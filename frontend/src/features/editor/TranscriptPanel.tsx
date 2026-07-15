@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, ChevronDown, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
+import { AudioLines, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
 
 import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -36,7 +36,6 @@ export function TranscriptPanel({
   const t = useI18n();
   const qc = useQueryClient();
   const playhead = useEditorStore((state) => state.playhead);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
   const [showSilences, setShowSilences] = React.useState(false);
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
@@ -195,12 +194,65 @@ export function TranscriptPanel({
     });
   };
 
-  const removeAllSilences = () => {
-    if (!onCutRanges || silences.length === 0) return;
-    onCutRanges(
-      groupCuts(silences.map((gap) => ({ clipId: gap.clipId, srcStart: gap.srcStart, srcEnd: gap.srcEnd }))),
-    );
+  const selectAllSilences = () => {
+    setSelected((current) => {
+      const next = new Map(current);
+      for (const gap of silences) {
+        next.set(`${gap.clipId}:sil:${gap.srcStart}`, {
+          clipId: gap.clipId,
+          srcStart: gap.srcStart,
+          srcEnd: gap.srcEnd,
+        });
+      }
+      return next;
+    });
   };
+
+  // 文档视图:句子与静音间隙按时间线顺序交织成一篇连续文本。
+  const docItems = React.useMemo(() => {
+    const items: Array<
+      | { kind: "sentence"; sentence: (typeof projected)[number] }
+      | { kind: "silence"; gap: (typeof silences)[number] }
+    > = projected.map((sentence) => ({ kind: "sentence" as const, sentence }));
+    if (showSilences) {
+      for (const gap of silences) items.push({ kind: "silence", gap });
+    }
+    return items.sort((a, b) => {
+      const ta = a.kind === "sentence" ? a.sentence.timelineStart : a.gap.timelineStart;
+      const tb = b.kind === "sentence" ? b.sentence.timelineStart : b.gap.timelineStart;
+      return ta - tb;
+    });
+  }, [projected, silences, showSilences]);
+
+  // 卡拉OK定位:播放头映射回当前片段的源时间,命中的词高亮。
+  const clipById = React.useMemo(() => new Map(videoClips.map((clip) => [clip.id, clip])), [videoClips]);
+  const activeSrc = React.useMemo(() => {
+    for (const clip of videoClips) {
+      const end = clip.timeline_start + (clip.src_out - clip.src_in) / (clip.speed || 1);
+      if (playhead >= clip.timeline_start && playhead < end) {
+        return { clipId: clip.id, src: clip.src_in + (playhead - clip.timeline_start) * (clip.speed || 1) };
+      }
+    }
+    return null;
+  }, [videoClips, playhead]);
+
+  const activeSentenceRef = React.useRef<HTMLDivElement | null>(null);
+  const activeSentenceKey = React.useMemo(() => {
+    const hit = projected.find((item) => playhead >= item.timelineStart && playhead < item.timelineEnd);
+    return hit ? `${hit.clipId}:${hit.segmentId}` : null;
+  }, [projected, playhead]);
+  React.useEffect(() => {
+    activeSentenceRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeSentenceKey]);
+
+  const selectedSeconds = React.useMemo(() => {
+    let total = 0;
+    for (const entry of selected.values()) {
+      const speed = clipById.get(entry.clipId)?.speed || 1;
+      total += (entry.srcEnd - entry.srcStart) / speed;
+    }
+    return total;
+  }, [selected, clipById]);
 
   if (projected.length === 0) {
     return (
@@ -231,65 +283,72 @@ export function TranscriptPanel({
           <Sparkles size={12} /> {t("fillers")}
           {fillerCount > 0 && <em>{fillerCount}</em>}
         </button>
-        {selected.size > 0 && (
-          <button type="button" className="ts-tool danger" onClick={applySelected}>
-            <Trash2 size={12} /> {t("removeSelectedWords")} ({selected.size})
+        {showSilences && silences.length > 0 && (
+          <button type="button" className="ts-tool" title={t("removeAllSilences")} onClick={selectAllSilences}>
+            {t("selectAllSilences")}
           </button>
         )}
       </div>
-      {showSilences && silences.length > 0 && (
-        <div className="ts-silences">
-          {silences.map((gap) => (
-            <div key={`${gap.clipId}:${gap.srcStart}`} className="ts-item ts-silence">
+
+      <div className="tsd-doc">
+        {docItems.map((item) => {
+          if (item.kind === "silence") {
+            const gap = item.gap;
+            const gapKey = `${gap.clipId}:sil:${gap.srcStart}`;
+            return (
               <button
+                key={gapKey}
                 type="button"
-                className="ts-seek"
-                onClick={() => useEditorStore.getState().setPlayhead(gap.timelineStart)}
+                className={selected.has(gapKey) ? "tsd-gap cut" : "tsd-gap"}
+                title={t("silenceGapHint")}
+                onClick={() => toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
               >
-                <span className="ts-time timecode">{formatTimecode(gap.timelineStart)}</span>
-                <span className="ts-text">
-                  {t("silenceGap")} · {gap.duration.toFixed(1)}s
-                </span>
+                <AudioLines size={10} /> {gap.duration.toFixed(1)}s
               </button>
-              <button
-                type="button"
-                className="ts-cut"
-                title={t("removeSilence")}
-                aria-label={t("removeSilence")}
-                onClick={() => onCutRanges?.([{ clipId: gap.clipId, ranges: [{ srcStart: gap.srcStart, srcEnd: gap.srcEnd }] }])}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-          <button type="button" className="ts-tool danger ts-silence-all" onClick={removeAllSilences}>
-            <Trash2 size={12} /> {t("removeAllSilences")} ({silences.length})
-          </button>
-        </div>
-      )}
-      <div className="ts-list">
-        {projected.map((item) => {
-          const key = `${item.clipId}:${item.segmentId}`;
-          const active = playhead >= item.timelineStart && playhead < item.timelineEnd;
-          const expanded = expandedId === key && item.tokens.length > 0;
+            );
+          }
+          const sentence = item.sentence;
+          const key = `${sentence.clipId}:${sentence.segmentId}`;
+          const active = key === activeSentenceKey;
           return (
-            <div key={key} className={active ? "ts-item active" : "ts-item"}>
-              {expanded ? (
-                <div className="ts-seek ts-expanded">
-                  <button
-                    type="button"
-                    className="ts-time timecode ts-time-btn"
-                    onClick={() => setExpandedId(null)}
-                  >
-                    {formatTimecode(item.timelineStart)}
-                  </button>
-                  <span className="ts-tokens">
-                    {item.tokens.map((token, index) => {
-                      const tokenKey = `${item.clipId}:${item.segmentId}:${index}`;
+            <div
+              key={key}
+              ref={active ? activeSentenceRef : undefined}
+              className={active ? "tsd-sentence active" : "tsd-sentence"}
+            >
+              <div className="tsd-gutter">
+                <button
+                  type="button"
+                  className="tsd-time timecode"
+                  title={t("seekToSentence")}
+                  onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+                >
+                  {formatTimecode(sentence.timelineStart)}
+                </button>
+                <button
+                  type="button"
+                  className="tsd-drop"
+                  title={t("cutSentenceHint")}
+                  aria-label={t("cutSentence")}
+                  onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+              <p className="tsd-text">
+                {sentence.speaker && <em className="tsd-speaker">{sentence.speaker}</em>}
+                {sentence.tokens.length > 0
+                  ? sentence.tokens.map((token, index) => {
+                      const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
+                      const current =
+                        activeSrc?.clipId === sentence.clipId &&
+                        activeSrc.src >= token.start_time &&
+                        activeSrc.src < token.end_time;
                       const classes = [
-                        "ts-token",
+                        "tsd-word",
                         selected.has(tokenKey) ? "cut" : "",
                         isFillerToken(token.text) ? "filler" : "",
+                        current ? "current" : "",
                       ]
                         .filter(Boolean)
                         .join(" ");
@@ -298,55 +357,41 @@ export function TranscriptPanel({
                           key={tokenKey}
                           type="button"
                           className={classes}
-                          onClick={() => toggleToken(tokenKey, item.clipId, token.start_time, token.end_time)}
+                          onClick={() => toggleToken(tokenKey, sentence.clipId, token.start_time, token.end_time)}
                         >
                           {token.text}
                         </button>
                       );
-                    })}
-                  </span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="ts-seek"
-                  onClick={() => {
-                    useEditorStore.getState().setPlayhead(item.timelineStart);
-                    if (item.tokens.length > 0) setExpandedId(key);
-                  }}
-                >
-                  <span className="ts-time timecode">{formatTimecode(item.timelineStart)}</span>
-                  <span className="ts-text">
-                    {item.speaker && <em>{item.speaker}</em>}
-                    {item.text}
-                    {item.clipped && <small> · {t("transcriptClipped")}</small>}
-                  </span>
-                </button>
-              )}
-              {!expanded && item.tokens.length > 0 && (
-                <button
-                  type="button"
-                  className="ts-cut ts-expand"
-                  title={t("expandWordsHint")}
-                  aria-label={t("expandWordsHint")}
-                  onClick={() => setExpandedId(key)}
-                >
-                  <ChevronDown size={12} />
-                </button>
-              )}
-              <button
-                type="button"
-                className="ts-cut"
-                title={t("cutSentenceHint")}
-                aria-label={t("cutSentence")}
-                onClick={() => onCutSegment(item.clipId, item.srcStart, item.srcEnd)}
-              >
-                <X size={12} />
-              </button>
+                    })
+                  : (
+                      <button
+                        type="button"
+                        className={selected.has(`${key}:all`) ? "tsd-word block cut" : "tsd-word block"}
+                        title={t("markSentenceHint")}
+                        onClick={() => toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                      >
+                        {sentence.text}
+                      </button>
+                    )}
+              </p>
             </div>
           );
         })}
       </div>
+
+      {selected.size > 0 && (
+        <div className="tsd-bar">
+          <span className="tsd-bar-info">
+            {t("selectedWordsInfo").replace("{n}", String(selected.size)).replace("{s}", selectedSeconds.toFixed(1))}
+          </span>
+          <button type="button" className="ts-tool" onClick={() => setSelected(new Map())}>
+            {t("clearSelection")}
+          </button>
+          <button type="button" className="ts-tool danger" onClick={applySelected}>
+            <Trash2 size={12} /> {t("removeSelectedWords")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
