@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  clipEnd,
   formatRulerLabel,
   formatTimecode,
   pxToTime,
@@ -159,7 +160,7 @@ export function Timeline({
       tracks.forEach((track, index) => {
         if (index < rowTop || index > rowBottom) return;
         for (const clip of track.clips ?? []) {
-          if (clip.timeline_start < t2 && clip.timeline_start + (clip.src_out - clip.src_in) > t1) hits.push(clip.id);
+          if (clip.timeline_start < t2 && clipEnd(clip) > t1) hits.push(clip.id);
         }
       });
       useEditorStore.getState().selectClips(hits);
@@ -451,7 +452,7 @@ export function Timeline({
                         trackKind={track.kind}
                         name={assetById.get(source.asset_id)?.name ?? ""}
                         left={timeToPx(dragDraft.timeline_start, pxPerSecond)}
-                        width={Math.max(10, timeToPx(dragDraft.src_out - dragDraft.src_in, pxPerSecond))}
+                        width={Math.max(10, timeToPx((dragDraft.src_out - dragDraft.src_in) / (source.speed || 1), pxPerSecond))}
                         selected
                         dragging
                         onPointerDown={() => undefined}
@@ -465,7 +466,7 @@ export function Timeline({
                   const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
                   const display = draft ?? clip;
                   const waveform = track.kind === "audio" ? waveformByAsset.get(clip.asset_id) : undefined;
-                  const clipWidth = Math.max(10, timeToPx(display.src_out - display.src_in, pxPerSecond));
+                  const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks = waveform
                     ? downsamplePeaks(
                         slicePeaks(waveform.peaks, waveform.duration, display.src_in, display.src_out),

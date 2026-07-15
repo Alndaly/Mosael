@@ -32,6 +32,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
             "timeline_start": clip.timeline_start,
             "src_in": clip.src_in,
             "src_out": clip.src_out,
+            "speed": clip.speed,
             "gain": clip.gain,
             "muted": clip.muted,
             "effects": clip.effects,

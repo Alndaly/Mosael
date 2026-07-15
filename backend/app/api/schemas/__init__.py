@@ -210,6 +210,10 @@ class SetClipEffectsRequest(BaseModel):
     effects: dict = Field(default_factory=dict)
 
 
+class SetClipSpeedRequest(BaseModel):
+    speed: float = Field(ge=0.25, le=4.0)
+
+
 class JobOut(OrmModel):
     id: str
     workspace_id: str

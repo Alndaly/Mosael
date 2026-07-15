@@ -17,6 +17,7 @@ import {
   setTrackState,
   splitClip,
   setClipEffects,
+  setClipSpeed,
   trimClip,
   undoSequence,
   type Asset,
@@ -180,6 +181,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
+    onSuccess: refreshSequences,
+  });
+  const setSpeedMutation = useMutation({
+    mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!.id, clipId, speed),
     onSuccess: refreshSequences,
   });
   const setEffectsMutation = useMutation({
@@ -380,6 +385,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         isOverlayClip={isOverlayClip}
         onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
         onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
+        onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
       />
       <section className="panel timeline">
         <Timeline

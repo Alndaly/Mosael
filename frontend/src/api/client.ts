@@ -123,6 +123,13 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function setClipSpeed(sequenceId: string, clipId: string, speed: number): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
+    method: "PATCH",
+    body: JSON.stringify({ speed }),
+  });
+}
+
 export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
 }

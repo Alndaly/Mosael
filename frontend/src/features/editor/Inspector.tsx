@@ -12,6 +12,7 @@ const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↘", x: 0.62, y: 0.6 },
 ];
 const PIP_SIZES = [0.25, 0.33, 0.5];
+const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 export function Inspector({
   sequence,
@@ -20,6 +21,7 @@ export function Inspector({
   isOverlayClip,
   onDeleteClip,
   onSetEffects,
+  onSetSpeed,
 }: {
   sequence: Sequence;
   selectedClip: Clip | null;
@@ -27,6 +29,7 @@ export function Inspector({
   isOverlayClip: boolean;
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
+  onSetSpeed?: (clipId: string, speed: number) => void;
 }) {
   const t = useI18n();
   const asset = selectedClip ? assets.find((item) => item.id === selectedClip.asset_id) : null;
@@ -39,6 +42,12 @@ export function Inspector({
   const applyPip = (patch: Partial<typeof pip>) => {
     if (!selectedClip) return;
     onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
+  };
+  const effects = (selectedClip?.effects ?? {}) as { fade_in?: number; fade_out?: number };
+  const applyFade = (key: "fade_in" | "fade_out", raw: string) => {
+    if (!selectedClip) return;
+    const value = Math.max(0, Number(raw) || 0);
+    onSetEffects(selectedClip.id, { ...selectedClip.effects, [key]: value });
   };
 
   return (
@@ -66,6 +75,45 @@ export function Inspector({
             <dt>{t("gain")}</dt>
             <dd className="timecode">{selectedClip.gain.toFixed(2)}</dd>
           </dl>
+          {onSetSpeed && (
+            <div className="pip-controls">
+              <span className="pip-label">{t("speed")}</span>
+              <div className="pip-row">
+                {SPEED_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={Math.abs(selectedClip.speed - option) < 0.001 ? "pip-btn active" : "pip-btn"}
+                    onClick={() => onSetSpeed(selectedClip.id, option)}
+                  >
+                    {option}x
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="pip-controls">
+            <span className="pip-label">{t("fadeIn")}</span>
+            <input
+              key={`fi-${selectedClip.id}`}
+              className="fade-input"
+              type="number"
+              min={0}
+              step={0.1}
+              defaultValue={effects.fade_in ?? 0}
+              onBlur={(event) => applyFade("fade_in", event.target.value)}
+            />
+            <span className="pip-label">{t("fadeOut")}</span>
+            <input
+              key={`fo-${selectedClip.id}`}
+              className="fade-input"
+              type="number"
+              min={0}
+              step={0.1}
+              defaultValue={effects.fade_out ?? 0}
+              onBlur={(event) => applyFade("fade_out", event.target.value)}
+            />
+          </div>
           {isOverlayClip && (
             <div className="pip-controls">
               <span className="pip-label">{t("pipPosition")}</span>

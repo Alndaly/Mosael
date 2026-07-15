@@ -27,6 +27,7 @@ UNDOABLE_KINDS = (
     "split_clip",
     "set_track_state",
     "ripple_delete_clip",
+    "set_clip_speed",
 )
 
 
@@ -171,6 +172,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_effect":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.effects = payload["previous"]
+    elif operation.kind == "set_clip_speed":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.speed = payload["previous"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be undone")
 
@@ -223,6 +227,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_effect":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.effects = payload["effects"]
+    elif operation.kind == "set_clip_speed":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.speed = payload["speed"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be redone")
 

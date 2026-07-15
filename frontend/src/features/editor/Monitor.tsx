@@ -93,7 +93,8 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       loadedOverlayAssetRef.current = overlayAsset.id;
       video.src = assetFileUrl(overlayAsset.id);
     }
-    const desired = playhead - activeOverlayClip.timeline_start + activeOverlayClip.src_in;
+    const desired =
+      activeOverlayClip.src_in + (playhead - activeOverlayClip.timeline_start) * (activeOverlayClip.speed || 1);
     if (Math.abs(video.currentTime - desired) > 0.18) video.currentTime = desired;
     if (playing && video.paused) video.play().catch(() => undefined);
     else if (!playing && !video.paused) video.pause();
@@ -136,11 +137,12 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       loadedAssetRef.current = activeAsset.id;
       video.src = assetFileUrl(activeAsset.id);
     }
-    const desired = playhead - activeClip.timeline_start + activeClip.src_in;
+    const clipSpeed = activeClip.speed || 1;
+    const desired = activeClip.src_in + (playhead - activeClip.timeline_start) * clipSpeed;
     if (Math.abs(video.currentTime - desired) > 0.18) {
       video.currentTime = desired;
     }
-    video.playbackRate = playbackRate;
+    video.playbackRate = playbackRate * clipSpeed;
     video.volume = masterMuted ? 0 : volume;
     if (playing && video.paused) {
       video.play().catch(() => undefined);
@@ -161,11 +163,12 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       loadedAudioAssetRef.current = activeAudioClip.asset_id;
       audio.src = assetFileUrl(activeAudioClip.asset_id);
     }
-    const desired = playhead - activeAudioClip.timeline_start + activeAudioClip.src_in;
+    const audioSpeed = activeAudioClip.speed || 1;
+    const desired = activeAudioClip.src_in + (playhead - activeAudioClip.timeline_start) * audioSpeed;
     if (Math.abs(audio.currentTime - desired) > 0.18) {
       audio.currentTime = desired;
     }
-    audio.playbackRate = playbackRate;
+    audio.playbackRate = playbackRate * audioSpeed;
     audio.volume = Math.min(1, Math.max(0, activeAudioClip.gain)) * (masterMuted ? 0 : volume);
     audio.muted = activeAudioClip.muted || Boolean(audioTrack?.muted);
     if (playing && audio.paused) {

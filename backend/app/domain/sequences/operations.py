@@ -300,6 +300,32 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
     return sequence
 
 
+@dataclass(frozen=True)
+class SetClipSpeed:
+    clip_id: str
+    speed: float
+    actor_id: str | None = None
+
+
+def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    if not (0.25 <= op.speed <= 4.0):
+        raise SequenceDomainError("Speed must be between 0.25 and 4")
+    previous = clip.speed
+    clip.speed = op.speed
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_speed",
+        payload={"clip_id": clip.id, "speed": op.speed, "previous": previous},
+        summary={"operation": "set_clip_speed", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)

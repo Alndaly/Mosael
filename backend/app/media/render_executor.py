@@ -22,6 +22,33 @@ class RenderExecutionError(RuntimeError):
         self.stderr_tail = stderr_tail
 
 
+def _atempo_chain(speed: float) -> str:
+    """atempo filters covering speed, chained because one instance is limited to [0.5, 2]."""
+    if speed == 1.0:
+        return ""
+    parts: list[str] = []
+    remaining = speed
+    while remaining > 2.0:
+        parts.append("atempo=2.0")
+        remaining /= 2.0
+    while remaining < 0.5:
+        parts.append("atempo=0.5")
+        remaining /= 0.5
+    parts.append(f"atempo={remaining}")
+    return ",".join(parts) + ","
+
+
+def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
+    """Leading-comma filter suffix for edge fades in segment-local output time."""
+    name = "afade" if audio else "fade"
+    chunks: list[str] = []
+    if fade_in > 0:
+        chunks.append(f",{name}=t=in:st=0:d={fade_in}")
+    if fade_out > 0:
+        chunks.append(f",{name}=t=out:st={max(0.0, round(duration - fade_out, 6))}:d={fade_out}")
+    return "".join(chunks)
+
+
 def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     args: list[str] = ["ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
@@ -34,15 +61,19 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             path = resolve(segment.source.file_key)
             args += ["-i", str(path)]
             src = segment.source
+            setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
+            video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
             filters.append(
-                f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts=PTS-STARTPTS,"
+                f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p,setsar=1[v{i}]"
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p,setsar=1{video_fades}[v{i}]"
             )
             if probe_has_audio(path):
+                tempo = _atempo_chain(segment.speed)
+                audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 filters.append(
-                    f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
-                    f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo[a{i}]"
+                    f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,{tempo}"
+                    f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
                 filters.append(
@@ -87,9 +118,10 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             args += ["-i", str(path)]
             src = item.source
             delay_ms = int(item.start * 1000)
+            audio_fades = _fade_filters(item.fade_in, item.fade_out, item.duration, audio=True)
             filters.append(
                 f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
-                f"volume={item.gain},aresample={AUDIO_RATE},aformat=channel_layouts=stereo,"
+                f"volume={item.gain},aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
                 f"adelay={delay_ms}:all=1[aov{i}]"
             )
             mix_inputs.append(f"[aov{i}]")

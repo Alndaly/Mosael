@@ -22,11 +22,18 @@ class ClipSource:
 
 @dataclass(frozen=True)
 class Segment:
-    """One contiguous piece of the output timeline: a clip or a gap."""
+    """One contiguous piece of the output timeline: a clip or a gap.
+
+    duration is output-timeline time: source duration divided by speed.
+    fade_in/fade_out are output-time seconds applied at the segment edges.
+    """
 
     kind: str  # "clip" | "gap"
     duration: float
     source: ClipSource | None = None
+    speed: float = 1.0
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,8 @@ class AudioItem:
     duration: float
     source: ClipSource
     gain: float
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -119,7 +128,10 @@ def build_render_plan(
     cursor = 0.0
     for clip in ordered:
         start = float(clip["timeline_start"])
-        duration = float(clip["src_out"]) - float(clip["src_in"])
+        speed = float(clip.get("speed") or 1.0)
+        if not (0.25 <= speed <= 4.0):
+            raise RenderPlanError(f"Clip {clip['id']} has speed outside [0.25, 4]")
+        duration = (float(clip["src_out"]) - float(clip["src_in"])) / speed
         if duration <= 0:
             raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
         if start < cursor - GAP_EPSILON:
@@ -129,6 +141,7 @@ def build_render_plan(
             raise RenderPlanError(f"Clip {clip['id']} references an asset without a file")
         if start > cursor + GAP_EPSILON:
             segments.append(Segment(kind="gap", duration=round(start - cursor, 6)))
+        fade_in, fade_out = _clip_fades(clip, duration)
         segments.append(
             Segment(
                 kind="clip",
@@ -139,6 +152,9 @@ def build_render_plan(
                     src_in=float(clip["src_in"]),
                     src_out=float(clip["src_out"]),
                 ),
+                speed=speed,
+                fade_in=fade_in,
+                fade_out=fade_out,
             )
         )
         cursor = start + duration
@@ -174,12 +190,15 @@ def build_render_plan(
         clip_duration = float(clip["src_out"]) - float(clip["src_in"])
         if clip_duration <= 0:
             raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        fade_in, fade_out = _clip_fades(clip, clip_duration)
         audio_overlays.append(
             AudioItem(
                 start=float(clip["timeline_start"]),
                 duration=round(clip_duration, 6),
                 source=source,
                 gain=float(clip.get("gain", 1.0)),
+                fade_in=fade_in,
+                fade_out=fade_out,
             )
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
@@ -194,6 +213,19 @@ def build_render_plan(
         audio_overlays=tuple(audio_overlays),
     )
     return plan.with_hash()
+
+
+def _clip_fades(clip: dict, duration: float) -> tuple[float, float]:
+    """Fade lengths from clip effects, clamped so in+out never exceed the clip."""
+    effects = clip.get("effects") or {}
+    fade_in = max(0.0, float(effects.get("fade_in") or 0.0))
+    fade_out = max(0.0, float(effects.get("fade_out") or 0.0))
+    total = fade_in + fade_out
+    if total > duration and total > 0:
+        ratio = duration / total
+        fade_in *= ratio
+        fade_out *= ratio
+    return round(fade_in, 6), round(fade_out, 6)
 
 
 def _require_source(assets: dict[str, dict], clip: dict) -> ClipSource:

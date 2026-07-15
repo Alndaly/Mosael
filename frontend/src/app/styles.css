@@ -2255,3 +2255,20 @@
   border-radius: 2px;
   pointer-events: none;
 }
+
+/* Inspector fade inputs */
+.fade-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+.fade-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -1px;
+}

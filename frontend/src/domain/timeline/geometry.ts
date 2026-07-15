@@ -9,6 +9,7 @@ export interface ClipLike {
   timeline_start: number;
   src_in: number;
   src_out: number;
+  speed?: number;
 }
 
 export function timeToPx(time: number, pxPerSecond: number): number {
@@ -20,7 +21,7 @@ export function pxToTime(px: number, pxPerSecond: number): number {
 }
 
 export function clipDuration(clip: ClipLike): number {
-  return clip.src_out - clip.src_in;
+  return (clip.src_out - clip.src_in) / (clip.speed || 1);
 }
 
 export function clipEnd(clip: ClipLike): number {
