@@ -35,6 +35,10 @@ class Segment:
     fade_in: float = 0.0
     fade_out: float = 0.0
     filter: str = ""  # one of FILTER_PRESETS or ""
+    # Manual grade, each in [-1, 1] (0 = untouched). Applied after the preset.
+    brightness: float = 0.0
+    contrast: float = 0.0
+    saturation: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -166,9 +170,11 @@ def build_render_plan(
         if start > cursor + GAP_EPSILON:
             segments.append(Segment(kind="gap", duration=round(start - cursor, 6)))
         fade_in, fade_out = _clip_fades(clip, duration)
-        preset = str((clip.get("effects") or {}).get("filter") or "")
+        effects = clip.get("effects") or {}
+        preset = str(effects.get("filter") or "")
         if preset and preset not in FILTER_PRESETS:
             raise RenderPlanError(f"Clip {clip['id']} uses unknown filter preset {preset!r}")
+        grade = effects.get("color") or {}
         segments.append(
             Segment(
                 kind="clip",
@@ -183,6 +189,9 @@ def build_render_plan(
                 fade_in=fade_in,
                 fade_out=fade_out,
                 filter=preset,
+                brightness=_grade_value(grade, "brightness"),
+                contrast=_grade_value(grade, "contrast"),
+                saturation=_grade_value(grade, "saturation"),
             )
         )
         cursor = start + duration
@@ -254,6 +263,14 @@ def build_render_plan(
         subtitles=tuple(subtitles),
     )
     return plan.with_hash()
+
+
+def _grade_value(grade: dict, key: str) -> float:
+    """Manual color values clamped to [-1, 1]; anything unparsable is 0."""
+    try:
+        return max(-1.0, min(1.0, float(grade.get(key) or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _clip_fades(clip: dict, duration: float) -> tuple[float, float]:

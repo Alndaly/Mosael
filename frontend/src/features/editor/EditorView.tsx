@@ -38,6 +38,7 @@ import { useEditorStore } from "@/stores/editorStore";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
+import { SubtitlePanel } from "./SubtitlePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 
@@ -72,7 +73,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const t = useI18n();
   const qc = useQueryClient();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
-  const [leftTab, setLeftTab] = React.useState<"media" | "transcript">("media");
+  const [leftTab, setLeftTab] = React.useState<"media" | "transcript" | "subtitle">("media");
   const [panels, setPanels] = React.useState(readPanelSizes);
 
   React.useEffect(() => {
@@ -413,11 +414,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           <div className="panel-head">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
-          <TranscriptPanel
-            sequence={sequence}
-            onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
-            onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
-          />
+          {leftTab === "transcript" ? (
+            <TranscriptPanel
+              sequence={sequence}
+              onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
+              onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
+            />
+          ) : (
+            <SubtitlePanel
+              sequence={sequence}
+              onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+              onAddSubtitle={() => addSubtitleMutation.mutate()}
+              onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+            />
+          )}
         </section>
       )}
       <section className="panel monitor">
@@ -501,7 +511,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   );
 }
 
-function LeftTabs({ tab, onChange }: { tab: "media" | "transcript"; onChange: (tab: "media" | "transcript") => void }) {
+function LeftTabs({
+  tab,
+  onChange,
+}: {
+  tab: "media" | "transcript" | "subtitle";
+  onChange: (tab: "media" | "transcript" | "subtitle") => void;
+}) {
   const t = useI18n();
   return (
     <div className="panel-tabs">
@@ -518,6 +534,13 @@ function LeftTabs({ tab, onChange }: { tab: "media" | "transcript"; onChange: (t
         onClick={() => onChange("transcript")}
       >
         {t("transcriptTab")}
+      </button>
+      <button
+        type="button"
+        className={tab === "subtitle" ? "panel-tab active" : "panel-tab"}
+        onClick={() => onChange("subtitle")}
+      >
+        {t("subtitleTab")}
       </button>
     </div>
   );

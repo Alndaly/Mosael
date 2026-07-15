@@ -104,3 +104,26 @@ def test_unknown_filter_preset_rejected() -> None:
                     "effects": {"filter": "nope"}}],
             assets=ASSETS,
         )
+
+
+def test_manual_grade_in_plan_and_command(tmp_path) -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
+                "effects": {"color": {"brightness": 0.5, "contrast": -0.5, "saturation": 2.5}}}],
+        assets=ASSETS,
+    )
+    segment = plan.video_segments[0]
+    assert (segment.brightness, segment.contrast, segment.saturation) == (0.5, -0.5, 1.0)  # clamped
+    command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
+    assert "eq=brightness=0.2:contrast=0.7:saturation=2.0" in command
+
+
+def test_zero_grade_adds_no_filter(tmp_path) -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8}],
+        assets=ASSETS,
+    )
+    command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
+    assert "eq=brightness" not in command

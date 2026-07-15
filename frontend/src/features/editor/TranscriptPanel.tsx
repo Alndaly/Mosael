@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
+import { AudioLines, ChevronDown, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
 
 import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -207,6 +207,7 @@ export function TranscriptPanel({
       <div className="ts-empty">
         <MessageSquareText size={18} />
         <p>{t("transcriptEmpty")}</p>
+        <p className="ts-flow-hint">{t("transcriptFlowHint")}</p>
         {transcribeButton}
         {asrError && <p className="ts-asr-error">{asrError}</p>}
       </div>
@@ -220,12 +221,13 @@ export function TranscriptPanel({
         <button
           type="button"
           className={showSilences ? "ts-tool on" : "ts-tool"}
+          title={t("silencesHint")}
           onClick={() => setShowSilences((value) => !value)}
         >
           <AudioLines size={12} /> {t("silences")}
           {showSilences && silences.length > 0 && <em>{silences.length}</em>}
         </button>
-        <button type="button" className="ts-tool" onClick={selectAllFillers} disabled={fillerCount === 0}>
+        <button type="button" className="ts-tool" title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
           <Sparkles size={12} /> {t("fillers")}
           {fillerCount > 0 && <em>{fillerCount}</em>}
         </button>
@@ -321,10 +323,21 @@ export function TranscriptPanel({
                   </span>
                 </button>
               )}
+              {!expanded && item.tokens.length > 0 && (
+                <button
+                  type="button"
+                  className="ts-cut ts-expand"
+                  title={t("expandWordsHint")}
+                  aria-label={t("expandWordsHint")}
+                  onClick={() => setExpandedId(key)}
+                >
+                  <ChevronDown size={12} />
+                </button>
+              )}
               <button
                 type="button"
                 className="ts-cut"
-                title={t("cutSentence")}
+                title={t("cutSentenceHint")}
                 aria-label={t("cutSentence")}
                 onClick={() => onCutSegment(item.clipId, item.srcStart, item.srcEnd)}
               >

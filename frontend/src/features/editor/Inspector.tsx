@@ -47,7 +47,25 @@ export function Inspector({
     onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
   };
   const isTextClip = Boolean(selectedClip && !selectedClip.asset_id && selectedClip.text_override != null);
-  const effects = (selectedClip?.effects ?? {}) as { fade_in?: number; fade_out?: number; filter?: string };
+  const effects = (selectedClip?.effects ?? {}) as {
+    fade_in?: number;
+    fade_out?: number;
+    filter?: string;
+    color?: { brightness?: number; contrast?: number; saturation?: number };
+  };
+  const grade = { brightness: 0, contrast: 0, saturation: 0, ...(effects.color ?? {}) };
+  const hasGrade = Boolean(grade.brightness || grade.contrast || grade.saturation);
+  const applyGrade = (key: "brightness" | "contrast" | "saturation", raw: string) => {
+    if (!selectedClip) return;
+    const value = Math.max(-1, Math.min(1, Number(raw) / 100));
+    onSetEffects(selectedClip.id, { ...selectedClip.effects, color: { ...grade, [key]: value } });
+  };
+  const resetGrade = () => {
+    if (!selectedClip) return;
+    const next = { ...selectedClip.effects } as Record<string, unknown>;
+    delete next.color;
+    onSetEffects(selectedClip.id, next);
+  };
   const applyFade = (key: "fade_in" | "fade_out", raw: string) => {
     if (!selectedClip) return;
     const value = Math.max(0, Number(raw) || 0);
@@ -96,13 +114,21 @@ export function Inspector({
           )}
           {!isTextClip && (
             <div className="pip-controls">
-              <span className="pip-label">{t("filterLabel")}</span>
+              <div className="grade-head">
+                <span className="pip-label">{t("colorGrade")}</span>
+                {hasGrade && (
+                  <button type="button" className="grade-reset" onClick={resetGrade}>
+                    {t("gradeReset")}
+                  </button>
+                )}
+              </div>
               <div className="pip-row">
                 {FILTER_PRESETS.map((preset) => (
                   <button
                     key={preset || "none"}
                     type="button"
                     className={(effects.filter ?? "") === preset ? "pip-btn active" : "pip-btn"}
+                    title={t("filterPresetHint")}
                     onClick={() =>
                       onSetEffects(selectedClip.id, { ...selectedClip.effects, filter: preset || undefined })
                     }
@@ -111,6 +137,28 @@ export function Inspector({
                   </button>
                 ))}
               </div>
+              {(
+                [
+                  ["brightness", t("gradeBrightness")],
+                  ["contrast", t("gradeContrast")],
+                  ["saturation", t("gradeSaturation")],
+                ] as const
+              ).map(([key, label]) => (
+                <label className="grade-slider" key={`${key}-${selectedClip.id}`}>
+                  <span>{label}</span>
+                  <input
+                    type="range"
+                    min={-100}
+                    max={100}
+                    step={5}
+                    defaultValue={Math.round((grade[key] ?? 0) * 100)}
+                    onPointerUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
+                    onKeyUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
+                    aria-label={label}
+                  />
+                  <em className="timecode">{Math.round((grade[key] ?? 0) * 100)}</em>
+                </label>
+              ))}
             </div>
           )}
           {!isTextClip && onSetSpeed && (

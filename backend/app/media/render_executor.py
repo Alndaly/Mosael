@@ -38,6 +38,22 @@ def _atempo_chain(speed: float) -> str:
     return ",".join(parts) + ","
 
 
+def _grade_filter(brightness: float, contrast: float, saturation: float) -> str:
+    """Manual grade ([-1,1] each) → one eq filter; empty string when untouched.
+    Ranges mirror the Monitor's CSS preview: brightness ±0.4, contrast ±0.6,
+    saturation 0..2."""
+    if not (brightness or contrast or saturation):
+        return ""
+    parts = []
+    if brightness:
+        parts.append(f"brightness={round(brightness * 0.4, 4)}")
+    if contrast:
+        parts.append(f"contrast={round(1 + contrast * 0.6, 4)}")
+    if saturation:
+        parts.append(f"saturation={round(max(0.0, 1 + saturation), 4)}")
+    return ",eq=" + ":".join(parts)
+
+
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
     """Leading-comma filter suffix for edge fades in segment-local output time."""
     name = "afade" if audio else "fade"
@@ -86,6 +102,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
+            preset += _grade_filter(segment.brightness, segment.contrast, segment.saturation)
             filters.append(
                 f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"

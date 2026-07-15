@@ -84,8 +84,25 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const activeAsset = activeClip?.asset_id ? (assetById.get(activeClip.asset_id) ?? null) : null;
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const activeFilter = String((activeClip?.effects as { filter?: string } | undefined)?.filter ?? "");
-  const cssFilter = FILTER_CSS[activeFilter] ?? "";
+  const activeEffects = (activeClip?.effects ?? {}) as {
+    filter?: string;
+    color?: { brightness?: number; contrast?: number; saturation?: number };
+  };
+  const cssFilter = React.useMemo(() => {
+    const parts: string[] = [];
+    const preset = FILTER_CSS[String(activeEffects.filter ?? "")];
+    if (preset) parts.push(preset);
+    const grade = activeEffects.color ?? {};
+    const clamp = (value: unknown) => Math.max(-1, Math.min(1, Number(value) || 0));
+    const b = clamp(grade.brightness);
+    const c = clamp(grade.contrast);
+    const s = clamp(grade.saturation);
+    // Same response curves as the FFmpeg eq chain in the executor.
+    if (b) parts.push(`brightness(${(1 + b * 0.4).toFixed(3)})`);
+    if (c) parts.push(`contrast(${(1 + c * 0.6).toFixed(3)})`);
+    if (s) parts.push(`saturate(${Math.max(0, 1 + s).toFixed(3)})`);
+    return parts.join(" ");
+  }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
     audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;

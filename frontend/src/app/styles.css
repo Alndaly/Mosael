@@ -2735,3 +2735,111 @@
   color: var(--primary);
   border-color: var(--primary);
 }
+
+/* Color grade sliders */
+.grade-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.grade-reset {
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.grade-reset:hover {
+  color: var(--destructive);
+}
+.grade-slider {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.grade-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  cursor: pointer;
+  outline: none;
+}
+.grade-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.grade-slider em {
+  font-style: normal;
+  text-align: right;
+  font-size: 10.5px;
+}
+
+/* Subtitle panel */
+.sub-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+.sub-list {
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.sub-item {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: var(--panel);
+}
+.sub-item.active {
+  border-color: color-mix(in oklab, var(--primary) 50%, var(--border));
+  background: color-mix(in oklab, var(--primary) 5%, var(--panel));
+}
+.sub-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sub-delete {
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+.sub-delete:hover {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+.sub-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  display: flex;
+  justify-content: center;
+}
+.ts-expand {
+  transform: none;
+}
+.ts-flow-hint {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  max-width: 220px;
+  line-height: 1.6;
+}
