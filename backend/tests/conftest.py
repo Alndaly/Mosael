@@ -11,3 +11,5 @@ import os
 import tempfile
 
 os.environ["MIBU_DATA_DIR"] = tempfile.mkdtemp(prefix="mibu-test-")
+# Tests drive the scheduler tick() directly; the background loop stays off.
+os.environ["MIBU_SCHEDULER_ENABLED"] = "0"

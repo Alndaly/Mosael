@@ -82,7 +82,11 @@ def run_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskR
     return run, job
 
 
-def compute_next_run_at(trigger_type: str, schedule: dict[str, Any]) -> datetime | None:
+def compute_next_run_at(
+    trigger_type: str, schedule: dict[str, Any], reference: datetime | None = None
+) -> datetime | None:
+    """Next trigger time (UTC). Supports manual/once/interval/daily/weekly."""
+    current = reference or now()
     if trigger_type == "manual":
         return None
     if trigger_type == "once":
@@ -94,8 +98,37 @@ def compute_next_run_at(trigger_type: str, schedule: dict[str, Any]) -> datetime
         value = schedule.get("seconds")
         if not isinstance(value, int | float) or value <= 0:
             raise SchedulerDomainError("interval schedule requires positive seconds")
-        return now() + timedelta(seconds=float(value))
+        return current + timedelta(seconds=float(value))
+    if trigger_type == "daily":
+        hour, minute = _parse_time(schedule)
+        candidate = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= current:
+            candidate += timedelta(days=1)
+        return candidate
+    if trigger_type == "weekly":
+        weekday = schedule.get("weekday")
+        if not isinstance(weekday, int) or not 0 <= weekday <= 6:
+            raise SchedulerDomainError("weekly schedule requires weekday 0-6 (Monday=0)")
+        hour, minute = _parse_time(schedule)
+        candidate = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        days_ahead = (weekday - candidate.weekday()) % 7
+        candidate += timedelta(days=days_ahead)
+        if candidate <= current:
+            candidate += timedelta(days=7)
+        return candidate
     raise SchedulerDomainError(f"Unsupported trigger type: {trigger_type}")
+
+
+def _parse_time(schedule: dict[str, Any]) -> tuple[int, int]:
+    value = schedule.get("time", "09:00")
+    try:
+        hour_text, minute_text = str(value).split(":", 1)
+        hour, minute = int(hour_text), int(minute_text)
+    except ValueError as exc:
+        raise SchedulerDomainError("time must be HH:MM") from exc
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise SchedulerDomainError("time must be HH:MM")
+    return hour, minute
 
 
 def _parse_datetime(value: str) -> datetime:

@@ -65,6 +65,9 @@ def run_task(task_id: str, db: DbSession, user: CurrentUser) -> RunScheduledTask
         run, job = run_scheduled_task(db, task)
     except SchedulerDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    from app.workers.scheduler import dispatch_job_for_task
+
+    dispatch_job_for_task(db, task, run, job)
     return RunScheduledTaskResponse(
         task=ScheduledTaskOut.model_validate(task),
         run=ScheduledTaskRunOut.model_validate(run),

@@ -255,7 +255,7 @@ class ScheduledTaskCreate(BaseModel):
     project_id: str | None = None
     name: str = Field(min_length=1, max_length=180)
     kind: str = Field(min_length=1, max_length=60)
-    trigger_type: str = Field(pattern="^(manual|once|interval)$")
+    trigger_type: str = Field(pattern="^(manual|once|interval|daily|weekly)$")
     schedule: dict = Field(default_factory=dict)
     timezone: str = Field(default="UTC", max_length=80)
     enabled: bool = True
@@ -264,7 +264,7 @@ class ScheduledTaskCreate(BaseModel):
 
 class ScheduledTaskUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=180)
-    trigger_type: str | None = Field(default=None, pattern="^(manual|once|interval)$")
+    trigger_type: str | None = Field(default=None, pattern="^(manual|once|interval|daily|weekly)$")
     schedule: dict | None = None
     timezone: str | None = Field(default=None, max_length=80)
     enabled: bool | None = None

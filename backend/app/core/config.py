@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path.home() / ".mibu-new"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8800
+    scheduler_enabled: bool = True
 
     @property
     def db_path(self) -> Path:

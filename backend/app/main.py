@@ -19,9 +19,11 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
+from app.core.config import settings
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.generation import ensure_builtin_generation_models
+from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
 
 @asynccontextmanager
@@ -29,7 +31,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
     with SessionLocal() as db:
         ensure_builtin_generation_models(db)
+    if settings.scheduler_enabled:
+        start_scheduler_loop()
     yield
+    stop_scheduler_loop()
 
 
 def create_app() -> FastAPI:
