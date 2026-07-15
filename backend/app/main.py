@@ -11,6 +11,7 @@ from fastapi import Depends
 from app.api.routes.agent import router as agent_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.confirmations import router as confirmations_router
 from app.api.routes.generation import router as generation_router
 from app.api.routes.health import router as health_router
 from app.api.routes.jobs import router as jobs_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
+    app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
     return app

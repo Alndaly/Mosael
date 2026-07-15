@@ -32,6 +32,31 @@ def _get(path: str, params: dict[str, Any] | None = None) -> Any:
         return response.json()
 
 
+def _post(path: str, payload: dict[str, Any]) -> Any:
+    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    with httpx.Client(base_url=API_BASE, timeout=30, headers=headers) as client:
+        response = client.post(path, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+
+def _default_workspace_id() -> str:
+    workspaces = _get("/api/workspaces")
+    if not workspaces:
+        raise ValueError("No workspace available")
+    return workspaces[0]["id"]
+
+
+def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "confirmation_id": confirmation["id"],
+        "status": confirmation["status"],
+        "permission": confirmation["permission"],
+        "summary": confirmation["summary"],
+        "message": "等待用户在 Mibu 中确认。用 get_confirmation 轮询结果；批准后 result 才会填充。",
+    }
+
+
 @mcp.tool()
 def list_assets(workspace_id: str = "") -> list[dict[str, Any]]:
     """List media assets in a workspace (id, name, kind, source, duration).
@@ -121,6 +146,94 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
         {"id": project["id"], "name": project["name"], "active_sequence_id": project.get("active_sequence_id")}
         for project in projects
     ]
+
+
+@mcp.tool()
+def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+    """Propose timeline edits (permission: edit). Requires user confirmation in Mibu.
+
+    operations: list of {kind, ...args}. Supported kinds: insert_clip
+    (track_id, asset_id, timeline_start, src_in, src_out), move_clip
+    (clip_id, timeline_start), trim_clip (clip_id, timeline_start, src_in,
+    src_out), delete_clip (clip_id), cut_clip_range (clip_id, src_start,
+    src_end), add_track (track_kind), remove_track (track_id),
+    set_clip_effects (clip_id, effects).
+    Every applied edit is undoable by the user.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "edit_timeline",
+            "requested_by": "mcp-agent",
+            "payload": {"sequence_id": sequence_id, "operations": operations},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
+    """Export a timeline to mp4 (permission: render-cost). Requires user confirmation.
+
+    After approval the confirmation result carries the render job id.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "render_sequence",
+            "requested_by": "mcp-agent",
+            "payload": {"sequence_id": sequence_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
+    """Generate an image asset (permission: ai-cost). Requires user confirmation.
+
+    After approval the result carries job_id; the finished image lands in the
+    media pool as a generated asset.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "generate_image",
+            "requested_by": "mcp-agent",
+            "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
+    """Generate a video asset (permission: ai-cost). Requires user confirmation."""
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "generate_video",
+            "requested_by": "mcp-agent",
+            "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def get_confirmation(confirmation_id: str) -> dict[str, Any]:
+    """Check a pending confirmation: status becomes executed/rejected/failed after the user decides."""
+    confirmation = _get(f"/api/confirmations/{confirmation_id}")
+    return {
+        "confirmation_id": confirmation["id"],
+        "status": confirmation["status"],
+        "result": confirmation["result"],
+        "error": confirmation["error"],
+    }
 
 
 if __name__ == "__main__":

@@ -361,6 +361,28 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
+class ConfirmationCreate(BaseModel):
+    workspace_id: str
+    tool: str = Field(min_length=1, max_length=80)
+    payload: dict = Field(default_factory=dict)
+    requested_by: str = Field(default="external-agent", max_length=120)
+
+
+class ConfirmationOut(OrmModel):
+    id: str
+    workspace_id: str
+    tool: str
+    permission: str
+    summary: str
+    payload: dict
+    status: str
+    result: dict
+    error: str | None
+    requested_by: str
+    created_at: datetime
+    resolved_at: datetime | None
+
+
 class AgentSkillOut(BaseModel):
     id: str
     name: str

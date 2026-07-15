@@ -1302,6 +1302,81 @@
   clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%);
 }
 
+/* ---------- Confirmation cards ---------- */
+
+.confirm-stack {
+  position: fixed;
+  right: 16px;
+  top: 56px;
+  z-index: 50;
+  display: grid;
+  gap: 10px;
+  width: 340px;
+}
+
+.confirm-card {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: var(--shadow-raised);
+  padding: 12px 14px;
+  animation: confirm-in 160ms ease-out;
+}
+
+@keyframes confirm-in {
+  from {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.confirm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.confirm-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.confirm-summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.confirm-ops {
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--panel-subtle);
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  display: grid;
+  gap: 2px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ---------- Welcome / loading ---------- */
 
 .center {

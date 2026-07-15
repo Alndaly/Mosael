@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/app/auth";
 import { PreferencesProvider, useI18n } from "@/app/preferences";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -99,6 +100,7 @@ function Studio({ workspace }: { workspace: Workspace }) {
       {view === "settings" && <SettingsView workspace={workspace} />}
       {view === "scheduler" && <SchedulerView workspace={workspace} project={project} />}
       {view === "plugins" && <PluginsView />}
+      <ConfirmationCenter workspaceId={workspace.id} />
     </AppShell>
   );
 }

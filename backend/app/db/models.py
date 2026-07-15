@@ -336,6 +336,24 @@ class GenerationJob(Base):
     result_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
 
 
+class ToolConfirmation(Base):
+    __tablename__ = "tool_confirmations"
+    __table_args__ = (Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    tool: Mapped[str] = mapped_column(String(80), nullable=False)
+    permission: Mapped[str] = mapped_column(String(40), nullable=False)
+    summary: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_by: Mapped[str] = mapped_column(String(120), nullable=False, default="external-agent")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Plugin(Base):
     __tablename__ = "plugins"
 

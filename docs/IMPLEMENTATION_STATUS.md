@@ -65,6 +65,13 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Mutating MCP tools + confirmation cards (plan §16.2/§17.2/§17.4)
+
+- tool_confirmations table (Alembic 0007) with permission levels (edit / ai-cost / render-cost); pending → approved/rejected → executed/failed lifecycle.
+- Confirmation kernel validates payloads up front and executes only on approval: edit_timeline applies operation batches through SequenceOperations (undoable), render_sequence starts the export job, generate_image/video dispatch the provider runner.
+- MCP tools: edit_timeline, render_sequence, generate_image, generate_video (all return pending confirmations) + get_confirmation for polling.
+- Global confirmation card stack in the UI: requesting agent, permission badge, operation details, approve/reject; approvals refresh sequences/assets/jobs.
+
 ### Multi-track + PiP (plan Phase 8) & scheduler runner (Phase 11)
 
 - add_track / remove_track / set_clip_effect SequenceOperations (undo/redo supported); POST/DELETE /sequences/{id}/tracks, PATCH clips/{id}/effects.
@@ -94,7 +101,6 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 ## Next
 
-- Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters.
 - A real scheduler runner process claiming due tasks.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
