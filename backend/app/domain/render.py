@@ -42,7 +42,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
     base_clips = [clip_dict(clip) for clip in (video_tracks[0].clips if video_tracks else [])]
-    overlay_clips = [clip_dict(clip) for track in video_tracks[1:] for clip in track.clips]
+    overlay_clips = [clip_dict(clip) for track in video_tracks[1:] if not track.muted for clip in track.clips]
     audio_clips = [clip_dict(clip) for track in audio_tracks for clip in track.clips]
 
     asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips}

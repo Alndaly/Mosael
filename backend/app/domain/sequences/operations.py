@@ -276,6 +276,94 @@ def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Seque
     return sequence
 
 
+@dataclass(frozen=True)
+class SplitClip:
+    """Cut a clip into two at a source-time point — nothing is removed."""
+
+    clip_id: str
+    src_time: float
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
+class SetTrackState:
+    track_id: str
+    muted: bool | None = None
+    locked: bool | None = None
+    actor_id: str | None = None
+
+
+def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    if not (clip.src_in + MIN_CUT_REMAINDER < op.src_time < clip.src_out - MIN_CUT_REMAINDER):
+        raise SequenceDomainError("Split point must fall inside the clip")
+
+    original = _clip_payload(clip)
+    original["gain"], original["speed"], original["effects"] = clip.gain, clip.speed, clip.effects
+    common = {
+        "workspace_id": sequence.workspace_id,
+        "sequence_id": sequence.id,
+        "track_id": clip.track_id,
+        "asset_id": clip.asset_id,
+        "gain": clip.gain,
+        "speed": clip.speed,
+        "effects": clip.effects,
+    }
+    db.delete(clip)
+    left = Clip(**common, timeline_start=original["timeline_start"], src_in=original["src_in"], src_out=op.src_time)
+    right = Clip(
+        **common,
+        timeline_start=original["timeline_start"] + (op.src_time - original["src_in"]),
+        src_in=op.src_time,
+        src_out=original["src_out"],
+    )
+    db.add_all([left, right])
+    db.flush()
+    _record_operation(
+        db,
+        sequence,
+        kind="split_clip",
+        payload={
+            "clip_id": original["clip_id"],
+            "src_time": op.src_time,
+            "original": original,
+            "created": [_clip_payload(left), _clip_payload(right)],
+        },
+        summary={"operation": "split_clip", "clip_id": original["clip_id"]},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    track = db.get(Track, op.track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceDomainError("Track not found")
+    previous = {"muted": track.muted, "locked": track.locked}
+    if op.muted is not None:
+        track.muted = op.muted
+    if op.locked is not None:
+        track.locked = op.locked
+    _record_operation(
+        db,
+        sequence,
+        kind="set_track_state",
+        payload={
+            "track_id": track.id,
+            "muted": track.muted,
+            "locked": track.locked,
+            "previous": previous,
+        },
+        summary={"operation": "set_track_state", "track_id": track.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)

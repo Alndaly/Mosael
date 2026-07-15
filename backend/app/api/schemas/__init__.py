@@ -193,6 +193,15 @@ class CutClipRangeRequest(BaseModel):
     src_end: float
 
 
+class SplitClipRequest(BaseModel):
+    src_time: float
+
+
+class SetTrackStateRequest(BaseModel):
+    muted: bool | None = None
+    locked: bool | None = None
+
+
 class AddTrackRequest(BaseModel):
     kind: str = Field(pattern="^(video|audio)$")
 

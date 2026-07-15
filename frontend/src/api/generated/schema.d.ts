@@ -421,6 +421,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split Clip */
+        post: operations["split_clip_api_sequences__sequence_id__clips__clip_id__split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/tracks/{track_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Track */
+        delete: operations["remove_track_api_sequences__sequence_id__tracks__track_id__delete"];
+        options?: never;
+        head?: never;
+        /** Set Track State */
+        patch: operations["set_track_state_api_sequences__sequence_id__tracks__track_id__patch"];
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
         parameters: {
             query?: never;
@@ -450,23 +485,6 @@ export interface paths {
         /** Add Track */
         post: operations["add_track_api_sequences__sequence_id__tracks_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sequences/{sequence_id}/tracks/{track_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Track */
-        delete: operations["remove_track_api_sequences__sequence_id__tracks__track_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1981,6 +1999,18 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SetTrackStateRequest */
+        SetTrackStateRequest: {
+            /** Muted */
+            muted?: boolean | null;
+            /** Locked */
+            locked?: boolean | null;
+        };
+        /** SplitClipRequest */
+        SplitClipRequest: {
+            /** Src Time */
+            src_time: number;
+        };
         /** TrackOut */
         TrackOut: {
             /** Id */
@@ -3103,6 +3133,110 @@ export interface operations {
             };
         };
     };
+    split_clip_api_sequences__sequence_id__clips__clip_id__split_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_track_api_sequences__sequence_id__tracks__track_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_track_state_api_sequences__sequence_id__tracks__track_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTrackStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_clip_api_sequences__sequence_id__clips__clip_id__delete: {
         parameters: {
             query?: never;
@@ -3149,38 +3283,6 @@ export interface operations {
                 "application/json": components["schemas"]["AddTrackRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SequenceOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_track_api_sequences__sequence_id__tracks__track_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sequence_id: string;
-                track_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

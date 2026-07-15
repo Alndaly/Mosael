@@ -14,6 +14,8 @@ from app.api.schemas import (
     SequenceCreate,
     SequenceOut,
     SetClipEffectsRequest,
+    SetTrackStateRequest,
+    SplitClipRequest,
     TrimClipRequest,
 )
 from app.db.models import Job, Project, Sequence, Track
@@ -30,12 +32,16 @@ from app.domain.sequences.operations import (
     RemoveTrack,
     SequenceDomainError,
     SetClipEffects,
+    SetTrackState,
+    SplitClip,
     TrimClip,
     add_track as add_track_operation,
     cut_clip_range as cut_clip_range_operation,
     delete_clip as delete_clip_operation,
     remove_track as remove_track_operation,
     set_clip_effects as set_clip_effects_operation,
+    set_track_state as set_track_state_operation,
+    split_clip as split_clip_operation,
     insert_clip as insert_clip_operation,
     move_clip as move_clip_operation,
     trim_clip as trim_clip_operation,
@@ -107,6 +113,22 @@ def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSessi
 def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/split", response_model=SequenceOut)
+def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, src_time=body.src_time)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
+def set_track_state(
+    sequence_id: str, track_id: str, body: SetTrackStateRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: set_track_state_operation(db, sequence_id, SetTrackState(track_id=track_id, **body.model_dump())))
     return _get_sequence(db, sequence_id)
 
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, Film, Magnet, Minus, Plus, X } from "lucide-react";
+import { AudioLines, Film, Lock, LockOpen, Magnet, Minus, Plus, Volume2, VolumeX, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -40,6 +40,9 @@ export function Timeline({
   onAddTrack,
   onRemoveTrack,
   onDeleteClip,
+  onSplitClip,
+  onDuplicateClip,
+  onSetTrackState,
   toolbarExtra,
 }: {
   sequence: Sequence;
@@ -50,6 +53,9 @@ export function Timeline({
   onAddTrack?: (kind: "video" | "audio") => void;
   onRemoveTrack?: (trackId: string) => void;
   onDeleteClip?: (clipId: string) => void;
+  onSplitClip?: (clipId: string) => void;
+  onDuplicateClip?: (clipId: string) => void;
+  onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -279,6 +285,26 @@ export function Timeline({
             <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <span className={`tl-label-dot dot-${track.kind}`} />
               {track.name}
+              {onSetTrackState && (
+                <span className="tl-label-tools">
+                  <button
+                    type="button"
+                    className={track.muted ? "tl-label-tool on" : "tl-label-tool"}
+                    aria-label={track.muted ? t("trackUnmute") : t("trackMute")}
+                    onClick={() => onSetTrackState(track.id, { muted: !track.muted })}
+                  >
+                    {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                  </button>
+                  <button
+                    type="button"
+                    className={track.locked ? "tl-label-tool on" : "tl-label-tool"}
+                    aria-label={track.locked ? t("trackUnlock") : t("trackLock")}
+                    onClick={() => onSetTrackState(track.id, { locked: !track.locked })}
+                  >
+                    {track.locked ? <Lock size={11} /> : <LockOpen size={11} />}
+                  </button>
+                </span>
+              )}
               {onRemoveTrack && (track.clips ?? []).length === 0 && (
                 <button
                   type="button"
@@ -346,6 +372,8 @@ export function Timeline({
                       onTrimPointerDown={(event, edge) => startClipTrim(event, track, clip.id, edge)}
                       onSelect={() => selectClip(clip.id)}
                       onDelete={onDeleteClip ? () => onDeleteClip(clip.id) : undefined}
+                      onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
+                      onDuplicate={onDuplicateClip ? () => onDuplicateClip(clip.id) : undefined}
                     />
                   );
                 })}

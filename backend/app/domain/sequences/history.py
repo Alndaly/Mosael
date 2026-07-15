@@ -24,6 +24,8 @@ UNDOABLE_KINDS = (
     "add_track",
     "remove_track",
     "set_clip_effect",
+    "split_clip",
+    "set_track_state",
 )
 
 
@@ -135,10 +137,15 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = previous["timeline_start"]
         clip.src_in = previous["src_in"]
         clip.src_out = previous["src_out"]
-    elif operation.kind == "apply_transcript_edit":
+    elif operation.kind in ("apply_transcript_edit", "split_clip"):
         for created in payload["created"]:
             _delete_clip_row(db, created["clip_id"])
         _restore_clip_row(db, sequence, payload["original"])
+    elif operation.kind == "set_track_state":
+        track = db.get(Track, payload["track_id"])
+        if track is not None:
+            track.muted = payload["previous"]["muted"]
+            track.locked = payload["previous"]["locked"]
     elif operation.kind == "add_track":
         track = db.get(Track, payload["track_id"])
         if track is not None:
@@ -177,10 +184,15 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = payload["timeline_start"]
         clip.src_in = payload["src_in"]
         clip.src_out = payload["src_out"]
-    elif operation.kind == "apply_transcript_edit":
+    elif operation.kind in ("apply_transcript_edit", "split_clip"):
         _delete_clip_row(db, payload["original"]["clip_id"])
         for created in payload["created"]:
             _restore_clip_row(db, sequence, created)
+    elif operation.kind == "set_track_state":
+        track = db.get(Track, payload["track_id"])
+        if track is not None:
+            track.muted = payload["muted"]
+            track.locked = payload["locked"]
     elif operation.kind == "add_track":
         db.add(
             Track(

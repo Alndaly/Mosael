@@ -13,6 +13,8 @@ import {
   moveClip,
   redoSequence,
   removeTrack,
+  setTrackState,
+  splitClip,
   setClipEffects,
   trimClip,
   undoSequence,
@@ -171,6 +173,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const splitMutation = useMutation({
+    mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!.id, clipId, srcTime),
+    onSuccess: refreshSequences,
+  });
+  const trackStateMutation = useMutation({
+    mutationFn: ({ trackId, body }: { trackId: string; body: { muted?: boolean; locked?: boolean } }) =>
+      setTrackState(sequence!.id, trackId, body),
+    onSuccess: refreshSequences,
+  });
   const undoMutation = useMutation({
     mutationFn: () => undoSequence(sequence!.id),
     onSuccess: () => {
@@ -196,6 +207,46 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     return videoTracks.slice(1).some((track) => track.id === selectedClip.track_id);
   }, [selectedClip, sequence]);
 
+  const splitAtPlayhead = React.useCallback(
+    (clipId?: string) => {
+      if (!sequence) return;
+      const playhead = useEditorStore.getState().playhead;
+      const targetId = clipId ?? useEditorStore.getState().selectedClipId;
+      const all = (sequence.tracks ?? []).flatMap((track) => track.clips ?? []);
+      const clip = targetId
+        ? all.find((item) => item.id === targetId)
+        : all.find((item) => playhead > item.timeline_start && playhead < clipEnd(item));
+      if (!clip) return;
+      if (!(playhead > clip.timeline_start && playhead < clipEnd(clip))) return;
+      const srcTime = clip.src_in + (playhead - clip.timeline_start);
+      splitMutation.mutate({ clipId: clip.id, srcTime });
+    },
+    [sequence, splitMutation],
+  );
+
+  const duplicateClip = React.useCallback(
+    (clipId?: string) => {
+      if (!sequence) return;
+      const targetId = clipId ?? useEditorStore.getState().selectedClipId;
+      if (!targetId) return;
+      for (const track of sequence.tracks ?? []) {
+        const clip = (track.clips ?? []).find((item) => item.id === targetId);
+        if (clip) {
+          const trackEnd = (track.clips ?? []).reduce((end, item) => Math.max(end, clipEnd(item)), 0);
+          insertClipMutation.mutate({
+            trackId: track.id,
+            assetId: clip.asset_id,
+            timelineStart: trackEnd,
+            srcIn: clip.src_in,
+            srcOut: clip.src_out,
+          });
+          return;
+        }
+      }
+    },
+    [sequence, insertClipMutation],
+  );
+
   const addAssetToTimeline = (asset: Asset) => {
     if (!sequence) return;
     const track = (sequence.tracks ?? []).find((item) => trackAcceptsAsset(item, asset));
@@ -220,6 +271,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         event.preventDefault();
         if (event.shiftKey) redoMutation.mutate();
         else undoMutation.mutate();
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        duplicateClip();
+      } else if (event.key.toLowerCase() === "s" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        splitAtPlayhead();
       } else if (event.code === "Space") {
         event.preventDefault();
         useEditorStore.getState().togglePlaying();
@@ -234,7 +291,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sequence?.id]);
+  }, [sequence?.id, splitAtPlayhead, duplicateClip]);
 
   if (!sequence) {
     return (
@@ -304,6 +361,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+          onSplitClip={(clipId) => splitAtPlayhead(clipId)}
+          onDuplicateClip={(clipId) => duplicateClip(clipId)}
+          onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
           toolbarExtra={
             <>
               <Tooltip>

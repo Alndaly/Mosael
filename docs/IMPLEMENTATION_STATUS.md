@@ -112,6 +112,12 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Audio-track clips render their sliced waveform (pure slicePeaks/downsample kernel, tested) as an SVG inside the clip.
 - Monitor drives a hidden audio element in lockstep with the active audio-track clip (gain/mute honored); playback clock switched from rAF to interval so it survives occluded/background windows.
 
+### Editing boost round 1 (parity work vs mibu-video)
+
+- split_clip operation (cut-in-two at a source point, single invertible op) + S key / clip context menu at the playhead; ⌘D duplicate appends a copy at track end.
+- set_track_state operation (mute/lock, undoable) with hover tools on track headers; muted video tracks drop their overlays from the render plan; locked tracks already reject drags.
+- Remaining parity queue: multi-select, ripple delete, fade, speed UI, transitions, token-level transcript edits, silence/filler detection, asset inspector.
+
 ## Next
 
 - Sandboxed plugin execution adapters.

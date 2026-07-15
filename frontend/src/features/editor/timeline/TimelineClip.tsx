@@ -1,8 +1,8 @@
 import React from "react";
-import { Trash2 } from "lucide-react";
+import { Copy, Scissors, Trash2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
 
 export function TimelineClip({
@@ -17,6 +17,8 @@ export function TimelineClip({
   onTrimPointerDown,
   onSelect,
   onDelete,
+  onSplit,
+  onDuplicate,
 }: {
   trackKind: string;
   name: string;
@@ -29,6 +31,8 @@ export function TimelineClip({
   onTrimPointerDown: (event: React.PointerEvent, edge: "start" | "end") => void;
   onSelect: () => void;
   onDelete?: () => void;
+  onSplit?: () => void;
+  onDuplicate?: () => void;
 }) {
   const t = useI18n();
   const className = [
@@ -80,6 +84,17 @@ export function TimelineClip({
     <ContextMenu>
       <ContextMenuTrigger asChild>{clip}</ContextMenuTrigger>
       <ContextMenuContent>
+        {onSplit && (
+          <ContextMenuItem onSelect={onSplit}>
+            <Scissors /> {t("splitAtPlayhead")}
+          </ContextMenuItem>
+        )}
+        {onDuplicate && (
+          <ContextMenuItem onSelect={onDuplicate}>
+            <Copy /> {t("duplicateClip")}
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
         <ContextMenuItem destructive onSelect={onDelete}>
           <Trash2 /> {t("deleteClip")}
         </ContextMenuItem>

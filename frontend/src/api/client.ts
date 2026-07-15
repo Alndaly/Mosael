@@ -123,6 +123,24 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function splitClip(sequenceId: string, clipId: string, srcTime: number): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split`, {
+    method: "POST",
+    body: JSON.stringify({ src_time: srcTime }),
+  });
+}
+
+export function setTrackState(
+  sequenceId: string,
+  trackId: string,
+  body: { muted?: boolean; locked?: boolean },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export function addTrack(sequenceId: string, kind: "video" | "audio"): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks`, { method: "POST", body: JSON.stringify({ kind }) });
 }
