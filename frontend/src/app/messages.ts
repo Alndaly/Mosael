@@ -131,6 +131,15 @@ export const messages = {
 
     // AI Studio
     aiDescription: "统一管理图片、视频生成模型和生成任务。",
+    aiTabChat: "对话",
+    aiTabGenerate: "生成",
+    chatNewSession: "新对话",
+    chatPlaceholder: "让智能体查看素材、修改时间线、生成内容…",
+    chatSend: "发送",
+    chatThinking: "智能体思考中…",
+    chatEmptyTitle: "和 Mibu 智能体开始对话",
+    chatEmptyBody: "智能体通过 MCP 工具查看你的项目、提出时间线修改与生成任务；所有变更都会先出确认卡。",
+    chatErrorDetail: "错误详情",
     generateImage: "生成图片",
     generateVideo: "生成视频",
     models: "模型",
@@ -309,6 +318,15 @@ export const messages = {
 
     // AI Studio
     aiDescription: "Manage image and video generation models and jobs.",
+    aiTabChat: "Chat",
+    aiTabGenerate: "Generate",
+    chatNewSession: "New chat",
+    chatPlaceholder: "Ask the agent to inspect assets, edit the timeline, generate media…",
+    chatSend: "Send",
+    chatThinking: "Agent is thinking…",
+    chatEmptyTitle: "Start a conversation with the Mibu agent",
+    chatEmptyBody: "The agent uses MCP tools to inspect your project and propose edits or generations; every mutation raises a confirmation card first.",
+    chatErrorDetail: "Error detail",
     generateImage: "Generate image",
     generateVideo: "Generate video",
     models: "Models",

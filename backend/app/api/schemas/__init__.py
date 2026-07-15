@@ -361,6 +361,39 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
+class AgentSessionCreate(BaseModel):
+    workspace_id: str
+    project_id: str | None = None
+    title: str = Field(default="新对话", max_length=200)
+    adapter: str | None = Field(default=None, pattern="^(claude|opencode)$")
+
+
+class AgentSessionOut(OrmModel):
+    id: str
+    workspace_id: str
+    project_id: str | None
+    title: str
+    origin: str
+    adapter: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentMessageCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class AgentMessageOut(OrmModel):
+    id: str
+    session_id: str
+    role: str
+    content: str
+    payload: dict
+    error: str | None
+    created_at: datetime
+
+
 class ConfirmationCreate(BaseModel):
     workspace_id: str
     tool: str = Field(min_length=1, max_length=80)

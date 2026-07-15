@@ -15,8 +15,42 @@ import {
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 
 export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+  const t = useI18n();
+  const [tab, setTab] = React.useState<"chat" | "generate">("chat");
+
+  return (
+    <div className="feature-view ai-studio-view">
+      <header className="feature-head">
+        <div>
+          <h1>AI Studio</h1>
+          <p>{t("aiDescription")}</p>
+        </div>
+        <div className="panel-tabs">
+          <button
+            type="button"
+            className={tab === "chat" ? "panel-tab active" : "panel-tab"}
+            onClick={() => setTab("chat")}
+          >
+            {t("aiTabChat")}
+          </button>
+          <button
+            type="button"
+            className={tab === "generate" ? "panel-tab active" : "panel-tab"}
+            onClick={() => setTab("generate")}
+          >
+            {t("aiTabGenerate")}
+          </button>
+        </div>
+      </header>
+      {tab === "chat" ? <ChatWorkspace workspace={workspace} /> : <GeneratePanel workspace={workspace} project={project} />}
+    </div>
+  );
+}
+
+function GeneratePanel({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [prompt, setPrompt] = React.useState("");
@@ -75,14 +109,7 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
   }, [succeededCount, qc, workspace.id]);
 
   return (
-    <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>AI Studio</h1>
-          <p>{t("aiDescription")}</p>
-        </div>
-      </header>
-
+    <div>
       <section className="gen-compose panel">
         <textarea
           className="gen-prompt"

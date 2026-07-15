@@ -336,6 +336,58 @@ class GenerationJob(Base):
     result_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
 
 
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+    __table_args__ = (Index("idx_agent_sessions_ws_updated", "workspace_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
+    origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
+    external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
+    adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="claude")
+    adapter_session_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+    messages: Mapped[list["AgentMessage"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", order_by="AgentMessage.created_at"
+    )
+
+
+class AgentMessage(Base):
+    __tablename__ = "agent_messages"
+    __table_args__ = (Index("idx_agent_messages_session_created", "session_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(24), nullable=False)  # user | assistant | system
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+    session: Mapped[AgentSession] = relationship(back_populates="messages")
+
+
+class FeishuBot(Base):
+    __tablename__ = "feishu_bots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, default="Mibu 助手")
+    app_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    app_secret: Mapped[str] = mapped_column(String(200), nullable=False)
+    capability: Mapped[str] = mapped_column(String(24), nullable=False, default="editor")  # readonly|editor|full
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="offline")  # offline|connecting|online|error
+    status_detail: Mapped[str] = mapped_column(String(400), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class ToolConfirmation(Base):
     __tablename__ = "tool_confirmations"
     __table_args__ = (Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),)
