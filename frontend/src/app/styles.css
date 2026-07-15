@@ -1521,6 +1521,49 @@
   border-bottom-left-radius: 3px;
 }
 
+.chat-bubble.assistant :is(p, ul, ol, pre, table) {
+  margin: 0 0 8px;
+}
+
+.chat-bubble.assistant :is(p, ul, ol, pre, table):last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble.assistant :is(h1, h2, h3, h4) {
+  margin: 10px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-bubble.assistant code {
+  border-radius: 4px;
+  background: var(--panel-inset);
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.chat-bubble.assistant pre {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.chat-bubble.assistant pre code {
+  background: none;
+  padding: 0;
+}
+
+.chat-bubble.assistant ul,
+.chat-bubble.assistant ol {
+  padding-left: 18px;
+}
+
+.chat-bubble.streaming {
+  border-color: var(--ring);
+}
+
 .chat-bubble.thinking {
   display: inline-flex;
   align-items: center;

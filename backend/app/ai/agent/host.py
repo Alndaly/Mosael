@@ -34,6 +34,37 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本
 
 _turn_callbacks: list[Callable[[str], None]] = []
 
+# Live token streams for in-flight turns, keyed by session id.
+_streams_lock = threading.Lock()
+_streams: dict[str, dict] = {}
+
+
+def get_stream_state(session_id: str) -> dict:
+    with _streams_lock:
+        state = _streams.get(session_id)
+        return dict(state) if state else {"text": "", "done": True, "seq": 0}
+
+
+def _stream_reset(session_id: str) -> None:
+    with _streams_lock:
+        _streams[session_id] = {"text": "", "done": False, "seq": 0}
+
+
+def _stream_append(session_id: str, delta: str) -> None:
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if state is not None:
+            state["text"] += delta
+            state["seq"] += 1
+
+
+def _stream_finish(session_id: str, final_text: str) -> None:
+    with _streams_lock:
+        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0})
+        state["text"] = final_text
+        state["done"] = True
+        state["seq"] += 1
+
 
 def on_turn_finished(callback: Callable[[str], None]) -> None:
     """Register a listener (e.g. the Feishu worker) fired with session_id after each turn."""
@@ -107,6 +138,8 @@ def _mint_service_token(db: Session, user: User) -> str:
 
 def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
+    _stream_reset(session_id)
+    final_text = ""
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
         if session is None:
@@ -120,7 +153,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 api_base=api_base,
                 token=token,
                 adapter_session_id=session.adapter_session_id,
+                on_delta=lambda delta: _stream_append(session_id, delta),
             )
+            final_text = result.text
             db.add(AgentMessage(session_id=session.id, role="assistant", content=result.text))
             if result.adapter_session_id:
                 session.adapter_session_id = result.adapter_session_id
@@ -144,6 +179,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             session.status = "idle"
             session.updated_at = now()
             db.commit()
+            _stream_finish(session_id, final_text)
     for callback in list(_turn_callbacks):
         try:
             callback(session_id)

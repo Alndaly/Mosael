@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.ai.agent import host
@@ -65,6 +69,29 @@ def post_agent_message(
         return host.post_user_message(db, session, body.content, user)
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/agent/sessions/{session_id}/stream")
+async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> StreamingResponse:
+    """SSE: live token stream of the in-flight turn (snapshots, then done)."""
+    _require_session(db, user, session_id)
+
+    async def generator():
+        last_seq = -1
+        while True:
+            state = host.get_stream_state(session_id)
+            if state["seq"] != last_seq:
+                last_seq = state["seq"]
+                yield f"data: {json.dumps({'text': state['text'], 'done': state['done']})}\n\n"
+            if state["done"]:
+                break
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _require_session(db: DbSession, user: CurrentUser, session_id: str) -> AgentSession:

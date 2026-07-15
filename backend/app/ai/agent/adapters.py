@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,9 +51,10 @@ def run_turn(
     api_base: str,
     token: str,
     adapter_session_id: str | None,
+    on_delta: "Callable[[str], None] | None" = None,
 ) -> TurnResult:
     if adapter == "claude":
-        return _run_claude(prompt, system_prompt, api_base, token, adapter_session_id)
+        return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
     if adapter == "opencode":
         return _run_opencode(prompt, system_prompt, api_base, token, adapter_session_id)
     raise AdapterError(f"Unknown agent adapter: {adapter}")
@@ -76,30 +78,63 @@ def build_claude_command(
     return command
 
 
-def _run_claude(
-    prompt: str, system_prompt: str, api_base: str, token: str, adapter_session_id: str | None
+def _run_claude_streaming(
+    prompt: str,
+    system_prompt: str,
+    api_base: str,
+    token: str,
+    adapter_session_id: str | None,
+    on_delta: Callable[[str], None] | None = None,
 ) -> TurnResult:
+    """stream-json mode: emits token-level text deltas via on_delta while running."""
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
         json.dump(mibu_mcp_config(api_base, token), handle)
         config_path = handle.name
     try:
         command = build_claude_command(prompt, system_prompt, config_path, adapter_session_id)
-        process = subprocess.run(
+        stream_index = command.index("json")
+        command[stream_index] = "stream-json"
+        command += ["--include-partial-messages", "--verbose"]
+
+        process = subprocess.Popen(
             command,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=TURN_TIMEOUT_SECONDS,
             env={**os.environ},
         )
+        result_text: str | None = None
+        session_id: str | None = None
+        is_error = False
+        assert process.stdout is not None
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            kind = event.get("type")
+            if kind == "stream_event" and on_delta is not None:
+                inner = event.get("event") or {}
+                if inner.get("type") == "content_block_delta":
+                    delta = inner.get("delta") or {}
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        on_delta(str(delta["text"]))
+            elif kind == "result":
+                result_text = str(event.get("result", ""))
+                session_id = event.get("session_id")
+                is_error = bool(event.get("is_error"))
+        process.wait(timeout=TURN_TIMEOUT_SECONDS)
         if process.returncode != 0:
-            raise AdapterError(_tail(process.stderr) or f"agent exited with code {process.returncode}")
-        try:
-            payload = json.loads(process.stdout)
-        except json.JSONDecodeError as exc:
-            raise AdapterError(f"Unparseable agent output: {_tail(process.stdout)}") from exc
-        if payload.get("is_error"):
-            raise AdapterError(_tail(str(payload.get("result", "agent error"))))
-        return TurnResult(text=str(payload.get("result", "")).strip(), adapter_session_id=payload.get("session_id"))
+            stderr_tail = _tail(process.stderr.read() if process.stderr else "")
+            raise AdapterError(stderr_tail or f"agent exited with code {process.returncode}")
+        if result_text is None:
+            raise AdapterError("Agent produced no result event")
+        if is_error:
+            raise AdapterError(_tail(result_text or "agent error"))
+        return TurnResult(text=result_text.strip(), adapter_session_id=session_id)
     finally:
         Path(config_path).unlink(missing_ok=True)
 

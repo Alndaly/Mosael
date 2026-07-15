@@ -22,7 +22,7 @@ def test_claude_command_and_mcp_config_shape() -> None:
 def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     calls: dict = {}
 
-    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, adapter_session_id):
+    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, adapter_session_id, on_delta=None):
         calls.update(
             adapter=adapter, prompt=prompt, system=system_prompt, token=token, prev=adapter_session_id
         )

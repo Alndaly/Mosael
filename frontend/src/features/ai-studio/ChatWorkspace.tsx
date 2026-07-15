@@ -1,8 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, CircleAlert, Loader2, Plus, Send } from "lucide-react";
+import { Streamdown } from "streamdown";
 
-import { api, type Workspace } from "@/api/client";
+import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,52 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
+  const [streamText, setStreamText] = React.useState<string>("");
+  const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
+
+  const attachStream = React.useCallback(
+    async (targetSessionId: string) => {
+      if (streamingRef.current === targetSessionId) return;
+      streamingRef.current = targetSessionId;
+      setStreamText("");
+      try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const event of events) {
+            const line = event.split("\n").find((item) => item.startsWith("data: "));
+            if (!line) continue;
+            try {
+              const payload = JSON.parse(line.slice(6)) as { text: string; done: boolean };
+              if (streamingRef.current === targetSessionId) setStreamText(payload.text);
+            } catch {
+              // partial frame — ignore
+            }
+          }
+        }
+      } finally {
+        if (streamingRef.current === targetSessionId) {
+          streamingRef.current = null;
+          setStreamText("");
+          void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
+          void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
+        }
+      }
+    },
+    [qc],
+  );
 
   const sessions = useQuery({
     queryKey: ["agent-sessions", workspace.id],
@@ -58,12 +104,20 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
         method: "POST",
         body: JSON.stringify({ content }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, _variables) => {
       setDraft("");
       void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
+      if (activeSession) void attachStream(activeSession.id);
     },
   });
+
+  // Reconnect to an in-flight turn (e.g. after switching sessions or reload).
+  React.useEffect(() => {
+    if (running && activeSession && streamingRef.current !== activeSession.id) {
+      void attachStream(activeSession.id);
+    }
+  }, [running, activeSession, attachStream]);
 
   React.useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
@@ -117,7 +171,12 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
               {(messages.data ?? []).map((message) => (
                 <ChatBubble key={message.id} message={message} />
               ))}
-              {running && (
+              {running && streamText && (
+                <div className="chat-bubble assistant streaming">
+                  <Streamdown>{streamText}</Streamdown>
+                </div>
+              )}
+              {running && !streamText && (
                 <div className="chat-bubble assistant thinking">
                   <Loader2 size={13} className="spin" /> {t("chatThinking")}
                 </div>
@@ -155,7 +214,11 @@ function ChatBubble({ message }: { message: AgentMessage }) {
   const [showError, setShowError] = React.useState(false);
   return (
     <div className={`chat-bubble ${message.role}`}>
-      <div className="chat-bubble-content">{message.content}</div>
+      {message.role === "assistant" ? (
+        <Streamdown>{message.content}</Streamdown>
+      ) : (
+        <div className="chat-bubble-content">{message.content}</div>
+      )}
       {message.error && (
         <button type="button" className="chat-error" onClick={() => setShowError((value) => !value)}>
           <CircleAlert size={11} /> {t("chatErrorDetail")}
