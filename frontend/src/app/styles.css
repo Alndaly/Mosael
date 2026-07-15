@@ -2549,3 +2549,12 @@
   outline: 2px solid var(--ring);
   outline-offset: -1px;
 }
+
+.ts-asr-error {
+  color: var(--destructive);
+  font-size: 12px;
+  max-width: 220px;
+}
+.ts-empty .ts-tool {
+  margin-top: 4px;
+}

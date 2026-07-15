@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     feishu_autostart: bool = True
 
+    # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
+    # interpreter so this backend stays light; empty asr_python autodetects
+    # (env → sibling mibu-video venv → this interpreter).
+    asr_python: str = ""
+    asr_provider: str = "auto"  # "auto" | "funasr" | "whisperx"
+    asr_whisper_model: str = "small"
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "mibu.db"

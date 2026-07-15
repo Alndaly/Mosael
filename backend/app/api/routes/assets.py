@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, JobOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
+from app.audio.service import AsrError, start_transcription
 from app.core.permissions import ensure_workspace_access, require_asset
 from app.db.models import Asset, Clip, Transcript
 from app.domain.assets import import_uploaded_asset
@@ -125,6 +126,15 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
         status = 404 if "not found" in message.lower() else 422
         raise HTTPException(status_code=status, detail=message) from exc
     return get_transcript_for_asset(db, asset_id) or transcript
+
+
+@router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
+def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser):
+    require_asset(db, user, asset_id)
+    try:
+        return start_transcription(db, asset_id)
+    except AsrError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)

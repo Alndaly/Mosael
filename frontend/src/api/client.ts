@@ -216,6 +216,14 @@ export function deleteAsset(assetId: string): Promise<unknown> {
   return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }
 
+export function transcribeAsset(assetId: string): Promise<Job> {
+  return api<Job>(`/api/assets/${assetId}/transcribe`, { method: "POST" });
+}
+
+export function fetchJob(jobId: string): Promise<Job> {
+  return api<Job>(`/api/jobs/${jobId}`);
+}
+
 export function exportSequence(sequenceId: string): Promise<Job> {
   return api<Job>(`/api/sequences/${sequenceId}/export`, { method: "POST" });
 }

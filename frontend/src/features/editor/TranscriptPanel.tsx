@@ -1,8 +1,8 @@
 import React from "react";
-import { useQueries } from "@tanstack/react-query";
-import { AudioLines, MessageSquareText, Sparkles, Trash2, X } from "lucide-react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AudioLines, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
 
-import { API_BASE, getAuthToken, type Sequence } from "@/api/client";
+import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -34,10 +34,13 @@ export function TranscriptPanel({
   onCutRanges?: (cuts: Array<{ clipId: string; ranges: CutRange[] }>) => void;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
   const playhead = useEditorStore((state) => state.playhead);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
   const [showSilences, setShowSilences] = React.useState(false);
+  const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
+  const [asrError, setAsrError] = React.useState<string | null>(null);
 
   const videoClips = React.useMemo(() => {
     const track = (sequence.tracks ?? []).find((item) => item.kind === "video");
@@ -106,6 +109,50 @@ export function TranscriptPanel({
   // Selection keys go stale whenever the sequence changes underneath us.
   React.useEffect(() => setSelected(new Map()), [sequence.revision]);
 
+  // ASR: kick a transcribe job for the first video clip's asset, poll it,
+  // then refetch transcripts so word tokens appear.
+  const startAsr = useMutation({
+    mutationFn: (assetId: string) => transcribeAsset(assetId),
+    onSuccess: (job) => {
+      setAsrError(null);
+      setAsrJobId(job.id);
+    },
+    onError: (error) => setAsrError(String((error as Error).message)),
+  });
+  const asrJob = useQuery({
+    queryKey: ["job", asrJobId],
+    enabled: Boolean(asrJobId),
+    queryFn: () => fetchJob(asrJobId!),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "succeeded" || status === "failed" ? false : 1500;
+    },
+    refetchIntervalInBackground: true,
+  });
+  React.useEffect(() => {
+    if (asrJob.data?.status === "succeeded") {
+      setAsrJobId(null);
+      void qc.invalidateQueries({ queryKey: ["transcript"] });
+    } else if (asrJob.data?.status === "failed") {
+      setAsrJobId(null);
+      setAsrError(asrJob.data.error ?? t("transcribeFailed"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asrJob.data?.status]);
+  const asrRunning = startAsr.isPending || Boolean(asrJobId);
+  const firstAssetId = assetIds[0] ?? null;
+  const transcribeButton = firstAssetId && (
+    <button
+      type="button"
+      className="ts-tool"
+      disabled={asrRunning}
+      onClick={() => startAsr.mutate(firstAssetId)}
+    >
+      {asrRunning ? <Loader2 size={12} className="spin" /> : <Mic size={12} />}
+      {asrRunning ? (asrJob.data?.message ?? t("transcribing")) : t("aiTranscribe")}
+    </button>
+  );
+
   const toggleToken = (key: string, clipId: string, srcStart: number, srcEnd: number) => {
     setSelected((current) => {
       const next = new Map(current);
@@ -160,6 +207,8 @@ export function TranscriptPanel({
       <div className="ts-empty">
         <MessageSquareText size={18} />
         <p>{t("transcriptEmpty")}</p>
+        {transcribeButton}
+        {asrError && <p className="ts-asr-error">{asrError}</p>}
       </div>
     );
   }
@@ -167,6 +216,7 @@ export function TranscriptPanel({
   return (
     <div className="ts-wrap">
       <div className="ts-tools">
+        {transcribeButton}
         <button
           type="button"
           className={showSilences ? "ts-tool on" : "ts-tool"}
