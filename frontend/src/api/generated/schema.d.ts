@@ -245,6 +245,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Sequence */
+        post: operations["undo_sequence_api_sequences__sequence_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redo Sequence */
+        post: operations["redo_sequence_api_sequences__sequence_id__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/export": {
         parameters: {
             query?: never;
@@ -1067,6 +1101,16 @@ export interface components {
             fps: number;
             /** Revision */
             revision: number;
+            /**
+             * Can Undo
+             * @default false
+             */
+            can_undo: boolean;
+            /**
+             * Can Redo
+             * @default false
+             */
+            can_redo: boolean;
             /** Tracks */
             tracks?: components["schemas"]["TrackOut"][];
         };
@@ -1640,6 +1684,68 @@ export interface operations {
             path: {
                 sequence_id: string;
                 clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_sequence_api_sequences__sequence_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redo_sequence_api_sequences__sequence_id__redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
             };
             cookie?: never;
         };

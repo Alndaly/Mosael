@@ -65,11 +65,13 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
         src_out=op.src_out,
     )
     db.add(clip)
+    db.flush()  # materialize clip.id so the operation payload can invert
     _record_operation(
         db,
         sequence,
         kind="insert_clip",
         payload={
+            "clip_id": clip.id,
             "track_id": op.track_id,
             "asset_id": op.asset_id,
             "timeline_start": op.timeline_start,
@@ -89,6 +91,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
     if op.timeline_start < 0:
         raise SequenceDomainError("timeline_start must be non-negative")
 
+    previous_track_id = clip.track_id
     target_track_id = op.track_id or clip.track_id
     if target_track_id != clip.track_id:
         target = db.get(Track, target_track_id)
@@ -110,6 +113,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
             "track_id": clip.track_id,
             "timeline_start": op.timeline_start,
             "previous_timeline_start": previous_start,
+            "previous_track_id": previous_track_id,
         },
         summary={"operation": "move_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
@@ -205,6 +209,7 @@ def _record_operation(
     payload: dict[str, Any],
     summary: dict[str, Any],
     actor_id: str | None,
+    undo_of: str | None = None,
 ) -> None:
     before = sequence.revision
     after = before + 1
@@ -218,6 +223,7 @@ def _record_operation(
             kind=kind,
             payload=payload,
             actor_id=actor_id,
+            undo_of=undo_of,
         )
     )
     db.add(

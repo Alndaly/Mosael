@@ -69,6 +69,14 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function undoSequence(sequenceId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/undo`, { method: "POST" });
+}
+
+export function redoSequence(sequenceId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
+}
+
 export function exportSequence(sequenceId: string): Promise<Job> {
   return api<Job>(`/api/sequences/${sequenceId}/export`, { method: "POST" });
 }

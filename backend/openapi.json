@@ -755,6 +755,90 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/undo": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Undo Sequence",
+        "operationId": "undo_sequence_api_sequences__sequence_id__undo_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/redo": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Redo Sequence",
+        "operationId": "redo_sequence_api_sequences__sequence_id__redo_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/export": {
       "post": {
         "tags": [
@@ -2972,6 +3056,16 @@
           "revision": {
             "type": "integer",
             "title": "Revision"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo",
+            "default": false
+          },
+          "can_redo": {
+            "type": "boolean",
+            "title": "Can Redo",
+            "default": false
           },
           "tracks": {
             "items": {

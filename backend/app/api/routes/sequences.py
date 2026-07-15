@@ -8,6 +8,7 @@ from app.api.deps import DbSession
 from app.api.schemas import InsertClipRequest, JobOut, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
 from app.db.models import Job, Project, Sequence, Track
 from app.domain.render import start_export
+from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
     DeleteClip,
@@ -50,7 +51,11 @@ def list_sequences(project_id: str, db: DbSession) -> list[Sequence]:
         .options(selectinload(Sequence.tracks).selectinload(Track.clips))
         .order_by(Sequence.updated_at.desc())
     )
-    return list(db.scalars(stmt))
+    sequences = list(db.scalars(stmt))
+    for sequence in sequences:
+        sequence.can_undo = can_undo(db, sequence.id)
+        sequence.can_redo = can_redo(db, sequence.id)
+    return sequences
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
@@ -74,6 +79,18 @@ def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSessi
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
 def delete_clip(sequence_id: str, clip_id: str, db: DbSession) -> Sequence:
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
+def undo_sequence(sequence_id: str, db: DbSession) -> Sequence:
+    _apply(lambda: undo_operation(db, sequence_id))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
+def redo_sequence(sequence_id: str, db: DbSession) -> Sequence:
+    _apply(lambda: redo_operation(db, sequence_id))
     return _get_sequence(db, sequence_id)
 
 
@@ -106,4 +123,6 @@ def _get_sequence(db, sequence_id: str) -> Sequence:
     sequence = db.scalar(stmt)
     if sequence is None:
         raise HTTPException(status_code=404, detail="Sequence not found")
+    sequence.can_undo = can_undo(db, sequence_id)
+    sequence.can_redo = can_redo(db, sequence_id)
     return sequence

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Download, Loader2, Plus, Scissors } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Undo2 } from "lucide-react";
 
 import {
   api,
@@ -9,13 +9,16 @@ import {
   importAsset,
   insertClip,
   moveClip,
+  redoSequence,
   trimClip,
+  undoSequence,
   type Asset,
   type Job,
   type Project,
   type Sequence,
   type Workspace,
 } from "@/api/client";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -99,6 +102,17 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const undoMutation = useMutation({
+    mutationFn: () => undoSequence(sequence!.id),
+    onSuccess: () => {
+      useEditorStore.getState().selectClip(null);
+      void refreshSequences();
+    },
+  });
+  const redoMutation = useMutation({
+    mutationFn: () => redoSequence(sequence!.id),
+    onSuccess: refreshSequences,
+  });
 
   const allClips = React.useMemo(
     () => (sequence?.tracks ?? []).flatMap((track) => track.clips ?? []),
@@ -126,7 +140,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      if (event.code === "Space") {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoMutation.mutate();
+        else undoMutation.mutate();
+      } else if (event.code === "Space") {
         event.preventDefault();
         useEditorStore.getState().togglePlaying();
       } else if (event.key === "Delete" || event.key === "Backspace") {
@@ -183,7 +201,39 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onInsertClip={(args) => insertClipMutation.mutate(args)}
           onMoveClip={(clipId, timelineStart) => moveClipMutation.mutate({ clipId, timelineStart })}
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
-          toolbarExtra={<ExportControl workspaceId={workspace.id} projectId={project.id} sequenceId={sequence.id} />}
+          toolbarExtra={
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!sequence.can_undo || undoMutation.isPending}
+                    onClick={() => undoMutation.mutate()}
+                    aria-label={t("undo")}
+                  >
+                    <Undo2 size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("undo")} (⌘Z)</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!sequence.can_redo || redoMutation.isPending}
+                    onClick={() => redoMutation.mutate()}
+                    aria-label={t("redoAction")}
+                  >
+                    <Redo2 size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("redoAction")} (⇧⌘Z)</TooltipContent>
+              </Tooltip>
+              <ExportControl workspaceId={workspace.id} projectId={project.id} sequenceId={sequence.id} />
+            </>
+          }
         />
       </section>
     </div>

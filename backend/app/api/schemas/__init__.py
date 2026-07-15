@@ -98,6 +98,8 @@ class SequenceOut(OrmModel):
     height: int
     fps: float
     revision: int
+    can_undo: bool = False
+    can_redo: bool = False
     tracks: list[TrackOut] = Field(default_factory=list)
 
 
