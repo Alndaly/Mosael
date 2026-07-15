@@ -28,7 +28,11 @@ CORE_SKILLS = [
         "source": "core",
         "tools": [
             {"name": "create_sequence", "method": "POST", "path": "/api/sequences"},
+            {"name": "inspect_sequence", "method": "GET", "path": "/api/sequences/{sequence_id}"},
             {"name": "insert_clip", "method": "POST", "path": "/api/sequences/{sequence_id}/clips"},
+            {"name": "undo", "method": "POST", "path": "/api/sequences/{sequence_id}/undo"},
+            {"name": "redo", "method": "POST", "path": "/api/sequences/{sequence_id}/redo"},
+            {"name": "export_sequence", "method": "POST", "path": "/api/sequences/{sequence_id}/export"},
         ],
         "permissions": ["sequence:read", "sequence:write"],
     },

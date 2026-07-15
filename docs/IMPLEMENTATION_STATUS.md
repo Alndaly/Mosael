@@ -36,14 +36,30 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Export flow: export button in the timeline toolbar → render job with live progress → mp4 in ~/.mibu-new/exports/ → result registered as an exported asset (thumbnail included) that appears in the media pool and library.
 - Test isolation: tests run in a temp MIBU_DATA_DIR (conftest) so the suite never touches the live database.
 
+### Undo / Redo (plan §10.2)
+
+- Alembic 0002 history columns; undo applies operation inverses, redo re-applies; fresh edits invalidate the redo stack; every undo/redo is itself an operation + revision.
+- Editor toolbar buttons + ⌘Z / ⇧⌘Z; can_undo/can_redo on sequence responses.
+
+### Transcripts (plan Phase 5 MVP)
+
+- Alembic 0003: transcripts / transcript_segments / transcript_tokens / clip_transcript_refs.
+- PUT/GET /api/assets/{id}/transcript; attaching replaces the prior transcript; transcripts are analysis results, never a second edit state.
+- Pure projection kernel (transcriptProjection.ts, tested) maps asset segments through clip src ranges; editor left panel 素材/逐字稿 tabs with click-to-seek and playhead highlight.
+
+### MCP (plan §17 minimal)
+
+- backend/mcp_server.py (stdio, FastMCP): list_projects / list_assets / inspect_sequence returning product-semantic summaries; verified with a real MCP stdio client. See docs/MCP.md.
+
 ## Next
 
-- Undo/redo surfaced in the editor (operation log already records history).
 - Audio track playback in the monitor; waveforms in pool and clips.
 - Timeline preview via RenderPlan-backed proxy renders for multi-track scenes.
-- Transcript tables and projection views (Phase 5).
+- Transcript-driven editing operations (delete-by-word → apply_transcript_edit).
+- Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters; real generation provider adapters.
 - A real scheduler runner process claiming due tasks.
+- Local login + workspace membership checks (Phase 2 acceptance).
 - Electron packaging pass (Phase 14).
 
 ## Frontend Rules
