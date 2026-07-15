@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, ImagePlus, Loader2, Sparkles, Video } from "lucide-react";
+import { CircleAlert, ImagePlus, Loader2, Send, Sparkles, Video } from "lucide-react";
 
 import {
   api,
@@ -13,8 +13,8 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 
 export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
@@ -49,20 +49,32 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} project={project} switcher={switcher} />
       ) : (
-        <div className="gen-view">
-          <div className="feature-toolbar gen-toolbar">{switcher}</div>
-          <GeneratePanel workspace={workspace} project={project} />
-        </div>
+        <GenerateWorkspace workspace={workspace} project={project} switcher={switcher} />
       )}
     </div>
   );
 }
 
-function GeneratePanel({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+/**
+ * Generation, shaped exactly like the chat surface: models live in the left
+ * rail (where chat keeps its sessions), each generation renders as a
+ * prompt-bubble + result-row pair in the centered thread, and the same
+ * composer sits at the bottom.
+ */
+function GenerateWorkspace({
+  workspace,
+  project,
+  switcher,
+}: {
+  workspace: Workspace;
+  project: Project | null;
+  switcher?: React.ReactNode;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [prompt, setPrompt] = React.useState("");
   const [modelId, setModelId] = React.useState<string | null>(null);
+  const threadRef = React.useRef<HTMLDivElement | null>(null);
 
   const models = useQuery({
     queryKey: ["generation-models"],
@@ -116,87 +128,123 @@ function GeneratePanel({ workspace, project }: { workspace: Workspace; project: 
     }
   }, [succeededCount, qc, workspace.id]);
 
-  return (
-    <div>
-      <section className="gen-compose panel">
-        <textarea
-          className="gen-prompt"
-          rows={3}
-          placeholder={t("promptPlaceholder")}
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-        />
-        <div className="gen-compose-row">
-          <div className="gen-models">
-            {(models.data ?? []).map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                className={selectedModel?.id === model.id ? "gen-model active" : "gen-model"}
-                onClick={() => setModelId(model.id)}
-              >
-                {model.kind === "image" ? <ImagePlus size={13} /> : <Video size={13} />}
-                {model.model}
-              </button>
-            ))}
-          </div>
-          <Button
-            onClick={() => createGeneration.mutate()}
-            disabled={!prompt.trim() || !selectedModel || createGeneration.isPending}
-          >
-            <Sparkles size={15} /> {t("generate")}
-          </Button>
-        </div>
-      </section>
+  // Oldest first, like a conversation.
+  const ordered = React.useMemo(() => [...(generations.data ?? [])].reverse(), [generations.data]);
 
-      <h2 className="section-label" style={{ marginTop: 18 }}>
-        <Sparkles size={13} /> {t("generationQueue")}
-      </h2>
-      <div className="gen-queue">
-        {(generations.data ?? []).map((generation) => {
-          const job = jobs.data?.find((item) => item.id === generation.job_id);
-          return <GenerationRow key={generation.id} generation={generation} job={job ?? null} />;
-        })}
-        {generations.data?.length === 0 && <div className="empty-inline">{t("noGenerationJobs")}</div>}
-      </div>
+  React.useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
+  }, [ordered.length]);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!prompt.trim() || !selectedModel || createGeneration.isPending) return;
+    createGeneration.mutate();
+  };
+
+  return (
+    <div className="chat-grid">
+      <aside className="chat-sessions panel">
+        <div className="panel-head">
+          <h2>{t("generationModels")}</h2>
+        </div>
+        <div className="chat-session-list">
+          {(models.data ?? []).map((model) => (
+            <button
+              key={model.id}
+              type="button"
+              className={selectedModel?.id === model.id ? "chat-session active" : "chat-session"}
+              onClick={() => setModelId(model.id)}
+            >
+              <strong>
+                {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />} {model.model}
+              </strong>
+              <small>{model.provider}</small>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <section className="chat-main panel">
+        <div className="chat-thread" ref={threadRef}>
+          {ordered.length === 0 && (
+            <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
+          )}
+          {ordered.map((generation) => (
+            <GenerationTurn
+              key={generation.id}
+              generation={generation}
+              job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
+            />
+          ))}
+        </div>
+        <form className="chat-composer" onSubmit={submit}>
+          <textarea
+            rows={2}
+            value={prompt}
+            placeholder={t("promptPlaceholder")}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              event.target.style.height = "auto";
+              event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit(event);
+              }
+            }}
+          />
+          <div className="chat-composer-bar">
+            <div className="chat-composer-left">
+              {switcher}
+              {selectedModel && (
+                <span className="composer-model">
+                  {selectedModel.kind === "image" ? <ImagePlus size={11} /> : <Video size={11} />}
+                  {selectedModel.model}
+                </span>
+              )}
+            </div>
+            <Button
+              type="submit"
+              size="icon"
+              className="chat-send"
+              aria-label={t("generate")}
+              disabled={!prompt.trim() || !selectedModel || createGeneration.isPending}
+            >
+              {createGeneration.isPending ? <Loader2 size={15} className="spin" /> : <Send size={15} />}
+            </Button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
 
-function GenerationRow({ generation, job }: { generation: GenerationJob; job: Job | null }) {
+function GenerationTurn({ generation, job }: { generation: GenerationJob; job: Job | null }) {
   const t = useI18n();
   const status = job?.status ?? "queued";
   return (
-    <div className="gen-row">
-      <div className="gen-thumb">
-        {generation.result_asset_id ? (
-          <img src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
-        ) : status === "failed" ? (
-          <CircleAlert size={16} />
-        ) : (
-          <Loader2 size={16} className="spin" />
-        )}
+    <>
+      <div className="chat-bubble user">{String(generation.request.prompt ?? "")}</div>
+      <div className="chat-bubble assistant">
+        <div className="gen-turn">
+          {generation.result_asset_id ? (
+            <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
+          ) : status === "failed" ? (
+            <span className="gen-turn-status failed">
+              <CircleAlert size={13} /> {t("genFailed")}
+              {job?.error ? ` · ${job.error}` : ""}
+            </span>
+          ) : (
+            <span className="gen-turn-status">
+              <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
+            </span>
+          )}
+          <small>
+            {generation.provider} · {generation.model}
+          </small>
+        </div>
       </div>
-      <div className="gen-row-body">
-        <strong>{String(generation.request.prompt ?? "")}</strong>
-        <small>
-          {generation.provider} · {generation.model}
-          {job?.error ? ` · ${job.error}` : ""}
-        </small>
-      </div>
-      <Badge variant={status === "failed" ? "outline" : "secondary"}>
-        {status === "succeeded" ? (
-          <>
-            <CircleCheck size={11} /> {t("genDone")}
-          </>
-        ) : status === "failed" ? (
-          t("genFailed")
-        ) : status === "running" ? (
-          t("generating")
-        ) : (
-          t("genQueued")
-        )}
-      </Badge>
-    </div>
+    </>
   );
 }
