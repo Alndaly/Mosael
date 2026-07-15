@@ -92,6 +92,10 @@ export const messages = {
     zoomIn: "放大时间线",
     zoomOut: "缩小时间线",
     fitTimeline: "适配时间线",
+    exportVideo: "导出",
+    exporting: "导出中",
+    exportDone: "导出完成",
+    exportFailed: "导出失败",
 
     // AI Studio
     aiDescription: "统一管理图片、视频生成模型和生成任务。",
@@ -222,6 +226,10 @@ export const messages = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     fitTimeline: "Fit timeline",
+    exportVideo: "Export",
+    exporting: "Exporting",
+    exportDone: "Export complete",
+    exportFailed: "Export failed",
 
     // AI Studio
     aiDescription: "Manage image and video generation models and jobs.",

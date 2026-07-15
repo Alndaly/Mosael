@@ -723,7 +723,41 @@
 
 .tl-toolbar-actions {
   display: flex;
+  align-items: center;
   gap: 2px;
+}
+
+.export-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+.export-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.export-status.done {
+  color: var(--track-audio-text);
+}
+
+.export-status.failed {
+  color: var(--destructive);
+}
+
+.spin {
+  animation: mibu-spin 0.9s linear infinite;
+}
+
+@keyframes mibu-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tl-body {

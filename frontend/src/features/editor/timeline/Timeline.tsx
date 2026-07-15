@@ -35,12 +35,14 @@ export function Timeline({
   onInsertClip,
   onMoveClip,
   onTrimClip,
+  toolbarExtra,
 }: {
   sequence: Sequence;
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
   onMoveClip: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
+  toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
@@ -182,6 +184,7 @@ export function Timeline({
       <div className="tl-toolbar">
         <span className="timecode tl-readout">{formatTimecode(playhead)}</span>
         <div className="tl-toolbar-actions">
+          {toolbarExtra}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

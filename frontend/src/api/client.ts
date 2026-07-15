@@ -69,6 +69,10 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function exportSequence(sequenceId: string): Promise<Job> {
+  return api<Job>(`/api/sequences/${sequenceId}/export`, { method: "POST" });
+}
+
 export async function importAsset(params: {
   workspaceId: string;
   projectId: string;

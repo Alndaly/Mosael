@@ -1,15 +1,17 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Scissors } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, Loader2, Plus, Scissors } from "lucide-react";
 
 import {
   api,
   deleteClip,
+  exportSequence,
   importAsset,
   insertClip,
   moveClip,
   trimClip,
   type Asset,
+  type Job,
   type Project,
   type Sequence,
   type Workspace,
@@ -181,8 +183,69 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onInsertClip={(args) => insertClipMutation.mutate(args)}
           onMoveClip={(clipId, timelineStart) => moveClipMutation.mutate({ clipId, timelineStart })}
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
+          toolbarExtra={<ExportControl workspaceId={workspace.id} projectId={project.id} sequenceId={sequence.id} />}
         />
       </section>
     </div>
+  );
+}
+
+function ExportControl({
+  workspaceId,
+  projectId,
+  sequenceId,
+}: {
+  workspaceId: string;
+  projectId: string;
+  sequenceId: string;
+}) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [jobId, setJobId] = React.useState<string | null>(null);
+  const startExport = useMutation({
+    mutationFn: () => exportSequence(sequenceId),
+    onSuccess: (job) => setJobId(job.id),
+  });
+  const job = useQuery({
+    queryKey: ["job", jobId],
+    enabled: Boolean(jobId),
+    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "succeeded" || status === "failed" ? false : 700;
+    },
+    refetchIntervalInBackground: true,
+  });
+
+  const status = jobId ? (job.data?.status ?? "queued") : null;
+  React.useEffect(() => {
+    if (status === "succeeded") {
+      void qc.invalidateQueries({ queryKey: ["assets", workspaceId, projectId] });
+      void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
+    }
+  }, [status, qc, workspaceId, projectId]);
+
+  const busy = startExport.isPending || status === "queued" || status === "running";
+
+  return (
+    <span className="export-control">
+      {status === "running" && (
+        <span className="export-status timecode">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
+      )}
+      {status === "succeeded" && (
+        <span className="export-status done">
+          <CircleCheck size={13} /> {t("exportDone")}
+        </span>
+      )}
+      {status === "failed" && (
+        <span className="export-status failed" title={job.data?.error ?? undefined}>
+          <CircleAlert size={13} /> {t("exportFailed")}
+        </span>
+      )}
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => startExport.mutate()}>
+        {busy ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+        {busy ? t("exporting") : t("exportVideo")}
+      </Button>
+    </span>
   );
 }
