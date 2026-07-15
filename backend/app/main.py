@@ -33,10 +33,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Mibu New API", version="0.1.0", lifespan=lifespan)
+    # Auth is bearer-token (no cookies), and the packaged Electron shell loads
+    # the frontend from file://, whose fetches carry Origin: null — so CORS is
+    # open while authentication still gates every request (plan §20).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

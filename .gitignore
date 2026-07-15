@@ -11,3 +11,7 @@ build/
 *.db-wal
 .env
 
+release/
+backend/build/
+backend/dist/
+*.spec

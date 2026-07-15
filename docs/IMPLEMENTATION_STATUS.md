@@ -58,6 +58,13 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Login/register screen gates the app; token in localStorage; 401 anywhere drops back to login; account section with sign-out in Settings; MCP server passes MIBU_TOKEN.
 - Isolation tests: second user sees no foreign workspaces, all cross-user access 404s.
 
+### Desktop packaging (plan Phase 14, macOS)
+
+- Backend packaged with PyInstaller (run_backend.py → dist/mibu-backend, 127.0.0.1 only).
+- Production Electron shell: reuses an already-healthy backend or spawns the packaged binary, waits on /api/health (30s), error dialogs on failure/crash, kills the backend on quit.
+- electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
+- Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
+
 ## Next
 
 - Audio track playback in the monitor; waveforms in pool and clips.
@@ -66,7 +73,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters; real generation provider adapters.
 - A real scheduler runner process claiming due tasks.
-- Electron packaging pass (Phase 14).
+- Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
 
 ## Frontend Rules
 
