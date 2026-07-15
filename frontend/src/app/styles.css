@@ -848,7 +848,9 @@
 .settings-sections {
   display: grid;
   gap: 14px;
-  max-width: 640px;
+  width: 100%;
+  max-width: 720px;
+  margin: 8px auto 0;
 }
 
 .settings-section {
@@ -1829,9 +1831,15 @@
 /* ---------- Chat workspace ---------- */
 
 .ai-studio-view {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 0;
+}
+
+.ai-studio-view > .chat-grid,
+.ai-studio-view > .gen-view {
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-grid {
@@ -2095,17 +2103,30 @@
 
 .chat-composer {
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
   width: 100%;
   max-width: 780px;
   margin: 6px auto 14px;
   border: 1px solid var(--input);
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--panel);
   box-shadow: var(--shadow-raised);
-  padding: 8px 8px 8px 10px;
+  padding: 12px 12px 8px 14px;
   transition: border-color 100ms, box-shadow 100ms;
+}
+
+.chat-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-composer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chat-composer-wrap {
@@ -2123,15 +2144,15 @@
 }
 
 .chat-composer textarea {
-  max-height: 160px;
-
-  flex: 1;
+  max-height: 220px;
+  min-height: 44px;
+  width: 100%;
   border: none;
   background: transparent;
-  padding: 5px 4px;
+  padding: 2px 2px 6px;
   color: var(--foreground);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 13.5px;
+  line-height: 1.55;
   resize: none;
   outline: none;
 }
@@ -2449,6 +2470,7 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
+  margin-bottom: 14px;
 }
 
 /* Segmented control (对话/生成 etc.) */

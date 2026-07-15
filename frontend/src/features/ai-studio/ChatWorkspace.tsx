@@ -176,7 +176,7 @@ export function ChatWorkspace({
     <div className="chat-grid">
       <aside className="chat-sessions panel">
         <div className="panel-head">
-          {switcher ?? <h2>{t("aiTabChat")}</h2>}
+          {activeSession ? <h2>{t("aiTabChat")}</h2> : (switcher ?? <h2>{t("aiTabChat")}</h2>)}
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("chatNewSession")}
           </Button>
@@ -272,29 +272,14 @@ export function ChatWorkspace({
               </div>
             )}
             <form className="chat-composer" onSubmit={submit}>
-              <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
-                <label>
-                  <input
-                    type="file"
-                    accept="video/*,audio/*,image/*"
-                    className="hidden-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) uploadAttachment.mutate(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  {uploadAttachment.isPending ? <Loader2 size={14} className="spin" /> : <Paperclip size={14} />}
-                </label>
-              </Button>
               <textarea
-                rows={1}
+                rows={2}
                 value={draft}
                 placeholder={t("chatPlaceholder")}
                 onChange={(event) => {
                   setDraft(event.target.value);
                   event.target.style.height = "auto";
-                  event.target.style.height = `${Math.min(event.target.scrollHeight, 160)}px`;
+                  event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
@@ -303,15 +288,35 @@ export function ChatWorkspace({
                   }
                 }}
               />
-              <Button
-                type="submit"
-                size="icon"
-                className="chat-send"
-                aria-label={t("chatSend")}
-                disabled={(!draft.trim() && attachments.length === 0) || running || sendMessage.isPending}
-              >
-                <Send size={15} />
-              </Button>
+              <div className="chat-composer-bar">
+                <div className="chat-composer-left">
+                  {switcher}
+                  <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
+                    <label>
+                      <input
+                        type="file"
+                        accept="video/*,audio/*,image/*"
+                        className="hidden-input"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          if (file) uploadAttachment.mutate(file);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                      {uploadAttachment.isPending ? <Loader2 size={14} className="spin" /> : <Paperclip size={14} />}
+                    </label>
+                  </Button>
+                </div>
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="chat-send"
+                  aria-label={t("chatSend")}
+                  disabled={(!draft.trim() && attachments.length === 0) || running || sendMessage.isPending}
+                >
+                  <Send size={15} />
+                </Button>
+              </div>
             </form>
           </>
         )}
