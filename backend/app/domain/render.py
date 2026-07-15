@@ -25,18 +25,27 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     if sequence is None:
         raise LookupError("Sequence not found")
 
-    video_track = next((track for track in sequence.tracks if track.kind == "video"), None)
-    clips = [
-        {
+    def clip_dict(clip) -> dict:
+        return {
             "id": clip.id,
             "asset_id": clip.asset_id,
             "timeline_start": clip.timeline_start,
             "src_in": clip.src_in,
             "src_out": clip.src_out,
+            "gain": clip.gain,
+            "muted": clip.muted,
+            "effects": clip.effects,
         }
-        for clip in (video_track.clips if video_track else [])
-    ]
-    asset_ids = {clip["asset_id"] for clip in clips}
+
+    video_tracks = sorted(
+        (track for track in sequence.tracks if track.kind == "video"), key=lambda track: track.position
+    )
+    audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
+    base_clips = [clip_dict(clip) for clip in (video_tracks[0].clips if video_tracks else [])]
+    overlay_clips = [clip_dict(clip) for track in video_tracks[1:] for clip in track.clips]
+    audio_clips = [clip_dict(clip) for track in audio_tracks for clip in track.clips]
+
+    asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips}
     assets = {
         asset.id: {"file_key": asset.file_key}
         for asset in db.scalars(select(Asset).where(Asset.id.in_(asset_ids)))
@@ -47,8 +56,10 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         width=sequence.width,
         height=sequence.height,
         fps=sequence.fps,
-        clips=clips,
+        clips=base_clips,
         assets=assets,
+        overlay_clips=overlay_clips,
+        audio_clips=audio_clips,
     )
 
 

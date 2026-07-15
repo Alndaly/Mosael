@@ -122,6 +122,21 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function addTrack(sequenceId: string, kind: "video" | "audio"): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/tracks`, { method: "POST", body: JSON.stringify({ kind }) });
+}
+
+export function removeTrack(sequenceId: string, trackId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, { method: "DELETE" });
+}
+
+export function setClipEffects(sequenceId: string, clipId: string, effects: Record<string, unknown>): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/effects`, {
+    method: "PATCH",
+    body: JSON.stringify({ effects }),
+  });
+}
+
 export function undoSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/undo`, { method: "POST" });
 }

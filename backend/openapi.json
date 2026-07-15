@@ -1128,6 +1128,170 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/tracks": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Add Track",
+        "operationId": "add_track_api_sequences__sequence_id__tracks_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTrackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/tracks/{track_id}": {
+      "delete": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Remove Track",
+        "operationId": "remove_track_api_sequences__sequence_id__tracks__track_id__delete",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/effects": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Set Clip Effects",
+        "operationId": "set_clip_effects_api_sequences__sequence_id__clips__clip_id__effects_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetClipEffectsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/undo": {
       "post": {
         "tags": [
@@ -2290,6 +2454,20 @@
   },
   "components": {
     "schemas": {
+      "AddTrackRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^(video|audio)$",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "AddTrackRequest"
+      },
       "AgentManifestOut": {
         "properties": {
           "app": {
@@ -3335,7 +3513,7 @@
           },
           "trigger_type": {
             "type": "string",
-            "pattern": "^(manual|once|interval)$",
+            "pattern": "^(manual|once|interval|daily|weekly)$",
             "title": "Trigger Type"
           },
           "schedule": {
@@ -3559,7 +3737,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^(manual|once|interval)$"
+                "pattern": "^(manual|once|interval|daily|weekly)$"
               },
               {
                 "type": "null"
@@ -3722,6 +3900,17 @@
           "revision"
         ],
         "title": "SequenceOut"
+      },
+      "SetClipEffectsRequest": {
+        "properties": {
+          "effects": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Effects"
+          }
+        },
+        "type": "object",
+        "title": "SetClipEffectsRequest"
       },
       "TrackOut": {
         "properties": {

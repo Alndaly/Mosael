@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Clip, Sequence, SequenceOperation
+from app.db.models import Clip, Sequence, SequenceOperation, Track
 from app.domain.sequences.operations import SequenceDomainError, _record_operation, _require_sequence
 
 """
@@ -15,7 +15,16 @@ original, un-reverts it, and appends a "redo" op. A fresh edit after an undo
 invalidates the redo stack (checked by revision ordering).
 """
 
-UNDOABLE_KINDS = ("insert_clip", "move_clip", "trim_clip", "delete_clip", "apply_transcript_edit")
+UNDOABLE_KINDS = (
+    "insert_clip",
+    "move_clip",
+    "trim_clip",
+    "delete_clip",
+    "apply_transcript_edit",
+    "add_track",
+    "remove_track",
+    "set_clip_effect",
+)
 
 
 def undo(db: Session, sequence_id: str) -> Sequence:
@@ -130,6 +139,25 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         for created in payload["created"]:
             _delete_clip_row(db, created["clip_id"])
         _restore_clip_row(db, sequence, payload["original"])
+    elif operation.kind == "add_track":
+        track = db.get(Track, payload["track_id"])
+        if track is not None:
+            if track.clips:
+                raise SequenceDomainError("Cannot undo add_track while the track has clips")
+            db.delete(track)
+    elif operation.kind == "remove_track":
+        db.add(
+            Track(
+                id=payload["track_id"],
+                sequence_id=sequence.id,
+                kind=payload["kind"],
+                name=payload["name"],
+                position=payload["position"],
+            )
+        )
+    elif operation.kind == "set_clip_effect":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.effects = payload["previous"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be undone")
 
@@ -153,6 +181,25 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         _delete_clip_row(db, payload["original"]["clip_id"])
         for created in payload["created"]:
             _restore_clip_row(db, sequence, created)
+    elif operation.kind == "add_track":
+        db.add(
+            Track(
+                id=payload["track_id"],
+                sequence_id=sequence.id,
+                kind=payload["kind"],
+                name=payload["name"],
+                position=payload["position"],
+            )
+        )
+    elif operation.kind == "remove_track":
+        track = db.get(Track, payload["track_id"])
+        if track is not None:
+            if track.clips:
+                raise SequenceDomainError("Cannot redo remove_track while the track has clips")
+            db.delete(track)
+    elif operation.kind == "set_clip_effect":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.effects = payload["effects"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be redone")
 

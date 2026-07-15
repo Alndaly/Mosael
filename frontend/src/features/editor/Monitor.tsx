@@ -24,10 +24,25 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const loadedAudioAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
-  const videoClips = React.useMemo(() => {
-    const track = (sequence.tracks ?? []).find((item) => item.kind === "video");
-    return [...(track?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start);
-  }, [sequence]);
+  const videoTracks = React.useMemo(
+    () =>
+      (sequence.tracks ?? [])
+        .filter((item) => item.kind === "video")
+        .sort((a, b) => a.position - b.position),
+    [sequence],
+  );
+  const videoClips = React.useMemo(
+    () => [...(videoTracks[0]?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
+    [videoTracks],
+  );
+  const overlayClips = React.useMemo(
+    () =>
+      videoTracks
+        .slice(1)
+        .flatMap((track) => track.clips ?? [])
+        .sort((a, b) => a.timeline_start - b.timeline_start),
+    [videoTracks],
+  );
   const audioTrack = React.useMemo(
     () => (sequence.tracks ?? []).find((item) => item.kind === "audio") ?? null,
     [sequence],
@@ -47,6 +62,35 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
     audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  const activeOverlayClip =
+    overlayClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  const overlayAsset = activeOverlayClip ? (assetById.get(activeOverlayClip.asset_id) ?? null) : null;
+  const pip = {
+    x: 0.62,
+    y: 0.06,
+    scale: 0.33,
+    ...(((activeOverlayClip?.effects as { pip?: { x?: number; y?: number; scale?: number } })?.pip) ?? {}),
+  };
+  const overlayRef = React.useRef<HTMLVideoElement | null>(null);
+  const loadedOverlayAssetRef = React.useRef<string | null>(null);
+
+  // Overlay video (PiP) kept in lockstep, muted — export mixes only base+audio tracks.
+  React.useEffect(() => {
+    const video = overlayRef.current;
+    if (!video) return;
+    if (!activeOverlayClip || !overlayAsset || overlayAsset.kind === "image") {
+      if (!video.paused) video.pause();
+      return;
+    }
+    if (loadedOverlayAssetRef.current !== overlayAsset.id) {
+      loadedOverlayAssetRef.current = overlayAsset.id;
+      video.src = assetFileUrl(overlayAsset.id);
+    }
+    const desired = playhead - activeOverlayClip.timeline_start + activeOverlayClip.src_in;
+    if (Math.abs(video.currentTime - desired) > 0.18) video.currentTime = desired;
+    if (playing && video.paused) video.play().catch(() => undefined);
+    else if (!playing && !video.paused) video.pause();
+  }, [playhead, playing, activeOverlayClip, overlayAsset]);
 
   // Playback clock. Interval-based (not rAF) so it keeps running when the
   // window is occluded or backgrounded — audio keeps playing there too.
@@ -121,18 +165,39 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     <div className="monitor-stack">
       <audio ref={audioRef} preload="auto" />
       <div className="monitor-stage">
-        <video
-          ref={videoRef}
-          className="monitor-video"
-          style={{ display: activeClip && !isImage ? "block" : "none" }}
-          muted={false}
-          playsInline
-          preload="auto"
-        />
-        {activeClip && isImage && activeAsset && (
-          <img className="monitor-video" src={assetFileUrl(activeAsset.id)} alt="" />
-        )}
-        {!activeClip && <div className="monitor-blank" />}
+        <div className="monitor-frame-wrap">
+          <video
+            ref={videoRef}
+            className="monitor-video"
+            style={{ display: activeClip && !isImage ? "block" : "none" }}
+            muted={false}
+            playsInline
+            preload="auto"
+          />
+          {activeClip && isImage && activeAsset && (
+            <img className="monitor-video" src={assetFileUrl(activeAsset.id)} alt="" />
+          )}
+          {!activeClip && <div className="monitor-blank" />}
+          {activeOverlayClip && overlayAsset && (
+            overlayAsset.kind === "image" ? (
+              <img
+                className="monitor-overlay"
+                src={assetFileUrl(overlayAsset.id)}
+                alt=""
+                style={{ left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.scale * 100}%` }}
+              />
+            ) : (
+              <video
+                ref={overlayRef}
+                className="monitor-overlay"
+                style={{ left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.scale * 100}%` }}
+                muted
+                playsInline
+                preload="auto"
+              />
+            )
+          )}
+        </div>
       </div>
       <div className="monitor-transport">
         <div className="monitor-buttons">

@@ -6,12 +6,14 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    AddTrackRequest,
     CutClipRangeRequest,
     InsertClipRequest,
     JobOut,
     MoveClipRequest,
     SequenceCreate,
     SequenceOut,
+    SetClipEffectsRequest,
     TrimClipRequest,
 )
 from app.db.models import Job, Project, Sequence, Track
@@ -20,14 +22,20 @@ from app.domain.render import start_export
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
+    AddTrack,
     CutClipRange,
     DeleteClip,
     InsertClip,
     MoveClip,
+    RemoveTrack,
     SequenceDomainError,
+    SetClipEffects,
     TrimClip,
+    add_track as add_track_operation,
     cut_clip_range as cut_clip_range_operation,
     delete_clip as delete_clip_operation,
+    remove_track as remove_track_operation,
+    set_clip_effects as set_clip_effects_operation,
     insert_clip as insert_clip_operation,
     move_clip as move_clip_operation,
     trim_clip as trim_clip_operation,
@@ -106,6 +114,29 @@ def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db
 def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/tracks", response_model=SequenceOut)
+def add_track(sequence_id: str, body: AddTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: add_track_operation(db, sequence_id, AddTrack(kind=body.kind)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.delete("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
+def remove_track(sequence_id: str, track_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: remove_track_operation(db, sequence_id, RemoveTrack(track_id=track_id)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/effects", response_model=SequenceOut)
+def set_clip_effects(
+    sequence_id: str, clip_id: str, body: SetClipEffectsRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: set_clip_effects_operation(db, sequence_id, SetClipEffects(clip_id=clip_id, effects=body.effects)))
     return _get_sequence(db, sequence_id)
 
 

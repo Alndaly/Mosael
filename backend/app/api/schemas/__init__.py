@@ -189,6 +189,14 @@ class CutClipRangeRequest(BaseModel):
     src_end: float
 
 
+class AddTrackRequest(BaseModel):
+    kind: str = Field(pattern="^(video|audio)$")
+
+
+class SetClipEffectsRequest(BaseModel):
+    effects: dict = Field(default_factory=dict)
+
+
 class JobOut(OrmModel):
     id: str
     workspace_id: str

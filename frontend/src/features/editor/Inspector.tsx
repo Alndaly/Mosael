@@ -5,19 +5,41 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 
+const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
+  { key: "↖", x: 0.05, y: 0.06 },
+  { key: "↗", x: 0.62, y: 0.06 },
+  { key: "↙", x: 0.05, y: 0.6 },
+  { key: "↘", x: 0.62, y: 0.6 },
+];
+const PIP_SIZES = [0.25, 0.33, 0.5];
+
 export function Inspector({
   sequence,
   selectedClip,
   assets,
+  isOverlayClip,
   onDeleteClip,
+  onSetEffects,
 }: {
   sequence: Sequence;
   selectedClip: Clip | null;
   assets: Asset[];
+  isOverlayClip: boolean;
   onDeleteClip: (clipId: string) => void;
+  onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
 }) {
   const t = useI18n();
   const asset = selectedClip ? assets.find((item) => item.id === selectedClip.asset_id) : null;
+  const pip = {
+    x: 0.62,
+    y: 0.06,
+    scale: 0.33,
+    ...(((selectedClip?.effects as { pip?: { x?: number; y?: number; scale?: number } })?.pip) ?? {}),
+  };
+  const applyPip = (patch: Partial<typeof pip>) => {
+    if (!selectedClip) return;
+    onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
+  };
 
   return (
     <section className="panel inspector">
@@ -44,6 +66,40 @@ export function Inspector({
             <dt>{t("gain")}</dt>
             <dd className="timecode">{selectedClip.gain.toFixed(2)}</dd>
           </dl>
+          {isOverlayClip && (
+            <div className="pip-controls">
+              <span className="pip-label">{t("pipPosition")}</span>
+              <div className="pip-row">
+                {PIP_POSITIONS.map((position) => (
+                  <button
+                    key={position.key}
+                    type="button"
+                    className={
+                      Math.abs(pip.x - position.x) < 0.01 && Math.abs(pip.y - position.y) < 0.01
+                        ? "pip-btn active"
+                        : "pip-btn"
+                    }
+                    onClick={() => applyPip({ x: position.x, y: position.y })}
+                  >
+                    {position.key}
+                  </button>
+                ))}
+              </div>
+              <span className="pip-label">{t("pipSize")}</span>
+              <div className="pip-row">
+                {PIP_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={Math.abs(pip.scale - size) < 0.01 ? "pip-btn active" : "pip-btn"}
+                    onClick={() => applyPip({ scale: size })}
+                  >
+                    {Math.round(size * 100)}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="inspector-actions">
             <Button variant="destructive" size="sm" onClick={() => onDeleteClip(selectedClip.id)}>
               <Trash2 size={13} /> {t("deleteClip")}

@@ -57,15 +57,55 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         pair_labels.append(f"[v{i}][a{i}]")
 
     n = len(plan.video_segments)
-    filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vout][aout]")
+    filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
+
+    # Picture-in-picture overlays from upper video tracks.
+    video_label = "[vbase]"
+    for i, overlay in enumerate(plan.overlays):
+        path = resolve(overlay.source.file_key)
+        args += ["-i", str(path)]
+        src = overlay.source
+        overlay_width = max(2, int(width * overlay.scale) // 2 * 2)
+        filters.append(
+            f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},"
+            f"setpts=PTS-STARTPTS+{overlay.start}/TB,scale={overlay_width}:-2[ovv{i}]"
+        )
+        out_label = f"[vov{i}]"
+        filters.append(
+            f"{video_label}[ovv{i}]overlay=x={overlay.x}*W:y={overlay.y}*H:eof_action=pass:"
+            f"enable='between(t,{overlay.start},{overlay.start + overlay.duration})'{out_label}"
+        )
+        video_label = out_label
+        input_index += 1
+
+    # Audio-track clips mixed over the base audio.
+    audio_label = "[abase]"
+    if plan.audio_overlays:
+        mix_inputs = ["[abase]"]
+        for i, item in enumerate(plan.audio_overlays):
+            path = resolve(item.source.file_key)
+            args += ["-i", str(path)]
+            src = item.source
+            delay_ms = int(item.start * 1000)
+            filters.append(
+                f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
+                f"volume={item.gain},aresample={AUDIO_RATE},aformat=channel_layouts=stereo,"
+                f"adelay={delay_ms}:all=1[aov{i}]"
+            )
+            mix_inputs.append(f"[aov{i}]")
+            input_index += 1
+        filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
+        audio_label = "[amix]"
 
     args += [
         "-filter_complex",
         ";".join(filters),
         "-map",
-        "[vout]",
+        video_label,
         "-map",
-        "[aout]",
+        audio_label,
+        "-t",
+        str(plan.timeline_duration),
         "-c:v",
         "libx264",
         "-preset",

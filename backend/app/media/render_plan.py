@@ -37,12 +37,36 @@ class OutputSettings:
 
 
 @dataclass(frozen=True)
+class OverlayItem:
+    """A picture-in-picture layer from an upper video track."""
+
+    start: float
+    duration: float
+    source: ClipSource
+    x: float  # 0..1 of output width
+    y: float  # 0..1 of output height
+    scale: float  # 0..1 of output width
+
+
+@dataclass(frozen=True)
+class AudioItem:
+    """An audio-track clip mixed over the base audio."""
+
+    start: float
+    duration: float
+    source: ClipSource
+    gain: float
+
+
+@dataclass(frozen=True)
 class RenderPlan:
     sequence_id: str
     sequence_revision: int
     timeline_duration: float
     video_segments: tuple[Segment, ...]
     output: OutputSettings
+    overlays: tuple[OverlayItem, ...] = ()
+    audio_overlays: tuple[AudioItem, ...] = ()
     render_plan_hash: str = field(default="")
 
     def with_hash(self) -> "RenderPlan":
@@ -55,6 +79,8 @@ class RenderPlan:
             timeline_duration=self.timeline_duration,
             video_segments=self.video_segments,
             output=self.output,
+            overlays=self.overlays,
+            audio_overlays=self.audio_overlays,
             render_plan_hash=digest,
         )
 
@@ -66,6 +92,9 @@ class RenderPlanError(ValueError):
 GAP_EPSILON = 1e-6
 
 
+DEFAULT_PIP = {"x": 0.62, "y": 0.06, "scale": 0.33}
+
+
 def build_render_plan(
     *,
     sequence_id: str,
@@ -75,11 +104,15 @@ def build_render_plan(
     fps: float,
     clips: list[dict],
     assets: dict[str, dict],
+    overlay_clips: list[dict] | None = None,
+    audio_clips: list[dict] | None = None,
 ) -> RenderPlan:
     """
-    clips: [{id, asset_id, timeline_start, src_in, src_out}] from the video track.
+    clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
+    overlay_clips: clips from upper video tracks (may carry effects.pip {x,y,scale}).
+    audio_clips: clips from audio tracks ({..., gain, muted}).
     assets: {asset_id: {file_key}}.
-    Overlaps are rejected; gaps become black/silent segments.
+    Overlaps on the base track are rejected; gaps become black/silent segments.
     """
     ordered = sorted(clips, key=lambda c: float(c["timeline_start"]))
     segments: list[Segment] = []
@@ -113,11 +146,63 @@ def build_render_plan(
     if not segments:
         raise RenderPlanError("Sequence has no clips to render")
 
+    duration = cursor
+    overlays: list[OverlayItem] = []
+    for clip in sorted(overlay_clips or [], key=lambda c: float(c["timeline_start"])):
+        source = _require_source(assets, clip)
+        pip = {**DEFAULT_PIP, **((clip.get("effects") or {}).get("pip") or {})}
+        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
+        if clip_duration <= 0:
+            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        overlays.append(
+            OverlayItem(
+                start=float(clip["timeline_start"]),
+                duration=round(clip_duration, 6),
+                source=source,
+                x=float(pip["x"]),
+                y=float(pip["y"]),
+                scale=float(pip["scale"]),
+            )
+        )
+        duration = max(duration, float(clip["timeline_start"]) + clip_duration)
+
+    audio_overlays: list[AudioItem] = []
+    for clip in sorted(audio_clips or [], key=lambda c: float(c["timeline_start"])):
+        if clip.get("muted"):
+            continue
+        source = _require_source(assets, clip)
+        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
+        if clip_duration <= 0:
+            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        audio_overlays.append(
+            AudioItem(
+                start=float(clip["timeline_start"]),
+                duration=round(clip_duration, 6),
+                source=source,
+                gain=float(clip.get("gain", 1.0)),
+            )
+        )
+        duration = max(duration, float(clip["timeline_start"]) + clip_duration)
+
     plan = RenderPlan(
         sequence_id=sequence_id,
         sequence_revision=revision,
-        timeline_duration=round(cursor, 6),
+        timeline_duration=round(duration, 6),
         video_segments=tuple(segments),
         output=OutputSettings(width=width, height=height, fps=fps),
+        overlays=tuple(overlays),
+        audio_overlays=tuple(audio_overlays),
     )
     return plan.with_hash()
+
+
+def _require_source(assets: dict[str, dict], clip: dict) -> ClipSource:
+    asset = assets.get(clip["asset_id"])
+    if asset is None or not asset.get("file_key"):
+        raise RenderPlanError(f"Clip {clip['id']} references an asset without a file")
+    return ClipSource(
+        asset_id=clip["asset_id"],
+        file_key=asset["file_key"],
+        src_in=float(clip["src_in"]),
+        src_out=float(clip["src_out"]),
+    )

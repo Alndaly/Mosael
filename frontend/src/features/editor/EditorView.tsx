@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Undo2 } from "lucide-react";
 
 import {
+  addTrack,
   api,
   cutClipRange,
   deleteClip,
@@ -11,6 +12,8 @@ import {
   insertClip,
   moveClip,
   redoSequence,
+  removeTrack,
+  setClipEffects,
   trimClip,
   undoSequence,
   type Asset,
@@ -105,6 +108,19 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const addTrackMutation = useMutation({
+    mutationFn: (kind: "video" | "audio") => addTrack(sequence!.id, kind),
+    onSuccess: refreshSequences,
+  });
+  const removeTrackMutation = useMutation({
+    mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
+    onSuccess: refreshSequences,
+  });
+  const setEffectsMutation = useMutation({
+    mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
+      setClipEffects(sequence!.id, clipId, effects),
+    onSuccess: refreshSequences,
+  });
   const cutRangeMutation = useMutation({
     mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
       cutClipRange(sequence!.id, clipId, { src_start: srcStart, src_end: srcEnd }),
@@ -130,6 +146,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     [sequence],
   );
   const selectedClip = allClips.find((clip) => clip.id === selectedClipId) ?? null;
+  const isOverlayClip = React.useMemo(() => {
+    if (!selectedClip || !sequence) return false;
+    const videoTracks = (sequence.tracks ?? [])
+      .filter((track) => track.kind === "video")
+      .sort((a, b) => a.position - b.position);
+    return videoTracks.slice(1).some((track) => track.id === selectedClip.track_id);
+  }, [selectedClip, sequence]);
 
   const addAssetToTimeline = (asset: Asset) => {
     if (!sequence) return;
@@ -216,7 +239,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         sequence={sequence}
         selectedClip={selectedClip}
         assets={assets.data ?? []}
+        isOverlayClip={isOverlayClip}
         onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+        onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
       />
       <section className="panel timeline">
         <Timeline
@@ -225,6 +250,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onInsertClip={(args) => insertClipMutation.mutate(args)}
           onMoveClip={(clipId, timelineStart) => moveClipMutation.mutate({ clipId, timelineStart })}
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
+          onAddTrack={(kind) => addTrackMutation.mutate(kind)}
+          onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
           toolbarExtra={
             <>
               <Tooltip>

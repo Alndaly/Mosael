@@ -193,6 +193,89 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
     return sequence
 
 
+@dataclass(frozen=True)
+class AddTrack:
+    kind: str  # "video" | "audio"
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
+class RemoveTrack:
+    track_id: str
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
+class SetClipEffects:
+    clip_id: str
+    effects: dict[str, Any]
+    actor_id: str | None = None
+
+
+def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    if op.kind not in ("video", "audio"):
+        raise SequenceDomainError("Track kind must be video or audio")
+    existing = [track for track in sequence.tracks if track.kind == op.kind]
+    prefix = "V" if op.kind == "video" else "A"
+    track = Track(
+        sequence_id=sequence.id,
+        kind=op.kind,
+        name=f"{prefix}{len(existing) + 1}",
+        position=max((item.position for item in sequence.tracks), default=-1) + 1,
+    )
+    db.add(track)
+    db.flush()
+    _record_operation(
+        db,
+        sequence,
+        kind="add_track",
+        payload={"track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position},
+        summary={"operation": "add_track", "track_id": track.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    track = db.get(Track, op.track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceDomainError("Track not found")
+    if track.clips:
+        raise SequenceDomainError("Track must be empty before it can be removed")
+    payload = {"track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position}
+    db.delete(track)
+    _record_operation(
+        db,
+        sequence,
+        kind="remove_track",
+        payload=payload,
+        summary={"operation": "remove_track", "track_id": payload["track_id"]},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    previous = dict(clip.effects or {})
+    clip.effects = op.effects
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_effect",
+        payload={"clip_id": clip.id, "effects": op.effects, "previous": previous},
+        summary={"operation": "set_clip_effect", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)

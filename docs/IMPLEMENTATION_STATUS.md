@@ -65,6 +65,13 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Multi-track + PiP (plan Phase 8) & scheduler runner (Phase 11)
+
+- add_track / remove_track / set_clip_effect SequenceOperations (undo/redo supported); POST/DELETE /sequences/{id}/tracks, PATCH clips/{id}/effects.
+- RenderPlan carries overlay layers (upper video tracks → PiP items with x/y/scale from clip.effects.pip) and audio-track mix items (gain honored, muted skipped); executor renders overlays with enable-windows and mixes audio via amix; export duration covers audio/overlay tails.
+- Editor: add-track buttons, remove-empty-track on labels, monitor PiP preview via positioned overlay video, inspector PiP position/size presets.
+- Scheduler runner loop claims due tasks (once/interval/daily/weekly), dispatches generation/render executors, enforces no-reentry, syncs run states; once-tasks self-disable.
+
 ### Generation providers (plan Phase 10)
 
 - Pluggable provider contract (validate/generate with guardrails: num_images ≤ 4, duration ≤ 10s, resolution whitelist; sanitized errors so keys never leak) in app/ai/providers.
@@ -87,7 +94,6 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 ## Next
 
-- Timeline preview via RenderPlan-backed proxy renders for multi-track scenes.
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters.
 - A real scheduler runner process claiming due tasks.

@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { Magnet, Minus, Plus } from "lucide-react";
+import { AudioLines, Film, Magnet, Minus, Plus, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -37,6 +37,8 @@ export function Timeline({
   onInsertClip,
   onMoveClip,
   onTrimClip,
+  onAddTrack,
+  onRemoveTrack,
   toolbarExtra,
 }: {
   sequence: Sequence;
@@ -44,6 +46,8 @@ export function Timeline({
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
   onMoveClip: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
+  onAddTrack?: (kind: "video" | "audio") => void;
+  onRemoveTrack?: (trackId: string) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -214,6 +218,26 @@ export function Timeline({
         <span className="timecode tl-readout">{formatTimecode(playhead)}</span>
         <div className="tl-toolbar-actions">
           {toolbarExtra}
+          {onAddTrack && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("video")} aria-label={t("addVideoTrack")}>
+                    <Film size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("addVideoTrack")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("audio")} aria-label={t("addAudioTrack")}>
+                    <AudioLines size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("addAudioTrack")}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -253,6 +277,16 @@ export function Timeline({
             <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <span className={`tl-label-dot dot-${track.kind}`} />
               {track.name}
+              {onRemoveTrack && (track.clips ?? []).length === 0 && (
+                <button
+                  type="button"
+                  className="tl-label-remove"
+                  aria-label={t("removeTrack")}
+                  onClick={() => onRemoveTrack(track.id)}
+                >
+                  <X size={11} />
+                </button>
+              )}
             </div>
           ))}
         </div>
