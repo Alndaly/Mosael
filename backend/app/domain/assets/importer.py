@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key
 from app.media.probe import guess_kind, probe_media
+from app.media.thumbnails import generate_thumbnail
 
 
 def import_uploaded_asset(
@@ -29,6 +30,8 @@ def import_uploaded_asset(
 
     kind = guess_kind(target, upload.content_type)
     media_info = probe_media(target)
+    if generate_thumbnail(target, kind, target_dir) is not None:
+        media_info = {**media_info, "has_thumbnail": True}
     asset = Asset(
         id=asset_id,
         workspace_id=workspace_id,

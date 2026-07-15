@@ -109,6 +109,17 @@ class InsertClipRequest(BaseModel):
     src_out: float
 
 
+class MoveClipRequest(BaseModel):
+    timeline_start: float
+    track_id: str | None = None
+
+
+class TrimClipRequest(BaseModel):
+    timeline_start: float
+    src_in: float
+    src_out: float
+
+
 class JobOut(OrmModel):
     id: str
     workspace_id: str

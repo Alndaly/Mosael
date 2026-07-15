@@ -321,6 +321,86 @@
         }
       }
     },
+    "/api/assets/{asset_id}/file": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset File",
+        "operationId": "get_asset_file_api_assets__asset_id__file_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Thumbnail",
+        "operationId": "get_asset_thumbnail_api_assets__asset_id__thumbnail_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences": {
       "post": {
         "tags": [
@@ -478,6 +558,179 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/move": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Move Clip",
+        "operationId": "move_clip_api_sequences__sequence_id__clips__clip_id__move_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveClipRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/trim": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Trim Clip",
+        "operationId": "trim_clip_api_sequences__sequence_id__clips__clip_id__trim_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrimClipRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}": {
+      "delete": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Delete Clip",
+        "operationId": "delete_clip_api_sequences__sequence_id__clips__clip_id__delete",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1984,6 +2237,30 @@
         ],
         "title": "JobOut"
       },
+      "MoveClipRequest": {
+        "properties": {
+          "timeline_start": {
+            "type": "number",
+            "title": "Timeline Start"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timeline_start"
+        ],
+        "title": "MoveClipRequest"
+      },
       "PluginEnableRequest": {
         "properties": {
           "enabled": {
@@ -2724,6 +3001,29 @@
           "muted"
         ],
         "title": "TrackOut"
+      },
+      "TrimClipRequest": {
+        "properties": {
+          "timeline_start": {
+            "type": "number",
+            "title": "Timeline Start"
+          },
+          "src_in": {
+            "type": "number",
+            "title": "Src In"
+          },
+          "src_out": {
+            "type": "number",
+            "title": "Src Out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timeline_start",
+          "src_in",
+          "src_out"
+        ],
+        "title": "TrimClipRequest"
       },
       "ValidationError": {
         "properties": {

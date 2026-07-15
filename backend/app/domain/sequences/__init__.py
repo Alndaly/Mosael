@@ -1,6 +1,5 @@
 """Sequence domain interface."""
 
-from app.domain.sequences.operations import insert_clip
+from app.domain.sequences.operations import delete_clip, insert_clip, move_clip, trim_clip
 
-__all__ = ["insert_clip"]
-
+__all__ = ["delete_clip", "insert_clip", "move_clip", "trim_clip"]

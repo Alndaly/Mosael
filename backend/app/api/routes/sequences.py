@@ -5,9 +5,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession
-from app.api.schemas import InsertClipRequest, SequenceCreate, SequenceOut
+from app.api.schemas import InsertClipRequest, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
 from app.db.models import Project, Sequence, Track
-from app.domain.sequences.operations import InsertClip, SequenceDomainError, insert_clip as insert_clip_operation
+from app.domain.sequences.operations import (
+    DeleteClip,
+    InsertClip,
+    MoveClip,
+    SequenceDomainError,
+    TrimClip,
+    delete_clip as delete_clip_operation,
+    insert_clip as insert_clip_operation,
+    move_clip as move_clip_operation,
+    trim_clip as trim_clip_operation,
+)
 
 router = APIRouter(tags=["sequences"])
 
@@ -43,14 +53,36 @@ def list_sequences(project_id: str, db: DbSession) -> list[Sequence]:
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
 def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession) -> Sequence:
+    _apply(lambda: insert_clip_operation(db, sequence_id, InsertClip(**body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/move", response_model=SequenceOut)
+def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession) -> Sequence:
+    _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/trim", response_model=SequenceOut)
+def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession) -> Sequence:
+    _apply(lambda: trim_clip_operation(db, sequence_id, TrimClip(clip_id=clip_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
+def delete_clip(sequence_id: str, clip_id: str, db: DbSession) -> Sequence:
+    _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    return _get_sequence(db, sequence_id)
+
+
+def _apply(operation) -> None:
     try:
-        insert_clip_operation(db, sequence_id, InsertClip(**body.model_dump()))
+        operation()
     except SequenceDomainError as exc:
         message = str(exc)
         if "not found" in message.lower():
             raise HTTPException(status_code=404, detail=message) from exc
         raise HTTPException(status_code=422, detail=message) from exc
-    return _get_sequence(db, sequence_id)
 
 
 def _get_sequence(db, sequence_id: str) -> Sequence:
