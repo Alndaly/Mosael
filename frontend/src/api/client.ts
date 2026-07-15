@@ -28,6 +28,47 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export function assetFileUrl(assetId: string): string {
+  return `${API_BASE}/api/assets/${assetId}/file`;
+}
+
+export function assetThumbnailUrl(assetId: string): string {
+  return `${API_BASE}/api/assets/${assetId}/thumbnail`;
+}
+
+export function insertClip(
+  sequenceId: string,
+  body: { track_id: string; asset_id: string; timeline_start: number; src_in: number; src_out: number },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function moveClip(
+  sequenceId: string,
+  clipId: string,
+  body: { timeline_start: number; track_id?: string | null },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/move`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function trimClip(
+  sequenceId: string,
+  clipId: string,
+  body: { timeline_start: number; src_in: number; src_out: number },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/trim`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
+}
+
 export async function importAsset(params: {
   workspaceId: string;
   projectId: string;
