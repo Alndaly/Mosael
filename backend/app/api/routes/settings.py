@@ -1,15 +1,88 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CredentialSetRequest, CredentialStatusOut
-from app.db.models import Credential
+from app.api.schemas import (
+    CredentialSetRequest,
+    CredentialStatusOut,
+    ProviderProfileCreate,
+    ProviderProfileOut,
+    ProviderProfileUpdate,
+    VendorPresetOut,
+)
+from app.db.models import Credential, ProviderProfile
+from app.domain.providers import VENDOR_PRESETS
 
 router = APIRouter(tags=["settings"])
 
 KNOWN_PROVIDERS = ["alibaba", "bytedance", "openai", "google", "kuaishou"]
+
+
+def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
+    out = ProviderProfileOut.model_validate(profile)
+    out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
+    return out
+
+
+@router.get("/settings/provider-vendors", response_model=list[VendorPresetOut])
+def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
+    return [
+        VendorPresetOut(
+            vendor=vendor,
+            label=preset.get("label", vendor),
+            base_url=preset.get("base_url", ""),
+            default_model=preset.get("default_model", ""),
+        )
+        for vendor, preset in VENDOR_PRESETS.items()
+    ]
+
+
+@router.get("/settings/providers", response_model=list[ProviderProfileOut])
+def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
+    profiles = db.scalars(select(ProviderProfile).order_by(ProviderProfile.created_at)).all()
+    return [_profile_out(profile) for profile in profiles]
+
+
+@router.post("/settings/providers", response_model=ProviderProfileOut)
+def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
+    preset = VENDOR_PRESETS.get(body.vendor, {})
+    profile = ProviderProfile(
+        name=body.name,
+        vendor=body.vendor,
+        api_key=body.api_key,
+        base_url=body.base_url or preset.get("base_url", ""),
+        default_model=body.default_model or preset.get("default_model", ""),
+    )
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return _profile_out(profile)
+
+
+@router.patch("/settings/providers/{profile_id}", response_model=ProviderProfileOut)
+def update_provider_profile(
+    profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
+) -> ProviderProfileOut:
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    for key, value in body.model_dump(exclude_unset=True).items():
+        if value is not None:
+            setattr(profile, key, value)
+    db.commit()
+    db.refresh(profile)
+    return _profile_out(profile)
+
+
+@router.delete("/settings/providers/{profile_id}", status_code=204)
+def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is not None:
+        db.delete(profile)
+        db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/settings/credentials", response_model=list[CredentialStatusOut])

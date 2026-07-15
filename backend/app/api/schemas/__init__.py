@@ -215,6 +215,40 @@ class JobOut(OrmModel):
     updated_at: datetime
 
 
+class ProviderProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    vendor: str = Field(min_length=1, max_length=60)
+    api_key: str = Field(min_length=1, max_length=500)
+    base_url: str = Field(default="", max_length=300)
+    default_model: str = Field(default="", max_length=120)
+
+
+class ProviderProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    api_key: str | None = Field(default=None, min_length=1, max_length=500)
+    base_url: str | None = Field(default=None, max_length=300)
+    default_model: str | None = Field(default=None, max_length=120)
+    enabled: bool | None = None
+
+
+class ProviderProfileOut(OrmModel):
+    id: str
+    name: str
+    vendor: str
+    base_url: str
+    default_model: str
+    enabled: bool
+    created_at: datetime
+    key_hint: str = ""
+
+
+class VendorPresetOut(BaseModel):
+    vendor: str
+    label: str
+    base_url: str = ""
+    default_model: str = ""
+
+
 class CredentialSetRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=80)
     secret: str = Field(min_length=1, max_length=500)

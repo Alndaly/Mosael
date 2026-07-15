@@ -303,6 +303,23 @@ class ScheduledTaskRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class ProviderProfile(Base):
+    """A user-configured AI provider account. Multiple profiles per vendor
+    are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""
+
+    __tablename__ = "provider_profiles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    vendor: Mapped[str] = mapped_column(String(60), nullable=False)  # alibaba|bytedance|openai|moonshot|minimax|openai-compatible|...
+    base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    api_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Credential(Base):
     __tablename__ = "credentials"
 

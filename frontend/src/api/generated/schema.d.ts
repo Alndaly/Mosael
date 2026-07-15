@@ -645,6 +645,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/provider-vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vendor Presets */
+        get: operations["list_vendor_presets_api_settings_provider_vendors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Provider Profiles */
+        get: operations["list_provider_profiles_api_settings_providers_get"];
+        put?: never;
+        /** Create Provider Profile */
+        post: operations["create_provider_profile_api_settings_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Provider Profile */
+        delete: operations["delete_provider_profile_api_settings_providers__profile_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Provider Profile */
+        patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
+        trace?: never;
+    };
     "/api/settings/credentials": {
         parameters: {
             query?: never;
@@ -1650,6 +1703,63 @@ export interface components {
             /** Active Sequence Id */
             active_sequence_id: string | null;
         };
+        /** ProviderProfileCreate */
+        ProviderProfileCreate: {
+            /** Name */
+            name: string;
+            /** Vendor */
+            vendor: string;
+            /** Api Key */
+            api_key: string;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /**
+             * Default Model
+             * @default
+             */
+            default_model: string;
+        };
+        /** ProviderProfileOut */
+        ProviderProfileOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Vendor */
+            vendor: string;
+            /** Base Url */
+            base_url: string;
+            /** Default Model */
+            default_model: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Key Hint
+             * @default
+             */
+            key_hint: string;
+        };
+        /** ProviderProfileUpdate */
+        ProviderProfileUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Default Model */
+            default_model?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
         /** RenameRequest */
         RenameRequest: {
             /** Name */
@@ -1962,6 +2072,23 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VendorPresetOut */
+        VendorPresetOut: {
+            /** Vendor */
+            vendor: string;
+            /** Label */
+            label: string;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /**
+             * Default Model
+             * @default
+             */
+            default_model: string;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
@@ -3437,6 +3564,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunScheduledTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vendor_presets_api_settings_provider_vendors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorPresetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_provider_profiles_api_settings_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_provider_profile_api_settings_providers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProfileCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_provider_profile_api_settings_providers__profile_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_profile_api_settings_providers__profile_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"];
                 };
             };
             /** @description Validation Error */

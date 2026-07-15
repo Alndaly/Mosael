@@ -2074,6 +2074,200 @@
         }
       }
     },
+    "/api/settings/provider-vendors": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Vendor Presets",
+        "operationId": "list_vendor_presets_api_settings_provider_vendors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VendorPresetOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Vendor Presets Api Settings Provider Vendors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Provider Profiles",
+        "operationId": "list_provider_profiles_api_settings_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderProfileOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Provider Profiles Api Settings Providers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create Provider Profile",
+        "operationId": "create_provider_profile_api_settings_providers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderProfileCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Provider Profile",
+        "operationId": "update_provider_profile_api_settings_providers__profile_id__patch",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Provider Profile",
+        "operationId": "delete_provider_profile_api_settings_providers__profile_id__delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/credentials": {
       "get": {
         "tags": [
@@ -4989,6 +5183,163 @@
         ],
         "title": "ProjectOut"
       },
+      "ProviderProfileCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "vendor": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Vendor"
+          },
+          "api_key": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Api Key"
+          },
+          "base_url": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Base Url",
+            "default": ""
+          },
+          "default_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Default Model",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "vendor",
+          "api_key"
+        ],
+        "title": "ProviderProfileCreate"
+      },
+      "ProviderProfileOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "vendor": {
+            "type": "string",
+            "title": "Vendor"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "default_model": {
+            "type": "string",
+            "title": "Default Model"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "key_hint": {
+            "type": "string",
+            "title": "Key Hint",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "vendor",
+          "base_url",
+          "default_model",
+          "enabled",
+          "created_at"
+        ],
+        "title": "ProviderProfileOut"
+      },
+      "ProviderProfileUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "ProviderProfileUpdate"
+      },
       "RenameRequest": {
         "properties": {
           "name": {
@@ -5799,6 +6150,34 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VendorPresetOut": {
+        "properties": {
+          "vendor": {
+            "type": "string",
+            "title": "Vendor"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "default": ""
+          },
+          "default_model": {
+            "type": "string",
+            "title": "Default Model",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "vendor",
+          "label"
+        ],
+        "title": "VendorPresetOut"
       },
       "WorkspaceCreate": {
         "properties": {

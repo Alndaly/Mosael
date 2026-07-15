@@ -8,7 +8,7 @@ from pathlib import Path
 from app.ai.providers import GenerationRequest, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
-from app.db.models import Credential, GeneratedAsset, GenerationJob, Job, TaskEvent
+from app.db.models import GeneratedAsset, GenerationJob, Job, TaskEvent
 from app.domain.assets.importer import register_file_asset
 
 """
@@ -35,8 +35,9 @@ def _run_generation(generation_id: str) -> None:
             _fail(db, job, f"No adapter for provider {generation.provider}/{generation.kind}")
             return
 
-        credential = db.get(Credential, generation.provider)
-        secret = credential.secret if credential else None
+        from app.domain.providers import resolve_secret
+
+        secret = resolve_secret(db, generation.provider)
         request = GenerationRequest(
             kind=generation.kind,
             model=generation.model,

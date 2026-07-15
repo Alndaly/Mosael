@@ -591,6 +591,59 @@
   width: 220px;
 }
 
+/* ---------- Provider profiles ---------- */
+
+.provider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.provider-head .section-label {
+  margin: 0;
+}
+
+.provider-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.provider-form select {
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 6px 8px;
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.provider-list {
+  display: grid;
+  gap: 6px;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  padding: 8px 10px;
+}
+
+.provider-row.disabled {
+  opacity: 0.55;
+}
+
 /* ---------- Feishu binding ---------- */
 
 .feishu-desc {
