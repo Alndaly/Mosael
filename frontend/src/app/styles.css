@@ -183,12 +183,19 @@
 }
 
 .section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 10px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.section-label svg {
+  color: var(--accent-foreground);
 }
 
 /* ---------- Panels ---------- */
@@ -348,10 +355,23 @@
 
 .empty-inline {
   display: grid;
-  min-height: 100px;
   place-items: center;
+  margin: auto;
+  padding: 24px 16px;
   color: var(--muted-foreground);
   font-size: 13px;
+  text-align: center;
+  max-width: 240px;
+  line-height: 1.6;
+}
+
+.pool-list:has(> .empty-inline:only-child),
+.model-list:has(> .empty-inline:only-child),
+.job-list:has(> .empty-inline:only-child),
+.task-list:has(> .empty-inline:only-child),
+.plugin-list:has(> .empty-inline:only-child) {
+  align-content: stretch;
+  height: 100%;
 }
 
 /* ---------- Home ---------- */
@@ -459,6 +479,65 @@
 .asset-meta small {
   color: var(--muted-foreground);
   font-size: 11px;
+}
+
+.asset-specs {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.asset-tile {
+  cursor: pointer;
+  transition: border-color 100ms, box-shadow 100ms;
+}
+
+.asset-tile:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-raised);
+}
+
+/* ---------- Asset preview modal ---------- */
+
+.preview-modal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  width: min(860px, 90vw);
+}
+
+.preview-stage {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #000000;
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.preview-stage video,
+.preview-stage img {
+  max-width: 100%;
+  max-height: 60vh;
+}
+
+.preview-stage audio {
+  width: 90%;
+}
+
+.preview-meta {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.preview-meta dt {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.preview-meta dd {
+  margin: 0 0 6px;
 }
 
 /* ---------- AI Studio ---------- */
@@ -768,13 +847,29 @@
 
 .settings-sections {
   display: grid;
-  gap: 24px;
-  max-width: 560px;
+  gap: 14px;
+  max-width: 640px;
 }
 
 .settings-section {
   display: grid;
   gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  padding: 14px 16px;
+}
+
+.settings-section > .section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+.settings-section > .section-label svg {
+  color: var(--accent-foreground);
 }
 
 .settings-row {
@@ -808,12 +903,53 @@
 /* ---------- Editor layout ---------- */
 
 .editor-grid {
+  position: relative;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr) 264px;
   grid-template-rows: minmax(0, 1fr) 252px;
   gap: 8px;
   height: 100%;
   padding: 8px;
+}
+
+.panel-resizer {
+  position: absolute;
+  z-index: 10;
+  touch-action: none;
+}
+
+.panel-resizer.col {
+  top: 8px;
+  bottom: 8px;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.panel-resizer.row {
+  left: 8px;
+  right: 8px;
+  height: 7px;
+  cursor: row-resize;
+}
+
+.panel-resizer:hover::after,
+.panel-resizer:active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--ring);
+  border-radius: 2px;
+}
+
+.panel-resizer.col:hover::after,
+.panel-resizer.col:active::after {
+  width: 3px;
+}
+
+.panel-resizer.row:hover::after,
+.panel-resizer.row:active::after {
+  height: 3px;
 }
 
 .media-panel {
@@ -945,10 +1081,13 @@
 .ts-empty {
   display: grid;
   justify-items: center;
+  align-content: center;
   gap: 8px;
-  padding: 40px 18px;
+  margin: auto;
+  padding: 24px 18px;
   color: var(--muted-foreground);
   text-align: center;
+  max-width: 260px;
 }
 
 .ts-empty p {
@@ -1529,6 +1668,7 @@
 
 .chat-session.active {
   background: var(--accent);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 .chat-session strong {
@@ -1587,6 +1727,20 @@
   border: 1px solid var(--border);
   background: var(--panel-subtle);
   border-bottom-left-radius: 3px;
+  position: relative;
+  margin-left: 30px;
+}
+
+.chat-bubble.assistant::before {
+  content: "";
+  position: absolute;
+  left: -30px;
+  top: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--accent) center / 13px no-repeat;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%232e6fee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>');
 }
 
 .chat-bubble.assistant :is(p, ul, ol, pre, table) {
@@ -1699,25 +1853,34 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  border-top: 1px solid var(--border);
-  padding: 10px;
+  margin: 10px;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  background: var(--panel-subtle);
+  padding: 7px;
+  transition: border-color 100ms, box-shadow 100ms;
+}
+
+.chat-composer:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
 }
 
 .chat-composer textarea {
   flex: 1;
-  border: 1px solid var(--input);
-  border-radius: 7px;
-  background: var(--panel-subtle);
-  padding: 8px 11px;
+  border: none;
+  background: transparent;
+  padding: 5px 4px;
   color: var(--foreground);
   font-size: 13px;
   line-height: 1.5;
   resize: none;
+  outline: none;
 }
 
-.chat-composer textarea:focus-visible {
-  border-color: var(--ring);
-  outline: 2px solid color-mix(in srgb, var(--ring) 50%, transparent);
+.chat-attachments {
+  border-top: none;
+  padding: 8px 12px 0;
 }
 
 /* ---------- Confirmation cards ---------- */

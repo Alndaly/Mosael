@@ -74,9 +74,41 @@ function WorkspaceGate() {
   return <Studio workspace={workspace} />;
 }
 
+const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "batch", "publish", "kb", "settings", "scheduler", "plugins"];
+
+function readHash(): { view: StudioView; projectId: string | null } {
+  // Hash routing survives file:// packaging — the fragment never hits HTTP.
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const [path, query] = raw.split("?");
+  const view = (VALID_VIEWS as string[]).includes(path) ? (path as StudioView) : "home";
+  const projectId = new URLSearchParams(query ?? "").get("p");
+  return { view, projectId };
+}
+
+function writeHash(view: StudioView, projectId: string | null) {
+  const query = projectId ? `?p=${projectId}` : "";
+  const next = `#/${view}${query}`;
+  if (window.location.hash !== next) window.history.replaceState(null, "", next);
+}
+
 function Studio({ workspace }: { workspace: Workspace }) {
-  const [view, setView] = React.useState<StudioView>("home");
-  const [projectId, setProjectId] = React.useState<string | null>(null);
+  const initial = React.useMemo(readHash, []);
+  const [view, setView] = React.useState<StudioView>(initial.view);
+  const [projectId, setProjectId] = React.useState<string | null>(initial.projectId);
+
+  React.useEffect(() => {
+    writeHash(view, projectId);
+  }, [view, projectId]);
+
+  React.useEffect(() => {
+    const onHashChange = () => {
+      const next = readHash();
+      setView(next.view);
+      if (next.projectId) setProjectId(next.projectId);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
   const projects = useQuery({
     queryKey: ["projects", workspace.id],
     queryFn: () => api<Project[]>(`/api/projects?workspace_id=${workspace.id}`),

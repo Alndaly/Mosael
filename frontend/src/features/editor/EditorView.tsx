@@ -46,11 +46,53 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
   return <Editor workspace={workspace} project={project} />;
 }
 
+const PANEL_SIZES_KEY = "mibu.editor.panels";
+
+function readPanelSizes(): { left: number; right: number; timeline: number } {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PANEL_SIZES_KEY) ?? "{}");
+    return {
+      left: Math.min(480, Math.max(180, Number(parsed.left) || 252)),
+      right: Math.min(480, Math.max(200, Number(parsed.right) || 264)),
+      timeline: Math.min(560, Math.max(160, Number(parsed.timeline) || 252)),
+    };
+  } catch {
+    return { left: 252, right: 264, timeline: 252 };
+  }
+}
+
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
   const t = useI18n();
   const qc = useQueryClient();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
   const [leftTab, setLeftTab] = React.useState<"media" | "transcript">("media");
+  const [panels, setPanels] = React.useState(readPanelSizes);
+
+  React.useEffect(() => {
+    window.localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panels));
+  }, [panels]);
+
+  const startPanelDrag = (which: "left" | "right" | "timeline") => (event: React.PointerEvent) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const origin = { ...panels };
+    const onMove = (moveEvent: PointerEvent) => {
+      if (which === "left") {
+        setPanels((current) => ({ ...current, left: Math.min(480, Math.max(180, origin.left + (moveEvent.clientX - startX))) }));
+      } else if (which === "right") {
+        setPanels((current) => ({ ...current, right: Math.min(480, Math.max(200, origin.right - (moveEvent.clientX - startX))) }));
+      } else {
+        setPanels((current) => ({ ...current, timeline: Math.min(560, Math.max(160, origin.timeline - (moveEvent.clientY - startY))) }));
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id, project.id],
@@ -212,7 +254,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   }
 
   return (
-    <div className="editor-grid">
+    <div
+      className="editor-grid"
+      style={{
+        gridTemplateColumns: `${panels.left}px minmax(0, 1fr) ${panels.right}px`,
+        gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
+      }}
+    >
+      <div className="panel-resizer col" style={{ left: panels.left - 3 }} onPointerDown={startPanelDrag("left")} />
+      <div className="panel-resizer col right" style={{ right: panels.right - 3 }} onPointerDown={startPanelDrag("right")} />
+      <div className="panel-resizer row" style={{ bottom: panels.timeline + 5 }} onPointerDown={startPanelDrag("timeline")} />
       {leftTab === "media" ? (
         <MediaPool
           assets={assets.data ?? []}

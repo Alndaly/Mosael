@@ -71,7 +71,7 @@ export function ProviderProfilesSection() {
   return (
     <section className="settings-section">
       <div className="provider-head">
-        <h2 className="section-label">{t("settingsProviders")}</h2>
+        <h2 className="section-label"><KeyRound size={13} /> {t("settingsProviders")}</h2>
         <Button variant="outline" size="sm" onClick={() => setAdding((value) => !value)}>
           <Plus size={13} /> {t("providerAdd")}
         </Button>

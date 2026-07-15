@@ -1,4 +1,4 @@
-import { LogOut, Moon, Sun } from "lucide-react";
+import { LogOut, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
 
 import { API_BASE, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
@@ -23,7 +23,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
       <div className="settings-sections">
         <section className="settings-section">
-          <h2 className="section-label">{t("settingsAccount")}</h2>
+          <h2 className="section-label"><UserRound size={13} /> {t("settingsAccount")}</h2>
           <div className="settings-row">
             <span>{t("settingsUsername")}</span>
             <div className="settings-control">
@@ -35,7 +35,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           </div>
         </section>
         <section className="settings-section">
-          <h2 className="section-label">{t("settingsAppearance")}</h2>
+          <h2 className="section-label"><Palette size={13} /> {t("settingsAppearance")}</h2>
           <div className="settings-row">
             <span>{t("settingsTheme")}</span>
             <div className="settings-control">
@@ -44,6 +44,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               </Button>
               <Button variant={theme === "dark" ? "secondary" : "ghost"} size="sm" onClick={() => setTheme("dark")}>
                 <Moon size={14} /> {t("themeDark")}
+              </Button>
+              <Button variant={theme === "system" ? "secondary" : "ghost"} size="sm" onClick={() => setTheme("system")}>
+                <MonitorCog size={14} /> {t("themeSystem")}
               </Button>
             </div>
           </div>
@@ -65,7 +68,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         <FeishuSection workspace={workspace} />
 
         <section className="settings-section">
-          <h2 className="section-label">{t("settingsBackend")}</h2>
+          <h2 className="section-label"><Server size={13} /> {t("settingsBackend")}</h2>
           <div className="settings-row">
             <span>{t("settingsEndpoint")}</span>
             <code className="timecode">{API_BASE}</code>

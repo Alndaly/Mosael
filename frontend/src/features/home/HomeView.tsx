@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clapperboard, FolderPlus, Pencil, Scissors, Trash2 } from "lucide-react";
+import { Clapperboard, FolderOpen, FolderPlus, Pencil, Scissors, Trash2 } from "lucide-react";
 
 import { api, deleteProject, renameProject, type Project, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -72,7 +72,7 @@ export function HomeView({
         />
       ) : (
         <>
-          <h2 className="section-label">{t("homeProjects")}</h2>
+          <h2 className="section-label"><FolderOpen size={13} /> {t("homeProjects")}</h2>
           <div className="project-grid">
             {projects.map((project) => (
               <ContextMenu key={project.id}>

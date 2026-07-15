@@ -142,7 +142,7 @@ function GeneratePanel({ workspace, project }: { workspace: Workspace; project: 
       </section>
 
       <h2 className="section-label" style={{ marginTop: 18 }}>
-        {t("generationQueue")}
+        <Sparkles size={13} /> {t("generationQueue")}
       </h2>
       <div className="gen-queue">
         {(generations.data ?? []).map((generation) => {

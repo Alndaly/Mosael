@@ -7,6 +7,7 @@ import {
   Home,
   Languages,
   Layers,
+  MonitorCog,
   Moon,
   Plug,
   Rocket,
@@ -118,13 +119,15 @@ export function AppShell({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-                  aria-label={theme === "light" ? t("themeDark") : t("themeLight")}
+                  onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+                  aria-label={t("settingsTheme")}
                 >
-                  {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+                  {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{theme === "light" ? t("themeDark") : t("themeLight")}</TooltipContent>
+              <TooltipContent>
+                {theme === "light" ? t("themeLight") : theme === "dark" ? t("themeDark") : t("themeSystem")}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

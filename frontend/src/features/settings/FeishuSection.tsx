@@ -89,7 +89,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
 
   return (
     <section className="settings-section">
-      <h2 className="section-label">{t("feishuTitle")}</h2>
+      <h2 className="section-label"><MessageSquare size={13} /> {t("feishuTitle")}</h2>
       <p className="feishu-desc">{t("feishuDesc")}</p>
 
       <div className="feishu-actions">

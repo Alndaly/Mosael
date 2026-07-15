@@ -111,8 +111,9 @@ export function MediaPool({
 
 function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
   const t = useI18n();
+  const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : null;
-  const hasThumb = Boolean(asset.media_info.has_thumbnail);
+  const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
   return (
     <div
       className="pool-item"
@@ -125,7 +126,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
       <div className="pool-thumb">
-        {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" /> : kindIcon(asset.kind)}
+        {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
       <div className="pool-meta">
         <strong>{asset.name}</strong>

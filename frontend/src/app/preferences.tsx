@@ -2,7 +2,7 @@ import React from "react";
 
 import { messages, type MessageKey } from "@/app/messages";
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
 
 const STORAGE_KEY = "mibu.preferences";
@@ -25,10 +25,19 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const [locale, setLocaleState] = React.useState<Locale>(() => readPreferences().locale);
 
   React.useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    document.documentElement.dataset.theme = theme;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const effective = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.classList.toggle("dark", effective === "dark");
+      document.documentElement.dataset.theme = effective;
+    };
+    apply();
     document.documentElement.lang = locale;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, locale }));
+    if (theme === "system") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
   }, [theme, locale]);
 
   const value = React.useMemo<PreferencesContextValue>(
@@ -63,7 +72,7 @@ function readPreferences(): { theme: Theme; locale: Locale } {
       locale: Locale;
     }>;
     return {
-      theme: parsed.theme === "dark" ? "dark" : "light",
+      theme: parsed.theme === "dark" || parsed.theme === "system" ? parsed.theme : "light",
       locale: parsed.locale === "en-US" ? "en-US" : "zh-CN",
     };
   } catch {

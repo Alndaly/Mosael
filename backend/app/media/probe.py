@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any
 
 
+AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus", ".wma"}
+
+
 def guess_kind(path: Path, content_type: str | None = None) -> str:
+    if path.suffix.lower() in AUDIO_EXTENSIONS:
+        return "audio"
     mime = content_type or mimetypes.guess_type(path.name)[0] or ""
     if mime.startswith("image/"):
         return "image"

@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 
 export function MediaLibraryView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
+  const [previewing, setPreviewing] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -72,7 +74,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
           {(assets.data ?? []).map((asset) => (
             <ContextMenu key={asset.id}>
               <ContextMenuTrigger asChild>
-                <div>
+                <div onClick={() => setPreviewing(asset)}>
                   <AssetTile asset={asset} />
                 </div>
               </ContextMenuTrigger>
@@ -90,6 +92,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
         </div>
       )}
 
+      <AssetPreviewModal asset={previewing} onClose={() => setPreviewing(null)} />
       <RenameDialog
         open={renaming !== null}
         title={t("renameAsset")}
@@ -113,13 +116,21 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
 
 function AssetTile({ asset }: { asset: Asset }) {
   const t = useI18n();
+  const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = asset.media_info.duration as number | undefined;
-  const hasThumb = Boolean(asset.media_info.has_thumbnail);
+  const width = asset.media_info.width as number | undefined;
+  const fps = asset.media_info.fps as number | undefined;
+  const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
   return (
     <article className="asset-tile">
       <div className="asset-thumb">
         {hasThumb ? (
-          <img src={`${API_BASE}/api/assets/${asset.id}/thumbnail`} alt="" loading="lazy" />
+          <img
+            src={`${API_BASE}/api/assets/${asset.id}/thumbnail`}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbFailed(true)}
+          />
         ) : (
           <span className="asset-thumb-fallback">{kindIcon(asset.kind)}</span>
         )}
@@ -129,8 +140,12 @@ function AssetTile({ asset }: { asset: Asset }) {
         <strong title={asset.name}>{asset.name}</strong>
         <div className="asset-meta">
           <Badge variant="secondary">{asset.kind}</Badge>
-          <small>{asset.source === "generated" ? t("mediaSourceGenerated") : t("mediaSourceImported")}</small>
+          <small>{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? "导出" : t("mediaSourceImported")}</small>
         </div>
+        <span className="asset-specs timecode">
+          {width ? `${width}×${asset.media_info.height}` : "—"}
+          {fps ? ` · ${Math.round(Number(fps))}fps` : ""}
+        </span>
       </div>
     </article>
   );
