@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Trash2 } from "lucide-react";
+import { FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -139,6 +139,18 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
         <strong>{asset.name}</strong>
         <small className="timecode">{duration != null ? formatTimecode(duration) : asset.kind}</small>
       </div>
+      <button
+        type="button"
+        className="pool-add"
+        title={t("addToTimeline")}
+        aria-label={t("addToTimeline")}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAdd();
+        }}
+      >
+        <Plus size={13} />
+      </button>
     </div>
   );
 }

@@ -245,7 +245,11 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
               style={{ filter: cssFilter || undefined }}
             />
           )}
-          {!activeClip && <div className="monitor-blank" />}
+          {!activeClip && (
+            <div className="monitor-blank">
+              <span className="monitor-blank-hint">{t("monitorBlankHint")}</span>
+            </div>
+          )}
           {activeSubtitle?.text_override && (
             <div className="monitor-subtitle">{activeSubtitle.text_override}</div>
           )}

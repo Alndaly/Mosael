@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, Copy, Film, Lock, LockOpen, Magnet, Minus, Plus, Scissors, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -43,6 +43,7 @@ export function Timeline({
   onDeleteClip,
   onRippleDeleteClip,
   onSplitClip,
+  onSplitClipAt,
   onDuplicateClip,
   onSetTrackState,
   toolbarExtra,
@@ -57,6 +58,7 @@ export function Timeline({
   onDeleteClip?: (clipId: string) => void;
   onRippleDeleteClip?: (clipId: string) => void;
   onSplitClip?: (clipId: string) => void;
+  onSplitClipAt?: (clipId: string, srcTime: number) => void;
   onDuplicateClip?: (clipId: string) => void;
   onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
@@ -70,8 +72,10 @@ export function Timeline({
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
+  const tool = useEditorStore((state) => state.tool);
   const [dropGhost, setDropGhost] = React.useState<{ trackId: string; start: number; duration: number } | null>(null);
   const [marquee, setMarquee] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
@@ -178,6 +182,15 @@ export function Timeline({
   const startClipDrag = (event: React.PointerEvent, track: Track, clipId: string) => {
     const clip = (track.clips ?? []).find((item) => item.id === clipId);
     if (!clip || track.locked) return;
+    if (tool === "blade") {
+      // Blade (B): one click cuts the clip right where you clicked.
+      if (onSplitClipAt) {
+        const clickTime = timeAtPointer(event);
+        const srcTime = clip.src_in + (clickTime - clip.timeline_start) * (clip.speed || 1);
+        onSplitClipAt(clip.id, srcTime);
+      }
+      return;
+    }
     if (event.shiftKey || event.metaKey || event.ctrlKey) {
       useEditorStore.getState().toggleSelectClip(clip.id);
       return;
@@ -296,9 +309,35 @@ export function Timeline({
   };
 
   return (
-    <div className="tl" onWheel={handleWheel}>
+    <div className="tl" data-tool={tool} onWheel={handleWheel}>
       <div className="tl-toolbar">
-        <span className="timecode tl-readout">{formatTimecode(playhead)}</span>
+        <div className="tl-toolbar-left">
+          <div className="seg tl-tool-seg" role="group" aria-label={t("editTools")}>
+            <button
+              type="button"
+              className={tool === "select" ? "seg-btn active" : "seg-btn"}
+              title={t("toolSelectHint")}
+              aria-pressed={tool === "select"}
+              onClick={() => useEditorStore.getState().setTool("select")}
+            >
+              <MousePointer2 size={12} /> {t("toolSelect")}
+            </button>
+            <button
+              type="button"
+              className={tool === "blade" ? "seg-btn active" : "seg-btn"}
+              title={t("toolBladeHint")}
+              aria-pressed={tool === "blade"}
+              onClick={() => useEditorStore.getState().setTool("blade")}
+            >
+              <Slice size={12} /> {t("toolBlade")}
+            </button>
+          </div>
+          <span className="timecode tl-readout">
+            {formatTimecode(playhead)}
+            <em> / {formatTimecode(sequenceDuration(allClips))}</em>
+          </span>
+          <span className="tl-clip-count">{t("clipCount").replace("{n}", String(allClips.length))}</span>
+        </div>
         <div className="tl-toolbar-actions">
           {toolbarExtra}
           {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="tl-toolbar-sep" />}
@@ -369,30 +408,18 @@ export function Timeline({
           <span className="tl-toolbar-sep" />
           {onAddTrack && (
             <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("video")} aria-label={t("addVideoTrack")}>
-                    <Film size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("addVideoTrack")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("audio")} aria-label={t("addAudioTrack")}>
-                    <AudioLines size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("addAudioTrack")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("subtitle")} aria-label={t("addSubtitleTrack")}>
-                    <Type size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("addSubtitleTrack")}</TooltipContent>
-              </Tooltip>
+              <button type="button" className="tl-add-track" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
+                <Plus size={11} />
+                <Film size={12} /> {t("trackVideoShort")}
+              </button>
+              <button type="button" className="tl-add-track" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
+                <Plus size={11} />
+                <AudioLines size={12} /> {t("trackAudioShort")}
+              </button>
+              <button type="button" className="tl-add-track" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
+                <Plus size={11} />
+                <Type size={12} /> {t("trackSubtitleShort")}
+              </button>
             </>
           )}
           <Tooltip>
@@ -425,6 +452,39 @@ export function Timeline({
             </TooltipTrigger>
             <TooltipContent>{t("zoomIn")}</TooltipContent>
           </Tooltip>
+          <div className="tl-help-wrap">
+            <Button
+              variant={helpOpen ? "secondary" : "ghost"}
+              size="icon-sm"
+              onClick={() => setHelpOpen((value) => !value)}
+              aria-label={t("shortcutsHelp")}
+              aria-expanded={helpOpen}
+            >
+              <CircleHelp size={14} />
+            </Button>
+            {helpOpen && (
+              <div className="tl-help" role="dialog" aria-label={t("shortcutsHelp")}>
+                <strong>{t("shortcutsHelp")}</strong>
+                {[
+                  ["Space", t("hintPlayPause")],
+                  ["A / B", t("hintTools")],
+                  ["S", t("hintSplit")],
+                  ["⌘D", t("hintDuplicate")],
+                  ["Delete", t("hintDelete")],
+                  ["⇧Delete", t("hintRipple")],
+                  ["⌘Z / ⇧⌘Z", t("hintUndoRedo")],
+                  ["← / →", t("hintFrameStep")],
+                  ["⇧点击", t("hintMultiSelect")],
+                  [t("hintDragLabel"), t("hintDragBody")],
+                ].map(([key, body]) => (
+                  <div className="tl-help-row" key={key}>
+                    <kbd>{key}</kbd>
+                    <span>{body}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="tl-body">

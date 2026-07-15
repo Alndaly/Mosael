@@ -344,6 +344,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       } else if (event.key.toLowerCase() === "s" && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
         splitAtPlayhead();
+      } else if (event.key.toLowerCase() === "a" && !event.metaKey && !event.ctrlKey) {
+        useEditorStore.getState().setTool("select");
+      } else if (event.key.toLowerCase() === "b" && !event.metaKey && !event.ctrlKey) {
+        useEditorStore.getState().setTool("blade");
       } else if (event.code === "Space") {
         event.preventDefault();
         useEditorStore.getState().togglePlaying();
@@ -441,6 +445,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
           onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}
+          onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
           toolbarExtra={

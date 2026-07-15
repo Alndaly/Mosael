@@ -24,6 +24,9 @@ export interface DraggingAsset {
   duration: number;
 }
 
+/** "select" drags/moves clips; "blade" splits a clip where you click. */
+export type ToolMode = "select" | "blade";
+
 interface EditorState {
   playhead: number;
   playing: boolean;
@@ -36,6 +39,7 @@ interface EditorState {
   selectedClipIds: string[];
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
+  tool: ToolMode;
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
@@ -50,6 +54,7 @@ interface EditorState {
   selectClips: (clipIds: string[]) => void;
   setDragDraft: (draft: DragDraft | null) => void;
   setDraggingAsset: (asset: DraggingAsset | null) => void;
+  setTool: (tool: ToolMode) => void;
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
@@ -66,6 +71,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectedClipIds: [],
   dragDraft: null,
   draggingAsset: null,
+  tool: "select",
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
   togglePlaying: () => set((state) => ({ playing: !state.playing })),
@@ -93,4 +99,5 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectClips: (clipIds) => set({ selectedClipIds: clipIds, selectedClipId: clipIds[clipIds.length - 1] ?? null }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
+  setTool: (tool) => set({ tool }),
 }));
