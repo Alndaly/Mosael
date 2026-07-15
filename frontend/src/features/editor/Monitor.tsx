@@ -1,5 +1,5 @@
 import React from "react";
-import { Pause, Play, SkipBack } from "lucide-react";
+import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl, type Asset, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -17,7 +17,14 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
   const playing = useEditorStore((state) => state.playing);
-  const { setPlayhead, setPlaying, togglePlaying } = useEditorStore.getState();
+  const loop = useEditorStore((state) => state.loop);
+  const playbackRate = useEditorStore((state) => state.playbackRate);
+  const volume = useEditorStore((state) => state.volume);
+  const masterMuted = useEditorStore((state) => state.muted);
+  const { setPlayhead, setPlaying, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
+    useEditorStore.getState();
+  const stageRef = React.useRef<HTMLDivElement | null>(null);
+  const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -102,8 +109,12 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       const dt = (now - last) / 1000;
       last = now;
       const state = useEditorStore.getState();
-      const next = state.playhead + dt;
+      const next = state.playhead + dt * state.playbackRate;
       if (totalDuration > 0 && next >= totalDuration) {
+        if (state.loop) {
+          state.setPlayhead(0);
+          return;
+        }
         state.setPlayhead(totalDuration);
         state.setPlaying(false);
         return;
@@ -129,12 +140,14 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     if (Math.abs(video.currentTime - desired) > 0.18) {
       video.currentTime = desired;
     }
+    video.playbackRate = playbackRate;
+    video.volume = masterMuted ? 0 : volume;
     if (playing && video.paused) {
       video.play().catch(() => undefined);
     } else if (!playing && !video.paused) {
       video.pause();
     }
-  }, [playhead, playing, activeClip, activeAsset, isImage]);
+  }, [playhead, playing, activeClip, activeAsset, isImage, playbackRate, volume, masterMuted]);
 
   // Keep the audio-track element in lockstep as well.
   React.useEffect(() => {
@@ -152,20 +165,47 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     if (Math.abs(audio.currentTime - desired) > 0.18) {
       audio.currentTime = desired;
     }
-    audio.volume = Math.min(1, Math.max(0, activeAudioClip.gain));
+    audio.playbackRate = playbackRate;
+    audio.volume = Math.min(1, Math.max(0, activeAudioClip.gain)) * (masterMuted ? 0 : volume);
     audio.muted = activeAudioClip.muted || Boolean(audioTrack?.muted);
     if (playing && audio.paused) {
       audio.play().catch(() => undefined);
     } else if (!playing && !audio.paused) {
       audio.pause();
     }
-  }, [playhead, playing, activeAudioClip, audioTrack]);
+  }, [playhead, playing, activeAudioClip, audioTrack, playbackRate, volume, masterMuted]);
+
+  const frameStep = 1 / (sequence.fps || 30);
+  const seekFromScrub = (clientX: number) => {
+    const rect = scrubRef.current?.getBoundingClientRect();
+    if (!rect || totalDuration <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    setPlayhead(ratio * totalDuration);
+  };
+  const handleScrub = (event: React.PointerEvent<HTMLDivElement>) => {
+    seekFromScrub(event.clientX);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // synthetic/stale pointers cannot be captured; dragging still works while pressed
+    }
+  };
+  const toggleFullscreen = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void stage.requestFullscreen().catch(() => undefined);
+  };
+  const playToggle = () => {
+    if (!playing && totalDuration > 0 && playhead >= totalDuration) setPlayhead(0);
+    togglePlaying();
+  };
 
   return (
     <div className="monitor-stack">
       <audio ref={audioRef} preload="auto" />
       <div className="monitor-stage">
-        <div className="monitor-frame-wrap">
+        <div className="monitor-frame-wrap" ref={stageRef} onClick={playToggle}>
           <video
             ref={videoRef}
             className="monitor-video"
@@ -199,36 +239,68 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           )}
         </div>
       </div>
+      <div
+        className="monitor-scrub"
+        ref={scrubRef}
+        onPointerDown={handleScrub}
+        onPointerMove={(event) => event.buttons & 1 && seekFromScrub(event.clientX)}
+      >
+        <div
+          className="monitor-scrub-fill"
+          style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
+        />
+      </div>
       <div className="monitor-transport">
         <div className="monitor-buttons">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label="Go to start">
-                <SkipBack size={15} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>00:00.0</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="secondary"
-                size="icon-sm"
-                onClick={() => {
-                  if (!playing && totalDuration > 0 && playhead >= totalDuration) setPlayhead(0);
-                  togglePlaying();
-                }}
-                aria-label={t("playPause")}
-              >
-                {playing ? <Pause size={15} /> : <Play size={15} />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t("playPause")}</TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label="start">
+            <SkipBack size={14} />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label="frame back">
+            <StepBack size={14} />
+          </Button>
+          <Button variant="secondary" size="icon-sm" onClick={playToggle} aria-label={t("playPause")}>
+            {playing ? <Pause size={15} /> : <Play size={15} />}
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label="frame forward">
+            <StepForward size={14} />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label="end">
+            <SkipForward size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={loop ? "monitor-active" : undefined}
+            onClick={toggleLoop}
+            aria-label="loop"
+          >
+            <Repeat size={13} />
+          </Button>
+          <button type="button" className="monitor-rate timecode" onClick={cyclePlaybackRate} aria-label="rate">
+            {playbackRate}x
+          </button>
         </div>
         <div className="monitor-timecode timecode">
           {formatTimecode(playhead)}
           <span className="monitor-total"> / {formatTimecode(totalDuration)}</span>
+        </div>
+        <div className="monitor-buttons">
+          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label="mute">
+            {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </Button>
+          <input
+            type="range"
+            className="monitor-volume"
+            min={0}
+            max={1}
+            step={0.05}
+            value={masterMuted ? 0 : volume}
+            onChange={(event) => setVolume(Number(event.target.value))}
+            aria-label="volume"
+          />
+          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label="fullscreen">
+            <Maximize2 size={13} />
+          </Button>
         </div>
       </div>
     </div>

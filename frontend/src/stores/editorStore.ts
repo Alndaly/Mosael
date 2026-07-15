@@ -18,30 +18,60 @@ export const MIN_PX_PER_SECOND = 4;
 export const MAX_PX_PER_SECOND = 240;
 export const DEFAULT_PX_PER_SECOND = 40;
 
+export interface DraggingAsset {
+  id: string;
+  kind: string;
+  duration: number;
+}
+
 interface EditorState {
   playhead: number;
   playing: boolean;
+  loop: boolean;
+  playbackRate: number;
+  volume: number;
+  muted: boolean;
   pxPerSecond: number;
   selectedClipId: string | null;
   dragDraft: DragDraft | null;
+  draggingAsset: DraggingAsset | null;
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
+  toggleLoop: () => void;
+  cyclePlaybackRate: () => void;
+  setVolume: (volume: number) => void;
+  toggleMuted: () => void;
   setPxPerSecond: (value: number) => void;
   zoomBy: (factor: number) => void;
   selectClip: (clipId: string | null) => void;
   setDragDraft: (draft: DragDraft | null) => void;
+  setDraggingAsset: (asset: DraggingAsset | null) => void;
 }
+
+const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
 
 export const useEditorStore = create<EditorState>((set) => ({
   playhead: 0,
   playing: false,
+  loop: false,
+  playbackRate: 1,
+  volume: 1,
+  muted: false,
   pxPerSecond: DEFAULT_PX_PER_SECOND,
   selectedClipId: null,
   dragDraft: null,
+  draggingAsset: null,
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
   togglePlaying: () => set((state) => ({ playing: !state.playing })),
+  toggleLoop: () => set((state) => ({ loop: !state.loop })),
+  cyclePlaybackRate: () =>
+    set((state) => ({
+      playbackRate: PLAYBACK_RATES[(PLAYBACK_RATES.indexOf(state.playbackRate) + 1) % PLAYBACK_RATES.length],
+    })),
+  setVolume: (volume) => set({ volume: Math.min(1, Math.max(0, volume)), muted: false }),
+  toggleMuted: () => set((state) => ({ muted: !state.muted })),
   setPxPerSecond: (value) =>
     set({ pxPerSecond: Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, value)) }),
   zoomBy: (factor) =>
@@ -50,4 +80,5 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
   selectClip: (clipId) => set({ selectedClipId: clipId }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
+  setDraggingAsset: (asset) => set({ draggingAsset: asset }),
 }));

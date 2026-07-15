@@ -280,10 +280,14 @@ export function ChatWorkspace({ workspace, project }: { workspace: Workspace; pr
                 </label>
               </Button>
               <textarea
-                rows={2}
+                rows={1}
                 value={draft}
                 placeholder={t("chatPlaceholder")}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  event.target.style.height = "auto";
+                  event.target.style.height = `${Math.min(event.target.scrollHeight, 160)}px`;
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -293,9 +297,12 @@ export function ChatWorkspace({ workspace, project }: { workspace: Workspace; pr
               />
               <Button
                 type="submit"
+                size="icon"
+                className="chat-send"
+                aria-label={t("chatSend")}
                 disabled={(!draft.trim() && attachments.length === 0) || running || sendMessage.isPending}
               >
-                <Send size={14} /> {t("chatSend")}
+                <Send size={15} />
               </Button>
             </form>
           </>

@@ -136,8 +136,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: refreshSequences,
   });
   const moveClipMutation = useMutation({
-    mutationFn: ({ clipId, timelineStart }: { clipId: string; timelineStart: number }) =>
-      moveClip(sequence!.id, clipId, { timeline_start: timelineStart }),
+    mutationFn: ({ clipId, timelineStart, trackId }: { clipId: string; timelineStart: number; trackId?: string }) =>
+      moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null }),
     onSettled: settleDraft,
   });
   const trimClipMutation = useMutation({
@@ -280,6 +280,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       } else if (event.code === "Space") {
         event.preventDefault();
         useEditorStore.getState().togglePlaying();
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const fps = sequence?.fps || 30;
+        const step = (event.shiftKey ? 10 : 1) / fps;
+        const store = useEditorStore.getState();
+        store.setPlayhead(store.playhead + (event.key === "ArrowLeft" ? -step : step));
       } else if (event.key === "Delete" || event.key === "Backspace") {
         const clipId = useEditorStore.getState().selectedClipId;
         if (clipId && sequence) {
@@ -356,7 +362,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           sequence={sequence}
           assets={assets.data ?? []}
           onInsertClip={(args) => insertClipMutation.mutate(args)}
-          onMoveClip={(clipId, timelineStart) => moveClipMutation.mutate({ clipId, timelineStart })}
+          onMoveClip={(clipId, timelineStart, trackId) => moveClipMutation.mutate({ clipId, timelineStart, trackId })}
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}

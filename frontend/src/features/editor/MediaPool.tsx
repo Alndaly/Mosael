@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { formatTimecode } from "@/domain/timeline/geometry";
+import { useEditorStore } from "@/stores/editorStore";
 
 export function MediaPool({
   assets,
@@ -121,7 +122,13 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-mibu-asset", asset.id);
         event.dataTransfer.effectAllowed = "copy";
+        useEditorStore.getState().setDraggingAsset({
+          id: asset.id,
+          kind: asset.kind,
+          duration: typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5,
+        });
       }}
+      onDragEnd={() => useEditorStore.getState().setDraggingAsset(null)}
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >

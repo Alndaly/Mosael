@@ -48,7 +48,7 @@ export function Timeline({
   sequence: Sequence;
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
-  onMoveClip: (clipId: string, timelineStart: number) => void;
+  onMoveClip: (clipId: string, timelineStart: number, trackId?: string) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio") => void;
   onRemoveTrack?: (trackId: string) => void;
@@ -66,6 +66,8 @@ export function Timeline({
   const { setPlayhead, zoomBy, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
+  const draggingAsset = useEditorStore((state) => state.draggingAsset);
+  const [dropGhost, setDropGhost] = React.useState<{ trackId: string; start: number; duration: number } | null>(null);
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
@@ -125,6 +127,15 @@ export function Timeline({
     if (event.buttons & 1) setPlayhead(timeAtPointer(event));
   };
 
+  const laneTrackAt = (clientY: number, sourceKind: string): Track | null => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const laneIndex = Math.floor((clientY - rect.top - RULER_HEIGHT) / TRACK_HEIGHT);
+    const candidate = tracks[laneIndex];
+    if (!candidate || candidate.kind !== sourceKind || candidate.locked) return null;
+    return candidate;
+  };
+
   const startClipDrag = (event: React.PointerEvent, track: Track, clipId: string) => {
     const clip = (track.clips ?? []).find((item) => item.id === clipId);
     if (!clip || track.locked) return;
@@ -138,9 +149,10 @@ export function Timeline({
     const onMove = (moveEvent: PointerEvent) => {
       const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
       const resolved = resolveMove(origin, rawStart, candidates, pxPerSecond);
+      const lane = laneTrackAt(moveEvent.clientY, track.kind);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
-        trackId: track.id,
+        trackId: lane?.id ?? track.id,
         timeline_start: resolved,
         src_in: origin.src_in,
         src_out: origin.src_out,
@@ -151,8 +163,12 @@ export function Timeline({
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
       const draft = useEditorStore.getState().dragDraft;
-      if (draft && draft.clipId === clip.id && draft.timeline_start !== origin.timeline_start) {
-        onMoveClip(clip.id, draft.timeline_start);
+      if (
+        draft &&
+        draft.clipId === clip.id &&
+        (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id)
+      ) {
+        onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined);
       } else {
         useEditorStore.getState().setDragDraft(null);
       }
@@ -196,11 +212,27 @@ export function Timeline({
     target.addEventListener("pointerup", onUp);
   };
 
+  const handleDragOver = (event: React.DragEvent, track: Track) => {
+    event.preventDefault();
+    if (!draggingAsset) return;
+    const accepts =
+      (track.kind === "video" && (draggingAsset.kind === "video" || draggingAsset.kind === "image")) ||
+      (track.kind === "audio" && draggingAsset.kind === "audio");
+    if (!accepts || track.locked) {
+      if (dropGhost?.trackId === track.id) setDropGhost(null);
+      return;
+    }
+    let start = timeAtPointer(event);
+    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, playhead), pxPerSecond).time;
+    setDropGhost({ trackId: track.id, start, duration: draggingAsset.duration });
+  };
+
   const handleDrop = (event: React.DragEvent, track: Track) => {
     event.preventDefault();
+    setDropGhost(null);
     const assetId = event.dataTransfer.getData("application/x-mibu-asset");
     const asset = assetById.get(assetId);
-    if (!asset || !trackAcceptsAsset(track, asset)) return;
+    if (!asset || !trackAcceptsAsset(track, asset) || track.locked) return;
     const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
     let start = timeAtPointer(event);
     if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, playhead), pxPerSecond).time;
@@ -338,16 +370,56 @@ export function Timeline({
             </div>
             {tracks.map((track) => (
               <div
-                className="tl-lane"
+                className={
+                  draggingAsset &&
+                  ((track.kind === "video" && draggingAsset.kind !== "audio") ||
+                    (track.kind === "audio" && draggingAsset.kind === "audio")) &&
+                  !track.locked
+                    ? "tl-lane droppable"
+                    : "tl-lane"
+                }
                 key={track.id}
                 style={{ height: TRACK_HEIGHT }}
-                onDragOver={(event) => event.preventDefault()}
+                onDragOver={(event) => handleDragOver(event, track)}
+                onDragLeave={() => dropGhost?.trackId === track.id && setDropGhost(null)}
                 onDrop={(event) => handleDrop(event, track)}
                 onPointerDown={(event) => {
                   if (event.target === event.currentTarget) selectClip(null);
                 }}
               >
+                {dropGhost?.trackId === track.id && (
+                  <div
+                    className="tl-drop-ghost"
+                    style={{
+                      left: timeToPx(dropGhost.start, pxPerSecond),
+                      width: Math.max(12, timeToPx(dropGhost.duration, pxPerSecond)),
+                    }}
+                  />
+                )}
+                {dragDraft &&
+                  dragDraft.kind === "move" &&
+                  dragDraft.trackId === track.id &&
+                  !(track.clips ?? []).some((item) => item.id === dragDraft.clipId) &&
+                  (() => {
+                    const source = allClips.find((item) => item.id === dragDraft.clipId);
+                    if (!source) return null;
+                    return (
+                      <TimelineClip
+                        key={`draft-${source.id}`}
+                        trackKind={track.kind}
+                        name={assetById.get(source.asset_id)?.name ?? ""}
+                        left={timeToPx(dragDraft.timeline_start, pxPerSecond)}
+                        width={Math.max(10, timeToPx(dragDraft.src_out - dragDraft.src_in, pxPerSecond))}
+                        selected
+                        dragging
+                        onPointerDown={() => undefined}
+                        onTrimPointerDown={() => undefined}
+                        onSelect={() => undefined}
+                      />
+                    );
+                  })()}
                 {(track.clips ?? []).map((clip) => {
+                  if (dragDraft && dragDraft.clipId === clip.id && dragDraft.trackId !== track.id) return null;
                   const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
                   const display = draft ?? clip;
                   const waveform = track.kind === "audio" ? waveformByAsset.get(clip.asset_id) : undefined;
