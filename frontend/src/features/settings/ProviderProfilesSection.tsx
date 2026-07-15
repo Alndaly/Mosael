@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
@@ -69,75 +70,80 @@ export function ProviderProfilesSection() {
   const vendorLabel = (value: string) => (vendors.data ?? []).find((item) => item.vendor === value)?.label ?? value;
 
   return (
-    <section className="settings-section">
-      <div className="provider-head">
-        <h2 className="section-label"><KeyRound size={13} /> {t("settingsProviders")}</h2>
+    <SettingsGroup
+      title={t("settingsProviders")}
+      description={t("providerSectionDesc")}
+      actions={
         <Button variant="outline" size="sm" onClick={() => setAdding((value) => !value)}>
           <Plus size={13} /> {t("providerAdd")}
         </Button>
-      </div>
-
+      }
+    >
       {adding && (
-        <form
-          className="provider-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (name.trim() && apiKey.trim()) create.mutate();
-          }}
-        >
-          <select value={vendor} onChange={(event) => setVendor(event.target.value)}>
-            {(vendors.data ?? []).map((preset) => (
-              <option key={preset.vendor} value={preset.vendor}>
-                {preset.label}
-              </option>
-            ))}
-          </select>
-          <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
-          <Input
-            type="password"
-            placeholder={t("providerKeyPlaceholder")}
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-          />
-          <Input
-            placeholder={t("providerBaseUrl")}
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-          <Input placeholder={t("providerModel")} value={model} onChange={(event) => setModel(event.target.value)} />
-          <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
-            {t("save")}
-          </Button>
-        </form>
+        <SettingsBlock>
+          <form
+            className="provider-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (name.trim() && apiKey.trim()) create.mutate();
+            }}
+          >
+            <select value={vendor} onChange={(event) => setVendor(event.target.value)}>
+              {(vendors.data ?? []).map((preset) => (
+                <option key={preset.vendor} value={preset.vendor}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
+            <Input
+              type="password"
+              placeholder={t("providerKeyPlaceholder")}
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+            />
+            <Input
+              placeholder={t("providerBaseUrl")}
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.target.value)}
+            />
+            <Input placeholder={t("providerModel")} value={model} onChange={(event) => setModel(event.target.value)} />
+            <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
+              {t("save")}
+            </Button>
+          </form>
+        </SettingsBlock>
       )}
 
-      <div className="provider-list">
-        {(profiles.data ?? []).map((profile) => (
-          <div className={profile.enabled ? "provider-row" : "provider-row disabled"} key={profile.id}>
-            <span className="feishu-bot-icon">
-              <KeyRound size={13} />
-            </span>
-            <div className="feishu-bot-body">
-              <strong>{profile.name}</strong>
-              <small>
-                {vendorLabel(profile.vendor)} · {profile.key_hint}
-                {profile.default_model ? ` · ${profile.default_model}` : ""}
-                {profile.base_url ? ` · ${profile.base_url}` : ""}
-              </small>
+      <SettingsBlock>
+        <div className="provider-list">
+          {(profiles.data ?? []).map((profile) => (
+            <div className={profile.enabled ? "provider-row" : "provider-row disabled"} key={profile.id}>
+              <span className="feishu-bot-icon">
+                <KeyRound size={13} />
+              </span>
+              <div className="feishu-bot-body">
+                <strong>{profile.name}</strong>
+                <small>
+                  {vendorLabel(profile.vendor)} · {profile.key_hint}
+                  {profile.default_model ? ` · ${profile.default_model}` : ""}
+                  {profile.base_url ? ` · ${profile.base_url}` : ""}
+                </small>
+              </div>
+              {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
+              <div className="feishu-bot-actions">
+                <Button variant="ghost" size="icon-sm" onClick={() => toggle.mutate(profile)} aria-label="toggle">
+                  <Power size={13} />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => remove.mutate(profile.id)} aria-label={t("delete")}>
+                  <Trash2 size={13} />
+                </Button>
+              </div>
             </div>
-            {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
-            <div className="feishu-bot-actions">
-              <Button variant="ghost" size="icon-sm" onClick={() => toggle.mutate(profile)} aria-label="toggle">
-                <Power size={13} />
-              </Button>
-              <Button variant="ghost" size="icon-sm" onClick={() => remove.mutate(profile.id)} aria-label={t("delete")}>
-                <Trash2 size={13} />
-              </Button>
-            </div>
-          </div>
-        ))}
-        {profiles.data?.length === 0 && <p className="feishu-empty">{t("providerNoProfiles")}</p>}
-      </div>
-    </section>
+          ))}
+          {profiles.data?.length === 0 && <p className="feishu-empty">{t("providerNoProfiles")}</p>}
+        </div>
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }

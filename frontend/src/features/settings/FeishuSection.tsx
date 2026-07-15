@@ -9,6 +9,7 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
 type Onboarding = components["schemas"]["FeishuOnboardingOut"];
@@ -88,14 +89,17 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
   });
 
   return (
-    <section className="settings-section">
-      <h2 className="section-label"><MessageSquare size={13} /> {t("feishuTitle")}</h2>
-      <p className="feishu-desc">{t("feishuDesc")}</p>
-
-      <div className="feishu-actions">
-        <Button onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
-          <QrCode size={15} /> {t("feishuScanCreate")}
+    <SettingsGroup
+      title={t("feishuTitle")}
+      description={t("feishuDesc")}
+      actions={
+        <Button size="sm" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
+          <QrCode size={14} /> {t("feishuScanCreate")}
         </Button>
+      }
+    >
+      <SettingsBlock>
+      <div className="feishu-actions">
         <button type="button" className="login-switch" onClick={() => setManualOpen((value) => !value)}>
           {t("feishuManualToggle")}
         </button>
@@ -174,7 +178,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         ))}
         {bots.data?.length === 0 && !scanning && <p className="feishu-empty">{t("feishuNoBots")}</p>}
       </div>
-    </section>
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }
 

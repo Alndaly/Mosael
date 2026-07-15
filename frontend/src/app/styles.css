@@ -845,12 +845,143 @@
 
 /* ---------- Settings ---------- */
 
-.settings-sections {
+.settings-shell {
   display: grid;
-  gap: 14px;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 28px;
   width: 100%;
-  max-width: 720px;
-  margin: 8px auto 0;
+  max-width: 920px;
+  margin: 12px auto 0;
+  align-items: start;
+}
+
+.settings-nav {
+  display: grid;
+  gap: 2px;
+  position: sticky;
+  top: 12px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  padding: 7px 10px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.settings-nav-item:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.settings-nav-item.active {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 550;
+}
+
+.settings-content {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+/* Settings group: header (title/description/actions) + uniform rows */
+.sg {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.sg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sg-head-text h2 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sg-head-text p {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sg-body {
+  display: grid;
+}
+
+.sg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 18px;
+}
+
+.sg-row + .sg-row,
+.sg-row + .sg-block,
+.sg-block + .sg-row,
+.sg-block + .sg-block {
+  border-top: 1px solid var(--border);
+}
+
+.sg-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sg-row-text > span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sg-row-text small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sg-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sg-value {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sg-block {
+  padding: 12px 18px;
+  display: grid;
+  gap: 10px;
 }
 
 .settings-section {
