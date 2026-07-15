@@ -2245,3 +2245,13 @@
     grid-column: 1;
   }
 }
+
+/* Timeline marquee selection */
+.tl-marquee {
+  position: absolute;
+  z-index: 30;
+  border: 1px solid var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}

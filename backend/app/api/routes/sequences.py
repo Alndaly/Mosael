@@ -30,6 +30,7 @@ from app.domain.sequences.operations import (
     InsertClip,
     MoveClip,
     RemoveTrack,
+    RippleDeleteClip,
     SequenceDomainError,
     SetClipEffects,
     SetTrackState,
@@ -39,6 +40,7 @@ from app.domain.sequences.operations import (
     cut_clip_range as cut_clip_range_operation,
     delete_clip as delete_clip_operation,
     remove_track as remove_track_operation,
+    ripple_delete_clip as ripple_delete_clip_operation,
     set_clip_effects as set_clip_effects_operation,
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
@@ -136,6 +138,13 @@ def set_track_state(
 def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.delete("/sequences/{sequence_id}/clips/{clip_id}/ripple", response_model=SequenceOut)
+def ripple_delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: ripple_delete_clip_operation(db, sequence_id, RippleDeleteClip(clip_id=clip_id)))
     return _get_sequence(db, sequence_id)
 
 

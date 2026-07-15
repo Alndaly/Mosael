@@ -33,6 +33,7 @@ interface EditorState {
   muted: boolean;
   pxPerSecond: number;
   selectedClipId: string | null;
+  selectedClipIds: string[];
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
   setPlayhead: (time: number) => void;
@@ -45,6 +46,8 @@ interface EditorState {
   setPxPerSecond: (value: number) => void;
   zoomBy: (factor: number) => void;
   selectClip: (clipId: string | null) => void;
+  toggleSelectClip: (clipId: string) => void;
+  selectClips: (clipIds: string[]) => void;
   setDragDraft: (draft: DragDraft | null) => void;
   setDraggingAsset: (asset: DraggingAsset | null) => void;
 }
@@ -60,6 +63,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   muted: false,
   pxPerSecond: DEFAULT_PX_PER_SECOND,
   selectedClipId: null,
+  selectedClipIds: [],
   dragDraft: null,
   draggingAsset: null,
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
@@ -78,7 +82,15 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       pxPerSecond: Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, state.pxPerSecond * factor)),
     })),
-  selectClip: (clipId) => set({ selectedClipId: clipId }),
+  selectClip: (clipId) => set({ selectedClipId: clipId, selectedClipIds: clipId ? [clipId] : [] }),
+  toggleSelectClip: (clipId) =>
+    set((state) => {
+      const ids = state.selectedClipIds.includes(clipId)
+        ? state.selectedClipIds.filter((id) => id !== clipId)
+        : [...state.selectedClipIds, clipId];
+      return { selectedClipIds: ids, selectedClipId: ids[ids.length - 1] ?? null };
+    }),
+  selectClips: (clipIds) => set({ selectedClipIds: clipIds, selectedClipId: clipIds[clipIds.length - 1] ?? null }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
 }));

@@ -26,6 +26,7 @@ UNDOABLE_KINDS = (
     "set_clip_effect",
     "split_clip",
     "set_track_state",
+    "ripple_delete_clip",
 )
 
 
@@ -141,6 +142,11 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         for created in payload["created"]:
             _delete_clip_row(db, created["clip_id"])
         _restore_clip_row(db, sequence, payload["original"])
+    elif operation.kind == "ripple_delete_clip":
+        for entry in payload["shifted"]:
+            clip = _require_clip_row(db, entry["clip_id"])
+            clip.timeline_start = entry["previous_timeline_start"]
+        _restore_clip_row(db, sequence, payload["original"])
     elif operation.kind == "set_track_state":
         track = db.get(Track, payload["track_id"])
         if track is not None:
@@ -188,6 +194,11 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         _delete_clip_row(db, payload["original"]["clip_id"])
         for created in payload["created"]:
             _restore_clip_row(db, sequence, created)
+    elif operation.kind == "ripple_delete_clip":
+        _delete_clip_row(db, payload["original"]["clip_id"])
+        for entry in payload["shifted"]:
+            clip = _require_clip_row(db, entry["clip_id"])
+            clip.timeline_start = entry["timeline_start"]
     elif operation.kind == "set_track_state":
         track = db.get(Track, payload["track_id"])
         if track is not None:

@@ -40,6 +40,7 @@ export function Timeline({
   onAddTrack,
   onRemoveTrack,
   onDeleteClip,
+  onRippleDeleteClip,
   onSplitClip,
   onDuplicateClip,
   onSetTrackState,
@@ -53,6 +54,7 @@ export function Timeline({
   onAddTrack?: (kind: "video" | "audio") => void;
   onRemoveTrack?: (trackId: string) => void;
   onDeleteClip?: (clipId: string) => void;
+  onRippleDeleteClip?: (clipId: string) => void;
   onSplitClip?: (clipId: string) => void;
   onDuplicateClip?: (clipId: string) => void;
   onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean }) => void;
@@ -62,12 +64,13 @@ export function Timeline({
   const playhead = useEditorStore((state) => state.playhead);
   const pxPerSecond = useEditorStore((state) => state.pxPerSecond);
   const dragDraft = useEditorStore((state) => state.dragDraft);
-  const selectedClipId = useEditorStore((state) => state.selectedClipId);
+  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const { setPlayhead, zoomBy, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
   const [dropGhost, setDropGhost] = React.useState<{ trackId: string; start: number; duration: number } | null>(null);
+  const [marquee, setMarquee] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
@@ -136,10 +139,49 @@ export function Timeline({
     return candidate;
   };
 
+  const startMarquee = (event: React.PointerEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const origin = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    let moved = false;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const x = moveEvent.clientX - rect.left;
+      const y = moveEvent.clientY - rect.top;
+      if (!moved && Math.abs(x - origin.x) < 4 && Math.abs(y - origin.y) < 4) return;
+      moved = true;
+      setMarquee({ x1: origin.x, y1: origin.y, x2: x, y2: y });
+      const t1 = pxToTime(Math.min(origin.x, x), pxPerSecond);
+      const t2 = pxToTime(Math.max(origin.x, x), pxPerSecond);
+      const rowTop = Math.floor((Math.min(origin.y, y) - RULER_HEIGHT) / TRACK_HEIGHT);
+      const rowBottom = Math.floor((Math.max(origin.y, y) - RULER_HEIGHT) / TRACK_HEIGHT);
+      const hits: string[] = [];
+      tracks.forEach((track, index) => {
+        if (index < rowTop || index > rowBottom) return;
+        for (const clip of track.clips ?? []) {
+          if (clip.timeline_start < t2 && clip.timeline_start + (clip.src_out - clip.src_in) > t1) hits.push(clip.id);
+        }
+      });
+      useEditorStore.getState().selectClips(hits);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setMarquee(null);
+      if (!moved) selectClip(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   const startClipDrag = (event: React.PointerEvent, track: Track, clipId: string) => {
     const clip = (track.clips ?? []).find((item) => item.id === clipId);
     if (!clip || track.locked) return;
-    selectClip(clip.id);
+    if (event.shiftKey || event.metaKey || event.ctrlKey) {
+      useEditorStore.getState().toggleSelectClip(clip.id);
+      return;
+    }
+    if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
     const startX = event.clientX;
     const origin = { ...clip };
     const candidates = snapEnabled ? snapCandidates(allClips, clip.id, playhead) : [];
@@ -384,7 +426,7 @@ export function Timeline({
                 onDragLeave={() => dropGhost?.trackId === track.id && setDropGhost(null)}
                 onDrop={(event) => handleDrop(event, track)}
                 onPointerDown={(event) => {
-                  if (event.target === event.currentTarget) selectClip(null);
+                  if (event.target === event.currentTarget && event.button === 0) startMarquee(event);
                 }}
               >
                 {dropGhost?.trackId === track.id && (
@@ -437,13 +479,16 @@ export function Timeline({
                       name={assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8)}
                       left={timeToPx(display.timeline_start, pxPerSecond)}
                       width={clipWidth}
-                      selected={selectedClipId === clip.id}
+                      selected={selectedClipIds.includes(clip.id)}
                       dragging={Boolean(draft)}
                       peaks={peaks}
                       onPointerDown={(event) => startClipDrag(event, track, clip.id)}
                       onTrimPointerDown={(event, edge) => startClipTrim(event, track, clip.id, edge)}
-                      onSelect={() => selectClip(clip.id)}
+                      onSelect={() => {
+                        if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
+                      }}
                       onDelete={onDeleteClip ? () => onDeleteClip(clip.id) : undefined}
+                      onRippleDelete={onRippleDeleteClip ? () => onRippleDeleteClip(clip.id) : undefined}
                       onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
                       onDuplicate={onDuplicateClip ? () => onDuplicateClip(clip.id) : undefined}
                     />
@@ -451,6 +496,17 @@ export function Timeline({
                 })}
               </div>
             ))}
+            {marquee && (
+              <div
+                className="tl-marquee"
+                style={{
+                  left: Math.min(marquee.x1, marquee.x2),
+                  top: Math.min(marquee.y1, marquee.y2),
+                  width: Math.abs(marquee.x2 - marquee.x1),
+                  height: Math.abs(marquee.y2 - marquee.y1),
+                }}
+              />
+            )}
             <div className="tl-playhead" style={{ left: timeToPx(playhead, pxPerSecond) }}>
               <div className="tl-playhead-cap" />
             </div>

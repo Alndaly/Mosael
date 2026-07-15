@@ -7,6 +7,7 @@ import {
   api,
   cutClipRange,
   deleteClip,
+  rippleDeleteClip,
   exportSequence,
   importAsset,
   insertClip,
@@ -152,6 +153,27 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const deleteClipsMutation = useMutation({
+    mutationFn: async (clipIds: string[]) => {
+      for (const clipId of clipIds) await deleteClip(sequence!.id, clipId);
+    },
+    onSuccess: () => {
+      useEditorStore.getState().selectClip(null);
+      void refreshSequences();
+    },
+  });
+  const rippleDeleteMutation = useMutation({
+    mutationFn: async (clipIds: string[]) => {
+      // Later clips first so earlier ripples don't move the remaining targets.
+      const byStart = new Map(allClips.map((clip) => [clip.id, clip.timeline_start]));
+      const ordered = [...clipIds].sort((a, b) => (byStart.get(b) ?? 0) - (byStart.get(a) ?? 0));
+      for (const clipId of ordered) await rippleDeleteClip(sequence!.id, clipId);
+    },
+    onSuccess: () => {
+      useEditorStore.getState().selectClip(null);
+      void refreshSequences();
+    },
+  });
   const addTrackMutation = useMutation({
     mutationFn: (kind: "video" | "audio") => addTrack(sequence!.id, kind),
     onSuccess: refreshSequences,
@@ -287,10 +309,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         const store = useEditorStore.getState();
         store.setPlayhead(store.playhead + (event.key === "ArrowLeft" ? -step : step));
       } else if (event.key === "Delete" || event.key === "Backspace") {
-        const clipId = useEditorStore.getState().selectedClipId;
-        if (clipId && sequence) {
+        const clipIds = useEditorStore.getState().selectedClipIds;
+        if (clipIds.length > 0 && sequence) {
           event.preventDefault();
-          deleteClipMutation.mutate(clipId);
+          if (event.shiftKey) rippleDeleteMutation.mutate(clipIds);
+          else if (clipIds.length === 1) deleteClipMutation.mutate(clipIds[0]);
+          else deleteClipsMutation.mutate(clipIds);
         }
       }
     };
@@ -367,6 +391,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+          onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}

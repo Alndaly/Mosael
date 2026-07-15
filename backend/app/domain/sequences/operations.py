@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, SequenceOperation, SequenceRevision, Track
@@ -187,6 +188,46 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
         kind="delete_clip",
         payload=payload,
         summary={"operation": "delete_clip", "clip_id": payload["clip_id"]},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+@dataclass(frozen=True)
+class RippleDeleteClip:
+    """Delete a clip and shift later clips on the same track left to close the gap."""
+
+    clip_id: str
+    actor_id: str | None = None
+
+
+def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    gap = clip.src_out - clip.src_in
+    anchor = clip.timeline_start
+
+    original = _clip_payload(clip)
+    shifted: list[dict[str, Any]] = []
+    followers = db.scalars(
+        select(Clip).where(Clip.track_id == clip.track_id, Clip.id != clip.id, Clip.timeline_start >= anchor)
+    )
+    for other in followers:
+        new_start = max(anchor, other.timeline_start - gap)
+        if new_start == other.timeline_start:
+            continue
+        shifted.append(
+            {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
+        )
+        other.timeline_start = new_start
+    db.delete(clip)
+    _record_operation(
+        db,
+        sequence,
+        kind="ripple_delete_clip",
+        payload={"clip_id": original["clip_id"], "original": original, "shifted": shifted},
+        summary={"operation": "ripple_delete_clip", "clip_id": original["clip_id"], "shifted": len(shifted)},
         actor_id=op.actor_id,
     )
     db.commit()

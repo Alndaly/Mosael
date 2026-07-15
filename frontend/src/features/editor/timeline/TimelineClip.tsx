@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy, Scissors, Trash2 } from "lucide-react";
+import { Copy, Scissors, Trash2, Waves } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -17,6 +17,7 @@ export function TimelineClip({
   onTrimPointerDown,
   onSelect,
   onDelete,
+  onRippleDelete,
   onSplit,
   onDuplicate,
 }: {
@@ -31,6 +32,7 @@ export function TimelineClip({
   onTrimPointerDown: (event: React.PointerEvent, edge: "start" | "end") => void;
   onSelect: () => void;
   onDelete?: () => void;
+  onRippleDelete?: () => void;
   onSplit?: () => void;
   onDuplicate?: () => void;
 }) {
@@ -98,6 +100,11 @@ export function TimelineClip({
         <ContextMenuItem destructive onSelect={onDelete}>
           <Trash2 /> {t("deleteClip")}
         </ContextMenuItem>
+        {onRippleDelete && (
+          <ContextMenuItem destructive onSelect={onRippleDelete}>
+            <Waves /> {t("rippleDelete")}
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

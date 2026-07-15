@@ -123,6 +123,10 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
+}
+
 export function splitClip(sequenceId: string, clipId: string, srcTime: number): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split`, {
     method: "POST",
