@@ -116,7 +116,16 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - split_clip operation (cut-in-two at a source point, single invertible op) + S key / clip context menu at the playhead; ⌘D duplicate appends a copy at track end.
 - set_track_state operation (mute/lock, undoable) with hover tools on track headers; muted video tracks drop their overlays from the render plan; locked tracks already reject drags.
-- Remaining parity queue: multi-select, ripple delete, fade, speed UI, transitions, token-level transcript edits, silence/filler detection, asset inspector.
+
+### Editing boost round 2 (player, DnD, multi-select, speed/fade, transcript tools)
+
+- Monitor is a real player: scrubber with hover thumb, frame stepping (←/→, Shift=10), skip to start/end, loop, 0.5–2x rate, master volume + mute, fullscreen, click-stage play toggle.
+- Timeline: cross-track clip dragging with live lane preview; pool drags show a snap-aware dashed drop ghost and lane highlighting; shift/cmd-click multi-select + empty-lane marquee; Delete removes the selection.
+- ripple_delete_clip operation (delete + shift same-track followers left, clamped, single undoable op) via Shift+Delete, context menu, and DELETE /clips/{id}/ripple.
+- set_clip_speed operation (0.25–4x undoable) + speed presets in the Inspector; effective duration = source/speed flows through RenderPlan segments, FFmpeg setpts + chained atempo, timeline geometry, and Monitor source-time mapping/playbackRate.
+- Fades from clip effects.fade_in/fade_out (clamped): fade/afade at segment edges in the executor, afade on audio overlays before adelay; fade inputs in the Inspector.
+- cut_clip_ranges operation (batch source-range removal from one clip, merged + back-to-back, one undo step) powers the transcript tools: expandable word chips (token-level delete), amber-highlighted 口癖 with select-all, and 静音 gap detection (≥0.6s from token/segment timing) with per-gap and remove-all actions.
+- Remaining parity queue: transitions, richer asset inspector.
 
 ## Next
 
