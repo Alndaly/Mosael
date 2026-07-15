@@ -9,16 +9,20 @@ from app.api.schemas import (
     PluginInvocationOut,
     PluginInvokeRequest,
     PluginOut,
+    PluginPermissionGrantOut,
+    PluginPermissionGrantUpdate,
     PluginToolOut,
 )
 from app.core.config import settings
-from app.db.models import Plugin, PluginInvocation
+from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
 from app.domain.plugins import (
     PluginDomainError,
     invoke_plugin_tool,
     list_enabled_plugin_tools,
+    list_plugin_permission_grants,
     scan_plugins,
     set_plugin_enabled,
+    set_plugin_permission_grants,
 )
 
 router = APIRouter(tags=["plugins"])
@@ -44,6 +48,26 @@ def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession) -> P
         return set_plugin_enabled(db, plugin_id, body.enabled)
     except PluginDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/plugins/{plugin_id}/permissions", response_model=list[PluginPermissionGrantOut])
+def list_plugin_permissions(plugin_id: str, db: DbSession) -> list[PluginPermissionGrant]:
+    try:
+        return list_plugin_permission_grants(db, plugin_id)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/plugins/{plugin_id}/permissions", response_model=list[PluginPermissionGrantOut])
+def update_plugin_permissions(
+    plugin_id: str,
+    body: PluginPermissionGrantUpdate,
+    db: DbSession,
+) -> list[PluginPermissionGrant]:
+    try:
+        return set_plugin_permission_grants(db, plugin_id, body.grants)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/plugins/tools", response_model=list[PluginToolOut])

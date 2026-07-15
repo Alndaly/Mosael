@@ -1090,6 +1090,106 @@
         }
       }
     },
+    "/api/plugins/{plugin_id}/permissions": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List Plugin Permissions",
+        "operationId": "list_plugin_permissions_api_plugins__plugin_id__permissions_get",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginPermissionGrantOut"
+                  },
+                  "title": "Response List Plugin Permissions Api Plugins  Plugin Id  Permissions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Update Plugin Permissions",
+        "operationId": "update_plugin_permissions_api_plugins__plugin_id__permissions_patch",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginPermissionGrantUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginPermissionGrantOut"
+                  },
+                  "title": "Response Update Plugin Permissions Api Plugins  Plugin Id  Permissions Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/tools": {
       "get": {
         "tags": [
@@ -1999,6 +2099,54 @@
           "manifest"
         ],
         "title": "PluginOut"
+      },
+      "PluginPermissionGrantOut": {
+        "properties": {
+          "plugin_id": {
+            "type": "string",
+            "title": "Plugin Id"
+          },
+          "permission": {
+            "type": "string",
+            "title": "Permission"
+          },
+          "granted": {
+            "type": "boolean",
+            "title": "Granted"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plugin_id",
+          "permission",
+          "granted",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PluginPermissionGrantOut"
+      },
+      "PluginPermissionGrantUpdate": {
+        "properties": {
+          "grants": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Grants"
+          }
+        },
+        "type": "object",
+        "title": "PluginPermissionGrantUpdate"
       },
       "PluginToolOut": {
         "properties": {

@@ -333,6 +333,24 @@ export interface paths {
         patch: operations["update_plugin_api_plugins__plugin_id__patch"];
         trace?: never;
     };
+    "/api/plugins/{plugin_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plugin Permissions */
+        get: operations["list_plugin_permissions_api_plugins__plugin_id__permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Plugin Permissions */
+        patch: operations["update_plugin_permissions_api_plugins__plugin_id__permissions_patch"];
+        trace?: never;
+    };
     "/api/plugins/tools": {
         parameters: {
             query?: never;
@@ -714,6 +732,32 @@ export interface components {
             /** Manifest */
             manifest: {
                 [key: string]: unknown;
+            };
+        };
+        /** PluginPermissionGrantOut */
+        PluginPermissionGrantOut: {
+            /** Plugin Id */
+            plugin_id: string;
+            /** Permission */
+            permission: string;
+            /** Granted */
+            granted: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PluginPermissionGrantUpdate */
+        PluginPermissionGrantUpdate: {
+            /** Grants */
+            grants?: {
+                [key: string]: boolean;
             };
         };
         /** PluginToolOut */
@@ -1718,6 +1762,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plugin_permissions_api_plugins__plugin_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginPermissionGrantOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plugin_permissions_api_plugins__plugin_id__permissions_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginPermissionGrantUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginPermissionGrantOut"][];
                 };
             };
             /** @description Validation Error */

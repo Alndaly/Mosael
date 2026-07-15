@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plug, RadioTower, RefreshCcw, Terminal } from "lucide-react";
+import { CheckCircle2, Plug, RadioTower, RefreshCcw, ShieldCheck, Terminal } from "lucide-react";
 
-import { api, type Plugin, type PluginInvocation, type PluginTool } from "@/api/client";
+import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
 
 export function PluginsView() {
   const qc = useQueryClient();
@@ -17,10 +17,24 @@ export function PluginsView() {
     queryKey: ["plugin-invocations"],
     queryFn: () => api<PluginInvocation[]>("/api/plugins/invocations"),
   });
+  const permissions = useQuery({
+    queryKey: ["plugin-permissions", (plugins.data ?? []).map((plugin) => plugin.id).join(",")],
+    enabled: Boolean(plugins.data),
+    queryFn: async () => {
+      const entries = await Promise.all(
+        (plugins.data ?? []).map(async (plugin) => [
+          plugin.id,
+          await api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`),
+        ] as const),
+      );
+      return Object.fromEntries(entries) as Record<string, PluginPermissionGrant[]>;
+    },
+  });
   const scanPlugins = useMutation({
     mutationFn: () => api<Plugin[]>("/api/plugins/scan", { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plugins"] });
+      qc.invalidateQueries({ queryKey: ["plugin-permissions"] });
       qc.invalidateQueries({ queryKey: ["plugin-tools"] });
     },
   });
@@ -32,6 +46,21 @@ export function PluginsView() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plugins"] });
+      qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
+  const grantPlugin = useMutation({
+    mutationFn: (plugin: Plugin) => {
+      const grants = Object.fromEntries(
+        ((plugin.manifest.permissions as string[] | undefined) ?? []).map((permission) => [permission, true]),
+      );
+      return api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`, {
+        method: "PATCH",
+        body: JSON.stringify({ grants }),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plugin-permissions"] });
       qc.invalidateQueries({ queryKey: ["plugin-tools"] });
     },
   });
@@ -63,12 +92,17 @@ export function PluginsView() {
                 <Plug size={16} />
                 <div>
                   <strong>{plugin.name}</strong>
-                  <small>{plugin.id} · v{plugin.version}</small>
+                  <small>
+                    {plugin.id} · v{plugin.version} · {permissionLabel(permissions.data?.[plugin.id] ?? [])}
+                  </small>
                 </div>
-                <button onClick={() => togglePlugin.mutate({ plugin, enabled: !plugin.enabled })}>
-                  {plugin.enabled ? <CheckCircle2 size={14} /> : <RadioTower size={14} />}
-                  {plugin.enabled ? "已启用" : "启用"}
-                </button>
+                <div className="plugin-actions">
+                  <button onClick={() => grantPlugin.mutate(plugin)}><ShieldCheck size={14} /> 授权</button>
+                  <button onClick={() => togglePlugin.mutate({ plugin, enabled: !plugin.enabled })}>
+                    {plugin.enabled ? <CheckCircle2 size={14} /> : <RadioTower size={14} />}
+                    {plugin.enabled ? "已启用" : "启用"}
+                  </button>
+                </div>
               </div>
             ))}
             {plugins.data?.length === 0 && <div className="empty-inline">把插件目录放到 ~/.mibu-new/plugins 后点击扫描</div>}
@@ -110,4 +144,10 @@ export function PluginsView() {
       </section>
     </div>
   );
+}
+
+function permissionLabel(grants: PluginPermissionGrant[]) {
+  if (grants.length === 0) return "无需权限";
+  const granted = grants.filter((grant) => grant.granted).length;
+  return `${granted}/${grants.length} 权限`;
 }

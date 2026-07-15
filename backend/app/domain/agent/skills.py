@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Plugin
+from app.domain.plugins import plugin_permissions_granted
 
 
 CORE_SKILLS = [
@@ -72,6 +73,8 @@ def list_agent_skills(db: Session) -> list[dict[str, Any]]:
     skills = [dict(skill) for skill in CORE_SKILLS]
     plugins = db.scalars(select(Plugin).where(Plugin.enabled.is_(True)).order_by(Plugin.name)).all()
     for plugin in plugins:
+        if not plugin_permissions_granted(db, plugin):
+            continue
         permissions = plugin.manifest.get("permissions", [])
         tools = [
             {

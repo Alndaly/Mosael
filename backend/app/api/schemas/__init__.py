@@ -225,6 +225,18 @@ class PluginEnableRequest(BaseModel):
     enabled: bool
 
 
+class PluginPermissionGrantOut(OrmModel):
+    plugin_id: str
+    permission: str
+    granted: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PluginPermissionGrantUpdate(BaseModel):
+    grants: dict[str, bool] = Field(default_factory=dict)
+
+
 class PluginToolOut(BaseModel):
     plugin_id: str
     plugin_name: str

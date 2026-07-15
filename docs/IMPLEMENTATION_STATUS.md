@@ -16,10 +16,11 @@
 - Added Electron development shell.
 - Added backend tests for edit flow, file-backed imports, generation jobs, and scheduled task runs.
 - Added plugin manifest scanning, enable/disable state, enabled tool aggregation, invocation records, frontend plugin panel, and manifest documentation.
+- Added deny-by-default plugin permission grants with API and frontend approval controls.
 
 ## Next
 
-- Add plugin permission approval UI and sandboxed execution adapters.
+- Add sandboxed plugin execution adapters.
 - Add provider adapter contracts for OpenAI image, Qwen Image, Seedance, Kling, and Veo.
 - Add a real scheduler runner process that claims due tasks and emits job events.
 - Add render/export job pipeline backed by FFmpeg.

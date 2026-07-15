@@ -267,6 +267,16 @@ class Plugin(Base):
     manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class PluginPermissionGrant(Base):
+    __tablename__ = "plugin_permission_grants"
+
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.id", ondelete="CASCADE"), primary_key=True)
+    permission: Mapped[str] = mapped_column(String(120), primary_key=True)
+    granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class PluginInvocation(Base):
     __tablename__ = "plugin_invocations"
 

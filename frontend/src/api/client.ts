@@ -17,6 +17,7 @@ export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskRe
 export type Plugin = components["schemas"]["PluginOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
+export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

@@ -51,6 +51,28 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
     enabled = client.patch("/api/plugins/dev.caption-helper", json={"enabled": True}).json()
     assert enabled["enabled"] is True
 
+    permissions = client.get("/api/plugins/dev.caption-helper/permissions").json()
+    assert {grant["permission"]: grant["granted"] for grant in permissions} == {
+        "assets:read": False,
+        "sequence:write": False,
+    }
+
+    tools = client.get("/api/plugins/tools").json()
+    assert tools == []
+
+    blocked = client.post(
+        "/api/plugins/dev.caption-helper/tools/caption_asset/invoke",
+        json={"input": {"asset_id": "asset_1"}},
+    )
+    assert blocked.status_code == 422
+    assert "permissions" in blocked.json()["detail"]
+
+    granted = client.patch(
+        "/api/plugins/dev.caption-helper/permissions",
+        json={"grants": {"assets:read": True, "sequence:write": True}},
+    ).json()
+    assert all(item["granted"] for item in granted)
+
     tools = client.get("/api/plugins/tools").json()
     assert tools[0]["plugin_id"] == "dev.caption-helper"
     assert tools[0]["tool_name"] == "caption_asset"

@@ -330,6 +330,13 @@ button:disabled {
   grid-template-columns: 28px minmax(0, 1fr);
 }
 
+.plugin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .model-row span,
 .job-row > svg:first-child,
 .task-row > svg:first-child,
