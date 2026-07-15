@@ -6,6 +6,7 @@ import {
   addTrack,
   api,
   cutClipRange,
+  cutClipRanges,
   deleteClip,
   rippleDeleteClip,
   exportSequence,
@@ -200,6 +201,21 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const cutRangesMutation = useMutation({
+    mutationFn: async (cuts: Array<{ clipId: string; ranges: Array<{ srcStart: number; srcEnd: number }> }>) => {
+      for (const cut of cuts) {
+        await cutClipRanges(
+          sequence!.id,
+          cut.clipId,
+          cut.ranges.map((range) => ({ src_start: range.srcStart, src_end: range.srcEnd })),
+        );
+      }
+    },
+    onSuccess: () => {
+      useEditorStore.getState().selectClip(null);
+      void refreshSequences();
+    },
+  });
   const splitMutation = useMutation({
     mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!.id, clipId, srcTime),
     onSuccess: refreshSequences,
@@ -372,6 +388,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           <TranscriptPanel
             sequence={sequence}
             onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
+            onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
           />
         </section>
       )}

@@ -2272,3 +2272,122 @@
   outline: 2px solid var(--ring);
   outline-offset: -1px;
 }
+
+/* Transcript power tools */
+.ts-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.ts-wrap .ts-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ts-tools {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.ts-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.ts-tool:hover:not(:disabled) {
+  color: var(--foreground);
+  border-color: var(--ring);
+}
+.ts-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ts-tool.on {
+  background: color-mix(in oklab, var(--primary) 10%, var(--background));
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+  color: var(--primary);
+}
+.ts-tool.danger {
+  color: var(--destructive);
+  border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+}
+.ts-tool.danger:hover {
+  background: color-mix(in oklab, var(--destructive) 8%, var(--background));
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+.ts-tool em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 14%, transparent);
+}
+.ts-silences {
+  border-bottom: 1px solid var(--border);
+  max-height: 180px;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+.ts-silence .ts-text {
+  color: var(--muted-foreground);
+}
+.ts-silence-all {
+  margin: 4px 10px 2px;
+}
+.ts-expanded {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 0;
+}
+.ts-time-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0 0;
+  color: var(--muted-foreground);
+}
+.ts-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.ts-token {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--secondary);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.ts-token:hover {
+  border-color: var(--ring);
+}
+.ts-token.filler {
+  background: color-mix(in oklab, #eab308 16%, var(--secondary));
+}
+.ts-token.cut {
+  text-decoration: line-through;
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, var(--background));
+  border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+}

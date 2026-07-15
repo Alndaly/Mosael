@@ -123,6 +123,17 @@ export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }
 
+export function cutClipRanges(
+  sequenceId: string,
+  clipId: string,
+  ranges: Array<{ src_start: number; src_end: number }>,
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-ranges`, {
+    method: "POST",
+    body: JSON.stringify({ ranges }),
+  });
+}
+
 export function setClipSpeed(sequenceId: string, clipId: string, speed: number): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
     method: "PATCH",

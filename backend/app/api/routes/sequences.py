@@ -8,6 +8,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AddTrackRequest,
     CutClipRangeRequest,
+    CutClipRangesRequest,
     InsertClipRequest,
     JobOut,
     MoveClipRequest,
@@ -27,6 +28,7 @@ from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
     AddTrack,
     CutClipRange,
+    CutClipRanges,
     DeleteClip,
     InsertClip,
     MoveClip,
@@ -40,6 +42,7 @@ from app.domain.sequences.operations import (
     TrimClip,
     add_track as add_track_operation,
     cut_clip_range as cut_clip_range_operation,
+    cut_clip_ranges as cut_clip_ranges_operation,
     delete_clip as delete_clip_operation,
     remove_track as remove_track_operation,
     ripple_delete_clip as ripple_delete_clip_operation,
@@ -118,6 +121,16 @@ def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSessi
 def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-ranges", response_model=SequenceOut)
+def cut_clip_ranges(
+    sequence_id: str, clip_id: str, body: CutClipRangesRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    ranges = tuple((item.src_start, item.src_end) for item in body.ranges)
+    _apply(lambda: cut_clip_ranges_operation(db, sequence_id, CutClipRanges(clip_id=clip_id, ranges=ranges)))
     return _get_sequence(db, sequence_id)
 
 

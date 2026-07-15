@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { projectTranscript, type SegmentLike } from "./transcriptProjection";
+import { detectSilences, isFillerToken, projectTranscript, type SegmentLike } from "./transcriptProjection";
 
 const seg = (id: string, start: number, end: number, text: string): SegmentLike => ({
   id,
@@ -49,5 +49,52 @@ describe("projectTranscript", () => {
 
   it("returns nothing for assets without transcripts", () => {
     expect(projectTranscript([clip("c1", "missing", 0, 0, 5)], segments)).toEqual([]);
+  });
+});
+
+describe("detectSilences", () => {
+  const clip = { id: "c1", asset_id: "a1", timeline_start: 2, src_in: 0, src_out: 10 };
+
+  it("finds gaps between token speech intervals", () => {
+    const segments = new Map([
+      [
+        "a1",
+        [
+          {
+            id: "s1",
+            start_time: 1,
+            end_time: 4,
+            text: "hello world",
+            tokens: [
+              { start_time: 1, end_time: 2, text: "hello" },
+              { start_time: 3.5, end_time: 4, text: "world" },
+            ],
+          },
+          { id: "s2", start_time: 6, end_time: 9, text: "again" },
+        ],
+      ],
+    ]);
+    const gaps = detectSilences([clip], segments, 0.6);
+    expect(gaps.map((g) => [g.srcStart, g.srcEnd])).toEqual([
+      [0, 1],
+      [2, 3.5],
+      [4, 6],
+      [9, 10],
+    ]);
+    expect(gaps[0].timelineStart).toBe(2);
+  });
+
+  it("respects the minimum gap", () => {
+    const segments = new Map([["a1", [{ id: "s1", start_time: 0, end_time: 9.7, text: "x" }]]]);
+    expect(detectSilences([clip], segments, 0.6)).toEqual([]);
+  });
+});
+
+describe("isFillerToken", () => {
+  it("matches Chinese and English fillers, ignoring punctuation and case", () => {
+    expect(isFillerToken("呃")).toBe(true);
+    expect(isFillerToken("嗯,")).toBe(true);
+    expect(isFillerToken("Um")).toBe(true);
+    expect(isFillerToken("hello")).toBe(false);
   });
 });

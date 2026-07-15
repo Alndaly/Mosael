@@ -193,6 +193,10 @@ class CutClipRangeRequest(BaseModel):
     src_end: float
 
 
+class CutClipRangesRequest(BaseModel):
+    ranges: list[CutClipRangeRequest] = Field(min_length=1)
+
+
 class SplitClipRequest(BaseModel):
     src_time: float
 

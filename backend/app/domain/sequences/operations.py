@@ -499,6 +499,83 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     return sequence
 
 
+@dataclass(frozen=True)
+class CutClipRanges:
+    """Remove several source-time ranges from one clip in a single operation.
+
+    Kept pieces are laid back-to-back from the clip's original position
+    (transcript-style ripple). Recorded as apply_transcript_edit so the
+    existing original+created undo/redo path applies unchanged.
+    """
+
+    clip_id: str
+    ranges: tuple[tuple[float, float], ...]
+    actor_id: str | None = None
+
+
+def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+
+    clamped = sorted(
+        (max(float(start), clip.src_in), min(float(end), clip.src_out))
+        for start, end in op.ranges
+        if min(float(end), clip.src_out) > max(float(start), clip.src_in)
+    )
+    if not clamped:
+        raise SequenceDomainError("No cut range intersects the clip")
+    merged: list[list[float]] = []
+    for start, end in clamped:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+
+    kept: list[tuple[float, float]] = []
+    cursor_src = clip.src_in
+    for start, end in merged:
+        if start - cursor_src > MIN_CUT_REMAINDER:
+            kept.append((cursor_src, start))
+        cursor_src = max(cursor_src, end)
+    if clip.src_out - cursor_src > MIN_CUT_REMAINDER:
+        kept.append((cursor_src, clip.src_out))
+
+    original = _clip_payload(clip)
+    created: list[dict[str, Any]] = []
+    db.delete(clip)
+    timeline_cursor = original["timeline_start"]
+    for src_start, src_end in kept:
+        piece = Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=original["track_id"],
+            asset_id=original["asset_id"],
+            timeline_start=timeline_cursor,
+            src_in=src_start,
+            src_out=src_end,
+        )
+        db.add(piece)
+        db.flush()
+        created.append(_clip_payload(piece))
+        timeline_cursor += src_end - src_start
+
+    _record_operation(
+        db,
+        sequence,
+        kind="apply_transcript_edit",
+        payload={
+            "clip_id": original["clip_id"],
+            "ranges": [[start, end] for start, end in merged],
+            "original": original,
+            "created": created,
+        },
+        summary={"operation": "apply_transcript_edit", "clip_id": original["clip_id"], "created": len(created)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 MIN_CUT_REMAINDER = 0.05
 
 
