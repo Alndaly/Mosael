@@ -1,9 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CircleAlert, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Bot, CircleAlert, Loader2, Paperclip, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
-import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
+import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,22 @@ import { EmptyState } from "@/components/layout/EmptyState";
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 
-export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
+export function ChatWorkspace({ workspace, project }: { workspace: Workspace; project?: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
   const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
+  const [attachments, setAttachments] = React.useState<Asset[]>([]);
+  const uploadAttachment = useMutation({
+    mutationFn: (file: File) =>
+      importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
+    onSuccess: (asset) => {
+      setAttachments((current) => [...current, asset]);
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
   const [streamText, setStreamText] = React.useState<string>("");
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -146,8 +155,13 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft.trim() || running || !activeSession) return;
-    sendMessage.mutate(draft.trim());
+    if ((!draft.trim() && attachments.length === 0) || running || !activeSession) return;
+    let content = draft.trim();
+    for (const asset of attachments) {
+      content += `\n[附件 asset_id=${asset.id} 名称=${asset.name} 类型=${asset.kind}]`;
+    }
+    sendMessage.mutate(content.trim());
+    setAttachments([]);
   };
 
   return (
@@ -233,7 +247,38 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
                 <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
               )}
             </div>
+            {attachments.length > 0 && (
+              <div className="chat-attachments">
+                {attachments.map((asset) => (
+                  <span className="chat-attachment" key={asset.id}>
+                    {asset.name}
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((current) => current.filter((item) => item.id !== asset.id))}
+                      aria-label={t("delete")}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <form className="chat-composer" onSubmit={submit}>
+              <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
+                <label>
+                  <input
+                    type="file"
+                    accept="video/*,audio/*,image/*"
+                    className="hidden-input"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) uploadAttachment.mutate(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  {uploadAttachment.isPending ? <Loader2 size={14} className="spin" /> : <Paperclip size={14} />}
+                </label>
+              </Button>
               <textarea
                 rows={2}
                 value={draft}
@@ -246,7 +291,10 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
                   }
                 }}
               />
-              <Button type="submit" disabled={!draft.trim() || running || sendMessage.isPending}>
+              <Button
+                type="submit"
+                disabled={(!draft.trim() && attachments.length === 0) || running || sendMessage.isPending}
+              >
                 <Send size={14} /> {t("chatSend")}
               </Button>
             </form>

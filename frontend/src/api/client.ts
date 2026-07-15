@@ -174,7 +174,7 @@ export async function importAsset(params: {
 }): Promise<Asset> {
   const form = new FormData();
   form.set("workspace_id", params.workspaceId);
-  form.set("project_id", params.projectId);
+  if (params.projectId) form.set("project_id", params.projectId);
   if (params.name) form.set("name", params.name);
   form.set("file", params.file);
   return api<Asset>("/api/assets/import", { method: "POST", body: form });

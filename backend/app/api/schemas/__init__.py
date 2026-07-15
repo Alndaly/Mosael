@@ -215,6 +215,18 @@ class JobOut(OrmModel):
     updated_at: datetime
 
 
+class AnalyzeAssetRequest(BaseModel):
+    question: str = Field(default="", max_length=2000)
+    profile_id: str | None = None
+
+
+class AnalyzeAssetResponse(BaseModel):
+    answer: str
+    provider: str
+    model: str
+    frames: int
+
+
 class ProviderProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     vendor: str = Field(min_length=1, max_length=60)

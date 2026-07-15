@@ -45,7 +45,7 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
           </button>
         </div>
       </header>
-      {tab === "chat" ? <ChatWorkspace workspace={workspace} /> : <GeneratePanel workspace={workspace} project={project} />}
+      {tab === "chat" ? <ChatWorkspace workspace={workspace} project={project} /> : <GeneratePanel workspace={workspace} project={project} />}
     </div>
   );
 }

@@ -671,6 +671,58 @@
         }
       }
     },
+    "/api/assets/{asset_id}/analyze": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Analyze Asset Route",
+        "operationId": "analyze_asset_route_api_assets__asset_id__analyze_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeAssetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/transcript": {
       "put": {
         "tags": [
@@ -3949,6 +4001,57 @@
           "source"
         ],
         "title": "AgentSkillOut"
+      },
+      "AnalyzeAssetRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Question",
+            "default": ""
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          }
+        },
+        "type": "object",
+        "title": "AnalyzeAssetRequest"
+      },
+      "AnalyzeAssetResponse": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "frames": {
+            "type": "integer",
+            "title": "Frames"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "provider",
+          "model",
+          "frames"
+        ],
+        "title": "AnalyzeAssetResponse"
       },
       "AssetCreate": {
         "properties": {

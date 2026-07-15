@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AssetCreate, AssetOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
 from app.core.permissions import ensure_workspace_access, require_asset
 from app.db.models import Asset, Clip, Transcript
 from app.domain.assets import import_uploaded_asset
@@ -82,6 +82,18 @@ def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
 
         shutil.rmtree(file_dir, ignore_errors=True)
     return Response(status_code=204)
+
+
+@router.post("/assets/{asset_id}/analyze", response_model=AnalyzeAssetResponse)
+def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession, user: CurrentUser) -> AnalyzeAssetResponse:
+    from app.ai.analysis.service import AnalysisError, analyze_asset
+
+    asset = require_asset(db, user, asset_id)
+    try:
+        result = analyze_asset(db, asset, body.question, body.profile_id)
+    except AnalysisError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AnalyzeAssetResponse(**result)
 
 
 @router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)

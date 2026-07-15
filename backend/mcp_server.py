@@ -225,6 +225,16 @@ def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock
 
 
 @mcp.tool()
+def analyze_asset(asset_id: str, question: str = "") -> dict[str, Any]:
+    """Understand an image or video asset with a multimodal model (small ai-cost, runs directly).
+
+    Videos are sampled into frames; ask about content, scenes, text on
+    screen, mood, best moments for cutting, etc.
+    """
+    return _post(f"/api/assets/{asset_id}/analyze", {"question": question})
+
+
+@mcp.tool()
 def get_confirmation(confirmation_id: str) -> dict[str, Any]:
     """Check a pending confirmation: status becomes executed/rejected/failed after the user decides."""
     confirmation = _get(f"/api/confirmations/{confirmation_id}")

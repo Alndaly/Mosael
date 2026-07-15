@@ -216,6 +216,23 @@ export interface paths {
         patch: operations["rename_asset_api_assets__asset_id__patch"];
         trace?: never;
     };
+    "/api/assets/{asset_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Asset Route */
+        post: operations["analyze_asset_route_api_assets__asset_id__analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/transcript": {
         parameters: {
             query?: never;
@@ -1207,6 +1224,27 @@ export interface components {
             tools?: unknown[];
             /** Permissions */
             permissions?: unknown[];
+        };
+        /** AnalyzeAssetRequest */
+        AnalyzeAssetRequest: {
+            /**
+             * Question
+             * @default
+             */
+            question: string;
+            /** Profile Id */
+            profile_id?: string | null;
+        };
+        /** AnalyzeAssetResponse */
+        AnalyzeAssetResponse: {
+            /** Answer */
+            answer: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Frames */
+            frames: number;
         };
         /** AssetCreate */
         AssetCreate: {
@@ -2620,6 +2658,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_asset_route_api_assets__asset_id__analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyzeAssetResponse"];
                 };
             };
             /** @description Validation Error */
