@@ -6,6 +6,7 @@ import { API_BASE, api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { FeishuSection } from "@/features/settings/FeishuSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         </section>
 
         <ProviderCredentials />
+
+        <FeishuSection workspace={workspace} />
 
         <section className="settings-section">
           <h2 className="section-label">{t("settingsBackend")}</h2>

@@ -65,6 +65,12 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Agent host layer + Feishu binding
+
+- Mibu hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (Alembic 0008), claude CLI adapter (headless JSON mode, MCP config injection with minted service token, --resume continuity, specialized system prompt teaching the confirmation contract) + best-effort opencode adapter; single-flight turns, errors become assistant messages.
+- Chat Workspace in AI Studio (对话/生成 tabs): sessions, bubble thread, thinking indicator, composer. Verified with a real claude turn calling mibu list_assets.
+- Feishu binding ported from mibu-video: lark-oapi long-connection worker (one child process per bot), tenant-token send, message dedupe + mention stripping, chats map to agent sessions (external_key feishu:bot:chat) with capability-tier prompts; 扫码一键创建 via device-authorization grant + manual App ID/Secret; Settings section with QR, bot list, status, capability; autostart on app launch, cleanup on shutdown.
+
 ### Mutating MCP tools + confirmation cards (plan §16.2/§17.2/§17.4)
 
 - tool_confirmations table (Alembic 0007) with permission levels (edit / ai-cost / render-cost); pending → approved/rejected → executed/failed lifecycle.

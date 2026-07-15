@@ -584,6 +584,126 @@
   width: 220px;
 }
 
+/* ---------- Feishu binding ---------- */
+
+.feishu-desc {
+  margin: 0 0 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.feishu-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.feishu-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.feishu-qr img {
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 4px;
+}
+
+.feishu-qr p {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.feishu-qr-status {
+  color: var(--muted-foreground);
+}
+
+.feishu-manual {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.feishu-manual input {
+  max-width: 220px;
+}
+
+.feishu-bots {
+  display: grid;
+  gap: 6px;
+}
+
+.feishu-bot {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  padding: 8px 10px;
+}
+
+.feishu-bot-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.feishu-bot-body {
+  min-width: 0;
+}
+
+.feishu-bot-body strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feishu-bot-body small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feishu-bot-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feishu-bot-actions select {
+  border: 1px solid var(--input);
+  border-radius: 5px;
+  background: var(--panel);
+  padding: 3px 6px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.feishu-empty {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 /* ---------- Settings ---------- */
 
 .settings-sections {

@@ -12,6 +12,7 @@ from app.api.routes.agent import router as agent_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.confirmations import router as confirmations_router
+from app.api.routes.feishu import router as feishu_router
 from app.api.routes.generation import router as generation_router
 from app.api.routes.health import router as health_router
 from app.api.routes.jobs import router as jobs_router
@@ -34,8 +35,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ensure_builtin_generation_models(db)
     if settings.scheduler_enabled:
         start_scheduler_loop()
+    if settings.feishu_autostart:
+        from app.integrations.feishu.service import autostart_enabled_bots, stop_all_connections
+
+        autostart_enabled_bots()
     yield
     stop_scheduler_loop()
+    if settings.feishu_autostart:
+        stop_all_connections()
 
 
 def create_app() -> FastAPI:
@@ -62,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
+    app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
     return app

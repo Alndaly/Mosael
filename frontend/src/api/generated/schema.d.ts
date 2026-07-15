@@ -716,6 +716,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/feishu/bots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bots */
+        get: operations["list_bots_api_feishu_bots_get"];
+        put?: never;
+        /** Create Bot */
+        post: operations["create_bot_api_feishu_bots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feishu/bots/{bot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Bot */
+        delete: operations["delete_bot_api_feishu_bots__bot_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Bot */
+        patch: operations["update_bot_api_feishu_bots__bot_id__patch"];
+        trace?: never;
+    };
+    "/api/feishu/bots/{bot_id}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restart Bot */
+        post: operations["restart_bot_api_feishu_bots__bot_id__restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feishu/onboarding/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Onboarding Status */
+        get: operations["onboarding_status_api_feishu_onboarding__workspace_id__get"];
+        put?: never;
+        /** Begin Onboarding */
+        post: operations["begin_onboarding_api_feishu_onboarding__workspace_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/scan": {
         parameters: {
             query?: never;
@@ -1206,6 +1277,71 @@ export interface components {
             src_start: number;
             /** Src End */
             src_end: number;
+        };
+        /** FeishuBotCreate */
+        FeishuBotCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Name
+             * @default Mibu 助手
+             */
+            name: string;
+            /** App Id */
+            app_id: string;
+            /** App Secret */
+            app_secret: string;
+            /**
+             * Capability
+             * @default editor
+             */
+            capability: string;
+        };
+        /** FeishuBotOut */
+        FeishuBotOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** App Id */
+            app_id: string;
+            /** Capability */
+            capability: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Status */
+            status: string;
+            /** Status Detail */
+            status_detail: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** FeishuBotUpdate */
+        FeishuBotUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Capability */
+            capability?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** FeishuOnboardingOut */
+        FeishuOnboardingOut: {
+            /** Phase */
+            phase: string;
+            /** Qr Url */
+            qr_url?: string | null;
+            /** User Code */
+            user_code?: string | null;
+            /** Error */
+            error?: string | null;
+            /** App Id */
+            app_id?: string | null;
         };
         /** GenerationCreate */
         GenerationCreate: {
@@ -3360,6 +3496,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfirmationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bots_api_feishu_bots_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBotOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_bot_api_feishu_bots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeishuBotCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_bot_api_feishu_bots__bot_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_bot_api_feishu_bots__bot_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeishuBotUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_bot_api_feishu_bots__bot_id__restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    onboarding_status_api_feishu_onboarding__workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuOnboardingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    begin_onboarding_api_feishu_onboarding__workspace_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuOnboardingOut"];
                 };
             };
             /** @description Validation Error */
