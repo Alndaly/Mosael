@@ -17,6 +17,7 @@
 - Added backend tests for edit flow, file-backed imports, generation jobs, and scheduled task runs.
 - Added plugin manifest scanning, enable/disable state, enabled tool aggregation, invocation records, frontend plugin panel, and manifest documentation.
 - Added deny-by-default plugin permission grants with API and frontend approval controls.
+- Added TailwindCSS and shadcn/ui foundation, replaced direct native buttons, and added light/dark theme plus Chinese/English UI preferences.
 
 ## Next
 
@@ -25,3 +26,10 @@
 - Add a real scheduler runner process that claims due tasks and emits job events.
 - Add render/export job pipeline backed by FFmpeg.
 - Split frontend editor into feature modules as timeline behavior grows.
+
+## Frontend Rules
+
+- Use TailwindCSS and local shadcn/ui components for all interactive controls.
+- Do not use native browser dialogs such as `alert`, `confirm`, or `prompt`.
+- Keep all user-visible copy behind the i18n preference layer.
+- Preserve light and dark theme support for every new surface.

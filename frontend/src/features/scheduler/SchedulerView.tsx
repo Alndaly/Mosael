@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Play, Timer } from "lucide-react";
 
 import { api, type Job, type Project, type RunScheduledTaskResponse, type ScheduledTask, type Workspace } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+  const t = useI18n();
   const qc = useQueryClient();
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
@@ -20,7 +23,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         body: JSON.stringify({
           workspace_id: workspace.id,
           project_id: project?.id ?? null,
-          name: "每小时渲染检查",
+          name: t("hourlyRenderCheck"),
           kind: "render",
           trigger_type: "interval",
           schedule: { seconds: 3600 },
@@ -41,32 +44,32 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     <div className="feature-view">
       <header className="feature-head">
         <div>
-          <h1>定时任务</h1>
-          <p>把渲染、生成、素材检查等后台工作统一排队。</p>
+          <h1>{t("schedulerTitle")}</h1>
+          <p>{t("schedulerDescription")}</p>
         </div>
-        <button onClick={() => createTask.mutate()}><CalendarClock size={16} /> 新建任务</button>
+        <Button onClick={() => createTask.mutate()}><CalendarClock size={16} /> {t("createTask")}</Button>
       </header>
 
       <section className="feature-grid two">
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>任务</h2></div>
+          <div className="panel-head"><h2>{t("tasks")}</h2></div>
           <div className="task-list">
             {(tasks.data ?? []).map((task) => (
               <div className="task-row" key={task.id}>
                 <Timer size={16} />
                 <div>
                   <strong>{task.name}</strong>
-                  <small>{task.kind} · {task.trigger_type} · {task.next_run_at ?? "manual"}</small>
+                  <small>{task.kind} · {task.trigger_type} · {task.next_run_at ?? t("manual")}</small>
                 </div>
-                <button onClick={() => runTask.mutate(task.id)}><Play size={14} /></button>
+                <Button size="icon" variant="outline" onClick={() => runTask.mutate(task.id)}><Play size={14} /></Button>
               </div>
             ))}
-            {tasks.data?.length === 0 && <div className="empty-inline">还没有定时任务</div>}
+            {tasks.data?.length === 0 && <div className="empty-inline">{t("noTasks")}</div>}
           </div>
         </div>
 
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>最近 Job</h2></div>
+          <div className="panel-head"><h2>{t("recentJobs")}</h2></div>
           <div className="job-list">
             {(jobs.data ?? []).slice(0, 8).map((job) => (
               <div className="job-row" key={job.id}>
@@ -77,7 +80,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                 </div>
               </div>
             ))}
-            {jobs.data?.length === 0 && <div className="empty-inline">还没有后台任务</div>}
+            {jobs.data?.length === 0 && <div className="empty-inline">{t("noJobs")}</div>}
           </div>
         </div>
       </section>

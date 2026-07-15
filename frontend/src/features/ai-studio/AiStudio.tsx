@@ -10,8 +10,11 @@ import {
   type Project,
   type Workspace,
 } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 
 export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+  const t = useI18n();
   const qc = useQueryClient();
   const models = useQuery({
     queryKey: ["generation-models"],
@@ -35,7 +38,10 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
           provider: kind === "image" ? "alibaba" : "bytedance",
           model: kind === "image" ? "qwen-image" : "seedance",
           kind,
-          prompt: kind === "image" ? "A refined key visual for an AI video editing project" : "A concise cinematic product shot with smooth motion",
+          prompt:
+            kind === "image"
+              ? "A refined key visual for an AI video editing project"
+              : "A concise cinematic product shot with smooth motion",
           parameters: kind === "image" ? { size: "1024x1024" } : { duration_seconds: 5, aspect_ratio: "16:9" },
         }),
       }),
@@ -50,17 +56,17 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
       <header className="feature-head">
         <div>
           <h1>AI Studio</h1>
-          <p>统一管理图片、视频生成模型和生成任务。</p>
+          <p>{t("aiDescription")}</p>
         </div>
         <div className="feature-actions">
-          <button onClick={() => createGeneration.mutate("image")}><ImagePlus size={16} /> 生成图片</button>
-          <button onClick={() => createGeneration.mutate("video")}><Video size={16} /> 生成视频</button>
+          <Button onClick={() => createGeneration.mutate("image")}><ImagePlus size={16} /> {t("generateImage")}</Button>
+          <Button onClick={() => createGeneration.mutate("video")}><Video size={16} /> {t("generateVideo")}</Button>
         </div>
       </header>
 
       <section className="feature-grid two">
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>模型</h2></div>
+          <div className="panel-head"><h2>{t("models")}</h2></div>
           <div className="model-list">
             {(models.data ?? []).map((model) => (
               <div className="model-row" key={model.id}>
@@ -75,7 +81,7 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
         </div>
 
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>生成队列</h2></div>
+          <div className="panel-head"><h2>{t("generationQueue")}</h2></div>
           <div className="job-list">
             {(generations.data ?? []).map((generation) => {
               const job = jobs.data?.find((item) => item.id === generation.job_id);
@@ -90,7 +96,7 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
                 </div>
               );
             })}
-            {generations.data?.length === 0 && <div className="empty-inline">还没有生成任务</div>}
+            {generations.data?.length === 0 && <div className="empty-inline">{t("noGenerationJobs")}</div>}
           </div>
         </div>
       </section>

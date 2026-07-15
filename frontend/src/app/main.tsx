@@ -1,10 +1,13 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CalendarClock, Film, FolderPlus, ImagePlus, Play, Plug, Plus, Scissors } from "lucide-react";
+import { Bot, CalendarClock, Film, FolderPlus, ImagePlus, Moon, Play, Plug, Plus, Scissors, Sun } from "lucide-react";
 
 import { api, importAsset, type Asset, type Clip, type Project, type Sequence, type Track, type Workspace } from "@/api/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import "@/design/tokens.css";
+import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
@@ -16,32 +19,37 @@ type StudioView = "editor" | "ai" | "scheduler" | "plugins";
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Workspace />
+      <PreferencesProvider>
+        <Workspace />
+      </PreferencesProvider>
     </QueryClientProvider>
   );
 }
 
 function Workspace() {
+  const t = useI18n();
   const qc = useQueryClient();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/api/workspaces") });
   const createWorkspace = useMutation({
-    mutationFn: () => api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name: "默认工作区" }) }),
+    mutationFn: () => api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name: t("workspaceDefault") }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workspaces"] }),
   });
   const workspace = workspaces.data?.[0] ?? null;
 
-  if (workspaces.isLoading) return <div className="center">正在连接后端...</div>;
+  if (workspaces.isLoading) return <div className="center">{t("connecting")}</div>;
   if (!workspace) {
     return (
       <div className="center">
-        <div className="welcome">
-          <Film size={34} />
-          <h1>Mibu New</h1>
-          <p>先创建一个工作区，开始搭建新的 AI 视频创作工作台。</p>
-          <button onClick={() => createWorkspace.mutate()}>
-            <FolderPlus size={16} /> 创建默认工作区
-          </button>
-        </div>
+        <Card className="welcome">
+          <CardContent className="welcome-content">
+            <Film size={34} />
+            <h1>Mibu New</h1>
+            <p>{t("welcomeText")}</p>
+            <Button onClick={() => createWorkspace.mutate()}>
+              <FolderPlus size={16} /> {t("createWorkspace")}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -49,6 +57,8 @@ function Workspace() {
 }
 
 function Studio({ workspace }: { workspace: Workspace }) {
+  const t = useI18n();
+  const { locale, setLocale, theme, setTheme } = usePreferences();
   const [view, setView] = React.useState<StudioView>("editor");
   const qc = useQueryClient();
   const projects = useQuery({
@@ -57,7 +67,7 @@ function Studio({ workspace }: { workspace: Workspace }) {
   });
   const project = projects.data?.[0] ?? null;
   const createProject = useMutation({
-    mutationFn: () => api<Project>("/api/projects", { method: "POST", body: JSON.stringify({ workspace_id: workspace.id, name: "第一个项目" }) }),
+    mutationFn: () => api<Project>("/api/projects", { method: "POST", body: JSON.stringify({ workspace_id: workspace.id, name: t("projectDefault") }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] }),
   });
 
@@ -65,18 +75,24 @@ function Studio({ workspace }: { workspace: Workspace }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><Film size={18} /> Mibu New</div>
-        <button className={`nav ${view === "editor" ? "active" : ""}`} onClick={() => setView("editor")}><Scissors size={15} /> 剪辑</button>
-        <button className={`nav ${view === "ai" ? "active" : ""}`} onClick={() => setView("ai")}><Bot size={15} /> AI Studio</button>
-        <button className={`nav ${view === "scheduler" ? "active" : ""}`} onClick={() => setView("scheduler")}><CalendarClock size={15} /> 定时任务</button>
-        <button className={`nav ${view === "plugins" ? "active" : ""}`} onClick={() => setView("plugins")}><Plug size={15} /> 插件</button>
+        <Button variant={view === "editor" ? "secondary" : "ghost"} className="nav" onClick={() => setView("editor")}><Scissors size={15} /> {t("navEditor")}</Button>
+        <Button variant={view === "ai" ? "secondary" : "ghost"} className="nav" onClick={() => setView("ai")}><Bot size={15} /> {t("navAi")}</Button>
+        <Button variant={view === "scheduler" ? "secondary" : "ghost"} className="nav" onClick={() => setView("scheduler")}><CalendarClock size={15} /> {t("navScheduler")}</Button>
+        <Button variant={view === "plugins" ? "secondary" : "ghost"} className="nav" onClick={() => setView("plugins")}><Plug size={15} /> {t("navPlugins")}</Button>
       </aside>
       <main className="workspace">
         <header className="topbar">
           <div>
             <strong>{workspace.name}</strong>
-            <span>{project ? project.name : "还没有项目"}</span>
+            <span>{project ? project.name : t("noProject")}</span>
           </div>
-          {!project && <button onClick={() => createProject.mutate()}><Plus size={16} /> 新建项目</button>}
+          <div className="topbar-actions">
+            <Button variant={theme === "light" ? "secondary" : "ghost"} size="sm" onClick={() => setTheme("light")}><Sun size={15} /> {t("themeLight")}</Button>
+            <Button variant={theme === "dark" ? "secondary" : "ghost"} size="sm" onClick={() => setTheme("dark")}><Moon size={15} /> {t("themeDark")}</Button>
+            <Button variant={locale === "zh-CN" ? "secondary" : "ghost"} size="sm" onClick={() => setLocale("zh-CN")}>{t("languageZh")}</Button>
+            <Button variant={locale === "en-US" ? "secondary" : "ghost"} size="sm" onClick={() => setLocale("en-US")}>{t("languageEn")}</Button>
+            {!project && <Button onClick={() => createProject.mutate()}><Plus size={16} /> {t("createProject")}</Button>}
+          </div>
         </header>
         {view === "editor" && (project ? <Editor workspace={workspace} project={project} /> : <EmptyProject />)}
         {view === "ai" && <AiStudio workspace={workspace} project={project} />}
@@ -88,15 +104,17 @@ function Studio({ workspace }: { workspace: Workspace }) {
 }
 
 function EmptyProject() {
+  const t = useI18n();
   return (
     <div className="empty">
       <Scissors size={42} />
-      <h2>创建项目后开始剪辑</h2>
+      <h2>{t("emptyProject")}</h2>
     </div>
   );
 }
 
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
+  const t = useI18n();
   const qc = useQueryClient();
   const assets = useQuery({
     queryKey: ["assets", workspace.id, project.id],
@@ -115,7 +133,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           workspace_id: workspace.id,
           project_id: project.id,
           kind: "video",
-          name: `示例素材 ${(assets.data?.length ?? 0) + 1}`,
+          name: `${t("sampleAsset")} ${(assets.data?.length ?? 0) + 1}`,
           original_filename: "sample.mp4",
           file_key: "samples/sample.mp4",
           media_info: { duration: 8, width: 1920, height: 1080 },
@@ -131,7 +149,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: () =>
       api<Sequence>("/api/sequences", {
         method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id, project_id: project.id, name: "主时间线" }),
+        body: JSON.stringify({ workspace_id: workspace.id, project_id: project.id, name: t("mainSequence") }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sequences", project.id] }),
   });
@@ -156,9 +174,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     <div className="editor-grid">
       <section className="panel media-panel">
         <div className="panel-head">
-          <h2>素材</h2>
+          <h2>{t("media")}</h2>
           <div className="media-actions">
-            <label className="upload-button">
+            <Button asChild variant="outline">
+              <label>
               <input
                 type="file"
                 accept="video/*,audio/*,image/*"
@@ -168,14 +187,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   event.currentTarget.value = "";
                 }}
               />
-              <ImagePlus size={15} /> 导入
-            </label>
-            <button onClick={() => createAsset.mutate()}><ImagePlus size={15} /> 示例</button>
+              <ImagePlus size={15} /> {t("import")}
+              </label>
+            </Button>
+            <Button variant="outline" onClick={() => createAsset.mutate()}><ImagePlus size={15} /> {t("sample")}</Button>
           </div>
         </div>
         <div className="asset-list">
           {(assets.data ?? []).map((asset) => (
-            <button
+            <Button
+              variant="outline"
               className="asset-card"
               key={asset.id}
               onClick={() => videoTrack && insertClip.mutate({ asset, track: videoTrack })}
@@ -184,7 +205,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               <span>{asset.kind}</span>
               <strong>{asset.name}</strong>
               <small>{String(asset.media_info.duration ?? "?")}s</small>
-            </button>
+            </Button>
           ))}
         </div>
       </section>
@@ -192,19 +213,19 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <div className="monitor-frame"><Play size={42} /></div>
       </section>
       <section className="panel inspector">
-        <div className="panel-head"><h2>检查器</h2></div>
+        <div className="panel-head"><h2>{t("inspector")}</h2></div>
         {sequence ? (
           <dl>
-            <dt>时间线</dt><dd>{sequence.name}</dd>
-            <dt>Revision</dt><dd>{sequence.revision}</dd>
-            <dt>规格</dt><dd>{sequence.width}x{sequence.height} / {sequence.fps}fps</dd>
+            <dt>{t("sequence")}</dt><dd>{sequence.name}</dd>
+            <dt>{t("revision")}</dt><dd>{sequence.revision}</dd>
+            <dt>{t("format")}</dt><dd>{sequence.width}x{sequence.height} / {sequence.fps}fps</dd>
           </dl>
         ) : (
-          <button onClick={() => createSequence.mutate()}><Plus size={16} /> 创建主时间线</button>
+          <Button onClick={() => createSequence.mutate()}><Plus size={16} /> {t("createMainSequence")}</Button>
         )}
       </section>
       <section className="timeline panel">
-        {sequence ? <Timeline sequence={sequence} /> : <div className="empty small">创建时间线后可拖入素材</div>}
+        {sequence ? <Timeline sequence={sequence} /> : <div className="empty small">{t("emptyTimeline")}</div>}
       </section>
     </div>
   );

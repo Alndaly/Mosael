@@ -6,7 +6,7 @@
 
 .sidebar {
   border-right: 1px solid var(--border);
-  background: #eef3f8;
+  background: var(--secondary);
   padding: 14px;
 }
 
@@ -19,37 +19,11 @@
   font-weight: 700;
 }
 
-.nav,
-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-
 .nav {
   justify-content: flex-start;
   width: 100%;
   margin-bottom: 8px;
-  padding: 0 10px;
-}
-
-.nav.active,
-button:hover {
-  border-color: #acd1f7;
-  background: var(--primary-soft);
-  color: #0b5fab;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+  padding: 0 10px !important;
 }
 
 .media-actions {
@@ -57,28 +31,7 @@ button:disabled {
   gap: 6px;
 }
 
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
-  padding: 0 9px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.upload-button:hover {
-  border-color: #acd1f7;
-  background: var(--primary-soft);
-  color: #0b5fab;
-}
-
-.upload-button input {
+.media-actions input {
   display: none;
 }
 
@@ -100,6 +53,13 @@ button:disabled {
 .topbar span {
   margin-left: 10px;
   color: var(--muted);
+}
+
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .editor-grid {
@@ -383,13 +343,13 @@ button:disabled {
 }
 
 .welcome {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.welcome-content {
   display: grid;
   justify-items: center;
   gap: 12px;
-  width: min(420px, calc(100vw - 32px));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
   padding: 28px;
 }
 

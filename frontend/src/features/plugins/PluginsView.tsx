@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Plug, RadioTower, RefreshCcw, ShieldCheck, Terminal } from "lucide-react";
 
 import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 
 export function PluginsView() {
+  const t = useI18n();
   const qc = useQueryClient();
   const plugins = useQuery({
     queryKey: ["plugins"],
@@ -77,15 +80,15 @@ export function PluginsView() {
     <div className="feature-view">
       <header className="feature-head">
         <div>
-          <h1>插件</h1>
-          <p>扫描本地 manifest，暴露 Skill 和 Tool 给应用与外部智能体。</p>
+          <h1>{t("pluginsTitle")}</h1>
+          <p>{t("pluginsDescription")}</p>
         </div>
-        <button onClick={() => scanPlugins.mutate()}><RefreshCcw size={16} /> 扫描插件</button>
+        <Button onClick={() => scanPlugins.mutate()}><RefreshCcw size={16} /> {t("scanPlugins")}</Button>
       </header>
 
       <section className="feature-grid three">
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>已安装</h2></div>
+          <div className="panel-head"><h2>{t("installed")}</h2></div>
           <div className="plugin-list">
             {(plugins.data ?? []).map((plugin) => (
               <div className="plugin-row" key={plugin.id}>
@@ -93,24 +96,24 @@ export function PluginsView() {
                 <div>
                   <strong>{plugin.name}</strong>
                   <small>
-                    {plugin.id} · v{plugin.version} · {permissionLabel(permissions.data?.[plugin.id] ?? [])}
+                    {plugin.id} · v{plugin.version} · {permissionLabel(permissions.data?.[plugin.id] ?? [], t)}
                   </small>
                 </div>
                 <div className="plugin-actions">
-                  <button onClick={() => grantPlugin.mutate(plugin)}><ShieldCheck size={14} /> 授权</button>
-                  <button onClick={() => togglePlugin.mutate({ plugin, enabled: !plugin.enabled })}>
+                  <Button size="sm" variant="outline" onClick={() => grantPlugin.mutate(plugin)}><ShieldCheck size={14} /> {t("grant")}</Button>
+                  <Button size="sm" variant={plugin.enabled ? "secondary" : "outline"} onClick={() => togglePlugin.mutate({ plugin, enabled: !plugin.enabled })}>
                     {plugin.enabled ? <CheckCircle2 size={14} /> : <RadioTower size={14} />}
-                    {plugin.enabled ? "已启用" : "启用"}
-                  </button>
+                    {plugin.enabled ? t("enabled") : t("enable")}
+                  </Button>
                 </div>
               </div>
             ))}
-            {plugins.data?.length === 0 && <div className="empty-inline">把插件目录放到 ~/.mibu-new/plugins 后点击扫描</div>}
+            {plugins.data?.length === 0 && <div className="empty-inline">{t("noPlugins")}</div>}
           </div>
         </div>
 
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>工具</h2></div>
+          <div className="panel-head"><h2>{t("tools")}</h2></div>
           <div className="plugin-list">
             {(tools.data ?? []).map((tool) => (
               <div className="plugin-row" key={`${tool.plugin_id}:${tool.tool_name}`}>
@@ -119,15 +122,15 @@ export function PluginsView() {
                   <strong>{tool.tool_name}</strong>
                   <small>{tool.plugin_name} · {tool.description}</small>
                 </div>
-                <button onClick={() => invokeTool.mutate(tool)}>调用</button>
+                <Button size="sm" onClick={() => invokeTool.mutate(tool)}>{t("invoke")}</Button>
               </div>
             ))}
-            {tools.data?.length === 0 && <div className="empty-inline">启用插件后会显示可调用工具</div>}
+            {tools.data?.length === 0 && <div className="empty-inline">{t("noTools")}</div>}
           </div>
         </div>
 
         <div className="panel feature-panel">
-          <div className="panel-head"><h2>调用记录</h2></div>
+          <div className="panel-head"><h2>{t("invocations")}</h2></div>
           <div className="plugin-list">
             {(invocations.data ?? []).slice(0, 12).map((invocation) => (
               <div className="plugin-row compact" key={invocation.id}>
@@ -138,7 +141,7 @@ export function PluginsView() {
                 </div>
               </div>
             ))}
-            {invocations.data?.length === 0 && <div className="empty-inline">还没有工具调用记录</div>}
+            {invocations.data?.length === 0 && <div className="empty-inline">{t("noInvocations")}</div>}
           </div>
         </div>
       </section>
@@ -146,8 +149,8 @@ export function PluginsView() {
   );
 }
 
-function permissionLabel(grants: PluginPermissionGrant[]) {
-  if (grants.length === 0) return "无需权限";
+function permissionLabel(grants: PluginPermissionGrant[], t: ReturnType<typeof useI18n>) {
+  if (grants.length === 0) return t("noPermissions");
   const granted = grants.filter((grant) => grant.granted).length;
-  return `${granted}/${grants.length} 权限`;
+  return `${granted}/${grants.length} ${t("permissions")}`;
 }
