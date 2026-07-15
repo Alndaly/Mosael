@@ -14,7 +14,7 @@ from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
-from app.media.thumbnails import thumbnail_path
+from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
 router = APIRouter(tags=["assets"])
@@ -151,7 +151,10 @@ def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileRespo
 def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = _require_file_backed_asset(db, asset_id)
     ensure_workspace_access(db, user, asset.workspace_id)
-    thumb = thumbnail_path(resolve_key(asset.file_key).parent)
+    source = resolve_key(asset.file_key)
+    thumb = thumbnail_path(source.parent)
+    if not thumb.is_file():
+        generate_thumbnail(source, asset.kind, source.parent)  # backfill for pre-thumbnail imports
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
     return FileResponse(thumb, media_type="image/jpeg")

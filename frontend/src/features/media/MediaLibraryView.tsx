@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Pencil, Trash2 } from "lucide-react";
 
-import { API_BASE, api, deleteAsset, importAsset, renameAsset, type Asset, type Project, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,11 +45,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
 
   return (
     <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>{t("mediaTitle")}</h1>
-          <p>{t("mediaDescription")}</p>
-        </div>
+      <div className="feature-toolbar">
         <Button asChild>
           <label>
             <input
@@ -65,7 +61,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
             <ImagePlus size={15} /> {t("import")}
           </label>
         </Button>
-      </header>
+      </div>
 
       {(assets.data ?? []).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />
@@ -120,13 +116,13 @@ function AssetTile({ asset }: { asset: Asset }) {
   const duration = asset.media_info.duration as number | undefined;
   const width = asset.media_info.width as number | undefined;
   const fps = asset.media_info.fps as number | undefined;
-  const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
+  const hasThumb = asset.kind !== "audio" && !thumbFailed;
   return (
     <article className="asset-tile">
       <div className="asset-thumb">
         {hasThumb ? (
           <img
-            src={`${API_BASE}/api/assets/${asset.id}/thumbnail`}
+            src={assetThumbnailUrl(asset.id)}
             alt=""
             loading="lazy"
             onError={() => setThumbFailed(true)}

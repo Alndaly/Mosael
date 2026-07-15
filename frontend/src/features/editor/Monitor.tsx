@@ -261,8 +261,8 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label="frame back">
             <StepBack size={14} />
           </Button>
-          <Button variant="secondary" size="icon-sm" onClick={playToggle} aria-label={t("playPause")}>
-            {playing ? <Pause size={15} /> : <Play size={15} />}
+          <Button variant="secondary" size="icon-sm" className="monitor-play" onClick={playToggle} aria-label={t("playPause")}>
+            {playing ? <Pause size={14} /> : <Play size={14} className="monitor-play-icon" />}
           </Button>
           <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label="frame forward">
             <StepForward size={14} />

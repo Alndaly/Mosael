@@ -21,31 +21,39 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
   const t = useI18n();
   const [tab, setTab] = React.useState<"chat" | "generate">("chat");
 
+  const switcher = (
+    <div className="seg" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "chat"}
+        className={tab === "chat" ? "seg-btn active" : "seg-btn"}
+        onClick={() => setTab("chat")}
+      >
+        {t("aiTabChat")}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === "generate"}
+        className={tab === "generate" ? "seg-btn active" : "seg-btn"}
+        onClick={() => setTab("generate")}
+      >
+        {t("aiTabGenerate")}
+      </button>
+    </div>
+  );
+
   return (
     <div className="feature-view ai-studio-view">
-      <header className="feature-head">
-        <div>
-          <h1>AI Studio</h1>
-          <p>{t("aiDescription")}</p>
+      {tab === "chat" ? (
+        <ChatWorkspace workspace={workspace} project={project} switcher={switcher} />
+      ) : (
+        <div className="gen-view">
+          <div className="feature-toolbar gen-toolbar">{switcher}</div>
+          <GeneratePanel workspace={workspace} project={project} />
         </div>
-        <div className="panel-tabs">
-          <button
-            type="button"
-            className={tab === "chat" ? "panel-tab active" : "panel-tab"}
-            onClick={() => setTab("chat")}
-          >
-            {t("aiTabChat")}
-          </button>
-          <button
-            type="button"
-            className={tab === "generate" ? "panel-tab active" : "panel-tab"}
-            onClick={() => setTab("generate")}
-          >
-            {t("aiTabGenerate")}
-          </button>
-        </div>
-      </header>
-      {tab === "chat" ? <ChatWorkspace workspace={workspace} project={project} /> : <GeneratePanel workspace={workspace} project={project} />}
+      )}
     </div>
   );
 }

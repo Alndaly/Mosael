@@ -14,13 +14,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>{t("settingsTitle")}</h1>
-          <p>{t("settingsDescription")}</p>
-        </div>
-      </header>
-
       <div className="settings-sections">
         <section className="settings-section">
           <h2 className="section-label"><UserRound size={13} /> {t("settingsAccount")}</h2>

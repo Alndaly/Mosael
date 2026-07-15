@@ -14,7 +14,15 @@ import { EmptyState } from "@/components/layout/EmptyState";
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 
-export function ChatWorkspace({ workspace, project }: { workspace: Workspace; project?: Project | null }) {
+export function ChatWorkspace({
+  workspace,
+  project,
+  switcher,
+}: {
+  workspace: Workspace;
+  project?: Project | null;
+  switcher?: React.ReactNode;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
@@ -168,7 +176,7 @@ export function ChatWorkspace({ workspace, project }: { workspace: Workspace; pr
     <div className="chat-grid">
       <aside className="chat-sessions panel">
         <div className="panel-head">
-          <h2>{t("aiTabChat")}</h2>
+          {switcher ?? <h2>{t("aiTabChat")}</h2>}
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("chatNewSession")}
           </Button>
@@ -235,7 +243,7 @@ export function ChatWorkspace({ workspace, project }: { workspace: Workspace; pr
               ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
-                  <Streamdown>{streamText}</Streamdown>
+                  <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
                 </div>
               )}
               {running && !streamText && (
@@ -318,7 +326,7 @@ function ChatBubble({ message }: { message: AgentMessage }) {
   return (
     <div className={`chat-bubble ${message.role}`}>
       {message.role === "assistant" ? (
-        <Streamdown>{message.content}</Streamdown>
+        <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
       ) : (
         <div className="chat-bubble-content">{message.content}</div>
       )}

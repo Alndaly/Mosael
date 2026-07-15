@@ -49,15 +49,11 @@ export function HomeView({
 
   return (
     <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>{t("navHome")}</h1>
-          <p>{workspace.name}</p>
-        </div>
+      <div className="feature-toolbar">
         <Button onClick={() => createProject.mutate()}>
           <FolderPlus size={15} /> {t("createProject")}
         </Button>
-      </header>
+      </div>
 
       {projects.length === 0 ? (
         <EmptyState

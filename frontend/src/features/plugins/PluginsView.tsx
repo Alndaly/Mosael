@@ -78,13 +78,9 @@ export function PluginsView() {
 
   return (
     <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>{t("pluginsTitle")}</h1>
-          <p>{t("pluginsDescription")}</p>
-        </div>
+      <div className="feature-toolbar">
         <Button onClick={() => scanPlugins.mutate()}><RefreshCcw size={16} /> {t("scanPlugins")}</Button>
-      </header>
+      </div>
 
       <section className="feature-grid three">
         <div className="panel feature-panel">

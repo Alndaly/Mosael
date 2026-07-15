@@ -54,13 +54,9 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   return (
     <div className="feature-view">
-      <header className="feature-head">
-        <div>
-          <h1>{t("schedulerTitle")}</h1>
-          <p>{t("schedulerDescription")}</p>
-        </div>
+      <div className="feature-toolbar">
         <Button onClick={() => createTask.mutate()}><CalendarClock size={16} /> {t("createTask")}</Button>
-      </header>
+      </div>
 
       <section className="feature-grid two">
         <div className="panel feature-panel">

@@ -950,36 +950,10 @@
   height: 2px;
 }
 
-.panel-resizer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  border-radius: 3px;
-  background: var(--border-strong);
-  opacity: 0;
-  transition: opacity 100ms;
-}
-
-.panel-resizer.col::after {
-  width: 3px;
-  height: 34px;
-}
-
-.panel-resizer.row::after {
-  height: 3px;
-  width: 34px;
-}
-
 .panel-resizer:hover::before,
 .panel-resizer:active::before {
-  background: color-mix(in srgb, var(--ring) 60%, transparent);
-}
-
-.panel-resizer:hover::after,
-.panel-resizer:active::after {
-  opacity: 1;
-  background: var(--primary);
+  background: color-mix(in srgb, var(--primary) 65%, transparent);
+  transition-delay: 120ms;
 }
 
 .media-panel {
@@ -1286,12 +1260,34 @@
 }
 
 .monitor-transport {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0 8px;
+  padding: 3px 10px 5px;
+}
+
+.monitor-transport > .monitor-buttons:last-child {
+  justify-content: flex-end;
+}
+
+.monitor-play {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #17181a !important;
+  transition: transform 120ms;
+}
+
+.monitor-play:hover {
+  transform: scale(1.06);
+  background: #ffffff !important;
+  color: #17181a !important;
+}
+
+.monitor-play-icon {
+  margin-left: 1px; /* optical centering of the triangle */
 }
 
 .monitor-rate {
@@ -1315,15 +1311,39 @@
 }
 
 .monitor-volume {
-  width: 64px;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 68px;
   height: 3px;
-  accent-color: var(--primary);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
   cursor: pointer;
+  outline: none;
+}
+
+.monitor-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.monitor-volume::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
 }
 
 .monitor-buttons {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  align-items: center;
 }
 
 .monitor-transport .monitor-timecode {
@@ -1922,32 +1942,63 @@
   padding: 0 0 0 34px;
   border: none;
   background: transparent;
+  white-space: normal;
 }
 
 .chat-bubble.assistant::before {
   content: "";
   position: absolute;
-  left: -30px;
-  top: 2px;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: var(--accent) center / 13px no-repeat;
+  left: 0;
+  top: 1px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background) center / 14px no-repeat;
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%232e6fee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>');
 }
 
 .chat-bubble.assistant :is(p, ul, ol, pre, table) {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .chat-bubble.assistant :is(p, ul, ol, pre, table):last-child {
   margin-bottom: 0;
 }
 
-.chat-bubble.assistant :is(h1, h2, h3, h4) {
-  margin: 10px 0 6px;
-  font-size: 13px;
-  font-weight: 700;
+.chat-bubble.assistant :is(h1, h2) {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.chat-bubble.assistant :is(h3, h4) {
+  margin: 12px 0 6px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.chat-bubble.assistant :is(h1, h2, h3, h4):first-child {
+  margin-top: 0;
+}
+
+.chat-bubble.assistant table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.chat-bubble.assistant th,
+.chat-bubble.assistant td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.chat-bubble.assistant th {
+  background: var(--secondary);
+  font-weight: 600;
 }
 
 .chat-bubble.assistant code {
@@ -2390,4 +2441,48 @@
   color: var(--destructive);
   background: color-mix(in oklab, var(--destructive) 10%, var(--background));
   border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+}
+
+/* Slim action toolbar replacing page headers */
+.feature-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Segmented control (对话/生成 etc.) */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--secondary);
+  gap: 2px;
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  padding: 3px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.seg-btn.active {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.gen-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tl-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 3px;
 }

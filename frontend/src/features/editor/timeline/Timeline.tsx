@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, Film, Lock, LockOpen, Magnet, Minus, Plus, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, Copy, Film, Lock, LockOpen, Magnet, Minus, Plus, Scissors, Trash2, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -301,6 +301,72 @@ export function Timeline({
         <span className="timecode tl-readout">{formatTimecode(playhead)}</span>
         <div className="tl-toolbar-actions">
           {toolbarExtra}
+          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="tl-toolbar-sep" />}
+          {onSplitClip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!selectedClipIds.length}
+                  onClick={() => selectedClipIds[0] && onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
+                  aria-label={t("splitAtPlayhead")}
+                >
+                  <Scissors size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("splitAtPlayhead")}</TooltipContent>
+            </Tooltip>
+          )}
+          {onDuplicateClip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!selectedClipIds.length}
+                  onClick={() => selectedClipIds[0] && onDuplicateClip(selectedClipIds[selectedClipIds.length - 1])}
+                  aria-label={t("duplicateClip")}
+                >
+                  <Copy size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("duplicateClip")}</TooltipContent>
+            </Tooltip>
+          )}
+          {onRippleDeleteClip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!selectedClipIds.length}
+                  onClick={() => selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))}
+                  aria-label={t("rippleDelete")}
+                >
+                  <Waves size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("rippleDelete")}</TooltipContent>
+            </Tooltip>
+          )}
+          {onDeleteClip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!selectedClipIds.length}
+                  onClick={() => selectedClipIds.forEach((clipId) => onDeleteClip(clipId))}
+                  aria-label={t("deleteClip")}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("deleteClip")}</TooltipContent>
+            </Tooltip>
+          )}
+          <span className="tl-toolbar-sep" />
           {onAddTrack && (
             <>
               <Tooltip>
