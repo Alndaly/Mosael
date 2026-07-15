@@ -9,6 +9,7 @@ from app.core.permissions import ensure_workspace_access
 from app.db.models import GenerationJob, GenerationModel
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.runner import start_generation_thread
 
 router = APIRouter(tags=["generation"])
 
@@ -31,6 +32,7 @@ def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) 
         generation, job = create_generation_job(db, **body.model_dump())
     except GenerationDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    start_generation_thread(generation.id)
     return GenerationCreateResponse(
         generation=GenerationJobOut.model_validate(generation),
         job=job,

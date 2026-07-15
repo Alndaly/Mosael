@@ -302,6 +302,15 @@ class ScheduledTaskRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Credential(Base):
+    __tablename__ = "credentials"
+
+    provider: Mapped[str] = mapped_column(String(80), primary_key=True)
+    secret: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class GenerationModel(Base):
     __tablename__ = "generation_models"
 

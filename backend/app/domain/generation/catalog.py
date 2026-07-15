@@ -8,6 +8,20 @@ from app.db.models import GenerationModel
 
 BUILTIN_MODELS = [
     {
+        "id": "mock:mock-image:image",
+        "provider": "mock",
+        "kind": "image",
+        "model": "mock-image",
+        "capabilities": {"modes": ["text-to-image"], "local": True},
+    },
+    {
+        "id": "mock:mock-video:video",
+        "provider": "mock",
+        "kind": "video",
+        "model": "mock-video",
+        "capabilities": {"modes": ["text-to-video"], "local": True, "max_duration_seconds": 10},
+    },
+    {
         "id": "openai:gpt-image-2:image",
         "provider": "openai",
         "kind": "image",

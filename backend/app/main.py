@@ -18,6 +18,7 @@ from app.api.routes.plugins import router as plugins_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
+from app.api.routes.settings import router as settings_router
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.generation import ensure_builtin_generation_models
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router, prefix="/api", dependencies=protected)
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
+    app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
     return app

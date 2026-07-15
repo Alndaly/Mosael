@@ -203,6 +203,17 @@ class JobOut(OrmModel):
     updated_at: datetime
 
 
+class CredentialSetRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=80)
+    secret: str = Field(min_length=1, max_length=500)
+
+
+class CredentialStatusOut(BaseModel):
+    provider: str
+    configured: bool
+    hint: str = ""
+
+
 class GenerationModelOut(OrmModel):
     id: str
     provider: str

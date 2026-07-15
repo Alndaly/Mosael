@@ -454,6 +454,136 @@
   font-size: 11px;
 }
 
+/* ---------- AI Studio ---------- */
+
+.gen-compose {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+  padding: 12px;
+}
+
+.gen-prompt {
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: var(--panel-subtle);
+  padding: 9px 11px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.gen-prompt:focus-visible {
+  border-color: var(--ring);
+  outline: 2px solid color-mix(in srgb, var(--ring) 50%, transparent);
+}
+
+.gen-compose-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gen-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gen-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 4px 11px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 100ms, color 100ms, background-color 100ms;
+}
+
+.gen-model:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.gen-model.active {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.gen-queue {
+  display: grid;
+  gap: 6px;
+  max-width: 760px;
+}
+
+.gen-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  padding: 8px 10px;
+}
+
+.gen-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: var(--panel-inset);
+  color: var(--muted-foreground);
+  overflow: hidden;
+}
+
+.gen-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gen-row-body {
+  min-width: 0;
+}
+
+.gen-row-body strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen-row-body small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cred-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cred-input {
+  width: 220px;
+}
+
 /* ---------- Settings ---------- */
 
 .settings-sections {

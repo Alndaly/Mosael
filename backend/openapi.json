@@ -1740,6 +1740,116 @@
         }
       }
     },
+    "/api/settings/credentials": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Credentials",
+        "description": "Secrets never leave the backend — only configured-status and a hint.",
+        "operationId": "list_credentials_api_settings_credentials_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CredentialStatusOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Credentials Api Settings Credentials Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Credential",
+        "operationId": "set_credential_api_settings_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/credentials/{provider}": {
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Credential",
+        "operationId": "delete_credential_api_settings_credentials__provider__delete",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/scan": {
       "post": {
         "tags": [
@@ -2531,6 +2641,51 @@
           "effects"
         ],
         "title": "ClipOut"
+      },
+      "CredentialSetRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Provider"
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "secret"
+        ],
+        "title": "CredentialSetRequest"
+      },
+      "CredentialStatusOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "configured"
+        ],
+        "title": "CredentialStatusOut"
       },
       "CutClipRangeRequest": {
         "properties": {

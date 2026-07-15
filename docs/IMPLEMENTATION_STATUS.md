@@ -65,6 +65,15 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Generation providers (plan Phase 10)
+
+- Pluggable provider contract (validate/generate with guardrails: num_images ≤ 4, duration ≤ 10s, resolution whitelist; sanitized errors so keys never leak) in app/ai/providers.
+- Real adapters: qwen-image via DashScope async tasks, Seedance via Volcano ARK content-generation tasks (pure payload builders unit-tested).
+- Mock image/video providers synthesize media locally with ffmpeg so the whole pipeline runs offline.
+- Credentials table (Alembic 0005) + masked settings API and Settings UI for provider keys.
+- Generation runner thread: submit→poll→download→register as generated asset + generated_assets row + job lifecycle; results are draggable timeline material immediately.
+- AI Studio rebuilt: prompt composer, data-driven model pills, live-polling queue with result thumbnails.
+
 ### Transcript-driven editing (apply_transcript_edit)
 
 - cut_clip_range operation removes a source range from a clip: split into left + ripple-closed right, edge cuts trim, full cuts delete — recorded as one invertible apply_transcript_edit operation (undo restores the original clip, redo re-applies).
@@ -80,7 +89,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - Timeline preview via RenderPlan-backed proxy renders for multi-track scenes.
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
-- Sandboxed plugin execution adapters; real generation provider adapters.
+- Sandboxed plugin execution adapters.
 - A real scheduler runner process claiming due tasks.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
 
