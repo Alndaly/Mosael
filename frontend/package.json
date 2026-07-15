@@ -1,0 +1,33 @@
+{
+  "name": "mibu-new-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://127.0.0.1:5173 && electron ../electron/main.cjs\""
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0",
+    "typescript": "^5.8.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@tanstack/react-query": "^5.80.0",
+    "zustand": "^5.0.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "electron": "^32.0.0",
+    "openapi-typescript": "^7.0.0",
+    "concurrently": "^9.0.0",
+    "wait-on": "^8.0.0"
+  }
+}

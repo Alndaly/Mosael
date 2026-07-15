@@ -1,0 +1,25 @@
+{
+  "id": "dev.caption-helper",
+  "name": "Caption Helper",
+  "version": "0.1.0",
+  "permissions": ["assets:read", "sequence:write"],
+  "skills": [
+    {
+      "id": "caption_assets",
+      "description": "Create captions for selected media."
+    }
+  ],
+  "tools": [
+    {
+      "name": "caption_asset",
+      "description": "Generate captions for an asset.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asset_id": { "type": "string" }
+        },
+        "required": ["asset_id"]
+      }
+    }
+  ]
+}

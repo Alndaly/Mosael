@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import select
+
+from app.api.deps import DbSession
+from app.api.schemas import (
+    PluginEnableRequest,
+    PluginInvocationOut,
+    PluginInvokeRequest,
+    PluginOut,
+    PluginToolOut,
+)
+from app.core.config import settings
+from app.db.models import Plugin, PluginInvocation
+from app.domain.plugins import (
+    PluginDomainError,
+    invoke_plugin_tool,
+    list_enabled_plugin_tools,
+    scan_plugins,
+    set_plugin_enabled,
+)
+
+router = APIRouter(tags=["plugins"])
+
+
+@router.post("/plugins/scan", response_model=list[PluginOut])
+def scan_plugin_manifests(db: DbSession) -> list[Plugin]:
+    try:
+        return scan_plugins(db, settings.plugins_dir)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/plugins", response_model=list[PluginOut])
+def list_plugins(db: DbSession) -> list[Plugin]:
+    stmt = select(Plugin).order_by(Plugin.name)
+    return list(db.scalars(stmt))
+
+
+@router.patch("/plugins/{plugin_id}", response_model=PluginOut)
+def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession) -> Plugin:
+    try:
+        return set_plugin_enabled(db, plugin_id, body.enabled)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/plugins/tools", response_model=list[PluginToolOut])
+def list_plugin_tools(db: DbSession) -> list[dict]:
+    return list_enabled_plugin_tools(db)
+
+
+@router.post("/plugins/{plugin_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
+def invoke_tool(plugin_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession) -> PluginInvocation:
+    try:
+        return invoke_plugin_tool(db, plugin_id, tool_name, body.input)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
+def list_invocations(db: DbSession, plugin_id: str | None = None) -> list[PluginInvocation]:
+    stmt = select(PluginInvocation)
+    if plugin_id:
+        stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
+    stmt = stmt.order_by(PluginInvocation.created_at.desc())
+    return list(db.scalars(stmt))

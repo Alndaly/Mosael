@@ -1,0 +1,10 @@
+packages:
+  - "frontend"
+
+allowBuilds:
+  electron: true
+  esbuild: true
+
+onlyBuiltDependencies:
+  - electron
+  - esbuild
