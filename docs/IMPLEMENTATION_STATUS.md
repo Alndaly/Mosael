@@ -65,6 +65,11 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Transcript-driven editing (apply_transcript_edit)
+
+- cut_clip_range operation removes a source range from a clip: split into left + ripple-closed right, edge cuts trim, full cuts delete — recorded as one invertible apply_transcript_edit operation (undo restores the original clip, redo re-applies).
+- POST /sequences/{id}/clips/{clip_id}/cut-range; transcript panel segments carry a hover cut action wired through the projection's src range.
+
 ### Audio playback + waveforms
 
 - Waveform cache (plan §8): mono peak buckets extracted with ffmpeg at import/export-registration, stored beside the asset, served via GET /api/assets/{id}/waveform.
@@ -74,7 +79,6 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 ## Next
 
 - Timeline preview via RenderPlan-backed proxy renders for multi-track scenes.
-- Transcript-driven editing operations (delete-by-word → apply_transcript_edit).
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters; real generation provider adapters.
 - A real scheduler runner process claiming due tasks.

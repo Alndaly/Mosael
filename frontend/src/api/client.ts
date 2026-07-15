@@ -107,6 +107,17 @@ export function trimClip(
   });
 }
 
+export function cutClipRange(
+  sequenceId: string,
+  clipId: string,
+  body: { src_start: number; src_end: number },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-range`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
 }

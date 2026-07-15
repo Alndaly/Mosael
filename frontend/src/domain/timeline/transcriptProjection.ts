@@ -28,6 +28,9 @@ export interface ProjectedSegment {
   /** Segment bounds mapped onto the sequence timeline, clamped to the clip. */
   timelineStart: number;
   timelineEnd: number;
+  /** Visible portion in asset source time — what a transcript edit removes. */
+  srcStart: number;
+  srcEnd: number;
   /** True when the clip trims into the middle of this segment. */
   clipped: boolean;
 }
@@ -51,6 +54,8 @@ export function projectTranscript(
         speaker: segment.speaker ?? null,
         timelineStart: clip.timeline_start + (visibleStart - clip.src_in),
         timelineEnd: clip.timeline_start + (visibleEnd - clip.src_in),
+        srcStart: visibleStart,
+        srcEnd: visibleEnd,
         clipped: segment.start_time < clip.src_in || segment.end_time > clip.src_out,
       });
     }

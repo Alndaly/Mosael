@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Und
 
 import {
   api,
+  cutClipRange,
   deleteClip,
   exportSequence,
   importAsset,
@@ -104,6 +105,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       void refreshSequences();
     },
   });
+  const cutRangeMutation = useMutation({
+    mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
+      cutClipRange(sequence!.id, clipId, { src_start: srcStart, src_end: srcEnd }),
+    onSuccess: () => {
+      useEditorStore.getState().selectClip(null);
+      void refreshSequences();
+    },
+  });
   const undoMutation = useMutation({
     mutationFn: () => undoSequence(sequence!.id),
     onSuccess: () => {
@@ -194,7 +203,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           <div className="panel-head">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
-          <TranscriptPanel sequence={sequence} />
+          <TranscriptPanel
+            sequence={sequence}
+            onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
+          />
         </section>
       )}
       <section className="panel monitor">

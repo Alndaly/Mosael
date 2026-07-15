@@ -232,6 +232,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Asset Waveform */
+        get: operations["get_asset_waveform_api_assets__asset_id__waveform_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences": {
         parameters: {
             query?: never;
@@ -332,6 +349,23 @@ export interface paths {
         head?: never;
         /** Trim Clip */
         patch: operations["trim_clip_api_sequences__sequence_id__clips__clip_id__trim_patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/cut-range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cut Clip Range */
+        post: operations["cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
@@ -812,6 +846,13 @@ export interface components {
             effects: {
                 [key: string]: unknown;
             };
+        };
+        /** CutClipRangeRequest */
+        CutClipRangeRequest: {
+            /** Src Start */
+            src_start: number;
+            /** Src End */
+            src_end: number;
         };
         /** GenerationCreate */
         GenerationCreate: {
@@ -1906,6 +1947,37 @@ export interface operations {
             };
         };
     };
+    get_asset_waveform_api_assets__asset_id__waveform_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_sequence_api_sequences_post: {
         parameters: {
             query?: never;
@@ -2085,6 +2157,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TrimClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutClipRangeRequest"];
             };
         };
         responses: {

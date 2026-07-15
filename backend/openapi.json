@@ -673,6 +673,46 @@
         }
       }
     },
+    "/api/assets/{asset_id}/waveform": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Waveform",
+        "operationId": "get_asset_waveform_api_assets__asset_id__waveform_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences": {
       "post": {
         "tags": [
@@ -948,6 +988,67 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TrimClipRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/cut-range": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Cut Clip Range",
+        "operationId": "cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CutClipRangeRequest"
               }
             }
           }
@@ -2430,6 +2531,24 @@
           "effects"
         ],
         "title": "ClipOut"
+      },
+      "CutClipRangeRequest": {
+        "properties": {
+          "src_start": {
+            "type": "number",
+            "title": "Src Start"
+          },
+          "src_end": {
+            "type": "number",
+            "title": "Src End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "src_start",
+          "src_end"
+        ],
+        "title": "CutClipRangeRequest"
       },
       "GenerationCreate": {
         "properties": {

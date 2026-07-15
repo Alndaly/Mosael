@@ -553,15 +553,9 @@
 
 .ts-item {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 8px;
-  align-items: baseline;
-  border: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   border-radius: 5px;
-  background: transparent;
-  padding: 6px 8px;
-  cursor: pointer;
-  text-align: left;
   transition: background-color 100ms;
 }
 
@@ -571,6 +565,44 @@
 
 .ts-item.active {
   background: var(--accent);
+}
+
+.ts-seek {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ts-cut {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 5px 5px 0 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms, background-color 100ms, color 100ms;
+}
+
+.ts-item:hover .ts-cut,
+.ts-item.active .ts-cut {
+  opacity: 1;
+}
+
+.ts-cut:hover {
+  background: var(--destructive);
+  color: #ffffff;
 }
 
 .ts-time {

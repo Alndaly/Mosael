@@ -15,7 +15,7 @@ original, un-reverts it, and appends a "redo" op. A fresh edit after an undo
 invalidates the redo stack (checked by revision ordering).
 """
 
-UNDOABLE_KINDS = ("insert_clip", "move_clip", "trim_clip", "delete_clip")
+UNDOABLE_KINDS = ("insert_clip", "move_clip", "trim_clip", "delete_clip", "apply_transcript_edit")
 
 
 def undo(db: Session, sequence_id: str) -> Sequence:
@@ -126,6 +126,10 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = previous["timeline_start"]
         clip.src_in = previous["src_in"]
         clip.src_out = previous["src_out"]
+    elif operation.kind == "apply_transcript_edit":
+        for created in payload["created"]:
+            _delete_clip_row(db, created["clip_id"])
+        _restore_clip_row(db, sequence, payload["original"])
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be undone")
 
@@ -145,6 +149,10 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = payload["timeline_start"]
         clip.src_in = payload["src_in"]
         clip.src_out = payload["src_out"]
+    elif operation.kind == "apply_transcript_edit":
+        _delete_clip_row(db, payload["original"]["clip_id"])
+        for created in payload["created"]:
+            _restore_clip_row(db, sequence, created)
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be redone")
 

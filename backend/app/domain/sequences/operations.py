@@ -45,6 +45,21 @@ class DeleteClip:
     actor_id: str | None = None
 
 
+@dataclass(frozen=True)
+class CutClipRange:
+    """Remove a source-time range from a clip (transcript-driven edit).
+
+    The clip splits into a left part (original position) and a right part
+    that ripples left to close the gap. Cuts touching an edge trim instead;
+    a cut covering everything deletes the clip.
+    """
+
+    clip_id: str
+    src_start: float
+    src_end: float
+    actor_id: str | None = None
+
+
 def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
@@ -176,6 +191,88 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
     )
     db.commit()
     return sequence
+
+
+def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    start = max(op.src_start, clip.src_in)
+    end = min(op.src_end, clip.src_out)
+    if end <= start:
+        raise SequenceDomainError("Cut range does not intersect the clip")
+
+    original = {
+        "clip_id": clip.id,
+        "track_id": clip.track_id,
+        "asset_id": clip.asset_id,
+        "timeline_start": clip.timeline_start,
+        "src_in": clip.src_in,
+        "src_out": clip.src_out,
+    }
+    created: list[dict[str, Any]] = []
+
+    keep_left = start - clip.src_in > MIN_CUT_REMAINDER
+    keep_right = clip.src_out - end > MIN_CUT_REMAINDER
+    right_start = clip.timeline_start + (start - clip.src_in) if keep_left else clip.timeline_start
+
+    db.delete(clip)
+    if keep_left:
+        left = Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=original["track_id"],
+            asset_id=original["asset_id"],
+            timeline_start=original["timeline_start"],
+            src_in=original["src_in"],
+            src_out=start,
+        )
+        db.add(left)
+        db.flush()
+        created.append(_clip_payload(left))
+    if keep_right:
+        right = Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=original["track_id"],
+            asset_id=original["asset_id"],
+            timeline_start=right_start,
+            src_in=end,
+            src_out=original["src_out"],
+        )
+        db.add(right)
+        db.flush()
+        created.append(_clip_payload(right))
+
+    _record_operation(
+        db,
+        sequence,
+        kind="apply_transcript_edit",
+        payload={
+            "clip_id": original["clip_id"],
+            "src_start": start,
+            "src_end": end,
+            "original": original,
+            "created": created,
+        },
+        summary={"operation": "apply_transcript_edit", "clip_id": original["clip_id"], "created": len(created)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+MIN_CUT_REMAINDER = 0.05
+
+
+def _clip_payload(clip: Clip) -> dict[str, Any]:
+    return {
+        "clip_id": clip.id,
+        "track_id": clip.track_id,
+        "asset_id": clip.asset_id,
+        "timeline_start": clip.timeline_start,
+        "src_in": clip.src_in,
+        "src_out": clip.src_out,
+    }
 
 
 def _require_sequence(db: Session, sequence_id: str) -> Sequence:

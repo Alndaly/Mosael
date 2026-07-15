@@ -184,6 +184,11 @@ class TrimClipRequest(BaseModel):
     src_out: float
 
 
+class CutClipRangeRequest(BaseModel):
+    src_start: float
+    src_end: float
+
+
 class JobOut(OrmModel):
     id: str
     workspace_id: str

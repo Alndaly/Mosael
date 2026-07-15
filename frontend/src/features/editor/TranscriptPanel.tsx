@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { MessageSquareText } from "lucide-react";
+import { MessageSquareText, X } from "lucide-react";
 
 import { API_BASE, getAuthToken, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -11,7 +11,13 @@ import { useEditorStore } from "@/stores/editorStore";
 
 type TranscriptOut = components["schemas"]["TranscriptOut"];
 
-export function TranscriptPanel({ sequence }: { sequence: Sequence }) {
+export function TranscriptPanel({
+  sequence,
+  onCutSegment,
+}: {
+  sequence: Sequence;
+  onCutSegment: (clipId: string, srcStart: number, srcEnd: number) => void;
+}) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
 
@@ -77,19 +83,29 @@ export function TranscriptPanel({ sequence }: { sequence: Sequence }) {
       {projected.map((item) => {
         const active = playhead >= item.timelineStart && playhead < item.timelineEnd;
         return (
-          <button
-            type="button"
-            key={`${item.clipId}:${item.segmentId}`}
-            className={active ? "ts-item active" : "ts-item"}
-            onClick={() => useEditorStore.getState().setPlayhead(item.timelineStart)}
-          >
-            <span className="ts-time timecode">{formatTimecode(item.timelineStart)}</span>
-            <span className="ts-text">
-              {item.speaker && <em>{item.speaker}</em>}
-              {item.text}
-              {item.clipped && <small> · {t("transcriptClipped")}</small>}
-            </span>
-          </button>
+          <div key={`${item.clipId}:${item.segmentId}`} className={active ? "ts-item active" : "ts-item"}>
+            <button
+              type="button"
+              className="ts-seek"
+              onClick={() => useEditorStore.getState().setPlayhead(item.timelineStart)}
+            >
+              <span className="ts-time timecode">{formatTimecode(item.timelineStart)}</span>
+              <span className="ts-text">
+                {item.speaker && <em>{item.speaker}</em>}
+                {item.text}
+                {item.clipped && <small> · {t("transcriptClipped")}</small>}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="ts-cut"
+              title={t("cutSentence")}
+              aria-label={t("cutSentence")}
+              onClick={() => onCutSegment(item.clipId, item.srcStart, item.srcEnd)}
+            >
+              <X size={12} />
+            </button>
+          </div>
         );
       })}
     </div>

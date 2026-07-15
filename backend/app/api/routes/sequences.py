@@ -5,18 +5,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import InsertClipRequest, JobOut, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
+from app.api.schemas import (
+    CutClipRangeRequest,
+    InsertClipRequest,
+    JobOut,
+    MoveClipRequest,
+    SequenceCreate,
+    SequenceOut,
+    TrimClipRequest,
+)
 from app.db.models import Job, Project, Sequence, Track
 from app.core.permissions import ensure_workspace_access, require_sequence_access
 from app.domain.render import start_export
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
+    CutClipRange,
     DeleteClip,
     InsertClip,
     MoveClip,
     SequenceDomainError,
     TrimClip,
+    cut_clip_range as cut_clip_range_operation,
     delete_clip as delete_clip_operation,
     insert_clip as insert_clip_operation,
     move_clip as move_clip_operation,
@@ -82,6 +92,13 @@ def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSessi
 def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: trim_clip_operation(db, sequence_id, TrimClip(clip_id=clip_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-range", response_model=SequenceOut)
+def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, **body.model_dump())))
     return _get_sequence(db, sequence_id)
 
 
