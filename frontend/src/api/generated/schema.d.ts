@@ -92,6 +92,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transcript */
+        get: operations["get_transcript_api_assets__asset_id__transcript_get"];
+        /** Put Transcript */
+        put: operations["put_transcript_api_assets__asset_id__transcript_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/file": {
         parameters: {
             query?: never;
@@ -1133,6 +1151,88 @@ export interface components {
             /** Clips */
             clips?: components["schemas"]["ClipOut"][];
         };
+        /** TranscriptAttachRequest */
+        TranscriptAttachRequest: {
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /**
+             * Source
+             * @default imported
+             */
+            source: string;
+            /** Segments */
+            segments?: components["schemas"]["TranscriptSegmentIn"][];
+        };
+        /** TranscriptOut */
+        TranscriptOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Asset Id */
+            asset_id: string;
+            /** Language */
+            language: string;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /** Segments */
+            segments?: components["schemas"]["TranscriptSegmentOut"][];
+        };
+        /** TranscriptSegmentIn */
+        TranscriptSegmentIn: {
+            /** Start Time */
+            start_time: number;
+            /** End Time */
+            end_time: number;
+            /** Text */
+            text: string;
+            /** Speaker */
+            speaker?: string | null;
+            /** Tokens */
+            tokens?: components["schemas"]["TranscriptTokenIn"][];
+        };
+        /** TranscriptSegmentOut */
+        TranscriptSegmentOut: {
+            /** Id */
+            id: string;
+            /** Start Time */
+            start_time: number;
+            /** End Time */
+            end_time: number;
+            /** Text */
+            text: string;
+            /** Speaker */
+            speaker: string | null;
+            /** Tokens */
+            tokens?: components["schemas"]["TranscriptTokenOut"][];
+        };
+        /** TranscriptTokenIn */
+        TranscriptTokenIn: {
+            /** Start Time */
+            start_time: number;
+            /** End Time */
+            end_time: number;
+            /** Text */
+            text: string;
+        };
+        /** TranscriptTokenOut */
+        TranscriptTokenOut: {
+            /** Id */
+            id: string;
+            /** Token Index */
+            token_index: number;
+            /** Start Time */
+            start_time: number;
+            /** End Time */
+            end_time: number;
+            /** Text */
+            text: string;
+        };
         /** TrimClipRequest */
         TrimClipRequest: {
             /** Timeline Start */
@@ -1400,6 +1500,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transcript_api_assets__asset_id__transcript_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_transcript_api_assets__asset_id__transcript_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscriptAttachRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptOut"];
                 };
             };
             /** @description Validation Error */

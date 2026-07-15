@@ -11,17 +11,19 @@ export function MediaPool({
   uploading,
   onImportFile,
   onAddToTimeline,
+  tabs,
 }: {
   assets: Asset[];
   uploading: boolean;
   onImportFile: (file: File) => void;
   onAddToTimeline: (asset: Asset) => void;
+  tabs?: React.ReactNode;
 }) {
   const t = useI18n();
   return (
     <section className="panel media-panel">
       <div className="panel-head">
-        <h2>{t("media")}</h2>
+        {tabs ?? <h2>{t("media")}</h2>}
         <Button asChild variant="outline" size="sm" disabled={uploading}>
           <label>
             <input

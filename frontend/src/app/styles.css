@@ -511,6 +511,110 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* ---------- Panel tabs ---------- */
+
+.panel-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.panel-tab {
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 4px 9px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 100ms, color 100ms;
+}
+
+.panel-tab:hover {
+  color: var(--foreground);
+}
+
+.panel-tab.active {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+/* ---------- Transcript panel ---------- */
+
+.ts-list {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.ts-item {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 100ms;
+}
+
+.ts-item:hover {
+  background: var(--muted);
+}
+
+.ts-item.active {
+  background: var(--accent);
+}
+
+.ts-time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ts-item.active .ts-time {
+  color: var(--accent-foreground);
+}
+
+.ts-text {
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ts-text em {
+  margin-right: 6px;
+  color: var(--accent-foreground);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.ts-text small {
+  color: var(--muted-foreground);
+}
+
+.ts-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 40px 18px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.ts-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 /* ---------- Media pool ---------- */
 
 .pool-list {

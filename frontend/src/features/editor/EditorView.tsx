@@ -27,6 +27,7 @@ import { useEditorStore } from "@/stores/editorStore";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
+import { TranscriptPanel } from "./TranscriptPanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 
 export function EditorView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
@@ -45,6 +46,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const t = useI18n();
   const qc = useQueryClient();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
+  const [leftTab, setLeftTab] = React.useState<"media" | "transcript">("media");
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id, project.id],
@@ -179,12 +181,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   return (
     <div className="editor-grid">
-      <MediaPool
-        assets={assets.data ?? []}
-        uploading={uploadAsset.isPending}
-        onImportFile={(file) => uploadAsset.mutate(file)}
-        onAddToTimeline={addAssetToTimeline}
-      />
+      {leftTab === "media" ? (
+        <MediaPool
+          assets={assets.data ?? []}
+          uploading={uploadAsset.isPending}
+          onImportFile={(file) => uploadAsset.mutate(file)}
+          onAddToTimeline={addAssetToTimeline}
+          tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />}
+        />
+      ) : (
+        <section className="panel media-panel">
+          <div className="panel-head">
+            <LeftTabs tab={leftTab} onChange={setLeftTab} />
+          </div>
+          <TranscriptPanel sequence={sequence} />
+        </section>
+      )}
       <section className="panel monitor">
         <Monitor sequence={sequence} assets={assets.data ?? []} />
       </section>
@@ -236,6 +248,28 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           }
         />
       </section>
+    </div>
+  );
+}
+
+function LeftTabs({ tab, onChange }: { tab: "media" | "transcript"; onChange: (tab: "media" | "transcript") => void }) {
+  const t = useI18n();
+  return (
+    <div className="panel-tabs">
+      <button
+        type="button"
+        className={tab === "media" ? "panel-tab active" : "panel-tab"}
+        onClick={() => onChange("media")}
+      >
+        {t("media")}
+      </button>
+      <button
+        type="button"
+        className={tab === "transcript" ? "panel-tab active" : "panel-tab"}
+        onClick={() => onChange("transcript")}
+      >
+        {t("transcriptTab")}
+      </button>
     </div>
   );
 }

@@ -52,6 +52,53 @@ class AssetOut(OrmModel):
     media_info: dict
 
 
+class TranscriptTokenIn(BaseModel):
+    start_time: float
+    end_time: float
+    text: str = Field(max_length=120)
+
+
+class TranscriptSegmentIn(BaseModel):
+    start_time: float
+    end_time: float
+    text: str
+    speaker: str | None = None
+    tokens: list[TranscriptTokenIn] = Field(default_factory=list)
+
+
+class TranscriptAttachRequest(BaseModel):
+    language: str = Field(default="", max_length=24)
+    source: str = Field(default="imported", max_length=40)
+    segments: list[TranscriptSegmentIn] = Field(default_factory=list)
+
+
+class TranscriptTokenOut(OrmModel):
+    id: str
+    token_index: int
+    start_time: float
+    end_time: float
+    text: str
+
+
+class TranscriptSegmentOut(OrmModel):
+    id: str
+    start_time: float
+    end_time: float
+    text: str
+    speaker: str | None
+    tokens: list[TranscriptTokenOut] = Field(default_factory=list)
+
+
+class TranscriptOut(OrmModel):
+    id: str
+    workspace_id: str
+    asset_id: str
+    language: str
+    status: str
+    source: str
+    segments: list[TranscriptSegmentOut] = Field(default_factory=list)
+
+
 class SequenceCreate(BaseModel):
     workspace_id: str
     project_id: str

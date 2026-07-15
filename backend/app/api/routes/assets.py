@@ -7,9 +7,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.schemas import AssetCreate, AssetOut
-from app.db.models import Asset
+from app.api.schemas import AssetCreate, AssetOut, TranscriptAttachRequest, TranscriptOut
+from app.db.models import Asset, Transcript
 from app.domain.assets import import_uploaded_asset
+from app.domain.transcripts import attach_transcript, get_transcript_for_asset
+from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
 from app.media.thumbnails import thumbnail_path
 
@@ -49,6 +51,43 @@ def list_assets(workspace_id: str, db: DbSession, project_id: str | None = None)
         stmt = stmt.where(Asset.project_id == project_id)
     stmt = stmt.order_by(Asset.created_at.desc())
     return list(db.scalars(stmt))
+
+
+@router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)
+def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession) -> Transcript:
+    try:
+        transcript = attach_transcript(
+            db,
+            asset_id=asset_id,
+            language=body.language,
+            source=body.source,
+            segments=[
+                SegmentIn(
+                    start_time=segment.start_time,
+                    end_time=segment.end_time,
+                    text=segment.text,
+                    speaker=segment.speaker,
+                    tokens=tuple(
+                        TokenIn(start_time=token.start_time, end_time=token.end_time, text=token.text)
+                        for token in segment.tokens
+                    ),
+                )
+                for segment in body.segments
+            ],
+        )
+    except TranscriptDomainError as exc:
+        message = str(exc)
+        status = 404 if "not found" in message.lower() else 422
+        raise HTTPException(status_code=status, detail=message) from exc
+    return get_transcript_for_asset(db, asset_id) or transcript
+
+
+@router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)
+def get_transcript(asset_id: str, db: DbSession) -> Transcript:
+    transcript = get_transcript_for_asset(db, asset_id)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return transcript
 
 
 @router.get("/assets/{asset_id}/file")
