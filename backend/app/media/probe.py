@@ -56,6 +56,20 @@ def probe_media(path: Path) -> dict[str, Any]:
     return {k: v for k, v in info.items() if v is not None}
 
 
+def probe_has_audio(path: Path) -> bool:
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:
+        return False
+    return bool(proc.stdout.strip())
+
+
 def _parse_rate(value: str | None) -> float | None:
     if not value or value == "0/0":
         return None

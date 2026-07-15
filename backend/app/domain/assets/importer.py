@@ -12,6 +12,43 @@ from app.media.probe import guess_kind, probe_media
 from app.media.thumbnails import generate_thumbnail
 
 
+def register_file_asset(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    source_path: Path,
+    name: str,
+    source: str = "exported",
+) -> Asset:
+    """Copy an existing local file into asset storage and register it."""
+    asset_id = new_id()
+    target_dir = asset_dir(workspace_id, asset_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / source_path.name
+    shutil.copy2(source_path, target)
+
+    kind = guess_kind(target)
+    media_info = probe_media(target)
+    if generate_thumbnail(target, kind, target_dir) is not None:
+        media_info = {**media_info, "has_thumbnail": True}
+    asset = Asset(
+        id=asset_id,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        kind=kind,
+        source=source,
+        name=name,
+        original_filename=source_path.name,
+        file_key=asset_key(workspace_id, asset_id, source_path.name),
+        media_info=media_info,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
 def import_uploaded_asset(
     db: Session,
     *,

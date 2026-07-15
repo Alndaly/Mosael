@@ -5,8 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession
-from app.api.schemas import InsertClipRequest, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
-from app.db.models import Project, Sequence, Track
+from app.api.schemas import InsertClipRequest, JobOut, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
+from app.db.models import Job, Project, Sequence, Track
+from app.domain.render import start_export
+from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
     DeleteClip,
     InsertClip,
@@ -73,6 +75,16 @@ def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSessi
 def delete_clip(sequence_id: str, clip_id: str, db: DbSession) -> Sequence:
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
     return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/export", response_model=JobOut)
+def export_sequence(sequence_id: str, db: DbSession) -> Job:
+    try:
+        return start_export(db, sequence_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RenderPlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _apply(operation) -> None:
