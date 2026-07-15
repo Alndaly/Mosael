@@ -41,9 +41,12 @@ export function TranscriptPanel({
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
   const [asrError, setAsrError] = React.useState<string | null>(null);
 
+  // 逐字稿覆盖 V1(主叙事画面)加所有音轨(口播/旁白常在 A1)。
   const videoClips = React.useMemo(() => {
-    const track = (sequence.tracks ?? []).find((item) => item.kind === "video");
-    return track?.clips ?? [];
+    const tracks = sequence.tracks ?? [];
+    const mainVideo = tracks.find((item) => item.kind === "video");
+    const audioTracks = tracks.filter((item) => item.kind === "audio");
+    return [...(mainVideo?.clips ?? []), ...audioTracks.flatMap((track) => track.clips ?? [])];
   }, [sequence]);
   const assetIds = React.useMemo(
     () => [...new Set(videoClips.map((clip) => clip.asset_id).filter((id): id is string => Boolean(id)))],

@@ -98,3 +98,32 @@ describe("isFillerToken", () => {
     expect(isFillerToken("hello")).toBe(false);
   });
 });
+
+describe("token clamping at clip edges", () => {
+  it("keeps and clamps tokens that straddle the clip window", () => {
+    const clip = { id: "c1", asset_id: "a1", timeline_start: 0, src_in: 1.0, src_out: 3.0 };
+    const segments = new Map<string, SegmentLike[]>([
+      [
+        "a1",
+        [
+          {
+            id: "s1",
+            start_time: 0.5,
+            end_time: 3.5,
+            text: "abcd",
+            tokens: [
+              { start_time: 0.5, end_time: 0.9, text: "a" }, // fully outside → dropped
+              { start_time: 0.8, end_time: 1.4, text: "b" }, // straddles src_in → clamped
+              { start_time: 1.5, end_time: 2.0, text: "c" }, // inside → kept
+              { start_time: 2.8, end_time: 3.4, text: "d" }, // straddles src_out → clamped
+            ],
+          },
+        ],
+      ],
+    ]);
+    const [projected] = projectTranscript([clip], segments);
+    expect(projected.tokens.map((t) => t.text)).toEqual(["b", "c", "d"]);
+    expect(projected.tokens[0]).toMatchObject({ start_time: 1.0, end_time: 1.4 });
+    expect(projected.tokens[2]).toMatchObject({ start_time: 2.8, end_time: 3.0 });
+  });
+});

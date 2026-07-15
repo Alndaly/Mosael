@@ -66,9 +66,16 @@ export function projectTranscript(
         srcStart: visibleStart,
         srcEnd: visibleEnd,
         clipped: segment.start_time < clip.src_in || segment.end_time > clip.src_out,
-        tokens: (segment.tokens ?? []).filter(
-          (token) => token.start_time >= clip.src_in && token.end_time <= clip.src_out,
-        ),
+        // Keep every token that intersects the clip window (clamped) — the old
+        // fully-inside filter silently dropped words at trimmed edges, leaving
+        // whole sentences without word-level editing.
+        tokens: (segment.tokens ?? [])
+          .filter((token) => token.end_time > clip.src_in && token.start_time < clip.src_out)
+          .map((token) => ({
+            ...token,
+            start_time: Math.max(token.start_time, clip.src_in),
+            end_time: Math.min(token.end_time, clip.src_out),
+          })),
       });
     }
   }
