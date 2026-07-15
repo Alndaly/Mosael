@@ -68,6 +68,16 @@ export function assetThumbnailUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
+export interface WaveformData {
+  version: number;
+  duration: number;
+  peaks: number[];
+}
+
+export function fetchWaveform(assetId: string): Promise<WaveformData> {
+  return api<WaveformData>(`/api/assets/${assetId}/waveform`);
+}
+
 export function insertClip(
   sequenceId: string,
   body: { track_id: string; asset_id: string; timeline_start: number; src_in: number; src_out: number },

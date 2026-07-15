@@ -20,12 +20,22 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const { setPlayhead, setPlaying, togglePlaying } = useEditorStore.getState();
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const loadedAudioAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
   const videoClips = React.useMemo(() => {
     const track = (sequence.tracks ?? []).find((item) => item.kind === "video");
     return [...(track?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start);
   }, [sequence]);
+  const audioTrack = React.useMemo(
+    () => (sequence.tracks ?? []).find((item) => item.kind === "audio") ?? null,
+    [sequence],
+  );
+  const audioClips = React.useMemo(
+    () => [...(audioTrack?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
+    [audioTrack],
+  );
   const totalDuration = React.useMemo(
     () => sequenceDuration((sequence.tracks ?? []).flatMap((track) => track.clips ?? [])),
     [sequence],
@@ -35,13 +45,16 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeAsset = activeClip ? (assetById.get(activeClip.asset_id) ?? null) : null;
   const isImage = activeAsset?.kind === "image";
+  const activeAudioClip =
+    audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
 
-  // Playback clock.
+  // Playback clock. Interval-based (not rAF) so it keeps running when the
+  // window is occluded or backgrounded — audio keeps playing there too.
   React.useEffect(() => {
     if (!playing) return;
-    let raf = 0;
     let last = performance.now();
-    const tick = (now: number) => {
+    const interval = window.setInterval(() => {
+      const now = performance.now();
       const dt = (now - last) / 1000;
       last = now;
       const state = useEditorStore.getState();
@@ -52,10 +65,8 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
         return;
       }
       state.setPlayhead(next);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    }, 40);
+    return () => window.clearInterval(interval);
   }, [playing, totalDuration]);
 
   // Keep the video element in lockstep with the clock.
@@ -81,8 +92,34 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     }
   }, [playhead, playing, activeClip, activeAsset, isImage]);
 
+  // Keep the audio-track element in lockstep as well.
+  React.useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!activeAudioClip) {
+      if (!audio.paused) audio.pause();
+      return;
+    }
+    if (loadedAudioAssetRef.current !== activeAudioClip.asset_id) {
+      loadedAudioAssetRef.current = activeAudioClip.asset_id;
+      audio.src = assetFileUrl(activeAudioClip.asset_id);
+    }
+    const desired = playhead - activeAudioClip.timeline_start + activeAudioClip.src_in;
+    if (Math.abs(audio.currentTime - desired) > 0.18) {
+      audio.currentTime = desired;
+    }
+    audio.volume = Math.min(1, Math.max(0, activeAudioClip.gain));
+    audio.muted = activeAudioClip.muted || Boolean(audioTrack?.muted);
+    if (playing && audio.paused) {
+      audio.play().catch(() => undefined);
+    } else if (!playing && !audio.paused) {
+      audio.pause();
+    }
+  }, [playhead, playing, activeAudioClip, audioTrack]);
+
   return (
     <div className="monitor-stack">
+      <audio ref={audioRef} preload="auto" />
       <div className="monitor-stage">
         <video
           ref={videoRef}

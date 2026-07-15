@@ -1,7 +1,8 @@
 import React from "react";
+import { useQueries } from "@tanstack/react-query";
 import { Magnet, Minus, Plus } from "lucide-react";
 
-import type { Asset, Sequence, Track } from "@/api/client";
+import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +18,7 @@ import {
   snapTime,
   timeToPx,
 } from "@/domain/timeline/geometry";
+import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
 
@@ -56,6 +58,33 @@ export function Timeline({
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+
+  // Waveforms for audio-track clips whose assets have a cached waveform.
+  const waveformAssetIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const track of tracks) {
+      if (track.kind !== "audio") continue;
+      for (const clip of track.clips ?? []) {
+        if (assetById.get(clip.asset_id)?.media_info.has_waveform) ids.add(clip.asset_id);
+      }
+    }
+    return [...ids];
+  }, [tracks, assetById]);
+  const waveformQueries = useQueries({
+    queries: waveformAssetIds.map((assetId) => ({
+      queryKey: ["waveform", assetId],
+      queryFn: () => fetchWaveform(assetId),
+      staleTime: Infinity,
+    })),
+  });
+  const waveformByAsset = React.useMemo(() => {
+    const map = new Map<string, WaveformData>();
+    waveformQueries.forEach((query, index) => {
+      if (query.data) map.set(waveformAssetIds[index], query.data);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waveformAssetIds, ...waveformQueries.map((query) => query.data)]);
 
   const duration = Math.max(sequenceDuration(allClips), playhead) + 10;
   const contentWidth = timeToPx(duration, pxPerSecond) + 120;
@@ -259,15 +288,24 @@ export function Timeline({
                 {(track.clips ?? []).map((clip) => {
                   const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
                   const display = draft ?? clip;
+                  const waveform = track.kind === "audio" ? waveformByAsset.get(clip.asset_id) : undefined;
+                  const clipWidth = Math.max(10, timeToPx(display.src_out - display.src_in, pxPerSecond));
+                  const peaks = waveform
+                    ? downsamplePeaks(
+                        slicePeaks(waveform.peaks, waveform.duration, display.src_in, display.src_out),
+                        Math.max(24, Math.floor(clipWidth / 3)),
+                      )
+                    : undefined;
                   return (
                     <TimelineClip
                       key={clip.id}
                       trackKind={track.kind}
                       name={assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8)}
                       left={timeToPx(display.timeline_start, pxPerSecond)}
-                      width={Math.max(10, timeToPx(display.src_out - display.src_in, pxPerSecond))}
+                      width={clipWidth}
                       selected={selectedClipId === clip.id}
                       dragging={Boolean(draft)}
+                      peaks={peaks}
                       onPointerDown={(event) => startClipDrag(event, track, clip.id)}
                       onTrimPointerDown={(event, edge) => startClipTrim(event, track, clip.id, edge)}
                       onSelect={() => selectClip(clip.id)}

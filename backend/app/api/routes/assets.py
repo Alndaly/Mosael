@@ -15,6 +15,7 @@ from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
 from app.media.thumbnails import thumbnail_path
+from app.media.waveform import waveform_path
 
 router = APIRouter(tags=["assets"])
 
@@ -117,6 +118,16 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
     return FileResponse(thumb, media_type="image/jpeg")
+
+
+@router.get("/assets/{asset_id}/waveform")
+def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
+    waveform = waveform_path(resolve_key(asset.file_key).parent)
+    if not waveform.is_file():
+        raise HTTPException(status_code=404, detail="Waveform not available")
+    return FileResponse(waveform, media_type="application/json")
 
 
 def _require_file_backed_asset(db: DbSession, asset_id: str) -> Asset:

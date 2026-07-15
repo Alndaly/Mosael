@@ -1,5 +1,7 @@
 import React from "react";
 
+import { waveformPolygonPoints } from "@/domain/timeline/waveform";
+
 export function TimelineClip({
   trackKind,
   name,
@@ -7,6 +9,7 @@ export function TimelineClip({
   width,
   selected,
   dragging,
+  peaks,
   onPointerDown,
   onTrimPointerDown,
   onSelect,
@@ -17,6 +20,7 @@ export function TimelineClip({
   width: number;
   selected: boolean;
   dragging: boolean;
+  peaks?: number[];
   onPointerDown: (event: React.PointerEvent) => void;
   onTrimPointerDown: (event: React.PointerEvent, edge: "start" | "end") => void;
   onSelect: () => void;
@@ -43,6 +47,11 @@ export function TimelineClip({
       tabIndex={-1}
       title={name}
     >
+      {peaks && peaks.length > 0 && (
+        <svg className="tl-clip-wave" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+          <polygon points={waveformPolygonPoints(peaks)} />
+        </svg>
+      )}
       <span
         className="tl-clip-handle left"
         onPointerDown={(event) => {

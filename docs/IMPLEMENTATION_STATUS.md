@@ -65,9 +65,14 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
 - Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
 
+### Audio playback + waveforms
+
+- Waveform cache (plan §8): mono peak buckets extracted with ffmpeg at import/export-registration, stored beside the asset, served via GET /api/assets/{id}/waveform.
+- Audio-track clips render their sliced waveform (pure slicePeaks/downsample kernel, tested) as an SVG inside the clip.
+- Monitor drives a hidden audio element in lockstep with the active audio-track clip (gain/mute honored); playback clock switched from rAF to interval so it survives occluded/background windows.
+
 ## Next
 
-- Audio track playback in the monitor; waveforms in pool and clips.
 - Timeline preview via RenderPlan-backed proxy renders for multi-track scenes.
 - Transcript-driven editing operations (delete-by-word → apply_transcript_edit).
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).

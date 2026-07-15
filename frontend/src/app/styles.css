@@ -999,7 +999,22 @@
   color: var(--track-subtitle-text);
 }
 
+.tl-clip-wave {
+  position: absolute;
+  inset: 2px 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 4px);
+  pointer-events: none;
+}
+
+.tl-clip-wave polygon {
+  fill: currentColor;
+  opacity: 0.3;
+}
+
 .tl-clip-name {
+  position: relative;
+  z-index: 1;
   flex: 1;
   overflow: hidden;
   padding: 0 4px;

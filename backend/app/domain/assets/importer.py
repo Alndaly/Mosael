@@ -10,6 +10,7 @@ from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key
 from app.media.probe import guess_kind, probe_media
 from app.media.thumbnails import generate_thumbnail
+from app.media.waveform import generate_waveform
 
 
 def register_file_asset(
@@ -32,6 +33,8 @@ def register_file_asset(
     media_info = probe_media(target)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}
+    if generate_waveform(target, kind, target_dir) is not None:
+        media_info = {**media_info, "has_waveform": True}
     asset = Asset(
         id=asset_id,
         workspace_id=workspace_id,
@@ -69,6 +72,8 @@ def import_uploaded_asset(
     media_info = probe_media(target)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}
+    if generate_waveform(target, kind, target_dir) is not None:
+        media_info = {**media_info, "has_waveform": True}
     asset = Asset(
         id=asset_id,
         workspace_id=workspace_id,
