@@ -12,7 +12,10 @@
     "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://127.0.0.1:5173 && electron ../electron/main.cjs\""
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.19",
+    "@radix-ui/react-select": "^2.3.3",
     "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-tooltip": "^1.2.12",
     "@tailwindcss/vite": "^4.3.2",
     "@tanstack/react-query": "^5.80.0",
     "@vitejs/plugin-react": "^5.0.0",

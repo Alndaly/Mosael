@@ -22,65 +22,128 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
+/*
+ * Mibu design tokens.
+ * Instrument-panel discipline: neutral cold grays, white panels, one refined
+ * blue, semantic track colors. Hierarchy comes from 1px borders and background
+ * value steps — never from heavy shadows or gradients.
+ */
 :root {
   color-scheme: light;
-  --radius: 0.5rem;
-  --background: #f4f6f8;
-  --foreground: #17202a;
+  --radius: 6px;
+
+  --background: #f0f1f3;
+  --foreground: #1a1d21;
   --card: #ffffff;
-  --card-foreground: #17202a;
+  --card-foreground: #1a1d21;
   --popover: #ffffff;
-  --popover-foreground: #17202a;
-  --primary: #1274d8;
+  --popover-foreground: #1a1d21;
+  --primary: #2e6fee;
   --primary-foreground: #ffffff;
-  --secondary: #eef3f8;
-  --secondary-foreground: #17202a;
-  --muted: #f8fafc;
-  --muted-foreground: #697586;
-  --accent: #e6f2ff;
-  --accent-foreground: #0b5fab;
+  --secondary: #e9ebee;
+  --secondary-foreground: #33383f;
+  --muted: #f6f7f8;
+  --muted-foreground: #656c78;
+  --accent: #ebf1fe;
+  --accent-foreground: #1d4fb8;
   --destructive: #d92d20;
-  --border: #d9e0e8;
-  --input: #d9e0e8;
-  --ring: #72b7ff;
+  --border: #e2e4e8;
+  --input: #d5d8dd;
+  --ring: #9dbcf0;
+
+  /* Panel system */
   --panel: var(--card);
-  --panel-subtle: var(--muted);
-  --text: var(--foreground);
-  --track: #e8edf3;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --panel-subtle: #f6f7f8;
+  --panel-inset: #eceef0;
+  --border-strong: #cdd1d7;
+  --shadow-panel: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-raised: 0 2px 8px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.05);
+
+  /* Editor surfaces */
+  --monitor-bg: #17191d;
+  --timeline-bg: #f6f7f8;
+  --ruler-bg: #ffffff;
+  --ruler-tick: #b6bbc2;
+  --ruler-text: #82878f;
+  --playhead: #e5484d;
+  --track-lane: #eceef0;
+  --track-lane-line: #e2e4e8;
+
+  /* Semantic track colors */
+  --track-video-bg: #dce7fb;
+  --track-video-border: #9dbcf0;
+  --track-video-text: #28497f;
+  --track-audio-bg: #d7f0e3;
+  --track-audio-border: #8fd0b0;
+  --track-audio-text: #1f5c40;
+  --track-subtitle-bg: #fcefd3;
+  --track-subtitle-border: #e5c37f;
+  --track-subtitle-text: #7a5518;
+  --track-overlay-bg: #e9e2fa;
+  --track-overlay-border: #bba6ec;
+  --track-overlay-text: #4a3585;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+  font-family: var(--font-sans);
 }
 
 .dark {
   color-scheme: dark;
-  --background: #0f141b;
-  --foreground: #e6edf5;
-  --card: #151b23;
-  --card-foreground: #e6edf5;
-  --popover: #151b23;
-  --popover-foreground: #e6edf5;
-  --primary: #4ea7ff;
-  --primary-foreground: #07111f;
-  --secondary: #1c2530;
-  --secondary-foreground: #dce7f3;
-  --muted: #111820;
-  --muted-foreground: #8d9aac;
-  --accent: #17324a;
-  --accent-foreground: #b9ddff;
+
+  --background: #131519;
+  --foreground: #e8eaed;
+  --card: #1b1e24;
+  --card-foreground: #e8eaed;
+  --popover: #21252c;
+  --popover-foreground: #e8eaed;
+  --primary: #5c8dff;
+  --primary-foreground: #0a1020;
+  --secondary: #262a32;
+  --secondary-foreground: #d3d7dd;
+  --muted: #181b20;
+  --muted-foreground: #9aa1ab;
+  --accent: #1d2941;
+  --accent-foreground: #a8c4ff;
   --destructive: #ff6b5f;
-  --border: #283443;
-  --input: #334155;
-  --ring: #72b7ff;
+  --border: #2a2e36;
+  --input: #363b45;
+  --ring: #3d5fa8;
+
   --panel: var(--card);
-  --panel-subtle: var(--muted);
-  --text: var(--foreground);
-  --track: #1b2633;
+  --panel-subtle: #181b20;
+  --panel-inset: #14161b;
+  --border-strong: #3a3f49;
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --monitor-bg: #0b0c0f;
+  --timeline-bg: #16181d;
+  --ruler-bg: #1b1e24;
+  --ruler-tick: #4a505a;
+  --ruler-text: #82878f;
+  --playhead: #ff5d61;
+  --track-lane: #1e2127;
+  --track-lane-line: #262a32;
+
+  --track-video-bg: #22375c;
+  --track-video-border: #3e63a8;
+  --track-video-text: #b9d0f5;
+  --track-audio-bg: #1c3d2e;
+  --track-audio-border: #35745a;
+  --track-audio-text: #a9e2c6;
+  --track-subtitle-bg: #423419;
+  --track-subtitle-border: #8a6d33;
+  --track-subtitle-text: #ecd39a;
+  --track-overlay-bg: #322851;
+  --track-overlay-border: #5d4a99;
+  --track-overlay-text: #cfc0f2;
 }
 
 * {
@@ -88,13 +151,68 @@
   border-color: var(--border);
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* Timecode and any numeric readout aligns like an instrument. */
+.tabular,
+.timecode {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Quiet, consistent scrollbars for a desktop tool. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-color: var(--border-strong);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
