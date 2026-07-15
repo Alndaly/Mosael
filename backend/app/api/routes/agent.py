@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.ai.agent import host
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    RenameRequest,
     AgentManifestOut,
     AgentMessageCreate,
     AgentMessageOut,
@@ -69,6 +70,23 @@ def post_agent_message(
         return host.post_user_message(db, session, body.content, user)
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
+def rename_agent_session(session_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> AgentSession:
+    session = _require_session(db, user, session_id)
+    session.title = body.name
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.delete("/agent/sessions/{session_id}", status_code=204)
+def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
+    session = _require_session(db, user, session_id)
+    db.delete(session)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/agent/sessions/{session_id}/stream")

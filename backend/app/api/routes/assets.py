@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import mimetypes
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AssetCreate, AssetOut, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AssetCreate, AssetOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
 from app.core.permissions import ensure_workspace_access, require_asset
-from app.db.models import Asset, Transcript
+from app.db.models import Asset, Clip, Transcript
 from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
@@ -57,6 +57,31 @@ def list_assets(workspace_id: str, db: DbSession, user: CurrentUser, project_id:
         stmt = stmt.where(Asset.project_id == project_id)
     stmt = stmt.order_by(Asset.created_at.desc())
     return list(db.scalars(stmt))
+
+
+@router.patch("/assets/{asset_id}", response_model=AssetOut)
+def rename_asset(asset_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> Asset:
+    asset = require_asset(db, user, asset_id)
+    asset.name = body.name
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@router.delete("/assets/{asset_id}", status_code=204)
+def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
+    asset = require_asset(db, user, asset_id)
+    in_use = db.scalar(select(Clip.id).where(Clip.asset_id == asset_id).limit(1))
+    if in_use is not None:
+        raise HTTPException(status_code=422, detail="素材正在时间线中使用，请先从时间线移除")
+    file_dir = resolve_key(asset.file_key).parent if asset.file_key else None
+    db.delete(asset)
+    db.commit()
+    if file_dir is not None and file_dir.is_dir():
+        import shutil
+
+        shutil.rmtree(file_dir, ignore_errors=True)
+    return Response(status_code=204)
 
 
 @router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)

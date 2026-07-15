@@ -123,10 +123,17 @@
 /* ---------- Feature views ---------- */
 
 .feature-view {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   height: 100%;
   min-height: 0;
   padding: 20px 24px;
   overflow: auto;
+}
+
+.feature-view > * {
+  flex-shrink: 0;
 }
 
 .feature-head {
@@ -299,8 +306,8 @@
   justify-items: center;
   gap: 10px;
   max-width: 420px;
-  margin: 0 auto;
-  padding: 72px 24px;
+  margin: auto;
+  padding: 32px 24px;
   text-align: center;
 }
 
@@ -1490,11 +1497,19 @@
 }
 
 .chat-thread {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   padding: 14px;
   overflow-y: auto;
+}
+
+.chat-thread > .chat-bubble {
+  flex-shrink: 0;
+}
+
+.chat-thread > .empty-state {
+  margin: auto;
 }
 
 .chat-bubble {

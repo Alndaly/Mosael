@@ -252,6 +252,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
+          onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
           toolbarExtra={
             <>
               <Tooltip>

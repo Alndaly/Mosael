@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import ProjectCreate, ProjectOut, WorkspaceCreate, WorkspaceOut
+from app.api.schemas import ProjectCreate, ProjectOut, RenameRequest, WorkspaceCreate, WorkspaceOut
 from app.core.permissions import ensure_workspace_access
 from app.db.models import Project, Workspace, WorkspaceMember
 
@@ -48,3 +48,28 @@ def list_projects(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(Project).where(Project.workspace_id == workspace_id).order_by(Project.updated_at.desc())
     return list(db.scalars(stmt))
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectOut)
+def rename_project(project_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> Project:
+    project = _require_project(db, user, project_id)
+    project.name = body.name
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+def delete_project(project_id: str, db: DbSession, user: CurrentUser) -> Response:
+    project = _require_project(db, user, project_id)
+    db.delete(project)
+    db.commit()
+    return Response(status_code=204)
+
+
+def _require_project(db: DbSession, user: CurrentUser, project_id: str) -> Project:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    ensure_workspace_access(db, user, project.workspace_id)
+    return project

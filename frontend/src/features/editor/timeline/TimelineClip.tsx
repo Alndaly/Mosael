@@ -1,5 +1,8 @@
 import React from "react";
+import { Trash2 } from "lucide-react";
 
+import { useI18n } from "@/app/preferences";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
 
 export function TimelineClip({
@@ -13,6 +16,7 @@ export function TimelineClip({
   onPointerDown,
   onTrimPointerDown,
   onSelect,
+  onDelete,
 }: {
   trackKind: string;
   name: string;
@@ -24,7 +28,9 @@ export function TimelineClip({
   onPointerDown: (event: React.PointerEvent) => void;
   onTrimPointerDown: (event: React.PointerEvent, edge: "start" | "end") => void;
   onSelect: () => void;
+  onDelete?: () => void;
 }) {
+  const t = useI18n();
   const className = [
     "tl-clip",
     `tl-clip-${trackKind}`,
@@ -34,7 +40,7 @@ export function TimelineClip({
     .filter(Boolean)
     .join(" ");
 
-  return (
+  const clip = (
     <div
       className={className}
       style={{ left, width }}
@@ -43,6 +49,7 @@ export function TimelineClip({
         onSelect();
         onPointerDown(event);
       }}
+      onContextMenu={onSelect}
       role="button"
       tabIndex={-1}
       title={name}
@@ -66,5 +73,17 @@ export function TimelineClip({
         }}
       />
     </div>
+  );
+
+  if (!onDelete) return clip;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{clip}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem destructive onSelect={onDelete}>
+          <Trash2 /> {t("deleteClip")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

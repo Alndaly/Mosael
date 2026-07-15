@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Play, Timer } from "lucide-react";
+import { CalendarClock, Pause, Play, Timer, Trash2 } from "lucide-react";
 
 import { api, type Job, type Project, type RunScheduledTaskResponse, type ScheduledTask, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -32,6 +32,18 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
   });
+  const toggleTask = useMutation({
+    mutationFn: (task: ScheduledTask) =>
+      api<ScheduledTask>(`/api/scheduled-tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !task.enabled }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
+  });
+  const deleteTask = useMutation({
+    mutationFn: (taskId: string) => api(`/api/scheduled-tasks/${taskId}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
+  });
   const runTask = useMutation({
     mutationFn: (taskId: string) => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}/run`, { method: "POST" }),
     onSuccess: () => {
@@ -61,7 +73,11 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   <strong>{task.name}</strong>
                   <small>{task.kind} · {task.trigger_type} · {task.next_run_at ?? t("manual")}</small>
                 </div>
-                <Button size="icon" variant="outline" onClick={() => runTask.mutate(task.id)}><Play size={14} /></Button>
+                <div className="plugin-actions">
+                  <Button size="icon-sm" variant="outline" onClick={() => runTask.mutate(task.id)} disabled={!task.enabled}><Play size={13} /></Button>
+                  <Button size="icon-sm" variant="ghost" onClick={() => toggleTask.mutate(task)}>{task.enabled ? <Pause size={13} /> : <Play size={13} />}</Button>
+                  <Button size="icon-sm" variant="ghost" onClick={() => deleteTask.mutate(task.id)}><Trash2 size={13} /></Button>
+                </div>
               </div>
             ))}
             {tasks.data?.length === 0 && <div className="empty-inline">{t("noTasks")}</div>}

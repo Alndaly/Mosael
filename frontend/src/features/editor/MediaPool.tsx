@@ -1,9 +1,12 @@
 import React from "react";
-import { FileAudio, FileImage, FileVideo, ImagePlus } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Trash2 } from "lucide-react";
 
-import { assetThumbnailUrl, type Asset } from "@/api/client";
+import { assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { formatTimecode } from "@/domain/timeline/geometry";
 
 export function MediaPool({
@@ -20,6 +23,26 @@ export function MediaPool({
   tabs?: React.ReactNode;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
+  const [renaming, setRenaming] = React.useState<Asset | null>(null);
+  const [deleting, setDeleting] = React.useState<Asset | null>(null);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const rename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
+    onSuccess: () => {
+      setRenaming(null);
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteAsset(id),
+    onSuccess: () => {
+      setDeleting(null);
+      setDeleteError(null);
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (error) => setDeleteError(String((error as Error).message)),
+  });
   return (
     <section className="panel media-panel">
       <div className="panel-head">
@@ -42,10 +65,46 @@ export function MediaPool({
       </div>
       <div className="pool-list">
         {assets.map((asset) => (
-          <PoolItem key={asset.id} asset={asset} onAdd={() => onAddToTimeline(asset)} />
+          <ContextMenu key={asset.id}>
+            <ContextMenuTrigger asChild>
+              <div>
+                <PoolItem asset={asset} onAdd={() => onAddToTimeline(asset)} />
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => onAddToTimeline(asset)}>
+                <ListPlus /> {t("addToTimeline")}
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => setRenaming(asset)}>
+                <Pencil /> {t("rename")}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem destructive onSelect={() => setDeleting(asset)}>
+                <Trash2 /> {t("delete")}
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
         {assets.length === 0 && <div className="empty-inline">{t("mediaEmptyBody")}</div>}
       </div>
+
+      <RenameDialog
+        open={renaming !== null}
+        title={t("renameAsset")}
+        initialValue={renaming?.name ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
+      />
+      <ConfirmDialog
+        open={deleting !== null}
+        title={t("deleteConfirmTitle")}
+        body={deleteError ?? t("deleteAssetBody")}
+        onCancel={() => {
+          setDeleting(null);
+          setDeleteError(null);
+        }}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+      />
     </section>
   );
 }

@@ -39,6 +39,7 @@ export function Timeline({
   onTrimClip,
   onAddTrack,
   onRemoveTrack,
+  onDeleteClip,
   toolbarExtra,
 }: {
   sequence: Sequence;
@@ -48,6 +49,7 @@ export function Timeline({
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio") => void;
   onRemoveTrack?: (trackId: string) => void;
+  onDeleteClip?: (clipId: string) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -343,6 +345,7 @@ export function Timeline({
                       onPointerDown={(event) => startClipDrag(event, track, clip.id)}
                       onTrimPointerDown={(event, edge) => startClipTrim(event, track, clip.id, edge)}
                       onSelect={() => selectClip(clip.id)}
+                      onDelete={onDeleteClip ? () => onDeleteClip(clip.id) : undefined}
                     />
                   );
                 })}

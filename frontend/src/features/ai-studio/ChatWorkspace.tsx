@@ -1,12 +1,14 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CircleAlert, Loader2, Plus, Send } from "lucide-react";
+import { Bot, CircleAlert, Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -17,6 +19,8 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
+  const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
+  const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const [streamText, setStreamText] = React.useState<string>("");
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -112,6 +116,23 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
     },
   });
 
+  const renameSession = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api<AgentSession>(`/api/agent/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+    onSuccess: () => {
+      setRenamingSession(null);
+      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
+    },
+  });
+  const deleteSession = useMutation({
+    mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      setDeletingSession(null);
+      if (sessionId === id) setSessionId(null);
+      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
+    },
+  });
+
   // Reconnect to an in-flight turn (e.g. after switching sessions or reload).
   React.useEffect(() => {
     if (running && activeSession && streamingRef.current !== activeSession.id) {
@@ -140,17 +161,44 @@ export function ChatWorkspace({ workspace }: { workspace: Workspace }) {
         </div>
         <div className="chat-session-list">
           {(sessions.data ?? []).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
-              onClick={() => setSessionId(item.id)}
-            >
-              <strong>{item.title}</strong>
-              <small>{item.adapter}</small>
-            </button>
+            <ContextMenu key={item.id}>
+              <ContextMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
+                  onClick={() => setSessionId(item.id)}
+                >
+                  <strong>{item.title}</strong>
+                  <small>{item.adapter}</small>
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => setRenamingSession(item)}>
+                  <Pencil /> {t("rename")}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem destructive onSelect={() => setDeletingSession(item)}>
+                  <Trash2 /> {t("delete")}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
         </div>
+
+        <RenameDialog
+          open={renamingSession !== null}
+          title={t("renameSession")}
+          initialValue={renamingSession?.title ?? ""}
+          onCancel={() => setRenamingSession(null)}
+          onSubmit={(name) => renamingSession && renameSession.mutate({ id: renamingSession.id, name })}
+        />
+        <ConfirmDialog
+          open={deletingSession !== null}
+          title={t("deleteConfirmTitle")}
+          body={t("deleteSessionBody")}
+          onCancel={() => setDeletingSession(null)}
+          onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
+        />
       </aside>
 
       <section className="chat-main panel">

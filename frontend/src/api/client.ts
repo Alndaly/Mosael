@@ -54,6 +54,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("Not authenticated");
   }
   if (!res.ok) throw new Error(await res.text());
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -143,6 +144,22 @@ export function undoSequence(sequenceId: string): Promise<Sequence> {
 
 export function redoSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
+}
+
+export function renameProject(projectId: string, name: string): Promise<Project> {
+  return api<Project>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
+export function deleteProject(projectId: string): Promise<unknown> {
+  return api(`/api/projects/${projectId}`, { method: "DELETE" });
+}
+
+export function renameAsset(assetId: string, name: string): Promise<Asset> {
+  return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
+export function deleteAsset(assetId: string): Promise<unknown> {
+  return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }
 
 export function exportSequence(sequenceId: string): Promise<Job> {
