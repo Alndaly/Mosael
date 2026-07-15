@@ -3,8 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import GenerationCreate, GenerationCreateResponse, GenerationJobOut, GenerationModelOut
+from app.core.permissions import ensure_workspace_access
 from app.db.models import GenerationJob, GenerationModel
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
@@ -23,7 +24,8 @@ def list_generation_models(db: DbSession, kind: str | None = None) -> list[Gener
 
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
-def create_generation(body: GenerationCreate, db: DbSession) -> GenerationCreateResponse:
+def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
+    ensure_workspace_access(db, user, body.workspace_id)
     ensure_builtin_generation_models(db)
     try:
         generation, job = create_generation_job(db, **body.model_dump())
@@ -36,7 +38,8 @@ def create_generation(body: GenerationCreate, db: DbSession) -> GenerationCreate
 
 
 @router.get("/generation/jobs", response_model=list[GenerationJobOut])
-def list_generation_jobs(workspace_id: str, db: DbSession, kind: str | None = None) -> list[GenerationJob]:
+def list_generation_jobs(workspace_id: str, db: DbSession, user: CurrentUser, kind: str | None = None) -> list[GenerationJob]:
+    ensure_workspace_access(db, user, workspace_id)
     stmt = select(GenerationJob).where(GenerationJob.workspace_id == workspace_id)
     if kind:
         stmt = stmt.where(GenerationJob.kind == kind)

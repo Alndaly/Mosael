@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine, init_db
 from app.main import app
+from tests.util import fresh_client
 
 
 def reset_db(tmp_path: Path) -> None:
@@ -14,8 +15,7 @@ def reset_db(tmp_path: Path) -> None:
 
 
 def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     models = client.get("/api/generation/models?kind=image").json()
@@ -42,8 +42,7 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
 
 
 def test_scheduled_task_run_creates_job(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     task = client.post(

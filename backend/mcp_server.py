@@ -5,7 +5,9 @@ summaries, never raw internal schemas. Talks to the local backend HTTP API so
 domain rules and (future) permissions apply uniformly.
 
 Run:  .venv/bin/python mcp_server.py            (from backend/)
-Env:  MIBU_API (default http://127.0.0.1:8800)
+Env:  MIBU_API   (default http://127.0.0.1:8800)
+      MIBU_TOKEN (session token from login; required now that the API
+                  enforces local authentication)
 """
 
 from __future__ import annotations
@@ -17,12 +19,14 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 API_BASE = os.environ.get("MIBU_API", "http://127.0.0.1:8800")
+API_TOKEN = os.environ.get("MIBU_TOKEN", "")
 
 mcp = FastMCP("mibu")
 
 
 def _get(path: str, params: dict[str, Any] | None = None) -> Any:
-    with httpx.Client(base_url=API_BASE, timeout=15) as client:
+    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    with httpx.Client(base_url=API_BASE, timeout=15, headers=headers) as client:
         response = client.get(path, params=params)
         response.raise_for_status()
         return response.json()

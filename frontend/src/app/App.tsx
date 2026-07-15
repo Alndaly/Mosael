@@ -3,7 +3,9 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient
 import { Film, FolderPlus } from "lucide-react";
 
 import { api, type Project, type Workspace } from "@/api/client";
+import { AuthProvider, useAuth } from "@/app/auth";
 import { PreferencesProvider, useI18n } from "@/app/preferences";
+import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,11 +26,21 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
         <TooltipProvider delayDuration={300}>
-          <WorkspaceGate />
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
         </TooltipProvider>
       </PreferencesProvider>
     </QueryClientProvider>
   );
+}
+
+function AuthGate() {
+  const t = useI18n();
+  const { status } = useAuth();
+  if (status === "loading") return <div className="center">{t("connecting")}</div>;
+  if (status === "anonymous") return <LoginView />;
+  return <WorkspaceGate />;
 }
 
 function WorkspaceGate() {

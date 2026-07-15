@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { MessageSquareText } from "lucide-react";
 
-import { API_BASE, type Sequence } from "@/api/client";
+import { API_BASE, getAuthToken, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -25,7 +25,10 @@ export function TranscriptPanel({ sequence }: { sequence: Sequence }) {
     queries: assetIds.map((assetId) => ({
       queryKey: ["transcript", assetId],
       queryFn: async (): Promise<TranscriptOut | null> => {
-        const res = await fetch(`${API_BASE}/api/assets/${assetId}/transcript`);
+        const token = getAuthToken();
+        const res = await fetch(`${API_BASE}/api/assets/${assetId}/transcript`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (res.status === 404) return null;
         if (!res.ok) throw new Error(await res.text());
         return (await res.json()) as TranscriptOut;

@@ -6,8 +6,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AssetCreate, AssetOut, TranscriptAttachRequest, TranscriptOut
+from app.core.permissions import ensure_workspace_access, require_asset
 from app.db.models import Asset, Transcript
 from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -19,7 +20,8 @@ router = APIRouter(tags=["assets"])
 
 
 @router.post("/assets", response_model=AssetOut)
-def create_asset(body: AssetCreate, db: DbSession) -> Asset:
+def create_asset(body: AssetCreate, db: DbSession, user: CurrentUser) -> Asset:
+    ensure_workspace_access(db, user, body.workspace_id)
     asset = Asset(**body.model_dump())
     db.add(asset)
     db.commit()
@@ -30,11 +32,13 @@ def create_asset(body: AssetCreate, db: DbSession) -> Asset:
 @router.post("/assets/import", response_model=AssetOut)
 def import_asset(
     db: DbSession,
+    user: CurrentUser,
     workspace_id: str = Form(...),
     project_id: str | None = Form(None),
     name: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> Asset:
+    ensure_workspace_access(db, user, workspace_id)
     return import_uploaded_asset(
         db,
         workspace_id=workspace_id,
@@ -45,7 +49,8 @@ def import_asset(
 
 
 @router.get("/assets", response_model=list[AssetOut])
-def list_assets(workspace_id: str, db: DbSession, project_id: str | None = None) -> list[Asset]:
+def list_assets(workspace_id: str, db: DbSession, user: CurrentUser, project_id: str | None = None) -> list[Asset]:
+    ensure_workspace_access(db, user, workspace_id)
     stmt = select(Asset).where(Asset.workspace_id == workspace_id)
     if project_id:
         stmt = stmt.where(Asset.project_id == project_id)
@@ -54,7 +59,9 @@ def list_assets(workspace_id: str, db: DbSession, project_id: str | None = None)
 
 
 @router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)
-def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession) -> Transcript:
+def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, user: CurrentUser) -> Transcript:
+    if db.get(Asset, asset_id) is not None:
+        require_asset(db, user, asset_id)
     try:
         transcript = attach_transcript(
             db,
@@ -83,7 +90,8 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession) 
 
 
 @router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)
-def get_transcript(asset_id: str, db: DbSession) -> Transcript:
+def get_transcript(asset_id: str, db: DbSession, user: CurrentUser) -> Transcript:
+    require_asset(db, user, asset_id)
     transcript = get_transcript_for_asset(db, asset_id)
     if transcript is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
@@ -91,8 +99,9 @@ def get_transcript(asset_id: str, db: DbSession) -> Transcript:
 
 
 @router.get("/assets/{asset_id}/file")
-def get_asset_file(asset_id: str, db: DbSession) -> FileResponse:
+def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
     path = resolve_key(asset.file_key)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset file missing")
@@ -101,8 +110,9 @@ def get_asset_file(asset_id: str, db: DbSession) -> FileResponse:
 
 
 @router.get("/assets/{asset_id}/thumbnail")
-def get_asset_thumbnail(asset_id: str, db: DbSession) -> FileResponse:
+def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
     thumb = thumbnail_path(resolve_key(asset.file_key).parent)
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")

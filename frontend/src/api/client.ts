@@ -2,6 +2,29 @@ import type { components } from "@/api/generated/schema";
 
 export const API_BASE = "http://127.0.0.1:8800";
 
+const TOKEN_KEY = "mibu.auth.token";
+let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
+let onUnauthorized: (() => void) | null = null;
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+  if (typeof window !== "undefined") {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
+export type User = components["schemas"]["UserOut"];
+export type AuthOut = components["schemas"]["AuthOut"];
+
 export type Workspace = components["schemas"]["WorkspaceOut"];
 export type Project = components["schemas"]["ProjectOut"];
 export type Asset = components["schemas"]["AssetOut"];
@@ -20,20 +43,29 @@ export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: init?.body instanceof FormData ? init.headers : { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
+  const auth: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const headers =
+    init?.body instanceof FormData
+      ? { ...auth, ...(init?.headers as Record<string, string> | undefined) }
+      : { "Content-Type": "application/json", ...auth, ...(init?.headers as Record<string, string> | undefined) };
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (res.status === 401 && !path.startsWith("/api/auth/")) {
+    onUnauthorized?.();
+    throw new Error("Not authenticated");
+  }
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<T>;
 }
 
 export function assetFileUrl(assetId: string): string {
-  return `${API_BASE}/api/assets/${assetId}/file`;
+  // Media elements cannot send headers, so these URLs carry the token.
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/assets/${assetId}/file${suffix}`;
 }
 
 export function assetThumbnailUrl(assetId: string): string {
-  return `${API_BASE}/api/assets/${assetId}/thumbnail`;
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
 export function insertClip(

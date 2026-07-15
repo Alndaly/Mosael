@@ -4,9 +4,10 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import InsertClipRequest, JobOut, MoveClipRequest, SequenceCreate, SequenceOut, TrimClipRequest
 from app.db.models import Job, Project, Sequence, Track
+from app.core.permissions import ensure_workspace_access, require_sequence_access
 from app.domain.render import start_export
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
@@ -26,7 +27,8 @@ router = APIRouter(tags=["sequences"])
 
 
 @router.post("/sequences", response_model=SequenceOut)
-def create_sequence(body: SequenceCreate, db: DbSession) -> Sequence:
+def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> Sequence:
+    ensure_workspace_access(db, user, body.workspace_id)
     sequence = Sequence(**body.model_dump())
     video = Track(sequence=sequence, kind="video", name="V1", position=0)
     audio = Track(sequence=sequence, kind="audio", name="A1", position=1)
@@ -39,12 +41,16 @@ def create_sequence(body: SequenceCreate, db: DbSession) -> Sequence:
 
 
 @router.get("/sequences/{sequence_id}", response_model=SequenceOut)
-def get_sequence(sequence_id: str, db: DbSession) -> Sequence:
+def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     return _get_sequence(db, sequence_id)
 
 
 @router.get("/projects/{project_id}/sequences", response_model=list[SequenceOut])
-def list_sequences(project_id: str, db: DbSession) -> list[Sequence]:
+def list_sequences(project_id: str, db: DbSession, user: CurrentUser) -> list[Sequence]:
+    project = db.get(Project, project_id)
+    if project is not None:
+        ensure_workspace_access(db, user, project.workspace_id)
     stmt = (
         select(Sequence)
         .where(Sequence.project_id == project_id)
@@ -59,43 +65,50 @@ def list_sequences(project_id: str, db: DbSession) -> list[Sequence]:
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
-def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession) -> Sequence:
+def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: insert_clip_operation(db, sequence_id, InsertClip(**body.model_dump())))
     return _get_sequence(db, sequence_id)
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/move", response_model=SequenceOut)
-def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession) -> Sequence:
+def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
     return _get_sequence(db, sequence_id)
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/trim", response_model=SequenceOut)
-def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession) -> Sequence:
+def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: trim_clip_operation(db, sequence_id, TrimClip(clip_id=clip_id, **body.model_dump())))
     return _get_sequence(db, sequence_id)
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
-def delete_clip(sequence_id: str, clip_id: str, db: DbSession) -> Sequence:
+def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
     return _get_sequence(db, sequence_id)
 
 
 @router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
-def undo_sequence(sequence_id: str, db: DbSession) -> Sequence:
+def undo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: undo_operation(db, sequence_id))
     return _get_sequence(db, sequence_id)
 
 
 @router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
-def redo_sequence(sequence_id: str, db: DbSession) -> Sequence:
+def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
     _apply(lambda: redo_operation(db, sequence_id))
     return _get_sequence(db, sequence_id)
 
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
-def export_sequence(sequence_id: str, db: DbSession) -> Job:
+def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Job:
+    require_sequence_access(db, user, sequence_id)
     try:
         return start_export(db, sequence_id)
     except LookupError as exc:

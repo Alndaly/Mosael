@@ -4,12 +4,11 @@ from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine, init_db
 from app.main import app
+from tests.util import fresh_client
 
 
 def reset() -> TestClient:
-    Base.metadata.drop_all(bind=engine)
-    init_db()
-    return TestClient(app)
+    return fresh_client()
 
 
 def make_asset(client: TestClient) -> dict:

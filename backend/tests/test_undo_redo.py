@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine, init_db
 from app.main import app
+from tests.util import fresh_client
 
 
 def setup_sequence(client: TestClient) -> tuple[dict, dict, dict]:
@@ -42,9 +43,7 @@ def insert(client: TestClient, sequence: dict, asset: dict, start: float) -> dic
 
 
 def reset() -> TestClient:
-    Base.metadata.drop_all(bind=engine)
-    init_db()
-    return TestClient(app)
+    return fresh_client()
 
 
 def test_undo_insert_removes_clip_and_redo_restores(tmp_path: Path) -> None:

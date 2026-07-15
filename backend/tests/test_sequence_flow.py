@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine, init_db
 from app.main import app
+from tests.util import fresh_client
 
 
 def reset_db(tmp_path: Path) -> None:
@@ -14,8 +15,7 @@ def reset_db(tmp_path: Path) -> None:
 
 
 def test_workspace_project_asset_sequence_clip_flow(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Project"}).json()
@@ -90,8 +90,7 @@ def _video_clips(sequence: dict) -> list[dict]:
 
 
 def test_move_trim_delete_clip_operations(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
     sequence = _build_sequence_with_clip(client)
     clip = _video_clips(sequence)[0]
 
@@ -117,8 +116,7 @@ def test_move_trim_delete_clip_operations(tmp_path: Path) -> None:
 
 
 def test_clip_operation_validation_errors(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
     sequence = _build_sequence_with_clip(client)
     clip = _video_clips(sequence)[0]
     audio_track = next(track for track in sequence["tracks"] if track["kind"] == "audio")
@@ -146,8 +144,7 @@ def test_clip_operation_validation_errors(tmp_path: Path) -> None:
 
 
 def test_import_uploaded_asset_creates_file_backed_asset(tmp_path: Path) -> None:
-    reset_db(tmp_path)
-    client = TestClient(app)
+    client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Project"}).json()

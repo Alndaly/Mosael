@@ -1,12 +1,14 @@
-import { Moon, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 
 import { API_BASE, type Workspace } from "@/api/client";
+import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
+  const { user, logout } = useAuth();
 
   return (
     <div className="feature-view">
@@ -18,6 +20,18 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
       </header>
 
       <div className="settings-sections">
+        <section className="settings-section">
+          <h2 className="section-label">{t("settingsAccount")}</h2>
+          <div className="settings-row">
+            <span>{t("settingsUsername")}</span>
+            <div className="settings-control">
+              <code className="timecode">{user?.username}</code>
+              <Button variant="outline" size="sm" onClick={() => void logout()}>
+                <LogOut size={13} /> {t("signOut")}
+              </Button>
+            </div>
+          </div>
+        </section>
         <section className="settings-section">
           <h2 className="section-label">{t("settingsAppearance")}</h2>
           <div className="settings-row">

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.db import Base, SessionLocal, engine, init_db
 from app.domain.plugins import scan_plugins
 from app.main import app
+from tests.util import fresh_client
 
 
 def reset_db(tmp_path: Path) -> None:
@@ -48,6 +49,8 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
     assert [plugin.id for plugin in scanned] == ["dev.caption-helper"]
 
     client = TestClient(app)
+    from tests.util import login_as
+    login_as(client, "tester")
     enabled = client.patch("/api/plugins/dev.caption-helper", json={"enabled": True}).json()
     assert enabled["enabled"] is True
 

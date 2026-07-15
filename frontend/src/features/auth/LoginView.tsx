@@ -1,0 +1,78 @@
+import React from "react";
+import { Film } from "lucide-react";
+
+import { useAuth } from "@/app/auth";
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+
+export function LoginView() {
+  const t = useI18n();
+  const { hasUsers, login, register } = useAuth();
+  const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
+  const [username, setUsername] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    setMode(hasUsers ? "login" : "register");
+  }, [hasUsers]);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!username || !password) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "login") await login(username, password);
+      else await register(username, password);
+    } catch (err) {
+      setError(mode === "login" ? t("loginFailed") : t("registerFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="center">
+      <Card className="welcome">
+        <CardContent className="welcome-content">
+          <div className="login-brand">
+            <Film size={26} />
+          </div>
+          <h1>Mibu</h1>
+          <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
+          <form className="login-form" onSubmit={submit}>
+            <Input
+              autoFocus
+              placeholder={t("username")}
+              value={username}
+              autoComplete="username"
+              onChange={(event) => setUsername(event.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder={t("password")}
+              value={password}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            {error && <p className="login-error">{error}</p>}
+            <Button type="submit" disabled={busy || !username || !password}>
+              {mode === "login" ? t("signIn") : t("createAccount")}
+            </Button>
+          </form>
+          <button
+            type="button"
+            className="login-switch"
+            onClick={() => setMode(mode === "login" ? "register" : "login")}
+          >
+            {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
+          </button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

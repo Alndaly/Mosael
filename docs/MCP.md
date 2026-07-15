@@ -18,11 +18,12 @@ sequence).
 ## Running
 
 The backend HTTP API must be running (default `http://127.0.0.1:8800`,
-override with `MIBU_API`).
+override with `MIBU_API`). The API requires local authentication, so pass a
+session token via `MIBU_TOKEN` (obtain one with `POST /api/auth/login`).
 
 ```bash
 cd backend
-.venv/bin/python mcp_server.py     # stdio transport
+MIBU_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
 ```
 
 Register with an MCP client, e.g. Claude Code:

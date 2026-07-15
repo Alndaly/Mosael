@@ -9,6 +9,21 @@ class OrmModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthCredentials(BaseModel):
+    username: str = Field(min_length=2, max_length=80)
+    password: str = Field(min_length=4, max_length=200)
+
+
+class UserOut(OrmModel):
+    id: str
+    username: str
+
+
+class AuthOut(BaseModel):
+    token: str
+    user: UserOut
+
+
 class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
 

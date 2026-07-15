@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.core.db import Base, engine, init_db
 from app.main import app
+from tests.util import fresh_client
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
@@ -30,9 +31,7 @@ def make_test_video(path: Path, seconds: float) -> None:
 
 
 def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
-    Base.metadata.drop_all(bind=engine)
-    init_db()
-    client = TestClient(app)
+    client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
@@ -79,9 +78,7 @@ def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
 
 
 def test_export_empty_sequence_rejected() -> None:
-    Base.metadata.drop_all(bind=engine)
-    init_db()
-    client = TestClient(app)
+    client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
     sequence = client.post(

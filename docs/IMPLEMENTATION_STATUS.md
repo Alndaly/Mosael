@@ -51,6 +51,13 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - backend/mcp_server.py (stdio, FastMCP): list_projects / list_assets / inspect_sequence returning product-semantic summaries; verified with a real MCP stdio client. See docs/MCP.md.
 
+### Local auth + workspace scoping (plan Phase 2)
+
+- Local accounts (PBKDF2 password hashes, opaque session tokens in auth_sessions, Alembic 0004); register/login/me/logout; first account adopts pre-auth workspaces.
+- Every router behind authentication; workspace membership enforced across projects/assets/sequences/jobs/generation/scheduler — foreign or unknown resources return 404 (plan §9.3); media endpoints accept ?token= for <video>/<img>.
+- Login/register screen gates the app; token in localStorage; 401 anywhere drops back to login; account section with sign-out in Settings; MCP server passes MIBU_TOKEN.
+- Isolation tests: second user sees no foreign workspaces, all cross-user access 404s.
+
 ## Next
 
 - Audio track playback in the monitor; waveforms in pool and clips.
@@ -59,7 +66,6 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Mutating MCP tools behind confirmation cards and permission levels (§17.2/§17.4).
 - Sandboxed plugin execution adapters; real generation provider adapters.
 - A real scheduler runner process claiming due tasks.
-- Local login + workspace membership checks (Phase 2 acceptance).
 - Electron packaging pass (Phase 14).
 
 ## Frontend Rules

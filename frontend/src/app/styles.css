@@ -1078,6 +1078,43 @@
   margin: 0;
 }
 
+.login-brand {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.login-form {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.login-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 12px;
+}
+
+.login-switch {
+  border: none;
+  background: none;
+  padding: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.login-switch:hover {
+  color: var(--accent-foreground);
+  text-decoration: underline;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 960px) {
