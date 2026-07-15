@@ -127,6 +127,12 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - cut_clip_ranges operation (batch source-range removal from one clip, merged + back-to-back, one undo step) powers the transcript tools: expandable word chips (token-level delete), amber-highlighted 口癖 with select-all, and 静音 gap detection (≥0.6s from token/segment timing) with per-gap and remove-all actions.
 - Remaining parity queue: transitions, richer asset inspector.
 
+### Filters + subtitles + chrome polish
+
+- Filter presets (bw/warm/cool/vivid/fade) on clip effects: validated in RenderPlan, eq/hue chains in the executor, CSS-equivalent preview in the Monitor, preset row in the Inspector.
+- Subtitle tracks: clips.asset_id nullable (0010), text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
+- Chrome: page headers removed app-wide (slim action toolbars instead), AI Studio 对话/生成 segmented control in the chat sidebar, visible timeline clip-action buttons, redesigned monitor transport (circular play, custom volume), hairline-only panel resizers, ChatGPT-grade assistant message typography, media-library covers fixed (missing auth token on thumbnail URLs).
+
 ## Next
 
 - Sandboxed plugin execution adapters.
