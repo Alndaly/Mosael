@@ -28,6 +28,7 @@ UNDOABLE_KINDS = (
     "set_track_state",
     "ripple_delete_clip",
     "set_clip_speed",
+    "set_clip_text",
 )
 
 
@@ -175,6 +176,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["previous"]
+    elif operation.kind == "set_clip_text":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.text_override = payload["previous"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be undone")
 
@@ -230,6 +234,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["speed"]
+    elif operation.kind == "set_clip_text":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.text_override = payload["text"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be redone")
 
@@ -254,9 +261,10 @@ def _restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,
             track_id=payload["track_id"],
-            asset_id=payload["asset_id"],
+            asset_id=payload.get("asset_id"),
             timeline_start=payload["timeline_start"],
             src_in=payload["src_in"],
             src_out=payload["src_out"],
+            text_override=payload.get("text_override"),
         )
     )

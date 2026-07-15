@@ -13,6 +13,15 @@ import { useEditorStore } from "@/stores/editorStore";
  * whichever video-track clip sits under it and is continuously re-synced.
  * Gaps render as black, matching export semantics.
  */
+/** CSS approximations of the backend FFmpeg filter presets (render_plan.FILTER_PRESETS). */
+const FILTER_CSS: Record<string, string> = {
+  bw: "grayscale(1)",
+  warm: "sepia(0.22) saturate(1.15)",
+  cool: "hue-rotate(-8deg) saturate(1.1) brightness(1.02)",
+  vivid: "saturate(1.4) contrast(1.06)",
+  fade: "saturate(0.75) contrast(0.9) brightness(1.05)",
+};
+
 export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asset[] }) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
@@ -58,6 +67,13 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     () => [...(audioTrack?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
     [audioTrack],
   );
+  const subtitleClips = React.useMemo(
+    () =>
+      (sequence.tracks ?? [])
+        .filter((item) => item.kind === "subtitle" && !item.muted)
+        .flatMap((track) => track.clips ?? []),
+    [sequence],
+  );
   const totalDuration = React.useMemo(
     () => sequenceDuration((sequence.tracks ?? []).flatMap((track) => track.clips ?? [])),
     [sequence],
@@ -65,13 +81,17 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
 
   const activeClip =
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const activeAsset = activeClip ? (assetById.get(activeClip.asset_id) ?? null) : null;
+  const activeAsset = activeClip?.asset_id ? (assetById.get(activeClip.asset_id) ?? null) : null;
+  const activeSubtitle =
+    subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  const activeFilter = String((activeClip?.effects as { filter?: string } | undefined)?.filter ?? "");
+  const cssFilter = FILTER_CSS[activeFilter] ?? "";
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
     audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeOverlayClip =
     overlayClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const overlayAsset = activeOverlayClip ? (assetById.get(activeOverlayClip.asset_id) ?? null) : null;
+  const overlayAsset = activeOverlayClip?.asset_id ? (assetById.get(activeOverlayClip.asset_id) ?? null) : null;
   const pip = {
     x: 0.62,
     y: 0.06,
@@ -159,7 +179,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       if (!audio.paused) audio.pause();
       return;
     }
-    if (loadedAudioAssetRef.current !== activeAudioClip.asset_id) {
+    if (activeAudioClip.asset_id && loadedAudioAssetRef.current !== activeAudioClip.asset_id) {
       loadedAudioAssetRef.current = activeAudioClip.asset_id;
       audio.src = assetFileUrl(activeAudioClip.asset_id);
     }
@@ -212,15 +232,23 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           <video
             ref={videoRef}
             className="monitor-video"
-            style={{ display: activeClip && !isImage ? "block" : "none" }}
+            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined }}
             muted={false}
             playsInline
             preload="auto"
           />
           {activeClip && isImage && activeAsset && (
-            <img className="monitor-video" src={assetFileUrl(activeAsset.id)} alt="" />
+            <img
+              className="monitor-video"
+              src={assetFileUrl(activeAsset.id)}
+              alt=""
+              style={{ filter: cssFilter || undefined }}
+            />
           )}
           {!activeClip && <div className="monitor-blank" />}
+          {activeSubtitle?.text_override && (
+            <div className="monitor-subtitle">{activeSubtitle.text_override}</div>
+          )}
           {activeOverlayClip && overlayAsset && (
             overlayAsset.kind === "image" ? (
               <img

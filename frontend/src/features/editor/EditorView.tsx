@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Type, Undo2 } from "lucide-react";
 
 import {
   addTrack,
@@ -12,6 +12,7 @@ import {
   exportSequence,
   importAsset,
   insertClip,
+  insertTextClip,
   moveClip,
   redoSequence,
   removeTrack,
@@ -19,6 +20,7 @@ import {
   splitClip,
   setClipEffects,
   setClipSpeed,
+  setClipText,
   trimClip,
   undoSequence,
   type Asset,
@@ -177,7 +179,28 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const addTrackMutation = useMutation({
-    mutationFn: (kind: "video" | "audio") => addTrack(sequence!.id, kind),
+    mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!.id, kind),
+    onSuccess: refreshSequences,
+  });
+  const setTextMutation = useMutation({
+    mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
+    onSuccess: refreshSequences,
+  });
+  const addSubtitleMutation = useMutation({
+    mutationFn: async () => {
+      let track = (sequence!.tracks ?? []).find((item) => item.kind === "subtitle" && !item.locked);
+      if (!track) {
+        const updated = await addTrack(sequence!.id, "subtitle");
+        track = (updated.tracks ?? []).find((item) => item.kind === "subtitle");
+      }
+      if (!track) return;
+      await insertTextClip(sequence!.id, {
+        track_id: track.id,
+        text: t("subtitleDefaultText"),
+        timeline_start: useEditorStore.getState().playhead,
+        duration: 2,
+      });
+    },
     onSuccess: refreshSequences,
   });
   const removeTrackMutation = useMutation({
@@ -275,6 +298,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       for (const track of sequence.tracks ?? []) {
         const clip = (track.clips ?? []).find((item) => item.id === targetId);
         if (clip) {
+          if (!clip.asset_id) return;
           const trackEnd = (track.clips ?? []).reduce((end, item) => Math.max(end, clipEnd(item)), 0);
           insertClipMutation.mutate({
             trackId: track.id,
@@ -403,6 +427,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
         onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
         onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
+        onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
       />
       <section className="panel timeline">
         <Timeline
@@ -447,6 +472,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("redoAction")} (⇧⌘Z)</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={addSubtitleMutation.isPending}
+                    onClick={() => addSubtitleMutation.mutate()}
+                    aria-label={t("addSubtitleAtPlayhead")}
+                  >
+                    <Type size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
               </Tooltip>
               <ExportControl workspaceId={workspace.id} projectId={project.id} sequenceId={sequence.id} />
             </>

@@ -43,7 +43,10 @@ export function TranscriptPanel({
     const track = (sequence.tracks ?? []).find((item) => item.kind === "video");
     return track?.clips ?? [];
   }, [sequence]);
-  const assetIds = React.useMemo(() => [...new Set(videoClips.map((clip) => clip.asset_id))], [videoClips]);
+  const assetIds = React.useMemo(
+    () => [...new Set(videoClips.map((clip) => clip.asset_id).filter((id): id is string => Boolean(id)))],
+    [videoClips],
+  );
 
   const transcriptQueries = useQueries({
     queries: assetIds.map((assetId) => ({

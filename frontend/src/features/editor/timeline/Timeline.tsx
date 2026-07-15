@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, Copy, Film, Lock, LockOpen, Magnet, Minus, Plus, Scissors, Trash2, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, Copy, Film, Lock, LockOpen, Magnet, Minus, Plus, Scissors, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -52,7 +52,7 @@ export function Timeline({
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
   onMoveClip: (clipId: string, timelineStart: number, trackId?: string) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
-  onAddTrack?: (kind: "video" | "audio") => void;
+  onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
   onRemoveTrack?: (trackId: string) => void;
   onDeleteClip?: (clipId: string) => void;
   onRippleDeleteClip?: (clipId: string) => void;
@@ -83,7 +83,7 @@ export function Timeline({
     for (const track of tracks) {
       if (track.kind !== "audio") continue;
       for (const clip of track.clips ?? []) {
-        if (assetById.get(clip.asset_id)?.media_info.has_waveform) ids.add(clip.asset_id);
+        if (clip.asset_id && assetById.get(clip.asset_id)?.media_info.has_waveform) ids.add(clip.asset_id);
       }
     }
     return [...ids];
@@ -226,7 +226,7 @@ export function Timeline({
     event.stopPropagation();
     selectClip(clip.id);
     const origin = { ...clip };
-    const asset = assetById.get(clip.asset_id);
+    const asset = clip.asset_id ? assetById.get(clip.asset_id) : undefined;
     const assetDuration = typeof asset?.media_info.duration === "number" ? asset.media_info.duration : null;
     const candidates = snapEnabled ? snapCandidates(allClips, clip.id, playhead) : [];
     const target = event.currentTarget as HTMLElement;
@@ -385,6 +385,14 @@ export function Timeline({
                 </TooltipTrigger>
                 <TooltipContent>{t("addAudioTrack")}</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={() => onAddTrack("subtitle")} aria-label={t("addSubtitleTrack")}>
+                    <Type size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("addSubtitleTrack")}</TooltipContent>
+              </Tooltip>
             </>
           )}
           <Tooltip>
@@ -516,7 +524,7 @@ export function Timeline({
                       <TimelineClip
                         key={`draft-${source.id}`}
                         trackKind={track.kind}
-                        name={assetById.get(source.asset_id)?.name ?? ""}
+                        name={source.text_override ?? (source.asset_id ? assetById.get(source.asset_id)?.name ?? "" : "")}
                         left={timeToPx(dragDraft.timeline_start, pxPerSecond)}
                         width={Math.max(10, timeToPx((dragDraft.src_out - dragDraft.src_in) / (source.speed || 1), pxPerSecond))}
                         selected
@@ -531,7 +539,7 @@ export function Timeline({
                   if (dragDraft && dragDraft.clipId === clip.id && dragDraft.trackId !== track.id) return null;
                   const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
                   const display = draft ?? clip;
-                  const waveform = track.kind === "audio" ? waveformByAsset.get(clip.asset_id) : undefined;
+                  const waveform = track.kind === "audio" && clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;
                   const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks = waveform
                     ? downsamplePeaks(
@@ -543,7 +551,7 @@ export function Timeline({
                     <TimelineClip
                       key={clip.id}
                       trackKind={track.kind}
-                      name={assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8)}
+                      name={clip.text_override ?? (clip.asset_id ? assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8) : "")}
                       left={timeToPx(display.timeline_start, pxPerSecond)}
                       width={clipWidth}
                       selected={selectedClipIds.includes(clip.id)}

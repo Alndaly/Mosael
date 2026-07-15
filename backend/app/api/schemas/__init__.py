@@ -132,7 +132,7 @@ class ClipOut(OrmModel):
     workspace_id: str
     sequence_id: str
     track_id: str
-    asset_id: str
+    asset_id: str | None
     timeline_start: float
     src_in: float
     src_out: float
@@ -207,7 +207,7 @@ class SetTrackStateRequest(BaseModel):
 
 
 class AddTrackRequest(BaseModel):
-    kind: str = Field(pattern="^(video|audio)$")
+    kind: str = Field(pattern="^(video|audio|subtitle)$")
 
 
 class SetClipEffectsRequest(BaseModel):
@@ -216,6 +216,17 @@ class SetClipEffectsRequest(BaseModel):
 
 class SetClipSpeedRequest(BaseModel):
     speed: float = Field(ge=0.25, le=4.0)
+
+
+class InsertTextClipRequest(BaseModel):
+    track_id: str
+    text: str = Field(min_length=1, max_length=500)
+    timeline_start: float = 0.0
+    duration: float = Field(default=2.0, gt=0)
+
+
+class SetClipTextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
 
 
 class JobOut(OrmModel):

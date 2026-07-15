@@ -255,10 +255,10 @@ class SetClipEffects:
 
 def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
-    if op.kind not in ("video", "audio"):
-        raise SequenceDomainError("Track kind must be video or audio")
+    if op.kind not in ("video", "audio", "subtitle"):
+        raise SequenceDomainError("Track kind must be video, audio, or subtitle")
     existing = [track for track in sequence.tracks if track.kind == op.kind]
-    prefix = "V" if op.kind == "video" else "A"
+    prefix = {"video": "V", "audio": "A", "subtitle": "S"}[op.kind]
     track = Track(
         sequence_id=sequence.id,
         kind=op.kind,
@@ -294,6 +294,80 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
         kind="remove_track",
         payload=payload,
         summary={"operation": "remove_track", "track_id": payload["track_id"]},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+@dataclass(frozen=True)
+class InsertTextClip:
+    """A subtitle/text clip: no asset, text lives in text_override."""
+
+    track_id: str
+    text: str
+    timeline_start: float
+    duration: float
+    actor_id: str | None = None
+
+
+def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    track = db.get(Track, op.track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceDomainError("Track not found")
+    if track.kind != "subtitle":
+        raise SequenceDomainError("Text clips can only be placed on subtitle tracks")
+    if not op.text.strip():
+        raise SequenceDomainError("Text must not be empty")
+    if op.duration <= 0:
+        raise SequenceDomainError("Duration must be positive")
+    _validate_clip_range(op.timeline_start, 0, op.duration)
+
+    clip = Clip(
+        workspace_id=sequence.workspace_id,
+        sequence_id=sequence.id,
+        track_id=track.id,
+        asset_id=None,
+        timeline_start=op.timeline_start,
+        src_in=0,
+        src_out=op.duration,
+        text_override=op.text,
+    )
+    db.add(clip)
+    db.flush()
+    _record_operation(
+        db,
+        sequence,
+        kind="insert_clip",
+        payload=_clip_payload(clip),
+        summary={"operation": "insert_clip", "clip_id": clip.id, "text": True},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+@dataclass(frozen=True)
+class SetClipText:
+    clip_id: str
+    text: str
+    actor_id: str | None = None
+
+
+def set_clip_text(db: Session, sequence_id: str, op: SetClipText) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    if not op.text.strip():
+        raise SequenceDomainError("Text must not be empty")
+    previous = clip.text_override
+    clip.text_override = op.text
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_text",
+        payload={"clip_id": clip.id, "text": op.text, "previous": previous},
+        summary={"operation": "set_clip_text", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
     db.commit()
@@ -580,7 +654,7 @@ MIN_CUT_REMAINDER = 0.05
 
 
 def _clip_payload(clip: Clip) -> dict[str, Any]:
-    return {
+    payload = {
         "clip_id": clip.id,
         "track_id": clip.track_id,
         "asset_id": clip.asset_id,
@@ -588,6 +662,9 @@ def _clip_payload(clip: Clip) -> dict[str, Any]:
         "src_in": clip.src_in,
         "src_out": clip.src_out,
     }
+    if clip.text_override is not None:
+        payload["text_override"] = clip.text_override
+    return payload
 
 
 def _require_sequence(db: Session, sequence_id: str) -> Sequence:

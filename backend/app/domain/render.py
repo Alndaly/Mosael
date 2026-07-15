@@ -36,17 +36,20 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
             "gain": clip.gain,
             "muted": clip.muted,
             "effects": clip.effects,
+            "text_override": clip.text_override,
         }
 
     video_tracks = sorted(
         (track for track in sequence.tracks if track.kind == "video"), key=lambda track: track.position
     )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
+    subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
     base_clips = [clip_dict(clip) for clip in (video_tracks[0].clips if video_tracks else [])]
     overlay_clips = [clip_dict(clip) for track in video_tracks[1:] if not track.muted for clip in track.clips]
     audio_clips = [clip_dict(clip) for track in audio_tracks for clip in track.clips]
+    subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
 
-    asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips}
+    asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips if clip["asset_id"]}
     assets = {
         asset.id: {"file_key": asset.file_key}
         for asset in db.scalars(select(Asset).where(Asset.id.in_(asset_ids)))
@@ -61,6 +64,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         assets=assets,
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
+        subtitle_clips=subtitle_clips,
     )
 
 

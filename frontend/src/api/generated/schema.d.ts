@@ -421,6 +421,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/cut-ranges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cut Clip Ranges */
+        post: operations["cut_clip_ranges_api_sequences__sequence_id__clips__clip_id__cut_ranges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}/split": {
         parameters: {
             query?: never;
@@ -468,6 +485,74 @@ export interface paths {
         post?: never;
         /** Delete Clip */
         delete: operations["delete_clip_api_sequences__sequence_id__clips__clip_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/text-clips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Insert Text Clip */
+        post: operations["insert_text_clip_api_sequences__sequence_id__text_clips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Clip Text */
+        patch: operations["set_clip_text_api_sequences__sequence_id__clips__clip_id__text_patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/speed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Clip Speed */
+        patch: operations["set_clip_speed_api_sequences__sequence_id__clips__clip_id__speed_patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/ripple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Ripple Delete Clip */
+        delete: operations["ripple_delete_clip_api_sequences__sequence_id__clips__clip_id__ripple_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1347,7 +1432,7 @@ export interface components {
             /** Track Id */
             track_id: string;
             /** Asset Id */
-            asset_id: string;
+            asset_id: string | null;
             /** Timeline Start */
             timeline_start: number;
             /** Src In */
@@ -1444,6 +1529,11 @@ export interface components {
             src_start: number;
             /** Src End */
             src_end: number;
+        };
+        /** CutClipRangesRequest */
+        CutClipRangesRequest: {
+            /** Ranges */
+            ranges: components["schemas"]["CutClipRangeRequest"][];
         };
         /** FeishuBotCreate */
         FeishuBotCreate: {
@@ -1597,6 +1687,23 @@ export interface components {
             src_in: number;
             /** Src Out */
             src_out: number;
+        };
+        /** InsertTextClipRequest */
+        InsertTextClipRequest: {
+            /** Track Id */
+            track_id: string;
+            /** Text */
+            text: string;
+            /**
+             * Timeline Start
+             * @default 0
+             */
+            timeline_start: number;
+            /**
+             * Duration
+             * @default 2
+             */
+            duration: number;
         };
         /** JobOut */
         JobOut: {
@@ -1998,6 +2105,16 @@ export interface components {
             effects?: {
                 [key: string]: unknown;
             };
+        };
+        /** SetClipSpeedRequest */
+        SetClipSpeedRequest: {
+            /** Speed */
+            speed: number;
+        };
+        /** SetClipTextRequest */
+        SetClipTextRequest: {
+            /** Text */
+            text: string;
         };
         /** SetTrackStateRequest */
         SetTrackStateRequest: {
@@ -3133,6 +3250,42 @@ export interface operations {
             };
         };
     };
+    cut_clip_ranges_api_sequences__sequence_id__clips__clip_id__cut_ranges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutClipRangesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     split_clip_api_sequences__sequence_id__clips__clip_id__split_post: {
         parameters: {
             query?: never;
@@ -3238,6 +3391,145 @@ export interface operations {
         };
     };
     delete_clip_api_sequences__sequence_id__clips__clip_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    insert_text_clip_api_sequences__sequence_id__text_clips_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsertTextClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_clip_text_api_sequences__sequence_id__clips__clip_id__text_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClipTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_clip_speed_api_sequences__sequence_id__clips__clip_id__speed_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClipSpeedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ripple_delete_clip_api_sequences__sequence_id__clips__clip_id__ripple_delete: {
         parameters: {
             query?: never;
             header?: never;

@@ -13,6 +13,7 @@ const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
 ];
 const PIP_SIZES = [0.25, 0.33, 0.5];
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const FILTER_PRESETS = ["", "bw", "warm", "cool", "vivid", "fade"] as const;
 
 export function Inspector({
   sequence,
@@ -22,6 +23,7 @@ export function Inspector({
   onDeleteClip,
   onSetEffects,
   onSetSpeed,
+  onSetText,
 }: {
   sequence: Sequence;
   selectedClip: Clip | null;
@@ -30,9 +32,10 @@ export function Inspector({
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
+  onSetText?: (clipId: string, text: string) => void;
 }) {
   const t = useI18n();
-  const asset = selectedClip ? assets.find((item) => item.id === selectedClip.asset_id) : null;
+  const asset = selectedClip?.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
   const pip = {
     x: 0.62,
     y: 0.06,
@@ -43,7 +46,8 @@ export function Inspector({
     if (!selectedClip) return;
     onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
   };
-  const effects = (selectedClip?.effects ?? {}) as { fade_in?: number; fade_out?: number };
+  const isTextClip = Boolean(selectedClip && !selectedClip.asset_id && selectedClip.text_override != null);
+  const effects = (selectedClip?.effects ?? {}) as { fade_in?: number; fade_out?: number; filter?: string };
   const applyFade = (key: "fade_in" | "fade_out", raw: string) => {
     if (!selectedClip) return;
     const value = Math.max(0, Number(raw) || 0);
@@ -59,7 +63,7 @@ export function Inspector({
         <div className="inspector-body">
           <dl>
             <dt>{t("asset")}</dt>
-            <dd className="inspector-ellipsis" title={asset?.name}>{asset?.name ?? selectedClip.asset_id.slice(0, 8)}</dd>
+            <dd className="inspector-ellipsis" title={asset?.name}>{asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? t("subtitleText")}</dd>
             <dt>{t("timelineRange")}</dt>
             <dd className="timecode">
               {formatTimecode(selectedClip.timeline_start)} – {formatTimecode(clipEnd(selectedClip))}
@@ -75,7 +79,41 @@ export function Inspector({
             <dt>{t("gain")}</dt>
             <dd className="timecode">{selectedClip.gain.toFixed(2)}</dd>
           </dl>
-          {onSetSpeed && (
+          {isTextClip && onSetText && (
+            <div className="pip-controls">
+              <span className="pip-label">{t("subtitleText")}</span>
+              <textarea
+                key={`text-${selectedClip.id}`}
+                className="subtitle-input"
+                rows={3}
+                defaultValue={selectedClip.text_override ?? ""}
+                onBlur={(event) => {
+                  const value = event.target.value.trim();
+                  if (value && value !== selectedClip.text_override) onSetText(selectedClip.id, value);
+                }}
+              />
+            </div>
+          )}
+          {!isTextClip && (
+            <div className="pip-controls">
+              <span className="pip-label">{t("filterLabel")}</span>
+              <div className="pip-row">
+                {FILTER_PRESETS.map((preset) => (
+                  <button
+                    key={preset || "none"}
+                    type="button"
+                    className={(effects.filter ?? "") === preset ? "pip-btn active" : "pip-btn"}
+                    onClick={() =>
+                      onSetEffects(selectedClip.id, { ...selectedClip.effects, filter: preset || undefined })
+                    }
+                  >
+                    {t(preset ? (`filter_${preset}` as never) : ("filter_none" as never))}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {!isTextClip && onSetSpeed && (
             <div className="pip-controls">
               <span className="pip-label">{t("speed")}</span>
               <div className="pip-row">
@@ -92,6 +130,7 @@ export function Inspector({
               </div>
             </div>
           )}
+          {!isTextClip && (
           <div className="pip-controls">
             <span className="pip-label">{t("fadeIn")}</span>
             <input
@@ -114,6 +153,7 @@ export function Inspector({
               onBlur={(event) => applyFade("fade_out", event.target.value)}
             />
           </div>
+          )}
           {isOverlayClip && (
             <div className="pip-controls">
               <span className="pip-label">{t("pipPosition")}</span>

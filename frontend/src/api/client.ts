@@ -163,8 +163,22 @@ export function setTrackState(
   });
 }
 
-export function addTrack(sequenceId: string, kind: "video" | "audio"): Promise<Sequence> {
+export function addTrack(sequenceId: string, kind: "video" | "audio" | "subtitle"): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks`, { method: "POST", body: JSON.stringify({ kind }) });
+}
+
+export function insertTextClip(
+  sequenceId: string,
+  body: { track_id: string; text: string; timeline_start: number; duration: number },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/text-clips`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function setClipText(sequenceId: string, clipId: string, text: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/text`, {
+    method: "PATCH",
+    body: JSON.stringify({ text }),
+  });
 }
 
 export function removeTrack(sequenceId: string, trackId: string): Promise<Sequence> {

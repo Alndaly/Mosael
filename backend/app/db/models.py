@@ -197,7 +197,7 @@ class Clip(Base):
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     sequence_id: Mapped[str] = mapped_column(ForeignKey("sequences.id", ondelete="CASCADE"), nullable=False)
     track_id: Mapped[str] = mapped_column(ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
     timeline_start: Mapped[float] = mapped_column(Float, nullable=False)
     src_in: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     src_out: Mapped[float] = mapped_column(Float, nullable=False)

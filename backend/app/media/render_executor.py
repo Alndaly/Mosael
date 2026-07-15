@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.media.probe import probe_has_audio
-from app.media.render_plan import RenderPlan
+from app.media.render_plan import FILTER_PRESETS, RenderPlan
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -49,6 +49,28 @@ def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bo
     return "".join(chunks)
 
 
+def _srt_timestamp(seconds: float) -> str:
+    total_ms = max(0, int(round(seconds * 1000)))
+    hours, rest = divmod(total_ms, 3_600_000)
+    minutes, rest = divmod(rest, 60_000)
+    secs, ms = divmod(rest, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+
+def _build_srt(plan: RenderPlan) -> str:
+    blocks = []
+    for index, item in enumerate(plan.subtitles, start=1):
+        blocks.append(
+            f"{index}\n{_srt_timestamp(item.start)} --> {_srt_timestamp(item.start + item.duration)}\n{item.text}\n"
+        )
+    return "\n".join(blocks)
+
+
+def _escape_filter_path(path: Path) -> str:
+    # Inside filter_complex, colons separate options and backslashes escape.
+    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
 def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     args: list[str] = ["ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
@@ -63,10 +85,11 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             src = segment.source
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
+            preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
             filters.append(
                 f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p,setsar=1{video_fades}[v{i}]"
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p,setsar=1{preset}{video_fades}[v{i}]"
             )
             if probe_has_audio(path):
                 tempo = _atempo_chain(segment.speed)
@@ -108,6 +131,15 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         )
         video_label = out_label
         input_index += 1
+
+    # Burned-in subtitles from subtitle tracks (SRT + libass).
+    if plan.subtitles:
+        srt_path = output_path.with_suffix(".srt")
+        srt_path.parent.mkdir(parents=True, exist_ok=True)
+        srt_path.write_text(_build_srt(plan), encoding="utf-8")
+        out_label = "[vsub]"
+        filters.append(f"{video_label}subtitles=filename='{_escape_filter_path(srt_path)}'{out_label}")
+        video_label = out_label
 
     # Audio-track clips mixed over the base audio.
     audio_label = "[abase]"

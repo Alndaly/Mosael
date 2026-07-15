@@ -6,7 +6,7 @@
 
 export interface ProjectableClip {
   id: string;
-  asset_id: string;
+  asset_id: string | null;
   timeline_start: number;
   src_in: number;
   src_out: number;
@@ -51,7 +51,7 @@ export function projectTranscript(
   const projected: ProjectedSegment[] = [];
   const ordered = [...clips].sort((a, b) => a.timeline_start - b.timeline_start);
   for (const clip of ordered) {
-    const segments = segmentsByAsset.get(clip.asset_id) ?? [];
+    const segments = clip.asset_id ? (segmentsByAsset.get(clip.asset_id) ?? []) : [];
     for (const segment of segments) {
       if (segment.end_time <= clip.src_in || segment.start_time >= clip.src_out) continue;
       const visibleStart = Math.max(segment.start_time, clip.src_in);
@@ -97,7 +97,7 @@ export function detectSilences(
   const gaps: SilenceGap[] = [];
   const ordered = [...clips].sort((a, b) => a.timeline_start - b.timeline_start);
   for (const clip of ordered) {
-    const segments = segmentsByAsset.get(clip.asset_id) ?? [];
+    const segments = clip.asset_id ? (segmentsByAsset.get(clip.asset_id) ?? []) : [];
     if (segments.length === 0) continue;
     const speech: Array<[number, number]> = [];
     for (const segment of segments) {

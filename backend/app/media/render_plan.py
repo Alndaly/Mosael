@@ -34,6 +34,7 @@ class Segment:
     speed: float = 1.0
     fade_in: float = 0.0
     fade_out: float = 0.0
+    filter: str = ""  # one of FILTER_PRESETS or ""
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,15 @@ class AudioItem:
 
 
 @dataclass(frozen=True)
+class SubtitleItem:
+    """A text clip from a subtitle track, burned in at export."""
+
+    start: float
+    duration: float
+    text: str
+
+
+@dataclass(frozen=True)
 class RenderPlan:
     sequence_id: str
     sequence_revision: int
@@ -76,6 +86,7 @@ class RenderPlan:
     output: OutputSettings
     overlays: tuple[OverlayItem, ...] = ()
     audio_overlays: tuple[AudioItem, ...] = ()
+    subtitles: tuple[SubtitleItem, ...] = ()
     render_plan_hash: str = field(default="")
 
     def with_hash(self) -> "RenderPlan":
@@ -90,6 +101,7 @@ class RenderPlan:
             output=self.output,
             overlays=self.overlays,
             audio_overlays=self.audio_overlays,
+            subtitles=self.subtitles,
             render_plan_hash=digest,
         )
 
@@ -103,6 +115,17 @@ GAP_EPSILON = 1e-6
 
 DEFAULT_PIP = {"x": 0.62, "y": 0.06, "scale": 0.33}
 
+# Preset name → FFmpeg video filter chain. The plan stores only the name so it
+# stays pure; the executor appends the chain. Keep in sync with the frontend
+# CSS preview approximations.
+FILTER_PRESETS = {
+    "bw": "hue=s=0",
+    "warm": "eq=saturation=1.12:gamma_r=1.06:gamma_b=0.92",
+    "cool": "eq=saturation=1.08:gamma_r=0.94:gamma_b=1.08",
+    "vivid": "eq=saturation=1.35:contrast=1.08",
+    "fade": "eq=saturation=0.78:contrast=0.92:brightness=0.04",
+}
+
 
 def build_render_plan(
     *,
@@ -115,6 +138,7 @@ def build_render_plan(
     assets: dict[str, dict],
     overlay_clips: list[dict] | None = None,
     audio_clips: list[dict] | None = None,
+    subtitle_clips: list[dict] | None = None,
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
@@ -142,6 +166,9 @@ def build_render_plan(
         if start > cursor + GAP_EPSILON:
             segments.append(Segment(kind="gap", duration=round(start - cursor, 6)))
         fade_in, fade_out = _clip_fades(clip, duration)
+        preset = str((clip.get("effects") or {}).get("filter") or "")
+        if preset and preset not in FILTER_PRESETS:
+            raise RenderPlanError(f"Clip {clip['id']} uses unknown filter preset {preset!r}")
         segments.append(
             Segment(
                 kind="clip",
@@ -155,6 +182,7 @@ def build_render_plan(
                 speed=speed,
                 fade_in=fade_in,
                 fade_out=fade_out,
+                filter=preset,
             )
         )
         cursor = start + duration
@@ -203,6 +231,18 @@ def build_render_plan(
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
 
+    subtitles: list[SubtitleItem] = []
+    for clip in sorted(subtitle_clips or [], key=lambda c: float(c["timeline_start"])):
+        text = str(clip.get("text_override") or "").strip()
+        if not text:
+            continue
+        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
+        if clip_duration <= 0:
+            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        subtitles.append(
+            SubtitleItem(start=float(clip["timeline_start"]), duration=round(clip_duration, 6), text=text)
+        )
+
     plan = RenderPlan(
         sequence_id=sequence_id,
         sequence_revision=revision,
@@ -211,6 +251,7 @@ def build_render_plan(
         output=OutputSettings(width=width, height=height, fps=fps),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),
+        subtitles=tuple(subtitles),
     )
     return plan.with_hash()
 

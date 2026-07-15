@@ -2486,3 +2486,44 @@
   background: var(--border);
   margin: 0 3px;
 }
+
+/* Subtitle track + monitor overlay + inspector text input */
+.tl-clip-subtitle {
+  background: color-mix(in oklab, #a855f7 18%, var(--panel));
+  border-color: color-mix(in oklab, #a855f7 45%, var(--border));
+}
+.tl-label-dot.dot-subtitle {
+  background: #a855f7;
+}
+.monitor-subtitle {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  max-width: 86%;
+  padding: 3px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #ffffff;
+  font-size: clamp(12px, 2.4cqw, 20px);
+  line-height: 1.45;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+.subtitle-input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.subtitle-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -1px;
+}

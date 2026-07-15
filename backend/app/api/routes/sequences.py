@@ -10,12 +10,14 @@ from app.api.schemas import (
     CutClipRangeRequest,
     CutClipRangesRequest,
     InsertClipRequest,
+    InsertTextClipRequest,
     JobOut,
     MoveClipRequest,
     SequenceCreate,
     SequenceOut,
     SetClipEffectsRequest,
     SetClipSpeedRequest,
+    SetClipTextRequest,
     SetTrackStateRequest,
     SplitClipRequest,
     TrimClipRequest,
@@ -31,12 +33,14 @@ from app.domain.sequences.operations import (
     CutClipRanges,
     DeleteClip,
     InsertClip,
+    InsertTextClip,
     MoveClip,
     RemoveTrack,
     RippleDeleteClip,
     SequenceDomainError,
     SetClipEffects,
     SetClipSpeed,
+    SetClipText,
     SetTrackState,
     SplitClip,
     TrimClip,
@@ -51,6 +55,8 @@ from app.domain.sequences.operations import (
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
     insert_clip as insert_clip_operation,
+    insert_text_clip as insert_text_clip_operation,
+    set_clip_text as set_clip_text_operation,
     move_clip as move_clip_operation,
     trim_clip as trim_clip_operation,
 )
@@ -154,6 +160,22 @@ def set_track_state(
 def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/text-clips", response_model=SequenceOut)
+def insert_text_clip(sequence_id: str, body: InsertTextClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: insert_text_clip_operation(db, sequence_id, InsertTextClip(**body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/text", response_model=SequenceOut)
+def set_clip_text(
+    sequence_id: str, clip_id: str, body: SetClipTextRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: set_clip_text_operation(db, sequence_id, SetClipText(clip_id=clip_id, text=body.text)))
     return _get_sequence(db, sequence_id)
 
 
