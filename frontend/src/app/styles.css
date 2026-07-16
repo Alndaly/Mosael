@@ -7,7 +7,8 @@
      10 (panels, popovers) / 12+ (hero surfaces) / 999 (pills).
      No 3/5/7px values.
    - Segmented control (.seg/.seg-btn): ONE size app-wide; do not
-     add per-context padding or font overrides.
+     add per-context padding or font overrides. Look = hairline
+     joined group (border + inner dividers), active = accent tint.
    - Master-detail pages (settings/plugins/scheduler): detail
      column max 680px, list column 200–260px, shell gap 12.
    - FLAT: no drop shadows anywhere (--shadow-* resolve to none);
@@ -887,21 +888,25 @@
 
 /* ---------- Settings ---------- */
 
+/* 设置页与插件/定时任务共用同一主从几何:左列 260 面板 + 右侧详情,
+   不再是居中浮动的独立排版(与其他页面不一致)。 */
 .settings-shell {
   display: grid;
-  grid-template-columns: 200px minmax(0, 680px);
-  justify-content: center;
-  gap: 40px;
-  width: 100%;
-  margin: 28px auto 0;
-  align-items: start;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .settings-nav {
   display: grid;
   gap: 2px;
-  position: sticky;
-  top: 12px;
+  align-content: start;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
 }
 
 .settings-nav-item {
@@ -932,8 +937,12 @@
 
 .settings-content {
   min-width: 0;
+  max-width: 680px; /* Global rhythm: 主从页详情列上限 */
   display: grid;
+  align-content: start;
   gap: 16px;
+  overflow-y: auto;
+  padding: 4px 2px 12px;
 }
 
 /* Settings group: page-level header (outside the card) + a card of rows */
@@ -1602,7 +1611,8 @@
 
 .tl {
   display: grid;
-  grid-template-rows: 34px minmax(0, 1fr);
+  /* 工具栏窄屏会换行,行高必须 auto,否则第二行按钮叠进标尺 */
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 
@@ -2680,30 +2690,41 @@
   margin-bottom: 12px;
 }
 
-/* Segmented control (对话/生成 etc.) */
+/* Segmented control (对话/生成、属性/调色、选择/刀片 etc.)
+   全平面语言:发丝边框拼接组,与 outline 按钮同族;选中段用主色淡底,
+   不再是浮在灰底上的白色药丸(与整体风格脱节)。 */
 .seg {
   display: inline-flex;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--secondary);
-  gap: 2px;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
 }
 .seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: none;
   background: transparent;
   padding: 3px 11px;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 12px;
   color: var(--muted-foreground);
   cursor: pointer;
   transition: background 120ms, color 120ms;
 }
-.seg-btn.active {
-  background: var(--background);
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--border);
+}
+.seg-btn:hover {
   color: var(--foreground);
-  border: none;
-  outline: 1px solid var(--border);
-  outline-offset: -1px;
+  background: var(--secondary);
+}
+.seg-btn.active {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 500;
 }
 .gen-view {
   display: flex;
@@ -2820,11 +2841,6 @@
 .tl-readout,
 .tl-clip-count {
   white-space: nowrap;
-}
-.tl-tool-seg .seg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 .tl-readout em {
   font-style: normal;
@@ -3641,20 +3657,20 @@
 @media (max-width: 880px) {
   .settings-shell {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    margin-top: 8px;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .settings-nav {
-    position: static;
     display: flex;
     gap: 4px;
     overflow-x: auto;
-    padding-bottom: 2px;
+    padding: 5px 8px;
   }
 
   .settings-nav-item {
     white-space: nowrap;
+    flex-shrink: 0;
+    padding: 4px 10px;
   }
 
   .plugins-shell {
@@ -3662,18 +3678,44 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* 列表压成一行工具条:标题 · 插件芯片(横滚) · 扫描按钮,
+     不再是一张头重脚轻的大卡片。 */
   .plugins-list {
-    grid-template-rows: auto auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+  }
+
+  .plugins-list .panel-head {
+    display: contents;
+  }
+
+  .plugins-list .panel-head h2 {
+    order: 0;
+    flex-shrink: 0;
+  }
+
+  .plugins-list .panel-head > button {
+    order: 2;
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .plugins-list-body {
+    order: 1;
     display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
     overflow-x: auto;
     gap: 6px;
   }
 
   .plugins-item {
     flex-shrink: 0;
+    padding: 4px 10px;
   }
 }
 

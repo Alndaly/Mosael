@@ -35,6 +35,24 @@ export function PluginsView() {
   const selected =
     (plugins.data ?? []).find((plugin) => plugin.id === selectedId) ?? (plugins.data ?? [])[0] ?? null;
 
+  // 没有任何插件:整页一个居中空状态(扫描是唯一动作),不摆空骨架。
+  if (plugins.isSuccess && (plugins.data ?? []).length === 0) {
+    return (
+      <div className="feature-view">
+        <EmptyState
+          icon={<Plug size={22} />}
+          title={t("noPlugins")}
+          body={t("noPluginsGuide")}
+          action={
+            <Button disabled={scanPlugins.isPending} onClick={() => scanPlugins.mutate()}>
+              <RefreshCcw size={15} /> {t("scanPlugins")}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="feature-view">
       <div className="plugins-shell">
@@ -65,12 +83,6 @@ export function PluginsView() {
                 </span>
               </button>
             ))}
-            {plugins.data?.length === 0 && (
-              <div className="empty-inline">
-                <Plug size={16} />
-                {t("noPluginsGuide")}
-              </div>
-            )}
           </div>
         </aside>
         <div className="plugins-detail">

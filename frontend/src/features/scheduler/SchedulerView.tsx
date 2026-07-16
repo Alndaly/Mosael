@@ -53,6 +53,25 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   const selected =
     (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
 
+  // 一个任务都没有:整页一个居中空状态,不摆空的主从骨架(否则
+  // 列表和详情各出一个空提示,像坏掉了一样)。
+  if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
+    return (
+      <div className="feature-view">
+        <EmptyState
+          icon={<Timer size={22} />}
+          title={t("noTasks")}
+          body={t("noTasksGuide")}
+          action={
+            <Button disabled={createTask.isPending} onClick={() => createTask.mutate()}>
+              <CalendarClock size={15} /> {t("createTask")}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="feature-view">
       <div className="plugins-shell">
@@ -80,12 +99,6 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                 </span>
               </button>
             ))}
-            {tasks.data?.length === 0 && (
-              <div className="empty-inline">
-                <Timer size={16} />
-                {t("noTasksGuide")}
-              </div>
-            )}
           </div>
         </aside>
         <div className="plugins-detail">
