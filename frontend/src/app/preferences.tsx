@@ -64,6 +64,13 @@ export function useI18n() {
   return usePreferences().t;
 }
 
+/** 老版本创建的工作区名字是英文字面量;显示层按当前语言归一,不改数据。 */
+const LEGACY_DEFAULT_WORKSPACE_NAMES = new Set(["Workspace", "Default workspace", "默认工作区"]);
+
+export function displayWorkspaceName(name: string, t: (key: MessageKey) => string): string {
+  return LEGACY_DEFAULT_WORKSPACE_NAMES.has(name) ? t("workspaceDefault") : name;
+}
+
 function readPreferences(): { theme: Theme; locale: Locale } {
   if (typeof window === "undefined") return { theme: "light", locale: "zh-CN" };
   try {

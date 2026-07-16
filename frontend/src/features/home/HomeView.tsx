@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Clapperboard, FolderPlus, Pencil, Scissors, Trash2 } from "lucide-react";
 
 import { api, deleteProject, renameProject, type Project, type Workspace } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { displayWorkspaceName, useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
@@ -75,7 +75,7 @@ export function HomeView({
                   <article className="project-card" onDoubleClick={() => onOpenProject(project.id)}>
                     <div className="project-card-body">
                       <strong>{project.name}</strong>
-                      <small>{workspace.name}</small>
+                      <small>{displayWorkspaceName(workspace.name, t)}</small>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => onOpenProject(project.id)}>
                       <Scissors size={13} /> {t("homeOpenEditor")}

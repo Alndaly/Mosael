@@ -16,7 +16,7 @@ import {
   Sun,
 } from "lucide-react";
 
-import { useI18n, usePreferences } from "@/app/preferences";
+import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { TaskCenter } from "@/components/layout/TaskCenter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -102,7 +102,7 @@ export function AppShell({
       <div className="shell-main">
         <header className="topbar">
           <div className="topbar-crumb">
-            <span>{workspaceName}</span>
+            <span>{displayWorkspaceName(workspaceName, t)}</span>
             {projectName ? (
               <>
                 <span className="topbar-sep">/</span>
