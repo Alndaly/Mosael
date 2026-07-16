@@ -851,11 +851,11 @@
 
 .settings-shell {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: 200px minmax(0, 640px);
+  justify-content: center;
+  gap: 40px;
   width: 100%;
-  max-width: 920px;
-  margin: 12px auto 0;
+  margin: 28px auto 0;
   align-items: start;
 }
 
@@ -869,11 +869,11 @@
 .settings-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   border: none;
   border-radius: 7px;
   background: transparent;
-  padding: 7px 10px;
+  padding: 8px 12px;
   color: var(--muted-foreground);
   font-size: 13px;
   text-align: left;
@@ -898,8 +898,37 @@
   gap: 16px;
 }
 
-/* Settings group: header (title/description/actions) + uniform rows */
+/* Settings group: page-level header (outside the card) + a card of rows */
 .sg {
+  display: grid;
+  gap: 14px;
+}
+
+.sg-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 2px;
+}
+
+.sg-head-text h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.sg-head-text p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.sg-body {
+  display: grid;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--panel);
@@ -907,39 +936,12 @@
   overflow: hidden;
 }
 
-.sg-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.sg-head-text h2 {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.sg-head-text p {
-  margin: 3px 0 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.sg-body {
-  display: grid;
-}
-
 .sg-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 24px;
-  padding: 12px 18px;
+  padding: 14px 18px;
 }
 
 .sg-row + .sg-row,
