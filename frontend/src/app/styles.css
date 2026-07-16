@@ -263,7 +263,7 @@
 
 /* 发布内嵌视图的返回条:mac 端左侧给红绿灯让位,否则「← 返回 Mibu」压在灯上。 */
 .is-desktop.is-mac .publish-view-bar {
-  padding-left: 82px;
+  padding-left: 88px;
 }
 
 .topbar {
