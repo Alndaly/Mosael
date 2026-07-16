@@ -1,14 +1,16 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
+import { KeyRound, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { ModalShell } from "@/components/ui/modals";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
@@ -88,97 +90,111 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
   });
 
+  const hasBots = (bots.data ?? []).length > 0;
+
   return (
     <SettingsGroup
       title={t("feishuTitle")}
       description={t("feishuDesc")}
       actions={
-        <Button size="sm" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
-          <QrCode size={14} /> {t("feishuScanCreate")}
-        </Button>
+        <>
+          <Button size="sm" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
+            <QrCode size={13} /> {t("feishuScanCreate")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setManualOpen(true)}>
+            <KeyRound size={13} /> {t("feishuManualToggle")}
+          </Button>
+        </>
       }
     >
       <SettingsBlock>
-      <div className="feishu-actions">
-        <button type="button" className="login-switch" onClick={() => setManualOpen((value) => !value)}>
-          {t("feishuManualToggle")}
-        </button>
-      </div>
-      {beginScan.isError && <p className="login-error">{String((beginScan.error as Error).message)}</p>}
+        {beginScan.isError && <p className="login-error">{String((beginScan.error as Error).message)}</p>}
 
-      {scanning && (
-        <div className="feishu-qr">
-          {qrDataUrl ? <img src={qrDataUrl} alt="Feishu QR" /> : null}
-          <div>
-            <p>{t("feishuScanHint")}</p>
-            <p className="feishu-qr-status">
-              {onboarding.data?.phase === "error" ? onboarding.data.error : t("feishuWaitingScan")}
-              {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
-            </p>
+        {scanning && (
+          <div className="feishu-qr">
+            {qrDataUrl ? <img src={qrDataUrl} alt="Feishu QR" /> : null}
+            <div>
+              <p>{t("feishuScanHint")}</p>
+              <p className="feishu-qr-status">
+                {onboarding.data?.phase === "error" ? onboarding.data.error : t("feishuWaitingScan")}
+                {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {manualOpen && (
-        <div className="feishu-manual">
-          <Input placeholder={t("feishuAppId")} value={appId} onChange={(event) => setAppId(event.target.value)} />
+        {hasBots && (
+          <div className="feishu-bots">
+            {(bots.data ?? []).map((bot) => (
+              <div className="feishu-bot" key={bot.id}>
+                <span className="feishu-bot-icon">
+                  <MessageSquare size={14} />
+                </span>
+                <div className="feishu-bot-body">
+                  <strong>{bot.name}</strong>
+                  <small>
+                    {bot.app_id}
+                    {bot.status_detail ? ` · ${bot.status_detail}` : ""}
+                  </small>
+                </div>
+                <StatusBadge status={bot.status} />
+                <div className="feishu-bot-actions">
+                  <select
+                    value={bot.capability}
+                    onChange={(event) => patchBot.mutate({ id: bot.id, body: { capability: event.target.value } })}
+                  >
+                    {CAPABILITIES.map((capability) => (
+                      <option key={capability} value={capability}>
+                        {capability === "readonly"
+                          ? t("feishuCapReadonly")
+                          : capability === "editor"
+                            ? t("feishuCapEditor")
+                            : t("feishuCapFull")}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="ghost" size="icon-sm" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
+                    <RefreshCcw size={13} />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => removeBot.mutate(bot.id)} aria-label={t("feishuRemove")}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!hasBots && !scanning && (
+          <EmptyState icon={<MessageSquare size={22} />} title={t("feishuNoBots")} body={t("feishuEmptyBody")} />
+        )}
+      </SettingsBlock>
+
+      <ModalShell open={manualOpen} onOpenChange={(next) => !next && setManualOpen(false)} title={t("feishuManualToggle")}>
+        <div className="grid gap-3">
+          <p className="text-[13px] text-muted-foreground">{t("feishuManualBody")}</p>
+          <Input placeholder={t("feishuAppId")} value={appId} onChange={(event) => setAppId(event.target.value)} autoFocus />
           <Input
             type="password"
             placeholder={t("feishuAppSecret")}
             value={appSecret}
             onChange={(event) => setAppSecret(event.target.value)}
           />
-          <Button
-            variant="outline"
-            disabled={!appId.trim() || !appSecret.trim() || addBot.isPending}
-            onClick={() => addBot.mutate()}
-          >
-            {t("feishuAdd")}
-          </Button>
-        </div>
-      )}
-
-      <div className="feishu-bots">
-        {(bots.data ?? []).map((bot) => (
-          <div className="feishu-bot" key={bot.id}>
-            <span className="feishu-bot-icon">
-              <MessageSquare size={14} />
-            </span>
-            <div className="feishu-bot-body">
-              <strong>{bot.name}</strong>
-              <small>
-                {bot.app_id}
-                {bot.status_detail ? ` · ${bot.status_detail}` : ""}
-              </small>
-            </div>
-            <StatusBadge status={bot.status} />
-            <div className="feishu-bot-actions">
-              <select
-                value={bot.capability}
-                onChange={(event) => patchBot.mutate({ id: bot.id, body: { capability: event.target.value } })}
-              >
-                {CAPABILITIES.map((capability) => (
-                  <option key={capability} value={capability}>
-                    {capability === "readonly"
-                      ? t("feishuCapReadonly")
-                      : capability === "editor"
-                        ? t("feishuCapEditor")
-                        : t("feishuCapFull")}
-                  </option>
-                ))}
-              </select>
-              <Button variant="ghost" size="icon-sm" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
-                <RefreshCcw size={13} />
-              </Button>
-              <Button variant="ghost" size="icon-sm" onClick={() => removeBot.mutate(bot.id)} aria-label={t("feishuRemove")}>
-                <Trash2 size={13} />
-              </Button>
-            </div>
+          {addBot.isError && <p className="login-error">{String((addBot.error as Error).message)}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setManualOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!appId.trim() || !appSecret.trim() || addBot.isPending}
+              onClick={() => addBot.mutate()}
+            >
+              {t("feishuAdd")}
+            </Button>
           </div>
-        ))}
-        {bots.data?.length === 0 && !scanning && <p className="feishu-empty">{t("feishuNoBots")}</p>}
-      </div>
-      </SettingsBlock>
+        </div>
+      </ModalShell>
     </SettingsGroup>
   );
 }
