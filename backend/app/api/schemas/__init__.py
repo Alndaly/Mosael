@@ -229,6 +229,14 @@ class SetClipTextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 
+class TaskEventOut(OrmModel):
+    id: str
+    job_id: str
+    type: str
+    payload: dict
+    created_at: datetime
+
+
 class JobOut(OrmModel):
     id: str
     workspace_id: str

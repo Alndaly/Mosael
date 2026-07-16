@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.domain.jobs import prune_task_events
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
 from app.domain.scheduler.operations import run_scheduled_task
 
@@ -41,11 +43,21 @@ def stop_scheduler_loop() -> None:
         _stop_event = None
 
 
+PRUNE_INTERVAL_SECONDS = 6 * 3600
+
+
 def _loop(stop: threading.Event) -> None:
+    last_prune = 0.0
     while not stop.wait(TICK_SECONDS):
         try:
             with SessionLocal() as db:
                 tick(db)
+                # Task-event retention (plan §12.3) piggybacks on this loop.
+                if time.monotonic() - last_prune >= PRUNE_INTERVAL_SECONDS:
+                    last_prune = time.monotonic()
+                    removed = prune_task_events(db)
+                    if removed:
+                        logger.info("Task-event retention removed %d rows", removed)
         except Exception:  # the loop must survive any single bad tick
             logger.exception("Scheduler tick failed")
 

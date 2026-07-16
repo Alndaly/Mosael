@@ -121,7 +121,13 @@ function Studio({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <AppShell view={view} onViewChange={setView} workspaceName={workspace.name} projectName={project?.name ?? null}>
+    <AppShell
+      view={view}
+      onViewChange={setView}
+      workspaceId={workspace.id}
+      workspaceName={workspace.name}
+      projectName={project?.name ?? null}
+    >
       {view === "home" && <HomeView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
       {view === "media" && <MediaLibraryView workspace={workspace} project={project} />}
       {view === "editor" && <EditorView workspace={workspace} project={project} />}

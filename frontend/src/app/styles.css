@@ -3399,3 +3399,150 @@
   font-size: 10.5px;
   white-space: nowrap;
 }
+
+/* Task center (任务总线统一入口) */
+.taskcenter {
+  position: relative;
+}
+.taskcenter-btn {
+  position: relative;
+}
+.taskcenter-badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+.taskcenter-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 70;
+  width: 340px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+.taskcenter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.taskcenter-head strong {
+  font-size: 12.5px;
+}
+.taskcenter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+}
+.taskcenter-clear:hover {
+  color: var(--destructive);
+}
+.taskcenter-list {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+.taskcenter-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+.taskcenter-empty {
+  margin: 0;
+  padding: 22px 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.6;
+}
+.taskrow {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  align-items: start;
+}
+.taskrow:hover {
+  background: var(--secondary);
+}
+.taskrow-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.taskrow.failed .taskrow-icon {
+  background: color-mix(in oklab, var(--destructive) 12%, var(--background));
+  color: var(--destructive);
+}
+.taskrow-body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.taskrow-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.taskrow-title strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.taskrow-status {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+}
+.taskrow-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.taskrow-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--primary);
+  transition: width 300ms;
+}
+.taskrow-msg {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taskrow.failed .taskrow-msg {
+  color: var(--destructive);
+}

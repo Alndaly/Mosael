@@ -18,6 +18,7 @@ import {
 
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { TaskCenter } from "@/components/layout/TaskCenter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
 
@@ -52,6 +53,7 @@ const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: 
 export function AppShell({
   view,
   onViewChange,
+  workspaceId,
   workspaceName,
   projectName,
   actions,
@@ -59,6 +61,7 @@ export function AppShell({
 }: {
   view: StudioView;
   onViewChange: (view: StudioView) => void;
+  workspaceId?: string;
   workspaceName: string;
   projectName: string | null;
   actions?: React.ReactNode;
@@ -114,6 +117,7 @@ export function AppShell({
           </div>
           <div className="topbar-actions">
             {actions}
+            {workspaceId && <TaskCenter workspaceId={workspaceId} />}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
