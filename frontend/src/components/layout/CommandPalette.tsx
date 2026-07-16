@@ -20,6 +20,7 @@ import {
   SearchX,
   Settings,
   Sun,
+  Workflow,
 } from "lucide-react";
 
 import { api, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
@@ -47,6 +48,7 @@ const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[
   { view: "batch", labelKey: "navBatch", keywords: ["batch", "piliang"], icon: <Layers size={14} /> },
   { view: "publish", labelKey: "navPublish", keywords: ["publish", "fabu"], icon: <Rocket size={14} /> },
   { view: "kb", labelKey: "navKb", keywords: ["kb", "knowledge", "zhishiku"], icon: <BookOpen size={14} /> },
+  { view: "workflows", labelKey: "navWorkflows", keywords: ["workflow", "flow", "gongzuoliu"], icon: <Workflow size={14} /> },
   { view: "settings", labelKey: "navSettings", keywords: ["settings", "shezhi"], icon: <Settings size={14} /> },
   { view: "scheduler", labelKey: "schedulerTitle", keywords: ["schedule", "cron", "dingshi"], icon: <CalendarClock size={14} /> },
   { view: "plugins", labelKey: "pluginsTitle", keywords: ["plugins", "chajian"], icon: <Plug size={14} /> },

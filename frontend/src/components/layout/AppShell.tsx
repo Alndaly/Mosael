@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   Sun,
+  Workflow,
 } from "lucide-react";
 
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
@@ -32,6 +33,7 @@ export type StudioView =
   | "publish"
   | "kb"
   | "settings"
+  | "workflows"
   | "scheduler"
   | "plugins";
 
@@ -47,6 +49,7 @@ const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: Me
 ];
 
 const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
+  { view: "workflows", icon: <Workflow size={17} />, labelKey: "navWorkflows" },
   { view: "scheduler", icon: <CalendarClock size={17} />, labelKey: "schedulerTitle" },
   { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
 ];

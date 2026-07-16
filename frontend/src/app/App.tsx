@@ -21,6 +21,7 @@ import { BatchView, PublishView } from "@/features/planned/PlannedViews";
 import { KbView } from "@/features/kb/KbView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
+import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 import { SettingsView } from "@/features/settings/SettingsView";
 
 const queryClient = new QueryClient();
@@ -84,7 +85,7 @@ function WorkspaceGate() {
   return <Studio workspace={workspace} />;
 }
 
-const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "batch", "publish", "kb", "settings", "scheduler", "plugins"];
+const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "batch", "publish", "kb", "settings", "workflows", "scheduler", "plugins"];
 
 function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
@@ -146,6 +147,7 @@ function Studio({ workspace }: { workspace: Workspace }) {
       {view === "publish" && <PublishView />}
       {view === "kb" && <KbView workspace={workspace} />}
       {view === "settings" && <SettingsView workspace={workspace} />}
+      {view === "workflows" && <WorkflowsView workspace={workspace} />}
       {view === "scheduler" && <SchedulerView workspace={workspace} project={project} />}
       {view === "plugins" && <PluginsView />}
       <CommandPalette

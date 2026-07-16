@@ -25,6 +25,10 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "render_sequence": {"permission": "render-cost", "cost": "render"},
     "generate_image": {"permission": "ai-cost", "cost": "ai"},
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
+    # 工作流:建/改是编辑权限;运行可能触发渲染与 AI 消耗,按最高档要求确认。
+    "create_workflow": {"permission": "edit", "cost": "none"},
+    "update_workflow": {"permission": "edit", "cost": "none"},
+    "run_workflow": {"permission": "ai-cost", "cost": "ai"},
 }
 
 EDIT_OP_KINDS = (
@@ -111,6 +115,26 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
     if tool in ("generate_image", "generate_video"):
         if not str(payload.get("prompt", "")).strip():
             raise ConfirmationError("Generation requires a prompt")
+    if tool == "create_workflow":
+        from app.domain.workflows import validate_graph
+
+        if not str(payload.get("name", "")).strip():
+            raise ConfirmationError("create_workflow requires a name")
+        if payload.get("graph") is not None:
+            errors = validate_graph(payload["graph"])
+            if errors:
+                raise ConfirmationError("；".join(errors))
+    if tool in ("update_workflow", "run_workflow"):
+        from app.db.models import Workflow
+        from app.domain.workflows import validate_graph
+
+        workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
+        if workflow is None or workflow.workspace_id != workspace_id:
+            raise ConfirmationError("Workflow not found in this workspace")
+        if tool == "update_workflow" and payload.get("graph") is not None:
+            errors = validate_graph(payload["graph"])
+            if errors:
+                raise ConfirmationError("；".join(errors))
 
 
 def _summarize(tool: str, payload: dict[str, Any]) -> str:
@@ -119,6 +143,14 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
         return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     if tool == "render_sequence":
         return "导出时间线为 mp4"
+    if tool == "create_workflow":
+        nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
+        return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)"
+    if tool == "update_workflow":
+        nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
+        return f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
+    if tool == "run_workflow":
+        return "运行工作流(可能产生 AI/渲染消耗)"
     prompt = str(payload.get("prompt", ""))[:80]
     return f"生成{'图片' if tool == 'generate_image' else '视频'}: {prompt}"
 
@@ -151,6 +183,37 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         )
         start_generation_thread(generation.id)
         return {"job_id": job.id, "generation_id": generation.id}
+    if confirmation.tool == "create_workflow":
+        from app.domain.workflows import create_workflow
+
+        workflow = create_workflow(
+            db,
+            workspace_id=confirmation.workspace_id,
+            name=str(payload["name"]),
+            description=str(payload.get("description", "")),
+            graph=payload.get("graph"),
+        )
+        return {"workflow_id": workflow.id}
+    if confirmation.tool == "update_workflow":
+        from app.db.models import Workflow
+        from app.domain.workflows import update_workflow
+
+        workflow = db.get(Workflow, str(payload["workflow_id"]))
+        assert workflow is not None  # validated at request time
+        update_workflow(
+            db,
+            workflow,
+            {key: payload[key] for key in ("name", "description", "graph") if key in payload},
+        )
+        return {"workflow_id": workflow.id}
+    if confirmation.tool == "run_workflow":
+        from app.db.models import Workflow
+        from app.domain.workflows.engine import start_workflow_job
+
+        workflow = db.get(Workflow, str(payload["workflow_id"]))
+        assert workflow is not None
+        job = start_workflow_job(db, workflow, params=dict(payload.get("params") or {}))
+        return {"job_id": job.id}
     raise ConfirmationError(f"No executor for tool {confirmation.tool}")
 
 

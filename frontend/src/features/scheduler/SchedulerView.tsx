@@ -4,18 +4,22 @@ import { CalendarClock, CheckCircle2, CircleAlert, Loader2, Play, Timer, Trash2 
 
 import {
   api,
+  listWorkflows,
   type Job,
   type Project,
   type RunScheduledTaskResponse,
   type ScheduledTask,
   type ScheduledTaskRun,
+  type Workflow,
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ConfirmDialog } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
 /**
@@ -26,29 +30,11 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   const t = useI18n();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
 
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
     queryFn: () => api<ScheduledTask[]>(`/api/scheduled-tasks?workspace_id=${workspace.id}`),
-  });
-  const createTask = useMutation({
-    mutationFn: () =>
-      api<ScheduledTask>("/api/scheduled-tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          workspace_id: workspace.id,
-          project_id: project?.id ?? null,
-          name: t("hourlyRenderCheck"),
-          kind: "render",
-          trigger_type: "interval",
-          schedule: { seconds: 3600 },
-          payload: { project_id: project?.id ?? null },
-        }),
-      }),
-    onSuccess: (task) => {
-      setSelectedId(task.id);
-      void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
-    },
   });
 
   const selected =
@@ -56,6 +42,20 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   // 一个任务都没有:整页一个居中空状态,不摆空的主从骨架(否则
   // 列表和详情各出一个空提示,像坏掉了一样)。
+  const createDialog = (
+    <CreateTaskDialog
+      open={creating}
+      workspace={workspace}
+      project={project}
+      onClose={() => setCreating(false)}
+      onCreated={(task) => {
+        setCreating(false);
+        setSelectedId(task.id);
+        void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
+      }}
+    />
+  );
+
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
       <div className="feature-view">
@@ -64,11 +64,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           title={t("noTasks")}
           body={t("noTasksGuide")}
           action={
-            <Button disabled={createTask.isPending} onClick={() => createTask.mutate()}>
+            <Button onClick={() => setCreating(true)}>
               <CalendarClock size={15} /> {t("createTask")}
             </Button>
           }
         />
+        {createDialog}
       </div>
     );
   }
@@ -79,7 +80,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         <aside className="plugins-list panel">
           <div className="panel-head">
             <h2>{t("tasks")}</h2>
-            <Button variant="outline" size="sm" disabled={createTask.isPending} onClick={() => createTask.mutate()}>
+            <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
               <CalendarClock size={13} /> {t("createTask")}
             </Button>
           </div>
@@ -110,7 +111,124 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           )}
         </div>
       </div>
+      {createDialog}
     </div>
+  );
+}
+
+/** 任务详情里的"这个任务做什么":显示绑定的工作流,点击跳到工作流页。 */
+function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
+  const t = useI18n();
+  const workflows = useQuery({
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => listWorkflows(workspaceId),
+  });
+  const workflowId = String((task.payload as { workflow_id?: string })?.workflow_id ?? "");
+  const workflow = (workflows.data ?? []).find((item) => item.id === workflowId) ?? null;
+  return (
+    <SettingsRow
+      label={t("wfBoundWorkflow")}
+      description={workflow?.description || t("taskWorkflowDesc")}
+    >
+      <Button size="sm" variant="outline" onClick={() => (window.location.hash = "#/workflows")}>
+        {workflow?.name ?? workflowId ?? "—"}
+      </Button>
+    </SettingsRow>
+  );
+}
+
+/** 新建任务 = 名称 + 绑定工作流 + 触发方式:任务的"做什么"由工作流承载。 */
+function CreateTaskDialog({
+  open,
+  workspace,
+  project,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  workspace: Workspace;
+  project: Project | null;
+  onClose: () => void;
+  onCreated: (task: ScheduledTask) => void;
+}) {
+  const t = useI18n();
+  const [name, setName] = React.useState("");
+  const [workflowId, setWorkflowId] = React.useState<string | null>(null);
+  const [trigger, setTrigger] = React.useState<"manual" | "interval" | "daily">("manual");
+
+  const workflows = useQuery({
+    queryKey: ["workflows", workspace.id],
+    queryFn: () => listWorkflows(workspace.id),
+    enabled: open,
+  });
+  const selectedWorkflow = (workflows.data ?? []).find((workflow) => workflow.id === workflowId) ?? null;
+
+  const create = useMutation({
+    mutationFn: () =>
+      api<ScheduledTask>("/api/scheduled-tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          workspace_id: workspace.id,
+          project_id: project?.id ?? null,
+          name: name.trim() || selectedWorkflow?.name || t("createTask"),
+          kind: "workflow",
+          trigger_type: trigger,
+          schedule: trigger === "interval" ? { seconds: 3600 } : trigger === "daily" ? { time: "09:00" } : {},
+          payload: { workflow_id: workflowId, params: {} },
+        }),
+      }),
+    onSuccess: onCreated,
+  });
+
+  return (
+    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("createTask")}>
+      <div className="task-create-form">
+        <label className="wf-field">
+          <span>{t("taskNameLabel")}</span>
+          <Input value={name} placeholder={selectedWorkflow?.name ?? ""} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="wf-field">
+          <span>{t("wfBoundWorkflow")}</span>
+          <Select value={workflowId ?? ""} onValueChange={setWorkflowId}>
+            <SelectTrigger>
+              <SelectValue placeholder={t("wfPickWorkflow")} />
+            </SelectTrigger>
+            <SelectContent>
+              {(workflows.data ?? []).map((workflow: Workflow) => (
+                <SelectItem key={workflow.id} value={workflow.id}>
+                  {workflow.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(workflows.data ?? []).length === 0 && workflows.isSuccess && (
+            <small>{t("noWorkflowHint")}</small>
+          )}
+          {selectedWorkflow?.description && <small>{selectedWorkflow.description}</small>}
+        </label>
+        <label className="wf-field">
+          <span>{t("taskTriggerLabel")}</span>
+          <Select value={trigger} onValueChange={(value) => setTrigger(value as typeof trigger)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">{t("trigger_manual")}</SelectItem>
+              <SelectItem value="interval">{t("triggerHourly")}</SelectItem>
+              <SelectItem value="daily">{t("triggerDaily9")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
+        <div className="task-create-actions">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" disabled={!workflowId || create.isPending} onClick={() => create.mutate()}>
+            <CalendarClock size={13} /> {t("createTask")}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -180,6 +298,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           </div>
         }
       >
+        {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
         <SettingsRow label={t("taskSchedule")} description={t("taskScheduleDesc")}>
           <code className="timecode sg-value">{scheduleLabel}</code>
         </SettingsRow>

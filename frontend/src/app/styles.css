@@ -4079,6 +4079,266 @@
   border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
 }
 
+/* ---------- 工作流画布(Dify 式节点编辑器,全平面) ---------- */
+
+.wf-detail {
+  display: grid;
+}
+
+.wf-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+}
+
+.wf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wf-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--foreground);
+}
+
+.wf-title:hover {
+  background: var(--secondary);
+}
+
+.wf-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wf-add-node span {
+  font-size: 12px;
+}
+
+.wf-canvas-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 0;
+}
+
+.wf-canvas {
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+/* React Flow 覆盖:去投影、贴 token */
+.wf-canvas .react-flow__background {
+  background: var(--background);
+}
+.wf-canvas .react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+.wf-canvas .react-flow__controls-button {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--foreground);
+}
+.wf-canvas .react-flow__controls-button:hover {
+  background: var(--secondary);
+}
+.wf-canvas .react-flow__edge-path {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.wf-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary);
+}
+.wf-canvas .react-flow__attribution {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.wf-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 8px 12px;
+}
+
+.wf-node.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.wf-node-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  flex: none;
+}
+
+.wf-node-text {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.wf-node-text strong {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wf-node-text small {
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+}
+
+.wf-handle {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+}
+
+.wf-inspector {
+  width: 280px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.wf-inspector-body {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wf-field {
+  display: grid;
+  gap: 4px;
+}
+
+.wf-field > span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.wf-field input,
+.wf-field textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--foreground);
+  resize: vertical;
+}
+
+.wf-field input:focus-visible,
+.wf-field textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.wf-field small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.wf-node-desc {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.wf-node-outputs {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+.wf-ai-pop {
+  width: 320px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.wf-ai-pop > strong {
+  font-size: 12.5px;
+}
+
+.wf-ai-pop textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--foreground);
+  resize: vertical;
+}
+
+.wf-ai-pop textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.wf-ai-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 新建任务对话框表单 */
+.task-create-form {
+  display: grid;
+  gap: 12px;
+}
+
+.task-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* Cmd+K 无结果空状态:与全局 EmptyState 同语言的紧凑版(居中 + 主色淡底图标)。 */
 .cmdk-empty {
   display: grid;
@@ -4209,6 +4469,17 @@
   .plugins-item {
     flex-shrink: 0;
     padding: 4px 10px;
+  }
+
+  /* 工作流画布:窄屏时属性面板叠到画布下方 */
+  .wf-canvas-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(240px, 1fr) auto;
+  }
+
+  .wf-inspector {
+    width: auto;
+    max-height: 300px;
   }
 }
 

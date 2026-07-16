@@ -346,6 +346,95 @@ def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
 
 
 @mcp.tool()
+def list_workflows(workspace_id: str = "") -> list[dict[str, Any]]:
+    """List visual workflows (id, name, description, node count). Read-only, runs directly."""
+    workflows = _get("/api/workflows", {"workspace_id": workspace_id or _default_workspace_id()})
+    return [
+        {
+            "id": workflow["id"],
+            "name": workflow["name"],
+            "description": workflow["description"],
+            "nodes": len((workflow.get("graph") or {}).get("nodes", [])),
+        }
+        for workflow in workflows
+    ]
+
+
+@mcp.tool()
+def get_workflow(workflow_id: str) -> dict[str, Any]:
+    """Read a workflow's full graph (nodes/edges/configs). Read-only, runs directly."""
+    return _get(f"/api/workflows/{workflow_id}")
+
+
+@mcp.tool()
+def list_workflow_node_types() -> list[dict[str, Any]]:
+    """Node type registry for building workflow graphs: config fields and output
+    variables per type. Reference outputs downstream as {{node_id.output}}."""
+    return _get("/api/workflows/node-types")
+
+
+@mcp.tool()
+def create_workflow(name: str, graph: dict[str, Any] | None = None, description: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Create a visual workflow (permission: edit). Requires user confirmation.
+
+    graph = {"nodes": [{id,type,name,position,config}], "edges": [{id,source,target}]};
+    omit graph for a bare start-node workflow. Check list_workflow_node_types first.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "create_workflow",
+            "requested_by": "mcp-agent",
+            "payload": {"name": name, "description": description, "graph": graph},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name: str = "", description: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Rewrite a workflow's graph and/or rename it (permission: edit). Requires user confirmation.
+
+    Read the current graph with get_workflow, modify it, and pass the FULL new
+    graph — the update replaces, it does not merge.
+    """
+    payload: dict[str, Any] = {"workflow_id": workflow_id}
+    if graph is not None:
+        payload["graph"] = graph
+    if name:
+        payload["name"] = name
+    if description:
+        payload["description"] = description
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "update_workflow",
+            "requested_by": "mcp-agent",
+            "payload": payload,
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspace_id: str = "") -> dict[str, Any]:
+    """Run a workflow (permission: ai-cost — nodes may spend render/AI budget).
+    Requires user confirmation; after approval the result carries the job id."""
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "run_workflow",
+            "requested_by": "mcp-agent",
+            "payload": {"workflow_id": workflow_id, "params": params or {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
 def get_confirmation(confirmation_id: str) -> dict[str, Any]:
     """Check a pending confirmation: status becomes executed/rejected/failed after the user decides."""
     confirmation = _get(f"/api/confirmations/{confirmation_id}")

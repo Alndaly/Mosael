@@ -40,6 +40,9 @@ export type ScheduledTask = components["schemas"]["ScheduledTaskOut"];
 export type ScheduledTaskRun = components["schemas"]["ScheduledTaskRunOut"];
 export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskResponse"];
 export type Plugin = components["schemas"]["PluginOut"];
+export type Workflow = components["schemas"]["WorkflowOut"];
+export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
+export type WorkflowAiEditResponse = components["schemas"]["WorkflowAiEditResponse"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
@@ -200,6 +203,59 @@ export function undoSequence(sequenceId: string): Promise<Sequence> {
 
 export function redoSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
+}
+
+export interface WorkflowGraph {
+  nodes: Array<{
+    id: string;
+    type: string;
+    name?: string;
+    position?: { x: number; y: number };
+    config?: Record<string, unknown>;
+  }>;
+  edges: Array<{ id: string; source: string; target: string }>;
+}
+
+export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
+  return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
+}
+
+export function createWorkflow(body: {
+  workspace_id: string;
+  name: string;
+  description?: string;
+  graph?: WorkflowGraph | null;
+}): Promise<Workflow> {
+  return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateWorkflow(
+  workflowId: string,
+  body: { name?: string; description?: string; graph?: WorkflowGraph },
+): Promise<Workflow> {
+  return api<Workflow>(`/api/workflows/${workflowId}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteWorkflow(workflowId: string): Promise<unknown> {
+  return api(`/api/workflows/${workflowId}`, { method: "DELETE" });
+}
+
+export function runWorkflow(workflowId: string, params: Record<string, unknown> = {}): Promise<Job> {
+  return api<Job>(`/api/workflows/${workflowId}/run`, { method: "POST", body: JSON.stringify({ params }) });
+}
+
+export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
+  return api<WorkflowNodeType[]>("/api/workflows/node-types");
+}
+
+export function aiEditWorkflow(
+  workflowId: string,
+  body: { instruction: string; graph?: WorkflowGraph },
+): Promise<WorkflowAiEditResponse> {
+  return api<WorkflowAiEditResponse>(`/api/workflows/${workflowId}/ai-edit`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function renameProject(projectId: string, name: string): Promise<Project> {

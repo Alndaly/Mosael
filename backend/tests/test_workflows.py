@@ -112,6 +112,64 @@ def test_workflow_crud_and_run() -> None:
     assert gone.status_code == 204
 
 
+def test_workflow_tools_via_confirmations() -> None:
+    """智能体路径:create/update/run_workflow 走确认卡,批准后才执行。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    created = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "create_workflow",
+            "requested_by": "mcp-agent",
+            "payload": {"name": "智能体流", "description": "", "graph": linear_graph()},
+        },
+    )
+    assert created.status_code == 200, created.text
+    confirmation_id = created.json()["id"]
+    assert created.json()["status"] == "pending"
+
+    # 未批准前工作流不存在
+    assert client.get(f"/api/workflows?workspace_id={ws['id']}").json() == []
+
+    approved = client.post(f"/api/confirmations/{confirmation_id}/approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "executed"
+    workflow_id = approved.json()["result"]["workflow_id"]
+
+    listed = client.get(f"/api/workflows?workspace_id={ws['id']}").json()
+    assert [w["name"] for w in listed] == ["智能体流"]
+
+    # 非法图在请求确认时就被拒(不产生确认卡)
+    bad = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "update_workflow",
+            "payload": {"workflow_id": workflow_id, "graph": {"nodes": [], "edges": []}},
+        },
+    )
+    assert bad.status_code == 422
+
+    ran = client.post(
+        "/api/confirmations",
+        json={"workspace_id": ws["id"], "tool": "run_workflow", "payload": {"workflow_id": workflow_id, "params": {}}},
+    )
+    run_approved = client.post(f"/api/confirmations/{ran.json()['id']}/approve")
+    assert run_approved.json()["status"] == "executed"
+    job_id = run_approved.json()["result"]["job_id"]
+
+    deadline = time.monotonic() + 10
+    status = "queued"
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/jobs/{job_id}").json()["status"]
+        if status in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert status == "succeeded"
+
+
 def test_scheduled_task_dispatches_workflow() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
