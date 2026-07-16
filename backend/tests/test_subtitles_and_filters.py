@@ -106,6 +106,16 @@ def test_unknown_filter_preset_rejected() -> None:
         )
 
 
+def grade_command(tmp_path, color: dict) -> str:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
+                "effects": {"color": color}}],
+        assets=ASSETS,
+    )
+    return " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
+
+
 def test_manual_grade_in_plan_and_command(tmp_path) -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,
@@ -113,10 +123,9 @@ def test_manual_grade_in_plan_and_command(tmp_path) -> None:
                 "effects": {"color": {"brightness": 0.5, "contrast": -0.5, "saturation": 2.5}}}],
         assets=ASSETS,
     )
-    segment = plan.video_segments[0]
-    assert (segment.brightness, segment.contrast, segment.saturation) == (0.5, -0.5, 1.0)  # clamped
+    assert dict(plan.video_segments[0].grade) == {"brightness": 0.5, "contrast": -0.5, "saturation": 1.0}
     command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
-    assert "eq=brightness=0.2:contrast=0.7:saturation=2.0" in command
+    assert "contrast=0.500" in command and "brightness=0.500" in command and "saturation=2.000" in command
 
 
 def test_zero_grade_adds_no_filter(tmp_path) -> None:
@@ -126,16 +135,22 @@ def test_zero_grade_adds_no_filter(tmp_path) -> None:
         assets=ASSETS,
     )
     command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
-    assert "eq=brightness" not in command
+    assert "eq=" not in command and "curves=" not in command
 
 
-def test_temperature_maps_to_gamma_pair(tmp_path) -> None:
-    plan = build_render_plan(
-        sequence_id="s", revision=1, width=640, height=360, fps=30,
-        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
-                "effects": {"color": {"temperature": 0.6}}}],
-        assets=ASSETS,
-    )
-    assert plan.video_segments[0].temperature == 0.6
-    command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
-    assert "gamma_r=1.09" in command and "gamma_b=0.91" in command
+def test_full_grade_field_mapping(tmp_path) -> None:
+    # mibu-video parity: every field family lands in its FFmpeg filter.
+    command = grade_command(tmp_path, {
+        "exposure": 0.4, "gamma": 0.2, "highlights": 0.5, "blacks": 0.5, "fade": 0.5,
+        "temperature": 0.6, "tint": 0.5, "hue": 0.5, "vibrance": 0.5,
+        "sharpen": 0.5, "vignette": 0.5,
+    })
+    assert "brightness=0.200" in command          # exposure folded into brightness factor
+    assert "gamma=1.200" in command
+    assert "curves=master=" in command            # highlights/blacks/fade tone curve
+    assert "hue=h=90.0" in command
+    assert "colortemperature=temperature=5000" in command
+    assert "vibrance=intensity=1.000" in command
+    assert "colorbalance=gm=-0.100" in command
+    assert "unsharp=5:5:0.750" in command
+    assert "vignette=angle=PI/12.000" in command

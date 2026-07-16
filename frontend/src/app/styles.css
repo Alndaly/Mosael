@@ -3222,3 +3222,9 @@
   white-space: nowrap;
   align-self: center;
 }
+
+.monitor-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}

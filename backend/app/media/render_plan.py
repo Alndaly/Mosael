@@ -35,11 +35,9 @@ class Segment:
     fade_in: float = 0.0
     fade_out: float = 0.0
     filter: str = ""  # one of FILTER_PRESETS or ""
-    # Manual grade, each in [-1, 1] (0 = untouched). Applied after the preset.
-    brightness: float = 0.0
-    contrast: float = 0.0
-    saturation: float = 0.0
-    temperature: float = 0.0  # >0 warm (red gamma up), <0 cool (blue gamma up)
+    # Manual grade: sorted (name, value) pairs, names from GRADE_FIELDS, values
+    # clamped to [-1, 1] (0 entries dropped). Mirrors mibu-video's color panel.
+    grade: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +118,30 @@ GAP_EPSILON = 1e-6
 
 DEFAULT_PIP = {"x": 0.62, "y": 0.06, "scale": 0.33}
 
+# Full manual-grade field set, ported from mibu-video's color panel. All values
+# are normalized to [-1, 1] in clip effects.color; the executor maps them onto
+# the same FFmpeg formulas the old app used (eq/curves/hue/colortemperature/
+# vibrance/colorbalance/unsharp/vignette).
+GRADE_FIELDS = (
+    "exposure",
+    "brightness",
+    "contrast",
+    "gamma",
+    "highlights",
+    "shadows",
+    "whites",
+    "blacks",
+    "temperature",
+    "tint",
+    "saturation",
+    "vibrance",
+    "hue",
+    "fade",
+    "sharpen",
+    "vignette",
+)
+
+
 # Preset name → FFmpeg video filter chain. The plan stores only the name so it
 # stays pure; the executor appends the chain. Keep in sync with the frontend
 # CSS preview approximations.
@@ -190,10 +212,11 @@ def build_render_plan(
                 fade_in=fade_in,
                 fade_out=fade_out,
                 filter=preset,
-                brightness=_grade_value(grade, "brightness"),
-                contrast=_grade_value(grade, "contrast"),
-                saturation=_grade_value(grade, "saturation"),
-                temperature=_grade_value(grade, "temperature"),
+                grade=tuple(
+                    (field, _grade_value(grade, field))
+                    for field in GRADE_FIELDS
+                    if _grade_value(grade, field)
+                ),
             )
         )
         cursor = start + duration

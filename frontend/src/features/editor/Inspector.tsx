@@ -14,7 +14,18 @@ const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
 const PIP_SIZES = [0.25, 0.33, 0.5];
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const FILTER_PRESETS = ["", "bw", "warm", "cool", "vivid", "fade"] as const;
-const GRADE_KEYS = ["brightness", "contrast", "saturation", "temperature"] as const;
+
+/** mibu-video 调色面板的完整参数集,按老版分组呈现。 */
+const GRADE_GROUPS = [
+  {
+    label: "gradeGroupLight",
+    keys: ["exposure", "brightness", "contrast", "gamma", "highlights", "shadows", "whites", "blacks"],
+  },
+  { label: "gradeGroupColor", keys: ["temperature", "tint", "saturation", "vibrance", "hue"] },
+  { label: "gradeGroupFx", keys: ["fade", "sharpen", "vignette"] },
+] as const;
+const POSITIVE_ONLY = new Set(["fade", "sharpen", "vignette"]);
+const GRADE_KEYS = GRADE_GROUPS.flatMap((group) => group.keys);
 type GradeKey = (typeof GRADE_KEYS)[number];
 
 export function Inspector({
@@ -264,13 +275,9 @@ function ColorGradePanel({
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
 }) {
   const t = useI18n();
-  const grade: Record<GradeKey, number> = {
-    brightness: 0,
-    contrast: 0,
-    saturation: 0,
-    temperature: 0,
-    ...(effects.color ?? {}),
-  };
+  const grade = Object.fromEntries(
+    GRADE_KEYS.map((key) => [key, Number((effects.color as Record<string, number> | undefined)?.[key]) || 0]),
+  ) as Record<GradeKey, number>;
   const hasGrade = GRADE_KEYS.some((key) => grade[key]) || Boolean(effects.filter);
   const applyGrade = (key: GradeKey, raw: string) => {
     const value = Math.max(-1, Math.min(1, Number(raw) / 100));
@@ -282,13 +289,6 @@ function ColorGradePanel({
     delete next.filter;
     onSetEffects(clip.id, next);
   };
-
-  const sliders: Array<[GradeKey, string]> = [
-    ["brightness", t("gradeBrightness")],
-    ["contrast", t("gradeContrast")],
-    ["saturation", t("gradeSaturation")],
-    ["temperature", t("gradeTemperature")],
-  ];
 
   return (
     <div className="inspector-body color-panel">
@@ -317,25 +317,27 @@ function ColorGradePanel({
           ))}
         </div>
       </div>
-      <div className="pip-controls">
-        <span className="pip-label">{t("manualGrade")}</span>
-        {sliders.map(([key, label]) => (
-          <label className="grade-slider" key={`${key}-${clip.id}`}>
-            <span>{label}</span>
-            <input
-              type="range"
-              min={-100}
-              max={100}
-              step={5}
-              defaultValue={Math.round((grade[key] ?? 0) * 100)}
-              onPointerUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
-              onKeyUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
-              aria-label={label}
-            />
-            <em className="timecode">{Math.round((grade[key] ?? 0) * 100)}</em>
-          </label>
-        ))}
-      </div>
+      {GRADE_GROUPS.map((group) => (
+        <div className="pip-controls" key={group.label}>
+          <span className="pip-label">{t(group.label as never)}</span>
+          {group.keys.map((key) => (
+            <label className="grade-slider" key={`${key}-${clip.id}`}>
+              <span>{t(`grade_${key}` as never)}</span>
+              <input
+                type="range"
+                min={POSITIVE_ONLY.has(key) ? 0 : -100}
+                max={100}
+                step={5}
+                defaultValue={Math.round((grade[key] ?? 0) * 100)}
+                onPointerUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
+                onKeyUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
+                aria-label={t(`grade_${key}` as never)}
+              />
+              <em className="timecode">{Math.round((grade[key] ?? 0) * 100)}</em>
+            </label>
+          ))}
+        </div>
+      ))}
       <p className="color-hint">{t("colorScopeHint")}</p>
     </div>
   );

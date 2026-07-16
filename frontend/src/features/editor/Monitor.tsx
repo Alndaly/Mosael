@@ -86,26 +86,29 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
-    color?: { brightness?: number; contrast?: number; saturation?: number; temperature?: number };
+    color?: Record<string, number>;
   };
-  const cssFilter = React.useMemo(() => {
+  const { cssFilter, vignette } = React.useMemo(() => {
     const parts: string[] = [];
     const preset = FILTER_CSS[String(activeEffects.filter ?? "")];
     if (preset) parts.push(preset);
     const grade = activeEffects.color ?? {};
-    const clamp = (value: unknown) => Math.max(-1, Math.min(1, Number(value) || 0));
-    const b = clamp(grade.brightness);
-    const c = clamp(grade.contrast);
-    const s = clamp(grade.saturation);
-    const w = clamp(grade.temperature);
-    // Same response curves as the FFmpeg eq chain in the executor.
-    if (b) parts.push(`brightness(${(1 + b * 0.4).toFixed(3)})`);
-    if (c) parts.push(`contrast(${(1 + c * 0.6).toFixed(3)})`);
-    if (s) parts.push(`saturate(${Math.max(0, 1 + s).toFixed(3)})`);
-    // 色温近似:暖 → sepia 混入;冷 → 轻微反向色相旋转(导出走 eq gamma_r/b)。
+    const v = (key: string) => Math.max(-1, Math.min(1, Number(grade[key]) || 0));
+    // CSS 近似导出端的 FFmpeg 公式(色阶曲线/锐化无法用 CSS 表达,仅导出生效)。
+    const brightFactor = (1 + v("brightness")) * (1 + v("exposure") / 2);
+    if (Math.abs(brightFactor - 1) > 0.005) parts.push(`brightness(${brightFactor.toFixed(3)})`);
+    if (v("contrast")) parts.push(`contrast(${(1 + v("contrast") * 0.6).toFixed(3)})`);
+    if (v("gamma")) parts.push(`brightness(${(1 + v("gamma") * 0.25).toFixed(3)})`);
+    const sat = 1 + v("saturation") + v("vibrance") * 0.5;
+    if (Math.abs(sat - 1) > 0.005) parts.push(`saturate(${Math.max(0, sat).toFixed(3)})`);
+    if (v("hue")) parts.push(`hue-rotate(${(v("hue") * 180).toFixed(1)}deg)`);
+    const w = v("temperature");
     if (w > 0) parts.push(`sepia(${(w * 0.25).toFixed(3)})`);
     else if (w < 0) parts.push(`hue-rotate(${(w * 12).toFixed(1)}deg) saturate(${(1 - w * 0.08).toFixed(3)})`);
-    return parts.join(" ");
+    if (v("tint")) parts.push(`hue-rotate(${(v("tint") * -8).toFixed(1)}deg)`);
+    const fadeAmount = Math.max(0, v("fade"));
+    if (fadeAmount) parts.push(`contrast(${(1 - fadeAmount * 0.25).toFixed(3)}) brightness(${(1 + fadeAmount * 0.08).toFixed(3)})`);
+    return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")) };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
@@ -270,6 +273,12 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
             <div className="monitor-blank">
               <span className="monitor-blank-hint">{t("monitorBlankHint")}</span>
             </div>
+          )}
+          {vignette > 0 && (
+            <div
+              className="monitor-vignette"
+              style={{ boxShadow: `inset 0 0 ${60 + vignette * 120}px ${vignette * 60}px rgba(0,0,0,${0.35 + vignette * 0.4})` }}
+            />
           )}
           {activeSubtitle?.text_override && (
             <div className="monitor-subtitle">{activeSubtitle.text_override}</div>

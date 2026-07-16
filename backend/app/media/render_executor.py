@@ -38,23 +38,60 @@ def _atempo_chain(speed: float) -> str:
     return ",".join(parts) + ","
 
 
-def _grade_filter(brightness: float, contrast: float, saturation: float, temperature: float = 0.0) -> str:
-    """Manual grade ([-1,1] each) → one eq filter; empty string when untouched.
-    Ranges mirror the Monitor's CSS preview: brightness ±0.4, contrast ±0.6,
-    saturation 0..2, temperature ±0.15 on the red/blue gamma pair."""
-    if not (brightness or contrast or saturation or temperature):
+def _grade_filter(grade: dict[str, float]) -> str:
+    """Full manual grade → FFmpeg chain, ported from mibu-video's color_vf.
+
+    Values arrive normalized to [-1, 1]; formulas below convert them back to
+    the old panel's native ranges (100-based percentages, ±100 offsets, 0..100
+    amounts) so exports look identical to the old app."""
+    if not grade:
         return ""
-    parts = []
-    if brightness:
-        parts.append(f"brightness={round(brightness * 0.4, 4)}")
-    if contrast:
-        parts.append(f"contrast={round(1 + contrast * 0.6, 4)}")
-    if saturation:
-        parts.append(f"saturation={round(max(0.0, 1 + saturation), 4)}")
-    if temperature:
-        parts.append(f"gamma_r={round(1 + temperature * 0.15, 4)}")
-        parts.append(f"gamma_b={round(1 - temperature * 0.15, 4)}")
-    return ",eq=" + ":".join(parts)
+    value = lambda key: float(grade.get(key, 0.0))  # noqa: E731
+    parts: list[str] = []
+
+    # eq: contrast/brightness(+exposure)/saturation/gamma
+    contrast = 1 + value("contrast")
+    bright_factor = (1 + value("brightness")) * (1 + value("exposure") / 2)
+    saturation = 1 + value("saturation")
+    gamma = 1 + value("gamma")
+    eq_terms = []
+    if abs(contrast - 1) > 0.005:
+        eq_terms.append(f"contrast={contrast:.3f}")
+    if abs(bright_factor - 1) > 0.005:
+        eq_terms.append(f"brightness={max(-1.0, min(1.0, bright_factor - 1)):.3f}")
+    if abs(saturation - 1) > 0.005:
+        eq_terms.append(f"saturation={max(0.0, min(3.0, saturation)):.3f}")
+    if abs(gamma - 1) > 0.005:
+        eq_terms.append(f"gamma={max(0.1, min(10.0, gamma)):.3f}")
+    if eq_terms:
+        parts.append("eq=" + ":".join(eq_terms))
+
+    # Tone curve: highlights/shadows/whites/blacks/fade (old-panel ±100 → v*100)
+    highlights, shadows = value("highlights") * 100, value("shadows") * 100
+    whites, blacks = value("whites") * 100, value("blacks") * 100
+    fade = max(0.0, value("fade")) * 100
+    if any(abs(v) > 0.5 for v in (highlights, shadows, whites, blacks, fade)):
+        y0 = max(0.0, min(0.30, (blacks + fade * 0.6) / 500.0))
+        y1 = max(0.70, min(1.0, 1.0 + whites * 0.0015 - fade * 0.0008))
+        y75 = max(0.45, min(y1 - 0.02, 0.75 + highlights * 0.0015 + whites * 0.0005 - fade * 0.0003))
+        y25 = max(y0 + 0.02, min(y75 - 0.02, 0.25 + shadows * 0.0015 + blacks * 0.0005 + fade * 0.0003))
+        parts.append(f"curves=master='0/{y0:.3f} 0.25/{y25:.3f} 0.75/{y75:.3f} 1/{y1:.3f}'")
+
+    if abs(value("hue")) > 0.003:
+        parts.append(f"hue=h={value('hue') * 180:.1f}")
+    if abs(value("temperature")) > 0.005:
+        kelvin = int(max(1000, min(40000, 6500 - value("temperature") * 2500)))
+        parts.append(f"colortemperature=temperature={kelvin}")
+    if abs(value("vibrance")) > 0.005:
+        parts.append(f"vibrance=intensity={max(-2.0, min(2.0, value('vibrance') * 2)):.3f}")
+    if abs(value("tint")) > 0.005:
+        parts.append(f"colorbalance=gm={max(-1.0, min(1.0, -value('tint') * 0.2)):.3f}:pl=1")
+    if value("sharpen") > 0.005:
+        parts.append(f"unsharp=5:5:{max(0.0, min(1.5, value('sharpen') * 1.5)):.3f}:5:5:0")
+    if value("vignette") > 0.005:
+        denominator = max(4.0, 20.0 - 16.0 * min(1.0, value("vignette")))
+        parts.append(f"vignette=angle=PI/{denominator:.3f}")
+    return ("," + ",".join(parts)) if parts else ""
 
 
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
@@ -105,7 +142,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
-            preset += _grade_filter(segment.brightness, segment.contrast, segment.saturation, segment.temperature)
+            preset += _grade_filter(dict(segment.grade))
             filters.append(
                 f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
