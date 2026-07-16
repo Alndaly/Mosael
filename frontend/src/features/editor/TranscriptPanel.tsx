@@ -394,16 +394,16 @@ export function TranscriptPanel({
                 >
                   {formatTimecode(sentence.timelineStart)}
                 </button>
-                <button
-                  type="button"
-                  className="tsd-drop"
-                  title={t("cutSentenceHint")}
-                  aria-label={t("cutSentence")}
-                  onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-                >
-                  <X size={11} />
-                </button>
               </div>
+              <button
+                type="button"
+                className="tsd-drop"
+                title={t("cutSentenceHint")}
+                aria-label={t("cutSentence")}
+                onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+              >
+                <X size={11} />
+              </button>
               <p className="tsd-text">
                 {sentence.speaker && <em className="tsd-speaker">{sentence.speaker}</em>}
                 {sentence.tokens.length > 0

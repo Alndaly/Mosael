@@ -1503,11 +1503,19 @@
 
 /* ---------- Inspector ---------- */
 
+.inspector {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
 .inspector-body {
   display: grid;
   align-content: start;
   gap: 8px;
   padding: 12px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .inspector dl {
@@ -2990,6 +2998,7 @@
   gap: 10px;
 }
 .tsd-sentence {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
@@ -2997,6 +3006,7 @@
   align-items: baseline;
   border-left: 2px solid transparent;
   padding-left: 6px;
+  padding-right: 22px; /* room for the hover delete × */
   border-radius: 2px;
 }
 .tsd-sentence.active {
@@ -3021,12 +3031,15 @@
   color: var(--primary);
 }
 .tsd-drop {
+  position: absolute;
+  right: 0;
+  top: 3px;
   border: none;
   background: none;
-  padding: 1px;
+  padding: 2px;
   color: transparent;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 4px;
   line-height: 0;
 }
 .tsd-sentence:hover .tsd-drop {
@@ -3128,4 +3141,21 @@
 .tsd-doc {
   user-select: none;
   -webkit-user-select: none;
+}
+
+.inspector-delete {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 100ms, background 100ms;
+}
+.inspector-delete:hover {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
 }

@@ -76,6 +76,17 @@ export function Inspector({
     <section className="panel inspector">
       <div className="panel-head">
         <h2>{t("inspector")}</h2>
+        {selectedClip && (
+          <button
+            type="button"
+            className="inspector-delete"
+            title={t("deleteClip")}
+            aria-label={t("deleteClip")}
+            onClick={() => onDeleteClip(selectedClip.id)}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
       {selectedClip ? (
         <div className="inspector-body">
@@ -236,11 +247,6 @@ export function Inspector({
               </div>
             </div>
           )}
-          <div className="inspector-actions">
-            <Button variant="destructive" size="sm" onClick={() => onDeleteClip(selectedClip.id)}>
-              <Trash2 size={13} /> {t("deleteClip")}
-            </Button>
-          </div>
         </div>
       ) : (
         <div className="inspector-body">
