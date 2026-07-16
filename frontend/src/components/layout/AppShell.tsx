@@ -7,6 +7,7 @@ import {
   Home,
   Languages,
   Layers,
+  LogOut,
   MonitorCog,
   Moon,
   Plug,
@@ -18,8 +19,10 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TaskCenter } from "@/components/layout/TaskCenter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
@@ -106,6 +109,7 @@ export function AppShell({
           </RailButton>
         ))}
         <div className="rail-spacer" />
+        <RailUserMenu onOpenSettings={() => onViewChange("settings")} />
       </aside>
       <div className="shell-main">
         <header className="topbar">
@@ -163,6 +167,55 @@ export function AppShell({
         <main className="shell-content">{children}</main>
       </div>
     </div>
+  );
+}
+
+/** 侧栏底部的用户入口:头像(用户名首字)→ 账号菜单 + 版本号。 */
+function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const t = useI18n();
+  const { user, logout } = useAuth();
+  const [open, setOpen] = React.useState(false);
+  const initial = (user?.username ?? "?").slice(0, 1).toUpperCase();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="rail-user" aria-label={user?.username ?? "user"}>
+          {initial}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="rail-user-pop" side="right" align="end" sideOffset={10}>
+        <div className="rail-user-head">
+          <span className="rail-user-avatar">{initial}</span>
+          <div className="rail-user-names">
+            <strong>{user?.username}</strong>
+            <small>{t("railLocalAccount")}</small>
+          </div>
+        </div>
+        <div className="rail-user-actions">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings();
+            }}
+          >
+            <Settings size={13} /> {t("navSettings")}
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setOpen(false);
+              void logout();
+            }}
+          >
+            <LogOut size={13} /> {t("signOut")}
+          </button>
+        </div>
+        <div className="rail-user-version">Mibu v{__APP_VERSION__}</div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

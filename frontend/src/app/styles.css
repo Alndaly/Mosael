@@ -102,6 +102,109 @@
   background: var(--border);
 }
 
+/* 侧栏底部用户头像 + 账号菜单 */
+.rail-user {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 6px auto 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 100ms;
+}
+
+.rail-user:hover {
+  border-color: var(--primary);
+}
+
+.rail-user-pop {
+  width: 220px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.rail-user-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+}
+
+.rail-user-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rail-user-names {
+  display: grid;
+}
+
+.rail-user-names strong {
+  font-size: 13px;
+}
+
+.rail-user-names small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.rail-user-actions {
+  display: grid;
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.rail-user-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 7px 8px;
+  font-size: 12.5px;
+  color: var(--foreground);
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms;
+}
+
+.rail-user-actions button:hover {
+  background: var(--secondary);
+}
+
+.rail-user-actions button.danger {
+  color: var(--destructive);
+}
+
+.rail-user-actions button.danger:hover {
+  background: color-mix(in oklab, var(--destructive) 8%, transparent);
+}
+
+.rail-user-version {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 .rail-spacer {
   flex: 1;
 }

@@ -140,6 +140,9 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
         <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
           <code className="timecode sg-value">{workspace.id}</code>
         </SettingsRow>
+        <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
+          <code className="timecode sg-value">v{__APP_VERSION__}</code>
+        </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>
         <SettingsRow label={t("kbStatusEngine")} description={t("kbStatusEngineDesc")}>
