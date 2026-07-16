@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, JobOut, RenameRequest, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, TranscriptAttachRequest, TranscriptOut
 from app.audio.service import AsrError, start_transcription
 from app.core.permissions import ensure_workspace_access, require_asset
 from app.db.models import Asset, Clip, Transcript
@@ -61,9 +61,18 @@ def list_assets(workspace_id: str, db: DbSession, user: CurrentUser, project_id:
 
 
 @router.patch("/assets/{asset_id}", response_model=AssetOut)
-def rename_asset(asset_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> Asset:
+def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentUser) -> Asset:
     asset = require_asset(db, user, asset_id)
-    asset.name = body.name
+    if body.name is not None:
+        asset.name = body.name
+    if body.tags is not None:
+        # 标签去重且保序;空白标签直接丢弃。
+        cleaned: list[str] = []
+        for tag in body.tags:
+            value = tag.strip()[:40]
+            if value and value not in cleaned:
+                cleaned.append(value)
+        asset.tags = cleaned
     db.commit()
     db.refresh(asset)
     return asset

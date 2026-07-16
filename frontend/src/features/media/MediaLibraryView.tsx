@@ -1,8 +1,8 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Pencil, Trash2 } from "lucide-react";
+import { Check, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, type Asset, type Project, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Project, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,13 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { TagsDialog } from "@/features/media/TagsDialog";
+
+const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
+type KindFilter = (typeof KIND_FILTERS)[number];
+
+/** OpenAPI 里 tags 带默认值所以是可选字段;统一成数组再用。 */
+const assetTags = (asset: Asset): string[] => asset.tags ?? [];
 
 export function MediaLibraryView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
@@ -18,19 +25,29 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [previewing, setPreviewing] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
+  const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
+  const [tagFilter, setTagFilter] = React.useState<string | null>(null);
+  const [selectMode, setSelectMode] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [batchTagging, setBatchTagging] = React.useState(false);
+  const [batchDeleting, setBatchDeleting] = React.useState(false);
+
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["assets"] });
+
   const uploadAsset = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["assets"] }),
+    onSuccess: refresh,
   });
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
       setRenaming(null);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void refresh();
     },
   });
   const remove = useMutation({
@@ -38,45 +55,197 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
     onSuccess: () => {
       setDeleting(null);
       setDeleteError(null);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void refresh();
     },
     onError: (error) => setDeleteError(String((error as Error).message)),
   });
+  const saveTags = useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) => setAssetTags(id, tags),
+    onSuccess: () => {
+      setEditingTags(null);
+      void refresh();
+    },
+  });
+  // 批量打标:并集合并到每个选中素材上,已有标签保留。
+  const batchAddTags = useMutation({
+    mutationFn: async (tags: string[]) => {
+      const targets = (assets.data ?? []).filter((asset) => selectedIds.has(asset.id));
+      await Promise.all(
+        targets.map((asset) => {
+          const merged = [...assetTags(asset)];
+          for (const tag of tags) if (!merged.includes(tag)) merged.push(tag);
+          return setAssetTags(asset.id, merged);
+        }),
+      );
+    },
+    onSuccess: () => {
+      setBatchTagging(false);
+      void refresh();
+    },
+  });
+  const batchRemove = useMutation({
+    mutationFn: async () => {
+      // 时间线占用中的素材会被后端 422 拒绝;逐个尝试,失败的留下并提示。
+      const failures: string[] = [];
+      for (const id of selectedIds) {
+        try {
+          await deleteAsset(id);
+        } catch (error) {
+          const asset = assets.data?.find((item) => item.id === id);
+          failures.push(`${asset?.name ?? id}: ${String((error as Error).message)}`);
+        }
+      }
+      return failures;
+    },
+    onSuccess: (failures) => {
+      setBatchDeleting(false);
+      setSelectedIds(new Set());
+      if (failures.length > 0) setDeleteError(failures.join("\n"));
+      void refresh();
+    },
+  });
+
+  const allTags = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const asset of assets.data ?? []) for (const tag of assetTags(asset)) set.add(tag);
+    return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  }, [assets.data]);
+
+  const visible = React.useMemo(
+    () =>
+      (assets.data ?? []).filter(
+        (asset) =>
+          (kindFilter === "all" || asset.kind === kindFilter) &&
+          (tagFilter === null || assetTags(asset).includes(tagFilter)),
+      ),
+    [assets.data, kindFilter, tagFilter],
+  );
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const kindLabel: Record<KindFilter, string> = {
+    all: t("kindAll"),
+    video: t("kindVideo"),
+    audio: t("kindAudio"),
+    image: t("kindImage"),
+  };
 
   return (
     <div className="feature-view">
-      <div className="feature-toolbar">
-        <Button asChild>
-          <label>
-            <input
-              type="file"
-              accept="video/*,audio/*,image/*"
-              className="hidden-input"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                if (file) uploadAsset.mutate(file);
-                event.currentTarget.value = "";
-              }}
-            />
-            <ImagePlus size={15} /> {t("import")}
-          </label>
-        </Button>
+      <div className="feature-toolbar media-toolbar">
+        <div className="media-toolbar-left">
+          <Button asChild>
+            <label>
+              <input
+                type="file"
+                accept="video/*,audio/*,image/*"
+                className="hidden-input"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) uploadAsset.mutate(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <ImagePlus size={15} /> {t("import")}
+            </label>
+          </Button>
+          <div className="seg" role="group" aria-label={t("kindAll")}>
+            {KIND_FILTERS.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                className={kindFilter === kind ? "seg-btn active" : "seg-btn"}
+                onClick={() => setKindFilter(kind)}
+              >
+                {kindLabel[kind]}
+              </button>
+            ))}
+          </div>
+          {allTags.length > 0 && (
+            <div className="tag-filter" role="group" aria-label={t("filterByTag")}>
+              <Tags size={13} />
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={tagFilter === tag ? "tag-chip active" : "tag-chip"}
+                  onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="media-toolbar-right">
+          {selectMode ? (
+            <>
+              <span className="media-selected-count">
+                {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set(visible.map((a) => a.id)))}>
+                {t("mediaSelectAll")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
+                <Tag size={13} /> {t("addTags")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="danger-outline"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBatchDeleting(true)}
+              >
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={exitSelectMode}>
+                <X size={13} /> {t("cancel")}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+              <Check size={13} /> {t("mediaSelectMode")}
+            </Button>
+          )}
+        </div>
       </div>
 
       {(assets.data ?? []).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />
       ) : (
         <div className="asset-grid">
-          {(assets.data ?? []).map((asset) => (
+          {visible.map((asset) => (
             <ContextMenu key={asset.id}>
               <ContextMenuTrigger asChild>
-                <div onClick={() => setPreviewing(asset)}>
+                <div
+                  className={selectMode && selectedIds.has(asset.id) ? "asset-cell selected" : "asset-cell"}
+                  onClick={() => (selectMode ? toggleSelected(asset.id) : setPreviewing(asset))}
+                >
                   <AssetTile asset={asset} />
+                  {selectMode && (
+                    <span className={selectedIds.has(asset.id) ? "asset-check on" : "asset-check"}>
+                      <Check size={12} />
+                    </span>
+                  )}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
                 <ContextMenuItem onSelect={() => setRenaming(asset)}>
                   <Pencil /> {t("rename")}
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => setEditingTags(asset)}>
+                  <Tag /> {t("editTags")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem destructive onSelect={() => setDeleting(asset)}>
@@ -96,15 +265,40 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
         onCancel={() => setRenaming(null)}
         onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
       />
+      <TagsDialog
+        open={editingTags !== null}
+        title={t("editTags")}
+        initialTags={editingTags ? assetTags(editingTags) : []}
+        onCancel={() => setEditingTags(null)}
+        onSubmit={(tags) => editingTags && saveTags.mutate({ id: editingTags.id, tags })}
+      />
+      <TagsDialog
+        open={batchTagging}
+        title={t("addTags")}
+        body={t("addTagsBody")}
+        initialTags={[]}
+        onCancel={() => setBatchTagging(false)}
+        onSubmit={(tags) => tags.length > 0 && batchAddTags.mutate(tags)}
+      />
       <ConfirmDialog
-        open={deleting !== null}
+        open={deleting !== null || (deleteError !== null && !batchDeleting)}
         title={t("deleteConfirmTitle")}
         body={deleteError ?? t("deleteAssetBody")}
         onCancel={() => {
           setDeleting(null);
           setDeleteError(null);
         }}
-        onConfirm={() => deleting && remove.mutate(deleting.id)}
+        onConfirm={() => {
+          if (deleting) remove.mutate(deleting.id);
+          else setDeleteError(null);
+        }}
+      />
+      <ConfirmDialog
+        open={batchDeleting}
+        title={t("deleteConfirmTitle")}
+        body={t("deleteAssetsBody").replace("{n}", String(selectedIds.size))}
+        onCancel={() => setBatchDeleting(false)}
+        onConfirm={() => batchRemove.mutate()}
       />
     </div>
   );
@@ -138,6 +332,20 @@ function AssetTile({ asset }: { asset: Asset }) {
           <Badge variant="secondary">{asset.kind}</Badge>
           <small>{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? "导出" : t("mediaSourceImported")}</small>
         </div>
+        {assetTags(asset).length > 0 && (
+          <div className="asset-tags">
+            {assetTags(asset)
+              .slice(0, 3)
+              .map((tag) => (
+                <span className="tag-chip readonly" key={tag}>
+                  {tag}
+                </span>
+              ))}
+            {assetTags(asset).length > 3 && (
+              <span className="tag-chip readonly">+{assetTags(asset).length - 3}</span>
+            )}
+          </div>
+        )}
         <span className="asset-specs timecode">
           {width ? `${width}×${asset.media_info.height}` : "—"}
           {fps ? ` · ${Math.round(Number(fps))}fps` : ""}

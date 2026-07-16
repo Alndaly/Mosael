@@ -213,6 +213,10 @@ export function renameAsset(assetId: string, name: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }
 
+export function setAssetTags(assetId: string, tags: string[]): Promise<Asset> {
+  return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ tags }) });
+}
+
 export function deleteAsset(assetId: string): Promise<unknown> {
   return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }

@@ -69,6 +69,12 @@ class AssetOut(OrmModel):
     original_filename: str
     file_key: str
     media_info: dict
+    tags: list[str] = Field(default_factory=list)
+
+
+class AssetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=240)
+    tags: list[str] | None = Field(default=None, max_length=24)
 
 
 class TranscriptTokenIn(BaseModel):

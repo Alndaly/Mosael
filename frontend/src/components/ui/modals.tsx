@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /** Shared modal shell (no native dialogs per frontend rules). */
-function ModalShell({
+export function ModalShell({
   open,
   onOpenChange,
   title,

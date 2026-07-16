@@ -212,8 +212,8 @@ export interface paths {
         delete: operations["delete_asset_api_assets__asset_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Asset */
-        patch: operations["rename_asset_api_assets__asset_id__patch"];
+        /** Update Asset */
+        patch: operations["update_asset_api_assets__asset_id__patch"];
         trace?: never;
     };
     "/api/assets/{asset_id}/analyze": {
@@ -1464,6 +1464,15 @@ export interface components {
             media_info: {
                 [key: string]: unknown;
             };
+            /** Tags */
+            tags?: string[];
+        };
+        /** AssetUpdate */
+        AssetUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string[] | null;
         };
         /** AuthCredentials */
         AuthCredentials: {
@@ -2871,7 +2880,7 @@ export interface operations {
             };
         };
     };
-    rename_asset_api_assets__asset_id__patch: {
+    update_asset_api_assets__asset_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -2882,7 +2891,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RenameRequest"];
+                "application/json": components["schemas"]["AssetUpdate"];
             };
         };
         responses: {

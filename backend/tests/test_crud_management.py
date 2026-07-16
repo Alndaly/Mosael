@@ -45,6 +45,29 @@ def test_asset_rename_and_delete_blocked_when_in_use() -> None:
     assert client.delete(f"/api/assets/{asset['id']}").status_code == 204
 
 
+def test_asset_tags_update_dedupes_and_trims() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset = client.post(
+        "/api/assets",
+        json={"workspace_id": ws["id"], "kind": "video", "name": "A", "file_key": "media/a.mp4"},
+    ).json()
+    assert asset["tags"] == []
+
+    updated = client.patch(
+        f"/api/assets/{asset['id']}",
+        json={"tags": [" b-roll ", "b-roll", "海边", "", "  "]},
+    ).json()
+    assert updated["tags"] == ["b-roll", "海边"]
+
+    # 只改名不带 tags 字段:标签保持不变。
+    renamed = client.patch(f"/api/assets/{asset['id']}", json={"name": "A2"}).json()
+    assert renamed["tags"] == ["b-roll", "海边"]
+
+    listed = client.get(f"/api/assets?workspace_id={ws['id']}").json()
+    assert listed[0]["tags"] == ["b-roll", "海边"]
+
+
 def test_agent_session_rename_and_delete() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

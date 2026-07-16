@@ -81,6 +81,7 @@ class Asset(Base):
     original_filename: Mapped[str] = mapped_column(String(260), nullable=False, default="")
     file_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     media_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
