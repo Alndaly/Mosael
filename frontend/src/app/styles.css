@@ -1070,17 +1070,6 @@
   margin: 0;
 }
 
-.provider-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-  padding: 12px;
-}
-
 .provider-list {
   display: grid;
   gap: 6px;

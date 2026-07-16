@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { ModalShell } from "@/components/ui/modals";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -75,20 +76,21 @@ export function ProviderProfilesSection() {
       title={t("settingsProviders")}
       description={t("providerSectionDesc")}
       actions={
-        <Button variant="outline" size="sm" onClick={() => setAdding((value) => !value)}>
+        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
           <Plus size={13} /> {t("providerAdd")}
         </Button>
       }
     >
-      {adding && (
-        <SettingsBlock>
-          <form
-            className="provider-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (name.trim() && apiKey.trim()) create.mutate();
-            }}
-          >
+      <ModalShell open={adding} onOpenChange={(next) => !next && setAdding(false)} title={t("providerAdd")}>
+        <form
+          className="task-create-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (name.trim() && apiKey.trim()) create.mutate();
+          }}
+        >
+          <label className="wf-field">
+            <span>{t("providerVendorLabel")}</span>
             <Select value={vendor} onValueChange={setVendor}>
               <SelectTrigger>
                 <SelectValue />
@@ -101,25 +103,42 @@ export function ProviderProfilesSection() {
                 ))}
               </SelectContent>
             </Select>
+          </label>
+          <label className="wf-field">
+            <span>{t("providerNameLabel")}</span>
             <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label className="wf-field">
+            <span>API Key</span>
             <Input
               type="password"
               placeholder={t("providerKeyPlaceholder")}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
+          </label>
+          <label className="wf-field">
+            <span>Base URL</span>
             <Input
               placeholder={t("providerBaseUrl")}
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
             />
+          </label>
+          <label className="wf-field">
+            <span>{t("providerModelLabel")}</span>
             <Input placeholder={t("providerModel")} value={model} onChange={(event) => setModel(event.target.value)} />
-            <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
-              {t("save")}
+          </label>
+          <div className="task-create-actions">
+            <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>
+              {t("cancel")}
             </Button>
-          </form>
-        </SettingsBlock>
-      )}
+            <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
+              <Plus size={13} /> {t("providerAdd")}
+            </Button>
+          </div>
+        </form>
+      </ModalShell>
 
       <SettingsBlock>
         <div className="provider-list">
