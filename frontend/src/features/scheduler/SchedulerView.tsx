@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -172,22 +173,10 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
             <Button size="sm" variant="outline" disabled={!task.enabled || runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}
             </Button>
-            <div className="seg" role="tablist">
-              <button
-                type="button"
-                className={task.enabled ? "seg-btn" : "seg-btn active"}
-                onClick={() => toggleTask.mutate(false)}
-              >
-                {t("pluginOff")}
-              </button>
-              <button
-                type="button"
-                className={task.enabled ? "seg-btn active" : "seg-btn"}
-                onClick={() => toggleTask.mutate(true)}
-              >
-                {t("pluginOn")}
-              </button>
-            </div>
+            <label className="switch-field">
+              <span>{task.enabled ? t("pluginOn") : t("pluginOff")}</span>
+              <Switch checked={task.enabled} onCheckedChange={(checked) => toggleTask.mutate(checked)} />
+            </label>
           </div>
         }
       >

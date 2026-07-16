@@ -4,7 +4,8 @@ import { Film, FolderPlus } from "lucide-react";
 
 import { api, type ProjectWithStats, type Workspace } from "@/api/client";
 import { AuthProvider, useAuth } from "@/app/auth";
-import { PreferencesProvider, useI18n } from "@/app/preferences";
+import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences";
+import { Toaster } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
@@ -30,11 +31,18 @@ export function App() {
         <TooltipProvider delayDuration={300}>
           <AuthProvider>
             <AuthGate />
+            <AppToaster />
           </AuthProvider>
         </TooltipProvider>
       </PreferencesProvider>
     </QueryClientProvider>
   );
+}
+
+/** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
+function AppToaster() {
+  const { theme } = usePreferences();
+  return <Toaster theme={theme} position="bottom-right" gap={8} toastOptions={{ className: "mibu-toast" }} />;
 }
 
 function AuthGate() {

@@ -4009,18 +4009,6 @@
   display: inline-flex;
   align-items: center;
 }
-.taskrow-progress {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--border);
-  overflow: hidden;
-}
-.taskrow-progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--primary);
-  transition: width 300ms;
-}
 .taskrow-msg {
   color: var(--muted-foreground);
   font-size: 11px;
@@ -4032,6 +4020,17 @@
   color: var(--destructive);
 }
 
+/* Switch + 状态文案的组合字段(插件启用、权限授予、定时任务启停) */
+.switch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
 .sched-actions {
   display: flex;
   align-items: center;
@@ -4040,6 +4039,16 @@
 .sched-delete:hover {
   color: var(--destructive);
   border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+}
+
+/* Sonner toast:全平面 — 细边框、纯底色、无投影。 */
+.mibu-toast {
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 10px !important;
+  background: var(--popover) !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+  font-size: 12.5px !important;
 }
 
 /* ---------- Responsive (Global rhythm: breakpoints 1000 / 880 / 760) ----

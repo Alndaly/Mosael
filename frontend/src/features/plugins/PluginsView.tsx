@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, Refre
 import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -148,43 +149,22 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         title={plugin.name}
         description={`${plugin.id} · v${plugin.version}`}
         actions={
-          <div className="seg" role="tablist">
-            <button
-              type="button"
-              className={plugin.enabled ? "seg-btn" : "seg-btn active"}
-              onClick={() => togglePlugin.mutate(false)}
-            >
-              {t("pluginOff")}
-            </button>
-            <button
-              type="button"
-              className={plugin.enabled ? "seg-btn active" : "seg-btn"}
-              onClick={() => togglePlugin.mutate(true)}
-            >
-              {t("pluginOn")}
-            </button>
-          </div>
+          <label className="switch-field">
+            <span>{plugin.enabled ? t("pluginOn") : t("pluginOff")}</span>
+            <Switch checked={plugin.enabled} onCheckedChange={(checked) => togglePlugin.mutate(checked)} />
+          </label>
         }
       >
         {(grants.data ?? []).length > 0 ? (
           (grants.data ?? []).map((grant) => (
             <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
-              <div className="seg">
-                <button
-                  type="button"
-                  className={grant.granted ? "seg-btn" : "seg-btn active"}
-                  onClick={() => setGrant.mutate({ permission: grant.permission, granted: false })}
-                >
-                  {t("denied")}
-                </button>
-                <button
-                  type="button"
-                  className={grant.granted ? "seg-btn active" : "seg-btn"}
-                  onClick={() => setGrant.mutate({ permission: grant.permission, granted: true })}
-                >
-                  {t("granted")}
-                </button>
-              </div>
+              <label className="switch-field">
+                <span>{grant.granted ? t("granted") : t("denied")}</span>
+                <Switch
+                  checked={grant.granted}
+                  onCheckedChange={(granted) => setGrant.mutate({ permission: grant.permission, granted })}
+                />
+              </label>
             </SettingsRow>
           ))
         ) : (

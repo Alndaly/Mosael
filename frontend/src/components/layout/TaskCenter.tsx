@@ -12,10 +12,13 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { api, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const ACTIVE = new Set(["queued", "running"]);
@@ -42,6 +45,26 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const all = jobs.data ?? [];
   const active = all.filter((job) => ACTIVE.has(job.status));
   const finished = all.filter((job) => !ACTIVE.has(job.status)).slice(0, 12);
+
+  // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
+  // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
+  const prevStatuses = React.useRef<Map<string, string> | null>(null);
+  React.useEffect(() => {
+    if (!jobs.data) return;
+    if (prevStatuses.current === null) {
+      prevStatuses.current = new Map(jobs.data.map((job) => [job.id, job.status]));
+      return;
+    }
+    for (const job of jobs.data) {
+      const prev = prevStatuses.current.get(job.id);
+      if (prev && ACTIVE.has(prev) && !ACTIVE.has(job.status)) {
+        const label = t((KIND_META[job.kind]?.labelKey ?? "jobKindOther") as never);
+        if (job.status === "succeeded") toast.success(`${label} · ${t("jobDone")}`);
+        else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });
+      }
+      prevStatuses.current.set(job.id, job.status);
+    }
+  }, [jobs.data, t]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -118,11 +141,7 @@ function JobRow({ job }: { job: Job }) {
             )}
           </span>
         </div>
-        {running && (
-          <div className="taskrow-progress">
-            <div className="taskrow-progress-fill" style={{ width: `${Math.max(3, job.progress * 100)}%` }} />
-          </div>
-        )}
+        {running && <Progress className="taskrow-progress" value={Math.round(job.progress * 100)} />}
         <small className="taskrow-msg" title={job.error ?? job.message}>
           {job.status === "failed" ? (job.error ?? job.message) : job.message}
         </small>
