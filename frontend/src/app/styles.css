@@ -143,6 +143,44 @@
   color: var(--border-strong);
 }
 
+/* 顶栏全局搜索按钮(⌘K) */
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 100ms, color 100ms;
+}
+
+.topbar-search:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.topbar-search kbd {
+  font-family: inherit;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 15px;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 760px) {
+  .topbar-search span,
+  .topbar-search kbd {
+    display: none;
+  }
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;

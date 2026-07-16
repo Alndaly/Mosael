@@ -8,6 +8,7 @@ import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences"
 import { Toaster } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -147,6 +148,12 @@ function Studio({ workspace }: { workspace: Workspace }) {
       {view === "settings" && <SettingsView workspace={workspace} />}
       {view === "scheduler" && <SchedulerView workspace={workspace} project={project} />}
       {view === "plugins" && <PluginsView />}
+      <CommandPalette
+        workspace={workspace}
+        projects={projects.data ?? []}
+        onNavigate={setView}
+        onOpenProject={openProject}
+      />
       <ConfirmationCenter workspaceId={workspace.id} />
     </AppShell>
   );

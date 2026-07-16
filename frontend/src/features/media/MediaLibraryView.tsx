@@ -58,6 +58,17 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["assets"] });
 
+  // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
+  React.useEffect(() => {
+    const onOpenAsset = (event: Event) => {
+      const assetId = (event as CustomEvent<string>).detail;
+      const asset = (assets.data ?? []).find((item) => item.id === assetId);
+      if (asset) setPreviewing(asset);
+    };
+    window.addEventListener("mibu:open-asset", onOpenAsset);
+    return () => window.removeEventListener("mibu:open-asset", onOpenAsset);
+  }, [assets.data]);
+
   const uploadAsset = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
     onSuccess: refresh,

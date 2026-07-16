@@ -32,6 +32,13 @@ export function KbView({ workspace }: { workspace: Workspace }) {
     queryKey: ["kb-documents", workspace.id],
     queryFn: () => api<KbDocument[]>(`/api/kb/documents?workspace_id=${workspace.id}`),
   });
+
+  // Cmd+K 面板选中知识库文档后跳转到本页并选中该文档。
+  React.useEffect(() => {
+    const onOpenDoc = (event: Event) => setSelectedId((event as CustomEvent<string>).detail);
+    window.addEventListener("mibu:open-kb-doc", onOpenDoc);
+    return () => window.removeEventListener("mibu:open-kb-doc", onOpenDoc);
+  }, []);
   const search = useQuery({
     queryKey: ["kb-search", workspace.id, query],
     enabled: query.trim().length > 0,

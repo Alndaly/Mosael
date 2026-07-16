@@ -12,6 +12,7 @@ import {
   Plug,
   Rocket,
   Scissors,
+  Search,
   Settings,
   Sun,
 } from "lucide-react";
@@ -116,6 +117,15 @@ export function AppShell({
           </div>
           <div className="topbar-actions">
             {actions}
+            <button
+              type="button"
+              className="topbar-search"
+              onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
+            >
+              <Search size={13} />
+              <span>{t("cmdkTitle")}</span>
+              <kbd>⌘K</kbd>
+            </button>
             {workspaceId && <TaskCenter workspaceId={workspaceId} />}
             <Tooltip>
               <TooltipTrigger asChild>
