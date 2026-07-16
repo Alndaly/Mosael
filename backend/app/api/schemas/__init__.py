@@ -540,6 +540,76 @@ class BatchOut(BaseModel):
     items: list[BatchItemOut] = Field(default_factory=list)
 
 
+class PublishPlatformOut(BaseModel):
+    platform: str
+    label: str
+    description: str
+    config: dict
+
+
+class PublishAccountCreate(BaseModel):
+    workspace_id: str
+    platform: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=160)
+    config: dict = Field(default_factory=dict)
+
+
+class PublishAccountUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    config: dict | None = None
+    enabled: bool | None = None
+
+
+class PublishAccountOut(OrmModel):
+    id: str
+    workspace_id: str
+    platform: str
+    name: str
+    config: dict
+    enabled: bool
+    created_at: datetime
+
+
+class PublishCreate(BaseModel):
+    workspace_id: str
+    account_id: str
+    asset_id: str
+    title: str = Field(default="", max_length=300)
+    description: str = Field(default="", max_length=5000)
+    tags: list[str] = Field(default_factory=list, max_length=24)
+
+
+class PublishTaskOut(BaseModel):
+    id: str
+    workspace_id: str
+    account_id: str
+    account_name: str
+    platform: str
+    asset_id: str
+    asset_name: str
+    title: str
+    description: str
+    tags: list[str]
+    status: str
+    error: str | None
+    result: dict
+    job_id: str | None
+    created_at: datetime
+
+
+class PublishCopyRequest(BaseModel):
+    workspace_id: str
+    asset_id: str | None = None
+    brief: str = Field(default="", max_length=2000)
+    profile_id: str | None = None
+
+
+class PublishCopyResponse(BaseModel):
+    title: str
+    description: str
+    tags: list[str]
+
+
 class AgentSessionCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None

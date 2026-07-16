@@ -42,6 +42,10 @@ export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskRe
 export type Plugin = components["schemas"]["PluginOut"];
 export type Workflow = components["schemas"]["WorkflowOut"];
 export type Batch = components["schemas"]["BatchOut"];
+export type PublishPlatform = components["schemas"]["PublishPlatformOut"];
+export type PublishAccount = components["schemas"]["PublishAccountOut"];
+export type PublishTask = components["schemas"]["PublishTaskOut"];
+export type PublishCopy = components["schemas"]["PublishCopyResponse"];
 export type BatchItem = components["schemas"]["BatchItemOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type WorkflowAiEditResponse = components["schemas"]["WorkflowAiEditResponse"];
@@ -275,6 +279,54 @@ export function createBatch(body: {
 
 export function deleteBatch(batchId: string): Promise<unknown> {
   return api(`/api/batches/${batchId}`, { method: "DELETE" });
+}
+
+export function listPublishPlatforms(): Promise<PublishPlatform[]> {
+  return api<PublishPlatform[]>("/api/publish/platforms");
+}
+
+export function listPublishAccounts(workspaceId: string): Promise<PublishAccount[]> {
+  return api<PublishAccount[]>(`/api/publish/accounts?workspace_id=${workspaceId}`);
+}
+
+export function createPublishAccount(body: {
+  workspace_id: string;
+  platform: string;
+  name: string;
+  config: Record<string, unknown>;
+}): Promise<PublishAccount> {
+  return api<PublishAccount>("/api/publish/accounts", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deletePublishAccount(accountId: string): Promise<unknown> {
+  return api(`/api/publish/accounts/${accountId}`, { method: "DELETE" });
+}
+
+export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
+  return api<PublishTask[]>(`/api/publish/tasks?workspace_id=${workspaceId}`);
+}
+
+export function createPublishTask(body: {
+  workspace_id: string;
+  account_id: string;
+  asset_id: string;
+  title: string;
+  description: string;
+  tags: string[];
+}): Promise<PublishTask> {
+  return api<PublishTask>("/api/publish/tasks", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deletePublishTask(taskId: string): Promise<unknown> {
+  return api(`/api/publish/tasks/${taskId}`, { method: "DELETE" });
+}
+
+export function generatePublishCopy(body: {
+  workspace_id: string;
+  asset_id?: string | null;
+  brief?: string;
+}): Promise<PublishCopy> {
+  return api<PublishCopy>("/api/publish/copy", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function renameProject(projectId: string, name: string): Promise<Project> {

@@ -89,6 +89,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["asset_id", "generation_id"],
     },
+    "publish": {
+        "label": "发布",
+        "description": "把素材发布到指定账号(本地目录 / Webhook / 演示平台)。",
+        "config": {
+            "account_id": {"type": "string", "required": True, "description": "发布账号 id(发布页可查)"},
+            "asset_id": {"type": "template", "required": True},
+            "title": {"type": "template"},
+            "description": {"type": "template"},
+        },
+        "outputs": ["result"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")

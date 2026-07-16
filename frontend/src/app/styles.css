@@ -4762,6 +4762,110 @@
   font-size: 12px;
 }
 
+/* ---------- 发布页 ---------- */
+
+.publish-desc {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--foreground);
+  max-width: 480px;
+  white-space: pre-wrap;
+}
+
+.publish-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.publish-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publish-error {
+  color: var(--destructive);
+  font-size: 12px;
+  max-width: 420px;
+}
+
+.publish-account-list {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.publish-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.publish-account:hover {
+  background: var(--secondary);
+}
+
+.publish-account-text {
+  display: grid;
+  line-height: 1.3;
+}
+
+.publish-account-text strong {
+  font-size: 12.5px;
+}
+
+.publish-account-text small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.publish-inline-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.publish-create-actions {
+  display: flex;
+  align-items: center;
+}
+
+.publish-actions-spacer {
+  flex: 1;
+}
+
+.task-create-form textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--foreground);
+  resize: vertical;
+}
+
+.task-create-form textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* 新建任务对话框表单 */
 .task-create-form {
   display: grid;

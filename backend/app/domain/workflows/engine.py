@@ -242,6 +242,29 @@ def _handle_generate(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     return {"asset_id": generation.result_asset_id or "", "generation_id": generation.id}
 
 
+def _handle_publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    from app.db.models import Asset, PublishAccount
+    from app.domain.publish import start_publish
+
+    account = db.get(PublishAccount, str(config.get("account_id", "")))
+    if account is None or account.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("发布账号不存在")
+    asset = db.get(Asset, str(config.get("asset_id", "")))
+    if asset is None or asset.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("发布素材不存在")
+    task = start_publish(
+        db,
+        workspace_id=workflow.workspace_id,
+        account=account,
+        asset=asset,
+        title=str(config.get("title", "")),
+        description=str(config.get("description", "")),
+        tags=[],
+    )
+    final = _wait_for_job(task.job_id or "")
+    return {"result": final.result or {}}
+
+
 def _wait_for_job(job_id: str) -> Job:
     """轮询子 job 到终态(用独立会话,避免长事务)。"""
     deadline = time.monotonic() + CHILD_JOB_TIMEOUT_SECONDS
@@ -267,4 +290,5 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "transcribe_asset": _handle_transcribe,
     "export_sequence": _handle_export,
     "ai_generate": _handle_generate,
+    "publish": _handle_publish,
 }

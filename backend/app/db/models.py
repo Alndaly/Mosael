@@ -335,6 +335,38 @@ class BatchRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class PublishAccount(Base):
+    """发布目标账号(计划 §6.9 publish_accounts):platform 决定适配器,
+    config 是该平台的连接配置(目录路径 / webhook URL / 未来的 OAuth)。"""
+
+    __tablename__ = "publish_accounts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    platform: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class PublishTask(Base):
+    """一次发布(计划 §6.9 publish_tasks):成片素材 + 文案元数据 + 目标账号,
+    执行状态挂在任务总线 job 上。"""
+
+    __tablename__ = "publish_tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    account_id: Mapped[str] = mapped_column(ForeignKey("publish_accounts.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class ProviderProfile(Base):
     """A user-configured AI provider account. Multiple profiles per vendor
     are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""
