@@ -294,12 +294,18 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
                 </div>
                 <strong className="acct-name">{account.name}</strong>
                 <small className="acct-meta">
-                  {account.profile_name ? `${account.profile_name} · ` : ""}
-                  {account.last_checked_at
-                    ? t("publishLastChecked").replace("{t}", relativeTime(account.last_checked_at, locale))
-                    : t("publishNeverChecked")}
+                  {isBrowser
+                    ? `${account.profile_name ? `${account.profile_name} · ` : ""}${
+                        account.last_checked_at
+                          ? t("publishLastChecked").replace("{t}", relativeTime(account.last_checked_at, locale))
+                          : t("publishNeverChecked")
+                      }`
+                    : t("publishLocalHint")}
                 </small>
-                {account.last_error && <small className="acct-error">{account.last_error}</small>}
+                {/* 状态行恒占位:有错误显示错误,否则空占位,保证同排卡片行数一致。 */}
+                <small className={account.last_error ? "acct-error" : "acct-error placeholder"}>
+                  {account.last_error ?? " "}
+                </small>
                 <div className="acct-actions">
                   {isBrowser && (
                     <Button

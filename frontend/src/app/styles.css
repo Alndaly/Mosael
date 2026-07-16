@@ -5236,6 +5236,9 @@
   gap: 3px;
   padding: 10px;
   border-radius: 8px;
+  /* 统一卡片解剖:头/名/元信息/状态行结构恒定,操作行钉底,
+     同排卡片开关与按钮永远在同一水平线。 */
+  min-height: 128px;
 }
 
 .acct-card.disabled {
@@ -5284,7 +5287,14 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 5px;
+  margin-top: auto;
+  padding-top: 5px;
+  /* 行高恒定 = 按钮高:只有开关的本地卡与带登录/复检的浏览器卡,开关同一水平线。 */
+  min-height: 33px;
+}
+
+.acct-error.placeholder {
+  visibility: hidden;
 }
 
 .acct-spacer {
