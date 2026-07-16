@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -26,6 +27,9 @@ def create_scheduled_task(
     enabled: bool,
     payload: dict[str, Any],
 ) -> ScheduledTask:
+    if trigger_type == "webhook" and not payload.get("webhook_secret"):
+        # 外部触发路由不走登录态,按任务级密钥鉴权。
+        payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
     task = ScheduledTask(
         workspace_id=workspace_id,
         project_id=project_id,
@@ -87,7 +91,8 @@ def compute_next_run_at(
 ) -> datetime | None:
     """Next trigger time (UTC). Supports manual/once/interval/daily/weekly."""
     current = reference or now()
-    if trigger_type == "manual":
+    if trigger_type in ("manual", "webhook"):
+        # 都不进调度器轮询:手动靠 UI,webhook 靠外部 HTTP 触发。
         return None
     if trigger_type == "once":
         value = schedule.get("run_at")

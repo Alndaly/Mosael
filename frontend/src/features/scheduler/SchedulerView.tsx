@@ -1,8 +1,10 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, CircleAlert, Loader2, Play, Power, Timer, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Power, Timer, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
+  API_BASE,
   api,
   listWorkflows,
   type Job,
@@ -157,6 +159,33 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   );
 }
 
+/** Webhook 任务的触发地址:POST 该 URL 即触发一次运行,密钥即凭证。 */
+function WebhookUrlRow({ task }: { task: ScheduledTask }) {
+  const t = useI18n();
+  const secret = String((task.payload as { webhook_secret?: string })?.webhook_secret ?? "");
+  const url = `${API_BASE}/api/hooks/scheduled-tasks/${task.id}?secret=${secret}`;
+  return (
+    <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
+      <div className="webhook-url-cell">
+        <code className="timecode sg-value webhook-url" title={url}>
+          {url}
+        </code>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t("copy")}
+          onClick={() => {
+            void navigator.clipboard.writeText(url);
+            toast.success(t("webhookCopied"));
+          }}
+        >
+          <Copy size={13} />
+        </Button>
+      </div>
+    </SettingsRow>
+  );
+}
+
 /** 任务详情里的"这个任务做什么":显示绑定的工作流,点击跳到工作流页。 */
 function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
   const t = useI18n();
@@ -195,7 +224,9 @@ function CreateTaskDialog({
   const t = useI18n();
   const [name, setName] = React.useState("");
   const [workflowId, setWorkflowId] = React.useState<string | null>(null);
-  const [trigger, setTrigger] = React.useState<"manual" | "interval" | "daily">("manual");
+  const [trigger, setTrigger] = React.useState<"manual" | "scheduled" | "webhook">("manual");
+  const [schedKind, setSchedKind] = React.useState<"hourly" | "daily">("hourly");
+  const [dailyTime, setDailyTime] = React.useState("09:00");
 
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
@@ -205,19 +236,24 @@ function CreateTaskDialog({
   const selectedWorkflow = (workflows.data ?? []).find((workflow) => workflow.id === workflowId) ?? null;
 
   const create = useMutation({
-    mutationFn: () =>
-      api<ScheduledTask>("/api/scheduled-tasks", {
+    mutationFn: () => {
+      const trigger_type =
+        trigger === "scheduled" ? (schedKind === "hourly" ? "interval" : "daily") : trigger;
+      const schedule =
+        trigger !== "scheduled" ? {} : schedKind === "hourly" ? { seconds: 3600 } : { time: dailyTime };
+      return api<ScheduledTask>("/api/scheduled-tasks", {
         method: "POST",
         body: JSON.stringify({
           workspace_id: workspace.id,
           project_id: project?.id ?? null,
           name: name.trim() || selectedWorkflow?.name || t("createTask"),
           kind: "workflow",
-          trigger_type: trigger,
-          schedule: trigger === "interval" ? { seconds: 3600 } : trigger === "daily" ? { time: "09:00" } : {},
+          trigger_type,
+          schedule,
           payload: { workflow_id: workflowId, params: {} },
         }),
-      }),
+      });
+    },
     onSuccess: onCreated,
   });
 
@@ -255,11 +291,32 @@ function CreateTaskDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="manual">{t("trigger_manual")}</SelectItem>
-              <SelectItem value="interval">{t("triggerHourly")}</SelectItem>
-              <SelectItem value="daily">{t("triggerDaily9")}</SelectItem>
+              <SelectItem value="scheduled">{t("triggerScheduled")}</SelectItem>
+              <SelectItem value="webhook">Webhook</SelectItem>
             </SelectContent>
           </Select>
+          {trigger === "webhook" && <small>{t("webhookCreateHint")}</small>}
         </label>
+        {trigger === "scheduled" && (
+          <div className="task-sched-config">
+            <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hourly">{t("triggerHourly")}</SelectItem>
+                <SelectItem value="daily">{t("triggerDailyAt")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {schedKind === "daily" && (
+              <Input
+                type="time"
+                value={dailyTime}
+                onChange={(event) => setDailyTime(event.target.value || "09:00")}
+              />
+            )}
+          </div>
+        )}
         <div className="task-create-actions">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
@@ -340,6 +397,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         }
       >
         {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
+        {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
         <SettingsRow label={t("taskSchedule")} description={t("taskScheduleDesc")}>
           <code className="timecode sg-value">{scheduleLabel}</code>
         </SettingsRow>

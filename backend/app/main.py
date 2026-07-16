@@ -15,6 +15,7 @@ from app.api.routes.confirmations import router as confirmations_router
 from app.api.routes.feishu import router as feishu_router
 from app.api.routes.generation import router as generation_router
 from app.api.routes.health import router as health_router
+from app.api.routes.hooks import router as hooks_router
 from app.api.routes.jobs import router as jobs_router
 from app.api.routes.kb import router as kb_router
 from app.api.routes.plugins import router as plugins_router
@@ -63,6 +64,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
+    # Webhook 触发按任务密钥鉴权,不挂登录依赖。
+    app.include_router(hooks_router, prefix="/api")
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(assets_router, prefix="/api", dependencies=protected)

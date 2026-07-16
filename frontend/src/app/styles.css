@@ -4768,6 +4768,30 @@
   gap: 12px;
 }
 
+.task-sched-config {
+  display: flex;
+  gap: 6px;
+}
+
+.task-sched-config input[type="time"] {
+  width: 110px;
+}
+
+/* Webhook 触发地址:超长 URL 截断 + 复制按钮 */
+.webhook-url-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.webhook-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-create-actions {
   display: flex;
   justify-content: flex-end;
