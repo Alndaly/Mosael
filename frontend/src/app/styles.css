@@ -10,6 +10,12 @@
      add per-context padding or font overrides.
    - Master-detail pages (settings/plugins/scheduler): detail
      column max 680px, list column 200–260px, shell gap 12.
+   - FLAT: no drop shadows anywhere (--shadow-* resolve to none);
+     separation = hairline borders + background value steps. Focus
+     rings, active-indicator insets and in-video effects are fine.
+   - Accents (点缀), used sparingly: primary rail indicator bar,
+     primary-tinted empty-state icons, section-label icons, playhead
+     red, karaoke word underline. Don't add more without cause.
    ============================================================ */
 
 /* ---------- App shell ---------- */
@@ -45,6 +51,7 @@
 }
 
 .rail-btn {
+  position: relative;
   display: grid;
   place-items: center;
   width: 36px;
@@ -55,6 +62,18 @@
   color: var(--muted-foreground);
   cursor: pointer;
   transition: background-color 100ms, color 100ms;
+}
+
+/* 点缀:当前分区的左缘主色指示条 — 素界面里唯一的持续性强调。 */
+.rail-btn.active::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 9px;
+  bottom: 9px;
+  width: 2.5px;
+  border-radius: 999px;
+  background: var(--primary);
 }
 
 .rail-btn:hover {
@@ -337,11 +356,10 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
   border-radius: 10px;
-  background: var(--panel);
-  box-shadow: var(--shadow-panel);
-  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--primary) 6%, var(--panel));
+  color: var(--primary);
 }
 
 .empty-state-badge {
@@ -1361,7 +1379,7 @@
 .monitor-overlay {
   position: absolute;
   border-radius: 2px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   object-fit: contain;
 }
 
@@ -1403,7 +1421,6 @@
   border-radius: 50%;
   background: #ffffff;
   transform: translateY(-50%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   opacity: 0;
   transition: opacity 100ms;
 }
@@ -1482,7 +1499,6 @@
   border-radius: 50%;
   background: #ffffff;
   border: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .monitor-volume::-moz-range-thumb {
@@ -2642,7 +2658,9 @@
 .seg-btn.active {
   background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  border: none;
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
 }
 .gen-view {
   display: flex;
@@ -2921,7 +2939,6 @@
   border-radius: 50%;
   background: var(--primary);
   border: 2px solid var(--background);
-  box-shadow: 0 0 0 1px var(--border-strong);
 }
 .grade-slider em {
   font-style: normal;
