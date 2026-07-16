@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, PublishAccount, PublishTask, TaskEvent
 from app.domain.jobs import create_job
+from app.domain.notifications import notify
 from app.media.paths import resolve_key
 
 
@@ -206,6 +207,14 @@ def _run_publish_thread(task_id: str) -> None:
             job.message = f"发布完成: {task.title or asset.name}"
             task.status = "success"
             db.add(TaskEvent(job_id=job.id, type="publish.finished", payload=result))
+            notify(
+                db,
+                task.workspace_id,
+                type="publish",
+                title=f"发布成功: {task.title or asset.name}",
+                link="#/publish",
+                payload={"task_id": task.id, "platform": account.platform, "status": "success"},
+            )
         except Exception as exc:  # noqa: BLE001 — 适配器失败必须落到 job
             job.status = "failed"
             job.error = str(exc)[:500]
@@ -213,6 +222,15 @@ def _run_publish_thread(task_id: str) -> None:
             task.status = "failed"
             task.error_message = str(exc)[:500]
             db.add(TaskEvent(job_id=job.id, type="publish.failed", payload={"error": str(exc)[:500]}))
+            notify(
+                db,
+                task.workspace_id,
+                type="publish",
+                title=f"发布失败: {task.title or asset.name}",
+                body=str(exc)[:300],
+                link="#/publish",
+                payload={"task_id": task.id, "platform": account.platform, "status": "failed"},
+            )
         db.commit()
 
 

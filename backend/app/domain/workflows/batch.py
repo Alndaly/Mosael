@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import BatchRun, Job, TaskEvent, Workflow
 from app.domain.jobs import create_job
+from app.domain.notifications import notify
 from app.domain.workflows import WorkflowDomainError, validate_graph
 from app.domain.workflows.engine import run_workflow
 
@@ -103,6 +104,15 @@ def _run_batch_thread(batch_id: str) -> None:
         parent.progress = 1.0
         parent.result = {"succeeded": succeeded, "failed": failed, "total": total}
         parent.message = f"批量完成: {batch.name}(成功 {succeeded} / 失败 {failed})"
+        notify(
+            db,
+            batch.workspace_id,
+            type="batch",
+            title=f"批量完成: {batch.name}",
+            body=f"成功 {succeeded} / 失败 {failed}(共 {total} 项)",
+            link="#/batch",
+            payload={"batch_id": batch.id, "succeeded": succeeded, "failed": failed},
+        )
         db.commit()
 
 

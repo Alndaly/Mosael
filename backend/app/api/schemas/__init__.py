@@ -269,6 +269,23 @@ class JobOut(OrmModel):
     updated_at: datetime
 
 
+class NotificationOut(OrmModel):
+    id: str
+    workspace_id: str
+    type: str
+    title: str
+    body: str
+    link: str | None
+    payload: dict
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationListOut(BaseModel):
+    items: list[NotificationOut]
+    unread: int
+
+
 class AnalyzeAssetRequest(BaseModel):
     question: str = Field(default="", max_length=2000)
     profile_id: str | None = None

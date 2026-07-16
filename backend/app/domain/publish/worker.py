@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, PublishAccount, PublishTask, TaskEvent, now
+from app.domain.notifications import notify
 from app.domain.publish import (
     BINDING_STATUSES,
     PUBLISH_PLATFORMS,
@@ -111,13 +112,44 @@ def report_task(
     if task.status == "cancelled":
         # 已取消的任务不给后到的 worker 回报复活(老版规则)。
         return task
+    previous = task.status
     task.status = status
     task.error_message = error_message
     task.screenshot_path = screenshot_path
     _sync_job(db, task)
+    if status != previous:
+        _notify_status(db, task)
     db.commit()
     db.refresh(task)
     return task
+
+
+# 状态跃迁 → 通知文案;running/pending 之类的中间态不打扰。
+_NOTIFY_TITLES = {
+    "success": "发布成功",
+    "prepared": "发布已就绪(待手动确认)",
+    "failed": "发布失败",
+    "login_required": "发布需要重新登录",
+    "waiting_manual": "发布等待人工处理",
+    "permission_required": "发布权限不足",
+    "blocked": "发布被平台拦截",
+}
+
+
+def _notify_status(db: Session, task: PublishTask) -> None:
+    title = _NOTIFY_TITLES.get(task.status)
+    if title is None:
+        return
+    account = db.get(PublishAccount, task.account_id)
+    notify(
+        db,
+        task.workspace_id,
+        type="publish",
+        title=f"{title}: {task.title}",
+        body=task.error_message or "",
+        link="#/publish",
+        payload={"task_id": task.id, "platform": account.platform if account else "", "status": task.status},
+    )
 
 
 def _sync_job(db: Session, task: PublishTask) -> None:

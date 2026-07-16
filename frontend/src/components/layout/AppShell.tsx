@@ -23,6 +23,7 @@ import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
@@ -134,6 +135,7 @@ export function AppShell({
               <kbd>⌘K</kbd>
             </button>
             {workspaceId && <TaskCenter workspaceId={workspaceId} />}
+            {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

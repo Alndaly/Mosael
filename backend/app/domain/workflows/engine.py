@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Transcript, Workflow
 from app.domain.jobs import create_job
+from app.domain.notifications import notify
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, interpolate, topo_order, validate_graph
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,15 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
             job.error = str(exc)[:500]
             job.message = "工作流失败"
             db.add(TaskEvent(job_id=job.id, type="workflow.failed", payload={"error": str(exc)[:500]}))
+            notify(
+                db,
+                workflow.workspace_id,
+                type="workflow",
+                title=f"工作流失败: {workflow.name}",
+                body=str(exc)[:300],
+                link="#/workflows",
+                payload={"workflow_id": workflow.id, "job_id": job.id},
+            )
             db.commit()
 
 

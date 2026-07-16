@@ -306,6 +306,30 @@ export function deleteBatch(batchId: string): Promise<unknown> {
   return api(`/api/batches/${batchId}`, { method: "DELETE" });
 }
 
+export interface AppNotification {
+  id: string;
+  workspace_id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string | null;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export function listNotifications(workspaceId: string): Promise<{ items: AppNotification[]; unread: number }> {
+  return api(`/api/notifications?workspace_id=${workspaceId}`);
+}
+
+export function readNotification(id: string): Promise<AppNotification> {
+  return api(`/api/notifications/${id}/read`, { method: "POST" });
+}
+
+export function readAllNotifications(workspaceId: string): Promise<{ read: number }> {
+  return api(`/api/notifications/read-all?workspace_id=${workspaceId}`, { method: "POST" });
+}
+
 export function listPublishPlatforms(): Promise<PublishPlatform[]> {
   return api<PublishPlatform[]>("/api/publish/platforms");
 }

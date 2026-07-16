@@ -25,6 +25,7 @@ from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
 from app.api.routes.batches import router as batches_router
 from app.api.routes.publish import router as publish_router
+from app.api.routes.notifications import router as notifications_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.core.config import settings
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(assets_router, prefix="/api", dependencies=protected)
     app.include_router(sequences_router, prefix="/api", dependencies=protected)
     app.include_router(jobs_router, prefix="/api", dependencies=protected)
+    app.include_router(notifications_router, prefix="/api", dependencies=protected)
     app.include_router(kb_router, prefix="/api", dependencies=protected)
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
