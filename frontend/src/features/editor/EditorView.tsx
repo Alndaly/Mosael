@@ -437,11 +437,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
       }}
     >
-      <div className="panel-resizer col" style={{ left: leftWidth - 3 }} onPointerDown={startPanelDrag("left")} />
+      {/* Resizers sit on the 12px gap centers; grid pads 16px 20px (Global rhythm). */}
+      <div className="panel-resizer col" style={{ left: leftWidth + 20 + 6 - 3 }} onPointerDown={startPanelDrag("left")} />
       {showInspector && (
-        <div className="panel-resizer col right" style={{ right: panels.right - 3 }} onPointerDown={startPanelDrag("right")} />
+        <div
+          className="panel-resizer col right"
+          style={{ right: panels.right + 20 + 6 - 3 }}
+          onPointerDown={startPanelDrag("right")}
+        />
       )}
-      <div className="panel-resizer row" style={{ bottom: panels.timeline + 5 }} onPointerDown={startPanelDrag("timeline")} />
+      <div
+        className="panel-resizer row"
+        style={{ bottom: panels.timeline + 16 + 6 - 3 }}
+        onPointerDown={startPanelDrag("timeline")}
+      />
       {leftTab === "media" ? (
         <MediaPool
           assets={assets.data ?? []}
