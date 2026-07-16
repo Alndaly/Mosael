@@ -1,13 +1,18 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { KeyRound, LogOut, MessageSquare, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
 
-import { API_BASE, type Workspace } from "@/api/client";
+import { API_BASE, api, type Workspace } from "@/api/client";
+import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+type KbStatus = components["schemas"]["KbStatusOut"];
 
 type SectionId = "account" | "appearance" | "providers" | "feishu" | "backend";
 
@@ -119,14 +124,35 @@ function AppearanceSection() {
 
 function BackendSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const kbStatus = useQuery({
+    queryKey: ["kb-status"],
+    queryFn: () => api<KbStatus>("/api/kb/status"),
+  });
+  const tierBadge = (enabled: boolean | undefined) => (
+    <Badge variant={enabled ? "default" : "secondary"}>{enabled ? t("kbStatusOn") : t("kbStatusOff")}</Badge>
+  );
   return (
-    <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
-      <SettingsRow label={t("settingsEndpoint")} description={t("settingsEndpointDesc")}>
-        <code className="timecode sg-value">{API_BASE}</code>
-      </SettingsRow>
-      <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
-        <code className="timecode sg-value">{workspace.id}</code>
-      </SettingsRow>
-    </SettingsGroup>
+    <>
+      <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
+        <SettingsRow label={t("settingsEndpoint")} description={t("settingsEndpointDesc")}>
+          <code className="timecode sg-value">{API_BASE}</code>
+        </SettingsRow>
+        <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
+          <code className="timecode sg-value">{workspace.id}</code>
+        </SettingsRow>
+      </SettingsGroup>
+      <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>
+        <SettingsRow label={t("kbStatusEngine")} description={t("kbStatusEngineDesc")}>
+          <code className="timecode sg-value">{kbStatus.data?.convert_engine ?? "…"}</code>
+        </SettingsRow>
+        <SettingsRow label={t("kbStatusVector")} description={t("kbStatusVectorDesc")}>
+          {kbStatus.data?.embedding_model && <code className="timecode sg-value">{kbStatus.data.embedding_model}</code>}
+          {tierBadge(kbStatus.data?.vector_enabled)}
+        </SettingsRow>
+        <SettingsRow label={t("kbStatusGraph")} description={t("kbStatusGraphDesc")}>
+          {tierBadge(kbStatus.data?.graph_enabled)}
+        </SettingsRow>
+      </SettingsGroup>
+    </>
   );
 }

@@ -598,6 +598,13 @@ class KbDocumentOut(OrmModel):
     content: str | None = None  # 列表不带正文,详情才带
 
 
+class KbStatusOut(BaseModel):
+    convert_engine: str
+    vector_enabled: bool
+    graph_enabled: bool
+    embedding_model: str = ""
+
+
 class KbSearchResultOut(BaseModel):
     document_id: str
     title: str

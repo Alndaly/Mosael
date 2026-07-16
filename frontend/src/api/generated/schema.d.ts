@@ -763,6 +763,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kb/documents/import-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import File
+         * @description 上传文件并经转换引擎(MinerU/markitdown/纯文本)转成 markdown 文档。
+         */
+        post: operations["import_file_api_kb_documents_import_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kb Status
+         * @description 各增强层的启用状态,前端用来给出能力提示。
+         */
+        get: operations["kb_status_api_kb_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kb/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -1607,6 +1647,13 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_file_api_kb_documents_import_file_post */
+        Body_import_file_api_kb_documents_import_file_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** File */
+            file: string;
+        };
         /** ClipOut */
         ClipOut: {
             /** Id */
@@ -2009,6 +2056,20 @@ export interface components {
              * @default 0
              */
             score: number;
+        };
+        /** KbStatusOut */
+        KbStatusOut: {
+            /** Convert Engine */
+            convert_engine: string;
+            /** Vector Enabled */
+            vector_enabled: boolean;
+            /** Graph Enabled */
+            graph_enabled: boolean;
+            /**
+             * Embedding Model
+             * @default
+             */
+            embedding_model: string;
         };
         /** KbUrlImportRequest */
         KbUrlImportRequest: {
@@ -4319,6 +4380,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KbDocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_file_api_kb_documents_import_file_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_file_api_kb_documents_import_file_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kb_status_api_kb_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbStatusOut"];
                 };
             };
             /** @description Validation Error */

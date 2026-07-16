@@ -13,6 +13,10 @@ dependencies = [
   "mcp>=1.28.1",
   "httpx>=0.28.1",
   "lark-oapi>=1.7.1",
+  # 知识库文件转换与增强检索
+  "markitdown[pdf,docx,pptx,xlsx]>=0.1.1",
+  "pymilvus[milvus_lite]>=2.4.4",  # milvus-lite:内嵌单文件向量库
+  "neo4j>=5.23",               # 可选图谱层;未配置连接时不启用
 ]
 
 [dependency-groups]

@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+import logging
+import re
+import threading
+from typing import Any
+
+import httpx
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.domain.providers import resolve_profile
+
+"""
+知识库图谱层(可选增强,Revornix GraphRAG 的单机裁剪):配置 neo4j_uri
+即启用。入库时用 LLM 抽取实体(人物/地点/主题/风格…),写成
+(Document)-[:HAS_CHUNK]->(Chunk)-[:MENTIONS]->(Entity) 图;检索时以
+FTS/向量命中的文档为种子,经共享实体扩展出相关 chunk,融合进结果。
+社区发现等重活不做 —— "种子→实体→扩展"这一步是收益核心。
+失败一律降级,不影响基线检索。
+"""
+
+logger = logging.getLogger(__name__)
+
+_driver_lock = threading.Lock()
+_driver: Any | None = None
+
+ENTITY_PROMPT = (
+    "从下面的文本里抽取最多 10 个关键实体(人物、地点、品牌、主题、视觉风格、"
+    "拍摄手法等),输出 JSON 数组,每项 {\"name\": 实体名, \"type\": 类型}。"
+    "实体名用原文语言、保持简短;不要输出 JSON 以外的任何内容。\n\n文本:\n"
+)
+
+
+def graph_tier_enabled() -> bool:
+    return bool(settings.neo4j_uri)
+
+
+def _get_driver() -> Any:
+    global _driver
+    with _driver_lock:
+        if _driver is None:
+            from neo4j import GraphDatabase
+
+            _driver = GraphDatabase.driver(
+                settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password)
+            )
+        return _driver
+
+
+def extract_entities(db: Session, text: str) -> list[dict[str, str]]:
+    """LLM 实体抽取;没有可用模型或解析失败返回空。"""
+    vendor = settings.kb_embedding_vendor  # 复用同一供应商配置做轻量抽取
+    profile = resolve_profile(db, vendor) if vendor else None
+    if profile is None or not profile.default_model:
+        return []
+    try:
+        response = httpx.post(
+            f"{profile.base_url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {profile.api_key}"},
+            json={
+                "model": profile.default_model,
+                "messages": [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
+                "temperature": 0,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        content = str(response.json()["choices"][0]["message"]["content"])
+        match = re.search(r"\[.*\]", content, re.DOTALL)
+        if not match:
+            return []
+        entities = json.loads(match.group(0))
+        return [
+            {"name": str(item["name"]).strip()[:80], "type": str(item.get("type", ""))[:40]}
+            for item in entities
+            if isinstance(item, dict) and str(item.get("name", "")).strip()
+        ][:10]
+    except Exception:  # noqa: BLE001 - 降级路径
+        logger.exception("KB entity extraction failed")
+        return []
+
+
+def upsert_document_graph(
+    db: Session, *, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]]
+) -> None:
+    """chunks: [(chunk_id, text)]。每个 chunk 独立抽实体并写图。"""
+    if not graph_tier_enabled() or not chunks:
+        return
+    driver = _get_driver()
+    with driver.session() as session:
+        session.run("MATCH (c:Chunk {document_id: $doc}) DETACH DELETE c", doc=document_id)
+        session.run(
+            "MERGE (d:Document {id: $doc}) SET d.title = $title, d.workspace_id = $ws",
+            doc=document_id, title=title, ws=workspace_id,
+        )
+        for chunk_id, text in chunks:
+            entities = extract_entities(db, text)
+            session.run(
+                "MATCH (d:Document {id: $doc}) "
+                "MERGE (c:Chunk {id: $chunk}) SET c.document_id = $doc, c.workspace_id = $ws "
+                "MERGE (d)-[:HAS_CHUNK]->(c)",
+                doc=document_id, chunk=chunk_id, ws=workspace_id,
+            )
+            for entity in entities:
+                session.run(
+                    "MATCH (c:Chunk {id: $chunk}) "
+                    "MERGE (e:Entity {name: $name, workspace_id: $ws}) "
+                    "ON CREATE SET e.type = $type "
+                    "MERGE (c)-[:MENTIONS]->(e)",
+                    chunk=chunk_id, name=entity["name"], type=entity["type"], ws=workspace_id,
+                )
+
+
+def delete_document_graph(document_id: str) -> None:
+    if not graph_tier_enabled():
+        return
+    try:
+        with _get_driver().session() as session:
+            session.run("MATCH (c:Chunk {document_id: $doc}) DETACH DELETE c", doc=document_id)
+            session.run("MATCH (d:Document {id: $doc}) DETACH DELETE d", doc=document_id)
+    except Exception:  # noqa: BLE001 - 降级路径
+        logger.exception("KB graph delete failed")
+
+
+def expand_related_chunks(workspace_id: str, seed_document_ids: list[str], *, limit: int = 12) -> list[tuple[str, str]]:
+    """种子文档 → 共享实体 → 其他文档的相关 chunk;返回 [(chunk_id, document_id)]。"""
+    if not graph_tier_enabled() or not seed_document_ids:
+        return []
+    try:
+        with _get_driver().session() as session:
+            records = session.run(
+                "MATCH (seed:Document)-[:HAS_CHUNK]->(:Chunk)-[:MENTIONS]->(e:Entity) "
+                "WHERE seed.id IN $seeds AND e.workspace_id = $ws "
+                "MATCH (e)<-[:MENTIONS]-(c:Chunk)<-[:HAS_CHUNK]-(d:Document) "
+                "WHERE NOT d.id IN $seeds "
+                "RETURN c.id AS chunk_id, d.id AS document_id, count(e) AS shared "
+                "ORDER BY shared DESC LIMIT $limit",
+                seeds=seed_document_ids, ws=workspace_id, limit=limit,
+            )
+            return [(record["chunk_id"], record["document_id"]) for record in records]
+    except Exception:  # noqa: BLE001 - 降级路径
+        logger.exception("KB graph expansion failed")
+        return []

@@ -95,3 +95,133 @@ def test_kb_workspace_scoping() -> None:
 
     other = second_client()
     assert other.get(f"/api/kb/documents/{doc['id']}").status_code in (403, 404)
+
+
+def test_kb_file_import_txt_and_md(tmp_path) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    doc = client.post(
+        "/api/kb/documents/import-file",
+        data={"workspace_id": ws},
+        files={"file": ("拍摄清单.md", "# 清单\n\n无人机镜头三组。".encode(), "text/markdown")},
+    ).json()
+    assert doc["title"] == "拍摄清单" and doc["source_type"] == "file"
+    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=无人机镜头").json()
+    assert hits and hits[0]["document_id"] == doc["id"]
+
+
+def test_kb_file_import_rejects_unknown_type() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    response = client.post(
+        "/api/kb/documents/import-file",
+        data={"workspace_id": ws},
+        files={"file": ("movie.mp4", b"\x00\x01", "video/mp4")},
+    )
+    assert response.status_code == 422
+
+
+def test_kb_convert_engine_selection(monkeypatch) -> None:
+    from app.core.config import settings
+    from app.domain.kb import convert
+
+    monkeypatch.setattr(settings, "kb_convert_engine", "auto")
+    monkeypatch.setattr(settings, "mineru_api_token", "")
+    assert convert.active_engine() == "markitdown"
+    monkeypatch.setattr(settings, "mineru_api_token", "tok")
+    assert convert.active_engine() == "mineru"
+    monkeypatch.setattr(settings, "kb_convert_engine", "text")
+    assert convert.active_engine() == "text"
+
+
+def test_kb_status_endpoint() -> None:
+    client = fresh_client()
+    status = client.get("/api/kb/status").json()
+    assert status["convert_engine"] in ("markitdown", "mineru", "text")
+    assert status["vector_enabled"] is False  # 未配置 embedding 时向量层关闭
+    assert status["graph_enabled"] is False
+
+
+def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
+    """向量层命中的文档要能被 RRF 提到前面(用假 dense 结果验证融合逻辑)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    doc_a = client.post(
+        "/api/kb/documents", json={"workspace_id": ws, "title": "文档A", "content": "海边的镜头语言与调色参考。"}
+    ).json()
+    doc_b = client.post(
+        "/api/kb/documents", json={"workspace_id": ws, "title": "文档B", "content": "海边的旅拍脚本与分镜。"}
+    ).json()
+
+    from app.core.db import SessionLocal
+    from app.db.models import KbChunk
+    from app.domain import kb as kb_domain
+    from sqlalchemy import select
+
+    with SessionLocal() as session:
+        chunk_b = session.scalars(select(KbChunk).where(KbChunk.document_id == doc_b["id"])).first()
+        chunk_b_id = chunk_b.id
+
+    # 假向量层:强烈偏向文档B
+    monkeypatch.setattr(kb_domain.kb_vectors, "dense_search", lambda db, ws_, q, limit=20: [(chunk_b_id, doc_b["id"])] * 1)
+
+    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=海边").json()
+    assert [h["document_id"] for h in hits][0] == doc_b["id"]
+    assert {h["document_id"] for h in hits} == {doc_a["id"], doc_b["id"]}
+
+
+def test_kb_milvus_lite_roundtrip(tmp_path, monkeypatch) -> None:
+    """真实 milvus-lite:建库、写入、按 workspace 过滤检索、删除。"""
+    from app.core.config import settings
+    from app.domain.kb import vectors
+
+    monkeypatch.setattr(settings, "kb_embedding_vendor", "openai-compatible")
+    monkeypatch.setattr(settings, "kb_embedding_model", "fake-embed")
+    monkeypatch.setattr(settings, "kb_embedding_dim", 8)
+    monkeypatch.setattr(settings, "kb_milvus_uri", str(tmp_path / "vec.db"))
+    monkeypatch.setattr(vectors, "_client", None)
+
+    def fake_embed(db, texts):
+        return [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
+
+    monkeypatch.setattr(vectors, "embed_texts", fake_embed)
+
+    vectors.upsert_document_vectors(None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")])
+    hits = vectors.dense_search(None, "ws1", "abc", limit=5)
+    assert hits and hits[0][1] == "d1"
+    assert vectors.dense_search(None, "ws-other", "abc", limit=5) == []
+    vectors.delete_document_vectors("d1")
+    assert vectors.dense_search(None, "ws1", "abc", limit=5) == []
+    monkeypatch.setattr(vectors, "_client", None)
+
+
+def test_kb_graph_expansion_merges_related_docs(monkeypatch) -> None:
+    """图谱层扩展出的低权重相关文档要出现在结果尾部(不喧宾夺主)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    doc_hit = client.post(
+        "/api/kb/documents", json={"workspace_id": ws, "title": "命中文档", "content": "冲浪板评测与海浪运镜。"}
+    ).json()
+    doc_related = client.post(
+        "/api/kb/documents", json={"workspace_id": ws, "title": "相关文档", "content": "装备清单:防水壳、脚绳。"}
+    ).json()
+
+    from app.core.db import SessionLocal
+    from app.db.models import KbChunk
+    from app.domain import kb as kb_domain
+    from sqlalchemy import select
+
+    with SessionLocal() as session:
+        related_chunk = session.scalars(select(KbChunk).where(KbChunk.document_id == doc_related["id"])).first()
+        related_id = related_chunk.id
+
+    monkeypatch.setattr(
+        kb_domain.kb_graph,
+        "expand_related_chunks",
+        lambda ws_, seeds, limit=12: [(related_id, doc_related["id"])] if doc_hit["id"] in seeds else [],
+    )
+
+    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=冲浪板").json()
+    ids = [h["document_id"] for h in hits]
+    assert ids[0] == doc_hit["id"]          # 直接命中排最前
+    assert doc_related["id"] in ids          # 图谱扩展的相关文档并入结果

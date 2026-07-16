@@ -3813,10 +3813,27 @@
   gap: 2px;
 }
 
-/* 知识库列表多一行搜索框:头 / 搜索 / 列表 */
+/* 知识库列表列:头 / 搜索 / (导入状态) / 列表,行数可变用 flex */
 .plugins-list.kb-list {
-  grid-template-rows: auto auto minmax(0, 1fr);
-  row-gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-list .plugins-list-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-import-status {
+  margin: 0 8px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.kb-import-status.error {
+  color: var(--destructive);
+  white-space: pre-wrap;
 }
 
 .kb-search {

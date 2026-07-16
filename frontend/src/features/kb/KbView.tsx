@@ -63,19 +63,13 @@ export function KbView({ workspace }: { workspace: Workspace }) {
       void refresh();
     },
   });
+  // 文件统一交给后端转换引擎(MinerU/markitdown):PDF/Word/PPT/Excel 都能进。
   const importFile = useMutation({
     mutationFn: async (file: File) => {
-      const text = await file.text();
-      return api<KbDocument>("/api/kb/documents", {
-        method: "POST",
-        body: JSON.stringify({
-          workspace_id: workspace.id,
-          title: file.name.replace(/\.(md|txt|markdown)$/i, ""),
-          content: text.slice(0, 400_000),
-          source_type: "file",
-          source_ref: file.name,
-        }),
-      });
+      const form = new FormData();
+      form.set("workspace_id", workspace.id);
+      form.set("file", file);
+      return api<KbDocument>("/api/kb/documents/import-file", { method: "POST", body: form });
     },
     onSuccess: (doc) => {
       setSelectedId(doc.id);
@@ -141,7 +135,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
                 <label>
                   <input
                     type="file"
-                    accept=".md,.txt,.markdown,text/plain,text/markdown"
+                    accept=".md,.txt,.markdown,.pdf,.docx,.doc,.pptx,.xlsx,.xls,.html,.htm,.csv,.epub"
                     className="hidden-input"
                     onChange={(event) => {
                       const file = event.currentTarget.files?.[0];
@@ -162,6 +156,11 @@ export function KbView({ workspace }: { workspace: Workspace }) {
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
+          {(importFile.isError || importFile.isPending) && (
+            <p className={importFile.isPending ? "kb-import-status" : "kb-import-status error"}>
+              {importFile.isPending ? t("kbConverting") : String((importFile.error as Error).message)}
+            </p>
+          )}
           <div className="plugins-list-body">
             {searching
               ? (search.data ?? []).map((hit) => (
