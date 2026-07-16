@@ -304,6 +304,21 @@ class ScheduledTaskRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Workflow(Base):
+    """可视化工作流(Coze/Dify 式):graph 存节点+连线的 JSON,
+    定时任务与智能体都以 workflow 为执行单元。"""
+
+    __tablename__ = "workflows"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    graph: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class ProviderProfile(Base):
     """A user-configured AI provider account. Multiple profiles per vendor
     are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""

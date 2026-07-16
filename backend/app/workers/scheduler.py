@@ -97,7 +97,19 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
     """Route known task kinds to their executors; unknown kinds stay queued."""
     payload: dict[str, Any] = task.payload or {}
     try:
-        if task.kind == "ai_generation":
+        if task.kind == "workflow":
+            from app.db.models import Workflow
+            from app.domain.workflows.engine import start_workflow_job
+
+            workflow = db.get(Workflow, str(payload.get("workflow_id", "")))
+            if workflow is None:
+                raise RuntimeError("任务绑定的工作流不存在")
+            # 复用 run 的 job 作为工作流 job:引擎直接在它上面推进度/终态。
+            job.payload = {**job.payload, "workflow_id": workflow.id}
+            run.status = "running"
+            db.commit()
+            start_workflow_job(db, workflow, params=dict(payload.get("params") or {}), job=job)
+        elif task.kind == "ai_generation":
             from app.domain.generation import create_generation_job
             from app.domain.generation.runner import start_generation_thread
 

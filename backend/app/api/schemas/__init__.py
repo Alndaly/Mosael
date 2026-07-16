@@ -466,6 +466,52 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
+class WorkflowCreate(BaseModel):
+    workspace_id: str
+    name: str = Field(min_length=1, max_length=180)
+    description: str = Field(default="", max_length=2000)
+    graph: dict | None = None
+
+
+class WorkflowUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=2000)
+    graph: dict | None = None
+
+
+class WorkflowOut(OrmModel):
+    id: str
+    workspace_id: str
+    name: str
+    description: str
+    graph: dict
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowRunRequest(BaseModel):
+    params: dict = Field(default_factory=dict)
+
+
+class WorkflowNodeTypeOut(BaseModel):
+    type: str
+    label: str
+    description: str
+    config: dict
+    outputs: list[str]
+
+
+class WorkflowAiEditRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=4000)
+    graph: dict | None = None
+    profile_id: str | None = None
+
+
+class WorkflowAiEditResponse(BaseModel):
+    graph: dict
+    summary: str = ""
+
+
 class AgentSessionCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None
