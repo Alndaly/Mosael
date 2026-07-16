@@ -8,6 +8,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/ui/modals";
@@ -98,7 +99,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       description={t("feishuDesc")}
       actions={
         <>
-          <Button size="sm" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
+          {/* 两种绑定方式是平级选择,同一视觉重量,不做主次 */}
+          <Button size="sm" variant="outline" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
             <QrCode size={13} /> {t("feishuScanCreate")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setManualOpen(true)}>
@@ -139,20 +141,25 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                 </div>
                 <StatusBadge status={bot.status} />
                 <div className="feishu-bot-actions">
-                  <select
+                  <Select
                     value={bot.capability}
-                    onChange={(event) => patchBot.mutate({ id: bot.id, body: { capability: event.target.value } })}
+                    onValueChange={(capability) => patchBot.mutate({ id: bot.id, body: { capability } })}
                   >
-                    {CAPABILITIES.map((capability) => (
-                      <option key={capability} value={capability}>
-                        {capability === "readonly"
-                          ? t("feishuCapReadonly")
-                          : capability === "editor"
-                            ? t("feishuCapEditor")
-                            : t("feishuCapFull")}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CAPABILITIES.map((capability) => (
+                        <SelectItem key={capability} value={capability}>
+                          {capability === "readonly"
+                            ? t("feishuCapReadonly")
+                            : capability === "editor"
+                              ? t("feishuCapEditor")
+                              : t("feishuCapFull")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button variant="ghost" size="icon-sm" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
                     <RefreshCcw size={13} />
                   </Button>

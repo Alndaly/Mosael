@@ -7,6 +7,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
@@ -88,13 +89,18 @@ export function ProviderProfilesSection() {
               if (name.trim() && apiKey.trim()) create.mutate();
             }}
           >
-            <select value={vendor} onChange={(event) => setVendor(event.target.value)}>
-              {(vendors.data ?? []).map((preset) => (
-                <option key={preset.vendor} value={preset.vendor}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
+            <Select value={vendor} onValueChange={setVendor}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(vendors.data ?? []).map((preset) => (
+                  <SelectItem key={preset.vendor} value={preset.vendor}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
             <Input
               type="password"

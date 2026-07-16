@@ -8,6 +8,7 @@ import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryVie
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 
 export function HomeView({
@@ -71,16 +72,16 @@ export function HomeView({
             placeholder={t("searchProjects")}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <select
-            className="toolbar-select"
-            value={sortKey}
-            aria-label={t("sortUpdated")}
-            onChange={(event) => setSortKey(event.target.value as "updated" | "created" | "name")}
-          >
-            <option value="updated">{t("sortUpdated")}</option>
-            <option value="created">{t("sortCreated")}</option>
-            <option value="name">{t("sortName")}</option>
-          </select>
+          <Select value={sortKey} onValueChange={(value) => setSortKey(value as "updated" | "created" | "name")}>
+            <SelectTrigger aria-label={t("sortUpdated")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
+              <SelectItem value="created">{t("sortCreated")}</SelectItem>
+              <SelectItem value="name">{t("sortName")}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button size="sm" onClick={() => createProject.mutate()}>
           <FolderPlus size={13} /> {t("createProject")}

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
@@ -199,17 +200,17 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
             placeholder={t("searchAssets")}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <select
-            className="toolbar-select"
-            value={sortKey}
-            aria-label={t("sortNewest")}
-            onChange={(event) => setSortKey(event.target.value as SortKey)}
-          >
-            <option value="created">{t("sortNewest")}</option>
-            <option value="updated">{t("sortUpdated")}</option>
-            <option value="name">{t("sortName")}</option>
-            <option value="duration">{t("sortDuration")}</option>
-          </select>
+          <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+            <SelectTrigger aria-label={t("sortNewest")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created">{t("sortNewest")}</SelectItem>
+              <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
+              <SelectItem value="name">{t("sortName")}</SelectItem>
+              <SelectItem value="duration">{t("sortDuration")}</SelectItem>
+            </SelectContent>
+          </Select>
           {allTags.length > 0 && (
             <div className="tag-filter" role="group" aria-label={t("filterByTag")}>
               <Tags size={13} />
