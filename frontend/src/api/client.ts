@@ -36,6 +36,7 @@ export type GenerationModel = components["schemas"]["GenerationModelOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
 export type ScheduledTask = components["schemas"]["ScheduledTaskOut"];
+export type ScheduledTaskRun = components["schemas"]["ScheduledTaskRunOut"];
 export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskResponse"];
 export type Plugin = components["schemas"]["PluginOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];

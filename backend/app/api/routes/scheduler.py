@@ -12,7 +12,7 @@ from app.api.schemas import (
     ScheduledTaskUpdate,
 )
 from app.core.permissions import ensure_workspace_access
-from app.db.models import ScheduledTask
+from app.db.models import ScheduledTask, ScheduledTaskRun
 from app.domain.scheduler import create_scheduled_task, run_scheduled_task, update_scheduled_task
 from app.domain.scheduler.operations import SchedulerDomainError
 
@@ -55,6 +55,22 @@ def delete_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
     db.delete(task)
     db.commit()
     return Response(status_code=204)
+
+
+@router.get("/scheduled-tasks/{task_id}/runs", response_model=list[ScheduledTaskRunOut])
+def list_task_runs(task_id: str, db: DbSession, user: CurrentUser) -> list[ScheduledTaskRun]:
+    task = db.get(ScheduledTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Scheduled task not found")
+    ensure_workspace_access(db, user, task.workspace_id)
+    return list(
+        db.scalars(
+            select(ScheduledTaskRun)
+            .where(ScheduledTaskRun.scheduled_task_id == task_id)
+            .order_by(ScheduledTaskRun.started_at.desc())
+            .limit(20)
+        )
+    )
 
 
 @router.post("/scheduled-tasks/{task_id}/run", response_model=RunScheduledTaskResponse)

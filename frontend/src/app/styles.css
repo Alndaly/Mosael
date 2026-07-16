@@ -3546,3 +3546,13 @@
 .taskrow.failed .taskrow-msg {
   color: var(--destructive);
 }
+
+.sched-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sched-delete:hover {
+  color: var(--destructive);
+  border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+}

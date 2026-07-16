@@ -1,20 +1,34 @@
+import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Pause, Play, Timer, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleAlert, Loader2, Play, Timer, Trash2 } from "lucide-react";
 
-import { api, type Job, type Project, type RunScheduledTaskResponse, type ScheduledTask, type Workspace } from "@/api/client";
+import {
+  api,
+  type Job,
+  type Project,
+  type RunScheduledTaskResponse,
+  type ScheduledTask,
+  type ScheduledTaskRun,
+  type Workspace,
+} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/modals";
+import { EmptyState } from "@/components/layout/EmptyState";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
+/**
+ * 定时任务页 = 主从布局(与插件页同一设计语言):左列任务列表,
+ * 右侧选中任务的详情(概览行 + 运行记录)。
+ */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
     queryFn: () => api<ScheduledTask[]>(`/api/scheduled-tasks?workspace_id=${workspace.id}`),
-  });
-  const jobs = useQuery({
-    queryKey: ["jobs", workspace.id],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}`),
   });
   const createTask = useMutation({
     mutationFn: () =>
@@ -30,72 +44,198 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           payload: { project_id: project?.id ?? null },
         }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
-  });
-  const toggleTask = useMutation({
-    mutationFn: (task: ScheduledTask) =>
-      api<ScheduledTask>(`/api/scheduled-tasks/${task.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled: !task.enabled }),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
-  });
-  const deleteTask = useMutation({
-    mutationFn: (taskId: string) => api(`/api/scheduled-tasks/${taskId}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] }),
-  });
-  const runTask = useMutation({
-    mutationFn: (taskId: string) => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}/run`, { method: "POST" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
-      qc.invalidateQueries({ queryKey: ["jobs", workspace.id] });
+    onSuccess: (task) => {
+      setSelectedId(task.id);
+      void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
     },
   });
 
+  const selected =
+    (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
+
   return (
     <div className="feature-view">
-      <div className="feature-toolbar">
-        <Button onClick={() => createTask.mutate()}><CalendarClock size={16} /> {t("createTask")}</Button>
-      </div>
-
-      <section className="feature-grid two">
-        <div className="panel feature-panel">
-          <div className="panel-head"><h2>{t("tasks")}</h2></div>
-          <div className="task-list">
+      <div className="plugins-shell">
+        <aside className="plugins-list panel">
+          <div className="panel-head">
+            <h2>{t("tasks")}</h2>
+            <Button variant="outline" size="sm" disabled={createTask.isPending} onClick={() => createTask.mutate()}>
+              <CalendarClock size={13} /> {t("createTask")}
+            </Button>
+          </div>
+          <div className="plugins-list-body">
             {(tasks.data ?? []).map((task) => (
-              <div className="task-row" key={task.id}>
-                <Timer size={16} />
-                <div>
+              <button
+                key={task.id}
+                type="button"
+                className={selected?.id === task.id ? "plugins-item active" : "plugins-item"}
+                onClick={() => setSelectedId(task.id)}
+              >
+                <span className={task.enabled ? "plugins-dot on" : "plugins-dot"} />
+                <span className="plugins-item-text">
                   <strong>{task.name}</strong>
-                  <small>{task.kind} · {task.trigger_type} · {task.next_run_at ?? t("manual")}</small>
-                </div>
-                <div className="plugin-actions">
-                  <Button size="icon-sm" variant="outline" onClick={() => runTask.mutate(task.id)} disabled={!task.enabled}><Play size={13} /></Button>
-                  <Button size="icon-sm" variant="ghost" onClick={() => toggleTask.mutate(task)}>{task.enabled ? <Pause size={13} /> : <Play size={13} />}</Button>
-                  <Button size="icon-sm" variant="ghost" onClick={() => deleteTask.mutate(task.id)}><Trash2 size={13} /></Button>
-                </div>
-              </div>
+                  <small>
+                    {t(`taskKind_${task.kind}` as never)} · {t(`trigger_${task.trigger_type}` as never)}
+                  </small>
+                </span>
+              </button>
             ))}
-            {tasks.data?.length === 0 && <div className="empty-inline">{t("noTasks")}</div>}
+            {tasks.data?.length === 0 && (
+              <div className="empty-inline">
+                <Timer size={16} />
+                {t("noTasksGuide")}
+              </div>
+            )}
           </div>
+        </aside>
+        <div className="plugins-detail">
+          {selected ? (
+            <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
+          ) : (
+            <EmptyState icon={<Timer size={22} />} title={t("noTasks")} body={t("noTasksGuide")} />
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="panel feature-panel">
-          <div className="panel-head"><h2>{t("recentJobs")}</h2></div>
-          <div className="job-list">
-            {(jobs.data ?? []).slice(0, 8).map((job) => (
-              <div className="job-row" key={job.id}>
-                <Play size={16} />
-                <div>
-                  <strong>{job.kind}</strong>
-                  <small>{job.status} · {job.message}</small>
-                </div>
-              </div>
-            ))}
-            {jobs.data?.length === 0 && <div className="empty-inline">{t("noJobs")}</div>}
+function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: string }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [deleting, setDeleting] = React.useState(false);
+
+  const runs = useQuery({
+    queryKey: ["task-runs", task.id],
+    queryFn: () => api<ScheduledTaskRun[]>(`/api/scheduled-tasks/${task.id}/runs`),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : false,
+    refetchIntervalInBackground: true,
+  });
+  const jobs = useQuery({
+    queryKey: ["jobs", workspaceId, "all"],
+    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}`),
+  });
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
+    void qc.invalidateQueries({ queryKey: ["task-runs", task.id] });
+  };
+  const toggleTask = useMutation({
+    mutationFn: (enabled: boolean) =>
+      api<ScheduledTask>(`/api/scheduled-tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      }),
+    onSuccess: refresh,
+  });
+  const runTask = useMutation({
+    mutationFn: () => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${task.id}/run`, { method: "POST" }),
+    onSuccess: () => {
+      refresh();
+      void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] });
+    },
+  });
+  const deleteTask = useMutation({
+    mutationFn: () => api(`/api/scheduled-tasks/${task.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setDeleting(false);
+      void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });
+    },
+  });
+
+  const scheduleLabel =
+    task.trigger_type === "interval" && task.schedule?.seconds
+      ? t("everySeconds").replace("{s}", String(task.schedule.seconds))
+      : JSON.stringify(task.schedule ?? {});
+
+  return (
+    <div className="plugins-detail-body">
+      <SettingsGroup
+        title={task.name}
+        description={`${t(`taskKind_${task.kind}` as never)} · ${t(`trigger_${task.trigger_type}` as never)}`}
+        actions={
+          <div className="sched-actions">
+            <Button size="sm" variant="outline" disabled={!task.enabled || runTask.isPending} onClick={() => runTask.mutate()}>
+              <Play size={13} /> {t("runNow")}
+            </Button>
+            <div className="seg" role="tablist">
+              <button
+                type="button"
+                className={task.enabled ? "seg-btn" : "seg-btn active"}
+                onClick={() => toggleTask.mutate(false)}
+              >
+                {t("pluginOff")}
+              </button>
+              <button
+                type="button"
+                className={task.enabled ? "seg-btn active" : "seg-btn"}
+                onClick={() => toggleTask.mutate(true)}
+              >
+                {t("pluginOn")}
+              </button>
+            </div>
           </div>
+        }
+      >
+        <SettingsRow label={t("taskSchedule")} description={t("taskScheduleDesc")}>
+          <code className="timecode sg-value">{scheduleLabel}</code>
+        </SettingsRow>
+        <SettingsRow label={t("taskNextRun")} description={t("taskNextRunDesc")}>
+          <code className="timecode sg-value">{task.next_run_at ?? t("manual")}</code>
+        </SettingsRow>
+        <SettingsRow label={t("taskLastRun")}>
+          <code className="timecode sg-value">{task.last_run_at ?? "—"}</code>
+        </SettingsRow>
+        <SettingsRow label={t("deleteTask")} description={t("deleteTaskDesc")}>
+          <Button size="sm" variant="outline" className="sched-delete" onClick={() => setDeleting(true)}>
+            <Trash2 size={13} /> {t("delete")}
+          </Button>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("taskRuns")} description={t("taskRunsDesc")}>
+        <SettingsBlock>
+          {(runs.data ?? []).map((run) => (
+            <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
+          ))}
+          {runs.data?.length === 0 && <p className="feishu-empty">{t("noRunsYet")}</p>}
+        </SettingsBlock>
+      </SettingsGroup>
+
+      <ConfirmDialog
+        open={deleting}
+        title={t("deleteConfirmTitle")}
+        body={t("deleteTaskBody")}
+        onCancel={() => setDeleting(false)}
+        onConfirm={() => deleteTask.mutate()}
+      />
+    </div>
+  );
+}
+
+function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
+  const running = run.status === "queued" || run.status === "running";
+  return (
+    <div className={running ? "taskrow running" : `taskrow ${run.status}`}>
+      <span className="taskrow-icon">
+        {running ? (
+          <Loader2 size={13} className="spin" />
+        ) : run.status === "succeeded" ? (
+          <CheckCircle2 size={13} className="inv-ok" />
+        ) : (
+          <CircleAlert size={13} className="inv-bad" />
+        )}
+      </span>
+      <div className="taskrow-body">
+        <div className="taskrow-title">
+          <strong className="timecode">{(run.started_at ?? "").replace("T", " ").slice(0, 19) || run.status}</strong>
+          <span className="taskrow-status">{run.status}</span>
         </div>
-      </section>
+        <small className="taskrow-msg" title={run.error ?? job?.message ?? ""}>
+          {run.error ?? job?.message ?? ""}
+        </small>
+      </div>
     </div>
   );
 }

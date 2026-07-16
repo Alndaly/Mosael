@@ -377,6 +377,7 @@ class ScheduledTaskOut(OrmModel):
     enabled: bool
     payload: dict
     next_run_at: datetime | None
+    last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
