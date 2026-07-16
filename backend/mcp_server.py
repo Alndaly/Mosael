@@ -268,6 +268,57 @@ def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) ->
 
 
 @mcp.tool()
+def search_kb(query: str, workspace_id: str = "", limit: int = 6) -> list[dict[str, Any]]:
+    """Search the workspace knowledge base (scripts, briefs, notes, imported articles).
+
+    Use this BEFORE writing copy, planning a cut, or answering questions about
+    the user's project background — the KB holds their scripts, style guides
+    and reference material. Returns per-document best-matching snippets with
+    document_id; call read_kb_document for the full text. Chinese and English
+    queries both work (trigram index). Do NOT use for media assets — that is
+    list_assets/analyze_asset.
+    """
+    ws = workspace_id or _default_workspace_id()
+    return _get("/api/kb/search", {"workspace_id": ws, "q": query, "limit": limit})
+
+
+@mcp.tool()
+def read_kb_document(document_id: str) -> dict[str, Any]:
+    """Read one knowledge-base document in full (title, markdown content, tags).
+
+    Get document_id from search_kb results or the user. Prefer search_kb
+    snippets when you only need a fact; read the full document when you must
+    follow a script or style guide precisely.
+    """
+    doc = _get(f"/api/kb/documents/{document_id}")
+    return {
+        "document_id": doc["id"],
+        "title": doc["title"],
+        "source_type": doc["source_type"],
+        "source_ref": doc["source_ref"],
+        "tags": doc.get("tags", []),
+        "content": doc.get("content") or "",
+    }
+
+
+@mcp.tool()
+def create_kb_note(title: str, content: str, workspace_id: str = "", tags: list[str] | None = None) -> dict[str, Any]:
+    """Save a note into the knowledge base (runs directly, no confirmation).
+
+    Use to persist reusable creative output the user asks you to keep:
+    finalized scripts, shot lists, title/description drafts, research digests.
+    Do NOT dump raw chat replies — save polished, reusable material with a
+    clear title.
+    """
+    ws = workspace_id or _default_workspace_id()
+    doc = _post(
+        "/api/kb/documents",
+        {"workspace_id": ws, "title": title, "content": content, "source_type": "note", "tags": tags or []},
+    )
+    return {"document_id": doc["id"], "title": doc["title"]}
+
+
+@mcp.tool()
 def list_skills() -> list[dict[str, Any]]:
     """List available agent skills (reusable playbooks for common Mibu workflows).
 

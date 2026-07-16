@@ -3805,6 +3805,168 @@
   white-space: nowrap;
 }
 
+/* ---------- Knowledge base ---------- */
+
+.kb-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 知识库列表多一行搜索框:头 / 搜索 / 列表 */
+.plugins-list.kb-list {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  row-gap: 8px;
+}
+
+.kb-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+
+.kb-search input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--foreground);
+  outline: none;
+}
+
+.kb-item-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+
+.kb-hit {
+  display: grid;
+  gap: 2px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.kb-hit:hover {
+  background: var(--muted);
+}
+
+.kb-hit.active {
+  background: var(--accent);
+}
+
+.kb-hit strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kb-hit span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-editor {
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.kb-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kb-title-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--foreground);
+  outline: none;
+  padding: 2px 0;
+}
+
+.kb-editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.kb-saved-hint {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.kb-editor-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.kb-editor-meta a {
+  color: var(--primary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+
+.kb-content-input {
+  min-height: 0;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 14px 16px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--foreground);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 100ms;
+}
+
+.kb-content-input:focus-visible {
+  border-color: var(--primary);
+}
+
+.kb-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Task center (任务总线统一入口) */
 .taskcenter {
   position: relative;

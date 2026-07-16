@@ -455,3 +455,39 @@ class PluginInvocation(Base):
     output: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class KbDocument(Base):
+    """知识库文档(计划 §6.9):正文 markdown 直接入库,检索走 kb_chunks 的 FTS。"""
+
+    __tablename__ = "kb_documents"
+    __table_args__ = (Index("idx_kb_documents_workspace_updated", "workspace_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(24), nullable=False, default="note")  # note|file|url
+    source_ref: Mapped[str] = mapped_column(String(600), nullable=False, default="")
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="ready")  # ready|error
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+    chunks: Mapped[list["KbChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", order_by="KbChunk.chunk_index"
+    )
+
+
+class KbChunk(Base):
+    __tablename__ = "kb_chunks"
+    __table_args__ = (Index("idx_kb_chunks_document", "document_id", "chunk_index"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    document_id: Mapped[str] = mapped_column(ForeignKey("kb_documents.id", ondelete="CASCADE"), nullable=False)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    document: Mapped[KbDocument] = relationship(back_populates="chunks")

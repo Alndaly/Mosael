@@ -564,6 +564,50 @@ class AgentSkillOut(BaseModel):
     permissions: list = Field(default_factory=list)
 
 
+class KbDocumentCreate(BaseModel):
+    workspace_id: str
+    title: str = Field(min_length=1, max_length=300)
+    content: str = Field(default="", max_length=400_000)
+    source_type: str = Field(default="note", pattern="^(note|file|url)$")
+    source_ref: str = Field(default="", max_length=600)
+    tags: list[str] = Field(default_factory=list, max_length=24)
+
+
+class KbDocumentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    content: str | None = Field(default=None, max_length=400_000)
+    tags: list[str] | None = Field(default=None, max_length=24)
+
+
+class KbUrlImportRequest(BaseModel):
+    workspace_id: str
+    url: str = Field(min_length=8, max_length=600)
+
+
+class KbDocumentOut(OrmModel):
+    id: str
+    workspace_id: str
+    title: str
+    source_type: str
+    source_ref: str
+    summary: str
+    tags: list[str] = Field(default_factory=list)
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    content: str | None = None  # 列表不带正文,详情才带
+
+
+class KbSearchResultOut(BaseModel):
+    document_id: str
+    title: str
+    source_type: str
+    tags: list[str] = Field(default_factory=list)
+    chunk_index: int
+    snippet: str
+    score: float = 0.0
+
+
 class PromptSkillOut(BaseModel):
     """文件型智能体技能(skills/<id>/SKILL.md);body 仅在单独获取时返回。"""
 
