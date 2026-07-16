@@ -3664,3 +3664,18 @@
 .inspector-drawer .inspector {
   height: 100%;
 }
+
+/* Streamdown 给表格套了两层带边框圆角的包装容器 — 剥掉包装,只保留
+   内层的横向滚动能力和我们自己的表格边框(否则是三层嵌套框)。 */
+.chat-bubble.assistant div:has(> div > table) {
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  margin: 10px 0;
+}
+.chat-bubble.assistant div:has(> table) {
+  border: none;
+  border-radius: 0;
+  background: none;
+}
