@@ -20,6 +20,7 @@ import {
   BookOpen,
   Loader2,
   Mic,
+  Pencil,
   Play,
   Plus,
   Save,
@@ -49,6 +50,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -93,6 +95,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
+  const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
 
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
@@ -106,6 +110,26 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       setSelectedId(workflow.id);
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
+  });
+
+  const menuRename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => updateWorkflow(id, { name }),
+    onSuccess: () => {
+      setMenuRenaming(null);
+      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+    },
+  });
+  const menuRemove = useMutation({
+    mutationFn: (id: string) => deleteWorkflow(id),
+    onSuccess: () => {
+      setMenuDeleting(null);
+      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+    },
+  });
+  const menuRun = useMutation({
+    mutationFn: (id: string) => runWorkflow(id),
+    onSuccess: () => toast.success(t("wfRunQueued")),
+    onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
 
   const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? (workflows.data ?? [])[0] ?? null;
@@ -139,19 +163,34 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           </div>
           <div className="plugins-list-body">
             {(workflows.data ?? []).map((workflow) => (
-              <button
-                key={workflow.id}
-                type="button"
-                className={selected?.id === workflow.id ? "plugins-item active" : "plugins-item"}
-                onClick={() => setSelectedId(workflow.id)}
-              >
-                <span className="plugins-item-text">
-                  <strong>{workflow.name}</strong>
-                  <small>
-                    {t("wfNodeCount").replace("{n}", String((workflow.graph as unknown as WorkflowGraph).nodes?.length ?? 0))}
-                  </small>
-                </span>
-              </button>
+              <ContextMenu key={workflow.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={selected?.id === workflow.id ? "plugins-item active" : "plugins-item"}
+                    onClick={() => setSelectedId(workflow.id)}
+                  >
+                    <span className="plugins-item-text">
+                      <strong>{workflow.name}</strong>
+                      <small>
+                        {t("wfNodeCount").replace("{n}", String((workflow.graph as unknown as WorkflowGraph).nodes?.length ?? 0))}
+                      </small>
+                    </span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => menuRun.mutate(workflow.id)}>
+                    <Play /> {t("wfRun")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => setMenuRenaming(workflow)}>
+                    <Pencil /> {t("rename")}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem destructive onSelect={() => setMenuDeleting(workflow)}>
+                    <Trash2 /> {t("delete")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </div>
         </aside>
@@ -168,6 +207,20 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       </div>
+      <RenameDialog
+        open={menuRenaming !== null}
+        title={t("rename")}
+        initialValue={menuRenaming?.name ?? ""}
+        onCancel={() => setMenuRenaming(null)}
+        onSubmit={(name) => menuRenaming && menuRename.mutate({ id: menuRenaming.id, name })}
+      />
+      <ConfirmDialog
+        open={menuDeleting !== null}
+        title={t("deleteConfirmTitle")}
+        body={t("wfDeleteBody")}
+        onCancel={() => setMenuDeleting(null)}
+        onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
+      />
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, FileText, FileUp, Link2, Loader2, NotebookPen, Search, Tag, Trash2 } from "lucide-react";
+import { BookOpen, FileText, FileUp, Link2, Loader2, NotebookPen, Pencil, Search, Tag, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { TagsDialog } from "@/features/media/TagsDialog";
@@ -27,6 +28,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
   const [query, setQuery] = React.useState("");
   const [urlDialogOpen, setUrlDialogOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<KbDocument | null>(null);
+  const [renaming, setRenaming] = React.useState<KbDocument | null>(null);
 
   const documents = useQuery({
     queryKey: ["kb-documents", workspace.id],
@@ -89,6 +91,15 @@ export function KbView({ workspace }: { workspace: Workspace }) {
       setDeleting(null);
       if (selectedId === id) setSelectedId(null);
       void refresh();
+    },
+  });
+  const renameDoc = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api<KbDocument>(`/api/kb/documents/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+    onSuccess: (doc) => {
+      setRenaming(null);
+      void refresh();
+      void qc.invalidateQueries({ queryKey: ["kb-document", doc.id] });
     },
   });
 
@@ -182,21 +193,33 @@ export function KbView({ workspace }: { workspace: Workspace }) {
                   </button>
                 ))
               : listed.map((doc) => (
-                  <button
-                    key={doc.id}
-                    type="button"
-                    className={selected?.id === doc.id ? "plugins-item active" : "plugins-item"}
-                    onClick={() => setSelectedId(doc.id)}
-                  >
-                    <span className="kb-item-icon">{sourceIcon(doc.source_type)}</span>
-                    <span className="plugins-item-text">
-                      <strong>{doc.title}</strong>
-                      <small>
-                        {sourceLabel(doc.source_type, t)}
-                        {(doc.tags ?? []).length > 0 ? ` · ${(doc.tags ?? []).join(" / ")}` : ""}
-                      </small>
-                    </span>
-                  </button>
+                  <ContextMenu key={doc.id}>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className={selected?.id === doc.id ? "plugins-item active" : "plugins-item"}
+                        onClick={() => setSelectedId(doc.id)}
+                      >
+                        <span className="kb-item-icon">{sourceIcon(doc.source_type)}</span>
+                        <span className="plugins-item-text">
+                          <strong>{doc.title}</strong>
+                          <small>
+                            {sourceLabel(doc.source_type, t)}
+                            {(doc.tags ?? []).length > 0 ? ` · ${(doc.tags ?? []).join(" / ")}` : ""}
+                          </small>
+                        </span>
+                      </button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onSelect={() => setRenaming(doc)}>
+                        <Pencil /> {t("rename")}
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem destructive onSelect={() => setDeleting(doc)}>
+                        <Trash2 /> {t("delete")}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 ))}
             {searching && search.isSuccess && (search.data ?? []).length === 0 && (
               <div className="empty-inline">
@@ -214,6 +237,13 @@ export function KbView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
 
+      <RenameDialog
+        open={renaming !== null}
+        title={t("rename")}
+        initialValue={renaming?.title ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(title) => renaming && renameDoc.mutate({ id: renaming.id, title })}
+      />
       <KbUrlDialog
         open={urlDialogOpen}
         pending={importUrl.isPending}

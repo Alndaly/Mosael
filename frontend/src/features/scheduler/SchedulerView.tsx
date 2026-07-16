@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, CircleAlert, Loader2, Play, Timer, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleAlert, Loader2, Play, Power, Timer, Trash2 } from "lucide-react";
 
 import {
   api,
@@ -15,6 +15,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
@@ -31,10 +32,28 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [menuDeleting, setMenuDeleting] = React.useState<ScheduledTask | null>(null);
 
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
     queryFn: () => api<ScheduledTask[]>(`/api/scheduled-tasks?workspace_id=${workspace.id}`),
+  });
+  const refreshTasks = () => void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
+  const menuRun = useMutation({
+    mutationFn: (id: string) => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${id}/run`, { method: "POST" }),
+    onSuccess: refreshTasks,
+  });
+  const menuToggle = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api<ScheduledTask>(`/api/scheduled-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+    onSuccess: refreshTasks,
+  });
+  const menuRemove = useMutation({
+    mutationFn: (id: string) => api(`/api/scheduled-tasks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setMenuDeleting(null);
+      refreshTasks();
+    },
   });
 
   const selected =
@@ -86,20 +105,35 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           </div>
           <div className="plugins-list-body">
             {(tasks.data ?? []).map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                className={selected?.id === task.id ? "plugins-item active" : "plugins-item"}
-                onClick={() => setSelectedId(task.id)}
-              >
-                <span className={task.enabled ? "plugins-dot on" : "plugins-dot"} />
-                <span className="plugins-item-text">
-                  <strong>{task.name}</strong>
-                  <small>
-                    {t(`taskKind_${task.kind}` as never)} · {t(`trigger_${task.trigger_type}` as never)}
-                  </small>
-                </span>
-              </button>
+              <ContextMenu key={task.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={selected?.id === task.id ? "plugins-item active" : "plugins-item"}
+                    onClick={() => setSelectedId(task.id)}
+                  >
+                    <span className={task.enabled ? "plugins-dot on" : "plugins-dot"} />
+                    <span className="plugins-item-text">
+                      <strong>{task.name}</strong>
+                      <small>
+                        {t(`taskKind_${task.kind}` as never)} · {t(`trigger_${task.trigger_type}` as never)}
+                      </small>
+                    </span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem disabled={!task.enabled} onSelect={() => menuRun.mutate(task.id)}>
+                    <Play /> {t("runNow")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}>
+                    <Power /> {task.enabled ? t("pluginOff") : t("pluginOn")}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem destructive onSelect={() => setMenuDeleting(task)}>
+                    <Trash2 /> {t("delete")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </div>
         </aside>
@@ -112,6 +146,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         </div>
       </div>
       {createDialog}
+      <ConfirmDialog
+        open={menuDeleting !== null}
+        title={t("deleteConfirmTitle")}
+        body={t("deleteTaskDesc")}
+        onCancel={() => setMenuDeleting(null)}
+        onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
+      />
     </div>
   );
 }
