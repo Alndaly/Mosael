@@ -3005,7 +3005,6 @@
   display: grid;
   gap: 2px;
   justify-items: start;
-  padding-top: 2px;
 }
 .tsd-time {
   border: none;
@@ -3013,6 +3012,8 @@
   padding: 0;
   color: var(--muted-foreground);
   font-size: 10.5px;
+  /* 与正文首行同一行盒(13px × 1.9),时码垂直居中对齐第一行文字 */
+  line-height: calc(13px * 1.9);
   cursor: pointer;
   white-space: nowrap;
 }
