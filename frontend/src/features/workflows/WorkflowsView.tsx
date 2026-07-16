@@ -63,6 +63,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
@@ -822,14 +823,15 @@ function NodeInspector({
                   }}
                 />
               ) : (
-                <textarea
-                  ref={(el) => {
+                <VarTextarea
+                  textareaRef={(el) => {
                     fieldRefs.current[key] = el;
                   }}
                   rows={spec?.type === "code" ? 6 : spec?.type === "template" ? 2 : 1}
                   className={spec?.type === "code" ? "wf-code-input" : undefined}
                   value={String(value ?? "")}
-                  onChange={(event) => setConfig(key, event.target.value)}
+                  onChange={(next) => setConfig(key, next)}
+                  variables={variables}
                 />
               )}
               {isTemplate && variables.length > 0 && (

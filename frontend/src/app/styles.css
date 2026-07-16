@@ -4530,8 +4530,14 @@
   border-radius: 999px;
 }
 
-.wf-handle:hover {
-  transform: scale(1.35);
+/* 悬停放大必须保留 React Flow 的 translate 定心,否则缩放中心跑偏。 */
+.react-flow__handle-right.wf-handle:hover {
+  transform: translate(50%, -50%) scale(1.35);
+  border-color: var(--primary);
+}
+
+.react-flow__handle-left.wf-handle:hover {
+  transform: translate(-50%, -50%) scale(1.35);
   border-color: var(--primary);
 }
 
@@ -4734,6 +4740,49 @@
 .wf-var-chip:hover {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* `/` 唤起的光标锚定变量弹窗(镜像 div 定位) */
+.var-textarea-wrap {
+  position: relative;
+}
+
+.var-textarea-wrap textarea {
+  width: 100%;
+}
+
+.var-menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.var-menu-item {
+  display: block;
+  text-align: left;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.var-menu-item.active {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
 }
 
 /* 代码节点输入:等宽字体 */
@@ -5145,6 +5194,18 @@
 .task-create-form textarea:focus-visible {
   outline: none;
   border-color: var(--primary);
+}
+
+/* 服务器切换行 */
+.server-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.server-switch input {
+  width: 240px;
 }
 
 /* 新建任务对话框表单 */
