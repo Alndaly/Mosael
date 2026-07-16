@@ -103,6 +103,8 @@ export const messages = {
     skillsTitle: "技能",
     skillsEmpty: "暂无技能。可在 ~/.mibu-new/skills 下新增。",
     skillUsePrefix: "请使用技能「{name}」:",
+    copyMessage: "复制",
+    copied: "已复制",
 
     // Batch
     batchTitle: "批量",
@@ -514,6 +516,8 @@ export const messages = {
     skillsTitle: "Skills",
     skillsEmpty: "No skills yet. Add them under ~/.mibu-new/skills.",
     skillUsePrefix: "Use the \"{name}\" skill:",
+    copyMessage: "Copy",
+    copied: "Copied",
 
     // Batch
     batchTitle: "Batch",

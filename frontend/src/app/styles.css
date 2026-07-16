@@ -425,20 +425,48 @@
   gap: 12px;
 }
 
+/* 项目卡片:纵向结构 标题区 / 统计行 / 底部(时间 + 打开按钮),
+   避免旧的左右布局在窄卡片上按钮压住统计。 */
 .project-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* 隐式 auto 列会被内容撑破卡片 */
+  gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   padding: 14px;
+  transition: border-color 100ms;
+}
+
+.project-card:hover {
+  border-color: var(--border-strong);
 }
 
 .project-card-body {
   min-width: 0;
+}
+
+.project-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.project-card-foot .project-card-updated {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card-foot > button {
+  flex-shrink: 0;
 }
 
 .project-card strong {
@@ -460,8 +488,8 @@
 .project-card-stats {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  margin-top: 8px;
   color: var(--muted-foreground);
   font-size: 11.5px;
 }
@@ -478,7 +506,6 @@
 }
 
 .project-card small.project-card-updated {
-  margin-top: 6px;
   font-size: 11px;
 }
 
@@ -2541,6 +2568,54 @@
 }
 
 
+
+/* 消息脚注:复制按钮 + 耗时。默认几乎隐形,悬停消息时浮现。 */
+.chat-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 18px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.chat-bubble:hover .chat-msg-meta,
+.chat-msg-meta.live {
+  opacity: 1;
+}
+
+.chat-msg-meta.live {
+  color: var(--muted-foreground);
+}
+
+.chat-msg-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.chat-msg-copy:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.chat-msg-duration {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.chat-bubble.thinking .chat-msg-duration {
+  margin-left: 2px;
+}
 
 /* 技能弹层:输入框左下角向上弹出的操作手册列表 */
 .composer-skills-wrap {

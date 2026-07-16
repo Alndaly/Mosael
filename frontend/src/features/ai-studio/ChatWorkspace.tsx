@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CircleAlert, Loader2, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, CircleAlert, Copy, Loader2, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -114,6 +114,21 @@ export function ChatWorkspace({
     refetchIntervalInBackground: true,
   });
   const running = session.data?.status === "running";
+
+  // 运行中的实时耗时:running 置真时记起点,每秒走字。
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  React.useEffect(() => {
+    if (!running) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [running, activeSession?.id]);
 
   const createSession = useMutation({
     mutationFn: () =>
@@ -269,11 +284,16 @@ export function ChatWorkspace({
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
                   <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
+                  <div className="chat-msg-meta live">
+                    <Loader2 size={11} className="spin" />
+                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  </div>
                 </div>
               )}
               {running && !streamText && (
                 <div className="chat-bubble assistant thinking">
                   <Loader2 size={13} className="spin" /> {t("chatThinking")}
+                  <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
@@ -392,6 +412,16 @@ export function ChatWorkspace({
 function ChatBubble({ message }: { message: AgentMessage }) {
   const t = useI18n();
   const [showError, setShowError] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const duration = (message.payload as { duration_seconds?: number } | null)?.duration_seconds;
+
+  const copy = () => {
+    void navigator.clipboard.writeText(message.content).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
   return (
     <div className={`chat-bubble ${message.role}`}>
       {message.role === "assistant" ? (
@@ -405,6 +435,15 @@ function ChatBubble({ message }: { message: AgentMessage }) {
           {showError && <pre>{message.error}</pre>}
         </button>
       )}
+      <div className="chat-msg-meta">
+        <button type="button" className="chat-msg-copy" title={t("copyMessage")} onClick={copy}>
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? t("copied") : t("copyMessage")}
+        </button>
+        {message.role === "assistant" && typeof duration === "number" && (
+          <span className="chat-msg-duration timecode">{duration.toFixed(1)}s</span>
+        )}
+      </div>
     </div>
   );
 }

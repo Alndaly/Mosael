@@ -108,32 +108,32 @@ export function HomeView({
                     <div className="project-card-body">
                       <strong>{project.name}</strong>
                       <small>{displayWorkspaceName(workspace.name, t)}</small>
-                      <div className="project-card-stats">
-                        <span title={t("projectStatDuration")}>
-                          <Clock3 size={11} />
-                          <em className="timecode">{formatSeconds(project.timeline_duration ?? 0)}</em>
-                        </span>
-                        <span title={t("projectStatAssets")}>
-                          <Film size={11} />
-                          {t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}
-                        </span>
-                        <span title={t("projectStatSequences")}>
-                          <Layers size={11} />
-                          {t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}
-                        </span>
-                      </div>
-                      {project.updated_at && (
-                        <small className="project-card-updated">
-                          {project.created_at && (
-                            <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
-                          )}
-                          {t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}
-                        </small>
-                      )}
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => onOpenProject(project.id)}>
-                      <Scissors size={13} /> {t("homeOpenEditor")}
-                    </Button>
+                    <div className="project-card-stats">
+                      <span title={t("projectStatDuration")}>
+                        <Clock3 size={11} />
+                        <em className="timecode">{formatSeconds(project.timeline_duration ?? 0)}</em>
+                      </span>
+                      <span title={t("projectStatAssets")}>
+                        <Film size={11} />
+                        {t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}
+                      </span>
+                      <span title={t("projectStatSequences")}>
+                        <Layers size={11} />
+                        {t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}
+                      </span>
+                    </div>
+                    <div className="project-card-foot">
+                      <small className="project-card-updated">
+                        {project.created_at && (
+                          <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
+                        )}
+                        {project.updated_at && t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}
+                      </small>
+                      <Button variant="outline" size="sm" onClick={() => onOpenProject(project.id)}>
+                        <Scissors size={13} /> {t("homeOpenEditor")}
+                      </Button>
+                    </div>
                   </article>
                 </ContextMenuTrigger>
                 <ContextMenuContent>

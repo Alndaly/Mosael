@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from typing import Callable
 
 from sqlalchemy import select
@@ -146,6 +147,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
     _stream_reset(session_id)
     final_text = ""
+    turn_started = time.monotonic()
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
         if session is None:
@@ -165,7 +167,14 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 on_delta=lambda delta: _stream_append(session_id, delta),
             )
             final_text = result.text
-            db.add(AgentMessage(session_id=session.id, role="assistant", content=result.text))
+            db.add(
+                AgentMessage(
+                    session_id=session.id,
+                    role="assistant",
+                    content=result.text,
+                    payload={"duration_seconds": round(time.monotonic() - turn_started, 1)},
+                )
+            )
             if result.adapter_session_id:
                 session.adapter_session_id = result.adapter_session_id
         except AdapterError as exc:
