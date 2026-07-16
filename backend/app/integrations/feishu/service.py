@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, run_turn
 from app.ai.agent.host import SYSTEM_PROMPT_TEMPLATE, get_or_create_external_session
+from app.domain.agent.prompt_skills import skills_index_for_prompt
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
@@ -150,7 +151,10 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str) -> No
             session.id, session.adapter, session.adapter_session_id, bot.workspace_id, bot.capability
         )
 
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(workspace_id=workspace_id)
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        workspace_id=workspace_id,
+        skills_index=skills_index_for_prompt() or "(暂无技能)",
+    )
     system_prompt += "\n" + CAPABILITY_NOTES.get(capability, CAPABILITY_NOTES["editor"])
     system_prompt += "\n你正通过飞书对话,回复保持简短(几句话内),不用 markdown 标题。"
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"

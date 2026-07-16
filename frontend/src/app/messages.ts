@@ -100,6 +100,9 @@ export const messages = {
     sortUpdated: "最近更新",
     sortCreated: "创建时间",
     projectCreatedAt: "创建于 {t}",
+    skillsTitle: "技能",
+    skillsEmpty: "暂无技能。可在 ~/.mibu-new/skills 下新增。",
+    skillUsePrefix: "请使用技能「{name}」:",
 
     // Batch
     batchTitle: "批量",
@@ -508,6 +511,9 @@ export const messages = {
     sortUpdated: "Recently updated",
     sortCreated: "Created",
     projectCreatedAt: "Created {t}",
+    skillsTitle: "Skills",
+    skillsEmpty: "No skills yet. Add them under ~/.mibu-new/skills.",
+    skillUsePrefix: "Use the \"{name}\" skill:",
 
     // Batch
     batchTitle: "Batch",

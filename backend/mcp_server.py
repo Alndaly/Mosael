@@ -40,6 +40,14 @@ def _post(path: str, payload: dict[str, Any]) -> Any:
         return response.json()
 
 
+def _patch(path: str, payload: dict[str, Any]) -> Any:
+    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    with httpx.Client(base_url=API_BASE, timeout=30, headers=headers) as client:
+        response = client.patch(path, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+
 def _default_workspace_id() -> str:
     workspaces = _get("/api/workspaces")
     if not workspaces:
@@ -257,6 +265,33 @@ def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) ->
         "output": invocation.get("output") or {},
         "error": invocation.get("error"),
     }
+
+
+@mcp.tool()
+def list_skills() -> list[dict[str, Any]]:
+    """List available agent skills (reusable playbooks for common Mibu workflows).
+
+    Each entry has id, name, description. When a task matches a skill, call
+    load_skill(id) and follow its body strictly.
+    """
+    return _get("/api/agent/prompt-skills")
+
+
+@mcp.tool()
+def load_skill(skill_id: str) -> dict[str, Any]:
+    """Load one skill's full playbook body (markdown). Follow it step by step."""
+    return _get(f"/api/agent/prompt-skills/{skill_id}")
+
+
+@mcp.tool()
+def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
+    """Replace an asset's tag list (metadata only, reversible — runs directly).
+
+    Read the asset's current tags via list_assets first if you want to merge
+    instead of replace.
+    """
+    asset = _patch(f"/api/assets/{asset_id}", {"tags": tags})
+    return {"asset_id": asset["id"], "name": asset["name"], "tags": asset.get("tags", [])}
 
 
 @mcp.tool()

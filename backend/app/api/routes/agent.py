@@ -17,10 +17,12 @@ from app.api.schemas import (
     AgentSessionCreate,
     AgentSessionOut,
     AgentSkillOut,
+    PromptSkillOut,
 )
 from app.core.permissions import ensure_workspace_access
 from app.db.models import AgentMessage, AgentSession
 from app.domain.agent import list_agent_skills
+from app.domain.agent.prompt_skills import list_prompt_skills, load_prompt_skill
 
 router = APIRouter(tags=["agent"])
 
@@ -123,6 +125,19 @@ def _require_session(db: DbSession, user: CurrentUser, session_id: str) -> Agent
 @router.get("/agent/skills", response_model=list[AgentSkillOut])
 def get_agent_skills(db: DbSession) -> list[dict]:
     return list_agent_skills(db)
+
+
+@router.get("/agent/prompt-skills", response_model=list[PromptSkillOut])
+def get_prompt_skills(user: CurrentUser) -> list[dict]:
+    return list_prompt_skills()
+
+
+@router.get("/agent/prompt-skills/{skill_id}", response_model=PromptSkillOut)
+def get_prompt_skill(skill_id: str, user: CurrentUser) -> dict:
+    skill = load_prompt_skill(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return skill
 
 
 @router.get("/agent/manifest", response_model=AgentManifestOut)

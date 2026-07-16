@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CircleAlert, Loader2, Paperclip, Pencil, Plus, Send, Trash2, X } from "lucide-react";
+import { Bot, CircleAlert, Loader2, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
+type PromptSkill = components["schemas"]["PromptSkillOut"];
 
 export function ChatWorkspace({
   workspace,
@@ -30,6 +31,12 @@ export function ChatWorkspace({
   const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const [attachments, setAttachments] = React.useState<Asset[]>([]);
+  const [skillsOpen, setSkillsOpen] = React.useState(false);
+  const skills = useQuery({
+    queryKey: ["prompt-skills"],
+    queryFn: () => api<PromptSkill[]>("/api/agent/prompt-skills"),
+    staleTime: 60_000,
+  });
   const uploadAttachment = useMutation({
     mutationFn: (file: File) =>
       importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
@@ -309,6 +316,45 @@ export function ChatWorkspace({
               <div className="chat-composer-bar">
                 <div className="chat-composer-left">
                   {switcher}
+                  <div className="composer-skills-wrap">
+                    <Button
+                      type="button"
+                      variant={skillsOpen ? "secondary" : "ghost"}
+                      size="icon-sm"
+                      aria-label={t("skillsTitle")}
+                      aria-expanded={skillsOpen}
+                      onClick={() => setSkillsOpen((value) => !value)}
+                    >
+                      <Sparkles size={14} />
+                    </Button>
+                    {skillsOpen && (
+                      <div className="composer-skills" role="menu" aria-label={t("skillsTitle")}>
+                        <strong>{t("skillsTitle")}</strong>
+                        {(skills.data ?? []).map((skill) => (
+                          <button
+                            key={skill.id}
+                            type="button"
+                            role="menuitem"
+                            className="composer-skill"
+                            onClick={() => {
+                              setDraft((current) =>
+                                current.trim()
+                                  ? current
+                                  : t("skillUsePrefix").replace("{name}", skill.name) + " ",
+                              );
+                              setSkillsOpen(false);
+                            }}
+                          >
+                            <em>{skill.name}</em>
+                            <span>{skill.description}</span>
+                          </button>
+                        ))}
+                        {(skills.data ?? []).length === 0 && (
+                          <span className="composer-skill-empty">{t("skillsEmpty")}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
                     <label>
                       <input

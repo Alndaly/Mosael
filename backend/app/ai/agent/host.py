@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
+from app.domain.agent.prompt_skills import skills_index_for_prompt
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mibu;
@@ -31,7 +32,11 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本
 - 用 analyze_asset 理解图片/视频素材的内容(用户消息里的 [附件 asset_id=…] 就是刚上传的素材)。
 - 所有已批准的时间线修改用户都可以撤销,不必过度谨慎,但一次确认卡只装一个连贯意图。
 工作区 ID: {workspace_id}。用用户使用的语言回复,简洁、面向创作者,不要提及内部实现细节。
-不要读写本机文件系统,不要执行 shell 命令;只使用 mibu 工具与对话。"""
+不要读写本机文件系统,不要执行 shell 命令;只使用 mibu 工具与对话。
+
+你有一组技能(可复用的操作手册)。当任务命中某个技能时,先用 load_skill 拉取正文,
+再严格按其流程执行;不确定时也可先 list_skills 查看。当前技能索引:
+{skills_index}"""
 
 _turn_callbacks: list[Callable[[str], None]] = []
 
@@ -145,7 +150,10 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         session = db.get(AgentSession, session_id)
         if session is None:
             return
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(workspace_id=session.workspace_id)
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            workspace_id=session.workspace_id,
+            skills_index=skills_index_for_prompt() or "(暂无技能)",
+        )
         try:
             result: TurnResult = run_turn(
                 session.adapter,
