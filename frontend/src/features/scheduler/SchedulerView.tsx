@@ -15,7 +15,8 @@ import {
   type Workflow,
   type Workspace,
 } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -416,10 +417,12 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
 
       <SettingsGroup title={t("taskRuns")} description={t("taskRunsDesc")}>
         <SettingsBlock>
-          {(runs.data ?? []).map((run) => (
-            <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
-          ))}
-          {runs.data?.length === 0 && <p className="feishu-empty">{t("noRunsYet")}</p>}
+          <div className="run-list">
+            {(runs.data ?? []).map((run) => (
+              <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
+            ))}
+            {runs.data?.length === 0 && <p className="feishu-empty">{t("noRunsYet")}</p>}
+          </div>
         </SettingsBlock>
       </SettingsGroup>
 
@@ -435,27 +438,50 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
 }
 
 function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
   const running = run.status === "queued" || run.status === "running";
+  // 耗时:两端都有才算;运行中显示已流逝。
+  const durationText = (() => {
+    if (!run.started_at) return null;
+    const start = new Date(/Z|[+-]\d\d:?\d\d$/.test(run.started_at) ? run.started_at : `${run.started_at}Z`).getTime();
+    const end = run.finished_at
+      ? new Date(/Z|[+-]\d\d:?\d\d$/.test(run.finished_at) ? run.finished_at : `${run.finished_at}Z`).getTime()
+      : Date.now();
+    const seconds = Math.max(0, (end - start) / 1000);
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  })();
+  const message = run.error ?? (running ? job?.message : null);
+
   return (
-    <div className={running ? "taskrow running" : `taskrow ${run.status}`}>
-      <span className="taskrow-icon">
+    <div className="run-row">
+      <span className={`run-dot ${running ? "running" : run.status}`}>
         {running ? (
-          <Loader2 size={13} className="spin" />
+          <Loader2 size={12} className="spin" />
         ) : run.status === "succeeded" ? (
-          <CheckCircle2 size={13} className="inv-ok" />
+          <CheckCircle2 size={12} />
         ) : (
-          <CircleAlert size={13} className="inv-bad" />
+          <CircleAlert size={12} />
         )}
       </span>
-      <div className="taskrow-body">
-        <div className="taskrow-title">
-          <strong className="timecode">{(run.started_at ?? "").replace("T", " ").slice(0, 19) || run.status}</strong>
-          <span className="taskrow-status">{run.status}</span>
+      <div className="run-body">
+        <div className="run-line">
+          <strong>{run.started_at ? relativeTime(run.started_at, locale) : t(`runStatus_${run.status}` as never)}</strong>
+          {run.started_at && (
+            <span className="run-abs timecode">{run.started_at.replace("T", " ").slice(5, 19)}</span>
+          )}
         </div>
-        <small className="taskrow-msg" title={run.error ?? job?.message ?? ""}>
-          {run.error ?? job?.message ?? ""}
-        </small>
+        {message && (
+          <small className="run-msg" title={message}>
+            {message}
+          </small>
+        )}
       </div>
+      {durationText && <span className="run-duration timecode">{durationText}</span>}
+      <em className={`run-status s-${running ? "running" : run.status}`}>
+        {t(`runStatus_${running ? "running" : run.status}` as never)}
+      </em>
     </div>
   );
 }

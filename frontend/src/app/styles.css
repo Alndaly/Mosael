@@ -4390,6 +4390,116 @@
   cursor: pointer;
 }
 
+/* 定时任务运行记录:扁平发丝分隔行(不再嵌一层小盒子) */
+.run-list {
+  display: block;
+}
+
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+}
+
+.run-row + .run-row {
+  border-top: 1px solid var(--border);
+}
+
+.run-dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+
+.run-dot.succeeded {
+  color: #16a34a;
+  border-color: color-mix(in srgb, #16a34a 35%, var(--border));
+  background: color-mix(in srgb, #16a34a 8%, transparent);
+}
+
+.run-dot.failed {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.run-dot.running {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.run-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.run-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.run-line strong {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.run-abs {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.run-msg {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-duration {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.run-status {
+  flex-shrink: 0;
+  font-style: normal;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 18px;
+  background: var(--secondary);
+  color: var(--muted-foreground);
+}
+
+.run-status.s-succeeded {
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: #16a34a;
+}
+
+.run-status.s-failed {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.run-status.s-running,
+.run-status.s-queued {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
 .taskrow-cancel {
   display: inline-grid;
   place-items: center;
