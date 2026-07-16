@@ -956,7 +956,7 @@ var PageDriver = class {
   }
   async findFileInputNode(selector) {
     this.throwIfAborted();
-    if (!this.debuggerAttached) {
+    if (!this.debuggerAttached && !this.wc.debugger.isAttached()) {
       this.wc.debugger.attach("1.3");
       this.debuggerAttached = true;
     }
@@ -1011,6 +1011,92 @@ var PageDriver = class {
   }
 };
 
+// electron/publish/stealth.ts
+var STEALTH_SOURCE = String.raw`
+(() => {
+  try {
+    // 1) navigator.webdriver:自动化标志,正常浏览器为 false。删掉 getter 让它返回 undefined/false。
+    try {
+      Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true });
+    } catch (_) {}
+    try { delete Navigator.prototype.webdriver; } catch (_) {}
+
+    // 2) window.chrome:真实 Chrome 有这个对象,无头/精简内核常缺失。补一个最小可信版本。
+    if (!window.chrome) {
+      window.chrome = {};
+    }
+    if (!window.chrome.runtime) {
+      window.chrome.runtime = {};
+    }
+    if (!window.chrome.app) {
+      window.chrome.app = { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
+    }
+
+    // 3) navigator.languages:无头常为空或单一。给中文桌面常见值。
+    try {
+      Object.defineProperty(Navigator.prototype, 'languages', { get: () => ['zh-CN', 'zh', 'en'], configurable: true });
+    } catch (_) {}
+
+    // 4) navigator.plugins / mimeTypes:无头为空数组是明显特征。伪造一个非空、带常见 PDF 插件的列表。
+    try {
+      const makePlugin = (name, filename, desc) => {
+        const plugin = { name: name, filename: filename, description: desc, length: 1 };
+        Object.defineProperty(plugin, '0', { value: { type: 'application/pdf', suffixes: 'pdf', description: desc, enabledPlugin: plugin }, enumerable: true });
+        return plugin;
+      };
+      const plugins = [
+        makePlugin('Chrome PDF Plugin', 'internal-pdf-viewer', 'Portable Document Format'),
+        makePlugin('Chrome PDF Viewer', 'mhjfbmdgcfjbbpaeojofohoefgiehjai', ''),
+        makePlugin('Native Client', 'internal-nacl-plugin', ''),
+      ];
+      plugins.item = (i) => plugins[i] || null;
+      plugins.namedItem = (n) => plugins.find((p) => p.name === n) || null;
+      plugins.refresh = () => {};
+      Object.defineProperty(Navigator.prototype, 'plugins', { get: () => plugins, configurable: true });
+    } catch (_) {}
+
+    // 5) permissions.query('notifications'):无头会返回与真实浏览器不一致的状态,平台以此判活。对齐真实行为。
+    try {
+      const original = window.navigator.permissions && window.navigator.permissions.query;
+      if (original) {
+        window.navigator.permissions.query = (params) =>
+          params && params.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission, onchange: null })
+            : original.call(window.navigator.permissions, params);
+      }
+    } catch (_) {}
+
+    // 6) WebGL vendor/renderer:无头/软件渲染会暴露 'Google SwiftShader' / 'Google Inc.',真机是显卡厂商。
+    //    改成常见的 Intel/Apple 值,消除软件渲染特征。
+    try {
+      const spoof = { 37445: 'Intel Inc.', 37446: 'Intel Iris OpenGL Engine' }; // UNMASKED_VENDOR/RENDERER
+      const patch = (proto) => {
+        if (!proto) return;
+        const getParam = proto.getParameter;
+        proto.getParameter = function (param) {
+          if (param in spoof) return spoof[param];
+          return getParam.call(this, param);
+        };
+      };
+      patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
+      patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
+    } catch (_) {}
+
+    // 7) navigator.hardwareConcurrency / deviceMemory:给桌面常见值(无头有时为 1)。
+    try {
+      if (!navigator.hardwareConcurrency || navigator.hardwareConcurrency < 2) {
+        Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 8, configurable: true });
+      }
+      if ('deviceMemory' in navigator && !navigator.deviceMemory) {
+        Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 8, configurable: true });
+      }
+    } catch (_) {}
+  } catch (_) {
+    /* 补丁失败不影响页面加载 */
+  }
+})();
+`;
+
 // electron/publish/accountViews.ts
 var noop = () => void 0;
 var ACCOUNT_VIEW_PRELOAD = import_node_path2.default.join(__dirname, "accountview-preload.cjs");
@@ -1025,6 +1111,8 @@ var AccountViewManager = class {
   views = /* @__PURE__ */ new Map();
   drivers = /* @__PURE__ */ new Map();
   appliedProxy = /* @__PURE__ */ new Map();
+  // 每个账号视图的 stealth 注入就绪 promise;configureAccount 在 goto 前 await,堵住首帧 race。
+  stealthReady = /* @__PURE__ */ new Map();
   window = null;
   visibleId = null;
   nameOf = () => null;
@@ -1037,6 +1125,9 @@ var AccountViewManager = class {
     return this.ensure(accountId).driver;
   }
   async configureAccount(accountId, proxy) {
+    this.ensure(accountId);
+    const ready = this.stealthReady.get(accountId);
+    if (ready) await Promise.race([ready, new Promise((r) => setTimeout(r, 3e3))]);
     const partition = this.partitionFor(accountId);
     const normalizedProxy = proxy?.trim() || null;
     if (this.appliedProxy.get(partition) === normalizedProxy) {
@@ -1136,6 +1227,7 @@ var AccountViewManager = class {
         }
       });
       view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+      this.applyStealth(accountId, view.webContents);
       view.webContents.setWindowOpenHandler(({ url }) => {
         try {
           const proto = new URL(url).protocol;
@@ -1163,6 +1255,21 @@ var AccountViewManager = class {
   }
   partitionFor(accountId) {
     return `persist:mibu-${accountId}`;
+  }
+  /** 注入拟真补丁:CDP addScriptToEvaluateOnNewDocument 让脚本在每个新文档最早期、页面主世界
+   *  执行,先于平台的检测脚本。debugger 常驻本视图(pageDriver 的文件上传会复用同一 attach)。
+   *  注入是异步的;把就绪 promise 存进 stealthReady,configureAccount 在首次 goto 前 await 它,
+   *  否则首帧导航会与注入 race 而漏掉补丁。 */
+  applyStealth(accountId, wc) {
+    try {
+      if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
+    } catch (error) {
+      plog("stealth attach skipped:", String(error).slice(0, 120));
+      this.stealthReady.set(accountId, Promise.resolve());
+      return;
+    }
+    const ready = wc.debugger.sendCommand("Page.enable").then(() => wc.debugger.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source: STEALTH_SOURCE })).then(() => plog("stealth ready:", accountId)).catch((error) => plog("stealth inject failed:", String(error).slice(0, 120)));
+    this.stealthReady.set(accountId, ready);
   }
   detachView(accountId) {
     const view = this.views.get(accountId);

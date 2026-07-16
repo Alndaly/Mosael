@@ -2,6 +2,10 @@ const { app, BrowserWindow, Notification, dialog, ipcMain } = require("electron"
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
+// 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
+// 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
+app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
+
 const BACKEND_PORT = Number(process.env.MIBU_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const isDev = !app.isPackaged;

@@ -2,6 +2,8 @@ import { session, WebContentsView, type BaseWindow } from "electron";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
+import { plog } from "./log";
+import { STEALTH_SOURCE } from "./stealth";
 
 const noop = (): void => undefined;
 // 账号视图 preload:注入「← 返回 Mibu」悬浮按钮(见 electron/accountview-preload.cjs)。运行时该文件
@@ -23,6 +25,8 @@ export class AccountViewManager {
   private views = new Map<string, WebContentsView>();
   private drivers = new Map<string, PageDriver>();
   private appliedProxy = new Map<string, string | null>();
+  // 每个账号视图的 stealth 注入就绪 promise;configureAccount 在 goto 前 await,堵住首帧 race。
+  private stealthReady = new Map<string, Promise<unknown>>();
   private window: BaseWindow | null = null;
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
@@ -40,6 +44,12 @@ export class AccountViewManager {
   }
 
   async configureAccount(accountId: string, proxy: string | null): Promise<void> {
+    // 确保视图已建 + stealth 注入完成,再让调用方 goto——否则首帧导航与注入 race 而漏补丁。
+    // 带 3s 超时兜底:stealth 是尽力而为的加固,CDP 命令万一挂起也绝不能卡死发布/登录主流程。
+    this.ensure(accountId);
+    const ready = this.stealthReady.get(accountId);
+    if (ready) await Promise.race([ready, new Promise((r) => setTimeout(r, 3000))]);
+
     const partition = this.partitionFor(accountId);
     const normalizedProxy = proxy?.trim() || null;
     if (this.appliedProxy.get(partition) === normalizedProxy) {
@@ -150,6 +160,7 @@ export class AccountViewManager {
         },
       });
       view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+      this.applyStealth(accountId, view.webContents);
       view.webContents.setWindowOpenHandler(({ url }) => {
         // 弹窗只允许 http(s) 在本视图内导航;javascript:/file:/data: 等危险 scheme 一律不加载,
         // 免得平台页面的 window.open 把已登录会话视图导到任意/危险目标。
@@ -183,6 +194,26 @@ export class AccountViewManager {
 
   private partitionFor(accountId: string): string {
     return `persist:mibu-${accountId}`;
+  }
+
+  /** 注入拟真补丁:CDP addScriptToEvaluateOnNewDocument 让脚本在每个新文档最早期、页面主世界
+   *  执行,先于平台的检测脚本。debugger 常驻本视图(pageDriver 的文件上传会复用同一 attach)。
+   *  注入是异步的;把就绪 promise 存进 stealthReady,configureAccount 在首次 goto 前 await 它,
+   *  否则首帧导航会与注入 race 而漏掉补丁。 */
+  private applyStealth(accountId: string, wc: Electron.WebContents): void {
+    try {
+      if (!wc.debugger.isAttached()) wc.debugger.attach("1.3");
+    } catch (error) {
+      plog("stealth attach skipped:", String(error).slice(0, 120));
+      this.stealthReady.set(accountId, Promise.resolve());
+      return;
+    }
+    const ready = wc.debugger
+      .sendCommand("Page.enable")
+      .then(() => wc.debugger.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source: STEALTH_SOURCE }))
+      .then(() => plog("stealth ready:", accountId))
+      .catch((error) => plog("stealth inject failed:", String(error).slice(0, 120)));
+    this.stealthReady.set(accountId, ready);
   }
 
   private detachView(accountId: string): void {

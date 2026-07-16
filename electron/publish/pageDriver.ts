@@ -972,7 +972,8 @@ export class PageDriver {
 
   private async findFileInputNode(selector: string): Promise<number> {
     this.throwIfAborted();
-    if (!this.debuggerAttached) {
+    // debugger 可能已被 accountViews 为注入 stealth 提前 attach:复用即可,别二次 attach(会抛)。
+    if (!this.debuggerAttached && !this.wc.debugger.isAttached()) {
       this.wc.debugger.attach("1.3");
       this.debuggerAttached = true;
     }
