@@ -50,6 +50,10 @@ const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: 
   { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
 ];
 
+/** 只有这些页面工作在"当前项目"语境;其余页面的面包屑显示页面名,
+    否则设置/插件页也挂着项目名,既不合理也容易误解。 */
+const PROJECT_SCOPED_VIEWS: StudioView[] = ["media", "editor", "ai"];
+
 export function AppShell({
   view,
   onViewChange,
@@ -103,17 +107,12 @@ export function AppShell({
         <header className="topbar">
           <div className="topbar-crumb">
             <span>{displayWorkspaceName(workspaceName, t)}</span>
-            {projectName ? (
-              <>
-                <span className="topbar-sep">/</span>
-                <strong>{projectName}</strong>
-              </>
-            ) : (
-              <>
-                <span className="topbar-sep">/</span>
-                <span>{t("noProject")}</span>
-              </>
-            )}
+            <span className="topbar-sep">/</span>
+            <strong>
+              {PROJECT_SCOPED_VIEWS.includes(view)
+                ? projectName ?? t("noProject")
+                : t([...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome")}
+            </strong>
           </div>
           <div className="topbar-actions">
             {actions}

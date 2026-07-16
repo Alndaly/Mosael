@@ -55,6 +55,7 @@ class ProjectWithStatsOut(ProjectOut):
     asset_count: int = 0
     sequence_count: int = 0
     timeline_duration: float = 0.0
+    created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
@@ -79,6 +80,8 @@ class AssetOut(OrmModel):
     file_key: str
     media_info: dict
     tags: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class AssetUpdate(BaseModel):

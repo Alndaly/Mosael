@@ -96,6 +96,7 @@ def list_projects(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
             asset_count=asset_counts.get(p.id, 0),
             sequence_count=sequence_counts.get(p.id, 0),
             timeline_duration=float(durations.get(p.id) or 0.0),
+            created_at=p.created_at,
             updated_at=max(filter(None, [p.updated_at, sequence_updates.get(p.id)])),
         )
         for p in projects

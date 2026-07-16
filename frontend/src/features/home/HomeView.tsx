@@ -4,7 +4,7 @@ import { Clapperboard, Clock3, Film, FolderPlus, Layers, Pencil, Scissors, Trash
 
 import { api, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
-import { formatSeconds } from "@/features/media/MediaLibraryView";
+import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
@@ -24,6 +24,18 @@ export function HomeView({
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
+  const [search, setSearch] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<"updated" | "created" | "name">("updated");
+
+  const visible = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const matched = projects.filter((project) => query === "" || project.name.toLowerCase().includes(query));
+    return [...matched].sort((a, b) => {
+      if (sortKey === "name") return a.name.localeCompare(b.name, "zh-CN");
+      if (sortKey === "created") return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
+    });
+  }, [projects, search, sortKey]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
 
   const createProject = useMutation({
@@ -51,9 +63,27 @@ export function HomeView({
 
   return (
     <div className="feature-view">
-      <div className="feature-toolbar">
-        <Button onClick={() => createProject.mutate()}>
-          <FolderPlus size={15} /> {t("createProject")}
+      <div className="feature-toolbar media-toolbar">
+        <div className="media-toolbar-left">
+          <input
+            className="toolbar-search"
+            value={search}
+            placeholder={t("searchProjects")}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <select
+            className="toolbar-select"
+            value={sortKey}
+            aria-label={t("sortUpdated")}
+            onChange={(event) => setSortKey(event.target.value as "updated" | "created" | "name")}
+          >
+            <option value="updated">{t("sortUpdated")}</option>
+            <option value="created">{t("sortCreated")}</option>
+            <option value="name">{t("sortName")}</option>
+          </select>
+        </div>
+        <Button size="sm" onClick={() => createProject.mutate()}>
+          <FolderPlus size={13} /> {t("createProject")}
         </Button>
       </div>
 
@@ -71,7 +101,7 @@ export function HomeView({
       ) : (
         <>
           <div className="project-grid">
-            {projects.map((project) => (
+            {visible.map((project) => (
               <ContextMenu key={project.id}>
                 <ContextMenuTrigger asChild>
                   <article className="project-card" onDoubleClick={() => onOpenProject(project.id)}>
@@ -94,6 +124,9 @@ export function HomeView({
                       </div>
                       {project.updated_at && (
                         <small className="project-card-updated">
+                          {project.created_at && (
+                            <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
+                          )}
                           {t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}
                         </small>
                       )}

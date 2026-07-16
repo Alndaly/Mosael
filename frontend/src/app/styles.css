@@ -10,7 +10,7 @@
      add per-context padding or font overrides. Look = hairline
      joined group (border + inner dividers), active = accent tint.
    - Master-detail pages (settings/plugins/scheduler): detail
-     column max 680px, list column 200–260px, shell gap 12.
+     column fills the remaining width, list column 200–260px.
    - FLAT: no drop shadows anywhere (--shadow-* resolve to none);
      separation = hairline borders + background value steps. Focus
      rings, active-indicator insets and in-video effects are fine.
@@ -566,7 +566,42 @@
 
 /* ---------- Asset tags / batch select ---------- */
 
-.media-toolbar {
+/* 工具条里的搜索框与排序下拉:与 sm 按钮同高(28px)同边框。 */
+.toolbar-search {
+  height: 28px;
+  width: 176px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 0 9px;
+  font-size: 12px;
+  color: var(--foreground);
+  transition: border-color 100ms;
+}
+
+.toolbar-search::placeholder {
+  color: var(--muted-foreground);
+}
+
+.toolbar-search:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.toolbar-select {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 0 7px;
+  font-size: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+/* 双类选择器压过后面的 .feature-toolbar(右对齐):素材工具条是
+   左侧筛选 + 右侧批量操作的两组布局。 */
+.feature-toolbar.media-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1089,7 +1124,6 @@
 
 .settings-content {
   min-width: 0;
-  max-width: 680px; /* Global rhythm: 主从页详情列上限 */
   display: grid;
   align-content: start;
   gap: 16px;
@@ -3624,9 +3658,7 @@
   display: grid;
   gap: 16px;
   align-content: start;
-  max-width: 680px;
   width: 100%;
-  margin: 0 auto;
   padding: 2px 2px 20px;
 }
 .plugin-tool-blocked {
@@ -3812,17 +3844,29 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* 折叠后的分区导航 = seg 同语言的拼接标签条,不是一排松散药丸。 */
   .settings-nav {
-    display: flex;
-    gap: 4px;
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    gap: 0;
+    padding: 0;
+    border-radius: 6px;
     overflow-x: auto;
-    padding: 5px 8px;
+    overflow-y: hidden;
   }
 
   .settings-nav-item {
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 4px 10px;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 0;
+    font-size: 12.5px;
+  }
+
+  .settings-nav-item + .settings-nav-item {
+    border-left: 1px solid var(--border);
   }
 
   .plugins-shell {

@@ -1466,6 +1466,10 @@ export interface components {
             };
             /** Tags */
             tags?: string[];
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** AssetUpdate */
         AssetUpdate: {
@@ -1971,6 +1975,8 @@ export interface components {
              * @default 0
              */
             timeline_duration: number;
+            /** Created At */
+            created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
         };

@@ -92,6 +92,14 @@ export const messages = {
     addTagsBody: "标签会添加到所有选中素材上,已有标签保留。",
     filterByTag: "按标签筛选",
     deleteAssetsBody: "选中的 {n} 个素材文件将被删除,无法恢复。",
+    searchAssets: "搜索素材…",
+    searchProjects: "搜索项目…",
+    sortNewest: "最新导入",
+    sortName: "名称",
+    sortDuration: "时长",
+    sortUpdated: "最近更新",
+    sortCreated: "创建时间",
+    projectCreatedAt: "创建于 {t}",
 
     // Batch
     batchTitle: "批量",
@@ -490,6 +498,14 @@ export const messages = {
     addTagsBody: "Tags are added to every selected asset; existing tags are kept.",
     filterByTag: "Filter by tag",
     deleteAssetsBody: "The {n} selected asset files will be deleted permanently.",
+    searchAssets: "Search assets…",
+    searchProjects: "Search projects…",
+    sortNewest: "Newest",
+    sortName: "Name",
+    sortDuration: "Duration",
+    sortUpdated: "Recently updated",
+    sortCreated: "Created",
+    projectCreatedAt: "Created {t}",
 
     // Batch
     batchTitle: "Batch",

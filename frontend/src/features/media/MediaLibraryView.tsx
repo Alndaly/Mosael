@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Project, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -18,6 +18,22 @@ type KindFilter = (typeof KIND_FILTERS)[number];
 /** OpenAPI 里 tags 带默认值所以是可选字段;统一成数组再用。 */
 const assetTags = (asset: Asset): string[] => asset.tags ?? [];
 
+const SORT_KEYS = ["created", "updated", "name", "duration"] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+
+function compareAssets(a: Asset, b: Asset, key: SortKey): number {
+  switch (key) {
+    case "name":
+      return a.name.localeCompare(b.name, "zh-CN");
+    case "duration":
+      return (Number(b.media_info.duration) || 0) - (Number(a.media_info.duration) || 0);
+    case "updated":
+      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
+    default:
+      return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+  }
+}
+
 export function MediaLibraryView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -28,6 +44,8 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
   const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
   const [tagFilter, setTagFilter] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey>("created");
   const [selectMode, setSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [batchTagging, setBatchTagging] = React.useState(false);
@@ -111,15 +129,18 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
     return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
   }, [assets.data]);
 
-  const visible = React.useMemo(
-    () =>
-      (assets.data ?? []).filter(
-        (asset) =>
-          (kindFilter === "all" || asset.kind === kindFilter) &&
-          (tagFilter === null || assetTags(asset).includes(tagFilter)),
-      ),
-    [assets.data, kindFilter, tagFilter],
-  );
+  const visible = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const matched = (assets.data ?? []).filter(
+      (asset) =>
+        (kindFilter === "all" || asset.kind === kindFilter) &&
+        (tagFilter === null || assetTags(asset).includes(tagFilter)) &&
+        (query === "" ||
+          asset.name.toLowerCase().includes(query) ||
+          assetTags(asset).some((tag) => tag.toLowerCase().includes(query))),
+    );
+    return [...matched].sort((a, b) => compareAssets(a, b, sortKey));
+  }, [assets.data, kindFilter, tagFilter, search, sortKey]);
 
   const toggleSelected = (id: string) => {
     setSelectedIds((current) => {
@@ -145,7 +166,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
     <div className="feature-view">
       <div className="feature-toolbar media-toolbar">
         <div className="media-toolbar-left">
-          <Button asChild>
+          <Button asChild size="sm">
             <label>
               <input
                 type="file"
@@ -157,7 +178,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
                   event.currentTarget.value = "";
                 }}
               />
-              <ImagePlus size={15} /> {t("import")}
+              <ImagePlus size={13} /> {t("import")}
             </label>
           </Button>
           <div className="seg" role="group" aria-label={t("kindAll")}>
@@ -172,6 +193,23 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
               </button>
             ))}
           </div>
+          <input
+            className="toolbar-search"
+            value={search}
+            placeholder={t("searchAssets")}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <select
+            className="toolbar-select"
+            value={sortKey}
+            aria-label={t("sortNewest")}
+            onChange={(event) => setSortKey(event.target.value as SortKey)}
+          >
+            <option value="created">{t("sortNewest")}</option>
+            <option value="updated">{t("sortUpdated")}</option>
+            <option value="name">{t("sortName")}</option>
+            <option value="duration">{t("sortDuration")}</option>
+          </select>
           {allTags.length > 0 && (
             <div className="tag-filter" role="group" aria-label={t("filterByTag")}>
               <Tags size={13} />
@@ -195,7 +233,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
                 {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
               </span>
               <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set(visible.map((a) => a.id)))}>
-                {t("mediaSelectAll")}
+                <ListChecks size={13} /> {t("mediaSelectAll")}
               </Button>
               <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
                 <Tag size={13} /> {t("addTags")}
@@ -349,6 +387,7 @@ function AssetTile({ asset }: { asset: Asset }) {
         <span className="asset-specs timecode">
           {width ? `${width}×${asset.media_info.height}` : "—"}
           {fps ? ` · ${Math.round(Number(fps))}fps` : ""}
+          {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
         </span>
       </div>
     </article>
@@ -359,6 +398,13 @@ function kindIcon(kind: string) {
   if (kind === "audio") return <FileAudio size={22} />;
   if (kind === "image") return <FileImage size={22} />;
   return <FileVideo size={22} />;
+}
+
+/** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区取短日期。 */
+export function formatShortDate(iso: string): string {
+  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
+  const date = new Date(normalized);
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 export function formatSeconds(total: number): string {
