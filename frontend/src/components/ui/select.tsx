@@ -64,7 +64,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
   return (
     <SelectPrimitive.Item
       className={cn(
-        "flex cursor-pointer select-none items-center gap-2 rounded-[6px] px-2 py-1.5 text-xs text-foreground outline-none",
+        "flex cursor-pointer select-none items-center gap-2 rounded-[4px] px-2 py-1.5 text-xs text-foreground outline-none",
         "data-[highlighted]:bg-secondary data-[state=checked]:font-semibold",
         className,
       )}

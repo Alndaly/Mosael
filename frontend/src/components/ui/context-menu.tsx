@@ -29,7 +29,7 @@ function ContextMenuItem({
   return (
     <ContextMenuPrimitive.Item
       className={cn(
-        "flex cursor-pointer select-none items-center gap-2 rounded-[5px] px-2.5 py-1.5 text-[13px] outline-none",
+        "flex cursor-pointer select-none items-center gap-2 rounded-[4px] px-2.5 py-1.5 text-[13px] outline-none",
         "focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-3.5",
         destructive && "text-destructive focus:bg-destructive focus:text-white",
         className,

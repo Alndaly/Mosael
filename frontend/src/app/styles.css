@@ -1,11 +1,13 @@
 /* ============================================================
-   Global rhythm (keep every new rule on this scale):
-   - Spacing: 4px base — containers pad 8/12, page pad 12px
-     (feature-view AND editor-grid, identical), panel/shell gaps 8
-     everywhere (editor, chat, plugins), feature-grid 12, group gaps 16.
-   - Radius: 4 (chips) / 6 (controls) / 8 (rows, inner cards) /
-     10 (panels, popovers) / 12+ (hero surfaces) / 999 (pills).
-     No 3/5/7px values.
+   Global rhythm (keep every new rule on this scale; tightened
+   one notch 2026-07 per 缩小间距/圆角 request):
+   - Spacing: 4px base — containers pad 6/10, page pad 10px
+     (feature-view AND editor-grid, identical), panel/shell gaps 6
+     everywhere (editor, chat, plugins), feature-grid 10, group gaps 12.
+   - Radius: 3 (chips) / 4 (controls) / 6 (rows, inner cards) /
+     8 (panels, popovers) / 10 (hero surfaces) / 999 (pills).
+     Tailwind side derives from --radius: 4px (tokens.css).
+     No 5/7px values.
    - Segmented control (.seg/.seg-btn): ONE size app-wide; do not
      add per-context padding or font overrides. Look = hairline
      joined group (border + inner dividers), active = accent tint.
@@ -37,7 +39,7 @@
   gap: 2px;
   border-right: 1px solid var(--border);
   background: var(--panel);
-  padding: 10px 0;
+  padding: 8px 0;
 }
 
 .rail-brand {
@@ -46,7 +48,7 @@
   width: 30px;
   height: 30px;
   margin-bottom: 10px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--primary);
   color: var(--primary-foreground);
   font-size: 15px;
@@ -61,7 +63,7 @@
   width: 36px;
   height: 36px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -125,15 +127,15 @@
 
 .rail-user-pop {
   width: 220px;
-  padding: 10px;
+  padding: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rail-user-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 2px 4px;
 }
 
@@ -172,11 +174,11 @@
 .rail-user-actions button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  padding: 7px 8px;
+  padding: 7px 6px;
   font-size: 12.5px;
   color: var(--foreground);
   cursor: pointer;
@@ -222,7 +224,7 @@
   justify-content: space-between;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .topbar-crumb {
@@ -254,7 +256,7 @@
   height: 26px;
   padding: 0 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted-foreground);
   font-size: 12px;
@@ -271,7 +273,7 @@
   font-family: inherit;
   font-size: 10px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 0 4px;
   line-height: 15px;
   color: var(--muted-foreground);
@@ -309,7 +311,7 @@
   align-items: stretch;
   height: 100%;
   min-height: 0;
-  padding: 12px;
+  padding: 10px;
   overflow: auto;
 }
 
@@ -321,7 +323,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 18px;
 }
 
@@ -343,12 +345,12 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .feature-grid {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .feature-grid.two {
@@ -384,7 +386,7 @@
 .panel {
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
@@ -396,7 +398,7 @@
   justify-content: space-between;
   min-height: 38px;
   border-bottom: 1px solid var(--border);
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .panel-head h2 {
@@ -416,7 +418,7 @@
 .plugin-list {
   display: grid;
   gap: 6px;
-  padding: 8px;
+  padding: 6px;
 }
 
 .model-row,
@@ -426,12 +428,12 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 52px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .model-row {
@@ -457,7 +459,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--accent);
   color: var(--accent-foreground);
 }
@@ -492,10 +494,10 @@
 .empty-state {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 420px;
   margin: auto;
-  padding: 32px 24px;
+  padding: 32px 20px;
   text-align: center;
 }
 
@@ -505,7 +507,7 @@
   width: 44px;
   height: 44px;
   border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
-  border-radius: 10px;
+  border-radius: 8px;
   background: color-mix(in oklab, var(--primary) 6%, var(--panel));
   color: var(--primary);
 }
@@ -537,7 +539,7 @@
   display: grid;
   place-items: center;
   margin: auto;
-  padding: 24px 16px;
+  padding: 20px 12px;
   color: var(--muted-foreground);
   font-size: 13px;
   text-align: center;
@@ -563,7 +565,7 @@
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 /* 项目卡片:纵向结构 标题区 / 统计行 / 底部(时间 + 打开按钮),
@@ -571,12 +573,12 @@
 .project-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr); /* 隐式 auto 列会被内容撑破卡片 */
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: 14px;
+  padding: 12px;
   transition: border-color 100ms;
 }
 
@@ -592,7 +594,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
@@ -630,7 +632,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   color: var(--muted-foreground);
   font-size: 11.5px;
 }
@@ -655,12 +657,12 @@
 .asset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .asset-tile {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
@@ -685,7 +687,7 @@
   position: absolute;
   right: 6px;
   bottom: 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: rgba(10, 12, 15, 0.75);
   padding: 1px 5px;
   color: #e8eaed;
@@ -695,7 +697,7 @@
 .asset-caption {
   display: grid;
   gap: 5px;
-  padding: 9px 10px;
+  padding: 9px 8px;
 }
 
 .asset-caption strong {
@@ -739,7 +741,7 @@
   height: 28px;
   width: 176px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
   padding: 0 9px;
   font-size: 12px;
@@ -762,7 +764,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -770,7 +772,7 @@
 .media-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -816,7 +818,7 @@
 
 .tag-chip.readonly {
   cursor: default;
-  padding: 0 8px;
+  padding: 0 6px;
 }
 
 .tag-chip.removable button {
@@ -888,14 +890,14 @@
 .preview-modal {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 14px;
+  gap: 12px;
   width: min(860px, 90vw);
 }
 
 .preview-stage {
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #000000;
   min-height: 320px;
   overflow: hidden;
@@ -914,7 +916,7 @@
 .preview-meta {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
 }
 
@@ -931,15 +933,15 @@
 
 .gen-compose {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   max-width: 760px;
-  padding: 12px;
+  padding: 10px;
 }
 
 .gen-prompt {
   width: 100%;
   border: 1px solid var(--input);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel-subtle);
   padding: 9px 11px;
   color: var(--foreground);
@@ -957,7 +959,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .gen-models {
@@ -1004,16 +1006,16 @@
   align-items: center;
   gap: 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .gen-thumb {
   display: grid;
   place-items: center;
   aspect-ratio: 16 / 9;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel-inset);
   color: var(--muted-foreground);
   overflow: hidden;
@@ -1079,11 +1081,11 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .provider-row.disabled {
@@ -1101,23 +1103,23 @@
 .feishu-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
 .feishu-qr {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
-  padding: 12px;
+  padding: 10px;
 }
 
 .feishu-qr img {
-  border-radius: 6px;
+  border-radius: 4px;
   background: #ffffff;
   padding: 4px;
 }
@@ -1133,7 +1135,7 @@
 
 .feishu-manual {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 12px;
 }
 
@@ -1150,11 +1152,11 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .feishu-bot-icon {
@@ -1162,7 +1164,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--accent);
   color: var(--accent-foreground);
 }
@@ -1208,7 +1210,7 @@
 .settings-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
   align-items: stretch;
@@ -1218,9 +1220,9 @@
   display: grid;
   gap: 2px;
   align-content: start;
-  padding: 8px;
+  padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
 }
 
@@ -1229,9 +1231,9 @@
   align-items: center;
   gap: 9px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  padding: 8px 12px;
+  padding: 6px 10px;
   color: var(--muted-foreground);
   font-size: 13px;
   text-align: left;
@@ -1254,22 +1256,22 @@
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 12px;
   overflow-y: auto;
-  padding: 4px 2px 12px;
+  padding: 4px 2px 10px;
 }
 
 /* Settings group: page-level header (outside the card) + a card of rows */
 .sg {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .sg-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   padding: 0 2px;
 }
 
@@ -1291,7 +1293,7 @@
 .sg-body {
   display: grid;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
@@ -1301,8 +1303,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 24px;
-  padding: 14px 18px;
+  gap: 20px;
+  padding: 12px 14px;
 }
 
 .sg-row + .sg-row,
@@ -1332,7 +1334,7 @@
 .sg-row-control {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -1346,19 +1348,19 @@
 }
 
 .sg-block {
-  padding: 12px 18px;
+  padding: 10px 14px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .settings-section {
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: 14px 16px;
+  padding: 12px 12px;
 }
 
 .settings-section > .section-label {
@@ -1376,7 +1378,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   min-height: 44px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
@@ -1407,9 +1409,9 @@
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr) 264px;
   grid-template-rows: minmax(0, 1fr) 252px;
-  gap: 8px;
+  gap: 6px;
   height: 100%;
-  padding: 12px;
+  padding: 10px;
 }
 
 .panel-resizer {
@@ -1470,7 +1472,7 @@
 
 .panel-tab {
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   padding: 4px 9px;
   color: var(--muted-foreground);
@@ -1497,7 +1499,7 @@
   display: grid;
   align-content: start;
   gap: 2px;
-  padding: 8px;
+  padding: 6px;
   overflow: auto;
 }
 
@@ -1505,7 +1507,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  border-radius: 6px;
+  border-radius: 4px;
   transition: background-color 100ms;
 }
 
@@ -1520,12 +1522,12 @@
 .ts-seek {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   align-items: baseline;
   min-width: 0;
   border: none;
   background: transparent;
-  padding: 6px 8px;
+  padding: 6px 6px;
   cursor: pointer;
   text-align: left;
 }
@@ -1537,7 +1539,7 @@
   height: 22px;
   margin: 5px 5px 0 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -1586,9 +1588,9 @@
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 8px;
+  gap: 6px;
   margin: auto;
-  padding: 24px 18px;
+  padding: 20px 14px;
   color: var(--muted-foreground);
   text-align: center;
   max-width: 260px;
@@ -1606,7 +1608,7 @@
   display: grid;
   align-content: start;
   gap: 6px;
-  padding: 8px;
+  padding: 6px;
   overflow: auto;
 }
 
@@ -1616,7 +1618,7 @@
   gap: 9px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
   padding: 6px;
   cursor: grab;
@@ -1637,7 +1639,7 @@
   display: grid;
   place-items: center;
   aspect-ratio: 16 / 9;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel-inset);
   color: var(--muted-foreground);
   overflow: hidden;
@@ -1683,7 +1685,7 @@
   display: grid;
   place-items: center;
   min-height: 0;
-  padding: 14px;
+  padding: 12px;
 }
 
 .monitor-frame-wrap {
@@ -1692,7 +1694,7 @@
   max-width: 100%;
   max-height: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #000000;
   overflow: hidden;
 }
@@ -1762,8 +1764,8 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
-  padding: 3px 10px 5px;
+  gap: 6px;
+  padding: 3px 8px 5px;
 }
 
 .monitor-transport > .monitor-buttons:last-child {
@@ -1791,7 +1793,7 @@
 
 .monitor-rate {
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   padding: 2px 7px;
   color: #c6cbd2;
@@ -1853,8 +1855,8 @@
 .inspector-body {
   display: grid;
   align-content: start;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
@@ -1918,7 +1920,7 @@
   row-gap: 2px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  padding: 2px 8px;
+  padding: 2px 6px;
 }
 
 .tl-readout {
@@ -1936,7 +1938,7 @@
 .export-control {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-right: 8px;
 }
 
@@ -1987,7 +1989,7 @@
   align-items: center;
   gap: 7px;
   border-bottom: 1px solid var(--track-lane-line);
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
@@ -2005,7 +2007,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -2032,7 +2034,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -2052,7 +2054,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -2106,9 +2108,9 @@
 .pip-btn {
   min-width: 34px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
-  padding: 4px 8px;
+  padding: 4px 6px;
   color: var(--muted-foreground);
   font-size: 12px;
   cursor: pointer;
@@ -2196,7 +2198,7 @@
   align-items: center;
   overflow: hidden;
   border: 1px solid var(--track-video-border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--track-video-bg);
   color: var(--track-video-text);
   cursor: grab;
@@ -2252,7 +2254,7 @@
   z-index: 1;
   flex: 1;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 6px;
   font-size: 11px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -2289,7 +2291,7 @@
 
 .tl-clip-handle.left {
   left: 0;
-  border-radius: 5px 0 0 5px;
+  border-radius: 4px 0 0 4px;
 }
 
 .tl-clip-handle.left::after {
@@ -2298,7 +2300,7 @@
 
 .tl-clip-handle.right {
   right: 0;
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 4px 4px 0;
 }
 
 .tl-clip-handle.right::after {
@@ -2318,7 +2320,7 @@
   transform: translateX(-50%);
   padding: 1px 7px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--popover);
   color: var(--foreground);
   font-size: 10.5px;
@@ -2336,7 +2338,7 @@
   top: 5px;
   bottom: 5px;
   border: 1.5px dashed var(--primary);
-  border-radius: 6px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--primary) 14%, transparent);
   pointer-events: none;
   z-index: 2;
@@ -2383,7 +2385,7 @@
   /* 行高必须显式钉在容器内:隐式 auto 行会被长对话撑高,
      把整个页面撑出滚动条(输入框随内容跑掉)。 */
   grid-template-rows: minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 
@@ -2396,7 +2398,7 @@
   display: grid;
   align-content: start;
   gap: 4px;
-  padding: 8px;
+  padding: 6px;
   overflow: auto;
 }
 
@@ -2404,9 +2406,9 @@
   display: grid;
   gap: 1px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  padding: 8px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   text-align: left;
   transition: background-color 100ms;
@@ -2422,7 +2424,7 @@
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 12px;
+  padding: 10px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
@@ -2463,8 +2465,8 @@
 .chat-thread {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 28px 20px 12px;
+  gap: 14px;
+  padding: 28px 16px 10px;
   overflow-y: auto;
 }
 
@@ -2485,7 +2487,7 @@
 }
 
 .chat-bubble {
-  border-radius: 12px;
+  border-radius: 10px;
   font-size: 13.5px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -2499,7 +2501,7 @@
   margin-right: max(calc((100% - 780px) / 2), 0px) !important;
   background: var(--secondary);
   color: var(--foreground);
-  padding: 9px 14px;
+  padding: 9px 12px;
   border-bottom-right-radius: 4px;
 }
 
@@ -2545,7 +2547,7 @@
 .chat-bubble.assistant th,
 .chat-bubble.assistant td {
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: 6px 8px;
   text-align: left;
 }
 
@@ -2555,7 +2557,7 @@
 }
 
 .chat-bubble.assistant code {
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel-inset);
   padding: 1px 4px;
   font-family: var(--font-mono);
@@ -2565,8 +2567,8 @@
 .chat-bubble.assistant pre {
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 4px;
+  padding: 6px 8px;
 }
 
 .chat-bubble.assistant pre code {
@@ -2604,8 +2606,8 @@
 
 .chat-error pre {
   margin: 4px 0 0;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 6px 6px;
+  border-radius: 4px;
   background: var(--panel-inset);
   color: var(--muted-foreground);
   font-size: 10px;
@@ -2618,7 +2620,7 @@
   flex-wrap: wrap;
   gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 8px 10px 0;
+  padding: 6px 8px 0;
 }
 
 .chat-attachment {
@@ -2657,7 +2659,7 @@
   border-radius: 18px;
   background: var(--panel);
   box-shadow: var(--shadow-raised);
-  padding: 12px 12px 8px 14px;
+  padding: 10px 10px 6px 12px;
   transition: border-color 100ms, box-shadow 100ms;
 }
 
@@ -2665,7 +2667,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding-top: 2px;
 }
 
@@ -2675,7 +2677,7 @@
 .chat-msg-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-top: 6px;
   min-height: 18px;
   opacity: 0;
@@ -2696,7 +2698,7 @@
   align-items: center;
   gap: 4px;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   padding: 2px 6px;
   color: var(--muted-foreground);
@@ -2724,7 +2726,7 @@
   width: 300px;
   display: grid;
   gap: 2px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .composer-skills > strong {
@@ -2740,9 +2742,9 @@
   display: grid;
   gap: 1px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  padding: 6px 8px;
+  padding: 6px 6px;
   text-align: left;
   cursor: pointer;
   transition: background 100ms;
@@ -2777,7 +2779,7 @@
 }
 
 .chat-composer-wrap {
-  padding: 0 16px;
+  padding: 0 12px;
 }
 
 .chat-composer:focus-within {
@@ -2806,7 +2808,7 @@
 
 .chat-attachments {
   border-top: none;
-  padding: 8px 12px 0;
+  padding: 6px 10px 0;
 }
 
 /* ---------- Confirmation cards ---------- */
@@ -2817,16 +2819,16 @@
   top: 56px;
   z-index: 50;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   width: 340px;
 }
 
 .confirm-card {
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--popover);
   box-shadow: var(--shadow-raised);
-  padding: 12px 14px;
+  padding: 10px 12px;
   animation: confirm-in 160ms ease-out;
 }
 
@@ -2845,7 +2847,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
@@ -2869,8 +2871,8 @@
 
 .confirm-ops {
   margin: 0 0 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 6px 6px;
+  border-radius: 4px;
   background: var(--panel-subtle);
   list-style: none;
   color: var(--muted-foreground);
@@ -2881,7 +2883,7 @@
 
 .confirm-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* ---------- Welcome / loading ---------- */
@@ -2900,7 +2902,7 @@
 .welcome-content {
   display: grid;
   justify-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 28px;
   text-align: center;
 }
@@ -2915,14 +2917,14 @@
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--primary);
   color: var(--primary-foreground);
 }
 
 .login-form {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   margin-top: 6px;
 }
@@ -2963,11 +2965,11 @@
 .fade-input {
   width: 100%;
   height: 26px;
-  padding: 0 8px;
+  padding: 0 6px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--background);
   color: var(--foreground);
 }
@@ -2991,7 +2993,7 @@
 .ts-tools {
   display: flex;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
@@ -3053,7 +3055,7 @@
 }
 .ts-expanded {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-start;
   padding: 6px 0;
 }
@@ -3073,7 +3075,7 @@
 }
 .ts-token {
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 1px 4px;
   font-size: 12px;
   line-height: 1.5;
@@ -3100,7 +3102,7 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 12px;
 }
 
@@ -3111,7 +3113,7 @@
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
   overflow: hidden;
 }
@@ -3143,7 +3145,7 @@
 .gen-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .tl-toolbar-sep {
@@ -3167,8 +3169,8 @@
   bottom: 7%;
   transform: translateX(-50%);
   max-width: 86%;
-  padding: 3px 12px;
-  border-radius: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
   background: rgba(0, 0, 0, 0.62);
   color: #ffffff;
   font-size: clamp(12px, 2.4cqw, 20px);
@@ -3182,7 +3184,7 @@
   width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--background);
   color: var(--foreground);
   font-size: 12.5px;
@@ -3223,7 +3225,7 @@
 .gen-turn-image {
   max-width: 320px;
   width: 100%;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   display: block;
 }
@@ -3246,7 +3248,7 @@
 .tl-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex-wrap: nowrap;
 }
@@ -3270,9 +3272,9 @@
   align-items: center;
   gap: 3px;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted-foreground);
   font-size: 11.5px;
@@ -3294,7 +3296,7 @@
   width: 300px;
   display: grid;
   gap: 6px;
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 .tl-help strong {
   font-size: 12px;
@@ -3303,7 +3305,7 @@
 .tl-help-row {
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   align-items: baseline;
   font-size: 12px;
 }
@@ -3313,7 +3315,7 @@
   padding: 1px 6px;
   border: 1px solid var(--border);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--secondary);
   white-space: nowrap;
   justify-self: start;
@@ -3328,7 +3330,7 @@
 .monitor-blank-hint {
   color: rgba(255, 255, 255, 0.4);
   font-size: 12.5px;
-  padding: 0 24px;
+  padding: 0 20px;
   text-align: center;
 }
 .pool-item {
@@ -3344,7 +3346,7 @@
   width: 22px;
   height: 22px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--background);
   color: var(--muted-foreground);
   cursor: pointer;
@@ -3380,7 +3382,7 @@
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 30px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 11.5px;
   color: var(--muted-foreground);
 }
@@ -3398,17 +3400,17 @@
 }
 .sub-list {
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: start;
 }
 .sub-item {
   display: grid;
   gap: 5px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 9px;
+  border-radius: 6px;
+  padding: 6px 9px;
   background: var(--panel);
 }
 .sub-item.active {
@@ -3426,7 +3428,7 @@
   color: var(--muted-foreground);
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 .sub-delete:hover {
   color: var(--destructive);
@@ -3434,7 +3436,7 @@
 }
 .sub-footer {
   border-top: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 6px 8px;
   display: flex;
   justify-content: center;
 }
@@ -3453,16 +3455,16 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 12px 16px;
+  padding: 10px 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .tsd-sentence {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   /* 时码(等宽小字)与正文(中文 13px)按真实文字基线对齐 */
   align-items: baseline;
   border-left: 2px solid transparent;
@@ -3500,7 +3502,7 @@
   padding: 2px;
   color: transparent;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 3px;
   line-height: 0;
 }
 .tsd-sentence:hover .tsd-drop {
@@ -3531,7 +3533,7 @@
   font: inherit;
   color: var(--foreground);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 .tsd-word:hover {
   background: var(--accent);
@@ -3581,10 +3583,10 @@
 .tsd-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--border);
   background: var(--panel);
-  padding: 8px 12px;
+  padding: 6px 10px;
 }
 .tsd-bar-info {
   flex: 1;
@@ -3595,7 +3597,7 @@
 
 .tsd-usage {
   margin: 0;
-  padding: 8px 14px 0;
+  padding: 6px 12px 0;
   color: var(--muted-foreground);
   font-size: 11px;
 }
@@ -3615,7 +3617,7 @@
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -3703,18 +3705,18 @@
 /* Plugin tool cards: expandable try-run form + result */
 .plugin-tool-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   overflow: hidden;
 }
 .plugin-tool-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   border: none;
   background: none;
-  padding: 9px 10px;
+  padding: 9px 8px;
   cursor: pointer;
   text-align: left;
 }
@@ -3739,9 +3741,9 @@
 }
 .plugin-tool-body {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 10px;
+  padding: 8px;
 }
 .plugin-field {
   display: grid;
@@ -3761,8 +3763,8 @@
 }
 .plugin-result {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.5;
@@ -3787,7 +3789,7 @@
 .plugins-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
 }
@@ -3797,7 +3799,7 @@
 }
 .plugins-list-body {
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: grid;
   gap: 4px;
   align-content: start;
@@ -3810,9 +3812,9 @@
   align-items: center;
   gap: 9px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  padding: 8px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   text-align: left;
   transition: background 100ms;
@@ -3855,10 +3857,10 @@
 }
 .plugins-detail-body {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   align-content: start;
   width: 100%;
-  padding: 2px 2px 20px;
+  padding: 2px 2px 16px;
 }
 .plugin-tool-blocked {
   margin-left: auto;
@@ -3879,7 +3881,7 @@
 .plugins-list.kb-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .kb-list .plugins-list-body {
@@ -3903,9 +3905,9 @@
   align-items: center;
   gap: 6px;
   margin: 0 8px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--background);
   color: var(--muted-foreground);
 }
@@ -3928,7 +3930,7 @@
   height: 26px;
   flex-shrink: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--background);
   color: var(--muted-foreground);
 }
@@ -3937,9 +3939,9 @@
   display: grid;
   gap: 2px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: left;
   cursor: pointer;
   transition: background 100ms;
@@ -3971,7 +3973,7 @@
 .kb-editor {
   height: 100%;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 /* 标题 + 元信息 + 操作合成一个头部块:标题在上,类型/标签紧贴其下,
@@ -3980,7 +3982,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 12px;
+  column-gap: 10px;
   row-gap: 2px;
 }
 
@@ -3998,7 +4000,7 @@
   color: var(--foreground);
   outline: none;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .kb-title-input:focus-visible {
@@ -4041,7 +4043,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
   overflow: hidden;
 }
@@ -4052,7 +4054,7 @@
   gap: 2px;
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
-  padding: 5px 8px;
+  padding: 5px 6px;
 }
 
 .kb-tt-btn {
@@ -4061,7 +4063,7 @@
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -4097,7 +4099,7 @@
 
 .kb-tiptap-content .ProseMirror {
   min-height: 100%;
-  padding: 16px 20px 40px;
+  padding: 12px 16px 40px;
   font-size: 13.5px;
   line-height: 1.75;
   color: var(--foreground);
@@ -4139,7 +4141,7 @@
 
 .kb-tiptap-content .ProseMirror code {
   background: var(--secondary);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 1px 5px;
   font-size: 12px;
 }
@@ -4147,8 +4149,8 @@
 .kb-tiptap-content .ProseMirror pre {
   background: var(--secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 8px 10px;
   overflow-x: auto;
 }
 
@@ -4175,7 +4177,7 @@
 .kb-empty-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Task center (任务总线统一入口) */
@@ -4207,7 +4209,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
 .taskcenter-head strong {
@@ -4229,7 +4231,7 @@
 .taskcenter-list {
   max-height: 380px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: grid;
   gap: 4px;
 }
@@ -4240,7 +4242,7 @@
 }
 .taskcenter-empty {
   margin: 0;
-  padding: 22px 16px;
+  padding: 18px 12px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
@@ -4257,17 +4259,17 @@
 .notif-list {
   max-height: 380px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: grid;
   gap: 4px;
 }
 .notif-row {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr) 12px;
-  gap: 8px;
-  padding: 7px 8px;
+  gap: 6px;
+  padding: 7px 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   text-align: left;
   align-items: start;
@@ -4282,7 +4284,7 @@
   width: 26px;
   height: 26px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--muted-foreground);
 }
 .notif-row.unread .notif-icon {
@@ -4326,9 +4328,9 @@
 .taskrow {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
-  gap: 8px;
-  padding: 7px 8px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 7px 6px;
+  border-radius: 6px;
   align-items: start;
 }
 .taskrow:hover {
@@ -4339,7 +4341,7 @@
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--accent);
   color: var(--accent-foreground);
 }
@@ -4356,7 +4358,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 .taskrow-title strong {
   font-size: 12px;
@@ -4384,7 +4386,7 @@
 .switch-field {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -4394,7 +4396,7 @@
 .sched-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .sched-delete:hover {
   color: var(--destructive);
@@ -4410,7 +4412,7 @@
 .wf-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 
@@ -4418,7 +4420,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -4428,8 +4430,8 @@
   gap: 9px;
   border: none;
   background: transparent;
-  padding: 3px 8px 3px 3px;
-  border-radius: 8px;
+  padding: 3px 6px 3px 3px;
+  border-radius: 6px;
   cursor: pointer;
   color: var(--foreground);
   text-align: left;
@@ -4444,7 +4446,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--primary);
 }
@@ -4485,7 +4487,7 @@
 .wf-canvas {
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--panel);
 }
@@ -4496,7 +4498,7 @@
 }
 .wf-canvas .react-flow__controls {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   box-shadow: none;
 }
@@ -4523,12 +4525,12 @@
 .wf-node {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 172px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
-  padding: 9px 14px;
+  padding: 9px 12px;
   transition: border-color 100ms;
 }
 
@@ -4548,7 +4550,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--wf-node-color, var(--primary)) 12%, transparent);
   color: var(--wf-node-color, var(--primary));
   flex: none;
@@ -4664,7 +4666,7 @@
 /* MiniMap:全平面小地图 */
 .wf-canvas .react-flow__minimap {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--background);
 }
@@ -4688,7 +4690,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
   overflow: hidden;
 }
@@ -4696,8 +4698,8 @@
 .wf-inspector-body {
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -4718,9 +4720,9 @@
 .wf-field input,
 .wf-field textarea {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
-  padding: 6px 8px;
+  padding: 6px 6px;
   font-size: 12.5px;
   font-family: inherit;
   color: var(--foreground);
@@ -4770,7 +4772,7 @@
 /* 输出变量芯片:点击即复制引用 */
 .wf-out-chip {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--secondary);
   padding: 2px 7px;
   font-size: 10.5px;
@@ -4793,7 +4795,7 @@
 
 .wf-var-chip {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--primary) 6%, transparent);
   padding: 1px 6px;
   font-size: 10px;
@@ -4826,16 +4828,16 @@
   flex-direction: column;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
 }
 
 .var-menu-item {
   display: block;
   text-align: left;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   font-size: 11px;
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -4870,7 +4872,7 @@
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   overflow: hidden;
   resize: both;
@@ -4879,9 +4881,9 @@
 .wf-agent-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border-bottom: 1px solid var(--border);
-  padding: 8px 10px 8px 12px;
+  padding: 6px 8px 6px 10px;
   cursor: move;
   user-select: none;
   touch-action: none;
@@ -4914,8 +4916,8 @@
 .wf-agent-thread {
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -4924,7 +4926,7 @@
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 12px;
+  padding: 10px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
@@ -4945,8 +4947,8 @@
   justify-self: end;
   max-width: 88%;
   background: var(--secondary);
-  border-radius: 10px 10px 4px 10px;
-  padding: 6px 10px;
+  border-radius: 8px 8px 3px 8px;
+  padding: 6px 8px;
   white-space: pre-wrap;
 }
 
@@ -4970,14 +4972,14 @@
   align-items: flex-end;
   gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 8px;
+  padding: 6px;
 }
 
 .wf-agent-composer textarea {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   padding: 6px 9px;
   font-size: 12.5px;
@@ -4996,7 +4998,7 @@
 .batch-progress-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 240px;
 }
 
@@ -5008,8 +5010,8 @@
 .batch-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   font-size: 12.5px;
 }
@@ -5093,17 +5095,17 @@
   height: 48px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 14px;
+  gap: 10px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border-strong);
   background: var(--panel);
 }
 
 .publish-view-bar button {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  padding: 5px 12px;
+  padding: 5px 10px;
   font-size: 12.5px;
   color: var(--foreground);
   cursor: pointer;
@@ -5194,7 +5196,7 @@
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 6px;
   max-height: 180px;
   overflow-y: auto;
@@ -5204,9 +5206,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .publish-account:hover {
@@ -5248,9 +5250,9 @@
 
 .task-create-form textarea {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
-  padding: 6px 8px;
+  padding: 6px 6px;
   font-size: 12.5px;
   font-family: inherit;
   color: var(--foreground);
@@ -5277,7 +5279,7 @@
 /* 新建任务对话框表单 */
 .task-create-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .task-sched-config {
@@ -5307,7 +5309,7 @@
 .task-create-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   margin-top: 4px;
 }
 
@@ -5316,7 +5318,7 @@
   display: grid;
   justify-items: center;
   gap: 4px;
-  padding: 26px 16px 30px;
+  padding: 26px 12px 30px;
   text-align: center;
 }
 
@@ -5326,7 +5328,7 @@
   width: 36px;
   height: 36px;
   margin-bottom: 4px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--primary);
 }
@@ -5347,7 +5349,7 @@
 /* Sonner toast:全平面 — 细边框、纯底色、无投影。 */
 .mibu-toast {
   border: 1px solid var(--border-strong) !important;
-  border-radius: 10px !important;
+  border-radius: 8px !important;
   background: var(--popover) !important;
   color: var(--foreground) !important;
   box-shadow: none !important;
@@ -5380,7 +5382,7 @@
     max-width: 100%;
     gap: 0;
     padding: 0;
-    border-radius: 6px;
+    border-radius: 4px;
     overflow-x: auto;
     overflow-y: hidden;
   }
@@ -5389,7 +5391,7 @@
     white-space: nowrap;
     flex-shrink: 0;
     gap: 6px;
-    padding: 5px 12px;
+    padding: 5px 10px;
     border-radius: 0;
     font-size: 12.5px;
   }
@@ -5408,8 +5410,8 @@
   .plugins-list {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
+    gap: 6px;
+    padding: 5px 6px;
   }
 
   .plugins-list .panel-head {
@@ -5440,7 +5442,7 @@
 
   .plugins-item {
     flex-shrink: 0;
-    padding: 4px 10px;
+    padding: 4px 8px;
   }
 
   /* 折叠条里芯片压成单行:副标题行藏掉,视觉重量和 28px 条持平。 */
@@ -5452,7 +5454,7 @@
   .plugins-list.kb-list {
     flex-direction: row;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .kb-list .panel-head h2 {

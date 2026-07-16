@@ -25,7 +25,7 @@ export function ModalShell({
         <DialogPrimitive.Content
           className={cn(
             "fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
-            "bg-popover p-4 shadow-[var(--shadow-raised)] animate-in fade-in-0 zoom-in-95",
+            "bg-popover p-3 shadow-[var(--shadow-raised)] animate-in fade-in-0 zoom-in-95",
           )}
         >
           <DialogPrimitive.Title className="mb-3 text-[14px] font-semibold">{title}</DialogPrimitive.Title>
