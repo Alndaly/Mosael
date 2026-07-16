@@ -95,6 +95,7 @@ function stopBackend() {
 }
 
 function createWindow() {
+  const isMac = process.platform === "darwin";
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -102,6 +103,12 @@ function createWindow() {
     minHeight: 640,
     title: "Mibu",
     backgroundColor: "#f0f1f3",
+    // 无边框标题栏(参考 mibu-video):mac 红绿灯悬在左上侧栏顶部,
+    // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度 = 顶栏 44px)。
+    titleBarStyle: "hidden",
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 15 } }
+      : { titleBarOverlay: { color: "#ffffff", symbolColor: "#656c78", height: 44 } }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

@@ -28,6 +28,12 @@ import { SettingsView } from "@/features/settings/SettingsView";
 const queryClient = new QueryClient();
 
 export function App() {
+  // 桌面(Electron 无边框窗)样式适配:红绿灯占位、标题拖拽区按 is-desktop/is-mac 生效。
+  React.useEffect(() => {
+    const desktop = window.mibuDesktop;
+    if (!desktop) return;
+    document.documentElement.classList.add("is-desktop", desktop.platform === "darwin" ? "is-mac" : "is-win");
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
@@ -53,7 +59,7 @@ function PublishViewBar() {
   React.useEffect(() => window.mibuPublish?.onViewState((next) => setState(next)), []);
   if (!state.visible) return null;
   return (
-    <div className="publish-view-bar">
+    <div className="publish-view-bar titlebar-no-drag">
       <button type="button" onClick={() => void window.mibuPublish?.hideView()}>
         ← 返回 Mibu
       </button>

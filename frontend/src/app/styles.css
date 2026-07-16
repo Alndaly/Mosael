@@ -218,6 +218,40 @@
   min-height: 0;
 }
 
+/* ---------- 桌面(Electron 无边框窗)适配,参考 mibu-video ----------
+   浏览器里 -webkit-app-region 被忽略,以下全部零副作用。 */
+
+/* 可拖拽标题区:顶栏 + 侧栏空白处都能拖窗;其内交互元素必须声明 no-drag,
+   否则点击被当成拖窗吃掉(表现为「按钮不一定点得到」)。 */
+.is-desktop .topbar,
+.is-desktop .rail {
+  -webkit-app-region: drag;
+}
+.is-desktop .topbar button,
+.is-desktop .topbar a,
+.is-desktop .topbar input,
+.is-desktop .topbar [role="button"],
+.is-desktop .rail button,
+.is-desktop .rail a {
+  -webkit-app-region: no-drag;
+}
+/* 盖在拖拽区之上的交互层(如发布内嵌视图的返回条)显式不可拖。 */
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* mac:红绿灯悬在侧栏顶部(trafficLightPosition x14 y15),给它让出一段,
+   品牌块下移;侧栏与顶栏同为 --panel 白底,灯轻微跨过竖分隔线无色差。 */
+.is-desktop.is-mac .rail {
+  padding-top: 44px;
+}
+
+/* Win/Linux:titleBarOverlay 的三键(最小化/最大化/关闭)悬浮在右上、盖住网页内容,
+   顶栏右侧留等宽空位(138px = 三键标准宽度保底)。 */
+.is-desktop.is-win .topbar {
+  padding-right: 148px;
+}
+
 .topbar {
   display: flex;
   align-items: center;

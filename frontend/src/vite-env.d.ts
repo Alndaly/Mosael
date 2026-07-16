@@ -15,4 +15,5 @@ interface MibuPublishBridge {
 
 interface Window {
   mibuPublish?: MibuPublishBridge;
+  mibuDesktop?: { platform: string };
 }
