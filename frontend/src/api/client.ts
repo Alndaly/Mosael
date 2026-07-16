@@ -52,6 +52,11 @@ export type Sequence = components["schemas"]["SequenceOut"];
 export type Track = components["schemas"]["TrackOut"];
 export type Clip = components["schemas"]["ClipOut"];
 export type Job = components["schemas"]["JobOut"];
+export type TaskEvent = components["schemas"]["TaskEventOut"];
+
+export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
+  return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
+}
 export type GenerationModel = components["schemas"]["GenerationModelOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];

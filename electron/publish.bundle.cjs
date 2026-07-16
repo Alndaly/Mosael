@@ -2260,6 +2260,8 @@ function heartbeat() {
 // electron/publish/worker.ts
 var views = null;
 var running = /* @__PURE__ */ new Set();
+var rechecking = /* @__PURE__ */ new Set();
+var loginAccounts = /* @__PURE__ */ new Set();
 var MAX_CONCURRENT = (() => {
   const n = Number.parseInt(process.env.MIBU_PUBLISH_CONCURRENCY || "", 10);
   return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 3;
@@ -2413,6 +2415,7 @@ async function runTask(bt) {
 }
 async function checkAccountStatus(acc) {
   if (!views) return;
+  if (loginAccounts.has(acc.account_id)) return;
   const platform = resolvePlatform(acc.platform).id;
   const stub = {
     id: `check-${acc.account_id}`,
@@ -2469,15 +2472,15 @@ async function loop(gen) {
         running.delete(task.account_id);
       });
     }
-    if (running.size === 0 && !views?.visibleAccountId) {
+    if (running.size === 0 && rechecking.size === 0 && !views?.visibleAccountId) {
       const { account } = await claimCheck();
-      if (account) {
+      if (account && !loginAccounts.has(account.account_id)) {
         didWork = true;
-        running.add(account.account_id);
+        rechecking.add(account.account_id);
         try {
           await checkAccountStatus(account);
         } finally {
-          running.delete(account.account_id);
+          rechecking.delete(account.account_id);
         }
       }
     }
@@ -2511,7 +2514,8 @@ function stopPublishWorker() {
   running.clear();
   onSettled = null;
 }
-function endLogin(gen) {
+function endLogin(gen, accountId) {
+  if (accountId) loginAccounts.delete(accountId);
   if (gen !== generation) return;
   if (loginPollTimer) {
     clearTimeout(loginPollTimer);
@@ -2523,6 +2527,7 @@ async function openLogin(accountId, platform) {
   if (running.has(accountId)) throw new Error(tr("\u8BE5\u8D26\u53F7\u6709\u53D1\u5E03\u4EFB\u52A1\u6B63\u5728\u8FDB\u884C\uFF0C\u8BF7\u7B49\u5B83\u5B8C\u6210\u540E\u518D\u767B\u5F55"));
   if (views.visibleAccountId && views.visibleAccountId !== accountId)
     throw new Error(tr("\u6709\u8D26\u53F7\u6B63\u5728\u524D\u53F0\u64CD\u4F5C\uFF0C\u8BF7\u5148\u5904\u7406\u5B8C\u518D\u767B\u5F55"));
+  loginAccounts.add(accountId);
   const gen = generation;
   try {
     await views.configureAccount(accountId, null);
@@ -2551,7 +2556,7 @@ async function openLogin(accountId, platform) {
     const poll = async () => {
       loginPollTimer = null;
       if (stopped || gen !== generation || !views || Date.now() > deadline) {
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       let ok = false;
@@ -2560,7 +2565,7 @@ async function openLogin(accountId, platform) {
       } catch {
       }
       if (stopped || gen !== generation || !views) {
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       if (ok) {
@@ -2568,14 +2573,14 @@ async function openLogin(accountId, platform) {
           await patchAccount(accountId, { binding_status: "bound", last_error: null });
         } catch {
         }
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       loginPollTimer = setTimeout(poll, 5e3);
     };
     void poll();
   } catch (error) {
-    endLogin(gen);
+    endLogin(gen, accountId);
     throw error;
   }
 }

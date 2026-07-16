@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 import { api, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -33,6 +34,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+  const [detailJob, setDetailJob] = React.useState<Job | null>(null);
 
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],
@@ -55,12 +57,17 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const active = all.filter((job) => ACTIVE.has(job.status));
   const finished = all.filter((job) => !ACTIVE.has(job.status)).slice(0, 12);
 
+  // 点任务行 → 打开该 job 的执行详情弹层(状态 + 事件时间线)。
   const openJob = (job: Job) => {
+    setDetailJob(job);
+    setOpen(false);
+  };
+
+  // 详情弹层里「前往对应页面」:发布任务直达那条发布记录,其余到对应业务页。
+  const gotoJobPage = (job: Job) => {
     const route = jobRoute(job);
     if (!route) return;
     window.location.hash = route;
-    // 发布任务直达那条发布记录:导航落定后经深链事件通道选中详情
-    // (hash 会被路由归一化,query 传参不可靠)。
     const taskId = ((job.payload ?? {}) as Record<string, unknown>).task_id;
     if (job.kind === "publish" && typeof taskId === "string") {
       window.setTimeout(
@@ -68,7 +75,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         80,
       );
     }
-    setOpen(false);
+    setDetailJob(null);
   };
 
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
@@ -135,6 +142,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           {all.length === 0 && <p className="taskcenter-empty">{t("noJobs")}</p>}
         </div>
       </PopoverContent>
+      <JobDetailDialog
+        job={detailJob}
+        onClose={() => setDetailJob(null)}
+        onGoto={detailJob && jobRoute(detailJob) ? () => gotoJobPage(detailJob) : undefined}
+      />
     </Popover>
   );
 }

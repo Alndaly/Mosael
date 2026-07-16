@@ -23,8 +23,12 @@ import type { PublishTask, ViewState } from "./types";
 import * as backend from "./backend";
 
 let views: AccountViewManager | null = null;
-// 正在跑发布任务(或后台复检)的账号集合:size 即并发数,元素即认领时要排除的账号(同账号串行)。
+// 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
 const running = new Set<string>();
+// 正在后台复检登录态的账号:与 running 分开——否则复检会被误当成"发布任务进行中"挡住用户登录。
+const rechecking = new Set<string>();
+// 用户已开始登录接管的账号:后台复检遇到它直接放弃,避免和登录抢同一个视图 goto(表现为空白)。
+const loginAccounts = new Set<string>();
 // 有限并发上限:默认 3,可用 MIBU_PUBLISH_CONCURRENCY 覆盖(夹在 1–5)。多账号同时后台发布更快,但
 // 同机高频操作对平台风控/机器资源更重,故设上限而非全并发。
 const MAX_CONCURRENT = (() => {
@@ -216,6 +220,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
  *  导航抖动)不下线用户,保留原状态,下个 ttl 再查。 */
 async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
   if (!views) return;
+  // 用户已开始登录接管:放弃本次复检,别和登录抢同一个视图 goto。
+  if (loginAccounts.has(acc.account_id)) return;
   const platform = resolvePlatform(acc.platform).id;
   const stub: PublishTask = {
     id: `check-${acc.account_id}`,
@@ -281,16 +287,17 @@ async function loop(gen: number): Promise<void> {
         running.delete(task.account_id);
       });
     }
-    // 没有更多待发任务、且完全空闲(无并发任务、前台无视图占用)时,后台静默复检一个到期账号。
-    if (running.size === 0 && !views?.visibleAccountId) {
+    // 没有更多待发任务、且完全空闲(无发布/复检并发、前台无视图占用)时,后台静默复检一个到期账号。
+    if (running.size === 0 && rechecking.size === 0 && !views?.visibleAccountId) {
       const { account } = await backend.claimCheck();
-      if (account) {
+      // 用户正在登录接管的账号跳过复检(否则抢同一个视图 goto → 空白)。
+      if (account && !loginAccounts.has(account.account_id)) {
         didWork = true;
-        running.add(account.account_id);
+        rechecking.add(account.account_id);
         try {
           await checkAccountStatus(account);
         } finally {
-          running.delete(account.account_id);
+          rechecking.delete(account.account_id);
         }
       }
     }
@@ -342,7 +349,8 @@ export function stopPublishWorker(): void {
 
 /** 结束一次登录轮询:停定时器。若已进入新一代(stop→reactivate),共享状态归新代管,这里不碰。
  *  前台可见槽由 views.visibleAccountId 表达——登录视图留在前台(原行为),用户 Esc/返回自行收起。 */
-function endLogin(gen: number): void {
+function endLogin(gen: number, accountId?: string): void {
+  if (accountId) loginAccounts.delete(accountId);
   if (gen !== generation) return;
   if (loginPollTimer) {
     clearTimeout(loginPollTimer);
@@ -353,15 +361,21 @@ function endLogin(gen: number): void {
 /** 触发某账号登录:亮出其视图、打开登录页,轮询登录态并回写后端(最多 10 分钟)。 */
 export async function openLogin(accountId: string, platform: string): Promise<void> {
   if (!views) return;
-  // 该账号正有发布任务在后台跑:登录会切它的视图/抢焦点,拒绝,等任务完成。
+  // 该账号正有「真发布任务」在后台跑:登录会切它的视图/抢焦点,拒绝,等任务完成。
+  // 注意:后台复检(rechecking)不在此列——复检恰恰是为确认登录态,用户手动登录优先级更高,可抢占。
   if (running.has(accountId)) throw new Error(tr("该账号有发布任务正在进行，请等它完成后再登录"));
   // 前台已被别的账号占(另一个登录 / 待确认现场):拒绝,让用户先处理完前台那个。
   if (views.visibleAccountId && views.visibleAccountId !== accountId)
     throw new Error(tr("有账号正在前台操作，请先处理完再登录"));
+  // 登录接管:标记后,在飞的复检(若有)遇到它会放弃回写;并中止该视图在飞的 goto/evaluate,
+  // 避免复检的旧 goto 与登录的新 goto 互相 abort 把页面留成空白。
+  loginAccounts.add(accountId);
   const gen = generation;
   try {
     await views.configureAccount(accountId, null);
     const driver = views.getDriver(accountId);
+    // 亮出视图即占据前台单槽,loop 不再对该账号启动新复检;在飞的旧复检 goto 会被下面
+    // 登录 goto 的 loadURL 自然覆盖(ERR_ABORTED),不会与登录页互抢。
     views.show(accountId);
     const def = resolvePlatform(platform);
     await backend.patchAccount(accountId, { binding_status: "checking" });
@@ -387,7 +401,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       loginPollTimer = null;
       // stop/换代/视图销毁/超时:收工,不再续排。
       if (stopped || gen !== generation || !views || Date.now() > deadline) {
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       let ok = false;
@@ -398,7 +412,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       }
       // checkLogin 挂起期间可能已 stop/换代:再查一次,别对已属新代的共享状态动手或续排。
       if (stopped || gen !== generation || !views) {
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       if (ok) {
@@ -407,7 +421,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         } catch {
           /* 回写失败下个 ttl 再纠正 */
         }
-        endLogin(gen);
+        endLogin(gen, accountId);
         return;
       }
       loginPollTimer = setTimeout(poll, 5000);
@@ -415,7 +429,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     void poll();
   } catch (error) {
     // 打开/导航阶段就失败:收工,再把错误抛给调用方。
-    endLogin(gen);
+    endLogin(gen, accountId);
     throw error;
   }
 }

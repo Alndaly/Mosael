@@ -261,6 +261,11 @@
   padding-right: 148px;
 }
 
+/* 发布内嵌视图的返回条:mac 端左侧给红绿灯让位,否则「← 返回 Mibu」压在灯上。 */
+.is-desktop.is-mac .publish-view-bar {
+  padding-left: 82px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -4498,6 +4503,145 @@
 .run-status.s-queued {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--primary);
+}
+
+/* 任务执行详情弹层 */
+.job-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.job-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-detail-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--secondary);
+  color: var(--muted-foreground);
+}
+
+.job-detail-status.s-succeeded {
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: #16a34a;
+}
+.job-detail-status.s-failed {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+.job-detail-status.s-running,
+.job-detail-status.s-pending,
+.job-detail-status.s-queued {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+.job-detail-kind {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.job-detail-progress {
+  margin: 2px 0;
+}
+
+.job-detail-msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.job-detail-error {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--destructive);
+}
+
+.job-detail-events {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.job-detail-events-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.job-detail-empty {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.job-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.job-event {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 0;
+}
+
+.job-event + .job-event {
+  border-top: 1px solid var(--border);
+}
+
+.job-event-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.job-event-body {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.job-event-type {
+  font-size: 11.5px;
+  color: var(--foreground);
+}
+
+.job-event-text {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-event-time {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+
+.job-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .taskrow-cancel {
