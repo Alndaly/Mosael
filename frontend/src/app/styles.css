@@ -4968,6 +4968,83 @@
 
 /* ---------- 发布页 ---------- */
 
+/* Electron 内嵌发布视图的返回条:必须恰好 48px(EMBED_HEADER_HEIGHT) */
+.publish-view-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--panel);
+}
+
+.publish-view-bar button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.publish-view-bar button:hover {
+  border-color: var(--border-strong);
+  background: var(--secondary);
+}
+
+.publish-view-bar span {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+/* 账号登录态徽标 */
+.publish-binding {
+  font-style: normal;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: var(--secondary);
+  color: var(--muted-foreground);
+}
+
+.publish-binding.b-bound {
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: #16a34a;
+}
+
+.publish-binding.b-login_required,
+.publish-binding.b-manual_required,
+.publish-binding.b-permission_required {
+  background: color-mix(in srgb, #d97706 12%, transparent);
+  color: #d97706;
+}
+
+.publish-blocked-icon {
+  color: #d97706;
+}
+
+.publish-title-count {
+  font-style: normal;
+  margin-left: 8px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted-foreground);
+}
+
+.publish-title-count.over {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
 .publish-desc {
   font-size: 12.5px;
   line-height: 1.6;

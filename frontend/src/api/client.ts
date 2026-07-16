@@ -319,6 +319,7 @@ export function createPublishTask(body: {
   title: string;
   description: string;
   tags: string[];
+  short_title?: string;
 }): Promise<PublishTask> {
   return api<PublishTask>("/api/publish/tasks", { method: "POST", body: JSON.stringify(body) });
 }

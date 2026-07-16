@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, Notification, dialog, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
@@ -8,6 +8,17 @@ const isDev = !app.isPackaged;
 
 let backend = null;
 let quitting = false;
+
+// 发布执行器(老版 mibu-video 移植):esbuild 打成的单文件 bundle,缺失/损坏不挡应用启动,
+// 但 publish:* IPC 会抛清晰错误(而不是渲染层遇到 "No handler registered" 直接崩)。
+let publish = null;
+let publishLoadError = null;
+try {
+  publish = require("./publish.bundle.cjs");
+} catch (e) {
+  publishLoadError = e;
+  console.warn("[publish] 执行器加载失败(electron/publish.bundle.cjs 是否已构建?):", e.message);
+}
 
 function backendCommand() {
   if (isDev) {
@@ -81,6 +92,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
   win.setMenuBarVisibility(false);
@@ -89,6 +101,47 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
   }
+
+  // 启动发布执行器:后端是任务事实源,这里驱动每账号一个持久登录的内嵌视图。
+  // mac 关窗→重新激活会重建窗口:先 stop 再 start,把视图挂到新窗口上。
+  if (publish) {
+    try {
+      publish.stopPublishWorker();
+      publish.startPublishWorker({
+        window: win,
+        onViewChanged: (state) => {
+          if (!win.isDestroyed()) win.webContents.send("publish:view", state);
+        },
+        onTaskSettled: (info) => {
+          const titles = {
+            success: "发布成功",
+            prepared: "发布已准备好,待确认",
+            failed: "发布失败",
+            login_required: "账号需要登录",
+            waiting_manual: "发布需要人工处理",
+            permission_required: "账号权限不足",
+            blocked: "发布被拦截",
+          };
+          if (Notification.isSupported()) {
+            new Notification({
+              title: titles[info.status] || `发布 ${info.status}`,
+              body: `${info.accountName} · ${info.title || "未命名"}`,
+            }).show();
+          }
+        },
+      });
+    } catch (e) {
+      console.warn("[publish] 启动执行器失败:", e.message);
+    }
+  }
+
+  win.on("closed", () => {
+    try {
+      publish?.stopPublishWorker();
+    } catch {
+      /* 窗口已销毁,忽略 */
+    }
+  });
 }
 
 app.whenReady().then(async () => {
@@ -102,6 +155,28 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  // publish:* handler 只注册一次(activate 重建窗口时不能二次注册)。恒注册:执行器加载失败时
+  // 也给渲染层抛清晰错误。
+  const requirePublish = () => {
+    if (publish) return publish;
+    throw new Error(
+      publishLoadError
+        ? `发布执行器加载失败:${publishLoadError.message}`
+        : "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",
+    );
+  };
+  ipcMain.handle("publish:login", (_e, { accountId, platform }) => requirePublish().openLogin(accountId, platform));
+  ipcMain.handle("publish:openPage", (_e, { accountId, platform }) => requirePublish().openPage(accountId, platform));
+  ipcMain.handle("publish:hideView", () => requirePublish().hidePublishView());
+  // 账号视图里注入的「返回 Mibu」按钮(accountview-preload.cjs)→ 收起内嵌视图。
+  ipcMain.on("publish:exit", () => {
+    try {
+      requirePublish().hidePublishView();
+    } catch (e) {
+      console.warn("[publish] exit 忽略:", e.message);
+    }
+  });
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

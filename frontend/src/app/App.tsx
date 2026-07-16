@@ -35,10 +35,30 @@ export function App() {
           <AuthProvider>
             <AuthGate />
             <AppToaster />
+            <PublishViewBar />
           </AuthProvider>
         </TooltipProvider>
       </PreferencesProvider>
     </QueryClientProvider>
+  );
+}
+
+/** Electron 内嵌发布视图可见时的顶部返回条(老版 PublishViewBar 的等价):
+    视图从 48px 处铺开,这条必须恰好 48px 高,否则露出穿帮。 */
+function PublishViewBar() {
+  const [state, setState] = React.useState<{ visible: boolean; accountName: string | null }>({
+    visible: false,
+    accountName: null,
+  });
+  React.useEffect(() => window.mibuPublish?.onViewState((next) => setState(next)), []);
+  if (!state.visible) return null;
+  return (
+    <div className="publish-view-bar">
+      <button type="button" onClick={() => void window.mibuPublish?.hideView()}>
+        ← 返回 Mibu
+      </button>
+      <span>{state.accountName ?? ""}</span>
+    </div>
   );
 }
 

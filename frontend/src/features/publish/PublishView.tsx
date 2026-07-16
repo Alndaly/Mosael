@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, FolderOutput, Loader2, Plus, Rocket, Settings2, Sparkles, Trash2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, Rocket, Settings2, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -28,7 +28,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
-const ACTIVE = new Set(["queued", "running"]);
+const ACTIVE = new Set(["queued", "running", "pending"]);
+// 受阻但可恢复(老版 BLOCKED_STATUSES):人工处理后可重试。
+const BLOCKED = new Set(["login_required", "waiting_manual", "permission_required", "blocked"]);
 
 /** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。 */
 export function PublishView({ workspace }: { workspace: Workspace }) {
@@ -165,19 +167,38 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
 function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => void }) {
   const t = useI18n();
+  const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, staleTime: Infinity });
+  const isBrowser =
+    (platforms.data ?? []).find((item) => item.platform === task.platform)?.executor === "browser";
+  const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
     <div className="plugins-detail-body">
       <SettingsGroup
         title={task.title || task.asset_name}
-        description={`${task.account_name} · ${task.platform}`}
+        description={`${task.account_name} · ${task.platform} · ${t(`batchStatus_${task.status}` as never)}`}
         actions={
           <div className="sched-actions">
             {ACTIVE.has(task.status) ? (
               <Loader2 size={14} className="spin" />
-            ) : task.status === "succeeded" ? (
+            ) : ok ? (
               <CheckCircle2 size={14} className="inv-ok" />
+            ) : BLOCKED.has(task.status) ? (
+              <CircleAlert size={14} className="publish-blocked-icon" />
             ) : (
               <CircleAlert size={14} className="inv-bad" />
+            )}
+            {isBrowser && window.mibuPublish && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  window.mibuPublish
+                    ?.openPage(task.account_id, task.platform)
+                    .catch((error: Error) => toast.error(error.message))
+                }
+              >
+                <ExternalLink size={13} /> {t("publishOpenPage")}
+              </Button>
             )}
             <Button size="sm" variant="outline" className="sched-delete" onClick={onDelete}>
               <Trash2 size={13} /> {t("delete")}
@@ -263,17 +284,44 @@ function AccountsDialog({ open, workspace, onClose }: { open: boolean; workspace
       <div className="task-create-form">
         {(accounts.data ?? []).length > 0 && (
           <div className="publish-account-list">
-            {(accounts.data ?? []).map((account: PublishAccount) => (
-              <div className="publish-account" key={account.id}>
-                <span className="publish-account-text">
-                  <strong>{account.name}</strong>
-                  <small>{(platforms.data ?? []).find((p: PublishPlatform) => p.platform === account.platform)?.label ?? account.platform}</small>
-                </span>
-                <Button size="icon-sm" variant="ghost" aria-label={t("delete")} onClick={() => remove.mutate(account.id)}>
-                  <Trash2 size={13} />
-                </Button>
-              </div>
-            ))}
+            {(accounts.data ?? []).map((account: PublishAccount) => {
+              const meta = (platforms.data ?? []).find((p: PublishPlatform) => p.platform === account.platform);
+              const isBrowser = meta?.executor === "browser";
+              return (
+                <div className="publish-account" key={account.id}>
+                  <span className="publish-account-text">
+                    <strong>{account.name}</strong>
+                    <small>
+                      {meta?.label ?? account.platform}
+                      {isBrowser && (
+                        <em className={`publish-binding b-${account.binding_status}`}>
+                          {t(`binding_${account.binding_status}` as never)}
+                        </em>
+                      )}
+                    </small>
+                  </span>
+                  {isBrowser && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
+                      disabled={!window.mibuPublish}
+                      onClick={() => {
+                        window.mibuPublish
+                          ?.login(account.id, account.platform)
+                          .then(() => toast.success(t("publishLoginOpened")))
+                          .catch((error: Error) => toast.error(error.message));
+                      }}
+                    >
+                      <LogIn size={13} /> {t("publishLogin")}
+                    </Button>
+                  )}
+                  <Button size="icon-sm" variant="ghost" aria-label={t("delete")} onClick={() => remove.mutate(account.id)}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
         <label className="wf-field">
@@ -346,6 +394,7 @@ function CreatePublishDialog({
   const [assetId, setAssetId] = React.useState<string | null>(null);
   const [accountId, setAccountId] = React.useState<string | null>(null);
   const [title, setTitle] = React.useState("");
+  const [shortTitle, setShortTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [tagsText, setTagsText] = React.useState("");
 
@@ -359,7 +408,12 @@ function CreatePublishDialog({
     queryFn: () => listPublishAccounts(workspace.id),
     enabled: open,
   });
+  const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, enabled: open, staleTime: Infinity });
   const videos = (assets.data ?? []).filter((asset) => asset.kind === "video");
+  const selectedAccount = (accounts.data ?? []).find((account) => account.id === accountId) ?? null;
+  const platformMeta =
+    (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
+  const titleMax = platformMeta?.title_max ?? 300;
 
   const aiCopy = useMutation({
     mutationFn: () => generatePublishCopy({ workspace_id: workspace.id, asset_id: assetId }),
@@ -383,9 +437,11 @@ function CreatePublishDialog({
           .split(/[,，\s]+/)
           .map((tag) => tag.trim())
           .filter(Boolean),
+        short_title: shortTitle.trim(),
       }),
     onSuccess: (task) => {
       setTitle("");
+      setShortTitle("");
       setDescription("");
       setTagsText("");
       onCreated(task);
@@ -436,9 +492,20 @@ function CreatePublishDialog({
           )}
         </label>
         <label className="wf-field">
-          <span>{t("publishTitle")}</span>
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+          <span>
+            {t("publishTitle")}
+            <em className={title.length > titleMax ? "publish-title-count over" : "publish-title-count"}>
+              {title.length}/{titleMax}
+            </em>
+          </span>
+          <Input value={title} maxLength={titleMax + 20} onChange={(event) => setTitle(event.target.value)} />
         </label>
+        {platformMeta?.short_title && (
+          <label className="wf-field">
+            <span>{t("publishShortTitle")}</span>
+            <Input value={shortTitle} maxLength={20} onChange={(event) => setShortTitle(event.target.value)} />
+          </label>
+        )}
         <label className="wf-field">
           <span>{t("publishDescription")}</span>
           <textarea

@@ -14,6 +14,9 @@ importers:
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
 
   frontend:
     dependencies:
@@ -143,7 +146,7 @@ importers:
         version: 4.1.10(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0))
       wait-on:
         specifier: ^8.0.0
-        version: 8.0.0(supports-color@10.2.2)
+        version: 8.0.0
 
 packages:
 
@@ -5589,7 +5592,7 @@ snapshots:
 
   abbrev@1.0.3: {}
 
-  agent-base@6.0.0(supports-color@10.2.2):
+  agent-base@6.0.0:
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
@@ -5733,11 +5736,11 @@ snapshots:
 
   at-least-node@1.0.0: {}
 
-  axios@1.18.1(supports-color@10.2.2):
+  axios@1.18.1:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
-      https-proxy-agent: 5.0.1(supports-color@10.2.2)
+      https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
@@ -6789,7 +6792,7 @@ snapshots:
   http-proxy-agent@5.0.0:
     dependencies:
       '@tootallnate/once': 2.0.1
-      agent-base: 6.0.0(supports-color@10.2.2)
+      agent-base: 6.0.0
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
@@ -6806,9 +6809,9 @@ snapshots:
       quick-lru: 5.1.1
       resolve-alpn: 1.2.1
 
-  https-proxy-agent@5.0.1(supports-color@10.2.2):
+  https-proxy-agent@5.0.1:
     dependencies:
-      agent-base: 6.0.0(supports-color@10.2.2)
+      agent-base: 6.0.0
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
@@ -7075,7 +7078,7 @@ snapshots:
       cacache: 15.3.0
       http-cache-semantics: 4.2.0
       http-proxy-agent: 5.0.0
-      https-proxy-agent: 5.0.1(supports-color@10.2.2)
+      https-proxy-agent: 5.0.1
       is-lambda: 1.0.1
       lru-cache: 7.3.1
       minipass: 3.1.6
@@ -8445,9 +8448,9 @@ snapshots:
 
   w3c-keyname@2.2.8: {}
 
-  wait-on@8.0.0(supports-color@10.2.2):
+  wait-on@8.0.0:
     dependencies:
-      axios: 1.18.1(supports-color@10.2.2)
+      axios: 1.18.1
       joi: 17.13.4
       lodash: 4.18.1
       minimist: 1.2.8
