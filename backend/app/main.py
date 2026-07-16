@@ -25,6 +25,7 @@ from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
 from app.api.routes.batches import router as batches_router
 from app.api.routes.publish import router as publish_router
+from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.core.config import settings
 from app.core.db import SessionLocal, init_db
@@ -67,6 +68,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     # Webhook 触发按任务密钥鉴权,不挂登录依赖。
     app.include_router(hooks_router, prefix="/api")
+    # 桌面发布器 worker:本机进程,免登录(后端只听 127.0.0.1)。
+    app.include_router(publish_worker_router, prefix="/api")
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(assets_router, prefix="/api", dependencies=protected)

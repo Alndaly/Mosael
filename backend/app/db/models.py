@@ -347,6 +347,10 @@ class PublishAccount(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # 浏览器平台的登录态(老版 BINDING_STATUSES):unknown/checking/bound/login_required/...
+    binding_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
@@ -363,8 +367,14 @@ class PublishTask(Base):
     title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    # 视频号等平台的短标题;浏览器平台任务的富状态(老版 TASK_STATUSES 词汇)。
+    short_title: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    screenshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
 class ProviderProfile(Base):

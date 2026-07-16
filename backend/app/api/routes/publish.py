@@ -31,7 +31,15 @@ router = APIRouter(tags=["publish"])
 @router.get("/publish/platforms", response_model=list[PublishPlatformOut])
 def platforms() -> list[dict]:
     return [
-        {"platform": key, "label": meta["label"], "description": meta["description"], "config": meta["config"]}
+        {
+            "platform": key,
+            "label": meta["label"],
+            "description": meta["description"],
+            "config": meta["config"],
+            "executor": meta.get("executor", "local"),
+            "title_max": meta.get("title_max", 300),
+            "short_title": meta.get("short_title", False),
+        }
         for key, meta in PUBLISH_PLATFORMS.items()
     ]
 
@@ -112,6 +120,7 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
             title=body.title,
             description=body.description,
             tags=body.tags,
+            short_title=body.short_title,
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

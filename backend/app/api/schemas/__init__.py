@@ -545,6 +545,9 @@ class PublishPlatformOut(BaseModel):
     label: str
     description: str
     config: dict
+    executor: str = "local"
+    title_max: int = 300
+    short_title: bool = False
 
 
 class PublishAccountCreate(BaseModel):
@@ -567,6 +570,8 @@ class PublishAccountOut(OrmModel):
     name: str
     config: dict
     enabled: bool
+    binding_status: str = "unknown"
+    last_error: str | None = None
     created_at: datetime
 
 
@@ -577,6 +582,7 @@ class PublishCreate(BaseModel):
     title: str = Field(default="", max_length=300)
     description: str = Field(default="", max_length=5000)
     tags: list[str] = Field(default_factory=list, max_length=24)
+    short_title: str = Field(default="", max_length=80)
 
 
 class PublishTaskOut(BaseModel):

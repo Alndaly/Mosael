@@ -29,23 +29,93 @@ class PublishDomainError(ValueError):
 
 
 # 平台注册表:config 字段描述驱动 UI 表单与校验。
+# executor="local" 在后端线程内完成;executor="browser" 由桌面端发布器
+# (Electron 内嵌浏览器 + 账号登录态)认领执行 —— 老版 mibu-video 同款架构。
+# title_max 在创建时校验,避免任务在平台侧因超长标题晚失败。
 PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     "folder": {
         "label": "本地目录",
         "description": "把成片拷贝到指定目录,并写入同名 .json 元数据(标题/简介/标签),方便手动上传或交给其他工具。",
         "config": {"directory": {"type": "string", "required": True, "description": "目标目录绝对路径"}},
+        "executor": "local",
+        "title_max": 300,
+        "short_title": False,
     },
     "webhook": {
         "label": "Webhook",
         "description": "把文件路径与文案元数据 POST 给外部自动化(n8n / Zapier / 自建服务),由对方完成上传。",
         "config": {"url": {"type": "string", "required": True, "description": "接收 POST 的 URL"}},
+        "executor": "local",
+        "title_max": 300,
+        "short_title": False,
     },
     "mock": {
         "label": "演示平台",
         "description": "不做真实上传,直接返回成功。用于演示与测试。",
         "config": {},
+        "executor": "local",
+        "title_max": 100,
+        "short_title": False,
+    },
+    "douyin": {
+        "label": "抖音",
+        "description": "由桌面端发布器用你已登录的抖音创作者账号自动上传;首次使用需在弹出的窗口里登录。",
+        "config": {},
+        "executor": "browser",
+        "title_max": 30,
+        "short_title": False,
+    },
+    "xiaohongshu": {
+        "label": "小红书",
+        "description": "由桌面端发布器用已登录的小红书账号自动上传;首次使用需登录。",
+        "config": {},
+        "executor": "browser",
+        "title_max": 20,
+        "short_title": False,
+    },
+    "weixin-channels": {
+        "label": "微信视频号",
+        "description": "由桌面端发布器用已登录的视频号助手账号自动上传;支持短标题。",
+        "config": {},
+        "executor": "browser",
+        "title_max": 16,
+        "short_title": True,
+    },
+    "bilibili": {
+        "label": "Bilibili",
+        "description": "由桌面端发布器用已登录的 B 站账号自动上传;首次使用需登录。",
+        "config": {},
+        "executor": "browser",
+        "title_max": 80,
+        "short_title": False,
     },
 }
+
+# 别名 → 规范 id(智能体/用户口语直达,老版同款)。
+PLATFORM_ALIASES = {
+    "抖音": "douyin", "dy": "douyin", "tiktok": "douyin",
+    "小红书": "xiaohongshu", "xhs": "xiaohongshu", "rednote": "xiaohongshu",
+    "视频号": "weixin-channels", "微信视频号": "weixin-channels", "channels": "weixin-channels",
+    "wechat": "weixin-channels", "weixin": "weixin-channels",
+    "b站": "bilibili", "哔哩哔哩": "bilibili", "bili": "bilibili",
+}
+
+# 老版任务状态词汇 1:1,移植的适配器直接映射。
+TASK_STATUSES = (
+    "pending", "running", "prepared", "success", "failed",
+    "login_required", "waiting_manual", "permission_required", "blocked", "cancelled",
+)
+TERMINAL_TASK_STATUSES = frozenset({"prepared", "success", "failed", "cancelled"})
+BINDING_STATUSES = ("unknown", "checking", "bound", "login_required", "manual_required", "permission_required")
+
+
+def normalize_platform(platform: str) -> str:
+    raw = (platform or "").strip()
+    lowered = raw.lower()
+    canonical = PLATFORM_ALIASES.get(raw, PLATFORM_ALIASES.get(lowered, lowered))
+    if canonical not in PUBLISH_PLATFORMS:
+        raise PublishDomainError(f"未知平台: {platform!r}(支持 {', '.join(PUBLISH_PLATFORMS)})")
+    return canonical
 
 WEBHOOK_TIMEOUT_SECONDS = 60
 
@@ -53,9 +123,8 @@ WEBHOOK_TIMEOUT_SECONDS = 60
 def create_account(
     db: Session, *, workspace_id: str, platform: str, name: str, config: dict[str, Any]
 ) -> PublishAccount:
-    meta = PUBLISH_PLATFORMS.get(platform)
-    if meta is None:
-        raise PublishDomainError(f"未知发布平台: {platform}")
+    platform = normalize_platform(platform)
+    meta = PUBLISH_PLATFORMS[platform]
     for key, spec in meta["config"].items():
         if isinstance(spec, dict) and spec.get("required") and not str(config.get(key, "")).strip():
             raise PublishDomainError(f"平台 {platform} 缺少必填配置 {key}")
@@ -75,18 +144,26 @@ def start_publish(
     title: str,
     description: str,
     tags: list[str],
+    short_title: str = "",
 ) -> PublishTask:
     if not account.enabled:
         raise PublishDomainError("发布账号已停用")
     if not asset.file_key:
         raise PublishDomainError("素材没有本地文件,无法发布")
+    meta = PUBLISH_PLATFORMS[account.platform]
+    title_max = int(meta.get("title_max", 300))
+    if title and len(title) > title_max:
+        raise PublishDomainError(f"{meta['label']} 标题最多 {title_max} 字(当前 {len(title)} 字)")
 
+    is_browser = meta.get("executor") == "browser"
     job = create_job(
         db,
         workspace_id=workspace_id,
         kind="publish",
         payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform},
-        message=f"发布排队中: {title or asset.name}",
+        message=(
+            f"等待桌面发布器认领: {title or asset.name}" if is_browser else f"发布排队中: {title or asset.name}"
+        ),
     )
     task = PublishTask(
         workspace_id=workspace_id,
@@ -95,12 +172,15 @@ def start_publish(
         title=title,
         description=description,
         tags=tags,
+        short_title=short_title,
+        status="pending",
         job_id=job.id,
     )
     db.add(task)
     db.commit()
     db.refresh(task)
-    threading.Thread(target=_run_publish_thread, args=(task.id,), daemon=True).start()
+    if not is_browser:
+        threading.Thread(target=_run_publish_thread, args=(task.id,), daemon=True).start()
     return task
 
 
@@ -124,11 +204,14 @@ def _run_publish_thread(task_id: str) -> None:
             job.progress = 1.0
             job.result = result
             job.message = f"发布完成: {task.title or asset.name}"
+            task.status = "success"
             db.add(TaskEvent(job_id=job.id, type="publish.finished", payload=result))
         except Exception as exc:  # noqa: BLE001 — 适配器失败必须落到 job
             job.status = "failed"
             job.error = str(exc)[:500]
             job.message = "发布失败"
+            task.status = "failed"
+            task.error_message = str(exc)[:500]
             db.add(TaskEvent(job_id=job.id, type="publish.failed", payload={"error": str(exc)[:500]}))
         db.commit()
 
@@ -182,19 +265,23 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
     job = db.get(Job, task.job_id) if task.job_id else None
     account = db.get(PublishAccount, task.account_id)
     asset = db.get(Asset, task.asset_id)
+    platform = account.platform if account else ""
+    is_browser = PUBLISH_PLATFORMS.get(platform, {}).get("executor") == "browser"
+    # 浏览器平台展示富状态(pending/running/login_required/...),本地平台跟 job。
+    status = task.status if is_browser else (job.status if job else "queued")
     return {
         "id": task.id,
         "workspace_id": task.workspace_id,
         "account_id": task.account_id,
         "account_name": account.name if account else "",
-        "platform": account.platform if account else "",
+        "platform": platform,
         "asset_id": task.asset_id,
         "asset_name": asset.name if asset else "",
         "title": task.title,
         "description": task.description,
         "tags": list(task.tags or []),
-        "status": job.status if job else "queued",
-        "error": job.error if job else None,
+        "status": status,
+        "error": task.error_message or (job.error if job else None),
         "result": job.result if job else {},
         "job_id": task.job_id,
         "created_at": task.created_at,
