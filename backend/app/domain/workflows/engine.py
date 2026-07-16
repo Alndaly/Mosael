@@ -115,6 +115,13 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
     db.commit()
 
     for index, node in enumerate(order):
+        # 用户取消(cancel_job 把 job 翻 failed):节点边界停下,不再执行后续节点。
+        db.refresh(job)
+        if job.status == "failed":
+            db.add(TaskEvent(job_id=job.id, type="workflow.cancelled", payload={"at_node": index}))
+            db.commit()
+            return context
+
         node_id = str(node["id"])
         node_type = str(node["type"])
         node_name = str(node.get("name") or NODE_TYPES[node_type]["label"])
@@ -163,6 +170,9 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         job.progress = (index + 1) / total
         db.commit()
 
+    db.refresh(job)
+    if job.status == "failed":
+        return context
     job.status = "succeeded"
     job.progress = 1.0
     job.message = f"工作流完成: {workflow.name}"

@@ -187,10 +187,20 @@ def claim_check(db: Session) -> dict[str, Any] | None:
         )
         .order_by(PublishAccount.last_checked_at.asc().nulls_first())
     )
+    stale_checking = now() - timedelta(minutes=10)
     for account in db.scalars(stmt):
-        due = account.binding_status == "unknown" or (
-            account.binding_status in ("bound", "login_required")
-            and (account.last_checked_at is None or account.last_checked_at < cutoff)
+        due = (
+            account.binding_status == "unknown"
+            or (
+                account.binding_status in ("bound", "login_required")
+                and (account.last_checked_at is None or account.last_checked_at < cutoff)
+            )
+            # 自愈:复检中途执行器崩溃/出错会把账号永远留在 checking(不在任何
+            # 认领条件里)。超过 10 分钟的 checking 视为悬挂,重新认领。
+            or (
+                account.binding_status == "checking"
+                and (account.last_checked_at is None or account.last_checked_at < stale_checking)
+            )
         )
         if due:
             previous = account.binding_status

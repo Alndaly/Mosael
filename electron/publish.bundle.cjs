@@ -2447,6 +2447,10 @@ async function checkAccountStatus(acc) {
     }
   } catch (error) {
     plog("recheck error:", acc.account_id, error instanceof Error ? error : String(error));
+    await patchAccount(acc.account_id, {
+      binding_status: acc.binding_status && acc.binding_status !== "checking" ? acc.binding_status : "unknown",
+      last_error: null
+    }).catch(() => void 0);
   }
 }
 async function loop(gen) {

@@ -279,3 +279,41 @@ def test_scheduled_task_dispatches_workflow() -> None:
             break
         time.sleep(0.2)
     assert status == "succeeded", status
+
+
+def test_cancel_running_workflow() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    workflow = client.post(
+        "/api/workflows",
+        json={"workspace_id": ws["id"], "name": "慢流", "graph": {
+            "nodes": [
+                {"id": "start", "type": "start", "config": {"params": {}}},
+                {"id": "slow", "type": "code", "config": {"code": "import time\ntime.sleep(2)\noutput = {'ok': 1}"}},
+                {"id": "after", "type": "template", "config": {"template": "{{slow.ok}}"}},
+            ],
+            "edges": [
+                {"id": "e1", "source": "start", "target": "slow"},
+                {"id": "e2", "source": "slow", "target": "after"},
+            ],
+        }},
+    ).json()
+    job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
+
+    time.sleep(0.3)  # 让引擎进入 slow 节点
+    cancelled = client.post(f"/api/jobs/{job_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["error"] == "已取消"
+
+    # 引擎在节点边界停下:job 保持取消态,不会被后续节点改写成 succeeded
+    for _ in range(60):
+        job = client.get(f"/api/jobs/{job_id}").json()
+        time.sleep(0.1)
+    assert job["status"] == "failed"
+    assert job["error"] == "已取消"
+
+    # 已结束的任务再取消 → 409
+    again = client.post(f"/api/jobs/{job_id}/cancel")
+    assert again.status_code == 409

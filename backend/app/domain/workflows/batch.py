@@ -77,6 +77,11 @@ def _run_batch_thread(batch_id: str) -> None:
         db.commit()
 
         for index, params in enumerate(batch.params_list):
+            # 父 job 被取消 → 不再开新的子项(在跑的那一项在其节点边界自行停止)。
+            db.refresh(parent)
+            if parent.status == "failed":
+                return
+
             item_job = create_job(
                 db,
                 workspace_id=batch.workspace_id,

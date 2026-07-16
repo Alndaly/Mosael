@@ -30,6 +30,30 @@ def create_job(
     return job
 
 
+def cancel_job(db: Session, job: Job) -> Job:
+    """用户主动取消:job 落终态,发布任务同步撤单,工作流/批量在节点边界停下。
+
+    线程内正在执行的节点无法安全掐断;engine/batch 每个节点边界都会重读 job
+    状态,看到已取消就不再继续——"停止中断"语义是节点粒度的。
+    """
+    if job.status not in ("queued", "running"):
+        raise ValueError("任务已结束,无法取消")
+    job.status = "failed"
+    job.error = "已取消"
+    job.message = "已取消"
+    db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
+
+    if job.kind == "publish":
+        from app.db.models import PublishTask
+
+        task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
+        if task is not None and task.status not in ("success", "prepared", "failed", "cancelled"):
+            task.status = "cancelled"
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
     """Apply the retention rules to task_events. Returns rows deleted."""
     reference = now or datetime.utcnow()

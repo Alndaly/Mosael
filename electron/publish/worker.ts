@@ -251,8 +251,15 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
       settle(stub, "login_required", false);
     }
   } catch (error) {
-    // 抖动别误判下线;保留原状态,下个 ttl 再查。但必须留痕,否则账号停在 checking 无从排查。
+    // 抖动别误判下线;把账号翻回复检前的状态(绝不能留在 checking——那不在任何
+    // 认领条件里,会永久卡死),下个 ttl 再查。
     plog("recheck error:", acc.account_id, error instanceof Error ? error : String(error));
+    await backend
+      .patchAccount(acc.account_id, {
+        binding_status: acc.binding_status && acc.binding_status !== "checking" ? acc.binding_status : "unknown",
+        last_error: null,
+      })
+      .catch(() => undefined);
   }
 }
 

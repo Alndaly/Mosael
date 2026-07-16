@@ -178,6 +178,9 @@ def start_publish(
         job_id=job.id,
     )
     db.add(task)
+    db.flush()
+    # job payload 带上 task_id:任务中心点击发布任务可直达对应发布详情。
+    job.payload = {**job.payload, "task_id": task.id}
     db.commit()
     db.refresh(task)
     if not is_browser:

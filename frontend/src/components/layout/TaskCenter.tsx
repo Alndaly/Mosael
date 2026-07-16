@@ -13,6 +13,7 @@ import {
   Sparkles,
   Timer,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -44,6 +45,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     mutationFn: () => api(`/api/jobs/finished?workspace_id=${workspaceId}`, { method: "DELETE" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] }),
   });
+  const cancelJob = useMutation({
+    mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const all = jobs.data ?? [];
   const active = all.filter((job) => ACTIVE.has(job.status));
@@ -53,6 +59,15 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     const route = jobRoute(job);
     if (!route) return;
     window.location.hash = route;
+    // 发布任务直达那条发布记录:导航落定后经深链事件通道选中详情
+    // (hash 会被路由归一化,query 传参不可靠)。
+    const taskId = ((job.payload ?? {}) as Record<string, unknown>).task_id;
+    if (job.kind === "publish" && typeof taskId === "string") {
+      window.setTimeout(
+        () => window.dispatchEvent(new CustomEvent("mibu:open-publish-task", { detail: taskId })),
+        80,
+      );
+    }
     setOpen(false);
   };
 
@@ -111,7 +126,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         </div>
         <div className="taskcenter-list">
           {active.map((job) => (
-            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
+            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
           {active.length > 0 && finished.length > 0 && <div className="taskcenter-sep" />}
           {finished.map((job) => (
@@ -148,11 +163,11 @@ const KIND_ROUTE: Record<string, string> = {
 function jobRoute(job: Job): string | null {
   const view = KIND_ROUTE[job.kind];
   if (!view) return null;
-  const projectId = (job.payload as Record<string, unknown> | null)?.project_id;
+  const projectId = ((job.payload ?? {}) as Record<string, unknown>).project_id;
   return `/${view}${typeof projectId === "string" && projectId ? `?p=${projectId}` : ""}`;
 }
 
-function JobRow({ job, onOpen }: { job: Job; onOpen?: () => void }) {
+function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCancel?: () => void }) {
   const t = useI18n();
   const meta = KIND_META[job.kind] ?? { icon: <Activity size={13} />, labelKey: "jobKindOther" };
   const running = ACTIVE.has(job.status);
@@ -177,6 +192,20 @@ function JobRow({ job, onOpen }: { job: Job; onOpen?: () => void }) {
               <CircleAlert size={12} className="inv-bad" />
             ) : (
               `${Math.round(job.progress * 100)}%`
+            )}
+            {running && onCancel && (
+              <button
+                type="button"
+                className="taskrow-cancel"
+                title={t("jobCancel")}
+                aria-label={t("jobCancel")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCancel();
+                }}
+              >
+                <X size={11} />
+              </button>
             )}
           </span>
         </div>

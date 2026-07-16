@@ -44,6 +44,19 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [tab, setTab] = React.useState<"records" | "accounts">("records");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
+  // 任务中心深链(mibu:open-* 事件通道):直接选中那条发布记录。
+  React.useEffect(() => {
+    const onOpenTask = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) {
+        setSelectedId(id);
+        setTab("records");
+      }
+    };
+    window.addEventListener("mibu:open-publish-task", onOpenTask);
+    return () => window.removeEventListener("mibu:open-publish-task", onOpenTask);
+  }, []);
   const [creating, setCreating] = React.useState(false);
   const [managingAccounts, setManagingAccounts] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PublishTask | null>(null);
@@ -327,7 +340,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={recheck.isPending || account.binding_status === "checking"}
+                      disabled={recheck.isPending}
                       onClick={() => recheck.mutate(account.id)}
                     >
                       <RefreshCcw size={13} /> {t("publishRecheck")}
