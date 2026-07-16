@@ -12,6 +12,7 @@ import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals"
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { TagsDialog } from "@/features/media/TagsDialog";
+import { KbTiptap } from "@/features/kb/KbTiptap";
 
 type KbDocument = components["schemas"]["KbDocumentOut"];
 type KbSearchResult = components["schemas"]["KbSearchResultOut"];
@@ -337,12 +338,11 @@ function KbDocumentEditor({ documentId, onDelete }: { documentId: string; onDele
           </span>
         ))}
       </div>
-      <textarea
-        className="kb-content-input"
-        value={content}
-        placeholder={t("kbContentPlaceholder")}
-        onChange={(event) => {
-          setContent(event.target.value);
+      <KbTiptap
+        key={data.id}
+        initialMarkdown={data.content ?? ""}
+        onChange={(markdown) => {
+          setContent(markdown);
           setDirty(true);
         }}
       />
