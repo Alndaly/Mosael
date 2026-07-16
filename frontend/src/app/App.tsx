@@ -17,7 +17,8 @@ import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
 import { HomeView } from "@/features/home/HomeView";
 import { MediaLibraryView } from "@/features/media/MediaLibraryView";
-import { BatchView, PublishView } from "@/features/planned/PlannedViews";
+import { PublishView } from "@/features/planned/PlannedViews";
+import { BatchView } from "@/features/batch/BatchView";
 import { KbView } from "@/features/kb/KbView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
@@ -143,7 +144,7 @@ function Studio({ workspace }: { workspace: Workspace }) {
       {view === "media" && <MediaLibraryView workspace={workspace} project={project} />}
       {view === "editor" && <EditorView workspace={workspace} project={project} />}
       {view === "ai" && <AiStudio workspace={workspace} project={project} />}
-      {view === "batch" && <BatchView />}
+      {view === "batch" && <BatchView workspace={workspace} />}
       {view === "publish" && <PublishView />}
       {view === "kb" && <KbView workspace={workspace} />}
       {view === "settings" && <SettingsView workspace={workspace} />}

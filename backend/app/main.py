@@ -22,6 +22,7 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
+from app.api.routes.batches import router as batches_router
 from app.api.routes.workflows import router as workflows_router
 from app.core.config import settings
 from app.core.db import SessionLocal, init_db
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
+    app.include_router(batches_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(feishu_router, prefix="/api", dependencies=protected)

@@ -319,6 +319,22 @@ class Workflow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class BatchRun(Base):
+    """批量执行:同一工作流 × N 组参数(计划 §13/批量混剪)。
+    父 job 聚合进度,每组参数一个子 workflow job。"""
+
+    __tablename__ = "batch_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    workflow_id: Mapped[str] = mapped_column(ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    params_list: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    item_job_ids: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class ProviderProfile(Base):
     """A user-configured AI provider account. Multiple profiles per vendor
     are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""

@@ -512,6 +512,34 @@ class WorkflowAiEditResponse(BaseModel):
     summary: str = ""
 
 
+class BatchCreate(BaseModel):
+    workspace_id: str
+    workflow_id: str
+    name: str = Field(min_length=1, max_length=180)
+    params_list: list[dict] = Field(min_length=1, max_length=200)
+
+
+class BatchItemOut(BaseModel):
+    index: int
+    params: dict
+    job_id: str | None
+    status: str
+    progress: float
+    error: str | None
+
+
+class BatchOut(BaseModel):
+    id: str
+    workspace_id: str
+    workflow_id: str
+    name: str
+    status: str
+    progress: float
+    job_id: str | None
+    created_at: datetime
+    items: list[BatchItemOut] = Field(default_factory=list)
+
+
 class AgentSessionCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None

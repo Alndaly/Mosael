@@ -41,6 +41,8 @@ export type ScheduledTaskRun = components["schemas"]["ScheduledTaskRunOut"];
 export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskResponse"];
 export type Plugin = components["schemas"]["PluginOut"];
 export type Workflow = components["schemas"]["WorkflowOut"];
+export type Batch = components["schemas"]["BatchOut"];
+export type BatchItem = components["schemas"]["BatchItemOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type WorkflowAiEditResponse = components["schemas"]["WorkflowAiEditResponse"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
@@ -256,6 +258,23 @@ export function aiEditWorkflow(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function listBatches(workspaceId: string): Promise<Batch[]> {
+  return api<Batch[]>(`/api/batches?workspace_id=${workspaceId}`);
+}
+
+export function createBatch(body: {
+  workspace_id: string;
+  workflow_id: string;
+  name: string;
+  params_list: Array<Record<string, unknown>>;
+}): Promise<Batch> {
+  return api<Batch>("/api/batches", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deleteBatch(batchId: string): Promise<unknown> {
+  return api(`/api/batches/${batchId}`, { method: "DELETE" });
 }
 
 export function renameProject(projectId: string, name: string): Promise<Project> {
