@@ -510,6 +510,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+              onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
           return compact ? <div className="inspector-drawer">{inspector}</div> : inspector;

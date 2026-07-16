@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, X } from "lucide-react";
 
 import type { Asset, Clip, Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -37,6 +37,7 @@ export function Inspector({
   onSetEffects,
   onSetSpeed,
   onSetText,
+  onClose,
 }: {
   sequence: Sequence;
   selectedClip: Clip | null;
@@ -46,6 +47,8 @@ export function Inspector({
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
   onSetText?: (clipId: string, text: string) => void;
+  /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
+  onClose?: () => void;
 }) {
   const t = useI18n();
   const [tab, setTab] = React.useState<"props" | "color">("props");
@@ -106,17 +109,30 @@ export function Inspector({
         ) : (
           <h2>{t("inspector")}</h2>
         )}
-        {selectedClip && (
-          <button
-            type="button"
-            className="inspector-delete"
-            title={t("deleteClip")}
-            aria-label={t("deleteClip")}
-            onClick={() => onDeleteClip(selectedClip.id)}
-          >
-            <Trash2 size={13} />
-          </button>
-        )}
+        <div className="inspector-head-tools">
+          {selectedClip && (
+            <button
+              type="button"
+              className="inspector-delete"
+              title={t("deleteClip")}
+              aria-label={t("deleteClip")}
+              onClick={() => onDeleteClip(selectedClip.id)}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              className="inspector-delete inspector-close"
+              title={t("close")}
+              aria-label={t("close")}
+              onClick={onClose}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
       </div>
       {selectedClip ? (
         tab === "color" && !isTextClip ? (

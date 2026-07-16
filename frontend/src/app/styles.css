@@ -1547,6 +1547,7 @@
   gap: 8px;
   padding: 12px;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 
@@ -1788,6 +1789,7 @@
 
 .pip-row {
   display: flex;
+  flex-wrap: wrap; /* 右栏可窄到 200px,速度档位按钮必须能换行 */
   gap: 4px;
 }
 
@@ -1940,7 +1942,7 @@
   z-index: 1;
   flex: 1;
   overflow: hidden;
-  padding: 0 4px;
+  padding: 0 8px;
   font-size: 11px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -1948,26 +1950,71 @@
   pointer-events: none;
 }
 
+/* Trim 手柄是覆盖层(绝对定位),不参与 clip 内部布局 —— 这样刀片模式
+   隐藏它们时段落外观不会有任何变化,两种工具下 clip 完全一致。 */
 .tl-clip-handle {
-  flex: none;
-  width: 7px;
-  align-self: stretch;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 10px;
   cursor: ew-resize;
   touch-action: none;
+  opacity: 0;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  transition: opacity 100ms;
+}
+
+.tl-clip-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.75;
 }
 
 .tl-clip-handle.left {
-  border-right: 1px solid transparent;
+  left: 0;
+  border-radius: 5px 0 0 5px;
+}
+
+.tl-clip-handle.left::after {
+  left: 3px;
 }
 
 .tl-clip-handle.right {
-  border-left: 1px solid transparent;
+  right: 0;
+  border-radius: 0 5px 5px 0;
+}
+
+.tl-clip-handle.right::after {
+  right: 3px;
 }
 
 .tl-clip:hover .tl-clip-handle,
 .tl-clip.selected .tl-clip-handle {
-  background: currentColor;
-  opacity: 0.28;
+  opacity: 1;
+}
+
+/* 拖动 trim 时跟随移动边缘的实时时长浮标 */
+.tl-trim-hint {
+  position: absolute;
+  top: -1px;
+  z-index: 8;
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--popover);
+  color: var(--foreground);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .tl-lane.droppable {
@@ -3160,6 +3207,11 @@
   -webkit-user-select: none;
 }
 
+.inspector-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .inspector-delete {
   display: grid;
   place-items: center;
@@ -3175,6 +3227,11 @@
 .inspector-delete:hover {
   color: var(--destructive);
   background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+.inspector-close:hover {
+  /* 抽屉的关闭按钮不是危险操作,悬停用中性色 */
+  color: var(--foreground);
+  background: var(--secondary);
 }
 
 /* Color grade panel (right tab) */
@@ -3647,22 +3704,26 @@
   }
 }
 
-/* Inspector overlay drawer for the compact editor (toggled from JS). */
+/* Inspector drawer for the compact editor (toggled from JS): docked right
+   sheet below the topbar. Flat design has no shadows, so the boundary comes
+   from the opaque panel background + hairline left border — never float it
+   borderless over content. */
 .inspector-drawer {
   position: fixed;
-  top: 56px;
-  right: 12px;
-  bottom: 12px;
+  top: 44px; /* topbar row height */
+  right: 0;
+  bottom: 0;
   z-index: 60;
   width: min(320px, calc(100vw - 96px));
   display: grid;
-  box-shadow: var(--shadow-raised);
-  border-radius: 10px;
-  overflow: hidden;
+  border-left: 1px solid var(--border-strong);
+  background: var(--panel);
 }
 
 .inspector-drawer .inspector {
   height: 100%;
+  border: none;
+  border-radius: 0;
 }
 
 /* Streamdown 给表格套了两层带边框圆角的包装容器 — 剥掉包装,只保留

@@ -634,6 +634,29 @@ export function Timeline({
                 })}
               </div>
             ))}
+            {dragDraft &&
+              (dragDraft.kind === "trim-start" || dragDraft.kind === "trim-end") &&
+              (() => {
+                const source = allClips.find((item) => item.id === dragDraft.clipId);
+                if (!source) return null;
+                const speed = source.speed || 1;
+                const duration = (dragDraft.src_out - dragDraft.src_in) / speed;
+                const edgeTime =
+                  dragDraft.kind === "trim-start" ? dragDraft.timeline_start : dragDraft.timeline_start + duration;
+                const trackIndex = tracks.findIndex((item) => item.id === dragDraft.trackId);
+                if (trackIndex < 0) return null;
+                return (
+                  <div
+                    className="tl-trim-hint"
+                    style={{
+                      left: timeToPx(edgeTime, pxPerSecond),
+                      top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,
+                    }}
+                  >
+                    {formatTimecode(edgeTime)} · {duration.toFixed(2)}s
+                  </div>
+                );
+              })()}
             {marquee && (
               <div
                 className="tl-marquee"
