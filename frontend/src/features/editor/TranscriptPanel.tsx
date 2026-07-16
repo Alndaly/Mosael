@@ -257,6 +257,64 @@ export function TranscriptPanel({
     return total;
   }, [selected, clipById]);
 
+  // 文档序的扁平词表:拖选按它计算范围,单击按它定位播放头。
+  const docTokens = React.useMemo(() => {
+    const list: Array<{ key: string; clipId: string; srcStart: number; srcEnd: number; timelineAt: number }> = [];
+    for (const item of docItems) {
+      if (item.kind !== "sentence") continue;
+      const sentence = item.sentence;
+      const clip = clipById.get(sentence.clipId);
+      const speed = clip?.speed || 1;
+      sentence.tokens.forEach((token, index) => {
+        list.push({
+          key: `${sentence.clipId}:${sentence.segmentId}:${index}`,
+          clipId: sentence.clipId,
+          srcStart: token.start_time,
+          srcEnd: token.end_time,
+          timelineAt: clip ? clip.timeline_start + (token.start_time - clip.src_in) / speed : sentence.timelineStart,
+        });
+      });
+    }
+    return list;
+  }, [docItems, clipById]);
+  const flatIndexByKey = React.useMemo(
+    () => new Map(docTokens.map((token, index) => [token.key, index])),
+    [docTokens],
+  );
+  const docTokensRef = React.useRef(docTokens);
+  docTokensRef.current = docTokens;
+
+  // 交互模型(Descript/剪映):单击 = 定位播放头;按住拖过多个词 = 标记
+  // 范围(在既有选择上追加);双击 = 单词标记/取消。
+  const dragRef = React.useRef<{ anchor: number; base: TokenSelection; moved: boolean } | null>(null);
+  const beginWordDrag = (flatIndex: number) => {
+    dragRef.current = { anchor: flatIndex, base: new Map(selected), moved: false };
+  };
+  const dragOverWord = (flatIndex: number) => {
+    const drag = dragRef.current;
+    if (!drag || (flatIndex === drag.anchor && !drag.moved)) return;
+    drag.moved = true;
+    const [from, to] = [Math.min(drag.anchor, flatIndex), Math.max(drag.anchor, flatIndex)];
+    const next = new Map(drag.base);
+    for (let index = from; index <= to; index += 1) {
+      const token = docTokensRef.current[index];
+      next.set(token.key, { clipId: token.clipId, srcStart: token.srcStart, srcEnd: token.srcEnd });
+    }
+    setSelected(next);
+  };
+  React.useEffect(() => {
+    const onUp = () => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (drag && !drag.moved) {
+        const token = docTokensRef.current[drag.anchor];
+        if (token) useEditorStore.getState().setPlayhead(token.timelineAt);
+      }
+    };
+    window.addEventListener("pointerup", onUp);
+    return () => window.removeEventListener("pointerup", onUp);
+  }, []);
+
   if (projected.length === 0) {
     return (
       <div className="ts-empty">
@@ -293,7 +351,15 @@ export function TranscriptPanel({
         )}
       </div>
 
-      <div className="tsd-doc">
+      <p className="tsd-usage">{t("transcriptUsage")}</p>
+      <div
+        className="tsd-doc"
+        onPointerOver={(event) => {
+          if (!(event.buttons & 1) || !dragRef.current) return;
+          const el = (event.target as HTMLElement).closest("[data-flat]");
+          if (el) dragOverWord(Number(el.getAttribute("data-flat")));
+        }}
+      >
         {docItems.map((item) => {
           if (item.kind === "silence") {
             const gap = item.gap;
@@ -343,6 +409,7 @@ export function TranscriptPanel({
                 {sentence.tokens.length > 0
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
+                      const flatIndex = flatIndexByKey.get(tokenKey) ?? -1;
                       const current =
                         activeSrc?.clipId === sentence.clipId &&
                         activeSrc.src >= token.start_time &&
@@ -360,7 +427,11 @@ export function TranscriptPanel({
                           key={tokenKey}
                           type="button"
                           className={classes}
-                          onClick={() => toggleToken(tokenKey, sentence.clipId, token.start_time, token.end_time)}
+                          data-flat={flatIndex}
+                          onPointerDown={(event) => {
+                            if (event.button === 0) beginWordDrag(flatIndex);
+                          }}
+                          onDoubleClick={() => toggleToken(tokenKey, sentence.clipId, token.start_time, token.end_time)}
                         >
                           {token.text}
                         </button>
@@ -371,7 +442,8 @@ export function TranscriptPanel({
                         type="button"
                         className={selected.has(`${key}:all`) ? "tsd-word block cut" : "tsd-word block"}
                         title={t("markSentenceHint")}
-                        onClick={() => toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                        onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+                        onDoubleClick={() => toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
                       >
                         {sentence.text}
                       </button>

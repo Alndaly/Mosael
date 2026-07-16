@@ -54,18 +54,46 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
   return <Editor workspace={workspace} project={project} />;
 }
 
-const PANEL_SIZES_KEY = "mibu.editor.panels";
+const PANEL_SIZES_KEY = "mibu.editor.panels.v2";
 
-function readPanelSizes(): { left: number; right: number; timeline: number } {
+type LeftTab = "media" | "transcript" | "subtitle";
+
+/** 素材是缩略图列表,窄即可;逐字稿是整篇文档,需要宽栏。宽度按页签分别记忆。 */
+const LEFT_WIDTH_BOUNDS: Record<LeftTab, { min: number; max: number; fallback: number }> = {
+  media: { min: 180, max: 480, fallback: 252 },
+  transcript: { min: 300, max: 620, fallback: 420 },
+  subtitle: { min: 240, max: 520, fallback: 320 },
+};
+
+interface PanelSizes {
+  left: Record<LeftTab, number>;
+  right: number;
+  timeline: number;
+}
+
+function clampLeft(tab: LeftTab, value: unknown): number {
+  const bounds = LEFT_WIDTH_BOUNDS[tab];
+  return Math.min(bounds.max, Math.max(bounds.min, Number(value) || bounds.fallback));
+}
+
+function readPanelSizes(): PanelSizes {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_SIZES_KEY) ?? "{}");
     return {
-      left: Math.min(480, Math.max(180, Number(parsed.left) || 252)),
+      left: {
+        media: clampLeft("media", parsed.left?.media),
+        transcript: clampLeft("transcript", parsed.left?.transcript),
+        subtitle: clampLeft("subtitle", parsed.left?.subtitle),
+      },
       right: Math.min(480, Math.max(200, Number(parsed.right) || 264)),
       timeline: Math.min(560, Math.max(160, Number(parsed.timeline) || 252)),
     };
   } catch {
-    return { left: 252, right: 264, timeline: 252 };
+    return {
+      left: { media: 252, transcript: 420, subtitle: 320 },
+      right: 264,
+      timeline: 252,
+    };
   }
 }
 
@@ -73,8 +101,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const t = useI18n();
   const qc = useQueryClient();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
-  const [leftTab, setLeftTab] = React.useState<"media" | "transcript" | "subtitle">("media");
+  const [leftTab, setLeftTab] = React.useState<LeftTab>("media");
   const [panels, setPanels] = React.useState(readPanelSizes);
+  const leftWidth = panels.left[leftTab];
 
   React.useEffect(() => {
     window.localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panels));
@@ -84,10 +113,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
-    const origin = { ...panels };
+    const origin = { ...panels, left: { ...panels.left } };
+    const tab = leftTab;
     const onMove = (moveEvent: PointerEvent) => {
       if (which === "left") {
-        setPanels((current) => ({ ...current, left: Math.min(480, Math.max(180, origin.left + (moveEvent.clientX - startX))) }));
+        setPanels((current) => ({
+          ...current,
+          left: { ...current.left, [tab]: clampLeft(tab, origin.left[tab] + (moveEvent.clientX - startX)) },
+        }));
       } else if (which === "right") {
         setPanels((current) => ({ ...current, right: Math.min(480, Math.max(200, origin.right - (moveEvent.clientX - startX))) }));
       } else {
@@ -390,16 +423,24 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     );
   }
 
+  // 检查器只在选中片段时占用右栏 — 空的「未选中片段」面板不该
+  // 一直吃掉宽度,逐字稿/监视器把空间用起来。
+  const showInspector = selectedClip !== null;
+
   return (
     <div
       className="editor-grid"
       style={{
-        gridTemplateColumns: `${panels.left}px minmax(0, 1fr) ${panels.right}px`,
+        gridTemplateColumns: showInspector
+          ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`
+          : `${leftWidth}px minmax(0, 1fr)`,
         gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
       }}
     >
-      <div className="panel-resizer col" style={{ left: panels.left - 3 }} onPointerDown={startPanelDrag("left")} />
-      <div className="panel-resizer col right" style={{ right: panels.right - 3 }} onPointerDown={startPanelDrag("right")} />
+      <div className="panel-resizer col" style={{ left: leftWidth - 3 }} onPointerDown={startPanelDrag("left")} />
+      {showInspector && (
+        <div className="panel-resizer col right" style={{ right: panels.right - 3 }} onPointerDown={startPanelDrag("right")} />
+      )}
       <div className="panel-resizer row" style={{ bottom: panels.timeline + 5 }} onPointerDown={startPanelDrag("timeline")} />
       {leftTab === "media" ? (
         <MediaPool
@@ -433,16 +474,18 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <section className="panel monitor">
         <Monitor sequence={sequence} assets={assets.data ?? []} />
       </section>
-      <Inspector
-        sequence={sequence}
-        selectedClip={selectedClip}
-        assets={assets.data ?? []}
-        isOverlayClip={isOverlayClip}
-        onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
-        onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
-        onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
-        onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
-      />
+      {showInspector && (
+        <Inspector
+          sequence={sequence}
+          selectedClip={selectedClip}
+          assets={assets.data ?? []}
+          isOverlayClip={isOverlayClip}
+          onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+          onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
+          onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
+          onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+        />
+      )}
       <section className="panel timeline">
         <Timeline
           sequence={sequence}

@@ -336,7 +336,10 @@ export function Timeline({
             {formatTimecode(playhead)}
             <em> / {formatTimecode(sequenceDuration(allClips))}</em>
           </span>
-          <span className="tl-clip-count">{t("clipCount").replace("{n}", String(allClips.length))}</span>
+          <span className="tl-clip-count">
+            {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
+            {Math.round(sequence.fps)}fps
+          </span>
         </div>
         <div className="tl-toolbar-actions">
           {toolbarExtra}

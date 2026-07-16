@@ -3113,3 +3113,14 @@
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
+
+.tsd-usage {
+  margin: 0;
+  padding: 8px 14px 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.tsd-doc {
+  user-select: none;
+  -webkit-user-select: none;
+}
