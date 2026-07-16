@@ -131,9 +131,26 @@ function GenerateWorkspace({
   // Oldest first, like a conversation.
   const ordered = React.useMemo(() => [...(generations.data ?? [])].reverse(), [generations.data]);
 
+  // 贴底跟随(与聊天一致):结果图片/视频异步加载会持续长高,
+  // 只要用户没往上翻就保持钉在底部。
   React.useEffect(() => {
-    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
-  }, [ordered.length]);
+    const el = threadRef.current;
+    if (!el) return;
+    let stick = true;
+    const onScroll = () => {
+      stick = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new MutationObserver(() => {
+      if (stick) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    el.scrollTop = el.scrollHeight;
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, []);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

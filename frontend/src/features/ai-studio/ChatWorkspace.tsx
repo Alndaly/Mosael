@@ -157,9 +157,27 @@ export function ChatWorkspace({
     }
   }, [running, activeSession, attachStream]);
 
+  // 贴底跟随:初次加载与流式输出都钉在底部;用户往上翻阅历史时不打断,
+  // 翻回底部附近后恢复跟随。用 MutationObserver 是因为 markdown 渲染是
+  // 异步长高的,一次性 scrollTo 会落在半截。
   React.useEffect(() => {
-    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
-  }, [messages.data?.length, running]);
+    const el = threadRef.current;
+    if (!el) return;
+    let stick = true;
+    const onScroll = () => {
+      stick = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new MutationObserver(() => {
+      if (stick) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    el.scrollTop = el.scrollHeight;
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, [activeSession?.id]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

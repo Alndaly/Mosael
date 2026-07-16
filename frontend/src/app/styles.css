@@ -23,6 +23,9 @@
 .app-shell {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
+  /* 行高必须钉死,否则 shell-main 会被页面内容撑出视口,
+     整个应用出现文档级滚动(顶栏/导航跟着滚走)。 */
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
 }
 
@@ -106,6 +109,7 @@
   display: grid;
   grid-template-rows: 44px minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
 }
 
 .topbar {
@@ -146,6 +150,8 @@
 
 .shell-content {
   min-height: 0;
+  height: 100%;
+  overflow: hidden; /* 滚动一律发生在 feature-view 内部,应用壳永远满屏 */
   background: var(--background);
 }
 
@@ -2058,6 +2064,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow: hidden; /* 聊天/生成只在线程内部滚动,页面本身不滚 */
 }
 
 .ai-studio-view > .chat-grid,
@@ -2069,9 +2076,11 @@
 .chat-grid {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
+  /* 行高必须显式钉在容器内:隐式 auto 行会被长对话撑高,
+     把整个页面撑出滚动条(输入框随内容跑掉)。 */
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
-  height: 100%;
 }
 
 .chat-sessions {
@@ -2171,23 +2180,10 @@
 
 .chat-bubble.assistant {
   position: relative;
-  padding: 0 0 0 34px;
+  padding: 0;
   border: none;
   background: transparent;
   white-space: normal;
-}
-
-.chat-bubble.assistant::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 1px;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--background) center / 14px no-repeat;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%232e6fee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>');
 }
 
 .chat-bubble.assistant :is(p, ul, ol, pre, table) {
