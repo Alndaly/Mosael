@@ -5,6 +5,7 @@ import { AudioLines, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, Mous
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   clipEnd,
@@ -455,39 +456,37 @@ export function Timeline({
             </TooltipTrigger>
             <TooltipContent>{t("zoomIn")}</TooltipContent>
           </Tooltip>
-          <div className="tl-help-wrap">
-            <Button
-              variant={helpOpen ? "secondary" : "ghost"}
-              size="icon-sm"
-              onClick={() => setHelpOpen((value) => !value)}
-              aria-label={t("shortcutsHelp")}
-              aria-expanded={helpOpen}
-            >
-              <CircleHelp size={14} />
-            </Button>
-            {helpOpen && (
-              <div className="tl-help" role="dialog" aria-label={t("shortcutsHelp")}>
-                <strong>{t("shortcutsHelp")}</strong>
-                {[
-                  ["Space", t("hintPlayPause")],
-                  ["A / B", t("hintTools")],
-                  ["S", t("hintSplit")],
-                  ["⌘D", t("hintDuplicate")],
-                  ["Delete", t("hintDelete")],
-                  ["⇧Delete", t("hintRipple")],
-                  ["⌘Z / ⇧⌘Z", t("hintUndoRedo")],
-                  ["← / →", t("hintFrameStep")],
-                  ["⇧点击", t("hintMultiSelect")],
-                  [t("hintDragLabel"), t("hintDragBody")],
-                ].map(([key, body]) => (
-                  <div className="tl-help-row" key={key}>
-                    <kbd>{key}</kbd>
-                    <span>{body}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <Popover open={helpOpen} onOpenChange={setHelpOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={helpOpen ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label={t("shortcutsHelp")}
+              >
+                <CircleHelp size={14} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="tl-help" aria-label={t("shortcutsHelp")}>
+              <strong>{t("shortcutsHelp")}</strong>
+              {[
+                ["Space", t("hintPlayPause")],
+                ["A / B", t("hintTools")],
+                ["S", t("hintSplit")],
+                ["⌘D", t("hintDuplicate")],
+                ["Delete", t("hintDelete")],
+                ["⇧Delete", t("hintRipple")],
+                ["⌘Z / ⇧⌘Z", t("hintUndoRedo")],
+                ["← / →", t("hintFrameStep")],
+                ["⇧点击", t("hintMultiSelect")],
+                [t("hintDragLabel"), t("hintDragBody")],
+              ].map(([key, body]) => (
+                <div className="tl-help-row" key={key}>
+                  <kbd>{key}</kbd>
+                  <span>{body}</span>
+                </div>
+              ))}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
       <div className="tl-body">

@@ -15,6 +15,7 @@ import {
 import { api, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const ACTIVE = new Set(["queued", "running"]);
@@ -25,7 +26,6 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
-  const wrapRef = React.useRef<HTMLDivElement | null>(null);
 
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],
@@ -43,62 +43,51 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const active = all.filter((job) => ACTIVE.has(job.status));
   const finished = all.filter((job) => !ACTIVE.has(job.status)).slice(0, 12);
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    window.addEventListener("pointerdown", onDown);
-    return () => window.removeEventListener("pointerdown", onDown);
-  }, [open]);
-
   return (
-    <div className="taskcenter" ref={wrapRef}>
+    <Popover open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="taskcenter-btn"
-            aria-label={t("taskCenter")}
-            aria-expanded={open}
-            onClick={() => setOpen((value) => !value)}
-          >
-            {active.length > 0 ? <Loader2 size={15} className="spin" /> : <Activity size={15} />}
-            {active.length > 0 && <em className="taskcenter-badge">{active.length}</em>}
-          </Button>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="taskcenter-btn"
+              aria-label={t("taskCenter")}
+            >
+              {active.length > 0 ? <Loader2 size={15} className="spin" /> : <Activity size={15} />}
+              {active.length > 0 && <em className="taskcenter-badge">{active.length}</em>}
+            </Button>
+          </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>{t("taskCenter")}</TooltipContent>
       </Tooltip>
 
-      {open && (
-        <div className="taskcenter-pop" role="dialog" aria-label={t("taskCenter")}>
-          <div className="taskcenter-head">
-            <strong>{t("taskCenter")}</strong>
-            {finished.length > 0 && (
-              <button
-                type="button"
-                className="taskcenter-clear"
-                disabled={clearFinished.isPending}
-                onClick={() => clearFinished.mutate()}
-              >
-                <Trash2 size={11} /> {t("clearFinished")}
-              </button>
-            )}
-          </div>
-          <div className="taskcenter-list">
-            {active.map((job) => (
-              <JobRow key={job.id} job={job} />
-            ))}
-            {active.length > 0 && finished.length > 0 && <div className="taskcenter-sep" />}
-            {finished.map((job) => (
-              <JobRow key={job.id} job={job} />
-            ))}
-            {all.length === 0 && <p className="taskcenter-empty">{t("noJobs")}</p>}
-          </div>
+      <PopoverContent className="taskcenter-pop" aria-label={t("taskCenter")}>
+        <div className="taskcenter-head">
+          <strong>{t("taskCenter")}</strong>
+          {finished.length > 0 && (
+            <button
+              type="button"
+              className="taskcenter-clear"
+              disabled={clearFinished.isPending}
+              onClick={() => clearFinished.mutate()}
+            >
+              <Trash2 size={11} /> {t("clearFinished")}
+            </button>
+          )}
         </div>
-      )}
-    </div>
+        <div className="taskcenter-list">
+          {active.map((job) => (
+            <JobRow key={job.id} job={job} />
+          ))}
+          {active.length > 0 && finished.length > 0 && <div className="taskcenter-sep" />}
+          {finished.map((job) => (
+            <JobRow key={job.id} job={job} />
+          ))}
+          {all.length === 0 && <p className="taskcenter-empty">{t("noJobs")}</p>}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

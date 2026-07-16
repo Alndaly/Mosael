@@ -2588,22 +2588,11 @@
   margin-left: 2px;
 }
 
-/* 技能弹层:输入框左下角向上弹出的操作手册列表 */
-.composer-skills-wrap {
-  position: relative;
-}
-
+/* 技能弹层:输入框左下角向上弹出的操作手册列表(定位交给 Radix) */
 .composer-skills {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 40;
   width: 300px;
   display: grid;
   gap: 2px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--popover);
   padding: 10px;
 }
 
@@ -3170,21 +3159,10 @@
 .tl[data-tool="blade"] .tl-clip-handle {
   display: none; /* blade clicks anywhere on the clip, trim handles would swallow edges */
 }
-.tl-help-wrap {
-  position: relative;
-}
 .tl-help {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 60;
   width: 300px;
   display: grid;
   gap: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--popover);
-  box-shadow: var(--shadow-raised);
   padding: 12px 14px;
 }
 .tl-help strong {
@@ -3956,9 +3934,6 @@
 }
 
 /* Task center (任务总线统一入口) */
-.taskcenter {
-  position: relative;
-}
 .taskcenter-btn {
   position: relative;
 }
@@ -3978,16 +3953,9 @@
   line-height: 14px;
   text-align: center;
 }
+/* 定位交给 Radix Popover;这里只管盒子本身。 */
 .taskcenter-pop {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 70;
   width: 340px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--popover);
-  box-shadow: var(--shadow-raised);
   overflow: hidden;
 }
 .taskcenter-head {

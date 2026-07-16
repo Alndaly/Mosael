@@ -7,6 +7,7 @@ import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, typ
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -336,45 +337,42 @@ export function ChatWorkspace({
               <div className="chat-composer-bar">
                 <div className="chat-composer-left">
                   {switcher}
-                  <div className="composer-skills-wrap">
-                    <Button
-                      type="button"
-                      variant={skillsOpen ? "secondary" : "ghost"}
-                      size="icon-sm"
-                      aria-label={t("skillsTitle")}
-                      aria-expanded={skillsOpen}
-                      onClick={() => setSkillsOpen((value) => !value)}
-                    >
-                      <Sparkles size={14} />
-                    </Button>
-                    {skillsOpen && (
-                      <div className="composer-skills" role="menu" aria-label={t("skillsTitle")}>
-                        <strong>{t("skillsTitle")}</strong>
-                        {(skills.data ?? []).map((skill) => (
-                          <button
-                            key={skill.id}
-                            type="button"
-                            role="menuitem"
-                            className="composer-skill"
-                            onClick={() => {
-                              setDraft((current) =>
-                                current.trim()
-                                  ? current
-                                  : t("skillUsePrefix").replace("{name}", skill.name) + " ",
-                              );
-                              setSkillsOpen(false);
-                            }}
-                          >
-                            <em>{skill.name}</em>
-                            <span>{skill.description}</span>
-                          </button>
-                        ))}
-                        {(skills.data ?? []).length === 0 && (
-                          <span className="composer-skill-empty">{t("skillsEmpty")}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <Popover open={skillsOpen} onOpenChange={setSkillsOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={skillsOpen ? "secondary" : "ghost"}
+                        size="icon-sm"
+                        aria-label={t("skillsTitle")}
+                      >
+                        <Sparkles size={14} />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="composer-skills" align="start" aria-label={t("skillsTitle")}>
+                      <strong>{t("skillsTitle")}</strong>
+                      {(skills.data ?? []).map((skill) => (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          className="composer-skill"
+                          onClick={() => {
+                            setDraft((current) =>
+                              current.trim()
+                                ? current
+                                : t("skillUsePrefix").replace("{name}", skill.name) + " ",
+                            );
+                            setSkillsOpen(false);
+                          }}
+                        >
+                          <em>{skill.name}</em>
+                          <span>{skill.description}</span>
+                        </button>
+                      ))}
+                      {(skills.data ?? []).length === 0 && (
+                        <span className="composer-skill-empty">{t("skillsEmpty")}</span>
+                      )}
+                    </PopoverContent>
+                  </Popover>
                   <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
                     <label>
                       <input
