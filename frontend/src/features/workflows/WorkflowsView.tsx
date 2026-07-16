@@ -4,6 +4,8 @@ import {
   Background,
   Controls,
   Handle,
+  MarkerType,
+  MiniMap,
   Position,
   ReactFlow,
   applyEdgeChanges,
@@ -73,11 +75,11 @@ interface WfNodeData extends Record<string, unknown> {
   typeLabel: string;
 }
 
-/** 画布节点:图标 + 名称 + 类型标签,全平面卡片。 */
+/** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。 */
 function WfNode({ data, selected }: NodeProps) {
   const d = data as WfNodeData;
   return (
-    <div className={selected ? "wf-node selected" : "wf-node"}>
+    <div className={selected ? "wf-node selected" : "wf-node"} data-node-type={d.nodeType}>
       {d.nodeType !== "start" && <Handle type="target" position={Position.Left} className="wf-handle" />}
       <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
       <span className="wf-node-text">
@@ -90,6 +92,11 @@ function WfNode({ data, selected }: NodeProps) {
 }
 
 const NODE_COMPONENT_TYPES = { wf: WfNode };
+
+/** 连线统一带闭合箭头,方向一目了然。 */
+const DEFAULT_EDGE_OPTIONS = {
+  markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+};
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -399,8 +406,16 @@ function WorkflowEditor({
     <div className="wf-editor">
       <div className="wf-toolbar">
         <button type="button" className="wf-title" onClick={() => setRenaming(true)} title={t("rename")}>
-          <WorkflowIcon size={14} />
-          <strong>{workflow.name}</strong>
+          <span className="wf-title-icon">
+            <WorkflowIcon size={14} />
+          </span>
+          <span className="wf-title-text">
+            <strong>{workflow.name}</strong>
+            <small>
+              {t("wfNodeCount").replace("{n}", String(graph.nodes.length))}
+              {dirty ? ` · ${t("wfUnsaved")}` : ""}
+            </small>
+          </span>
         </button>
         <div className="wf-toolbar-actions">
           <Select onValueChange={addNode} value="">
@@ -467,11 +482,14 @@ function WorkflowEditor({
             onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
             onPaneClick={() => setSelectedNodeId(null)}
             fitView
+            fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+            defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Background gap={18} size={1} />
-            <Controls showInteractive={false} />
+            <Background gap={20} size={1.2} />
+            <Controls showInteractive={false} position="bottom-left" />
+            <MiniMap pannable zoomable position="bottom-right" />
           </ReactFlow>
         </div>
         {selectedNode && (
@@ -585,9 +603,28 @@ function NodeInspector({
           );
         })}
         {meta && (
-          <p className="wf-node-outputs">
-            {t("wfOutputs")}: {meta.outputs.map((output) => `{{${node.id}.${output}}}`).join("  ")}
-          </p>
+          <div className="wf-node-outputs">
+            <span>{t("wfOutputs")}</span>
+            <div className="wf-out-chips">
+              {meta.outputs.map((output) => {
+                const ref = `{{${node.id}.${output}}}`;
+                return (
+                  <button
+                    key={output}
+                    type="button"
+                    className="wf-out-chip"
+                    title={t("wfCopyRef")}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(ref);
+                      toast.success(t("wfRefCopied"), { description: ref });
+                    }}
+                  >
+                    {ref}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </aside>

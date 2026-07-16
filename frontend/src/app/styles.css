@@ -2423,12 +2423,17 @@
   transition: background-color 100ms;
 }
 
-/* 会话列表空状态:小巧居中,不抢主区的大空态 */
+/* 会话列表空状态:小巧且在整列高度上垂直居中(空状态必须居中)。 */
+.chat-session-list:has(.chat-session-empty) {
+  align-content: center;
+  justify-items: center;
+}
+
 .chat-session-empty {
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 26px 12px;
+  padding: 12px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
@@ -3976,25 +3981,39 @@
 
 .kb-editor {
   height: 100%;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
 }
 
+/* 标题 + 元信息 + 操作合成一个头部块:标题在上,类型/标签紧贴其下,
+   右侧竖直居中放保存状态与操作 —— 不再出现孤零零的 meta 行。 */
 .kb-editor-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+
+.kb-editor-head .kb-editor-tools {
+  grid-row: 1 / span 2;
+  grid-column: 2;
 }
 
 .kb-title-input {
-  flex: 1;
   min-width: 0;
   border: none;
   background: transparent;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--foreground);
   outline: none;
-  padding: 2px 0;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.kb-title-input:focus-visible {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
 }
 
 .kb-editor-tools {
@@ -4340,18 +4359,42 @@
 .wf-title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
   border: none;
   background: transparent;
-  padding: 4px 6px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 3px 8px 3px 3px;
+  border-radius: 8px;
   cursor: pointer;
   color: var(--foreground);
+  text-align: left;
 }
 
 .wf-title:hover {
   background: var(--secondary);
+}
+
+.wf-title-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+.wf-title-text {
+  display: grid;
+  line-height: 1.3;
+}
+
+.wf-title-text strong {
+  font-size: 13px;
+}
+
+.wf-title-text small {
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
 
 .wf-toolbar-actions {
@@ -4413,12 +4456,17 @@
 .wf-node {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 150px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  gap: 10px;
+  min-width: 172px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--panel);
-  padding: 8px 12px;
+  padding: 9px 14px;
+  transition: border-color 100ms;
+}
+
+.wf-node:hover {
+  border-color: var(--border-strong);
 }
 
 .wf-node.selected {
@@ -4426,25 +4474,35 @@
   box-shadow: 0 0 0 1px var(--primary);
 }
 
+/* 节点类型语义色(与轨道颜色同属内容色,不算点缀):
+   开始=绿 / LLM=紫 / 检索=蓝 / 插件=琥珀 / 转写=青 / 导出=玫红 / 生成=品红 */
 .wf-node-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  color: var(--primary);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wf-node-color, var(--primary)) 12%, transparent);
+  color: var(--wf-node-color, var(--primary));
   flex: none;
 }
 
+.wf-icon-start { --wf-node-color: #16a34a; }
+.wf-icon-llm { --wf-node-color: #7c3aed; }
+.wf-icon-kb_search { --wf-node-color: #2563eb; }
+.wf-icon-plugin_tool { --wf-node-color: #d97706; }
+.wf-icon-transcribe_asset { --wf-node-color: #0891b2; }
+.wf-icon-export_sequence { --wf-node-color: #e11d48; }
+.wf-icon-ai_generate { --wf-node-color: #c026d3; }
+
 .wf-node-text {
   display: grid;
-  gap: 0;
+  gap: 1px;
   min-width: 0;
 }
 
 .wf-node-text strong {
-  font-size: 12px;
+  font-size: 12.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4456,10 +4514,32 @@
 }
 
 .wf-handle {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--border-strong);
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--border-strong);
   background: var(--panel);
+  transition: border-color 100ms;
+}
+
+.wf-node:hover .wf-handle,
+.wf-node.selected .wf-handle {
+  border-color: var(--primary);
+}
+
+/* MiniMap:全平面小地图 */
+.wf-canvas .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.wf-canvas .react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.wf-canvas .react-flow__minimap-node {
+  fill: var(--border-strong);
 }
 
 .wf-inspector {
@@ -4523,12 +4603,41 @@
 }
 
 .wf-node-outputs {
-  margin: 0;
-  color: var(--muted-foreground);
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.wf-node-outputs > span {
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.wf-out-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 输出变量芯片:点击即复制引用 */
+.wf-out-chip {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--secondary);
+  padding: 2px 7px;
+  font-size: 10.5px;
   font-family: var(--font-mono, monospace);
-  word-break: break-all;
-  line-height: 1.6;
+  color: var(--foreground);
+  cursor: copy;
+  transition: border-color 100ms;
+}
+
+.wf-out-chip:hover {
+  border-color: var(--primary);
 }
 
 .wf-ai-pop {

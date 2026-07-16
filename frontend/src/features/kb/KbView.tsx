@@ -324,19 +324,19 @@ function KbDocumentEditor({ documentId, onDelete }: { documentId: string; onDele
             <Trash2 size={14} />
           </Button>
         </div>
-      </div>
-      <div className="kb-editor-meta">
-        <span>{sourceLabel(data.source_type, t)}</span>
-        {data.source_ref && data.source_type === "url" && (
-          <a href={data.source_ref} target="_blank" rel="noreferrer">
-            {data.source_ref}
-          </a>
-        )}
-        {(data.tags ?? []).map((tag) => (
-          <span className="tag-chip readonly" key={tag}>
-            {tag}
-          </span>
-        ))}
+        <div className="kb-editor-meta">
+          <span>{sourceLabel(data.source_type, t)}</span>
+          {data.source_ref && data.source_type === "url" && (
+            <a href={data.source_ref} target="_blank" rel="noreferrer">
+              {data.source_ref}
+            </a>
+          )}
+          {(data.tags ?? []).map((tag) => (
+            <span className="tag-chip readonly" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
       </div>
       <KbTiptap
         key={data.id}

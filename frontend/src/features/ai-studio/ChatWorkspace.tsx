@@ -142,17 +142,29 @@ export function ChatWorkspace({
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
     },
   });
+  // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
   const sendMessage = useMutation({
-    mutationFn: (content: string) =>
-      api<AgentMessage>(`/api/agent/sessions/${activeSession!.id}/messages`, {
+    mutationFn: async (content: string) => {
+      let targetId = activeSession?.id;
+      if (!targetId) {
+        const created = await api<AgentSession>("/api/agent/sessions", {
+          method: "POST",
+          body: JSON.stringify({ workspace_id: workspace.id }),
+        });
+        targetId = created.id;
+        setSessionId(created.id);
+      }
+      const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
         body: JSON.stringify({ content }),
-      }),
-    onSuccess: (_data, _variables) => {
+      });
+      return { message, targetId };
+    },
+    onSuccess: ({ targetId }) => {
       setDraft("");
-      void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
-      if (activeSession) void attachStream(activeSession.id);
+      void attachStream(targetId);
     },
   });
 
@@ -204,7 +216,7 @@ export function ChatWorkspace({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if ((!draft.trim() && attachments.length === 0) || running || !activeSession) return;
+    if ((!draft.trim() && attachments.length === 0) || running || sendMessage.isPending) return;
     let content = draft.trim();
     for (const asset of attachments) {
       content += `\n[附件 asset_id=${asset.id} 名称=${asset.name} 类型=${asset.kind}]`;
@@ -271,18 +283,8 @@ export function ChatWorkspace({
       </aside>
 
       <section className="chat-main panel">
-        {!activeSession ? (
-          <EmptyState
-            icon={<Bot size={22} />}
-            title={t("chatEmptyTitle")}
-            body={t("chatEmptyBody")}
-            action={
-              <Button onClick={() => createSession.mutate()}>
-                <Plus size={15} /> {t("chatNewSession")}
-              </Button>
-            }
-          />
-        ) : (
+        {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
+        {
           <>
             <div className="chat-thread" ref={threadRef}>
               {(messages.data ?? []).map((message) => (
@@ -407,7 +409,7 @@ export function ChatWorkspace({
               </div>
             </form>
           </>
-        )}
+        }
       </section>
     </div>
   );
