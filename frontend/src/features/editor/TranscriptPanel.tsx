@@ -24,6 +24,13 @@ export interface CutRange {
 /** Selected word key → its cut payload. */
 type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: number }>;
 
+/** 老版 chunk-list 的说话人配色:名字哈希到色相,同一说话人永远同色。 */
+function speakerHue(speaker: string): number {
+  let hash = 0;
+  for (const ch of speaker) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return hash % 360;
+}
+
 export function TranscriptPanel({
   sequence,
   onCutSegment,
@@ -349,6 +356,11 @@ export function TranscriptPanel({
             {t("selectAllSilences")}
           </button>
         )}
+        <span className="ts-stats">
+          {t("transcriptStats")
+            .replace("{n}", String(projected.length))
+            .replace("{c}", String(projected.reduce((sum, item) => sum + item.text.length, 0)))}
+        </span>
       </div>
 
       <p className="tsd-usage">{t("transcriptUsage")}</p>
@@ -405,7 +417,17 @@ export function TranscriptPanel({
                 <X size={11} />
               </button>
               <p className="tsd-text">
-                {sentence.speaker && <em className="tsd-speaker">{sentence.speaker}</em>}
+                {sentence.speaker && (
+                  <em
+                    className="tsd-speaker"
+                    style={{
+                      background: `oklch(0.94 0.05 ${speakerHue(sentence.speaker)})`,
+                      color: `oklch(0.45 0.12 ${speakerHue(sentence.speaker)})`,
+                    }}
+                  >
+                    {sentence.speaker.replace("SPEAKER_", "说话人 ")}
+                  </em>
+                )}
                 {sentence.tokens.length > 0
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;

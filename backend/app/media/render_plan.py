@@ -39,6 +39,7 @@ class Segment:
     brightness: float = 0.0
     contrast: float = 0.0
     saturation: float = 0.0
+    temperature: float = 0.0  # >0 warm (red gamma up), <0 cool (blue gamma up)
 
 
 @dataclass(frozen=True)
@@ -192,6 +193,7 @@ def build_render_plan(
                 brightness=_grade_value(grade, "brightness"),
                 contrast=_grade_value(grade, "contrast"),
                 saturation=_grade_value(grade, "saturation"),
+                temperature=_grade_value(grade, "temperature"),
             )
         )
         cursor = start + duration

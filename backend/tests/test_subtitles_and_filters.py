@@ -127,3 +127,15 @@ def test_zero_grade_adds_no_filter(tmp_path) -> None:
     )
     command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
     assert "eq=brightness" not in command
+
+
+def test_temperature_maps_to_gamma_pair(tmp_path) -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
+                "effects": {"color": {"temperature": 0.6}}}],
+        assets=ASSETS,
+    )
+    assert plan.video_segments[0].temperature == 0.6
+    command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
+    assert "gamma_r=1.09" in command and "gamma_b=0.91" in command

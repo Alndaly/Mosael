@@ -38,11 +38,11 @@ def _atempo_chain(speed: float) -> str:
     return ",".join(parts) + ","
 
 
-def _grade_filter(brightness: float, contrast: float, saturation: float) -> str:
+def _grade_filter(brightness: float, contrast: float, saturation: float, temperature: float = 0.0) -> str:
     """Manual grade ([-1,1] each) → one eq filter; empty string when untouched.
     Ranges mirror the Monitor's CSS preview: brightness ±0.4, contrast ±0.6,
-    saturation 0..2."""
-    if not (brightness or contrast or saturation):
+    saturation 0..2, temperature ±0.15 on the red/blue gamma pair."""
+    if not (brightness or contrast or saturation or temperature):
         return ""
     parts = []
     if brightness:
@@ -51,6 +51,9 @@ def _grade_filter(brightness: float, contrast: float, saturation: float) -> str:
         parts.append(f"contrast={round(1 + contrast * 0.6, 4)}")
     if saturation:
         parts.append(f"saturation={round(max(0.0, 1 + saturation), 4)}")
+    if temperature:
+        parts.append(f"gamma_r={round(1 + temperature * 0.15, 4)}")
+        parts.append(f"gamma_b={round(1 - temperature * 0.15, 4)}")
     return ",eq=" + ":".join(parts)
 
 
@@ -102,7 +105,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
-            preset += _grade_filter(segment.brightness, segment.contrast, segment.saturation)
+            preset += _grade_filter(segment.brightness, segment.contrast, segment.saturation, segment.temperature)
             filters.append(
                 f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"

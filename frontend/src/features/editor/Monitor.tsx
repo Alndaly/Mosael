@@ -86,7 +86,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
-    color?: { brightness?: number; contrast?: number; saturation?: number };
+    color?: { brightness?: number; contrast?: number; saturation?: number; temperature?: number };
   };
   const cssFilter = React.useMemo(() => {
     const parts: string[] = [];
@@ -97,10 +97,14 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     const b = clamp(grade.brightness);
     const c = clamp(grade.contrast);
     const s = clamp(grade.saturation);
+    const w = clamp(grade.temperature);
     // Same response curves as the FFmpeg eq chain in the executor.
     if (b) parts.push(`brightness(${(1 + b * 0.4).toFixed(3)})`);
     if (c) parts.push(`contrast(${(1 + c * 0.6).toFixed(3)})`);
     if (s) parts.push(`saturate(${Math.max(0, 1 + s).toFixed(3)})`);
+    // 色温近似:暖 → sepia 混入;冷 → 轻微反向色相旋转(导出走 eq gamma_r/b)。
+    if (w > 0) parts.push(`sepia(${(w * 0.25).toFixed(3)})`);
+    else if (w < 0) parts.push(`hue-rotate(${(w * 12).toFixed(1)}deg) saturate(${(1 - w * 0.08).toFixed(3)})`);
     return parts.join(" ");
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
