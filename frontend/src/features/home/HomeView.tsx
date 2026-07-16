@@ -1,9 +1,10 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clapperboard, FolderPlus, Pencil, Scissors, Trash2 } from "lucide-react";
+import { Clapperboard, Clock3, Film, FolderPlus, Layers, Pencil, Scissors, Trash2 } from "lucide-react";
 
-import { api, deleteProject, renameProject, type Project, type Workspace } from "@/api/client";
-import { displayWorkspaceName, useI18n } from "@/app/preferences";
+import { api, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
+import { formatSeconds } from "@/features/media/MediaLibraryView";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
@@ -15,10 +16,11 @@ export function HomeView({
   onOpenProject,
 }: {
   workspace: Workspace;
-  projects: Project[];
+  projects: ProjectWithStats[];
   onOpenProject: (projectId: string) => void;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
@@ -76,6 +78,25 @@ export function HomeView({
                     <div className="project-card-body">
                       <strong>{project.name}</strong>
                       <small>{displayWorkspaceName(workspace.name, t)}</small>
+                      <div className="project-card-stats">
+                        <span title={t("projectStatDuration")}>
+                          <Clock3 size={11} />
+                          <em className="timecode">{formatSeconds(project.timeline_duration ?? 0)}</em>
+                        </span>
+                        <span title={t("projectStatAssets")}>
+                          <Film size={11} />
+                          {t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}
+                        </span>
+                        <span title={t("projectStatSequences")}>
+                          <Layers size={11} />
+                          {t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}
+                        </span>
+                      </div>
+                      {project.updated_at && (
+                        <small className="project-card-updated">
+                          {t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}
+                        </small>
+                      )}
                     </div>
                     <Button variant="outline" size="sm" onClick={() => onOpenProject(project.id)}>
                       <Scissors size={13} /> {t("homeOpenEditor")}
@@ -116,4 +137,16 @@ export function HomeView({
       />
     </div>
   );
+}
+
+/** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再算相对时间。 */
+function relativeTime(iso: string, locale: string): string {
+  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
+  const deltaSeconds = Math.round((new Date(normalized).getTime() - Date.now()) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const abs = Math.abs(deltaSeconds);
+  if (abs < 60) return rtf.format(Math.trunc(deltaSeconds), "second");
+  if (abs < 3600) return rtf.format(Math.trunc(deltaSeconds / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.trunc(deltaSeconds / 3600), "hour");
+  return rtf.format(Math.trunc(deltaSeconds / 86400), "day");
 }

@@ -457,6 +457,31 @@
   font-size: 12px;
 }
 
+.project-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.project-card-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.project-card-stats em {
+  font-style: normal;
+}
+
+.project-card small.project-card-updated {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
 /* ---------- Media library ---------- */
 
 .asset-grid {

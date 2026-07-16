@@ -1943,6 +1943,37 @@ export interface components {
             /** Active Sequence Id */
             active_sequence_id: string | null;
         };
+        /**
+         * ProjectWithStatsOut
+         * @description 列表页项目卡片用的汇总信息;单个项目端点仍返回精简 ProjectOut。
+         */
+        ProjectWithStatsOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Active Sequence Id */
+            active_sequence_id: string | null;
+            /**
+             * Asset Count
+             * @default 0
+             */
+            asset_count: number;
+            /**
+             * Sequence Count
+             * @default 0
+             */
+            sequence_count: number;
+            /**
+             * Timeline Duration
+             * @default 0
+             */
+            timeline_duration: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
         /** ProviderProfileCreate */
         ProviderProfileCreate: {
             /** Name */
@@ -2642,7 +2673,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectOut"][];
+                    "application/json": components["schemas"]["ProjectWithStatsOut"][];
                 };
             };
             /** @description Validation Error */

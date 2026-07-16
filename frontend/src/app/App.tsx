@@ -2,7 +2,7 @@ import React from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, FolderPlus } from "lucide-react";
 
-import { api, type Project, type Workspace } from "@/api/client";
+import { api, type ProjectWithStats, type Workspace } from "@/api/client";
 import { AuthProvider, useAuth } from "@/app/auth";
 import { PreferencesProvider, useI18n } from "@/app/preferences";
 import { LoginView } from "@/features/auth/LoginView";
@@ -111,7 +111,7 @@ function Studio({ workspace }: { workspace: Workspace }) {
   }, []);
   const projects = useQuery({
     queryKey: ["projects", workspace.id],
-    queryFn: () => api<Project[]>(`/api/projects?workspace_id=${workspace.id}`),
+    queryFn: () => api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
   });
   const project = projects.data?.find((item) => item.id === projectId) ?? projects.data?.[0] ?? null;
 

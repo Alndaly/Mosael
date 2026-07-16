@@ -27,6 +27,7 @@ export type AuthOut = components["schemas"]["AuthOut"];
 
 export type Workspace = components["schemas"]["WorkspaceOut"];
 export type Project = components["schemas"]["ProjectOut"];
+export type ProjectWithStats = components["schemas"]["ProjectWithStatsOut"];
 export type Asset = components["schemas"]["AssetOut"];
 export type Sequence = components["schemas"]["SequenceOut"];
 export type Track = components["schemas"]["TrackOut"];

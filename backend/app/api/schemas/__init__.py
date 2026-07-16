@@ -49,6 +49,15 @@ class ProjectOut(OrmModel):
     active_sequence_id: str | None
 
 
+class ProjectWithStatsOut(ProjectOut):
+    """列表页项目卡片用的汇总信息;单个项目端点仍返回精简 ProjectOut。"""
+
+    asset_count: int = 0
+    sequence_count: int = 0
+    timeline_duration: float = 0.0
+    updated_at: datetime | None = None
+
+
 class AssetCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None

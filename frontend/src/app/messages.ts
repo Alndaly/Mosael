@@ -66,6 +66,10 @@ export const messages = {
     homeEmptyTitle: "还没有项目",
     homeEmptyBody: "新建一个项目，开始导入素材和剪辑。",
     homeUpdated: "更新于",
+    projectStatDuration: "时间线时长",
+    projectStatAssets: "{n} 素材",
+    projectStatSequences: "{n} 序列",
+    projectStatUpdated: "更新于 {t}",
 
     // Media library
     mediaTitle: "素材库",
@@ -460,6 +464,10 @@ export const messages = {
     homeEmptyTitle: "No projects yet",
     homeEmptyBody: "Create a project to start importing media and editing.",
     homeUpdated: "Updated",
+    projectStatDuration: "Timeline duration",
+    projectStatAssets: "{n} assets",
+    projectStatSequences: "{n} sequences",
+    projectStatUpdated: "Updated {t}",
 
     // Media library
     mediaTitle: "Media library",
