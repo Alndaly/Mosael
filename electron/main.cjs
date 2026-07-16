@@ -60,10 +60,23 @@ async function ensureBackend() {
   if (await isHealthy()) return true;
 
   const { command, args, cwd } = backendCommand();
+  // 打包版后端日志落盘(userData/logs/backend.log);之前 ignore 导致后端问题完全无迹可查。
+  let stdio = "inherit";
+  if (!isDev) {
+    try {
+      const fs = require("node:fs");
+      const logDir = path.join(app.getPath("userData"), "logs");
+      fs.mkdirSync(logDir, { recursive: true });
+      const fd = fs.openSync(path.join(logDir, "backend.log"), "a");
+      stdio = ["ignore", fd, fd];
+    } catch {
+      stdio = "ignore";
+    }
+  }
   backend = spawn(command, args, {
     cwd,
     env: { ...process.env, MIBU_BACKEND_PORT: String(BACKEND_PORT) },
-    stdio: isDev ? "inherit" : "ignore",
+    stdio,
   });
   backend.on("exit", (code) => {
     backend = null;

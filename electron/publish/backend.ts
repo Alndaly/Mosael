@@ -1,5 +1,7 @@
 // 发布执行器 ↔ mibu-video 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
 // 认领待办、回报状态、更新账号登录态,都走这里。本地默认 owner,后端 publish 权限门放行本地。
+import { plog } from "./log";
+
 const BASE =
   process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
 
@@ -23,7 +25,12 @@ async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> 
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
+  if (!res.ok) {
+    // 服务器有响应但报错(4xx/5xx):必须落日志,这类错误静默过就是任务卡死的根源。
+    const detail = await res.text().catch(() => "");
+    plog("req failed:", method, path, res.status, detail.slice(0, 300));
+    throw new Error(`${method} ${path} → ${res.status}`);
+  }
   const text = await res.text();
   return (text ? JSON.parse(text) : {}) as T;
 }

@@ -39,9 +39,9 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // electron/publish/worker.ts
-var import_electron2 = require("electron");
+var import_electron3 = require("electron");
 var import_promises2 = require("node:fs/promises");
-var import_node_path2 = __toESM(require("node:path"));
+var import_node_path3 = __toESM(require("node:path"));
 
 // electron/publish/i18n.ts
 function tr(text, params) {
@@ -52,14 +52,44 @@ function setLocale(_locale) {
 }
 
 // electron/publish/accountViews.ts
-var import_electron = require("electron");
-var import_node_path = __toESM(require("node:path"));
+var import_electron2 = require("electron");
+var import_node_path2 = __toESM(require("node:path"));
 
 // electron/publish/types.ts
 var EMBED_HEADER_HEIGHT = 48;
 
 // electron/publish/pageDriver.ts
 var import_promises = require("node:fs/promises");
+
+// electron/publish/log.ts
+var import_electron = require("electron");
+var import_node_fs = require("node:fs");
+var import_node_path = __toESM(require("node:path"));
+var logFile = null;
+function ensureFile() {
+  if (logFile) return logFile;
+  try {
+    const dir = import_node_path.default.join(import_electron.app.getPath("userData"), "logs");
+    (0, import_node_fs.mkdirSync)(dir, { recursive: true });
+    logFile = import_node_path.default.join(dir, "publisher.log");
+    return logFile;
+  } catch {
+    return null;
+  }
+}
+function plog(...parts) {
+  const line = `[${(/* @__PURE__ */ new Date()).toISOString()}] ${parts.map((p) => p instanceof Error ? p.stack || p.message : typeof p === "string" ? p : JSON.stringify(p)).join(" ")}`;
+  console.log("[publisher]", line);
+  const file = ensureFile();
+  if (file) {
+    try {
+      (0, import_node_fs.appendFileSync)(file, line + "\n");
+    } catch {
+    }
+  }
+}
+
+// electron/publish/pageDriver.ts
 var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var KEY_MAP = {
   Enter: "Return",
@@ -118,14 +148,28 @@ var PageDriver = class {
     return this.wc.getURL();
   }
   async goto(url) {
-    await this.wc.loadURL(url).catch(() => void 0);
+    plog("goto:", url);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 45e3));
+    const outcome = await Promise.race([
+      this.wc.loadURL(url).then(
+        () => "loaded",
+        (error) => (plog("goto rejected:", url, String(error).slice(0, 160)), "rejected")
+      ),
+      timeout
+    ]);
+    plog(`goto ${outcome}:`, this.wc.getURL());
   }
   async setHtml(html) {
     await this.wc.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html)).catch(() => void 0);
   }
   async evaluate(expression) {
     this.throwIfAborted();
-    return this.wc.executeJavaScript(expression, true);
+    return await Promise.race([
+      this.wc.executeJavaScript(expression, true),
+      new Promise(
+        (_, reject) => setTimeout(() => reject(new Error("evaluate timeout (page not settled)")), 2e4)
+      )
+    ]);
   }
   async waitForFunction(expression, timeout = 3e4, poll = 300) {
     const deadline = Date.now() + timeout;
@@ -341,7 +385,7 @@ var PageDriver = class {
   async hasText(text) {
     return this.evaluate(
       `!!(document.body && document.body.innerText.includes(${JSON.stringify(text)}))`
-    );
+    ).catch(() => false);
   }
   async hasTextDeep(text) {
     const t = JSON.stringify(text);
@@ -366,7 +410,7 @@ var PageDriver = class {
         return text;
       };
       return collect(document).includes(${t});
-    })()`);
+    })()`).catch(() => false);
   }
   async waitTextGoneDeep(text, timeout = 3e4, poll = 1e3) {
     const t = JSON.stringify(text);
@@ -952,9 +996,9 @@ var PageDriver = class {
       `document.querySelectorAll(${JSON.stringify(selector)}).forEach((e) => e.remove())`
     );
   }
-  async screenshot(path3) {
+  async screenshot(path4) {
     const image = await this.wc.capturePage();
-    await (0, import_promises.writeFile)(path3, image.toPNG());
+    await (0, import_promises.writeFile)(path4, image.toPNG());
   }
   detach() {
     if (this.debuggerAttached) {
@@ -969,7 +1013,7 @@ var PageDriver = class {
 
 // electron/publish/accountViews.ts
 var noop = () => void 0;
-var ACCOUNT_VIEW_PRELOAD = import_node_path.default.join(__dirname, "accountview-preload.cjs");
+var ACCOUNT_VIEW_PRELOAD = import_node_path2.default.join(__dirname, "accountview-preload.cjs");
 var platformUserAgent = (userAgent) => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
@@ -998,7 +1042,7 @@ var AccountViewManager = class {
     if (this.appliedProxy.get(partition) === normalizedProxy) {
       return;
     }
-    const accountSession = import_electron.session.fromPartition(partition);
+    const accountSession = import_electron2.session.fromPartition(partition);
     await accountSession.setProxy({
       mode: normalizedProxy ? "fixed_servers" : "direct",
       proxyRules: normalizedProxy ?? void 0
@@ -1070,7 +1114,7 @@ var AccountViewManager = class {
     this.destroy(accountId);
     const partition = this.partitionFor(accountId);
     this.appliedProxy.delete(partition);
-    const accountSession = import_electron.session.fromPartition(partition);
+    const accountSession = import_electron2.session.fromPartition(partition);
     await accountSession.clearStorageData();
     await accountSession.clearCache().catch(noop);
   }
@@ -1082,7 +1126,7 @@ var AccountViewManager = class {
   ensure(accountId) {
     let view = this.views.get(accountId);
     if (!view) {
-      view = new import_electron.WebContentsView({
+      view = new import_electron2.WebContentsView({
         webPreferences: {
           partition: this.partitionFor(accountId),
           backgroundThrottling: false,
@@ -2180,13 +2224,17 @@ var createAdapter = (platform, driver, task) => {
 
 // electron/publish/backend.ts
 var BASE = process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
-async function req(path3, method = "GET", body) {
-  const res = await fetch(`${BASE}/api/publish${path3}`, {
+async function req(path4, method = "GET", body) {
+  const res = await fetch(`${BASE}/api/publish${path4}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : void 0,
     body: body ? JSON.stringify(body) : void 0
   });
-  if (!res.ok) throw new Error(`${method} ${path3} \u2192 ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    plog("req failed:", method, path4, res.status, detail.slice(0, 300));
+    throw new Error(`${method} ${path4} \u2192 ${res.status}`);
+  }
   const text = await res.text();
   return text ? JSON.parse(text) : {};
 }
@@ -2266,9 +2314,9 @@ function toAdapterTask(t) {
 }
 async function captureFailure(taskId, driver) {
   try {
-    const dir = import_node_path2.default.join(import_electron2.app.getPath("userData"), "publish-screenshots");
+    const dir = import_node_path3.default.join(import_electron3.app.getPath("userData"), "publish-screenshots");
     await (0, import_promises2.mkdir)(dir, { recursive: true });
-    const file = import_node_path2.default.join(dir, `${taskId}-${Date.now()}.png`);
+    const file = import_node_path3.default.join(dir, `${taskId}-${Date.now()}.png`);
     await driver.screenshot(file);
     return file;
   } catch {
@@ -2277,17 +2325,21 @@ async function captureFailure(taskId, driver) {
 }
 async function runTask(bt) {
   if (!views) {
+    plog("runTask aborted (views=null):", bt.id);
     running.delete(bt.account_id);
     return;
   }
+  plog("runTask start:", bt.id, bt.platform, bt.video_path);
   const t = toAdapterTask(bt);
   const driver = views.getDriver(t.accountId);
   try {
     await views.configureAccount(t.accountId, null);
     const adapter = createAdapter(t.platform, driver, t);
     await adapter.openCreatorPage();
+    plog("runTask creator page opened:", bt.id, driver.url());
     await delay(stepDelay());
     const loggedIn = await adapter.checkLogin();
+    plog("runTask checkLogin:", bt.id, loggedIn);
     if (!loggedIn) {
       await patchAccount(t.accountId, {
         binding_status: "login_required",
@@ -2317,9 +2369,11 @@ async function runTask(bt) {
     await delay(stepDelay());
     await adapter.waitResult();
     await reportTask(t.id, { status: "success" });
+    plog("runTask success:", t.id);
     settle(t, "success", false);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    plog("runTask error:", t.id, error instanceof Error ? error : message);
     const screenshot = await captureFailure(t.id, driver);
     const blocked = resolveBlockedStatus(error);
     if (blocked === "login_required")
@@ -2377,11 +2431,13 @@ async function checkAccountStatus(acc) {
     updatedAt: ""
   };
   try {
+    plog("recheck start:", acc.account_id, platform);
     await views.configureAccount(acc.account_id, null);
     const driver = views.getDriver(acc.account_id);
     const adapter = createAdapter(platform, driver, stub);
     await adapter.openCreatorPage();
     const loggedIn = await adapter.checkLogin();
+    plog("recheck result:", acc.account_id, loggedIn ? "bound" : "login_required");
     await patchAccount(acc.account_id, {
       binding_status: loggedIn ? "bound" : "login_required",
       last_error: loggedIn ? null : tr("\u767B\u5F55\u5DF2\u5931\u6548,\u8BF7\u91CD\u65B0\u767B\u5F55")
@@ -2389,7 +2445,8 @@ async function checkAccountStatus(acc) {
     if (acc.binding_status === "bound" && !loggedIn) {
       settle(stub, "login_required", false);
     }
-  } catch {
+  } catch (error) {
+    plog("recheck error:", acc.account_id, error instanceof Error ? error : String(error));
   }
 }
 async function loop(gen) {
@@ -2400,9 +2457,13 @@ async function loop(gen) {
     while (running.size < MAX_CONCURRENT) {
       const { task } = await claimTask([...running]);
       if (!task) break;
+      plog("claimed:", task.id, task.platform, "account:", task.account_id);
       didWork = true;
       running.add(task.account_id);
-      void runTask(task).catch(() => running.delete(task.account_id));
+      void runTask(task).catch((error) => {
+        plog("runTask crashed before report:", task.id, error instanceof Error ? error : String(error));
+        running.delete(task.account_id);
+      });
     }
     if (running.size === 0 && !views?.visibleAccountId) {
       const { account } = await claimCheck();
@@ -2416,7 +2477,9 @@ async function loop(gen) {
         }
       }
     }
-  } catch {
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!/fetch failed|ECONNREFUSED|aborted/i.test(msg)) plog("loop error:", msg);
   }
   if (!stopped && gen === generation)
     setTimeout(() => loop(gen), didWork ? POLL_BUSY_MS : POLL_IDLE_MS);
@@ -2429,6 +2492,7 @@ function startPublishWorker(opts) {
   onSettled = opts.onTaskSettled ?? null;
   views = new AccountViewManager(opts.onViewChanged);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
+  plog("worker started, generation", generation);
   void markDue().catch(() => void 0);
   loop(generation);
 }

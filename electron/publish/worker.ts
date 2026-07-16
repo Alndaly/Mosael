@@ -15,6 +15,7 @@ import path from "node:path";
 // @ts-expect-error CJS 词典无类型声明;esbuild 会内联(tsconfig 不含 electron/)。
 import { tr } from "./i18n";
 import { AccountViewManager } from "./accountViews";
+import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
 import { resolvePlatform } from "./platforms";
@@ -116,18 +117,22 @@ async function captureFailure(
  *  请求前台可见槽:抢到就亮出来,抢不到(前台被别的账号占)也没关系——视图仍在,任务行可再亮。 */
 async function runTask(bt: backend.BackendTask): Promise<void> {
   if (!views) {
+    plog("runTask aborted (views=null):", bt.id);
     running.delete(bt.account_id);
     return;
   }
+  plog("runTask start:", bt.id, bt.platform, bt.video_path);
   const t = toAdapterTask(bt);
   const driver = views.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
   try {
     await views.configureAccount(t.accountId, null);
     const adapter = createAdapter(t.platform, driver, t);
     await adapter.openCreatorPage();
+    plog("runTask creator page opened:", bt.id, driver.url());
     await delay(stepDelay());
 
     const loggedIn = await adapter.checkLogin();
+    plog("runTask checkLogin:", bt.id, loggedIn);
     if (!loggedIn) {
       await backend.patchAccount(t.accountId, {
         binding_status: "login_required",
@@ -160,9 +165,11 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await delay(stepDelay());
     await adapter.waitResult();
     await backend.reportTask(t.id, { status: "success" });
+    plog("runTask success:", t.id);
     settle(t, "success", false);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    plog("runTask error:", t.id, error instanceof Error ? error : message);
     const screenshot = await captureFailure(t.id, driver);
     const blocked = resolveBlockedStatus(error);
     if (blocked === "login_required")
@@ -227,11 +234,13 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     updatedAt: "",
   };
   try {
+    plog("recheck start:", acc.account_id, platform);
     await views.configureAccount(acc.account_id, null);
     const driver = views.getDriver(acc.account_id); // ensure() 建视图但不 show —— 后台静默检查
     const adapter = createAdapter(platform, driver, stub);
     await adapter.openCreatorPage();
     const loggedIn = await adapter.checkLogin();
+    plog("recheck result:", acc.account_id, loggedIn ? "bound" : "login_required");
     await backend.patchAccount(acc.account_id, {
       binding_status: loggedIn ? "bound" : "login_required",
       last_error: loggedIn ? null : tr("登录已失效,请重新登录"),
@@ -241,8 +250,9 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     if (acc.binding_status === "bound" && !loggedIn) {
       settle(stub, "login_required", false);
     }
-  } catch {
-    // 抖动别误判下线;保留原状态,下个 ttl 再查。
+  } catch (error) {
+    // 抖动别误判下线;保留原状态,下个 ttl 再查。但必须留痕,否则账号停在 checking 无从排查。
+    plog("recheck error:", acc.account_id, error instanceof Error ? error : String(error));
   }
 }
 
@@ -255,9 +265,14 @@ async function loop(gen: number): Promise<void> {
     while (running.size < MAX_CONCURRENT) {
       const { task } = await backend.claimTask([...running]);
       if (!task) break;
+      plog("claimed:", task.id, task.platform, "account:", task.account_id);
       didWork = true;
       running.add(task.account_id);
-      void runTask(task).catch(() => running.delete(task.account_id));
+      void runTask(task).catch((error) => {
+        // runTask 自身兜底了 report;走到这说明兜底之前就炸了(如 toAdapterTask)——必须留痕。
+        plog("runTask crashed before report:", task.id, error instanceof Error ? error : String(error));
+        running.delete(task.account_id);
+      });
     }
     // 没有更多待发任务、且完全空闲(无并发任务、前台无视图占用)时,后台静默复检一个到期账号。
     if (running.size === 0 && !views?.visibleAccountId) {
@@ -272,8 +287,10 @@ async function loop(gen: number): Promise<void> {
         }
       }
     }
-  } catch {
-    // 后端没起来/网络抖动:忽略,下个 tick 再试(执行器可比后端先启动)。
+  } catch (error) {
+    // 后端没起来/网络抖动:下个 tick 再试(执行器可比后端先启动)。连接拒绝不刷屏,其他错误留痕。
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!/fetch failed|ECONNREFUSED|aborted/i.test(msg)) plog("loop error:", msg);
   }
   // 仍是当前代才续排:stop→reactivate 后旧代不复活(新代由 startPublishWorker 另起一条链)。
   if (!stopped && gen === generation)
@@ -294,6 +311,7 @@ export function startPublishWorker(opts: {
   onSettled = opts.onTaskSettled ?? null;
   views = new AccountViewManager(opts.onViewChanged);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
+  plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
   void backend.markDue().catch(() => undefined);
   loop(generation);

@@ -1,6 +1,8 @@
 import type { WebContents } from "electron";
 import { writeFile } from "node:fs/promises";
 
+import { plog } from "./log";
+
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const KEY_MAP: Record<string, string> = {
@@ -80,7 +82,18 @@ export class PageDriver {
   }
 
   async goto(url: string): Promise<void> {
-    await this.wc.loadURL(url).catch(() => undefined);
+    plog("goto:", url);
+    // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +
+    // 持续加载),没有超时就会把整条认领链吊死。超时后放行:页面通常已可交互,交给 checkLogin 判断。
+    const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 45_000));
+    const outcome = await Promise.race([
+      this.wc.loadURL(url).then(
+        () => "loaded" as const,
+        (error) => (plog("goto rejected:", url, String(error).slice(0, 160)), "rejected" as const),
+      ),
+      timeout,
+    ]);
+    plog(`goto ${outcome}:`, this.wc.getURL());
   }
 
   async setHtml(html: string): Promise<void> {
@@ -91,7 +104,14 @@ export class PageDriver {
 
   async evaluate<T = unknown>(expression: string): Promise<T> {
     this.throwIfAborted();
-    return this.wc.executeJavaScript(expression, true) as Promise<T>;
+    // executeJavaScript 在页面未 finish load 时会排队不返回(B 站重前端页常见),
+    // 必须有兜底超时,否则 checkLogin 等一次性探测会把认领链吊死。
+    return await Promise.race([
+      this.wc.executeJavaScript(expression, true) as Promise<T>,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("evaluate timeout (page not settled)")), 20_000),
+      ),
+    ]);
   }
 
   async waitForFunction(expression: string, timeout = 30_000, poll = 300): Promise<boolean> {
@@ -332,9 +352,10 @@ export class PageDriver {
   // ---- text-based queries (Playwright :has-text / text= replacement) ------
 
   async hasText(text: string): Promise<boolean> {
+    // 探测类查询:页面没就绪(evaluate 超时/导航中)按「没找到」处理,别让 checkLogin 直接炸。
     return this.evaluate<boolean>(
       `!!(document.body && document.body.innerText.includes(${JSON.stringify(text)}))`,
-    );
+    ).catch(() => false);
   }
 
   async hasTextDeep(text: string): Promise<boolean> {
@@ -360,7 +381,7 @@ export class PageDriver {
         return text;
       };
       return collect(document).includes(${t});
-    })()`);
+    })()`).catch(() => false);
   }
 
   async waitTextGoneDeep(text: string, timeout = 30_000, poll = 1_000): Promise<boolean> {
