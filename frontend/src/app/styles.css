@@ -4710,12 +4710,50 @@
   white-space: pre;
 }
 
-/* 工作流常驻 AI 助手面板 */
+/* 工作流常驻 AI 助手:悬浮窗 —— 标题栏拖动,右下角原生缩放,不占画布布局。 */
 .wf-agent {
-  width: 300px;
+  position: fixed;
+  z-index: 55;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
+  min-width: 280px;
+  min-height: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+  resize: both;
+}
+
+.wf-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px 8px 12px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.wf-agent-head h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.wf-agent-grip {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+/* 空状态在整个消息区高度上居中 */
+.wf-agent-thread:has(.wf-agent-empty) {
+  align-content: center;
+  justify-items: center;
 }
 
 .wf-agent-title {
@@ -4737,11 +4775,10 @@
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 28px 10px;
+  padding: 12px;
   color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
-  align-self: center;
 }
 
 .wf-agent-empty svg {

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Loader2, Send, X } from "lucide-react";
+import { Bot, GripHorizontal, Loader2, Send, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client";
@@ -10,6 +10,35 @@ import { Button } from "@/components/ui/button";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
+
+const RECT_KEY = "mibu.wf.agent.rect";
+
+interface FloatRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function clampRect(rect: FloatRect): FloatRect {
+  const w = Math.min(Math.max(rect.w, 280), window.innerWidth - 24);
+  const h = Math.min(Math.max(rect.h, 320), window.innerHeight - 24);
+  return {
+    w,
+    h,
+    x: Math.min(Math.max(rect.x, 8), window.innerWidth - w - 8),
+    y: Math.min(Math.max(rect.y, 8), window.innerHeight - 60),
+  };
+}
+
+function loadRect(): FloatRect {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(RECT_KEY) ?? "");
+    return clampRect({ x: Number(parsed.x), y: Number(parsed.y), w: Number(parsed.w), h: Number(parsed.h) });
+  } catch {
+    return clampRect({ x: window.innerWidth - 356, y: window.innerHeight - 520, w: 320, h: 460 });
+  }
+}
 
 /**
  * 工作流常驻智能体面板:每个工作流绑定一个 agent 会话(external_key),
@@ -32,6 +61,48 @@ export function WorkflowAgentChat({
   const [streamText, setStreamText] = React.useState("");
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
+
+  // 悬浮窗:标题栏拖动 + 原生右下角缩放,位置尺寸记忆。
+  const [rect, setRect] = React.useState<FloatRect>(loadRect);
+  const panelRef = React.useRef<HTMLElement | null>(null);
+  const persistRect = React.useCallback((next: FloatRect) => {
+    window.localStorage.setItem(RECT_KEY, JSON.stringify(next));
+  }, []);
+
+  const startDrag = (event: React.PointerEvent) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const origin = { ...rect };
+    const onMove = (moveEvent: PointerEvent) => {
+      setRect(clampRect({ ...origin, x: origin.x + (moveEvent.clientX - startX), y: origin.y + (moveEvent.clientY - startY) }));
+    };
+    const onUp = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      persistRect(clampRect({ ...origin, x: origin.x + (upEvent.clientX - startX), y: origin.y + (upEvent.clientY - startY) }));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  // 原生 resize 改变的是元素盒子,观察后同步回状态并持久化。
+  React.useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.borderBoxSize?.[0];
+      if (!box) return;
+      setRect((current) => {
+        const next = clampRect({ ...current, w: Math.round(box.inlineSize), h: Math.round(box.blockSize) });
+        persistRect(next);
+        return next;
+      });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [persistRect]);
 
   const session = useQuery({
     queryKey: ["workflow-agent-session", workflowId],
@@ -132,11 +203,18 @@ export function WorkflowAgentChat({
   };
 
   return (
-    <aside className="wf-agent panel">
-      <div className="panel-head">
+    <aside
+      ref={panelRef}
+      className="wf-agent"
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      role="dialog"
+      aria-label={t("wfAgentTitle")}
+    >
+      <div className="wf-agent-head" onPointerDown={startDrag}>
         <h2 className="wf-agent-title">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
+        <GripHorizontal size={13} className="wf-agent-grip" />
         <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
