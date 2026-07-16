@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, CircleAlert, Copy, Loader2, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, CircleAlert, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -223,6 +223,12 @@ export function ChatWorkspace({
           </Button>
         </div>
         <div className="chat-session-list">
+          {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
+            <div className="chat-session-empty">
+              <MessageSquarePlus size={16} />
+              <span>{t("chatNoSessions")}</span>
+            </div>
+          )}
           {(sessions.data ?? []).map((item) => (
             <ContextMenu key={item.id}>
               <ContextMenuTrigger asChild>

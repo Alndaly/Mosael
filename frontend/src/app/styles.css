@@ -2320,6 +2320,22 @@
   transition: background-color 100ms;
 }
 
+/* 会话列表空状态:小巧居中,不抢主区的大空态 */
+.chat-session-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 26px 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+
+.chat-session-empty svg {
+  color: var(--primary);
+  opacity: 0.7;
+}
+
 .chat-session:hover {
   background: var(--muted);
 }
@@ -4469,6 +4485,41 @@
   .plugins-item {
     flex-shrink: 0;
     padding: 4px 10px;
+  }
+
+  /* 折叠条里芯片压成单行:副标题行藏掉,视觉重量和 28px 条持平。 */
+  .plugins-item .plugins-item-text small {
+    display: none;
+  }
+
+  /* kb-list 桌面态是纵向列(双类优先级),折叠时必须显式拉回横条。 */
+  .plugins-list.kb-list {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kb-list .panel-head h2 {
+    flex-shrink: 0;
+  }
+
+  .kb-list .kb-list-actions {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .kb-list .kb-search {
+    order: 1;
+    flex: 0 0 170px;
+    min-width: 130px;
+  }
+
+  .kb-list .plugins-list-body {
+    order: 2;
+  }
+
+  .kb-list .kb-import-status {
+    display: none; /* 窄条里放不下长状态文本,导入进度看任务中心 */
   }
 
   /* 工作流画布:窄屏时属性面板叠到画布下方 */
