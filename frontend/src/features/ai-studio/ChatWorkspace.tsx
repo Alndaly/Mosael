@@ -229,7 +229,8 @@ export function ChatWorkspace({
     <div className="chat-grid">
       <aside className="chat-sessions panel">
         <div className="panel-head">
-          {activeSession ? <h2>{t("aiTabChat")}</h2> : (switcher ?? <h2>{t("aiTabChat")}</h2>)}
+          {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
+          <h2>{t("aiTabChat")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("chatNewSession")}
           </Button>

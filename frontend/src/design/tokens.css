@@ -42,30 +42,32 @@
   color-scheme: light;
   --radius: 4px;
 
-  --background: #f0f1f3;
-  --foreground: #1a1d21;
+  /* 2026-07 配色重做:冷纸面 + 宝蓝。页面/面板/内嵌三级明度台阶拉开,
+     文字用蓝灰系而非纯灰,主色统一 #2f62ea(暗色端提亮为 #4d80ff)。 */
+  --background: #f3f4f7;
+  --foreground: #16181d;
   --card: #ffffff;
-  --card-foreground: #1a1d21;
+  --card-foreground: #16181d;
   --popover: #ffffff;
-  --popover-foreground: #1a1d21;
-  --primary: #2e6fee;
+  --popover-foreground: #16181d;
+  --primary: #2f62ea;
   --primary-foreground: #ffffff;
-  --secondary: #e9ebee;
-  --secondary-foreground: #33383f;
-  --muted: #f6f7f8;
-  --muted-foreground: #656c78;
-  --accent: #ebf1fe;
-  --accent-foreground: #1d4fb8;
-  --destructive: #d92d20;
-  --border: #e2e4e8;
-  --input: #d5d8dd;
-  --ring: #9dbcf0;
+  --secondary: #e9ebf0;
+  --secondary-foreground: #2f3540;
+  --muted: #f6f7fa;
+  --muted-foreground: #6a7180;
+  --accent: #e9effe;
+  --accent-foreground: #1c48c8;
+  --destructive: #d93025;
+  --border: #e2e5ea;
+  --input: #d3d8e0;
+  --ring: #a8c0f5;
 
   /* Panel system */
   --panel: var(--card);
-  --panel-subtle: #f6f7f8;
-  --panel-inset: #eceef0;
-  --border-strong: #cdd1d7;
+  --panel-subtle: #f6f7fa;
+  --panel-inset: #eceef3;
+  --border-strong: #c9ced8;
   /* Flat design: no drop shadows anywhere — separation comes from hairline
      borders and background value steps. Keep the vars so components stay
      switchable, but they resolve to none. */
@@ -104,40 +106,42 @@
 .dark {
   color-scheme: dark;
 
-  --background: #131519;
-  --foreground: #e8eaed;
-  --card: #1b1e24;
-  --card-foreground: #e8eaed;
-  --popover: #21252c;
-  --popover-foreground: #e8eaed;
-  --primary: #5c8dff;
-  --primary-foreground: #0a1020;
-  --secondary: #262a32;
-  --secondary-foreground: #d3d7dd;
-  --muted: #181b20;
-  --muted-foreground: #9aa1ab;
-  --accent: #1d2941;
-  --accent-foreground: #a8c4ff;
-  --destructive: #ff6b5f;
-  --border: #2a2e36;
-  --input: #363b45;
-  --ring: #3d5fa8;
+  /* 深蓝石墨:比旧版更深的底、更亮的字、更清晰的面板台阶,
+     消除"糊成一片"的中灰;主色提亮为电光宝蓝。 */
+  --background: #0d0f13;
+  --foreground: #e7eaf0;
+  --card: #15181e;
+  --card-foreground: #e7eaf0;
+  --popover: #1b1f26;
+  --popover-foreground: #e7eaf0;
+  --primary: #4d80ff;
+  --primary-foreground: #f5f8ff;
+  --secondary: #232830;
+  --secondary-foreground: #d5dae2;
+  --muted: #12151a;
+  --muted-foreground: #8b93a1;
+  --accent: #1c2a4a;
+  --accent-foreground: #9fbcff;
+  --destructive: #f26d5f;
+  --border: #262c36;
+  --input: #333b47;
+  --ring: #3f62b8;
 
   --panel: var(--card);
-  --panel-subtle: #181b20;
-  --panel-inset: #14161b;
-  --border-strong: #3a3f49;
+  --panel-subtle: #12151a;
+  --panel-inset: #0f1216;
+  --border-strong: #39414e;
   --shadow-panel: none;
   --shadow-raised: none;
 
-  --monitor-bg: #0b0c0f;
-  --timeline-bg: #16181d;
-  --ruler-bg: #1b1e24;
-  --ruler-tick: #4a505a;
-  --ruler-text: #82878f;
+  --monitor-bg: #08090b;
+  --timeline-bg: #101319;
+  --ruler-bg: #15181e;
+  --ruler-tick: #49525f;
+  --ruler-text: #838b99;
   --playhead: #ff5d61;
-  --track-lane: #1e2127;
-  --track-lane-line: #262a32;
+  --track-lane: #191d24;
+  --track-lane-line: #242a33;
 
   --track-video-bg: #22375c;
   --track-video-border: #3e63a8;

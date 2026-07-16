@@ -84,6 +84,59 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      <header className="topbar">
+        <div className="topbar-crumb">
+          <span>{displayWorkspaceName(workspaceName, t)}</span>
+          <span className="topbar-sep">/</span>
+          <strong>
+            {PROJECT_SCOPED_VIEWS.includes(view)
+              ? projectName ?? t("noProject")
+              : t([...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome")}
+          </strong>
+        </div>
+        <div className="topbar-actions">
+          {actions}
+          <button
+            type="button"
+            className="topbar-search"
+            onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
+          >
+            <Search size={13} />
+            <span>{t("cmdkTitle")}</span>
+            <kbd>⌘K</kbd>
+          </button>
+          {workspaceId && <TaskCenter workspaceId={workspaceId} />}
+          {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+                aria-label={t("settingsTheme")}
+              >
+                {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {theme === "light" ? t("themeLight") : theme === "dark" ? t("themeDark") : t("themeSystem")}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
+                aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
+              >
+                <Languages size={15} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{locale === "zh-CN" ? "English" : "中文"}</TooltipContent>
+          </Tooltip>
+        </div>
+      </header>
       <aside className="rail">
         <div className="rail-brand" aria-hidden>
           M
@@ -112,62 +165,7 @@ export function AppShell({
         <div className="rail-spacer" />
         <RailUserMenu onOpenSettings={() => onViewChange("settings")} />
       </aside>
-      <div className="shell-main">
-        <header className="topbar">
-          <div className="topbar-crumb">
-            <span>{displayWorkspaceName(workspaceName, t)}</span>
-            <span className="topbar-sep">/</span>
-            <strong>
-              {PROJECT_SCOPED_VIEWS.includes(view)
-                ? projectName ?? t("noProject")
-                : t([...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome")}
-            </strong>
-          </div>
-          <div className="topbar-actions">
-            {actions}
-            <button
-              type="button"
-              className="topbar-search"
-              onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
-            >
-              <Search size={13} />
-              <span>{t("cmdkTitle")}</span>
-              <kbd>⌘K</kbd>
-            </button>
-            {workspaceId && <TaskCenter workspaceId={workspaceId} />}
-            {workspaceId && <NotificationCenter workspaceId={workspaceId} />}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
-                  aria-label={t("settingsTheme")}
-                >
-                  {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {theme === "light" ? t("themeLight") : theme === "dark" ? t("themeDark") : t("themeSystem")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
-                  aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
-                >
-                  <Languages size={15} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{locale === "zh-CN" ? "English" : "中文"}</TooltipContent>
-            </Tooltip>
-          </div>
-        </header>
-        <main className="shell-content">{children}</main>
-      </div>
+      <main className="shell-content">{children}</main>
     </div>
   );
 }
