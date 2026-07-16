@@ -2993,7 +2993,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  /* 时码(等宽小字)与正文(中文 13px)按真实文字基线对齐 */
+  align-items: baseline;
   border-left: 2px solid transparent;
   padding-left: 6px;
   border-radius: 2px;
@@ -3012,8 +3013,7 @@
   padding: 0;
   color: var(--muted-foreground);
   font-size: 10.5px;
-  /* 与正文首行同一行盒(13px × 1.9),时码垂直居中对齐第一行文字 */
-  line-height: calc(13px * 1.9);
+  line-height: 1.5;
   cursor: pointer;
   white-space: nowrap;
 }
