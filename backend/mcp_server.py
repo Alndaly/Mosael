@@ -235,6 +235,31 @@ def analyze_asset(asset_id: str, question: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
+def list_plugin_tools() -> list[dict[str, Any]]:
+    """List tools contributed by enabled (and permission-granted) user plugins.
+
+    Each entry has plugin_id, tool_name, description, and input_schema — call
+    them with invoke_plugin_tool. Plugins are pure functions over their input
+    (no timeline mutation, no network) so calls run directly.
+    """
+    return _get("/api/plugins/tools")
+
+
+@mcp.tool()
+def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) -> dict[str, Any]:
+    """Run a plugin tool (see list_plugin_tools) with a JSON input payload.
+
+    Returns the invocation record: status succeeded/failed, output, error.
+    """
+    invocation = _post(f"/api/plugins/{plugin_id}/tools/{tool_name}/invoke", {"input": input})
+    return {
+        "status": invocation["status"],
+        "output": invocation.get("output") or {},
+        "error": invocation.get("error"),
+    }
+
+
+@mcp.tool()
 def get_confirmation(confirmation_id: str) -> dict[str, Any]:
     """Check a pending confirmation: status becomes executed/rejected/failed after the user decides."""
     confirmation = _get(f"/api/confirmations/{confirmation_id}")

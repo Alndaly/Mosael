@@ -325,6 +325,7 @@ export const messages = {
     // Plugins
     pluginsTitle: "插件",
     pluginsDescription: "扫描本地 manifest，暴露 Skill 和 Tool 给应用与外部智能体。",
+    runTool: "运行",
     scanPlugins: "扫描插件",
     installed: "已安装",
     tools: "工具",
@@ -665,6 +666,7 @@ export const messages = {
     // Plugins
     pluginsTitle: "Plugins",
     pluginsDescription: "Scan local manifests and expose Skills and Tools to the app and agents.",
+    runTool: "Run",
     scanPlugins: "Scan plugins",
     installed: "Installed",
     tools: "Tools",

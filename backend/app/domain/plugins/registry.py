@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
+from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 
 MANIFEST_FILENAMES = ("mibu.plugin.json", "plugin.json")
 
@@ -119,14 +120,26 @@ def invoke_plugin_tool(db: Session, plugin_id: str, tool_name: str, input_payloa
     invocation = PluginInvocation(
         plugin_id=plugin.id,
         tool_name=tool_name,
-        status="queued",
+        status="running",
         input=input_payload,
-        output={
-            "mode": "deferred",
-            "message": "Invocation recorded. Runtime execution adapter is not attached yet.",
-        },
+        output={},
     )
     db.add(invocation)
+    db.commit()
+
+    # Process-isolated execution (plan §19.6): a broken plugin fails its own
+    # invocation record, never the app.
+    try:
+        check_required_input(tool, input_payload)
+        output = execute_tool(plugin.manifest, tool_name, input_payload)
+        invocation.status = "succeeded"
+        invocation.output = output
+    except PluginRuntimeError as exc:
+        invocation.status = "failed"
+        invocation.error = str(exc)
+    except Exception as exc:  # noqa: BLE001 — defensive: runtime must never bubble
+        invocation.status = "failed"
+        invocation.error = f"插件运行时异常: {exc}"
     db.commit()
     db.refresh(invocation)
     return invocation

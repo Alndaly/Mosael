@@ -90,5 +90,8 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
         "/api/plugins/dev.caption-helper/tools/caption_asset/invoke",
         json={"input": {"asset_id": "asset_1"}},
     ).json()
-    assert invocation["status"] == "queued"
+    # caption-helper declares no entry script — the runtime records a failed
+    # invocation with an actionable message instead of silently queueing.
+    assert invocation["status"] == "failed"
+    assert "entry" in (invocation["error"] or "")
     assert invocation["input"]["asset_id"] == "asset_1"

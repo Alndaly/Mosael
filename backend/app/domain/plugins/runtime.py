@@ -1,0 +1,108 @@
+"""Plugin runtime (plan §19.6): process-isolated tool execution.
+
+Contract with the plugin's entry script:
+- The manifest declares `entry` (a script path relative to the plugin dir).
+- We spawn `<python> entry` with cwd = plugin dir and a minimal environment,
+  write ONE JSON request to stdin and read ONE JSON response from stdout:
+
+    stdin : {"tool": str, "input": {...}}
+    stdout: {"ok": true, "output": {...}} | {"ok": false, "error": str}
+
+- First version is pure-function tools only: no API token, no database, no
+  network guarantees. Anything long-running or mutating goes through jobs and
+  confirmation cards later — plugins cannot bypass the permission system by
+  design because they receive nothing but their input payload.
+- Every call is recorded in plugin_invocations; a crashing or hanging plugin
+  fails its invocation, never the app.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+PLUGIN_TIMEOUT_SECONDS = 60
+MAX_OUTPUT_BYTES = 1_000_000
+
+
+class PluginRuntimeError(RuntimeError):
+    pass
+
+
+def resolve_entry(manifest: dict[str, Any]) -> Path:
+    plugin_dir = Path(str(manifest.get("_path") or ""))
+    entry = str(manifest.get("entry") or "").strip()
+    if not entry:
+        raise PluginRuntimeError("插件未声明 entry 脚本,无法执行(manifest.entry)")
+    if not plugin_dir.is_dir():
+        raise PluginRuntimeError("插件目录不存在,请重新扫描")
+    entry_path = (plugin_dir / entry).resolve()
+    if not str(entry_path).startswith(str(plugin_dir.resolve()) + os.sep):
+        raise PluginRuntimeError("entry 脚本必须位于插件目录内")
+    if not entry_path.is_file():
+        raise PluginRuntimeError(f"entry 脚本不存在: {entry}")
+    return entry_path
+
+
+def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) -> None:
+    schema = tool.get("input_schema") or {}
+    required = schema.get("required") if isinstance(schema, dict) else None
+    if not isinstance(required, list):
+        return
+    missing = [key for key in required if isinstance(key, str) and key not in input_payload]
+    if missing:
+        raise PluginRuntimeError(f"缺少必填输入: {', '.join(missing)}")
+
+
+def execute_tool(manifest: dict[str, Any], tool_name: str, input_payload: dict[str, Any]) -> dict[str, Any]:
+    """Run the plugin entry once. Returns the tool output dict; raises
+    PluginRuntimeError with an actionable message on any failure."""
+    entry_path = resolve_entry(manifest)
+    request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "LANG": os.environ.get("LANG", "en_US.UTF-8"),
+        "MIBU_PLUGIN": "1",
+    }
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            [sys.executable, str(entry_path)],
+            input=request,
+            capture_output=True,
+            text=True,
+            timeout=PLUGIN_TIMEOUT_SECONDS,
+            cwd=entry_path.parent,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PluginRuntimeError(f"插件执行超时({PLUGIN_TIMEOUT_SECONDS}s)") from exc
+    duration_ms = int((time.monotonic() - started) * 1000)
+
+    if result.returncode != 0:
+        tail = (result.stderr or result.stdout or "").strip()[-500:]
+        raise PluginRuntimeError(f"插件进程退出码 {result.returncode}: {tail}")
+    stdout = result.stdout.strip()
+    if len(stdout) > MAX_OUTPUT_BYTES:
+        raise PluginRuntimeError("插件输出超过大小限制 (1MB)")
+    try:
+        response = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise PluginRuntimeError(f"插件输出不是合法 JSON: {stdout[-300:]}") from exc
+    if not isinstance(response, dict):
+        raise PluginRuntimeError("插件输出必须是 JSON 对象")
+    if not response.get("ok"):
+        raise PluginRuntimeError(str(response.get("error") or "插件返回失败但未说明原因"))
+    output = response.get("output")
+    if not isinstance(output, dict):
+        raise PluginRuntimeError("插件成功响应必须包含 output 对象")
+    output["_duration_ms"] = duration_ms
+    return output
+
+
+__all__ = ["PluginRuntimeError", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]

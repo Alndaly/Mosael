@@ -1,0 +1,33 @@
+{
+  "id": "dev.mibu.text-toolkit",
+  "name": "Text Toolkit",
+  "version": "0.1.0",
+  "entry": "tools/main.py",
+  "permissions": [],
+  "skills": [
+    {
+      "id": "text_toolkit",
+      "description": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。"
+    }
+  ],
+  "tools": [
+    {
+      "name": "word_count",
+      "description": "统计文本的字数、词数与预计口播时长(按 4.5 字/秒)。",
+      "input_schema": {
+        "type": "object",
+        "properties": { "text": { "type": "string" } },
+        "required": ["text"]
+      }
+    },
+    {
+      "name": "extract_hashtags",
+      "description": "从文案中提取 #话题# 与 #hashtag 标签。",
+      "input_schema": {
+        "type": "object",
+        "properties": { "text": { "type": "string" } },
+        "required": ["text"]
+      }
+    }
+  ]
+}

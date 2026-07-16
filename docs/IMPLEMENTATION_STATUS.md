@@ -133,9 +133,17 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Subtitle tracks: clips.asset_id nullable (0010), text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
 - Chrome: page headers removed app-wide (slim action toolbars instead), AI Studio 对话/生成 segmented control in the chat sidebar, visible timeline clip-action buttons, redesigned monitor transport (circular play, custom volume), hairline-only panel resizers, ChatGPT-grade assistant message typography, media-library covers fixed (missing auth token on thumbnail URLs).
 
+### Plugin runtime (plan §19.6)
+
+- Process-isolated execution: manifest `entry` script spawned per call with one JSON request on stdin / one JSON response on stdout ({ok, output|error}), 60s timeout, 1MB output cap, minimal env, cwd = plugin dir, entry path confined to the plugin directory.
+- First version is pure-function tools only — plugins receive nothing but their input payload, so the permission/confirmation system cannot be bypassed; every call lands in plugin_invocations (running → succeeded/failed with error text).
+- Required-input check from the tool's input_schema before spawning; MCP gains list_plugin_tools + invoke_plugin_tool so agents share the same registry.
+- Plugins page: expandable tool cards generate a try-run form from input_schema (typed coercion for number/boolean/object), green/red result blocks, invocation history with expandable output/error.
+- Runnable example plugin plugins/examples/text-toolkit (word_count, extract_hashtags); 8 runtime tests cover the protocol, crash/timeout/garbage-output/entry-escape paths and the API flow.
+
 ## Next
 
-- Sandboxed plugin execution adapters.
+- Plugin write-path tools via jobs + confirmation cards; scoped API token injection per granted permission.
 - A real scheduler runner process claiming due tasks.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
 

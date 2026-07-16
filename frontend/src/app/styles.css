@@ -3230,3 +3230,86 @@
   inset: 0;
   pointer-events: none;
 }
+
+/* Plugin tool cards: expandable try-run form + result */
+.plugin-tool-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.plugin-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 9px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.plugin-tool-head:hover {
+  background: var(--secondary);
+}
+.plugin-tool-title {
+  min-width: 0;
+}
+.plugin-tool-title strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.plugin-tool-title small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-tool-body {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 10px;
+}
+.plugin-field {
+  display: grid;
+  gap: 4px;
+}
+.plugin-field > span {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.plugin-field em {
+  color: var(--destructive);
+  font-style: normal;
+}
+.plugin-tool-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.plugin-result {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+.plugin-result.ok {
+  background: color-mix(in oklab, #22c55e 8%, var(--background));
+  border: 1px solid color-mix(in oklab, #22c55e 30%, var(--border));
+}
+.plugin-result.bad {
+  background: color-mix(in oklab, var(--destructive) 7%, var(--background));
+  border: 1px solid color-mix(in oklab, var(--destructive) 30%, var(--border));
+  color: var(--destructive);
+}
+.inv-ok { color: #16a34a; }
+.inv-bad { color: var(--destructive); }
