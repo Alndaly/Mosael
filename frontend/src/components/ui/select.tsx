@@ -2,10 +2,16 @@ import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 const Select = SelectPrimitive.Root;
-const SelectValue = SelectPrimitive.Value;
+
+/** 空值时必须有占位提醒:调用方没给 placeholder 就用全局默认「请选择」。 */
+function SelectValue({ placeholder, ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
+  const t = useI18n();
+  return <SelectPrimitive.Value placeholder={placeholder ?? t("selectPlaceholder")} {...props} />;
+}
 
 function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
   return (
@@ -27,6 +33,9 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
 }
 
 function SelectContent({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  const t = useI18n();
+  // 没有任何可选项时给出空态提示,避免弹出一个空白盒子。
+  const empty = React.Children.toArray(children).filter(Boolean).length === 0;
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -39,7 +48,13 @@ function SelectContent({ className, children, ...props }: React.ComponentProps<t
         )}
         {...props}
       >
-        <SelectPrimitive.Viewport>{children}</SelectPrimitive.Viewport>
+        <SelectPrimitive.Viewport>
+          {empty ? (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("selectEmpty")}</div>
+          ) : (
+            children
+          )}
+        </SelectPrimitive.Viewport>
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   );
