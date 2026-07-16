@@ -76,6 +76,19 @@ function clampLeft(tab: LeftTab, value: unknown): number {
   return Math.min(bounds.max, Math.max(bounds.min, Number(value) || bounds.fallback));
 }
 
+/** 紧凑断点(Global rhythm):≤1000px 时编辑器收成两列,检查器改为浮动抽屉。 */
+function useCompact(): boolean {
+  const query = "(max-width: 1000px)";
+  return React.useSyncExternalStore(
+    (notify) => {
+      const media = window.matchMedia(query);
+      media.addEventListener("change", notify);
+      return () => media.removeEventListener("change", notify);
+    },
+    () => window.matchMedia(query).matches,
+  );
+}
+
 function readPanelSizes(): PanelSizes {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_SIZES_KEY) ?? "{}");
@@ -103,7 +116,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
   const [leftTab, setLeftTab] = React.useState<LeftTab>("media");
   const [panels, setPanels] = React.useState(readPanelSizes);
-  const leftWidth = panels.left[leftTab];
+  const compact = useCompact();
+  const leftWidth = Math.min(panels.left[leftTab], compact ? 300 : Number.POSITIVE_INFINITY);
 
   React.useEffect(() => {
     window.localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panels));
@@ -424,14 +438,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   }
 
   // 检查器只在选中片段时占用右栏 — 空的「未选中片段」面板不该
-  // 一直吃掉宽度,逐字稿/监视器把空间用起来。
+  // 一直吃掉宽度;紧凑模式(≤1000px)下改为浮动抽屉,不占列。
   const showInspector = selectedClip !== null;
+  const inspectorInGrid = showInspector && !compact;
 
   return (
     <div
       className="editor-grid"
       style={{
-        gridTemplateColumns: showInspector
+        gridTemplateColumns: inspectorInGrid
           ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`
           : `${leftWidth}px minmax(0, 1fr)`,
         gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
@@ -439,7 +454,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     >
       {/* Resizers sit on the 8px gap centers; grid pads 12px (Global rhythm). */}
       <div className="panel-resizer col" style={{ left: leftWidth + 12 + 4 - 3 }} onPointerDown={startPanelDrag("left")} />
-      {showInspector && (
+      {inspectorInGrid && (
         <div
           className="panel-resizer col right"
           style={{ right: panels.right + 12 + 4 - 3 }}
@@ -483,18 +498,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <section className="panel monitor">
         <Monitor sequence={sequence} assets={assets.data ?? []} />
       </section>
-      {showInspector && (
-        <Inspector
-          sequence={sequence}
-          selectedClip={selectedClip}
-          assets={assets.data ?? []}
-          isOverlayClip={isOverlayClip}
-          onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
-          onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
-          onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
-          onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
-        />
-      )}
+      {showInspector &&
+        (() => {
+          const inspector = (
+            <Inspector
+              sequence={sequence}
+              selectedClip={selectedClip}
+              assets={assets.data ?? []}
+              isOverlayClip={isOverlayClip}
+              onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+              onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
+              onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
+              onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+            />
+          );
+          return compact ? <div className="inspector-drawer">{inspector}</div> : inspector;
+        })()}
       <section className="panel timeline">
         <Timeline
           sequence={sequence}

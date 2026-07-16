@@ -1587,9 +1587,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 2px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  padding: 0 8px;
+  padding: 2px 8px;
 }
 
 .tl-readout {
@@ -2464,22 +2466,6 @@
 
 /* ---------- Responsive ---------- */
 
-@media (max-width: 960px) {
-  .feature-grid.two,
-  .feature-grid.three {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .editor-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(240px, 1fr) auto 220px;
-  }
-
-  .timeline {
-    grid-column: 1;
-  }
-}
-
 /* Timeline marquee selection */
 .tl-marquee {
   position: absolute;
@@ -2766,6 +2752,13 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.tl-toolbar-left .seg,
+.tl-readout,
+.tl-clip-count {
+  white-space: nowrap;
 }
 .tl-tool-seg .seg-btn {
   display: inline-flex;
@@ -3560,4 +3553,97 @@
 .sched-delete:hover {
   color: var(--destructive);
   border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+}
+
+/* ---------- Responsive (Global rhythm: breakpoints 1000 / 880 / 760) ----
+   The editor's columns are JS-driven (inline styles), so its compact mode
+   lives in EditorView (<=1000px: two columns + inspector overlay drawer);
+   CSS only handles the pure-CSS shells here. */
+
+@media (max-width: 960px) {
+  .feature-grid.two,
+  .feature-grid.three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Master-detail shells collapse: nav/list becomes a top strip. */
+@media (max-width: 880px) {
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .settings-nav {
+    position: static;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+  }
+
+  .plugins-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .plugins-list {
+    grid-template-rows: auto auto;
+  }
+
+  .plugins-list-body {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+  }
+
+  .plugins-item {
+    flex-shrink: 0;
+  }
+}
+
+/* Chat stacks: sessions become a top strip above the thread. */
+@media (max-width: 760px) {
+  .chat-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .chat-sessions {
+    grid-template-rows: auto auto;
+  }
+
+  .chat-session-list {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+  }
+
+  .chat-session {
+    flex-shrink: 0;
+    max-width: 220px;
+  }
+}
+
+/* Inspector overlay drawer for the compact editor (toggled from JS). */
+.inspector-drawer {
+  position: fixed;
+  top: 56px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 60;
+  width: min(320px, calc(100vw - 96px));
+  display: grid;
+  box-shadow: var(--shadow-raised);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.inspector-drawer .inspector {
+  height: 100%;
 }
