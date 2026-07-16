@@ -219,7 +219,13 @@ export interface WorkflowGraph {
     position?: { x: number; y: number };
     config?: Record<string, unknown>;
   }>;
-  edges: Array<{ id: string; source: string; target: string }>;
+  edges: Array<{ id: string; source: string; target: string; source_handle?: string | null }>;
+}
+
+export type AgentSessionInfo = components["schemas"]["AgentSessionOut"];
+
+export function workflowAgentSession(workflowId: string): Promise<AgentSessionInfo> {
+  return api<AgentSessionInfo>(`/api/workflows/${workflowId}/agent-session`, { method: "POST" });
 }
 
 export function listWorkflows(workspaceId: string): Promise<Workflow[]> {

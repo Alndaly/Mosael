@@ -3,7 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 
 from app.api.deps import CurrentUser, DbSession
+from typing import TYPE_CHECKING
+
 from app.api.schemas import (
+    AgentSessionOut,
     JobOut,
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
@@ -23,6 +26,9 @@ from app.domain.workflows import (
     update_workflow,
 )
 from app.domain.workflows.engine import start_workflow_job
+
+if TYPE_CHECKING:
+    from app.db.models import AgentSession
 
 router = APIRouter(tags=["workflows"])
 
@@ -110,6 +116,29 @@ def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: 
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"graph": graph, "summary": summary}
+
+
+@router.post("/workflows/{workflow_id}/agent-session", response_model=AgentSessionOut)
+def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -> "AgentSession":
+    """工作流专属常驻智能体会话:按 external_key 找回,记忆随会话长期保留。"""
+    workflow = _get(db, workflow_id)
+    ensure_workspace_access(db, user, workflow.workspace_id)
+    from sqlalchemy import select
+
+    from app.ai.agent import host
+    from app.db.models import AgentSession
+
+    key = f"workflow:{workflow_id}"
+    existing = db.scalar(select(AgentSession).where(AgentSession.external_key == key))
+    if existing is not None:
+        return existing
+    return host.create_session(
+        db,
+        workspace_id=workflow.workspace_id,
+        origin="workflow",
+        external_key=key,
+        title=f"工作流 · {workflow.name}",
+    )
 
 
 def _get(db: DbSession, workflow_id: str) -> Workflow:

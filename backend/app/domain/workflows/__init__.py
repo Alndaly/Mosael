@@ -100,6 +100,47 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["result"],
     },
+    "condition": {
+        "label": "条件分支",
+        "description": "按条件把流程导向「真」或「假」分支(连线时从对应端点拉出)。",
+        "config": {
+            "left": {"type": "template", "required": True, "description": "左值,如 {{llm-1.text}}"},
+            "op": {
+                "type": "string",
+                "required": True,
+                "description": "equals | not_equals | contains | not_contains | empty | not_empty | gt | lt",
+            },
+            "right": {"type": "template", "description": "右值(empty/not_empty 不需要)"},
+        },
+        "outputs": ["result"],
+        "branches": ["true", "false"],
+    },
+    "http_request": {
+        "label": "HTTP 请求",
+        "description": "调用外部 API,输出状态码与响应内容。",
+        "config": {
+            "method": {"type": "string", "description": "GET/POST/PUT/DELETE,默认 GET"},
+            "url": {"type": "template", "required": True},
+            "headers": {"type": "object", "description": "请求头,值支持 {{变量}}"},
+            "body": {"type": "template", "description": "请求体(POST/PUT),JSON 或纯文本"},
+        },
+        "outputs": ["status", "text", "json"],
+    },
+    "code": {
+        "label": "代码",
+        "description": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。与插件同级的本地信任沙箱。",
+        "config": {
+            "code": {"type": "code", "required": True, "description": "如:output = len(inputs['text'])"},
+            "input": {"type": "object", "description": "入参,值支持 {{变量}}"},
+        },
+        "outputs": ["output"],
+    },
+    "template": {
+        "label": "文本模板",
+        "description": "把多个上游变量拼装成一段文本。",
+        "config": {"template": {"type": "template", "required": True}},
+        "outputs": ["text"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -137,6 +178,7 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
     if start_count != 1:
         errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
 
+    node_types = {str(node.get("id", "")): str(node.get("type", "")) for node in nodes}
     adjacency: dict[str, list[str]] = {}
     indegree: dict[str, int] = {node_id: 0 for node_id in seen_ids}
     for edge in edges:
@@ -145,6 +187,9 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
         if source not in seen_ids or target not in seen_ids:
             errors.append(f"连线引用了不存在的节点: {source} → {target}")
             continue
+        handle = edge.get("source_handle")
+        if node_types.get(source) == "condition" and handle not in (None, "true", "false"):
+            errors.append(f"条件节点的分支端点必须是 true/false: {source}")
         adjacency.setdefault(source, []).append(target)
         indegree[target] = indegree.get(target, 0) + 1
 

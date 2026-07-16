@@ -112,6 +112,80 @@ def test_workflow_crud_and_run() -> None:
     assert gone.status_code == 204
 
 
+def test_branching_code_and_template_nodes() -> None:
+    """条件分支只走匹配侧;code/template 节点产出可被下游引用。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"topic": "海边旅行"}}},
+            {
+                "id": "check",
+                "type": "condition",
+                "config": {"left": "{{start.topic}}", "op": "contains", "right": "海边"},
+            },
+            {"id": "yes", "type": "template", "config": {"template": "命中:{{start.topic}}"}},
+            {"id": "no", "type": "template", "config": {"template": "未命中"}},
+            {
+                "id": "count",
+                "type": "code",
+                "config": {"code": "output = len(inputs['text'])", "input": {"text": "{{yes.text}}"}},
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "check"},
+            {"id": "e2", "source": "check", "target": "yes", "source_handle": "true"},
+            {"id": "e3", "source": "check", "target": "no", "source_handle": "false"},
+            {"id": "e4", "source": "yes", "target": "count"},
+        ],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "分支流", "graph": graph})
+    assert workflow.status_code == 200, workflow.text
+
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+
+    context = job["result"]["context"]
+    assert context["check"]["result"] is True
+    assert context["yes"]["text"] == "命中:海边旅行"
+    assert context["count"]["output"] == len("命中:海边旅行")
+    assert "no" not in context  # 假分支整段跳过
+
+    with SessionLocal() as db:
+        events = db.query(TaskEvent).filter(TaskEvent.job_id == job_id).all()
+        skipped = [e.payload["node_id"] for e in events if e.type == "workflow.node.skipped"]
+        assert skipped == ["no"]
+
+
+def test_condition_operators_and_bad_branch_handle() -> None:
+    from app.domain.workflows import validate_graph
+    from app.domain.workflows.engine import _handle_condition
+
+    assert _handle_condition(None, None, {"left": "5", "op": "gt", "right": "3"})["result"] is True
+    assert _handle_condition(None, None, {"left": "", "op": "empty"})["result"] is True
+    assert _handle_condition(None, None, {"left": "abc", "op": "not_contains", "right": "x"})["result"] is True
+
+    bad = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "c", "type": "condition", "config": {"left": "a", "op": "equals", "right": "a"}},
+            {"id": "t", "type": "template", "config": {"template": "x"}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "c"},
+            {"id": "e2", "source": "c", "target": "t", "source_handle": "maybe"},
+        ],
+    }
+    assert any("true/false" in error for error in validate_graph(bad))
+
+
 def test_workflow_tools_via_confirmations() -> None:
     """智能体路径:create/update/run_workflow 走确认卡,批准后才执行。"""
     client = fresh_client()

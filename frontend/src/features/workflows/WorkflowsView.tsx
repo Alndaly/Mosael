@@ -19,26 +19,31 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  AlignLeft,
   BookOpen,
+  Bot,
+  Code2,
+  Download,
+  Flag,
+  GitBranch,
+  Globe,
   Loader2,
   Mic,
   Pencil,
   Play,
   Plus,
+  Rocket,
   Save,
   Sparkles,
   Trash2,
+  Type,
   Wand2,
   Workflow as WorkflowIcon,
   Wrench,
-  Download,
-  Flag,
-  Type,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  aiEditWorkflow,
   createWorkflow,
   deleteWorkflow,
   fetchWorkflowNodeTypes,
@@ -55,8 +60,8 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -67,6 +72,11 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   transcribe_asset: <Mic size={13} />,
   export_sequence: <Download size={13} />,
   ai_generate: <Wand2 size={13} />,
+  condition: <GitBranch size={13} />,
+  http_request: <Globe size={13} />,
+  code: <Code2 size={13} />,
+  template: <AlignLeft size={13} />,
+  publish: <Rocket size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {
@@ -75,9 +85,11 @@ interface WfNodeData extends Record<string, unknown> {
   typeLabel: string;
 }
 
-/** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。 */
+/** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
+    条件节点右侧是「真/假」两个分支端点,其余节点单一出口。 */
 function WfNode({ data, selected }: NodeProps) {
   const d = data as WfNodeData;
+  const isCondition = d.nodeType === "condition";
   return (
     <div className={selected ? "wf-node selected" : "wf-node"} data-node-type={d.nodeType}>
       {d.nodeType !== "start" && <Handle type="target" position={Position.Left} className="wf-handle" />}
@@ -86,7 +98,28 @@ function WfNode({ data, selected }: NodeProps) {
         <strong>{d.label}</strong>
         <small>{d.typeLabel}</small>
       </span>
-      <Handle type="source" position={Position.Right} className="wf-handle" />
+      {isCondition ? (
+        <>
+          <Handle
+            id="true"
+            type="source"
+            position={Position.Right}
+            className="wf-handle wf-handle-true"
+            style={{ top: "32%" }}
+          />
+          <Handle
+            id="false"
+            type="source"
+            position={Position.Right}
+            className="wf-handle wf-handle-false"
+            style={{ top: "68%" }}
+          />
+          <span className="wf-branch-label true">真</span>
+          <span className="wf-branch-label false">假</span>
+        </>
+      ) : (
+        <Handle type="source" position={Position.Right} className="wf-handle" />
+      )}
     </div>
   );
 }
@@ -108,6 +141,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
     queryFn: () => listWorkflows(workspace.id),
+    // 智能体经确认卡改图后 updated_at 变化,轮询让画布自动跟进。
+    refetchInterval: 5000,
   });
   const nodeTypes = useQuery({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes, staleTime: Infinity });
 
@@ -247,7 +282,14 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
 }
 
 function toFlowEdges(graph: WorkflowGraph): Edge[] {
-  return (graph.edges ?? []).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
+  return (graph.edges ?? []).map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.source_handle ?? undefined,
+    label: edge.source_handle === "true" ? "真" : edge.source_handle === "false" ? "假" : undefined,
+    className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
+  }));
 }
 
 function WorkflowEditor({
@@ -271,8 +313,20 @@ function WorkflowEditor({
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  const [aiOpen, setAiOpen] = React.useState(false);
-  const [aiInstruction, setAiInstruction] = React.useState("");
+  const [agentOpen, setAgentOpen] = React.useState(false);
+
+  // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
+  const lastSyncedRef = React.useRef(workflow.updated_at);
+  React.useEffect(() => {
+    if (workflow.updated_at === lastSyncedRef.current) return;
+    lastSyncedRef.current = workflow.updated_at;
+    if (!dirty) {
+      const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
+      setGraph(next);
+      setNodes(toFlowNodes(next, registry));
+      setEdges(toFlowEdges(next));
+    }
+  }, [workflow.updated_at, workflow.graph, dirty, registry]);
 
   const applyGraph = React.useCallback(
     (next: WorkflowGraph) => {
@@ -327,19 +381,61 @@ function WorkflowEditor({
     });
   }, []);
 
-  const onConnect = React.useCallback((connection: Connection) => {
-    if (!connection.source || !connection.target) return;
-    const id = `e-${connection.source}-${connection.target}`;
-    setEdges((current) =>
-      current.some((edge) => edge.id === id) ? current : [...current, { id, source: connection.source!, target: connection.target! }],
-    );
-    setGraph((current) =>
-      current.edges.some((edge) => edge.id === id)
-        ? current
-        : { ...current, edges: [...current.edges, { id, source: connection.source!, target: connection.target! }] },
-    );
-    setDirty(true);
-  }, []);
+  const onConnect = React.useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      const handle = connection.sourceHandle ?? undefined;
+      const id = `e-${connection.source}${handle ? `-${handle}` : ""}-${connection.target}`;
+      setGraph((current) => {
+        if (current.edges.some((edge) => edge.id === id)) return current;
+        const next: WorkflowGraph = {
+          ...current,
+          edges: [
+            ...current.edges,
+            { id, source: connection.source!, target: connection.target!, source_handle: handle ?? null },
+          ],
+        };
+        setEdges(toFlowEdges(next));
+        return next;
+      });
+      setDirty(true);
+    },
+    [],
+  );
+
+  // 连线合法性:禁自环、禁重复、禁成环(拖到一半就给出红色反馈)。
+  const isValidConnection = React.useCallback(
+    (connection: Connection | Edge) => {
+      const source = connection.source ?? "";
+      const target = connection.target ?? "";
+      if (!source || !target || source === target) return false;
+      const handle = ("sourceHandle" in connection ? connection.sourceHandle : undefined) ?? undefined;
+      if (
+        graph.edges.some(
+          (edge) =>
+            edge.source === source && edge.target === target && (edge.source_handle ?? undefined) === handle,
+        )
+      ) {
+        return false;
+      }
+      // 从 target 出发能走回 source 即成环
+      const adjacency = new Map<string, string[]>();
+      for (const edge of graph.edges) {
+        adjacency.set(edge.source, [...(adjacency.get(edge.source) ?? []), edge.target]);
+      }
+      const queue = [target];
+      const seen = new Set<string>();
+      while (queue.length) {
+        const current = queue.pop()!;
+        if (current === source) return false;
+        if (seen.has(current)) continue;
+        seen.add(current);
+        queue.push(...(adjacency.get(current) ?? []));
+      }
+      return true;
+    },
+    [graph.edges],
+  );
 
   const addNode = (type: string) => {
     const meta = registry.get(type);
@@ -389,17 +485,6 @@ function WorkflowEditor({
     onSuccess: () => toast.success(t("wfRunQueued")),
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
-  const aiEdit = useMutation({
-    mutationFn: () => aiEditWorkflow(workflow.id, { instruction: aiInstruction, graph }),
-    onSuccess: (response) => {
-      applyGraph(response.graph as unknown as WorkflowGraph);
-      setAiOpen(false);
-      setAiInstruction("");
-      toast.success(t("wfAiApplied"), { description: response.summary || undefined });
-    },
-    onError: (error: Error) => toast.error(t("wfAiFailed"), { description: error.message }),
-  });
-
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
   return (
@@ -433,31 +518,13 @@ function WorkflowEditor({
                 ))}
             </SelectContent>
           </Select>
-          <Popover open={aiOpen} onOpenChange={setAiOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Sparkles size={13} /> {t("wfAiEdit")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="wf-ai-pop" align="end">
-              <strong>{t("wfAiEdit")}</strong>
-              <textarea
-                rows={3}
-                value={aiInstruction}
-                placeholder={t("wfAiPlaceholder")}
-                onChange={(event) => setAiInstruction(event.target.value)}
-              />
-              <div className="wf-ai-actions">
-                <Button
-                  size="sm"
-                  disabled={!aiInstruction.trim() || aiEdit.isPending}
-                  onClick={() => aiEdit.mutate()}
-                >
-                  {aiEdit.isPending ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />} {t("wfAiApply")}
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+            variant={agentOpen ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setAgentOpen((value) => !value)}
+          >
+            <Bot size={13} /> {t("wfAgentTitle")}
+          </Button>
           <Button variant="outline" size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
             <Save size={13} /> {t("save")}
           </Button>
@@ -479,6 +546,9 @@ function WorkflowEditor({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
+            connectionRadius={36}
+            connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
             onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
             onPaneClick={() => setSelectedNodeId(null)}
             fitView
@@ -492,6 +562,9 @@ function WorkflowEditor({
             <MiniMap pannable zoomable position="bottom-right" />
           </ReactFlow>
         </div>
+        {agentOpen && (
+          <WorkflowAgentChat workflowId={workflow.id} workflowName={workflow.name} onClose={() => setAgentOpen(false)} />
+        )}
         {selectedNode && (
           <NodeInspector
             node={selectedNode}
@@ -593,7 +666,8 @@ function NodeInspector({
                 />
               ) : (
                 <textarea
-                  rows={spec?.type === "template" ? 2 : 1}
+                  rows={spec?.type === "code" ? 6 : spec?.type === "template" ? 2 : 1}
+                  className={spec?.type === "code" ? "wf-code-input" : undefined}
                   value={String(value ?? "")}
                   onChange={(event) => onChange({ config: { ...config, [key]: event.target.value } })}
                 />

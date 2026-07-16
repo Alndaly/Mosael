@@ -4518,12 +4518,74 @@
   height: 9px;
   border: 1.5px solid var(--border-strong);
   background: var(--panel);
-  transition: border-color 100ms;
+  transition: border-color 100ms, transform 100ms;
+}
+
+/* 命中区放大到 22px,拖连线不用瞄准 9px 圆点 */
+.wf-handle::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 999px;
+}
+
+.wf-handle:hover {
+  transform: scale(1.35);
+  border-color: var(--primary);
 }
 
 .wf-node:hover .wf-handle,
 .wf-node.selected .wf-handle {
   border-color: var(--primary);
+}
+
+/* 条件节点的真/假分支端点与标签 */
+.wf-handle-true {
+  border-color: #16a34a;
+}
+
+.wf-handle-false {
+  border-color: #e11d48;
+}
+
+.wf-branch-label {
+  position: absolute;
+  right: -20px;
+  font-size: 9px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.wf-branch-label.true {
+  top: calc(32% - 7px);
+  color: #16a34a;
+}
+
+.wf-branch-label.false {
+  top: calc(68% - 7px);
+  color: #e11d48;
+}
+
+/* 分支边:真绿假红,标签同色 */
+.wf-canvas .react-flow__edge.wf-edge-true .react-flow__edge-path {
+  stroke: #16a34a;
+}
+
+.wf-canvas .react-flow__edge.wf-edge-false .react-flow__edge-path {
+  stroke: #e11d48;
+}
+
+.wf-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 2.2;
+}
+
+.wf-canvas .react-flow__edge-textbg {
+  fill: var(--panel);
+}
+
+.wf-canvas .react-flow__edge-text {
+  font-size: 9.5px;
+  fill: var(--muted-foreground);
 }
 
 /* MiniMap:全平面小地图 */
@@ -4640,36 +4702,107 @@
   border-color: var(--primary);
 }
 
-.wf-ai-pop {
-  width: 320px;
+/* 代码节点输入:等宽字体 */
+.wf-code-input {
+  font-family: var(--font-mono, ui-monospace, monospace) !important;
+  font-size: 11.5px !important;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* 工作流常驻 AI 助手面板 */
+.wf-agent {
+  width: 300px;
   display: grid;
-  gap: 8px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.wf-agent-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-agent-thread {
+  display: grid;
+  align-content: start;
+  gap: 10px;
   padding: 12px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.wf-ai-pop > strong {
+.wf-agent-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+  align-self: center;
+}
+
+.wf-agent-empty svg {
+  color: var(--primary);
+  opacity: 0.7;
+}
+
+.wf-agent-msg {
   font-size: 12.5px;
+  line-height: 1.6;
+  word-break: break-word;
 }
 
-.wf-ai-pop textarea {
+.wf-agent-msg.user {
+  justify-self: end;
+  max-width: 88%;
+  background: var(--secondary);
+  border-radius: 10px 10px 4px 10px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+}
+
+.wf-agent-msg.assistant :is(p, ul, ol, pre) {
+  margin: 0 0 8px;
+}
+
+.wf-agent-msg.assistant :is(p, ul, ol, pre):last-child {
+  margin-bottom: 0;
+}
+
+.wf-agent-msg.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+}
+
+.wf-agent-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding: 8px;
+}
+
+.wf-agent-composer textarea {
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--panel);
-  padding: 6px 8px;
+  padding: 6px 9px;
   font-size: 12.5px;
   font-family: inherit;
   color: var(--foreground);
-  resize: vertical;
+  resize: none;
 }
 
-.wf-ai-pop textarea:focus-visible {
+.wf-agent-composer textarea:focus-visible {
   outline: none;
   border-color: var(--primary);
-}
-
-.wf-ai-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 /* ---------- 批量页 ---------- */
