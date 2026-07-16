@@ -2,6 +2,7 @@ import React from "react";
 import { RotateCcw, Trash2, X } from "lucide-react";
 
 import type { Asset, Clip, Sequence } from "@/api/client";
+import { Slider } from "@/components/ui/slider";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 
@@ -337,20 +338,18 @@ function ColorGradePanel({
         <div className="pip-controls" key={group.label}>
           <span className="pip-label">{t(group.label as never)}</span>
           {group.keys.map((key) => (
-            <label className="grade-slider" key={`${key}-${clip.id}`}>
+            <div className="grade-slider" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
-              <input
-                type="range"
+              <Slider
                 min={POSITIVE_ONLY.has(key) ? 0 : -100}
                 max={100}
                 step={5}
-                defaultValue={Math.round((grade[key] ?? 0) * 100)}
-                onPointerUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
-                onKeyUp={(event) => applyGrade(key, (event.target as HTMLInputElement).value)}
+                defaultValue={[Math.round((grade[key] ?? 0) * 100)]}
+                onValueCommit={([value]) => applyGrade(key, String(value))}
                 aria-label={t(`grade_${key}` as never)}
               />
               <em className="timecode">{Math.round((grade[key] ?? 0) * 100)}</em>
-            </label>
+            </div>
           ))}
         </div>
       ))}

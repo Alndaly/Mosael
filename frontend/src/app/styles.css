@@ -1679,33 +1679,13 @@
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Radix Slider 版:在暗色播放条上换白色系轨道(变量钩子见 ui/slider.tsx)。 */
 .monitor-volume {
-  -webkit-appearance: none;
-  appearance: none;
   width: 68px;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.22);
-  cursor: pointer;
-  outline: none;
-}
-
-.monitor-volume::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #ffffff;
-  border: none;
-}
-
-.monitor-volume::-moz-range-thumb {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #ffffff;
-  border: none;
+  flex: none;
+  --slider-track: rgba(255, 255, 255, 0.22);
+  --slider-range: rgba(255, 255, 255, 0.75);
+  --slider-thumb: #ffffff;
 }
 
 .monitor-buttons {
@@ -3252,24 +3232,6 @@
   gap: 8px;
   font-size: 11.5px;
   color: var(--muted-foreground);
-}
-.grade-slider input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--border-strong);
-  cursor: pointer;
-  outline: none;
-}
-.grade-slider input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--primary);
-  border: 2px solid var(--background);
 }
 .grade-slider em {
   font-style: normal;

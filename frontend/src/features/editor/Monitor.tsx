@@ -4,6 +4,7 @@ import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepFo
 import { assetFileUrl, type Asset, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
@@ -353,14 +354,13 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label="mute">
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
-          <input
-            type="range"
+          <Slider
             className="monitor-volume"
             min={0}
             max={1}
             step={0.05}
-            value={masterMuted ? 0 : volume}
-            onChange={(event) => setVolume(Number(event.target.value))}
+            value={[masterMuted ? 0 : volume]}
+            onValueChange={([value]) => setVolume(value)}
             aria-label="volume"
           />
           <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label="fullscreen">
