@@ -1,39 +1,27 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, RadioTower, RefreshCcw, ShieldCheck, Terminal } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, RefreshCcw, Terminal } from "lucide-react";
 
 import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
+/**
+ * 插件页 = 主从布局(VS Code 扩展页形态):左侧插件列表,右侧选中
+ * 插件的完整详情 — 概览 / 权限 / 工具试运行 / 调用历史。视觉语言与
+ * 设置页共用同一套 SettingsGroup/Row 组件。
+ */
 export function PluginsView() {
   const t = useI18n();
   const qc = useQueryClient();
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
   const plugins = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api<Plugin[]>("/api/plugins"),
-  });
-  const tools = useQuery({
-    queryKey: ["plugin-tools"],
-    queryFn: () => api<PluginTool[]>("/api/plugins/tools"),
-  });
-  const invocations = useQuery({
-    queryKey: ["plugin-invocations"],
-    queryFn: () => api<PluginInvocation[]>("/api/plugins/invocations"),
-  });
-  const permissions = useQuery({
-    queryKey: ["plugin-permissions", (plugins.data ?? []).map((plugin) => plugin.id).join(",")],
-    enabled: Boolean(plugins.data),
-    queryFn: async () => {
-      const entries = await Promise.all(
-        (plugins.data ?? []).map(async (plugin) => [
-          plugin.id,
-          await api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`),
-        ] as const),
-      );
-      return Object.fromEntries(entries) as Record<string, PluginPermissionGrant[]>;
-    },
   });
   const scanPlugins = useMutation({
     mutationFn: () => api<Plugin[]>("/api/plugins/scan", { method: "POST" }),
@@ -43,105 +31,207 @@ export function PluginsView() {
       qc.invalidateQueries({ queryKey: ["plugin-tools"] });
     },
   });
-  const togglePlugin = useMutation({
-    mutationFn: ({ plugin, enabled }: { plugin: Plugin; enabled: boolean }) =>
-      api<Plugin>(`/api/plugins/${plugin.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["plugins"] });
-      qc.invalidateQueries({ queryKey: ["plugin-tools"] });
-    },
-  });
-  const grantPlugin = useMutation({
-    mutationFn: (plugin: Plugin) => {
-      const grants = Object.fromEntries(
-        ((plugin.manifest.permissions as string[] | undefined) ?? []).map((permission) => [permission, true]),
-      );
-      return api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`, {
-        method: "PATCH",
-        body: JSON.stringify({ grants }),
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["plugin-permissions"] });
-      qc.invalidateQueries({ queryKey: ["plugin-tools"] });
-    },
-  });
+
+  const selected =
+    (plugins.data ?? []).find((plugin) => plugin.id === selectedId) ?? (plugins.data ?? [])[0] ?? null;
 
   return (
     <div className="feature-view">
-      <div className="feature-toolbar">
-        <Button onClick={() => scanPlugins.mutate()}><RefreshCcw size={16} /> {t("scanPlugins")}</Button>
-      </div>
-
-      <section className="feature-grid three">
-        <div className="panel feature-panel">
-          <div className="panel-head"><h2>{t("installed")}</h2></div>
-          <div className="plugin-list">
+      <div className="plugins-shell">
+        <aside className="plugins-list panel">
+          <div className="panel-head">
+            <h2>{t("installed")}</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={scanPlugins.isPending}
+              onClick={() => scanPlugins.mutate()}
+            >
+              <RefreshCcw size={13} /> {t("scanPlugins")}
+            </Button>
+          </div>
+          <div className="plugins-list-body">
             {(plugins.data ?? []).map((plugin) => (
-              <div className="plugin-row" key={plugin.id}>
-                <Plug size={16} />
-                <div>
+              <button
+                key={plugin.id}
+                type="button"
+                className={selected?.id === plugin.id ? "plugins-item active" : "plugins-item"}
+                onClick={() => setSelectedId(plugin.id)}
+              >
+                <span className={plugin.enabled ? "plugins-dot on" : "plugins-dot"} />
+                <span className="plugins-item-text">
                   <strong>{plugin.name}</strong>
-                  <small>
-                    {plugin.id} · v{plugin.version} · {permissionLabel(permissions.data?.[plugin.id] ?? [], t)}
-                  </small>
-                </div>
-                <div className="plugin-actions">
-                  {(permissions.data?.[plugin.id] ?? []).some((grant) => !grant.granted) && (
-                    <Button size="sm" variant="outline" onClick={() => grantPlugin.mutate(plugin)}>
-                      <ShieldCheck size={14} /> {t("grant")}
-                    </Button>
-                  )}
-                  <Button size="sm" variant={plugin.enabled ? "secondary" : "outline"} onClick={() => togglePlugin.mutate({ plugin, enabled: !plugin.enabled })}>
-                    {plugin.enabled ? <CheckCircle2 size={14} /> : <RadioTower size={14} />}
-                    {plugin.enabled ? t("enabled") : t("enable")}
-                  </Button>
-                </div>
+                  <small>v{plugin.version}</small>
+                </span>
+              </button>
+            ))}
+            {plugins.data?.length === 0 && (
+              <div className="empty-inline">
+                <Plug size={16} />
+                {t("noPluginsGuide")}
               </div>
-            ))}
-            {plugins.data?.length === 0 && <div className="empty-inline">{t("noPlugins")}</div>}
+            )}
           </div>
+        </aside>
+        <div className="plugins-detail">
+          {selected ? (
+            <PluginDetail plugin={selected} />
+          ) : (
+            <EmptyState icon={<Plug size={22} />} title={t("noPlugins")} body={t("noPluginsGuide")} />
+          )}
         </div>
-
-        <div className="panel feature-panel">
-          <div className="panel-head"><h2>{t("tools")}</h2></div>
-          <div className="plugin-list">
-            {(tools.data ?? []).map((tool) => (
-              <ToolCard key={`${tool.plugin_id}:${tool.tool_name}`} tool={tool} />
-            ))}
-            {tools.data?.length === 0 && <div className="empty-inline">{t("noTools")}</div>}
-          </div>
-        </div>
-
-        <div className="panel feature-panel">
-          <div className="panel-head"><h2>{t("invocations")}</h2></div>
-          <div className="plugin-list">
-            {(invocations.data ?? []).slice(0, 20).map((invocation) => (
-              <InvocationRow key={invocation.id} invocation={invocation} />
-            ))}
-            {invocations.data?.length === 0 && <div className="empty-inline">{t("noInvocations")}</div>}
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
 
+function PluginDetail({ plugin }: { plugin: Plugin }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+
+  const grants = useQuery({
+    queryKey: ["plugin-permissions", plugin.id],
+    queryFn: () => api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`),
+  });
+  const enabledTools = useQuery({
+    queryKey: ["plugin-tools"],
+    queryFn: () => api<PluginTool[]>("/api/plugins/tools"),
+  });
+  const invocations = useQuery({
+    queryKey: ["plugin-invocations", plugin.id],
+    queryFn: () => api<PluginInvocation[]>(`/api/plugins/invocations?plugin_id=${plugin.id}`),
+  });
+
+  const togglePlugin = useMutation({
+    mutationFn: (enabled: boolean) =>
+      api<Plugin>(`/api/plugins/${plugin.id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["plugins"] });
+      void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
+  const setGrant = useMutation({
+    mutationFn: ({ permission, granted }: { permission: string; granted: boolean }) =>
+      api<PluginPermissionGrant[]>(`/api/plugins/${plugin.id}/permissions`, {
+        method: "PATCH",
+        body: JSON.stringify({ grants: { [permission]: granted } }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["plugin-permissions", plugin.id] });
+      void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
+
+  const manifestTools = ((plugin.manifest.tools as PluginToolManifest[] | undefined) ?? []).filter(
+    (tool) => typeof tool?.name === "string",
+  );
+  const runnableNames = new Set(
+    (enabledTools.data ?? []).filter((tool) => tool.plugin_id === plugin.id).map((tool) => tool.tool_name),
+  );
+  const allGranted = (grants.data ?? []).every((grant) => grant.granted);
+
+  return (
+    <div className="plugins-detail-body">
+      <SettingsGroup
+        title={plugin.name}
+        description={`${plugin.id} · v${plugin.version}`}
+        actions={
+          <div className="seg" role="tablist">
+            <button
+              type="button"
+              className={plugin.enabled ? "seg-btn" : "seg-btn active"}
+              onClick={() => togglePlugin.mutate(false)}
+            >
+              {t("pluginOff")}
+            </button>
+            <button
+              type="button"
+              className={plugin.enabled ? "seg-btn active" : "seg-btn"}
+              onClick={() => togglePlugin.mutate(true)}
+            >
+              {t("pluginOn")}
+            </button>
+          </div>
+        }
+      >
+        {(grants.data ?? []).length > 0 ? (
+          (grants.data ?? []).map((grant) => (
+            <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
+              <div className="seg">
+                <button
+                  type="button"
+                  className={grant.granted ? "seg-btn" : "seg-btn active"}
+                  onClick={() => setGrant.mutate({ permission: grant.permission, granted: false })}
+                >
+                  {t("denied")}
+                </button>
+                <button
+                  type="button"
+                  className={grant.granted ? "seg-btn active" : "seg-btn"}
+                  onClick={() => setGrant.mutate({ permission: grant.permission, granted: true })}
+                >
+                  {t("granted")}
+                </button>
+              </div>
+            </SettingsRow>
+          ))
+        ) : (
+          <SettingsRow label={t("noPermissions")} description={t("pureToolDesc")} />
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup title={t("tools")} description={t("toolsGroupDesc")}>
+        <SettingsBlock>
+          {manifestTools.map((tool) => (
+            <ToolCard
+              key={tool.name}
+              pluginId={plugin.id}
+              tool={tool}
+              runnable={plugin.enabled && allGranted && runnableNames.has(tool.name)}
+            />
+          ))}
+          {manifestTools.length === 0 && <p className="feishu-empty">{t("noTools")}</p>}
+        </SettingsBlock>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("invocations")} description={t("invocationsGroupDesc")}>
+        <SettingsBlock>
+          {(invocations.data ?? []).slice(0, 15).map((invocation) => (
+            <InvocationRow key={invocation.id} invocation={invocation} />
+          ))}
+          {invocations.data?.length === 0 && <p className="feishu-empty">{t("noInvocations")}</p>}
+        </SettingsBlock>
+      </SettingsGroup>
+    </div>
+  );
+}
+
+interface PluginToolManifest {
+  name: string;
+  description?: string;
+  input_schema?: {
+    properties?: Record<string, { type?: string; description?: string }>;
+    required?: string[];
+  };
+}
+
 /** 工具卡:展开后按 input_schema 生成输入表单,试运行并展示结果。 */
-function ToolCard({ tool }: { tool: PluginTool }) {
+function ToolCard({
+  pluginId,
+  tool,
+  runnable,
+}: {
+  pluginId: string;
+  tool: PluginToolManifest;
+  runnable: boolean;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [values, setValues] = React.useState<Record<string, string>>({});
   const [result, setResult] = React.useState<PluginInvocation | null>(null);
 
-  const schema = (tool.input_schema ?? {}) as {
-    properties?: Record<string, { type?: string; description?: string }>;
-    required?: string[];
-  };
+  const schema = tool.input_schema ?? {};
   const fields = Object.entries(schema.properties ?? {});
   const required = new Set(schema.required ?? []);
 
@@ -161,14 +251,14 @@ function ToolCard({ tool }: { tool: PluginTool }) {
           }
         } else input[key] = raw;
       }
-      return api<PluginInvocation>(`/api/plugins/${tool.plugin_id}/tools/${tool.tool_name}/invoke`, {
+      return api<PluginInvocation>(`/api/plugins/${pluginId}/tools/${tool.name}/invoke`, {
         method: "POST",
         body: JSON.stringify({ input }),
       });
     },
     onSuccess: (invocation) => {
       setResult(invocation);
-      void qc.invalidateQueries({ queryKey: ["plugin-invocations"] });
+      void qc.invalidateQueries({ queryKey: ["plugin-invocations", pluginId] });
     },
   });
 
@@ -180,9 +270,10 @@ function ToolCard({ tool }: { tool: PluginTool }) {
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         <Terminal size={14} />
         <div className="plugin-tool-title">
-          <strong>{tool.tool_name}</strong>
-          <small>{tool.plugin_name} · {tool.description}</small>
+          <strong>{tool.name}</strong>
+          <small>{tool.description ?? ""}</small>
         </div>
+        {!runnable && <small className="plugin-tool-blocked">{t("toolBlockedHint")}</small>}
       </button>
       {open && (
         <div className="plugin-tool-body">
@@ -201,7 +292,7 @@ function ToolCard({ tool }: { tool: PluginTool }) {
             </label>
           ))}
           <div className="plugin-tool-actions">
-            <Button size="sm" disabled={missingRequired || invoke.isPending} onClick={() => invoke.mutate()}>
+            <Button size="sm" disabled={!runnable || missingRequired || invoke.isPending} onClick={() => invoke.mutate()}>
               <Play size={13} /> {t("runTool")}
             </Button>
           </div>
@@ -227,9 +318,7 @@ function InvocationRow({ invocation }: { invocation: PluginInvocation }) {
         {ok ? <CheckCircle2 size={14} className="inv-ok" /> : <CircleAlert size={14} className="inv-bad" />}
         <div className="plugin-tool-title">
           <strong>{invocation.tool_name}</strong>
-          <small>
-            {invocation.status} · {invocation.plugin_id}
-          </small>
+          <small>{invocation.status}</small>
         </div>
       </button>
       {open && (
@@ -239,10 +328,4 @@ function InvocationRow({ invocation }: { invocation: PluginInvocation }) {
       )}
     </div>
   );
-}
-
-function permissionLabel(grants: PluginPermissionGrant[], t: ReturnType<typeof useI18n>) {
-  if (grants.length === 0) return t("noPermissions");
-  const granted = grants.filter((grant) => grant.granted).length;
-  return `${granted}/${grants.length} ${t("permissions")}`;
 }

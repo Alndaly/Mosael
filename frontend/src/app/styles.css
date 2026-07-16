@@ -3313,3 +3313,89 @@
 }
 .inv-ok { color: #16a34a; }
 .inv-bad { color: var(--destructive); }
+
+/* Plugins master-detail */
+.plugins-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.plugins-list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.plugins-list-body {
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.plugins-list-body:has(> .empty-inline:only-child) {
+  align-content: stretch;
+}
+.plugins-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms;
+}
+.plugins-item:hover {
+  background: var(--muted);
+}
+.plugins-item.active {
+  background: var(--accent);
+}
+.plugins-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+.plugins-dot.on {
+  background: #22c55e;
+}
+.plugins-item-text {
+  min-width: 0;
+}
+.plugins-item-text strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugins-item-text small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.plugins-detail {
+  min-width: 0;
+  overflow-y: auto;
+  display: grid;
+}
+.plugins-detail-body {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2px 2px 20px;
+}
+.plugin-tool-blocked {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
