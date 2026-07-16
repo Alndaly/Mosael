@@ -5,8 +5,11 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
+  GitBranch,
+  Layers,
   Loader2,
   Mic,
+  Send,
   Sparkles,
   Timer,
   Trash2,
@@ -45,6 +48,13 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const all = jobs.data ?? [];
   const active = all.filter((job) => ACTIVE.has(job.status));
   const finished = all.filter((job) => !ACTIVE.has(job.status)).slice(0, 12);
+
+  const openJob = (job: Job) => {
+    const route = jobRoute(job);
+    if (!route) return;
+    window.location.hash = route;
+    setOpen(false);
+  };
 
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
   // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
@@ -101,11 +111,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         </div>
         <div className="taskcenter-list">
           {active.map((job) => (
-            <JobRow key={job.id} job={job} />
+            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
           ))}
           {active.length > 0 && finished.length > 0 && <div className="taskcenter-sep" />}
           {finished.map((job) => (
-            <JobRow key={job.id} job={job} />
+            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
           ))}
           {all.length === 0 && <p className="taskcenter-empty">{t("noJobs")}</p>}
         </div>
@@ -119,14 +129,43 @@ const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
   transcribe: { icon: <Mic size={13} />, labelKey: "jobKindTranscribe" },
   ai_generation: { icon: <Sparkles size={13} />, labelKey: "jobKindGeneration" },
   scheduled: { icon: <Timer size={13} />, labelKey: "jobKindScheduled" },
+  workflow: { icon: <GitBranch size={13} />, labelKey: "jobKindWorkflow" },
+  publish: { icon: <Send size={13} />, labelKey: "jobKindPublish" },
+  batch: { icon: <Layers size={13} />, labelKey: "jobKindBatch" },
 };
 
-function JobRow({ job }: { job: Job }) {
+/** 任务 → 对应详情页;payload 里有 project_id 就带上,编辑器直接落到项目。 */
+const KIND_ROUTE: Record<string, string> = {
+  render: "editor",
+  transcribe: "editor",
+  ai_generation: "ai",
+  scheduled: "scheduler",
+  workflow: "workflows",
+  publish: "publish",
+  batch: "batch",
+};
+
+function jobRoute(job: Job): string | null {
+  const view = KIND_ROUTE[job.kind];
+  if (!view) return null;
+  const projectId = (job.payload as Record<string, unknown> | null)?.project_id;
+  return `/${view}${typeof projectId === "string" && projectId ? `?p=${projectId}` : ""}`;
+}
+
+function JobRow({ job, onOpen }: { job: Job; onOpen?: () => void }) {
   const t = useI18n();
   const meta = KIND_META[job.kind] ?? { icon: <Activity size={13} />, labelKey: "jobKindOther" };
   const running = ACTIVE.has(job.status);
   return (
-    <div className={running ? "taskrow running" : `taskrow ${job.status}`}>
+    <div
+      className={running ? "taskrow running clickable" : `taskrow ${job.status} clickable`}
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onOpen?.();
+      }}
+    >
       <span className="taskrow-icon">{meta.icon}</span>
       <div className="taskrow-body">
         <div className="taskrow-title">

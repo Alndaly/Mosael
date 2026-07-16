@@ -351,6 +351,17 @@ export function deletePublishAccount(accountId: string): Promise<unknown> {
   return api(`/api/publish/accounts/${accountId}`, { method: "DELETE" });
 }
 
+export function patchPublishAccount(
+  accountId: string,
+  body: { name?: string; enabled?: boolean },
+): Promise<PublishAccount> {
+  return api<PublishAccount>(`/api/publish/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function recheckPublishAccount(accountId: string): Promise<PublishAccount> {
+  return api<PublishAccount>(`/api/publish/accounts/${accountId}/recheck`, { method: "POST" });
+}
+
 export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
   return api<PublishTask[]>(`/api/publish/tasks?workspace_id=${workspaceId}`);
 }

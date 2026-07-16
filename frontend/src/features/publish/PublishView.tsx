@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, Rocket, Settings2, Sparkles, Trash2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,29 +13,36 @@ import {
   listPublishAccounts,
   listPublishPlatforms,
   listPublishTasks,
+  patchPublishAccount,
+  recheckPublishAccount,
   type Asset,
   type PublishAccount,
   type PublishPlatform,
   type PublishTask,
   type Workspace,
 } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { relativeTime } from "@/lib/time";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
 // 受阻但可恢复(老版 BLOCKED_STATUSES):人工处理后可重试。
 const BLOCKED = new Set(["login_required", "waiting_manual", "permission_required", "blocked"]);
 
-/** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。 */
+/** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。
+ *  账号矩阵是一等页签:多平台账号的登录态、启停、复检都在这里管,登录会话
+ *  由桌面端 persist: 分区持久化,重启不丢。 */
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const [tab, setTab] = React.useState<"records" | "accounts">("records");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [managingAccounts, setManagingAccounts] = React.useState(false);
@@ -73,10 +80,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         }}
         onManageAccounts={() => {
           setCreating(false);
-          setManagingAccounts(true);
+          setTab("accounts");
         }}
       />
-      <AccountsDialog open={managingAccounts} workspace={workspace} onClose={() => setManagingAccounts(false)} />
+      <AddAccountDialog open={managingAccounts} workspace={workspace} onClose={() => setManagingAccounts(false)} />
       <ConfirmDialog
         open={deleting !== null}
         title={t("deleteConfirmTitle")}
@@ -87,24 +94,73 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     </>
   );
 
+  const seg = (
+    <div className="publish-head">
+      <div className="seg">
+        <button
+          type="button"
+          className={tab === "records" ? "seg-btn active" : "seg-btn"}
+          onClick={() => setTab("records")}
+        >
+          <Rocket size={13} /> {t("publishTabRecords")}
+        </button>
+        <button
+          type="button"
+          className={tab === "accounts" ? "seg-btn active" : "seg-btn"}
+          onClick={() => setTab("accounts")}
+        >
+          <Users size={13} /> {t("publishTabAccounts")}
+        </button>
+      </div>
+      {tab === "records" ? (
+        <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+          <Plus size={13} /> {t("publishCreate")}
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setManagingAccounts(true)}>
+          <Plus size={13} /> {t("publishAccountAdd")}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (tab === "accounts") {
+    return (
+      <div className="feature-view">
+        <div className="publish-col">
+          {seg}
+          <div className="publish-body">
+            <AccountsPanel workspace={workspace} onAdd={() => setManagingAccounts(true)} />
+          </div>
+        </div>
+        {dialogs}
+      </div>
+    );
+  }
+
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
       <div className="feature-view">
-        <EmptyState
-          icon={<Rocket size={22} />}
-          title={t("publishEmptyTitle")}
-          body={t("publishEmptyBody")}
-          action={
-            <div className="kb-empty-actions">
-              <Button onClick={() => setCreating(true)}>
-                <Plus size={15} /> {t("publishCreate")}
-              </Button>
-              <Button variant="outline" onClick={() => setManagingAccounts(true)}>
-                <Settings2 size={15} /> {t("publishAccounts")}
-              </Button>
-            </div>
-          }
-        />
+        <div className="publish-col">
+          {seg}
+          <div className="publish-body">
+            <EmptyState
+              icon={<Rocket size={22} />}
+              title={t("publishEmptyTitle")}
+              body={t("publishEmptyBody")}
+              action={
+                <div className="kb-empty-actions">
+                  <Button onClick={() => setCreating(true)}>
+                    <Plus size={15} /> {t("publishCreate")}
+                  </Button>
+                  <Button variant="outline" onClick={() => setTab("accounts")}>
+                    <Settings2 size={15} /> {t("publishTabAccounts")}
+                  </Button>
+                </div>
+              }
+            />
+          </div>
+        </div>
         {dialogs}
       </div>
     );
@@ -112,18 +168,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="plugins-shell">
+      <div className="publish-col">
+      {seg}
+      <div className="publish-body plugins-shell">
         <aside className="plugins-list panel">
           <div className="panel-head">
             <h2>{t("navPublish")}</h2>
-            <div className="kb-list-actions">
-              <Button size="icon-sm" variant="ghost" title={t("publishAccounts")} onClick={() => setManagingAccounts(true)}>
-                <Settings2 size={14} />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
-                <Plus size={13} /> {t("publishCreate")}
-              </Button>
-            </div>
           </div>
           <div className="plugins-list-body">
             {(tasks.data ?? []).map((task) => (
@@ -160,7 +210,155 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       </div>
+      </div>
       {dialogs}
+    </div>
+  );
+}
+
+/** 账号矩阵:多平台账号卡片墙。登录态、上次检测、启停、复检一屏看全。 */
+function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () => void }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const qc = useQueryClient();
+  const [renaming, setRenaming] = React.useState<PublishAccount | null>(null);
+  const [removing, setRemoving] = React.useState<PublishAccount | null>(null);
+
+  const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, staleTime: Infinity });
+  const accounts = useQuery({
+    queryKey: ["publish-accounts", workspace.id],
+    queryFn: () => listPublishAccounts(workspace.id),
+    // 复检/登录会在后台改登录态,轮询把徽标拉回真实状态。
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+  });
+  const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
+
+  const patch = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean } }) =>
+      patchPublishAccount(id, body),
+    onSuccess: () => {
+      setRenaming(null);
+      refresh();
+    },
+  });
+  const recheck = useMutation({
+    mutationFn: (id: string) => recheckPublishAccount(id),
+    onSuccess: () => {
+      toast.success(t("publishRecheckQueued"));
+      refresh();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deletePublishAccount(id),
+    onSuccess: () => {
+      setRemoving(null);
+      refresh();
+    },
+  });
+
+  const items = accounts.data ?? [];
+  if (accounts.isSuccess && items.length === 0) {
+    return (
+      <EmptyState
+        icon={<Users size={22} />}
+        title={t("publishNoAccountsTitle")}
+        body={t("publishNoAccountsBody")}
+        action={
+          <Button onClick={onAdd}>
+            <Plus size={15} /> {t("publishAccountAdd")}
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="acct-grid">
+      {items.map((account) => {
+        const meta = (platforms.data ?? []).find((p) => p.platform === account.platform);
+        const isBrowser = meta?.executor === "browser";
+        return (
+          <ContextMenu key={account.id}>
+            <ContextMenuTrigger asChild>
+              <div className={account.enabled ? "acct-card panel" : "acct-card panel disabled"}>
+                <div className="acct-head">
+                  <span className="acct-platform">{meta?.label ?? account.platform}</span>
+                  {isBrowser ? (
+                    <em className={`publish-binding b-${account.binding_status}`}>
+                      {t(`binding_${account.binding_status}` as never)}
+                    </em>
+                  ) : (
+                    <em className="publish-binding b-bound">{t("publishLocalExecutor")}</em>
+                  )}
+                </div>
+                <strong className="acct-name">{account.name}</strong>
+                <small className="acct-meta">
+                  {account.profile_name ? `${account.profile_name} · ` : ""}
+                  {account.last_checked_at
+                    ? t("publishLastChecked").replace("{t}", relativeTime(account.last_checked_at, locale))
+                    : t("publishNeverChecked")}
+                </small>
+                {account.last_error && <small className="acct-error">{account.last_error}</small>}
+                <div className="acct-actions">
+                  {isBrowser && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
+                      disabled={!window.mibuPublish}
+                      onClick={() => {
+                        window.mibuPublish
+                          ?.login(account.id, account.platform)
+                          .then(() => toast.success(t("publishLoginOpened")))
+                          .catch((error: Error) => toast.error(error.message));
+                      }}
+                    >
+                      <LogIn size={13} /> {t("publishLogin")}
+                    </Button>
+                  )}
+                  {isBrowser && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={recheck.isPending || account.binding_status === "checking"}
+                      onClick={() => recheck.mutate(account.id)}
+                    >
+                      <RefreshCcw size={13} /> {t("publishRecheck")}
+                    </Button>
+                  )}
+                  <span className="acct-spacer" />
+                  <Switch
+                    checked={account.enabled}
+                    onCheckedChange={(next) => patch.mutate({ id: account.id, body: { enabled: next } })}
+                    aria-label={t("publishAccountEnabled")}
+                  />
+                </div>
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => setRenaming(account)}>{t("rename")}</ContextMenuItem>
+              <ContextMenuItem destructive onSelect={() => setRemoving(account)}>
+                <Trash2 /> {t("delete")}
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        );
+      })}
+      <RenameDialog
+        open={renaming !== null}
+        title={t("rename")}
+        initialValue={renaming?.name ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(value) => renaming && patch.mutate({ id: renaming.id, body: { name: value } })}
+      />
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("deleteConfirmTitle")}
+        body={t("publishAccountDeleteBody")}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+      />
     </div>
   );
 }
@@ -242,8 +440,8 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
   );
 }
 
-/** 账号管理:平台注册表驱动的添加表单 + 现有账号列表。 */
-function AccountsDialog({ open, workspace, onClose }: { open: boolean; workspace: Workspace; onClose: () => void }) {
+/** 添加发布账号(纯创建弹窗;列表/管理在账号矩阵页签)。 */
+function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspace: Workspace; onClose: () => void }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [platform, setPlatform] = React.useState("folder");
@@ -251,11 +449,6 @@ function AccountsDialog({ open, workspace, onClose }: { open: boolean; workspace
   const [config, setConfig] = React.useState<Record<string, string>>({});
 
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, enabled: open, staleTime: Infinity });
-  const accounts = useQuery({
-    queryKey: ["publish-accounts", workspace.id],
-    queryFn: () => listPublishAccounts(workspace.id),
-    enabled: open,
-  });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
 
   const meta = (platforms.data ?? []).find((item) => item.platform === platform) ?? null;
@@ -274,56 +467,14 @@ function AccountsDialog({ open, workspace, onClose }: { open: boolean; workspace
       setConfig({});
       refresh();
       toast.success(t("publishAccountAdded"));
+      onClose();
     },
     onError: (error: Error) => toast.error(t("publishAccountFailed"), { description: error.message }),
   });
-  const remove = useMutation({ mutationFn: (id: string) => deletePublishAccount(id), onSuccess: refresh });
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishAccounts")}>
+    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishAccountAdd")}>
       <div className="task-create-form">
-        {(accounts.data ?? []).length > 0 && (
-          <div className="publish-account-list">
-            {(accounts.data ?? []).map((account: PublishAccount) => {
-              const meta = (platforms.data ?? []).find((p: PublishPlatform) => p.platform === account.platform);
-              const isBrowser = meta?.executor === "browser";
-              return (
-                <div className="publish-account" key={account.id}>
-                  <span className="publish-account-text">
-                    <strong>{account.name}</strong>
-                    <small>
-                      {meta?.label ?? account.platform}
-                      {isBrowser && (
-                        <em className={`publish-binding b-${account.binding_status}`}>
-                          {t(`binding_${account.binding_status}` as never)}
-                        </em>
-                      )}
-                    </small>
-                  </span>
-                  {isBrowser && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
-                      disabled={!window.mibuPublish}
-                      onClick={() => {
-                        window.mibuPublish
-                          ?.login(account.id, account.platform)
-                          .then(() => toast.success(t("publishLoginOpened")))
-                          .catch((error: Error) => toast.error(error.message));
-                      }}
-                    >
-                      <LogIn size={13} /> {t("publishLogin")}
-                    </Button>
-                  )}
-                  <Button size="icon-sm" variant="ghost" aria-label={t("delete")} onClick={() => remove.mutate(account.id)}>
-                    <Trash2 size={13} />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
         <label className="wf-field">
           <span>{t("publishPlatform")}</span>
           <Select

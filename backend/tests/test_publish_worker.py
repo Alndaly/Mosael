@@ -99,3 +99,33 @@ def test_title_limit_and_binding_check_flow() -> None:
     # 心跳 → 在线状态
     client.post("/api/publish/worker/heartbeat")
     assert client.get("/api/publish/worker/status").json()["online"] is True
+
+
+def test_account_recheck_and_profile() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    account = client.post(
+        "/api/publish/accounts",
+        json={"workspace_id": ws["id"], "platform": "b站", "name": "B站矩阵一号", "config": {}},
+    ).json()
+
+    # worker 回报 bound + 平台昵称
+    client.patch(
+        "/api/publish/worker/account",
+        json={"account_id": account["id"], "binding_status": "bound", "profile_name": "小美的频道"},
+    )
+    got = client.get(f"/api/publish/accounts?workspace_id={ws['id']}").json()[0]
+    assert got["binding_status"] == "bound"
+    assert got["profile_name"] == "小美的频道"
+    assert got["last_checked_at"] is not None
+
+    # 手动复检:归零登录态,等执行器下轮巡检认领
+    rechecked = client.post(f"/api/publish/accounts/{account['id']}/recheck").json()
+    assert rechecked["binding_status"] == "unknown"
+    assert rechecked["last_checked_at"] is None
+    claimed = client.post("/api/publish/worker/claim-check").json()
+    assert claimed["account"]["account_id"] == account["id"]
+
+    # 启停
+    patched = client.patch(f"/api/publish/accounts/{account['id']}", json={"enabled": False}).json()
+    assert patched["enabled"] is False

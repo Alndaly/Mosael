@@ -33,6 +33,7 @@ class AccountPatchRequest(BaseModel):
     account_id: str
     binding_status: str | None = None
     last_error: str | None = None
+    profile_name: str | None = None
 
 
 @router.post("/publish/worker/claim")
@@ -69,7 +70,11 @@ def mark_due(db: DbSession) -> dict[str, Any]:
 def patch_account(body: AccountPatchRequest, db: DbSession) -> dict[str, Any]:
     try:
         account = publish_worker.patch_account(
-            db, account_id=body.account_id, binding_status=body.binding_status, last_error=body.last_error
+            db,
+            account_id=body.account_id,
+            binding_status=body.binding_status,
+            last_error=body.last_error,
+            profile_name=body.profile_name,
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

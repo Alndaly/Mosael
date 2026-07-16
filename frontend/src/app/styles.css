@@ -4370,6 +4370,10 @@
 .taskrow:hover {
   background: var(--secondary);
 }
+
+.taskrow.clickable {
+  cursor: pointer;
+}
 .taskrow-icon {
   display: grid;
   place-items: center;
@@ -5180,6 +5184,96 @@
 
 .publish-blocked-icon {
   color: #d97706;
+}
+
+/* 发布页双页签(记录/账号矩阵)骨架 */
+.publish-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.publish-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.publish-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 账号矩阵卡片墙 */
+.acct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+
+.acct-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.acct-card.disabled {
+  opacity: 0.55;
+}
+
+.acct-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.acct-platform {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.acct-head .publish-binding {
+  margin-left: 0;
+}
+
+.acct-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-meta {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.acct-error {
+  color: var(--destructive);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.acct-spacer {
+  flex: 1;
 }
 
 .publish-title-count {

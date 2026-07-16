@@ -85,6 +85,21 @@ def update_account(account_id: str, body: PublishAccountUpdate, db: DbSession, u
     return account
 
 
+@router.post("/publish/accounts/{account_id}/recheck", response_model=PublishAccountOut)
+def recheck_account(account_id: str, db: DbSession, user: CurrentUser) -> PublishAccount:
+    """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。"""
+    account = db.get(PublishAccount, account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    ensure_workspace_access(db, user, account.workspace_id)
+    account.binding_status = "unknown"
+    account.last_checked_at = None
+    account.last_error = None
+    db.commit()
+    db.refresh(account)
+    return account
+
+
 @router.delete("/publish/accounts/{account_id}", status_code=204)
 def delete_account(account_id: str, db: DbSession, user: CurrentUser) -> Response:
     account = db.get(PublishAccount, account_id)
