@@ -369,6 +369,10 @@
 .model-list:has(> .empty-inline:only-child),
 .job-list:has(> .empty-inline:only-child),
 .task-list:has(> .empty-inline:only-child),
+.sub-list:has(> .empty-inline:only-child),
+.chat-session-list:has(> .empty-inline:only-child),
+.provider-list:has(> .empty-inline:only-child),
+.gen-queue:has(> .empty-inline:only-child),
 .plugin-list:has(> .empty-inline:only-child) {
   align-content: stretch;
   height: 100%;
