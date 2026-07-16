@@ -17,6 +17,7 @@ import {
   Plug,
   Rocket,
   Scissors,
+  SearchX,
   Settings,
   Sun,
 } from "lucide-react";
@@ -158,7 +159,17 @@ export function CommandPalette({
         autoFocus
       />
       <CommandList>
-        {!hasAnyResult && <CommandEmpty>{t("cmdkEmpty")}</CommandEmpty>}
+        {!hasAnyResult && (
+          <CommandEmpty>
+            <span className="cmdk-empty">
+              <span className="cmdk-empty-icon">
+                <SearchX size={17} />
+              </span>
+              <strong>{t("cmdkEmpty")}</strong>
+              <span>{t("cmdkEmptyHint")}</span>
+            </span>
+          </CommandEmpty>
+        )}
 
         {q === "" && (
           <>

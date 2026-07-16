@@ -4079,6 +4079,39 @@
   border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
 }
 
+/* Cmd+K 无结果空状态:与全局 EmptyState 同语言的紧凑版(居中 + 主色淡底图标)。 */
+.cmdk-empty {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 26px 16px 30px;
+  text-align: center;
+}
+
+.cmdk-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+.cmdk-empty strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.cmdk-empty > span:last-child {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 320px;
+}
+
 /* Sonner toast:全平面 — 细边框、纯底色、无投影。 */
 .mibu-toast {
   border: 1px solid var(--border-strong) !important;
