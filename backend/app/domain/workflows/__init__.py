@@ -84,7 +84,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "provider": {"type": "string", "required": True},
             "model": {"type": "string", "required": True},
-            "kind": {"type": "string", "required": True, "description": "image | video"},
+            "kind": {"type": "string", "required": True, "description": "生成类型", "options": ["image", "video"]},
             "prompt": {"type": "template", "required": True},
         },
         "outputs": ["asset_id", "generation_id"],
@@ -108,7 +108,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "op": {
                 "type": "string",
                 "required": True,
-                "description": "equals | not_equals | contains | not_contains | empty | not_empty | gt | lt",
+                "description": "比较方式",
+                "options": ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty", "gt", "lt"],
             },
             "right": {"type": "template", "description": "右值(empty/not_empty 不需要)"},
         },
@@ -119,7 +120,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "HTTP 请求",
         "description": "调用外部 API,输出状态码与响应内容。",
         "config": {
-            "method": {"type": "string", "description": "GET/POST/PUT/DELETE,默认 GET"},
+            "method": {"type": "string", "description": "默认 GET", "options": ["GET", "POST", "PUT", "DELETE"]},
             "url": {"type": "template", "required": True},
             "headers": {"type": "object", "description": "请求头,值支持 {{变量}}"},
             "body": {"type": "template", "description": "请求体(POST/PUT),JSON 或纯文本"},

@@ -4408,10 +4408,11 @@
   font-size: 12px;
 }
 
+/* 画布区:检查器是画布内右侧浮层(Dify 式),不参与布局。 */
 .wf-canvas-wrap {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -4605,10 +4606,19 @@
 }
 
 .wf-inspector {
-  width: 280px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 30;
+  width: min(300px, calc(100% - 32px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
 }
 
 .wf-inspector-body {
@@ -4700,6 +4710,30 @@
 
 .wf-out-chip:hover {
   border-color: var(--primary);
+}
+
+/* 上游变量插入芯片(Dify 式变量选择的轻量版) */
+.wf-var-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.wf-var-chip {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--primary);
+  cursor: pointer;
+  transition: border-color 100ms, background 100ms;
+}
+
+.wf-var-chip:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 /* 代码节点输入:等宽字体 */
@@ -5240,16 +5274,6 @@
     display: none; /* 窄条里放不下长状态文本,导入进度看任务中心 */
   }
 
-  /* 工作流画布:窄屏时属性面板叠到画布下方 */
-  .wf-canvas-wrap {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(240px, 1fr) auto;
-  }
-
-  .wf-inspector {
-    width: auto;
-    max-height: 300px;
-  }
 }
 
 /* Chat stacks: sessions become a top strip above the thread. */

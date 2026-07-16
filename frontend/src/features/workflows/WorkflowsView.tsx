@@ -44,9 +44,11 @@ import {
 import { toast } from "sonner";
 
 import {
+  api,
   createWorkflow,
   deleteWorkflow,
   fetchWorkflowNodeTypes,
+  listPublishAccounts,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
@@ -569,6 +571,9 @@ function WorkflowEditor({
           <NodeInspector
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
+            graph={graph}
+            registry={registry}
+            workspaceId={workspaceId}
             onChange={(patch) => {
               applyGraph({
                 ...graph,
@@ -611,21 +616,131 @@ function WorkflowEditor({
   );
 }
 
-/** 右侧节点属性面板:按注册表渲染 config 字段。 */
+interface ConfigSpec {
+  type?: string;
+  description?: string;
+  required?: boolean;
+  options?: string[];
+}
+
+/** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
+function upstreamVariables(
+  graph: WorkflowGraph,
+  nodeId: string,
+  registry: Map<string, WorkflowNodeType>,
+): string[] {
+  const parents = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    parents.set(edge.target, [...(parents.get(edge.target) ?? []), edge.source]);
+  }
+  const ancestors = new Set<string>();
+  const queue = [...(parents.get(nodeId) ?? [])];
+  while (queue.length) {
+    const current = queue.pop()!;
+    if (ancestors.has(current)) continue;
+    ancestors.add(current);
+    queue.push(...(parents.get(current) ?? []));
+  }
+  const refs: string[] = [];
+  for (const node of graph.nodes) {
+    if (!ancestors.has(node.id)) continue;
+    if (node.type === "start") {
+      const params = ((node.config as { params?: Record<string, unknown> })?.params ?? {}) as object;
+      for (const key of Object.keys(params)) refs.push(`{{${node.id}.${key}}}`);
+    } else {
+      for (const output of registry.get(node.type)?.outputs ?? []) refs.push(`{{${node.id}.${output}}}`);
+    }
+  }
+  return refs;
+}
+
+/** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
 function NodeInspector({
   node,
   meta,
+  graph,
+  registry,
+  workspaceId,
   onChange,
   onDelete,
 }: {
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
+  graph: WorkflowGraph;
+  registry: Map<string, WorkflowNodeType>;
+  workspaceId: string;
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
   onDelete?: () => void;
 }) {
   const t = useI18n();
   const config = (node.config ?? {}) as Record<string, unknown>;
-  const specs = Object.entries((meta?.config ?? {}) as Record<string, { type?: string; description?: string; required?: boolean }>);
+  const specs = Object.entries((meta?.config ?? {}) as Record<string, ConfigSpec>);
+  const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const variables = React.useMemo(
+    () => upstreamVariables(graph, node.id, registry),
+    [graph, node.id, registry],
+  );
+
+  // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
+  const providers = useQuery({
+    queryKey: ["provider-profiles"],
+    queryFn: () => api<Array<{ id: string; name: string; vendor: string }>>("/api/settings/providers"),
+    enabled: node.type === "llm",
+  });
+  const pluginTools = useQuery({
+    queryKey: ["plugin-tools"],
+    queryFn: () => api<Array<{ plugin_id: string; plugin_name: string; tool_name: string }>>("/api/plugins/tools"),
+    enabled: node.type === "plugin_tool",
+  });
+  const publishAccounts = useQuery({
+    queryKey: ["publish-accounts", workspaceId],
+    queryFn: () => listPublishAccounts(workspaceId),
+    enabled: node.type === "publish",
+  });
+  const generationModels = useQuery({
+    queryKey: ["generation-models"],
+    queryFn: () => api<Array<{ id: string; provider: string; model: string; kind: string }>>("/api/generation/models"),
+    enabled: node.type === "ai_generate",
+  });
+
+  const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
+
+  const insertVariable = (key: string, ref: string) => {
+    const el = fieldRefs.current[key];
+    const current = String(config[key] ?? "");
+    if (!el) {
+      setConfig(key, current + ref);
+      return;
+    }
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+    setConfig(key, current.slice(0, start) + ref + current.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + ref.length;
+    });
+  };
+
+  /** (nodeType, key) → 动态下拉选项;返回 null 表示该字段不是动态选择。 */
+  const dynamicOptions = (key: string): Array<{ value: string; label: string }> | null => {
+    if (node.type === "llm" && key === "profile_id") {
+      return (providers.data ?? []).map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
+    }
+    if (node.type === "plugin_tool" && key === "plugin_id") {
+      const seen = new Map<string, string>();
+      for (const tool of pluginTools.data ?? []) seen.set(tool.plugin_id, tool.plugin_name);
+      return [...seen].map(([value, label]) => ({ value, label }));
+    }
+    if (node.type === "plugin_tool" && key === "tool_name") {
+      return (pluginTools.data ?? [])
+        .filter((tool) => !config.plugin_id || tool.plugin_id === config.plugin_id)
+        .map((tool) => ({ value: tool.tool_name, label: tool.tool_name }));
+    }
+    if (node.type === "publish" && key === "account_id") {
+      return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
+    }
+    return null;
+  };
 
   return (
     <aside className="wf-inspector panel">
@@ -643,22 +758,64 @@ function NodeInspector({
           <input value={node.name ?? ""} onChange={(event) => onChange({ name: event.target.value })} />
         </label>
         {meta && <p className="wf-node-desc">{meta.description}</p>}
+        {node.type === "ai_generate" && (
+          <label className="wf-field">
+            <span>{t("wfModelPreset")}</span>
+            <Select
+              value=""
+              onValueChange={(id) => {
+                const model = (generationModels.data ?? []).find((item) => item.id === id);
+                if (model) {
+                  onChange({ config: { ...config, provider: model.provider, model: model.model, kind: model.kind } });
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("wfModelPresetHint")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(generationModels.data ?? []).map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.model} · {model.kind}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
         {specs.map(([key, spec]) => {
           const value = config[key];
           const isObject = spec?.type === "object";
+          const isTemplate = spec?.type === "template" || spec?.type === "code";
+          const options = spec?.options
+            ? spec.options.map((option) => ({ value: option, label: option }))
+            : dynamicOptions(key);
           return (
             <label className="wf-field" key={key}>
               <span>
                 {key}
                 {spec?.required ? " *" : ""}
               </span>
-              {isObject ? (
+              {options ? (
+                <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("wfPickOption")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : isObject ? (
                 <textarea
                   rows={3}
                   defaultValue={JSON.stringify(value ?? {}, null, 2)}
                   onBlur={(event) => {
                     try {
-                      onChange({ config: { ...config, [key]: JSON.parse(event.target.value || "{}") } });
+                      setConfig(key, JSON.parse(event.target.value || "{}"));
                     } catch {
                       toast.error(t("wfBadJson"));
                     }
@@ -666,11 +823,30 @@ function NodeInspector({
                 />
               ) : (
                 <textarea
+                  ref={(el) => {
+                    fieldRefs.current[key] = el;
+                  }}
                   rows={spec?.type === "code" ? 6 : spec?.type === "template" ? 2 : 1}
                   className={spec?.type === "code" ? "wf-code-input" : undefined}
                   value={String(value ?? "")}
-                  onChange={(event) => onChange({ config: { ...config, [key]: event.target.value } })}
+                  onChange={(event) => setConfig(key, event.target.value)}
                 />
+              )}
+              {isTemplate && variables.length > 0 && (
+                <div className="wf-var-chips">
+                  {variables.map((ref) => (
+                    <button
+                      key={ref}
+                      type="button"
+                      className="wf-var-chip"
+                      title={t("wfInsertVar")}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => insertVariable(key, ref)}
+                    >
+                      {ref.replace(/[{}]/g, "")}
+                    </button>
+                  ))}
+                </div>
               )}
               {spec?.description && <small>{spec.description}</small>}
             </label>
