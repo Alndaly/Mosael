@@ -14,6 +14,7 @@ export function LoginView() {
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -21,9 +22,18 @@ export function LoginView() {
     setMode(hasUsers ? "login" : "register");
   }, [hasUsers]);
 
+  const mismatch = mode === "register" && confirm.length > 0 && confirm !== password;
+  const canSubmit = Boolean(username && password && (mode === "login" || confirm === password));
+
+  const switchMode = () => {
+    setMode(mode === "login" ? "register" : "login");
+    setConfirm("");
+    setError(null);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!username || !password) return;
+    if (!canSubmit) return;
     setBusy(true);
     setError(null);
     try {
@@ -62,16 +72,23 @@ export function LoginView() {
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               onChange={(event) => setPassword(event.target.value)}
             />
+            {mode === "register" && (
+              <Input
+                type="password"
+                placeholder={t("confirmPassword")}
+                value={confirm}
+                autoComplete="new-password"
+                aria-invalid={mismatch}
+                onChange={(event) => setConfirm(event.target.value)}
+              />
+            )}
+            {mismatch && <p className="login-error">{t("passwordMismatch")}</p>}
             {error && <p className="login-error">{error}</p>}
-            <Button type="submit" disabled={busy || !username || !password}>
+            <Button type="submit" disabled={busy || !canSubmit}>
               {mode === "login" ? t("signIn") : t("createAccount")}
             </Button>
           </form>
-          <button
-            type="button"
-            className="login-switch"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-          >
+          <button type="button" className="login-switch" onClick={switchMode}>
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
           {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
