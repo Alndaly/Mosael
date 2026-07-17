@@ -58,7 +58,24 @@ pnpm dev            # http://localhost:5173
 ```
 
 浏览器打开 `http://localhost:5173` 即可开发绝大部分功能。
-**例外**:发布的内嵌浏览器(登录/上传)只存在于 Electron,网页版会提示"需要桌面端"。
+**例外**:发布的内嵌浏览器(登录/上传/地址栏工具栏)只存在于 Electron,网页版会提示"需要桌面端"。
+
+### 桌面端热调试(内嵌浏览器等 Electron 功能)
+
+不用打包,一条命令起 vite + Electron:
+
+```bash
+pnpm dev            # 仓库根目录;等价于 frontend 的 pnpm electron:dev
+```
+
+它会先构建发布 bundle,再并行跑三件事(带颜色前缀 `vite` / `bundle` / `electron`):
+- `vite`:前端热更新(`--strictPort`,5173 被占直接报错,不会静默换到 5174 导致 Electron 加载错服务器);
+- `bundle`:`esbuild --watch=forever`,改 `electron/publish/**` 的 TS 自动重打 `publish.bundle.cjs`;
+- `electron`:等 5173 就绪后加载它;`main.cjs` 的 dev 分支会自动复用或拉起 8800 的 `uvicorn` 后端。
+
+改 `electron/publish/**` 后 bundle 会自动更新,但**主进程不热更**——重启 `pnpm dev` 生效。改 `main.cjs`/`preload.cjs` 同理。主窗口 DevTools:`Cmd+Option+I`;内嵌账号视图:发布页右键账号 → 「检查页面(DevTools)」。
+
+若 Electron 报 `Electron failed to install correctly`(pnpm 有时漏跑其安装脚本):`pnpm rebuild electron`。
 
 ### 测试与检查
 

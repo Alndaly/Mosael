@@ -5,11 +5,11 @@
   "type": "module",
   "packageManager": "pnpm@11.6.0",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5173",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://127.0.0.1:5173 && electron ../electron/main.cjs\"",
+    "electron:dev": "pnpm --dir .. build:publisher && concurrently -k -n vite,bundle,electron -c cyan,yellow,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"wait-on http://127.0.0.1:5173 && electron ../electron/main.cjs\"",
     "test": "vitest run"
   },
   "dependencies": {
