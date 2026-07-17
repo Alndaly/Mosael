@@ -6800,3 +6800,28 @@
     backdrop-filter: blur(14px) saturate(1.4);
   }
 }
+
+/* CodeMirror 代码字段(工作流 code/JSON 输入):细边框裹住,字体与量表统一。
+   主题(明/暗)由 @uiw/react-codemirror 的 theme 决定,这里只管容器与字号。 */
+.code-editor {
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.code-editor:focus-within {
+  border-color: var(--primary);
+}
+.code-editor .cm-editor {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border-radius: 6px;
+}
+.code-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.code-editor .cm-gutters {
+  border: none;
+}
+.code-editor .cm-scroller {
+  font-family: var(--font-mono);
+}

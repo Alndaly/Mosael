@@ -72,6 +72,7 @@ import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
+import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
 import { analyzeWorkflow, extractRefs, type NodeIssue } from "@/features/workflows/analyze";
 
@@ -830,6 +831,73 @@ function upstreamVariables(
   return refs;
 }
 
+/** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。 */
+function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unknown) => void }) {
+  const t = useI18n();
+  const [text, setText] = React.useState(() => JSON.stringify(value ?? {}, null, 2));
+  // 上游(智能体改图)更新时回显,但不打断正在输入:仅当序列化值真变才重置。
+  const synced = React.useRef(text);
+  React.useEffect(() => {
+    const next = JSON.stringify(value ?? {}, null, 2);
+    if (next !== synced.current) {
+      synced.current = next;
+      setText(next);
+    }
+  }, [value]);
+  return (
+    <CodeEditor
+      value={text}
+      language="json"
+      minHeight={72}
+      onChange={setText}
+      onBlur={() => {
+        try {
+          const parsed = JSON.parse(text || "{}");
+          synced.current = JSON.stringify(parsed ?? {}, null, 2);
+          onChange(parsed);
+        } catch {
+          toast.error(t("wfBadJson"));
+        }
+      }}
+    />
+  );
+}
+
+/** code 字段:CodeMirror Python + 上游变量 chip(插到光标处)。 */
+function CodeField({
+  value,
+  onChange,
+  variables,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  variables: string[];
+}) {
+  const t = useI18n();
+  const handle = React.useRef<CodeEditorHandle>(null);
+  return (
+    <>
+      <CodeEditor ref={handle} value={value} language="python" minHeight={140} onChange={onChange} />
+      {variables.length > 0 && (
+        <div className="wf-var-chips">
+          {variables.map((ref) => (
+            <button
+              key={ref}
+              type="button"
+              className="wf-var-chip"
+              title={t("wfInsertVar")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handle.current?.insertAtCursor(ref)}
+            >
+              {ref.replace(/[{}]/g, "")}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
 function NodeInspector({
   node,
@@ -1093,7 +1161,6 @@ function NodeInspector({
           .map(([key, spec]) => {
           const value = config[key];
           const isObject = spec?.type === "object";
-          const isTemplate = spec?.type === "template" || spec?.type === "code";
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key);
@@ -1152,30 +1219,21 @@ function NodeInspector({
                   </SelectContent>
                 </Select>
               ) : isObject ? (
-                <textarea
-                  rows={3}
-                  defaultValue={JSON.stringify(value ?? {}, null, 2)}
-                  onBlur={(event) => {
-                    try {
-                      setConfig(key, JSON.parse(event.target.value || "{}"));
-                    } catch {
-                      toast.error(t("wfBadJson"));
-                    }
-                  }}
-                />
+                <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
+              ) : spec?.type === "code" ? (
+                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
               ) : (
                 <VarTextarea
                   textareaRef={(el) => {
                     fieldRefs.current[key] = el;
                   }}
-                  rows={spec?.type === "code" ? 6 : spec?.type === "template" ? 2 : 1}
-                  className={spec?.type === "code" ? "wf-code-input" : undefined}
+                  rows={spec?.type === "template" ? 2 : 1}
                   value={String(value ?? "")}
                   onChange={(next) => setConfig(key, next)}
                   variables={variables}
                 />
               )}
-              {!refMode && isTemplate && variables.length > 0 && (
+              {!refMode && spec?.type === "template" && variables.length > 0 && (
                 <div className="wf-var-chips">
                   {variables.map((ref) => (
                     <button
