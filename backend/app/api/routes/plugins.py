@@ -90,3 +90,22 @@ def list_invocations(db: DbSession, plugin_id: str | None = None) -> list[Plugin
         stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
     stmt = stmt.order_by(PluginInvocation.created_at.desc())
     return list(db.scalars(stmt))
+
+
+@router.delete("/plugins/invocations/{invocation_id}", status_code=204)
+def delete_invocation(invocation_id: str, db: DbSession) -> None:
+    obj = db.get(PluginInvocation, invocation_id)
+    if obj is not None:
+        db.delete(obj)
+        db.commit()
+
+
+@router.delete("/plugins/invocations", status_code=204)
+def clear_invocations(db: DbSession, plugin_id: str | None = None) -> None:
+    """清空调用记录;带 plugin_id 只清该插件的。"""
+    stmt = select(PluginInvocation)
+    if plugin_id:
+        stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
+    for obj in db.scalars(stmt):
+        db.delete(obj)
+    db.commit()

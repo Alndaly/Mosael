@@ -4006,6 +4006,30 @@
 .plugin-tool-head:hover {
   background: var(--secondary);
 }
+/* 调用记录行:展开钮撑满 + 末尾删除钮 */
+.inv-row-head {
+  display: flex;
+  align-items: stretch;
+}
+.inv-row-head .plugin-tool-head {
+  flex: 1;
+  min-width: 0;
+}
+.inv-row-delete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 100ms, background 100ms;
+}
+.inv-row-delete:hover {
+  color: var(--destructive);
+  background: var(--secondary);
+}
 .plugin-tool-title {
   min-width: 0;
 }

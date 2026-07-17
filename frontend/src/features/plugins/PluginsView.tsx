@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, RefreshCcw, Terminal } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, RefreshCcw, Terminal, Trash2 } from "lucide-react";
 
 import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -134,6 +134,15 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
       void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
     },
   });
+  const invalidateInvocations = () => qc.invalidateQueries({ queryKey: ["plugin-invocations", plugin.id] });
+  const deleteInvocation = useMutation({
+    mutationFn: (id: string) => api(`/api/plugins/invocations/${id}`, { method: "DELETE" }),
+    onSuccess: invalidateInvocations,
+  });
+  const clearInvocations = useMutation({
+    mutationFn: () => api(`/api/plugins/invocations?plugin_id=${plugin.id}`, { method: "DELETE" }),
+    onSuccess: invalidateInvocations,
+  });
 
   const manifestTools = ((plugin.manifest.tools as PluginToolManifest[] | undefined) ?? []).filter(
     (tool) => typeof tool?.name === "string",
@@ -186,10 +195,24 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         </SettingsBlock>
       </SettingsGroup>
 
-      <SettingsGroup title={t("invocations")} description={t("invocationsGroupDesc")}>
+      <SettingsGroup
+        title={t("invocations")}
+        description={t("invocationsGroupDesc")}
+        actions={
+          (invocations.data ?? []).length > 0 ? (
+            <Button variant="outline" size="sm" disabled={clearInvocations.isPending} onClick={() => clearInvocations.mutate()}>
+              <Trash2 size={13} /> {t("invocationsClear")}
+            </Button>
+          ) : undefined
+        }
+      >
         <SettingsBlock>
           {(invocations.data ?? []).slice(0, 15).map((invocation) => (
-            <InvocationRow key={invocation.id} invocation={invocation} />
+            <InvocationRow
+              key={invocation.id}
+              invocation={invocation}
+              onDelete={() => deleteInvocation.mutate(invocation.id)}
+            />
           ))}
           {invocations.data?.length === 0 && <p className="feishu-empty">{t("noInvocations")}</p>}
         </SettingsBlock>
@@ -301,18 +324,24 @@ function ToolCard({
   );
 }
 
-function InvocationRow({ invocation }: { invocation: PluginInvocation }) {
+function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation; onDelete: () => void }) {
+  const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const ok = invocation.status === "succeeded";
   return (
     <div className="plugin-tool-card">
-      <button type="button" className="plugin-tool-head" onClick={() => setOpen((value) => !value)}>
-        {ok ? <CheckCircle2 size={14} className="inv-ok" /> : <CircleAlert size={14} className="inv-bad" />}
-        <div className="plugin-tool-title">
-          <strong>{invocation.tool_name}</strong>
-          <small>{invocation.status}</small>
-        </div>
-      </button>
+      <div className="inv-row-head">
+        <button type="button" className="plugin-tool-head" onClick={() => setOpen((value) => !value)}>
+          {ok ? <CheckCircle2 size={14} className="inv-ok" /> : <CircleAlert size={14} className="inv-bad" />}
+          <div className="plugin-tool-title">
+            <strong>{invocation.tool_name}</strong>
+            <small>{invocation.status}</small>
+          </div>
+        </button>
+        <button type="button" className="inv-row-delete" aria-label={t("delete")} onClick={onDelete}>
+          <Trash2 size={13} />
+        </button>
+      </div>
       {open && (
         <pre className={ok ? "plugin-result ok" : "plugin-result bad"}>
           {JSON.stringify(ok ? invocation.output : { input: invocation.input, error: invocation.error }, null, 2)}
