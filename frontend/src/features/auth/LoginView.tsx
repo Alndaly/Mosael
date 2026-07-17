@@ -40,11 +40,13 @@ export function LoginView() {
     <div className="center">
       <Card className="welcome">
         <CardContent className="welcome-content">
-          <div className="login-brand">
-            <Film size={26} />
+          <div className="login-head">
+            <div className="login-brand">
+              <Film size={22} />
+            </div>
+            <h1>Mibu</h1>
+            <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
           </div>
-          <h1>Mibu</h1>
-          <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
           <form className="login-form" onSubmit={submit}>
             <Input
               autoFocus

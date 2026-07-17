@@ -2944,14 +2944,14 @@
 }
 
 .welcome {
-  width: min(420px, calc(100vw - 32px));
+  width: min(384px, calc(100vw - 32px));
 }
 
 .welcome-content {
   display: grid;
   justify-items: center;
-  gap: 10px;
-  padding: 28px;
+  gap: 16px;
+  padding: 30px 28px 22px;
   text-align: center;
 }
 
@@ -2960,21 +2960,41 @@
   margin: 0;
 }
 
+/* 品牌 + 标题 + 副标题作为一个紧凑的头部,和下方表单拉开层次。 */
+.login-head {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.welcome h1 {
+  font-size: 19px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--foreground);
+}
+.welcome p {
+  max-width: 30ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
 .login-brand {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 2px;
+  border-radius: 13px;
   background: var(--primary);
   color: var(--primary-foreground);
 }
 
 .login-form {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  margin-top: 6px;
 }
 
 .login-error {
@@ -2987,8 +3007,9 @@
   border: none;
   background: none;
   padding: 2px;
+  margin-top: -6px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 
@@ -5944,15 +5965,15 @@
 .server-pick {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 260px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-subtle);
+  gap: 10px;
+  width: 100%;
+  /* 登录页靠 .login-server 的分隔线成区,设置页靠所在行成区 —— 这里不再自带边框/底色,
+     避免"卡里套卡"的厚重感。 */
+  text-align: left;
 }
 .server-pick-seg {
   width: 100%;
+  height: 30px;
 }
 .server-pick-seg .seg-btn {
   flex: 1;
@@ -5981,9 +6002,12 @@
   line-height: 1.5;
 }
 
-/* 登录卡片里的服务器入口:与上方切换链接留一档间距 */
+/* 登录卡片里的服务器入口:作为卡片底部的分隔区,与表单拉开。 */
 .login-server {
-  margin-top: 4px;
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: center;
 }

@@ -102,6 +102,7 @@ export function ServerPicker() {
       <div className="server-pick-actions">
         <Button
           size="sm"
+          variant="secondary"
           className="server-pick-connect"
           disabled={testing || (mode === "remote" && !url.trim())}
           onClick={() => void apply(false)}
