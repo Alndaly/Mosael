@@ -29,9 +29,11 @@ import {
   Flag,
   GitBranch,
   Globe,
+  Link2,
   Loader2,
   Mic,
   Pencil,
+  PenLine,
   Play,
   Plus,
   Rocket,
@@ -178,6 +180,11 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   template: "wffTemplate",
   params: "wffParams",
 };
+
+/** 整个值恰好是单个 {{node.output}} 引用 → 该字段处于"连接输出"模式。 */
+function isPureRef(value: unknown): boolean {
+  return typeof value === "string" && /^\s*\{\{\s*[\w.-]+\s*\}\}\s*$/.test(value);
+}
 
 /** 连线统一带闭合箭头,方向一目了然。 */
 const DEFAULT_EDGE_OPTIONS = {
@@ -845,6 +852,8 @@ function NodeInspector({
   const config = (node.config ?? {}) as Record<string, unknown>;
   const specs = Object.entries((meta?.config ?? {}) as Record<string, ConfigSpec>);
   const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+  // 每字段的输入方式:手动填写 vs 连接上游输出(ComfyUI 式)。默认从值推断(纯引用=连接)。
+  const [fieldModes, setFieldModes] = React.useState<Record<string, "ref" | "manual">>({});
   const variables = React.useMemo(
     () => upstreamVariables(graph, node.id, registry),
     [graph, node.id, registry],
@@ -1089,13 +1098,47 @@ function NodeInspector({
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key);
           const labelKey = FIELD_LABEL_KEYS[key];
+          // ComfyUI 式:非 object 字段可在"手动填写/选择"与"连接上游输出"间切换。
+          const canRef = !isObject && (variables.length > 0 || isPureRef(value));
+          const fieldId = `${node.id}:${key}`;
+          const mode: "ref" | "manual" = fieldModes[fieldId] ?? (isPureRef(value) ? "ref" : "manual");
+          const refMode = canRef && mode === "ref";
           return (
             <label className="wf-field" key={key}>
               <span>
                 {labelKey ? t(labelKey) : key}
                 {spec?.required ? <em className="wf-field-req">*</em> : null}
+                {canRef && (
+                  <button
+                    type="button"
+                    className={`wf-field-mode${refMode ? " is-ref" : ""}`}
+                    title={t("wfInputModeHint")}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setFieldModes((current) => ({ ...current, [fieldId]: refMode ? "manual" : "ref" }));
+                    }}
+                  >
+                    {refMode ? <Link2 size={11} /> : <PenLine size={11} />}
+                    {refMode ? t("wfInputRef") : t("wfInputManual")}
+                  </button>
+                )}
               </span>
-              {options ? (
+              {refMode ? (
+                <div className="wf-ref-slot">
+                  <Select value={isPureRef(value) ? String(value) : ""} onValueChange={(next) => setConfig(key, next)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("wfPickUpstream")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {variables.map((ref) => (
+                        <SelectItem key={ref} value={ref}>
+                          {ref.replace(/[{}]/g, "")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : options ? (
                 <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
                   <SelectTrigger>
                     <SelectValue placeholder={t("wfPickOption")} />
@@ -1132,7 +1175,7 @@ function NodeInspector({
                   variables={variables}
                 />
               )}
-              {isTemplate && variables.length > 0 && (
+              {!refMode && isTemplate && variables.length > 0 && (
                 <div className="wf-var-chips">
                   {variables.map((ref) => (
                     <button
