@@ -1,0 +1,465 @@
+/* ============================================================
+   Mibu 文档站主题
+   风格:单色 neutral(近黑剪辑台底 + 白灰层次),无彩色装饰;强调=亮度对比而非色相。
+   首页所有样式 scoped 在 .mibu-home 下,不影响文档内容页。
+   ============================================================ */
+
+/* 0) 全站字体与底色 ------------------------------------------- */
+/* 字体:Outfit(标题/英数,几何感)+ Noto Sans SC(中文)+ JetBrains Mono(代码),
+   全部自托管(astro.config customCss 引入 fontsource),离线内嵌可用。 */
+:root {
+  --sl-font: "Outfit Variable", "Noto Sans SC Variable", ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --sl-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+/* 底色:中性近黑(参考 Revornix 的 rgb(17,17,17)),去掉 Starlight 默认的蓝灰调 */
+:root {
+  --sl-color-white: #fafafa;
+  --sl-color-gray-1: #ededed;
+  --sl-color-gray-2: #d4d4d4;
+  --sl-color-gray-3: #a3a3a3;
+  --sl-color-gray-4: #525252;
+  --sl-color-gray-5: #2c2c2c;
+  --sl-color-gray-6: #171717;
+  --sl-color-black: #111111;
+}
+:root[data-theme="light"] {
+  --sl-color-white: #171717;
+  --sl-color-gray-1: #262626;
+  --sl-color-gray-2: #404040;
+  --sl-color-gray-3: #6f6f6f;
+  --sl-color-gray-4: #a3a3a3;
+  --sl-color-gray-5: #dcdcdc;
+  --sl-color-gray-6: #f3f3f3;
+  --sl-color-gray-7: #f8f8f8;
+  --sl-color-black: #fcfcfc;
+}
+
+/* 1) 全站强调色(侧边栏 / 链接 / 选中)—— 单色:靠亮度分层,不引入色相 */
+:root {
+  --sl-color-accent-low: #262626;
+  --sl-color-accent: #8a8a8a;
+  --sl-color-accent-high: #fafafa;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #e8e8e8;
+  --sl-color-accent: #6f6f6f;
+  --sl-color-accent-high: #111111;
+}
+/* 正文链接:单色下靠下划线提供可点性 */
+.sl-markdown-content a:not(.mibu-btn):not(.mibu-doc) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--sl-color-gray-4);
+}
+.site-title img {
+  height: 1.75rem;
+}
+
+/* 2) 首页 ------------------------------------------------------ */
+.mibu-home {
+  --mono: var(--sl-font-mono);
+  --font: var(--sl-font);
+  max-width: 64rem;
+  margin-inline: auto;
+}
+/* 让首页突破 splash 的默认内容宽度 */
+.sl-markdown-content:has(.mibu-home) {
+  max-width: 100% !important;
+}
+/* splash 会渲染两个 .content-panel:第一个装(被我们隐藏的)页面大标题,第二个装内容且带
+   顶部分隔线 + 24px 内边距 —— 在首页把空标题面板整块隐藏,并去掉内容面板顶部的横线与留白。 */
+body:has(.mibu-home) .content-panel:has(#_top) {
+  display: none;
+}
+body:has(.mibu-home) .content-panel:has(.mibu-home) {
+  border-top: 0; /* 去掉那条分隔横线 */
+  padding-top: 2rem; /* 但保留一点顶部呼吸空间(不要贴着头部) */
+}
+/* 首页不要默认 markdown 元素间距干扰我们的布局 */
+.mibu-home :is(h1, h3, p) {
+  border: 0;
+}
+
+/* ---- HERO:居中极简,无装饰色,全靠排版与主题变量(双主题自动成立)---- */
+.mibu-hero {
+  text-align: center;
+  padding: clamp(2.5rem, 6vw, 4.5rem) 1rem clamp(1.5rem, 3vw, 2.5rem);
+}
+.mibu-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.mibu-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fb7185;
+  box-shadow: 0 0 10px 1px #fb7185;
+}
+/* .mibu-home 前缀提高优先级,压过 Starlight 的 .sl-markdown-content h1 颜色(否则浅色主题下变暗) */
+.mibu-home .mibu-hero h1 {
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 0.9rem auto 0;
+  color: var(--sl-color-white);
+}
+/* 第二行降灰:单色体系里用亮度做主副层次,替代原渐变字 */
+.mibu-hero h1 .g {
+  color: var(--sl-color-gray-4);
+}
+.mibu-sub {
+  margin: 1.1rem auto 0;
+  max-width: 44ch;
+  color: var(--sl-color-gray-3);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+.mibu-cta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.7rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.mibu-meta {
+  margin-top: 1.1rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--sl-color-gray-4);
+}
+.mibu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.62rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.mibu-btn.primary {
+  background: var(--sl-color-white);
+  color: var(--sl-color-black);
+}
+.mibu-btn.ghost {
+  color: var(--sl-color-white);
+  border: 1px solid var(--sl-color-gray-5);
+}
+.mibu-btn:hover {
+  transform: translateY(-2px);
+}
+.mibu-btn.primary:hover {
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+}
+.mibu-btn.ghost:hover {
+  border-color: var(--sl-color-gray-3);
+}
+
+/* ---- 特性区(随主题自适应)---- */
+.mibu-features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr; /* 所有卡片等高,不随文案长短参差 */
+  gap: 14px;
+  margin-top: 22px;
+}
+.mibu-feat {
+  position: relative;
+  overflow: hidden;
+  height: 100%; /* 配合 grid-auto-rows:1fr 撑满行高,四张卡严格等高 */
+  /* 清掉 Starlight 正文的相邻兄弟上边距——它会把网格里非首个卡片往下推 16px、行内错位。 */
+  margin: 0;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 14px;
+  background: var(--sl-color-bg-nav);
+  padding: 1.3rem 1.4rem;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+.mibu-feat:hover {
+  transform: translateY(-3px);
+  border-color: var(--sl-color-gray-4);
+}
+.mibu-feat .lab {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  color: var(--sl-color-gray-3);
+}
+.mibu-feat h3 {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 1.16rem;
+  font-weight: 700;
+  color: var(--sl-color-white);
+}
+.mibu-feat p {
+  margin: 0;
+  color: var(--sl-color-gray-3);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+/* ---- 文档导航 ---- */
+.mibu-docs {
+  margin-top: 30px;
+}
+.mibu-docs > .lab {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+.mibu-docgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr; /* 文档导航卡也等高 */
+  gap: 10px;
+  margin-top: 12px;
+}
+.mibu-doc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0; /* 同上:清掉正文相邻兄弟上边距,避免网格内错位 */
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 12px;
+  background: var(--sl-color-bg-nav);
+  padding: 0.85rem 1.1rem;
+  text-decoration: none;
+  color: var(--sl-color-white);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+.mibu-doc:hover {
+  border-color: var(--sl-color-accent);
+  transform: translateX(3px);
+}
+.mibu-doc .txt b {
+  display: block;
+  font-weight: 650;
+}
+.mibu-doc .txt span {
+  color: var(--sl-color-gray-3);
+  font-size: 0.85rem;
+}
+.mibu-doc .arr {
+  color: var(--sl-color-gray-4);
+  font-family: var(--mono);
+}
+
+@media (max-width: 640px) {
+  .mibu-features,
+  .mibu-docgrid {
+    grid-template-columns: 1fr;
+  }
+  .mibu-mascot {
+    position: static;
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+  .mibu-hero h1 {
+    max-width: none;
+  }
+}
+
+
+/* 首页真实产品截图(hero 下方) */
+.mibu-home .mibu-shot {
+  margin-top: 1.25rem;
+}
+.mibu-home .mibu-shot img {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--sl-color-gray-5);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+.mibu-home .mibu-shot-cap {
+  margin-top: 0.6rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--sl-color-gray-3);
+}
+
+/* 3) 文档内容页 ------------------------------------------------ */
+/* Expressive Code 代码块本身无下边距(块间距靠后一个兄弟的 margin-top);但在有序/无序列表项内,
+   后续段落或 inline code 的上边距被压得很小,超宽命令触发的横向滚动条(约 17px)会几乎贴住下方
+   文字(setup §3.1 的 docker compose 行实测)。补一个下边距,让滚动条与正文拉开。 */
+.sl-markdown-content .expressive-code {
+  margin-bottom: 0.85rem;
+}
+/* 表格:Starlight 默认让单元格互相挤压 —— 中文表头/首列被挤成一字一行、
+   长路径 inline code 断成三行(卸载页「数据都存在哪」实测)。改为:
+   代码与表头不折行、列宽按内容自然分配,过宽时表格自身横向滚动。 */
+.sl-markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 0.92em;
+}
+.sl-markdown-content table code {
+  /* 空格处可折行(带空格的长路径断成两行体面收场),无空格的 token 保持整行不打散。
+     overflow-wrap 必须归位:Starlight 全局 break-word 会在词中随意打断路径 */
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+.sl-markdown-content th {
+  white-space: nowrap;
+}
+.sl-markdown-content td:first-child {
+  white-space: nowrap;
+}
+.sl-markdown-content td,
+.sl-markdown-content th {
+  padding: 0.5rem 0.9rem;
+}
+/* 中文正文行高与段距(默认为西文调的,中文略挤) */
+.sl-markdown-content {
+  line-height: 1.75;
+}
+/* 说明性的末列(往往是长中文正文)给最小宽度体面折行,其余列 nowrap 后靠表格滚动消化 */
+.sl-markdown-content td:last-child {
+  min-width: 20rem;
+}
+/* 内容列稍加宽(默认 45rem 为西文正文调的,含表格的中文页偏挤) */
+:root {
+  --sl-content-width: 50rem;
+}
+/* 中间列同理给个下限,避免短语列被挤成两字一行(整体超宽交给表格滚动) */
+.sl-markdown-content td {
+  min-width: 9rem;
+}
+
+/* 4) 左侧目录与右侧 TOC ---------------------------------------- */
+/* 组标题降调(小号/宽字距/灰),与可点条目拉开层级 */
+#starlight__sidebar .group-label .large {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--sl-color-gray-3);
+}
+/* 条目:圆角 + 柔和 hover;当前页由重色块改为「淡强调底 + 左侧强调条」,降低视觉噪音 */
+#starlight__sidebar a {
+  border-radius: 0.5rem;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+#starlight__sidebar a:hover {
+  background: color-mix(in srgb, var(--sl-color-accent) 10%, transparent);
+  color: var(--sl-color-white);
+}
+#starlight__sidebar a[aria-current="page"],
+#starlight__sidebar a[aria-current="page"]:hover {
+  background: color-mix(in srgb, var(--sl-color-accent) 14%, transparent);
+  color: var(--sl-color-accent-high);
+  font-weight: 600;
+}
+
+/* 右侧「本页内容」:标题同样降调;整列挂 1px 细轨,当前项点亮 2px 强调段 + 渐隐淡底 */
+#starlight__on-this-page {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--sl-color-gray-3);
+}
+starlight-toc nav > ul {
+  border-inline-start: 1px solid var(--sl-color-gray-5);
+}
+starlight-toc nav ul a {
+  border-inline-start: 2px solid transparent;
+  margin-inline-start: -1px;
+  color: var(--sl-color-gray-3);
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+starlight-toc nav ul a:hover {
+  color: var(--sl-color-white);
+}
+starlight-toc nav ul a[aria-current="true"] {
+  border-inline-start-color: var(--sl-color-accent);
+  color: var(--sl-color-accent-high);
+  font-weight: 600;
+}
+
+/* 5) 底部翻页(上一页/下一页)---------------------------------- */
+.pagination-links a {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 14px;
+  box-shadow: none;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+.pagination-links a:hover {
+  border-color: var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-accent) 7%, transparent);
+  transform: translateY(-2px);
+}
+.pagination-links a > span {
+  color: var(--sl-color-gray-3);
+  font-size: 0.78rem;
+}
+.pagination-links .link-title {
+  color: var(--sl-color-white);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+.pagination-links svg {
+  color: var(--sl-color-accent);
+}
+
+/* 6) 目录/TOC 字号与密度(用户反馈:字太小、排太紧)------------- */
+#starlight__sidebar a {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.92rem;
+}
+#starlight__sidebar .top-level > li + li {
+  margin-top: 0.9rem; /* 组与组之间拉开 */
+}
+#starlight__sidebar summary {
+  padding-block: 0.5rem;
+}
+starlight-toc nav ul a {
+  font-size: 0.88rem;
+  padding-block: 0.38rem;
+}
+#starlight__on-this-page {
+  margin-bottom: 0.5rem;
+}
+
+/* 7) MDX 内组件:aside(:::tip/:::note)中性化 -------------------- */
+/* 默认 tip 紫底/note 蓝底与单色体系冲突;caution/danger 保留警示色(功能色,非装饰)。 */
+.starlight-aside--note,
+.starlight-aside--tip {
+  border-inline-start-color: var(--sl-color-gray-4);
+  background-color: var(--sl-color-gray-6);
+  color: var(--sl-color-gray-2);
+}
+.starlight-aside--note .starlight-aside__title,
+.starlight-aside--tip .starlight-aside__title {
+  color: var(--sl-color-white);
+}

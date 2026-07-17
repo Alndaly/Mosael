@@ -1,0 +1,24 @@
+{
+  "name": "mibu-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mibu 影像工作室文档站(Astro Starlight)——App 内可托管,亦可独立部署做 SEO。",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.34.0",
+    "@astrojs/starlight-tailwind": "^5.0.0",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/noto-sans-sc": "^5.2.10",
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@tailwindcss/vite": "^4.3.2",
+    "astro": "^5.6.0",
+    "sharp": "^0.34.1",
+    "tailwindcss": "^4.3.2"
+  }
+}
