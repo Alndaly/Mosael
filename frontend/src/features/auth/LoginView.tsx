@@ -6,6 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ServerPicker } from "@/components/layout/ServerPicker";
 
 export function LoginView() {
   const t = useI18n();
@@ -71,6 +72,10 @@ export function LoginView() {
           >
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
+          {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
+          <div className="login-server">
+            <ServerPicker />
+          </div>
         </CardContent>
       </Card>
     </div>

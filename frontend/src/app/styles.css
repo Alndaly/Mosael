@@ -5690,15 +5690,75 @@
 }
 
 /* 服务器切换行 */
-.server-switch {
+/* 服务器入口(登录页 + 设置页复用) */
+.server-pick-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 100ms;
+}
+.server-pick-toggle:hover {
+  color: var(--foreground);
+}
+.server-pick-toggle strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.server-pick-sep {
+  opacity: 0.5;
+}
+
+.server-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 260px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-subtle);
+}
+.server-pick-seg {
+  width: 100%;
+}
+.server-pick-seg .seg-btn {
+  flex: 1;
+  justify-content: center;
+}
+.server-pick input {
+  width: 100%;
+}
+.server-pick-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
+}
+.server-pick-connect {
+  flex: 1;
+}
+.server-pick-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 11px;
+}
+.server-pick-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
-.server-switch input {
-  width: 240px;
+/* 登录卡片里的服务器入口:与上方切换链接留一档间距 */
+.login-server {
+  margin-top: 4px;
+  display: flex;
+  justify-content: center;
 }
 
 /* 新建任务对话框表单 */

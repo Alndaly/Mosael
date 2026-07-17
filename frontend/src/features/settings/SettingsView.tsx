@@ -1,9 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Loader2, LogOut, MessageSquare, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
-import { toast } from "sonner";
+import { KeyRound, LogOut, MessageSquare, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
 
-import { API_BASE, api, isCustomServer, setServerUrl, type Workspace } from "@/api/client";
+import { API_BASE, api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -12,7 +11,7 @@ import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSec
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ServerPicker } from "@/components/layout/ServerPicker";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
@@ -124,48 +123,12 @@ function AppearanceSection() {
   );
 }
 
-/** 本地/远程服务器切换(团队模式铺垫):先探活再切,切换即整页重载。 */
+/** 本地/远程服务器切换,与登录页复用同一 ServerPicker(探活 + 强连兜底 + 整页重载)。 */
 function ServerSwitchRow() {
   const t = useI18n();
-  const [url, setUrl] = React.useState(isCustomServer() ? API_BASE : "");
-  const [testing, setTesting] = React.useState(false);
-
-  const applyServer = async (target: string | null) => {
-    if (target) {
-      setTesting(true);
-      try {
-        const normalized = target.replace(/\/+$/, "");
-        const res = await fetch(`${normalized}/api/health`, { signal: AbortSignal.timeout(4000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setServerUrl(normalized);
-      } catch (error) {
-        toast.error(t("serverTestFailed"), { description: error instanceof Error ? error.message : String(error) });
-        setTesting(false);
-        return;
-      }
-    } else {
-      setServerUrl(null);
-    }
-    window.location.reload();
-  };
-
   return (
     <SettingsRow label={t("serverSwitchLabel")} description={t("serverSwitchDesc")}>
-      <div className="server-switch">
-        <Input
-          value={url}
-          placeholder="https://mibu.example.com"
-          onChange={(event) => setUrl(event.target.value)}
-        />
-        <Button size="sm" disabled={!url.trim() || testing} onClick={() => void applyServer(url.trim())}>
-          {testing ? <Loader2 size={13} className="spin" /> : null} {t("serverSwitchApply")}
-        </Button>
-        {isCustomServer() && (
-          <Button size="sm" variant="outline" onClick={() => void applyServer(null)}>
-            {t("serverUseLocal")}
-          </Button>
-        )}
-      </div>
+      <ServerPicker />
     </SettingsRow>
   );
 }
