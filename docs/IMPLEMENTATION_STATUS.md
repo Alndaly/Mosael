@@ -141,11 +141,46 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Plugins page: expandable tool cards generate a try-run form from input_schema (typed coercion for number/boolean/object), green/red result blocks, invocation history with expandable output/error.
 - Runnable example plugin plugins/examples/text-toolkit (word_count, extract_hashtags); 8 runtime tests cover the protocol, crash/timeout/garbage-output/entry-escape paths and the API flow.
 
+### Knowledge base (plan §18)
+
+- SQLite FTS5 trigram baseline + optional tiers: dense vectors (Milvus Lite, RRF hybrid fusion) and an entity graph (Neo4j, config-gated) — all degrade gracefully when a tier is off; `/api/kb/status` reports which tiers are live.
+- File conversion engines: markitdown (local default) or MinerU API, selected by config.
+- Tiptap v3 note editor (StarterKit + official markdown extension + placeholder), markdown round-trip.
+
+### Workflows + batch + scheduler triggers (plan §12, Phase 13)
+
+- `workflows.graph` JSON `{nodes, edges}` driven by a NODE_TYPES registry (start / llm / kb_search / plugin_tool / transcribe_asset / export_sequence / ai_generate / publish / condition / http_request / code / template) that simultaneously drives validation, the canvas UI and the agent's editing tools.
+- Branch-aware engine: only nodes reachable via active edges run; condition nodes route true/false by `source_handle`; skipped nodes emit events. `{{node.key}}` interpolation between nodes. Code node = isolated python subprocess (20s, `-I`, PATH-only env).
+- React Flow canvas: dual condition handles, cycle-checking `isValidConnection`, minimap, node inspector v2 (overlay panel, static/dynamic selects, upstream-variable chips, Dify-style `/` slash picker via mirror-div caret measurement).
+- Per-workflow resident agent session (`external_key=workflow:<id>`) with memory; edits go through `update_workflow` behind confirmation cards; canvas auto-syncs on `updated_at` when not dirty.
+- Batch = workflow × params rows (sequential runner, parent job aggregates, one row failing does not abort the batch).
+- Scheduler = trigger + workflow: manual / once / interval / daily / weekly / **webhook** (per-task secret, public POST endpoint with constant-time compare, no-reentry 409).
+
+### Publish + account matrix (plan §6.9, Phase 13)
+
+- Platform registry with `executor` local (folder/webhook/mock) vs browser (douyin/bilibili/xiaohongshu/weixin-channels); per-platform `title_max` enforced at create; Chinese aliases.
+- Full Electron publisher ported from mibu-video: per-account persistent session partitions, CDP file upload, adapters, foreground/background view management, cross-account concurrency with same-account serialization.
+- Worker queue protocol (claim / report rich statuses / claim-check / mark-due / heartbeat) — see [PUBLISHING.md](PUBLISHING.md) for the protocol and the **hard constraints** learned the hard way.
+- Account matrix tab: binding badges, platform nickname, last-check time, login / recheck / enable / rename / delete; checking-deadlock self-heal.
+- AI publish copy; publish workflow node.
+
+### Task bus, notifications, cancellation
+
+- Task center: kind-aware icons/labels, click-through deep links per kind, cancel button on active rows.
+- `POST /api/jobs/{id}/cancel`: job → terminal, publish task → cancelled, workflow/batch stop at node boundaries.
+- Notifications: per-user rows fanned out to workspace members (`team` type reserved for collaboration requests), unread badge + popover center, produced by publish settles / workflow failures / batch completion.
+
+### Desktop shell + server switching
+
+- Full-width topbar with mac traffic lights inside it; `is-desktop`/`is-mac`/`is-win` classes; drag regions.
+- Local/team server picker on the **login screen** (must precede auth) and in Settings — health-probe before switch, force-connect fallback, reload to re-resolve `API_BASE`.
+
 ## Next
 
+- Transitions (转场) in the render plan and editor.
 - Plugin write-path tools via jobs + confirmation cards; scoped API token injection per granted permission.
-- A real scheduler runner process claiming due tasks.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
+- Team mode proper: multi-user workspaces, collaboration requests (notification `team` type already reserved).
 
 ## Frontend Rules
 
