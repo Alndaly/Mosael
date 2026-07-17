@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
+import { Bug, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -357,6 +357,18 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
             </ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => setRenaming(account)}>{t("rename")}</ContextMenuItem>
+              {isBrowser && window.mibuPublish && (
+                <ContextMenuItem
+                  onSelect={() => {
+                    window.mibuPublish
+                      ?.inspect(account.id, account.platform)
+                      .then((ok) => (ok ? undefined : toast.error(t("publishInspectFailed"))))
+                      .catch((error: Error) => toast.error(error.message));
+                  }}
+                >
+                  <Bug /> {t("publishInspect")}
+                </ContextMenuItem>
+              )}
               <ContextMenuItem destructive onSelect={() => setRemoving(account)}>
                 <Trash2 /> {t("delete")}
               </ContextMenuItem>

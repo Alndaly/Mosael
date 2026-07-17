@@ -455,6 +455,25 @@ export async function openPage(accountId: string, platform: string): Promise<voi
   }
 }
 
+/** 打开某账号内嵌视图的 DevTools(调试平台适配器/巡检选择器用)。先确保视图存在、
+ *  必要时亮出并导航到平台页,再挂 detached 检查器;再点一次则关闭。 */
+export async function inspectAccount(accountId: string, platform: string): Promise<boolean> {
+  if (!views) return false;
+  // 前台被别的账号占(登录/待确认现场)→ 别抢,直接给那个视图开检查器。
+  if (views.visibleAccountId && views.visibleAccountId !== accountId) {
+    return views.openDevTools(views.visibleAccountId);
+  }
+  await views.configureAccount(accountId, null);
+  const driver = views.getDriver(accountId);
+  const current = driver.url();
+  views.show(accountId);
+  if (!current || current === "about:blank") {
+    const def = resolvePlatform(platform);
+    await driver.goto(def.dashboardUrl || def.loginUrl);
+  }
+  return views.openDevTools(accountId);
+}
+
 /** 收起内嵌视图,把窗口还给 React UI。 */
 export function hidePublishView(): void {
   views?.hide();

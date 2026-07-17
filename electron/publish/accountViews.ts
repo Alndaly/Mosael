@@ -91,15 +91,22 @@ export class AccountViewManager {
   }
 
   /**
-   * Open detached DevTools on the currently visible embedded view (menu-driven;
-   * used to probe/calibrate selectors against the live platform DOM).
+   * Open detached DevTools on an account's embedded view (or the currently
+   * visible one) — used to probe/calibrate selectors against the live platform
+   * DOM. Toggles: a second call on an already-open inspector closes it.
    */
-  openDevTools(): boolean {
-    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+  openDevTools(accountId?: string): boolean {
+    const id = accountId ?? this.visibleId;
+    const view = id ? this.views.get(id) : null;
     if (!view || view.webContents.isDestroyed()) {
       return false;
     }
-    view.webContents.openDevTools({ mode: "detach" });
+    const wc = view.webContents;
+    if (wc.isDevToolsOpened()) {
+      wc.closeDevTools();
+    } else {
+      wc.openDevTools({ mode: "detach" });
+    }
     return true;
   }
 

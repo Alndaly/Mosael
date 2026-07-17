@@ -30,6 +30,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var index_exports = {};
 __export(index_exports, {
   hidePublishView: () => hidePublishView,
+  inspectAccount: () => inspectAccount,
   openLogin: () => openLogin,
   openPage: () => openPage,
   setLocale: () => setLocale,
@@ -1082,15 +1083,22 @@ var AccountViewManager = class {
     return this.visibleId;
   }
   /**
-   * Open detached DevTools on the currently visible embedded view (menu-driven;
-   * used to probe/calibrate selectors against the live platform DOM).
+   * Open detached DevTools on an account's embedded view (or the currently
+   * visible one) — used to probe/calibrate selectors against the live platform
+   * DOM. Toggles: a second call on an already-open inspector closes it.
    */
-  openDevTools() {
-    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+  openDevTools(accountId) {
+    const id = accountId ?? this.visibleId;
+    const view = id ? this.views.get(id) : null;
     if (!view || view.webContents.isDestroyed()) {
       return false;
     }
-    view.webContents.openDevTools({ mode: "detach" });
+    const wc = view.webContents;
+    if (wc.isDevToolsOpened()) {
+      wc.closeDevTools();
+    } else {
+      wc.openDevTools({ mode: "detach" });
+    }
     return true;
   }
   destroy(accountId) {
@@ -2600,12 +2608,28 @@ async function openPage(accountId, platform) {
     await driver.goto(def.dashboardUrl || def.loginUrl);
   }
 }
+async function inspectAccount(accountId, platform) {
+  if (!views) return false;
+  if (views.visibleAccountId && views.visibleAccountId !== accountId) {
+    return views.openDevTools(views.visibleAccountId);
+  }
+  await views.configureAccount(accountId, null);
+  const driver = views.getDriver(accountId);
+  const current = driver.url();
+  views.show(accountId);
+  if (!current || current === "about:blank") {
+    const def = resolvePlatform(platform);
+    await driver.goto(def.dashboardUrl || def.loginUrl);
+  }
+  return views.openDevTools(accountId);
+}
 function hidePublishView() {
   views?.hide();
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   hidePublishView,
+  inspectAccount,
   openLogin,
   openPage,
   setLocale,

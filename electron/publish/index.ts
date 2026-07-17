@@ -5,6 +5,7 @@ export {
   stopPublishWorker,
   openLogin,
   openPage,
+  inspectAccount,
   hidePublishView,
 } from "./worker";
 // 语言切换占位:i18n 模块 v1 中文直出。

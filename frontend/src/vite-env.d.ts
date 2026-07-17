@@ -7,6 +7,7 @@ declare const __APP_VERSION__: string;
 interface MibuPublishBridge {
   login: (accountId: string, platform: string) => Promise<void>;
   openPage: (accountId: string, platform: string) => Promise<void>;
+  inspect: (accountId: string, platform: string) => Promise<boolean>;
   hideView: () => Promise<void>;
   onViewState: (
     callback: (state: { visible: boolean; accountId: string | null; accountName: string | null }) => void,
