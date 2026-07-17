@@ -5099,9 +5099,12 @@
 .wf-canvas .react-flow__edge-path {
   stroke: var(--border-strong);
   stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke 120ms, stroke-width 120ms;
 }
 .wf-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--primary);
+  stroke-width: 2.2;
 }
 .wf-canvas .react-flow__attribution {
   background: transparent;
@@ -5478,10 +5481,20 @@
   fill: var(--muted-foreground);
 }
 
-/* 数据边:蓝色实线,区别于控制边(灰)。 */
+/* 数据边:蓝色流动虚线,顺着数据方向滚动,区别于控制边(灰实线)。 */
 .wf-canvas .react-flow__edge.wf-edge-data .react-flow__edge-path {
   stroke: var(--primary);
   stroke-width: 2;
+  stroke-dasharray: 6 5;
+  animation: wf-dash 0.6s linear infinite;
+}
+.wf-canvas .react-flow__edge.wf-edge-data.selected .react-flow__edge-path {
+  stroke-width: 2.6;
+}
+@keyframes wf-dash {
+  to {
+    stroke-dashoffset: -11;
+  }
 }
 
 /* MiniMap:全平面小地图 */

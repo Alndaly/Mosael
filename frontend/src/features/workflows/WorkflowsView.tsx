@@ -207,7 +207,7 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
 
 /** 连线统一带闭合箭头,方向一目了然。 */
 const DEFAULT_EDGE_OPTIONS = {
-  markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+  markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" },
 };
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
@@ -375,7 +375,7 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
 
 function toFlowEdges(graph: WorkflowGraph): Edge[] {
   return (graph.edges ?? []).map((edge) => {
-    // 数据边:接输出接点 out:x → 输入接点 in:y,带语义色曲线;控制边保持原样。
+    // 数据边:接输出接点 out:x → 输入接点 in:y。蓝色流动虚线,不带箭头(终点是接点)。
     if (edge.kind === "data") {
       return {
         id: edge.id,
@@ -384,6 +384,8 @@ function toFlowEdges(graph: WorkflowGraph): Edge[] {
         sourceHandle: edge.source_output ? `out:${edge.source_output}` : undefined,
         targetHandle: edge.target_input ? `in:${edge.target_input}` : undefined,
         className: "wf-edge-data",
+        animated: true,
+        markerEnd: undefined,
         data: { kind: "data" },
       };
     }
