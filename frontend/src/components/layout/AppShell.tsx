@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
 
@@ -156,7 +157,7 @@ export function AppShell({
       </header>
       <aside className="rail">
         <div className="rail-brand" aria-hidden>
-          M
+          <BrandMark size={22} />
         </div>
         {PRIMARY_NAV.map((item) => (
           <RailButton

@@ -15,3 +15,9 @@ release/
 backend/build/
 backend/dist/
 *.spec
+
+# App icon sources for electron-builder packaging (root build/ is otherwise ignored)
+!/build/
+/build/*
+!/build/icon.png
+!/build/icon.icns

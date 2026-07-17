@@ -38,12 +38,14 @@
     ],
     "mac": {
       "category": "public.app-category.video",
+      "icon": "build/icon.icns",
       "target": [
         "dir"
       ],
       "identity": null
     },
     "win": {
+      "icon": "build/icon.png",
       "target": [
         "nsis"
       ]
