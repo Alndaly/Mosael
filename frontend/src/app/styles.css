@@ -5077,6 +5077,7 @@
 }
 
 .wf-node {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5086,6 +5087,169 @@
   background: var(--panel);
   padding: 9px 12px;
   transition: border-color 100ms;
+}
+
+/* 就绪度:缺配置=红描边,提醒(断连等)=琥珀描边。选中态优先级更高,放其后。 */
+.wf-node.has-issue.is-error {
+  border-color: color-mix(in srgb, var(--destructive) 60%, var(--border));
+}
+
+.wf-node.has-issue.is-warn {
+  border-color: color-mix(in srgb, #d97706 55%, var(--border));
+}
+
+.wf-node-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.wf-node-badge.is-error {
+  background: var(--destructive);
+}
+
+.wf-node-badge.is-warn {
+  background: #d97706;
+}
+
+/* 运行前就绪检查:工具栏按钮 + 明细浮层 */
+.wf-checklist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 100ms, color 100ms;
+}
+
+.wf-checklist-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.wf-checklist-btn.ok {
+  color: #16a34a;
+}
+
+.wf-checklist-btn.has-warn {
+  color: #d97706;
+  border-color: color-mix(in srgb, #d97706 40%, var(--border));
+}
+
+.wf-checklist-btn.has-error {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
+}
+
+.wf-checklist-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: currentColor;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.wf-checklist-count::after {
+  content: none;
+}
+
+/* 数字用底色反白:给内部数字一个反色 span 太重,直接让数字继承按钮反色。 */
+.wf-checklist-btn.has-error .wf-checklist-count,
+.wf-checklist-btn.has-warn .wf-checklist-count,
+.wf-checklist-btn.ok .wf-checklist-count {
+  color: var(--panel);
+}
+
+.wf-checklist-pop {
+  width: 320px;
+  padding: 6px;
+}
+
+.wf-checklist-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px;
+  color: #16a34a;
+  font-size: 12.5px;
+}
+
+.wf-checklist-head {
+  padding: 4px 8px 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wf-checklist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.wf-checklist-row {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-checklist-row:hover {
+  background: var(--muted);
+}
+
+.wf-checklist-row.is-error > svg {
+  color: var(--destructive);
+}
+
+.wf-checklist-row.is-warn > svg {
+  color: #d97706;
+}
+
+.wf-checklist-node {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wf-checklist-msg {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wf-node:hover {

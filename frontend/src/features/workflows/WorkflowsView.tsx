@@ -20,8 +20,10 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   AlignLeft,
+  AlertTriangle,
   BookOpen,
   Bot,
+  CircleCheck,
   Code2,
   Download,
   Flag,
@@ -64,9 +66,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
+import { analyzeWorkflow, extractRefs, type NodeIssue } from "@/features/workflows/analyze";
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -88,21 +92,34 @@ interface WfNodeData extends Record<string, unknown> {
   label: string;
   nodeType: string;
   typeLabel: string;
+  /** 就绪度角标:分析出的最高严重度 + 问题条数 + 悬浮明细。 */
+  badge?: { severity: "error" | "warn"; count: number; title: string } | null;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
-    条件节点右侧是「真/假」两个分支端点,其余节点单一出口。 */
+    条件节点右侧是「真/假」两个分支端点,其余节点单一出口。
+    缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
 function WfNode({ data, selected }: NodeProps) {
   const d = data as WfNodeData;
   const isCondition = d.nodeType === "condition";
+  const badge = d.badge ?? null;
   return (
-    <div className={selected ? "wf-node selected" : "wf-node"} data-node-type={d.nodeType}>
+    <div
+      className={`wf-node${selected ? " selected" : ""}${badge ? ` has-issue is-${badge.severity}` : ""}`}
+      data-node-type={d.nodeType}
+    >
       {d.nodeType !== "start" && <Handle type="target" position={Position.Left} className="wf-handle" />}
       <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
       <span className="wf-node-text">
         <strong>{d.label}</strong>
         <small>{d.typeLabel}</small>
       </span>
+      {badge && (
+        <span className={`wf-node-badge is-${badge.severity}`} title={badge.title} aria-label={badge.title}>
+          <AlertTriangle size={11} />
+          {badge.count > 1 ? badge.count : null}
+        </span>
+      )}
       {isCondition ? (
         <>
           <Handle
@@ -307,6 +324,26 @@ function toFlowEdges(graph: WorkflowGraph): Edge[] {
   }));
 }
 
+/** issue code → 本地化文案(角标 tooltip / checklist 行都用它)。 */
+function issueText(t: ReturnType<typeof useI18n>, issue: NodeIssue): string {
+  switch (issue.code) {
+    case "required-missing":
+      return t("wfIssueRequired").replace("{k}", issue.configKey ?? "");
+    case "stale-var":
+      return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
+    case "disconnected":
+      return t("wfIssueDisconnected");
+    case "no-providers":
+      return t("wfIssueNoProviders");
+    case "provider-missing":
+      return t("wfIssueProviderMissing");
+    case "gen-provider-unconfigured":
+      return t("wfIssueGenUnconfigured");
+    default:
+      return issue.code;
+  }
+}
+
 function WorkflowEditor({
   workflow,
   nodeTypes,
@@ -502,6 +539,42 @@ function WorkflowEditor({
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
+  // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
+  // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
+  const hasLlm = graph.nodes.some((node) => node.type === "llm");
+  const hasGen = graph.nodes.some((node) => node.type === "ai_generate");
+  const providers = useQuery({
+    queryKey: ["provider-profiles"],
+    queryFn: () => api<Array<{ id: string; name: string; vendor: string }>>("/api/settings/providers"),
+    enabled: hasLlm,
+  });
+  const credentials = useQuery({ queryKey: ["credentials"], queryFn: listCredentials, enabled: hasGen });
+  const analysis = React.useMemo(
+    () =>
+      analyzeWorkflow(graph, registry, {
+        providerIds: new Set((providers.data ?? []).map((p) => p.id)),
+        providersLoaded: !hasLlm || providers.isSuccess,
+        configuredGenProviders: new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider)),
+        credentialsLoaded: !hasGen || credentials.isSuccess,
+      }),
+    [graph, registry, providers.data, providers.isSuccess, credentials.data, credentials.isSuccess, hasLlm, hasGen],
+  );
+
+  // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
+  const displayNodes = React.useMemo(
+    () =>
+      nodes.map((node) => {
+        const nodeIssues = analysis.byNode.get(node.id);
+        const severity = analysis.severityByNode.get(node.id);
+        const badge =
+          nodeIssues && severity
+            ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => issueText(t, i)).join("\n") }
+            : null;
+        return { ...node, data: { ...node.data, badge } };
+      }),
+    [nodes, analysis, t],
+  );
+
   return (
     <div className="wf-editor">
       <div className="wf-toolbar">
@@ -540,10 +613,62 @@ function WorkflowEditor({
           >
             <Bot size={13} /> {t("wfAgentTitle")}
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`wf-checklist-btn${
+                  analysis.errorCount ? " has-error" : analysis.warnCount ? " has-warn" : " ok"
+                }`}
+              >
+                {analysis.errorCount || analysis.warnCount ? <AlertTriangle size={13} /> : <CircleCheck size={13} />}
+                <span>{t("wfChecklist")}</span>
+                {analysis.errorCount + analysis.warnCount > 0 && (
+                  <em className="wf-checklist-count">{analysis.errorCount + analysis.warnCount}</em>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="wf-checklist-pop">
+              {analysis.issues.length === 0 ? (
+                <div className="wf-checklist-ok">
+                  <CircleCheck size={14} /> {t("wfChecklistReady")}
+                </div>
+              ) : (
+                <>
+                  <div className="wf-checklist-head">
+                    {analysis.errorCount
+                      ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
+                      : t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))}
+                  </div>
+                  <div className="wf-checklist-list">
+                    {[...analysis.issues]
+                      .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1))
+                      .map((issue, i) => (
+                        <button
+                          key={`${issue.nodeId}-${issue.code}-${i}`}
+                          type="button"
+                          className={`wf-checklist-row is-${issue.severity}`}
+                          onClick={() => setSelectedNodeId(issue.nodeId)}
+                        >
+                          <AlertTriangle size={12} />
+                          <span className="wf-checklist-node">{issue.nodeName}</span>
+                          <span className="wf-checklist-msg">{issueText(t, issue)}</span>
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
             <Save size={13} /> {t("save")}
           </Button>
-          <Button size="sm" disabled={run.isPending || dirty} title={dirty ? t("wfSaveFirst") : undefined} onClick={() => run.mutate()}>
+          <Button
+            size="sm"
+            disabled={run.isPending || dirty || !analysis.runnable}
+            title={dirty ? t("wfSaveFirst") : !analysis.runnable ? t("wfRunBlocked") : undefined}
+            onClick={() => run.mutate()}
+          >
             <Play size={13} /> {t("wfRun")}
           </Button>
           <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
@@ -555,7 +680,7 @@ function WorkflowEditor({
       <div className="wf-canvas-wrap">
         <div className="wf-canvas">
           <ReactFlow
-            nodes={nodes}
+            nodes={displayNodes}
             edges={edges}
             nodeTypes={NODE_COMPONENT_TYPES}
             onNodesChange={onNodesChange}
