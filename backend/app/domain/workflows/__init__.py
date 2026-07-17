@@ -160,6 +160,13 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
     if not isinstance(nodes, list) or not isinstance(edges, list):
         return ["graph 必须包含 nodes 与 edges 两个数组"]
 
+    # 数据边(kind="data")把上游输出绑到目标输入 → 该输入即便字面量为空也算已满足。
+    data_bound: set[tuple[str, str]] = {
+        (str(edge.get("target", "")), str(edge.get("target_input", "")))
+        for edge in edges
+        if str(edge.get("kind", "")) == "data" and edge.get("target_input")
+    }
+
     seen_ids: set[str] = set()
     start_count = 0
     for node in nodes:
@@ -179,7 +186,7 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
         for key, spec in NODE_TYPES[node_type]["config"].items():
             if isinstance(spec, dict) and spec.get("required"):
                 value = (node.get("config") or {}).get(key)
-                if value in (None, ""):
+                if value in (None, "") and (node_id, key) not in data_bound:
                     errors.append(f"节点 {node_id} 缺少必填配置 {key}")
     if start_count != 1:
         errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")

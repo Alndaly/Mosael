@@ -54,6 +54,48 @@ def test_validate_graph_rules() -> None:
     assert any("不存在的节点" in e for e in validate_graph(bad_edge))
 
 
+def data_edge_graph() -> dict:
+    """LLM.text 经数据边喂给 template 节点的必填 template 输入(字面量留空)。"""
+    return {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "llm-1", "type": "llm", "config": {"prompt": "hi"}},
+            {"id": "tmpl", "type": "template", "config": {"template": ""}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "llm-1"},
+            {
+                "id": "d1",
+                "source": "llm-1",
+                "target": "tmpl",
+                "kind": "data",
+                "source_output": "text",
+                "target_input": "template",
+            },
+        ],
+    }
+
+
+def test_data_edge_satisfies_required_and_orders() -> None:
+    # 必填 template 字面量为空,但被数据边绑定 → 校验通过。
+    assert validate_graph(data_edge_graph()) == []
+    # 数据边也是排序约束:llm-1 排在 tmpl 前。
+    order = [node["id"] for node in topo_order(data_edge_graph())]
+    assert order.index("llm-1") < order.index("tmpl")
+
+
+def test_apply_data_edges_binds_input() -> None:
+    from app.domain.workflows.engine import _apply_data_edges
+
+    edges = data_edge_graph()["edges"]
+    context = {"llm-1": {"text": "你好世界"}}
+    config = _apply_data_edges("tmpl", {"template": ""}, edges, context)
+    assert config["template"] == "你好世界"
+    # 上游还没跑(不在 context)→ 不绑定,保留原字面量。
+    config2 = _apply_data_edges("tmpl", {"template": "orig"}, edges, {})
+    assert config2["template"] == "orig"
+
+
 def test_topo_and_interpolate() -> None:
     order = [node["id"] for node in topo_order(linear_graph())]
     assert order == ["start", "search"]

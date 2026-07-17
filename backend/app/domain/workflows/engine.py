@@ -81,6 +81,25 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
             db.commit()
 
 
+def _apply_data_edges(
+    node_id: str,
+    config: dict[str, Any],
+    edges: list[dict[str, Any]],
+    context: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """数据边(kind="data")把上游输出值绑到目标输入,优先于字面量 / 内联 {{var}}。
+    上游已执行(数据边同时是排序约束)才有值;拿不到就跳过、保留原字面量。"""
+    for edge in edges:
+        if str(edge.get("kind", "")) != "data" or str(edge.get("target", "")) != node_id:
+            continue
+        source = str(edge.get("source", ""))
+        output = str(edge.get("source_output", ""))
+        target_input = str(edge.get("target_input", ""))
+        if target_input and source in context and output in context[source]:
+            config[target_input] = context[source][output]
+    return config
+
+
 def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
     """分支感知执行:只有从 start 沿「活跃连线」可达的节点才会运行。
 
@@ -150,7 +169,8 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         handler = _HANDLERS.get(node_type)
         if handler is None:
             raise WorkflowDomainError(f"节点类型 {node_type} 没有执行器")
-        config = interpolate(dict(node.get("config") or {}), context)
+        config = _apply_data_edges(node_id, dict(node.get("config") or {}), edges, context)
+        config = interpolate(config, context)
         if node_type == "start":
             merged = dict(config.get("params") or {})
             merged.update(params or {})
