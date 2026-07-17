@@ -13,6 +13,14 @@ def asset_key(workspace_id: str, asset_id: str, filename: str) -> str:
     return str(Path("media") / "assets" / workspace_id / asset_id / filename)
 
 
+def lut_dir(workspace_id: str, lut_id: str) -> Path:
+    return settings.media_dir / "luts" / workspace_id / lut_id
+
+
+def lut_key(workspace_id: str, lut_id: str, filename: str) -> str:
+    return str(Path("media") / "luts" / workspace_id / lut_id / filename)
+
+
 def resolve_key(key: str) -> Path:
     return settings.data_dir / key
 

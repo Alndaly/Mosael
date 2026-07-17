@@ -3737,6 +3737,26 @@
   opacity: 0.4;
   cursor: default;
 }
+.lut-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lut-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lut-row .lut-select {
+  flex: 1;
+  min-width: 0;
+}
+.lut-hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
 .color-presets {
   flex-wrap: wrap;
 }

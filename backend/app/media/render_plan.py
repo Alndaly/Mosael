@@ -42,6 +42,9 @@ class Segment:
     # (ffmpeg_key, "x/y x/y ...") — identity channels dropped, near-dup points
     # removed at plan time. Empty when all channels are identity.
     curves: tuple[tuple[str, str], ...] = ()
+    # 3D LUT file_key (resolved to a path by the executor and burned in with
+    # lut3d, after the slider/curve grade). Empty when no LUT is applied.
+    lut: str = ""
 
 
 @dataclass(frozen=True)
@@ -170,6 +173,7 @@ def build_render_plan(
     overlay_clips: list[dict] | None = None,
     audio_clips: list[dict] | None = None,
     subtitle_clips: list[dict] | None = None,
+    luts: dict[str, str] | None = None,
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
@@ -202,6 +206,12 @@ def build_render_plan(
         if preset and preset not in FILTER_PRESETS:
             raise RenderPlanError(f"Clip {clip['id']} uses unknown filter preset {preset!r}")
         grade = effects.get("color") or {}
+        lut_id = str(grade.get("lut") or "")
+        lut_key = ""
+        if lut_id:
+            lut_key = (luts or {}).get(lut_id, "")
+            if not lut_key:
+                raise RenderPlanError(f"Clip {clip['id']} references an unknown LUT {lut_id!r}")
         segments.append(
             Segment(
                 kind="clip",
@@ -222,6 +232,7 @@ def build_render_plan(
                     if _grade_value(grade, field)
                 ),
                 curves=_curve_specs(grade.get("curves")),
+                lut=lut_key,
             )
         )
         cursor = start + duration

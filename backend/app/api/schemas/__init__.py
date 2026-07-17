@@ -89,6 +89,19 @@ class AssetUpdate(BaseModel):
     tags: list[str] | None = Field(default=None, max_length=24)
 
 
+class LutOut(OrmModel):
+    id: str
+    workspace_id: str
+    name: str
+    original_filename: str
+    size: int
+    created_at: datetime | None = None
+
+
+class LutUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
 class TranscriptTokenIn(BaseModel):
     start_time: float
     end_time: float

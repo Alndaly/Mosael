@@ -440,3 +440,28 @@ export async function importAsset(params: {
   form.set("file", params.file);
   return api<Asset>("/api/assets/import", { method: "POST", body: form });
 }
+
+export interface Lut {
+  id: string;
+  workspace_id: string;
+  name: string;
+  original_filename: string;
+  size: number;
+  created_at?: string | null;
+}
+
+export function listLuts(workspaceId: string): Promise<Lut[]> {
+  return api<Lut[]>(`/api/luts?workspace_id=${workspaceId}`);
+}
+
+export async function uploadLut(params: { workspaceId: string; file: File; name?: string }): Promise<Lut> {
+  const form = new FormData();
+  form.set("workspace_id", params.workspaceId);
+  if (params.name) form.set("name", params.name);
+  form.set("file", params.file);
+  return api<Lut>("/api/luts", { method: "POST", body: form });
+}
+
+export function deleteLut(lutId: string): Promise<void> {
+  return api<void>(`/api/luts/${lutId}`, { method: "DELETE" });
+}

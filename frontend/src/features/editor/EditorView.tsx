@@ -503,6 +503,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           const inspector = (
             <Inspector
               sequence={sequence}
+              workspaceId={workspace.id}
               selectedClip={selectedClip}
               assets={assets.data ?? []}
               isOverlayClip={isOverlayClip}

@@ -86,6 +86,23 @@ class Asset(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class Lut(Base):
+    """A 3D color lookup table (.cube), uploaded per workspace and burned in with
+    ffmpeg lut3d at export. Referenced from clip.effects.color.lut by id."""
+
+    __tablename__ = "luts"
+    __table_args__ = (Index("idx_luts_workspace_created", "workspace_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(260), nullable=False, default="")
+    file_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class GeneratedAsset(Base):
     __tablename__ = "generated_assets"
 

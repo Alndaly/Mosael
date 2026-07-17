@@ -38,13 +38,18 @@ def _atempo_chain(speed: float) -> str:
     return ",".join(parts) + ","
 
 
-def _grade_filter(grade: dict[str, float], curves: tuple[tuple[str, str], ...] = ()) -> str:
+def _grade_filter(
+    grade: dict[str, float],
+    curves: tuple[tuple[str, str], ...] = (),
+    lut_path: str = "",
+) -> str:
     """Full manual grade → FFmpeg chain, ported from mibu-video's color_vf.
 
     Values arrive normalized to [-1, 1]; formulas below convert them back to
     the old panel's native ranges (100-based percentages, ±100 offsets, 0..100
-    amounts) so exports look identical to the old app."""
-    if not grade and not curves:
+    amounts) so exports look identical to the old app. lut_path, when set, is an
+    already-escaped .cube path burned in with lut3d after the primary grade."""
+    if not grade and not curves and not lut_path:
         return ""
     value = lambda key: float(grade.get(key, 0.0))  # noqa: E731
     parts: list[str] = []
@@ -96,6 +101,9 @@ def _grade_filter(grade: dict[str, float], curves: tuple[tuple[str, str], ...] =
     # the plan (near-dup x would reject the whole chain).
     if curves:
         parts.append("curves=" + ":".join(f"{key}='{spec}'" for key, spec in curves))
+    # Creative 3D LUT sits last, on top of the primary correction.
+    if lut_path:
+        parts.append(f"lut3d=file='{lut_path}'")
     return ("," + ",".join(parts)) if parts else ""
 
 
@@ -147,7 +155,8 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
-            preset += _grade_filter(dict(segment.grade), segment.curves)
+            lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
+            preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
             filters.append(
                 f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
                 f"scale={width}:{height}:force_original_aspect_ratio=decrease,"

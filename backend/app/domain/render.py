@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job, Sequence, TaskEvent, Track
+from app.db.models import Asset, Job, Lut, Sequence, TaskEvent, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job
 from app.media.paths import resolve_key
@@ -54,6 +54,15 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         asset.id: {"file_key": asset.file_key}
         for asset in db.scalars(select(Asset).where(Asset.id.in_(asset_ids)))
     }
+    lut_ids = {
+        str((clip.get("effects") or {}).get("color", {}).get("lut") or "")
+        for clip in base_clips + overlay_clips
+    }
+    lut_ids.discard("")
+    luts = {
+        lut.id: lut.file_key
+        for lut in (db.scalars(select(Lut).where(Lut.id.in_(lut_ids))) if lut_ids else [])
+    }
     return build_render_plan(
         sequence_id=sequence.id,
         revision=sequence.revision,
@@ -65,6 +74,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
+        luts=luts,
     )
 
 

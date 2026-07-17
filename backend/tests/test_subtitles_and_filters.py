@@ -154,3 +154,48 @@ def test_full_grade_field_mapping(tmp_path) -> None:
     assert "colorbalance=gm=-0.100" in command
     assert "unsharp=5:5:0.750" in command
     assert "vignette=angle=PI/12.000" in command
+
+
+def test_lut3d_burned_in_after_grade(tmp_path) -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
+                "effects": {"color": {"contrast": 0.2, "lut": "lut-1"}}}],
+        assets=ASSETS,
+        luts={"lut-1": "media/luts/w/lut-1/look.cube"},
+    )
+    assert plan.video_segments[0].lut == "media/luts/w/lut-1/look.cube"
+    command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4"))
+    # lut3d appears, and after the eq= grade in the chain (creative LUT on top).
+    assert "lut3d=file=" in command
+    assert command.index("eq=") < command.index("lut3d=")
+
+
+def test_unknown_lut_reference_rejected() -> None:
+    import pytest
+
+    from app.media.render_plan import RenderPlanError
+
+    with pytest.raises(RenderPlanError):
+        build_render_plan(
+            sequence_id="s", revision=1, width=640, height=360, fps=30,
+            clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8,
+                    "effects": {"color": {"lut": "ghost"}}}],
+            assets=ASSETS,
+        )
+
+
+def test_cube_parser_validates_size() -> None:
+    import pytest
+
+    from app.domain.luts import LutError, parse_cube_size
+
+    good = "TITLE \"x\"\nLUT_3D_SIZE 2\n" + "\n".join(["0 0 0"] * 8)
+    assert parse_cube_size(good) == 2
+
+    with pytest.raises(LutError):
+        parse_cube_size("# no size here\n0 0 0")
+    with pytest.raises(LutError):
+        parse_cube_size("LUT_1D_SIZE 16\n0 0 0")
+    with pytest.raises(LutError):
+        parse_cube_size("LUT_3D_SIZE 4\n0 0 0")  # far too few data rows

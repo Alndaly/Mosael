@@ -9,6 +9,7 @@ import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
 import { useColorHistory } from "@/features/editor/useColorHistory";
+import { LutPicker } from "@/features/editor/LutPicker";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↖", x: 0.05, y: 0.06 },
@@ -34,6 +35,7 @@ type GradeKey = (typeof GRADE_KEYS)[number];
 
 export function Inspector({
   sequence,
+  workspaceId,
   selectedClip,
   assets,
   isOverlayClip,
@@ -44,6 +46,7 @@ export function Inspector({
   onClose,
 }: {
   sequence: Sequence;
+  workspaceId: string;
   selectedClip: Clip | null;
   assets: Asset[];
   isOverlayClip: boolean;
@@ -142,6 +145,7 @@ export function Inspector({
         tab === "color" && !isTextClip ? (
           <ColorGradePanel
             clip={selectedClip}
+            workspaceId={workspaceId}
             targetName={asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? ""}
             effects={effects}
             onSetEffects={onSetEffects}
@@ -285,11 +289,13 @@ export function Inspector({
  */
 function ColorGradePanel({
   clip,
+  workspaceId,
   targetName,
   effects,
   onSetEffects,
 }: {
   clip: Clip;
+  workspaceId: string;
   targetName: string;
   effects: { filter?: string; color?: Partial<Record<GradeKey, number>> };
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
@@ -300,10 +306,14 @@ function ColorGradePanel({
   ) as Record<GradeKey, number>;
   const curColor = (effects.color ?? {}) as Record<string, unknown>;
   const hasGrade =
-    GRADE_KEYS.some((key) => grade[key]) || Boolean(effects.filter) || Boolean(curColor.curves);
+    GRADE_KEYS.some((key) => grade[key]) ||
+    Boolean(effects.filter) ||
+    Boolean(curColor.curves) ||
+    Boolean(curColor.lut);
   // 预设高亮:滤镜与调色预设互斥,滤镜在时不高亮任一调色预设。
   const activePreset = effects.filter ? null : matchColorPreset(curColor);
-  const isCleanColor = !effects.filter && !curColor.curves && !GRADE_KEYS.some((key) => grade[key]);
+  const isCleanColor =
+    !effects.filter && !curColor.curves && !curColor.lut && !GRADE_KEYS.some((key) => grade[key]);
 
   // 调色独立撤销栈:按 clip 存快照(color+filter),每次编辑前记一步。与时间线全局
   // 撤销无关 —— 撤销只是再发一次 setEffects,方便反复试色。
@@ -312,8 +322,12 @@ function ColorGradePanel({
     history.snapshot();
     const next = { ...clip.effects } as Record<string, unknown>;
     delete next.filter; // 调色预设是唯一真源,清掉遗留的 CSS 滤镜
-    if (payload) next.color = payload;
-    else delete next.color;
+    if (payload) {
+      // 预设换的是主校正(滑杆 + 曲线),保留用户已选的创意 LUT。
+      next.color = curColor.lut ? { ...payload, lut: curColor.lut } : payload;
+    } else {
+      delete next.color;
+    }
     onSetEffects(clip.id, next);
   };
   const applyGrade = (key: GradeKey, raw: string) => {
@@ -328,6 +342,13 @@ function ColorGradePanel({
     delete next.color;
     delete next.filter;
     onSetEffects(clip.id, next);
+  };
+  const setLut = (lutId: string | undefined) => {
+    history.snapshot();
+    const nextColor = { ...curColor };
+    if (lutId) nextColor.lut = lutId;
+    else delete nextColor.lut;
+    onSetEffects(clip.id, { ...clip.effects, color: nextColor });
   };
 
   return (
@@ -418,6 +439,10 @@ function ColorGradePanel({
             onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, curves: next } })
           }
         />
+      </div>
+      <div className="pip-controls">
+        <span className="pip-label">{t("gradeGroupLut")}</span>
+        <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
       </div>
       <p className="color-hint">{t("colorScopeHint")}</p>
     </div>

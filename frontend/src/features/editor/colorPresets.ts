@@ -61,8 +61,12 @@ export function matchColorPreset(color: Record<string, unknown> | undefined): st
   if (!color) return null;
   const curves = color.curves as ColorCurves | undefined;
   for (const preset of COLOR_PRESETS) {
-    // 预设定义的每个滑杆键都要吻合;未定义的键必须为 0(或缺省)。
-    const keys = new Set([...Object.keys(preset.grade), ...Object.keys(color).filter((k) => k !== "curves")]);
+    // 预设定义的每个滑杆键都要吻合;未定义的键必须为 0(或缺省)。curves/lut 是
+    // 独立图层,不参与滑杆匹配(电影预设的曲线在下方单独比对)。
+    const keys = new Set([
+      ...Object.keys(preset.grade),
+      ...Object.keys(color).filter((k) => k !== "curves" && k !== "lut"),
+    ]);
     let ok = true;
     for (const k of keys) {
       const want = preset.grade[k] ?? 0;
