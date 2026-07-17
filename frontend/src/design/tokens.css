@@ -68,6 +68,11 @@
   --panel-subtle: #f6f7fa;
   --panel-inset: #eceef3;
   --border-strong: #c9ced8;
+
+  /* 磨玻璃:仅用于浮层与顶部/侧栏 chrome(内容面板保持不透明,保可读 + 平面身份)。
+     引用 --popover/--panel,故自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
+  --glass-bg: color-mix(in srgb, var(--popover) 80%, transparent);
+  --glass-chrome: color-mix(in srgb, var(--panel) 70%, transparent);
   /* Flat design: no drop shadows anywhere — separation comes from hairline
      borders and background value steps. Keep the vars so components stay
      switchable, but they resolve to none. */

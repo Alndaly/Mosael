@@ -6743,3 +6743,36 @@
   border-radius: 0;
   background: none;
 }
+
+/* ============================================================
+   磨玻璃(2026-07 精致化):半透明 + 背景模糊,只给浮层与 chrome。
+   内容面板(.panel/.card)保持不透明 —— 可读性与平面身份优先。
+   只在支持 backdrop-filter 时启用;否则退回原不透明外观。
+   ============================================================ */
+@supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  /* 浮层:Radix popover/select/dropdown/context-menu(都挂在 popper 包裹层下)、
+     对话框/命令面板/画布浮层(role=dialog)、Sonner toast。 */
+  [data-radix-popper-content-wrapper] > *,
+  [data-radix-menu-content],
+  [role="dialog"],
+  .mibu-toast {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+
+  /* 顶栏 / 侧栏 chrome:更克制的模糊,与浮层区分层级。 */
+  .topbar,
+  .rail {
+    background: var(--glass-chrome);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+  }
+
+  /* 内嵌浏览器工具栏也随 chrome 一致。 */
+  .publish-view-bar {
+    background: var(--glass-chrome);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+  }
+}
