@@ -13,3 +13,8 @@ export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey
   workflow: { event: "mibu:open-workflow", payloadKey: "workflow_id" },
   batch: { event: "mibu:open-batch", payloadKey: "batch_id" },
 };
+
+/** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 mibu:open-settings。 */
+export function gotoSettings(section: string): void {
+  gotoRecord("/settings", "mibu:open-settings", section);
+}

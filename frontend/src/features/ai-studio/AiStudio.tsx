@@ -5,6 +5,7 @@ import { CircleAlert, ImagePlus, Loader2, Send, Sparkles, Video } from "lucide-r
 import {
   api,
   assetThumbnailUrl,
+  listCredentials,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationModel,
@@ -15,6 +16,7 @@ import {
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 
 export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
@@ -80,6 +82,16 @@ function GenerateWorkspace({
     queryKey: ["generation-models"],
     queryFn: () => api<GenerationModel[]>("/api/generation/models"),
   });
+  const credentials = useQuery({ queryKey: ["credentials"], queryFn: listCredentials });
+  // 模型目录始终有内置项;能不能真跑取决于服务商密钥是否配好。
+  const configuredProviders = React.useMemo(
+    () => new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider)),
+    [credentials.data],
+  );
+  const noUsableModel =
+    models.isSuccess &&
+    credentials.isSuccess &&
+    !(models.data ?? []).some((m) => configuredProviders.has(m.provider));
   const generations = useQuery({
     queryKey: ["generation-jobs", workspace.id],
     queryFn: () => api<GenerationJob[]>(`/api/generation/jobs?workspace_id=${workspace.id}`),
@@ -165,6 +177,9 @@ function GenerateWorkspace({
           <h2>{t("generationModels")}</h2>
         </div>
         <div className="chat-session-list">
+          {noUsableModel && (
+            <ConfigNotice message={t("aiNoModels")} actionLabel={t("wfGoConfigure")} section="providers" />
+          )}
           {(models.data ?? []).map((model) => (
             <button
               key={model.id}

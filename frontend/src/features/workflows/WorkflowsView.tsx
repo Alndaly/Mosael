@@ -48,6 +48,7 @@ import {
   createWorkflow,
   deleteWorkflow,
   fetchWorkflowNodeTypes,
+  listCredentials,
   listPublishAccounts,
   listWorkflows,
   runWorkflow,
@@ -62,6 +63,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
@@ -713,6 +715,34 @@ function NodeInspector({
     queryFn: () => api<Array<{ id: string; provider: string; model: string; kind: string }>>("/api/generation/models"),
     enabled: node.type === "ai_generate",
   });
+  const credentials = useQuery({
+    queryKey: ["credentials"],
+    queryFn: listCredentials,
+    enabled: node.type === "ai_generate",
+  });
+
+  // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
+  const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
+    if (node.type === "llm") {
+      const list = providers.data ?? [];
+      if (providers.isSuccess && list.length === 0) return { message: t("wfNoProviders"), section: "providers" };
+      const pid = config.profile_id;
+      if (pid && providers.isSuccess && !list.some((p) => p.id === pid))
+        return { message: t("wfProviderMissing"), section: "providers", error: true };
+    }
+    if (node.type === "ai_generate") {
+      // 生成模型目录始终有内置项;是否可用取决于该服务商的密钥是否配好(credentials)。
+      const configured = new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider));
+      const chosenProvider = config.provider as string | undefined;
+      if (chosenProvider && credentials.isSuccess && !configured.has(chosenProvider))
+        return { message: t("wfGenModelMissing"), section: "providers", error: true };
+      const models = generationModels.data ?? [];
+      const anyUsable = models.some((g) => configured.has(g.provider));
+      if (credentials.isSuccess && generationModels.isSuccess && !anyUsable)
+        return { message: t("wfNoGenModels"), section: "providers" };
+    }
+    return null;
+  })();
 
   const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
 
@@ -769,6 +799,14 @@ function NodeInspector({
           <input value={node.name ?? ""} onChange={(event) => onChange({ name: event.target.value })} />
         </label>
         {meta && <p className="wf-node-desc">{meta.description}</p>}
+        {bindingNotice && (
+          <ConfigNotice
+            message={bindingNotice.message}
+            actionLabel={t("wfGoConfigure")}
+            section={bindingNotice.section}
+            tone={bindingNotice.error ? "error" : "warn"}
+          />
+        )}
         {node.type === "ai_generate" && (
           <label className="wf-field">
             <span>{t("wfModelPreset")}</span>

@@ -335,6 +335,17 @@ export function readAllNotifications(workspaceId: string): Promise<{ read: numbe
   return api(`/api/notifications/read-all?workspace_id=${workspaceId}`, { method: "POST" });
 }
 
+export interface CredentialStatus {
+  provider: string;
+  configured: boolean;
+  hint: string;
+}
+
+/** 各生成服务商的密钥配置状态(secret 不出后端,只回 configured + 尾号提示)。 */
+export function listCredentials(): Promise<CredentialStatus[]> {
+  return api<CredentialStatus[]>("/api/settings/credentials");
+}
+
 export function listPublishPlatforms(): Promise<PublishPlatform[]> {
   return api<PublishPlatform[]>("/api/publish/platforms");
 }

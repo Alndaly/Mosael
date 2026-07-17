@@ -17,9 +17,21 @@ type KbStatus = components["schemas"]["KbStatusOut"];
 
 type SectionId = "account" | "appearance" | "providers" | "feishu" | "backend";
 
+const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "feishu", "backend"];
+
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const [section, setSection] = React.useState<SectionId>("account");
+
+  // 深链:别处(如工作流「模型未配置」提示)→ mibu:open-settings 直达对应分区。
+  React.useEffect(() => {
+    const onOpen = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (SECTION_IDS.includes(id as SectionId)) setSection(id as SectionId);
+    };
+    window.addEventListener("mibu:open-settings", onOpen);
+    return () => window.removeEventListener("mibu:open-settings", onOpen);
+  }, []);
 
   const nav: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
     { id: "account", label: t("settingsAccount"), icon: <UserRound size={14} /> },

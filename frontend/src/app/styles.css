@@ -5283,6 +5283,53 @@
   line-height: 1.5;
 }
 
+/* 未配置/引用失效提示条:琥珀色(error 时红),末尾一个直达配置的入口。 */
+.config-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, #d97706 40%, var(--border));
+  background: color-mix(in oklab, #d97706 10%, transparent);
+  color: var(--foreground);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.config-notice.is-error {
+  border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+.config-notice-icon {
+  flex: none;
+  margin-top: 1px;
+  color: #d97706;
+}
+.config-notice.is-error .config-notice-icon {
+  color: var(--destructive);
+}
+.config-notice-text {
+  flex: 1;
+  min-width: 0;
+}
+.config-notice-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.config-notice-action:hover {
+  text-decoration: underline;
+}
+
 .wf-node-outputs {
   display: grid;
   gap: 5px;
