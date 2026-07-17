@@ -379,7 +379,9 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     views.show(accountId);
     const def = resolvePlatform(platform);
     await backend.patchAccount(accountId, { binding_status: "checking" });
-    await driver.goto(def.loginUrl);
+    // 不 await 整页加载:视图已亮出(用户能看到加载中),导航是 fire-and-forget,
+    // 让 openLogin 立即返回 → IPC/登录按钮秒解除,不再"卡一阵子"。poll 轮询接管登录态判断。
+    void driver.goto(def.loginUrl).catch((error) => plog("login goto error:", accountId, String(error).slice(0, 120)));
     const adapter = createAdapter(platform, driver, {
       id: `login-${accountId}`,
       accountId,
