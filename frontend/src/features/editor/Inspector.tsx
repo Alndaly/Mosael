@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2, X } from "lucide-react";
+import { Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 
 import type { Asset, Clip, Sequence } from "@/api/client";
 import { Slider } from "@/components/ui/slider";
@@ -8,6 +8,7 @@ import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
+import { useColorHistory } from "@/features/editor/useColorHistory";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↖", x: 0.05, y: 0.06 },
@@ -303,7 +304,12 @@ function ColorGradePanel({
   // 预设高亮:滤镜与调色预设互斥,滤镜在时不高亮任一调色预设。
   const activePreset = effects.filter ? null : matchColorPreset(curColor);
   const isCleanColor = !effects.filter && !curColor.curves && !GRADE_KEYS.some((key) => grade[key]);
+
+  // 调色独立撤销栈:按 clip 存快照(color+filter),每次编辑前记一步。与时间线全局
+  // 撤销无关 —— 撤销只是再发一次 setEffects,方便反复试色。
+  const history = useColorHistory(clip.id, clip.effects, onSetEffects);
   const applyPreset = (payload: Record<string, unknown> | null) => {
+    history.snapshot();
     const next = { ...clip.effects } as Record<string, unknown>;
     delete next.filter; // 调色预设是唯一真源,清掉遗留的 CSS 滤镜
     if (payload) next.color = payload;
@@ -311,11 +317,13 @@ function ColorGradePanel({
     onSetEffects(clip.id, next);
   };
   const applyGrade = (key: GradeKey, raw: string) => {
+    history.snapshot();
     const value = Math.max(-1, Math.min(1, Number(raw) / 100));
     // 从完整 color 展开,保住 curves 等非滑杆字段。
     onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, [key]: value } });
   };
   const resetAll = () => {
+    history.snapshot();
     const next = { ...clip.effects } as Record<string, unknown>;
     delete next.color;
     delete next.filter;
@@ -327,11 +335,33 @@ function ColorGradePanel({
       <div className="color-target">
         <span>{t("colorTarget")}</span>
         <strong title={targetName}>{targetName}</strong>
-        {hasGrade && (
-          <button type="button" className="grade-reset" onClick={resetAll} title={t("gradeResetAllHint")}>
-            <RotateCcw size={11} /> {t("gradeReset")}
+        <div className="color-actions">
+          <button
+            type="button"
+            className="grade-icon-btn"
+            onClick={history.undo}
+            disabled={!history.canUndo}
+            title={t("colorUndo")}
+            aria-label={t("colorUndo")}
+          >
+            <Undo2 size={12} />
           </button>
-        )}
+          <button
+            type="button"
+            className="grade-icon-btn"
+            onClick={history.redo}
+            disabled={!history.canRedo}
+            title={t("colorRedo")}
+            aria-label={t("colorRedo")}
+          >
+            <Redo2 size={12} />
+          </button>
+          {hasGrade && (
+            <button type="button" className="grade-reset" onClick={resetAll} title={t("gradeResetAllHint")}>
+              <RotateCcw size={11} /> {t("gradeReset")}
+            </button>
+          )}
+        </div>
       </div>
       <div className="pip-controls">
         <span className="pip-label">{t("stylePresets")}</span>
@@ -383,6 +413,7 @@ function ColorGradePanel({
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
+          onCommitStart={history.snapshot}
           onChange={(next) =>
             onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, curves: next } })
           }

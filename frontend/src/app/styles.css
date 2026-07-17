@@ -3712,6 +3712,31 @@
   gap: 3px;
   white-space: nowrap;
 }
+.color-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.grade-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.grade-icon-btn:not(:disabled):hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.grade-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .color-presets {
   flex-wrap: wrap;
 }
