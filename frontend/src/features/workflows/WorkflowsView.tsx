@@ -515,15 +515,56 @@ function WorkflowEditor({
   const onConnect = React.useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      const handle = connection.sourceHandle ?? undefined;
-      const id = `e-${connection.source}${handle ? `-${handle}` : ""}-${connection.target}`;
+      const srcHandle = connection.sourceHandle ?? undefined;
+      const tgtHandle = connection.targetHandle ?? undefined;
+      // 数据边:输出接点 out:x → 输入接点 in:y。一个输入只接一条数据边;连上后清字面量交给数据边供值。
+      if (srcHandle?.startsWith("out:") && tgtHandle?.startsWith("in:")) {
+        const output = srcHandle.slice(4);
+        const targetInput = tgtHandle.slice(3);
+        const id = `d-${connection.source}-${output}-${connection.target}-${targetInput}`;
+        setGraph((current) => {
+          const kept = current.edges.filter(
+            (edge) => !(edge.kind === "data" && edge.target === connection.target && edge.target_input === targetInput),
+          );
+          const next: WorkflowGraph = {
+            ...current,
+            edges: [
+              ...kept,
+              {
+                id,
+                source: connection.source!,
+                target: connection.target!,
+                kind: "data",
+                source_output: output,
+                target_input: targetInput,
+              },
+            ],
+            nodes: current.nodes.map((node) =>
+              node.id === connection.target
+                ? {
+                    ...node,
+                    inputs: Array.from(new Set([...(node.inputs ?? []), targetInput])),
+                    config: { ...(node.config ?? {}), [targetInput]: "" },
+                  }
+                : node,
+            ),
+          };
+          setNodes(toFlowNodes(next, registry));
+          setEdges(toFlowEdges(next));
+          return next;
+        });
+        setDirty(true);
+        return;
+      }
+      // 控制边:节点 → 节点(条件分支带 handle)。
+      const id = `e-${connection.source}${srcHandle ? `-${srcHandle}` : ""}-${connection.target}`;
       setGraph((current) => {
         if (current.edges.some((edge) => edge.id === id)) return current;
         const next: WorkflowGraph = {
           ...current,
           edges: [
             ...current.edges,
-            { id, source: connection.source!, target: connection.target!, source_handle: handle ?? null },
+            { id, source: connection.source!, target: connection.target!, source_handle: srcHandle ?? null },
           ],
         };
         setEdges(toFlowEdges(next));
@@ -531,7 +572,7 @@ function WorkflowEditor({
       });
       setDirty(true);
     },
-    [],
+    [registry],
   );
 
   // 连线合法性:禁自环、禁重复、禁成环(拖到一半就给出红色反馈)。
@@ -797,6 +838,7 @@ function WorkflowEditor({
                 nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
               });
             }}
+            onApplyGraph={applyGraph}
             onDelete={
               selectedNode.type === "start"
                 ? undefined
@@ -946,6 +988,7 @@ function NodeInspector({
   registry,
   workspaceId,
   onChange,
+  onApplyGraph,
   onDelete,
 }: {
   node: WorkflowGraph["nodes"][number];
@@ -954,6 +997,7 @@ function NodeInspector({
   registry: Map<string, WorkflowNodeType>;
   workspaceId: string;
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
+  onApplyGraph: (next: WorkflowGraph) => void;
   onDelete?: () => void;
 }) {
   const t = useI18n();
@@ -961,7 +1005,6 @@ function NodeInspector({
   const specs = Object.entries((meta?.config ?? {}) as Record<string, ConfigSpec>);
   const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
   // 每字段的输入方式:手动填写 vs 连接上游输出(ComfyUI 式)。默认从值推断(纯引用=连接)。
-  const [fieldModes, setFieldModes] = React.useState<Record<string, "ref" | "manual">>({});
   const variables = React.useMemo(
     () => upstreamVariables(graph, node.id, registry),
     [graph, node.id, registry],
@@ -1036,6 +1079,67 @@ function NodeInspector({
   // 重新指向:把某字段里的失效引用整体替换为新引用(空串=移除该引用)。
   const repoint = (key: string, oldRef: string, newRef: string) => {
     setConfig(key, String(config[key] ?? "").split(oldRef).join(newRef));
+  };
+
+  // 连接态字段(node.inputs)+ 数据边管理。
+  const connectedInputs = node.inputs ?? [];
+  // 本节点的后代(顺边正向可达),绑数据边时排除它们避免成环。
+  const descendants = React.useMemo(() => {
+    const adjacency = new Map<string, string[]>();
+    for (const edge of graph.edges) {
+      adjacency.set(edge.source, [...(adjacency.get(edge.source) ?? []), edge.target]);
+    }
+    const seen = new Set<string>();
+    const queue = [...(adjacency.get(node.id) ?? [])];
+    while (queue.length) {
+      const current = queue.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      queue.push(...(adjacency.get(current) ?? []));
+    }
+    return seen;
+  }, [graph.edges, node.id]);
+  // 可绑定来源:任意非后代、非自身节点的具体输出(数据边本身即建立依赖/排序)。
+  const upstreamOptions = graph.nodes.flatMap((source) => {
+    if (source.id === node.id || descendants.has(source.id)) return [];
+    return (registry.get(source.type)?.outputs ?? [])
+      .filter((output) => !output.startsWith("*"))
+      .map((output) => ({ ref: `{{${source.id}.${output}}}`, sourceId: source.id, output }));
+  });
+  const dataEdgeFor = (key: string) =>
+    graph.edges.find((edge) => edge.kind === "data" && edge.target === node.id && edge.target_input === key) ?? null;
+
+  // 切换字段的连接态:连接=进 inputs;断开=移出 inputs 并删对应数据边。
+  const setConnected = (key: string, connected: boolean) => {
+    const inputs = new Set(connectedInputs);
+    if (connected) inputs.add(key);
+    else inputs.delete(key);
+    onApplyGraph({
+      ...graph,
+      edges: connected
+        ? graph.edges
+        : graph.edges.filter(
+            (edge) => !(edge.kind === "data" && edge.target === node.id && edge.target_input === key),
+          ),
+      nodes: graph.nodes.map((n) => (n.id === node.id ? { ...n, inputs: [...inputs] } : n)),
+    });
+  };
+
+  // 绑定输入到某上游输出:建/换数据边,清字面量交给数据边供值。
+  const bindInput = (key: string, sourceId: string, output: string) => {
+    const id = `d-${sourceId}-${output}-${node.id}-${key}`;
+    onApplyGraph({
+      ...graph,
+      edges: [
+        ...graph.edges.filter((edge) => !(edge.kind === "data" && edge.target === node.id && edge.target_input === key)),
+        { id, source: sourceId, target: node.id, kind: "data" as const, source_output: output, target_input: key },
+      ],
+      nodes: graph.nodes.map((n) =>
+        n.id === node.id
+          ? { ...n, inputs: [...new Set([...connectedInputs, key])], config: { ...(n.config ?? {}), [key]: "" } }
+          : n,
+      ),
+    });
   };
 
   const insertVariable = (key: string, ref: string) => {
@@ -1205,41 +1309,47 @@ function NodeInspector({
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key);
           const labelKey = FIELD_LABEL_KEYS[key];
-          // ComfyUI 式:非 object 字段可在"手动填写/选择"与"连接上游输出"间切换。
-          const canRef = !isObject && (variables.length > 0 || isPureRef(value));
-          const fieldId = `${node.id}:${key}`;
-          const mode: "ref" | "manual" = fieldModes[fieldId] ?? (isPureRef(value) ? "ref" : "manual");
-          const refMode = canRef && mode === "ref";
+          // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
+          const canConnect = !isObject;
+          const connected = canConnect && connectedInputs.includes(key);
+          const boundEdge = connected ? dataEdgeFor(key) : null;
+          const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
           return (
             <label className="wf-field" key={key}>
               <span>
                 {labelKey ? t(labelKey) : key}
                 {spec?.required ? <em className="wf-field-req">*</em> : null}
-                {canRef && (
+                {canConnect && (
                   <button
                     type="button"
-                    className={`wf-field-mode${refMode ? " is-ref" : ""}`}
+                    className={`wf-field-mode${connected ? " is-ref" : ""}`}
                     title={t("wfInputModeHint")}
                     onClick={(event) => {
                       event.preventDefault();
-                      setFieldModes((current) => ({ ...current, [fieldId]: refMode ? "manual" : "ref" }));
+                      setConnected(key, !connected);
                     }}
                   >
-                    {refMode ? <Link2 size={11} /> : <PenLine size={11} />}
-                    {refMode ? t("wfInputRef") : t("wfInputManual")}
+                    {connected ? <Link2 size={11} /> : <PenLine size={11} />}
+                    {connected ? t("wfInputRef") : t("wfInputManual")}
                   </button>
                 )}
               </span>
-              {refMode ? (
+              {connected ? (
                 <div className="wf-ref-slot">
-                  <Select value={isPureRef(value) ? String(value) : ""} onValueChange={(next) => setConfig(key, next)}>
+                  <Select
+                    value={boundValue}
+                    onValueChange={(next) => {
+                      const dot = next.indexOf(".");
+                      bindInput(key, next.slice(0, dot), next.slice(dot + 1));
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder={t("wfPickUpstream")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {variables.map((ref) => (
-                        <SelectItem key={ref} value={ref}>
-                          {ref.replace(/[{}]/g, "")}
+                      {upstreamOptions.map((option) => (
+                        <SelectItem key={option.ref} value={`${option.sourceId}.${option.output}`}>
+                          {option.sourceId}.{option.output}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1273,7 +1383,7 @@ function NodeInspector({
                   variables={variables}
                 />
               )}
-              {!refMode && spec?.type === "template" && variables.length > 0 && (
+              {!connected && spec?.type === "template" && variables.length > 0 && (
                 <div className="wf-var-chips">
                   {variables.map((ref) => (
                     <button
