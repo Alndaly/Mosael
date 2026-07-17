@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { api, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
+import { gotoRecord } from "@/lib/deepLink";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -63,18 +64,16 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     setOpen(false);
   };
 
-  // 详情弹层里「前往对应页面」:发布任务直达那条发布记录,其余到对应业务页。
+  // 详情弹层里「前往对应页面」:发布/工作流/批量都直达对应的那条记录,其余到业务页。
   const gotoJobPage = (job: Job) => {
     const route = jobRoute(job);
     if (!route) return;
-    window.location.hash = route;
-    const taskId = ((job.payload ?? {}) as Record<string, unknown>).task_id;
-    if (job.kind === "publish" && typeof taskId === "string") {
-      window.setTimeout(
-        () => window.dispatchEvent(new CustomEvent("mibu:open-publish-task", { detail: taskId })),
-        80,
-      );
-    }
+    const payload = (job.payload ?? {}) as Record<string, unknown>;
+    if (job.kind === "publish") gotoRecord(route, "mibu:open-publish-task", payload.task_id);
+    else if (job.kind === "batch" || typeof payload.batch_id === "string")
+      gotoRecord("/batch", "mibu:open-batch", payload.batch_id);
+    else if (job.kind === "workflow") gotoRecord(route, "mibu:open-workflow", payload.workflow_id);
+    else gotoRecord(route);
     setDetailJob(null);
   };
 

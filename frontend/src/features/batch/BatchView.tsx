@@ -33,6 +33,16 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<Batch | null>(null);
 
+  // 通知/任务中心深链(mibu:open-* 事件通道):直接选中那条批量记录。
+  React.useEffect(() => {
+    const onOpenBatch = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) setSelectedId(id);
+    };
+    window.addEventListener("mibu:open-batch", onOpenBatch);
+    return () => window.removeEventListener("mibu:open-batch", onOpenBatch);
+  }, []);
+
   const batches = useQuery({
     queryKey: ["batches", workspace.id],
     queryFn: () => listBatches(workspace.id),

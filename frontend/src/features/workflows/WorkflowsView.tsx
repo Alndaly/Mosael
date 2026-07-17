@@ -141,6 +141,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
 
+  // 通知/任务中心深链(mibu:open-* 事件通道):直接选中对应工作流。
+  React.useEffect(() => {
+    const onOpenWorkflow = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) setSelectedId(id);
+    };
+    window.addEventListener("mibu:open-workflow", onOpenWorkflow);
+    return () => window.removeEventListener("mibu:open-workflow", onOpenWorkflow);
+  }, []);
+
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
     queryFn: () => listWorkflows(workspace.id),

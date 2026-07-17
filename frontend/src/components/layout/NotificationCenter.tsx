@@ -12,6 +12,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { NOTIFICATION_DEEP_LINKS, gotoRecord } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -45,10 +46,12 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const items = query.data?.items ?? [];
   const unread = query.data?.unread ?? 0;
 
+  // 点通知 → 跳业务页并打开那条记录(payload 里带记录 id,走 mibu:open-* 深链通道)。
   const openItem = (item: AppNotification) => {
     if (!item.read_at) readOne.mutate(item.id);
     if (item.link) {
-      window.location.hash = item.link.replace(/^#/, "");
+      const deep = NOTIFICATION_DEEP_LINKS[item.type];
+      gotoRecord(item.link, deep?.event, deep ? item.payload?.[deep.payloadKey] : undefined);
       setOpen(false);
     }
   };

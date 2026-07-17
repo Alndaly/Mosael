@@ -55,6 +55,9 @@ def start_batch(
     db.add(batch)
     db.commit()
     db.refresh(batch)
+    # 回填 batch_id,任务中心/通知从 job 一步深链到这条批量记录。
+    parent.payload = {**parent.payload, "batch_id": batch.id}
+    db.commit()
     threading.Thread(target=_run_batch_thread, args=(batch.id,), daemon=True).start()
     return batch
 
