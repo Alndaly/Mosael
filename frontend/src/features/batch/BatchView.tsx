@@ -98,7 +98,7 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
       <div className="plugins-shell">
         <aside className="plugins-list panel">
           <div className="panel-head">
-            <h2>{t("navBatch")}</h2>
+            <h2>{t("batchListTitle")}</h2>
             <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
               <Plus size={13} /> {t("batchCreate")}
             </Button>

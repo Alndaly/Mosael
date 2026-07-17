@@ -193,7 +193,7 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
               <ImagePlus size={13} /> {t("import")}
             </label>
           </Button>
-          <div className="seg" role="group" aria-label={t("kindAll")}>
+          <div className="seg" role="group" aria-label={t("mediaKindGroup")}>
             {KIND_FILTERS.map((kind) => (
               <button
                 key={kind}
@@ -380,7 +380,7 @@ function AssetTile({ asset }: { asset: Asset }) {
         <strong title={asset.name}>{asset.name}</strong>
         <div className="asset-meta">
           <Badge variant="secondary">{asset.kind}</Badge>
-          <small>{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? "导出" : t("mediaSourceImported")}</small>
+          <small>{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
         {assetTags(asset).length > 0 && (
           <div className="asset-tags">

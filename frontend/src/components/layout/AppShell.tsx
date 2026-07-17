@@ -85,15 +85,32 @@ export function AppShell({
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="topbar-crumb">
-          <span>{displayWorkspaceName(workspaceName, t)}</span>
-          <span className="topbar-sep">/</span>
-          <strong>
-            {PROJECT_SCOPED_VIEWS.includes(view)
-              ? projectName ?? t("noProject")
-              : t([...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome")}
-          </strong>
-        </div>
+        {(() => {
+          // 面包屑必须始终暴露"当前页面";项目语境的页面再把项目名接成第三段。
+          // 早先的写法在 media/editor/ai 无项目时只显示"还没有项目",页面身份被抹掉
+          // (三个项目页面看起来一模一样),这里修正。页面名是本页唯一的 h1。
+          const pageLabel = t(
+            [...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome",
+          );
+          const scoped = PROJECT_SCOPED_VIEWS.includes(view);
+          return (
+            <div className="topbar-crumb">
+              <span className="topbar-crumb-ws">{displayWorkspaceName(workspaceName, t)}</span>
+              <span className="topbar-sep">/</span>
+              <h1 className={scoped ? "topbar-crumb-page muted" : "topbar-crumb-page"}>{pageLabel}</h1>
+              {scoped && (
+                <>
+                  <span className="topbar-sep">/</span>
+                  {projectName ? (
+                    <strong className="topbar-crumb-leaf">{projectName}</strong>
+                  ) : (
+                    <span className="topbar-crumb-hint">{t("crumbNoProject")}</span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
         <div className="topbar-actions">
           {actions}
           <button

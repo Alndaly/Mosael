@@ -230,7 +230,7 @@ export function ChatWorkspace({
       <aside className="chat-sessions panel">
         <div className="panel-head">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
-          <h2>{t("aiTabChat")}</h2>
+          <h2>{t("chatSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("chatNewSession")}
           </Button>
@@ -382,7 +382,7 @@ export function ChatWorkspace({
                       )}
                     </PopoverContent>
                   </Popover>
-                  <Button asChild variant="ghost" size="icon-sm" aria-label="attach" disabled={uploadAttachment.isPending}>
+                  <Button asChild variant="ghost" size="icon-sm" aria-label={t("attachFile")} disabled={uploadAttachment.isPending}>
                     <label>
                       <input
                         type="file"

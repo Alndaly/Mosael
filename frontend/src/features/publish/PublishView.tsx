@@ -186,7 +186,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <div className="publish-body plugins-shell">
         <aside className="plugins-list panel">
           <div className="panel-head">
-            <h2>{t("navPublish")}</h2>
+            <h2>{t("publishListTitle")}</h2>
           </div>
           <div className="plugins-list-body">
             {(tasks.data ?? []).map((task) => (

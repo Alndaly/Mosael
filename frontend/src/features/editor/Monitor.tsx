@@ -341,19 +341,19 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
       </div>
       <div className="monitor-transport">
         <div className="monitor-buttons">
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label="start">
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label="frame back">
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
           <Button variant="secondary" size="icon-sm" className="monitor-play" onClick={playToggle} aria-label={t("playPause")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="monitor-play-icon" />}
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label="frame forward">
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
             <StepForward size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label="end">
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
             <SkipForward size={14} />
           </Button>
           <Button
@@ -361,11 +361,11 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
             size="icon-sm"
             className={loop ? "monitor-active" : undefined}
             onClick={toggleLoop}
-            aria-label="loop"
+            aria-label={t("monLoop")}
           >
             <Repeat size={13} />
           </Button>
-          <button type="button" className="monitor-rate timecode" onClick={cyclePlaybackRate} aria-label="rate">
+          <button type="button" className="monitor-rate timecode" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
             {playbackRate}x
           </button>
         </div>
@@ -384,7 +384,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           >
             <Activity size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label="mute">
+          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
           <Slider
@@ -394,9 +394,9 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
             step={0.05}
             value={[masterMuted ? 0 : volume]}
             onValueChange={([value]) => setVolume(value)}
-            aria-label="volume"
+            aria-label={t("monVolume")}
           />
-          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label="fullscreen">
+          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
             <Maximize2 size={13} />
           </Button>
         </div>

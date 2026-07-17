@@ -293,12 +293,31 @@
   font-size: 13px;
 }
 
-.topbar-crumb strong {
+/* 页面名是本页唯一 h1,但视觉上仍是面包屑一段(13px),reset 掉浏览器 h1 默认。 */
+.topbar-crumb-page {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.topbar-crumb-page.muted {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.topbar-crumb-leaf {
   overflow: hidden;
   color: var(--foreground);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.topbar-crumb-hint {
+  color: var(--muted-foreground);
+  font-style: italic;
 }
 
 .topbar-sep {
