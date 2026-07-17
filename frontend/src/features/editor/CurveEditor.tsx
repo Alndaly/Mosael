@@ -17,9 +17,40 @@ const CHANNELS: { key: Channel; label: string; stroke: string }[] = [
   { key: "b", label: "B", stroke: "#3e63dd" },
 ];
 
-const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+// 固定比例画布 + 内边距(与 mibu-video 一致):控制点是正圆、端点不贴边被裁。
+const W = 224;
+const H = 160;
+const PAD = 8;
+// 相邻点最小间距:既是拖动手感,也防止近邻 x 让 ffmpeg curves 拒掉整条 vf 链。
+const MIN_GAP = 0.02;
 
-/** 达芬奇式色调曲线编辑器:通道分页 + 拖点 + 空白处加点 + 双击删点。作用于选中片段的 curves。 */
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const sx = (x: number) => PAD + x * (W - 2 * PAD);
+const sy = (y: number) => H - PAD - y * (H - 2 * PAD);
+
+/** 指针捕获尽力而为:失效的 pointerId(合成事件/已离场的触点)会抛错,不能中断手势。 */
+function capturePointer(event: React.PointerEvent): void {
+  try {
+    (event.target as Element).setPointerCapture(event.pointerId);
+  } catch {
+    /* keep the gesture going without capture */
+  }
+}
+
+/** 采样 evalCurve 描出路径:画的就是实际应用的那条单调三次曲线(identity 精确压在对角线上)。 */
+function pathFor(points: CurvePoint[]): string {
+  const N = 64;
+  const cmds: string[] = [];
+  for (let i = 0; i <= N; i++) {
+    const x = i / N;
+    const y = evalCurve(points, x);
+    cmds.push(`${i === 0 ? "M" : "L"} ${sx(x).toFixed(1)} ${sy(y).toFixed(1)}`);
+  }
+  return cmds.join(" ");
+}
+
+/** 达芬奇式色调曲线编辑器,交互移植自 mibu-video:
+ *  曲线/空白处按下 = 原地加点并立刻拖动;点上按下 = 精确抓取;双击/右键删点(端点保留)。 */
 export function CurveEditor({
   curves,
   onChange,
@@ -27,99 +58,108 @@ export function CurveEditor({
 }: {
   curves: ColorCurves | undefined;
   onChange: (next: ColorCurves) => void;
-  /** 拖动/加点/删点开始前调用一次(供调色撤销栈记快照)。 */
+  /** 拖动/加点/删点开始前调用一次(调色撤销栈记一步)。 */
   onCommitStart?: () => void;
 }) {
   const t = useI18n();
   const [channel, setChannel] = React.useState<Channel>("luma");
   const svgRef = React.useRef<SVGSVGElement | null>(null);
-  const dragIndex = React.useRef<number | null>(null);
+  const dragRef = React.useRef<number | null>(null);
 
-  const base = curves ?? IDENTITY_CURVES;
+  // 本地草稿:拖动期间逐帧更新草稿(即时),松手才把整条曲线写给 onChange(一次
+  // 服务端往返)。onChange 直连服务端 mutation,若每帧都发,渲染会一直落后于手,
+  // 拖动直接失灵 —— mibu-video 原版写的是同步本地 store,这里用草稿层等价还原手感。
+  const [draft, setDraft] = React.useState<ColorCurves | null>(null);
+  const base = draft ?? curves ?? IDENTITY_CURVES;
   const points = base[channel] ?? IDENTITY_CURVE;
 
-  const setPoints = (next: CurvePoint[]) => {
-    const sorted = [...next].sort((a, b) => a[0] - b[0]);
-    onChange({ ...base, [channel]: sorted });
+  // 服务端状态变化(提交后的回读、预设/撤销改曲线)且不在拖动中 → 放下草稿跟随外部。
+  React.useEffect(() => {
+    if (dragRef.current == null) setDraft(null);
+  }, [curves]);
+
+  const withChannel = (pts: CurvePoint[]): ColorCurves => ({ ...base, [channel]: pts });
+  /** 拖动中:只改草稿。 */
+  const previewPoints = (pts: CurvePoint[]) => setDraft(withChannel(pts));
+  /** 离散操作(删点/重置)或松手:草稿 + 提交一并完成。 */
+  const commitPoints = (pts: CurvePoint[]) => {
+    const next = withChannel(pts);
+    setDraft(next);
+    onChange(next);
   };
 
-  const toNorm = (event: React.PointerEvent | PointerEvent): CurvePoint => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    const x = clamp01((event.clientX - rect.left) / rect.width);
-    const y = clamp01(1 - (event.clientY - rect.top) / rect.height); // y inverted for display
-    return [x, y];
+  const toUnit = (clientX: number, clientY: number): CurvePoint => {
+    const r = svgRef.current!.getBoundingClientRect();
+    const px = ((clientX - r.left) / r.width) * W;
+    const py = ((clientY - r.top) / r.height) * H;
+    return [clamp01((px - PAD) / (W - 2 * PAD)), clamp01((H - PAD - py) / (H - 2 * PAD))];
   };
 
-  const nearestPointIndex = (nx: number, ny: number): number | null => {
-    let best = -1;
-    let bestDist = 0.05 * 0.05; // ~0.05 hit radius in normalized space
-    points.forEach(([px, py], i) => {
-      const d = (px - nx) ** 2 + (py - ny) ** 2;
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    });
-    return best >= 0 ? best : null;
-  };
-
-  const onPointerDown = (event: React.PointerEvent) => {
-    const [nx, ny] = toNorm(event);
-    let index = nearestPointIndex(nx, ny);
+  // 已有点上按下:精确抓这个点(stopPropagation 挡住背景的加点逻辑)。
+  const onPointDown = (event: React.PointerEvent, index: number) => {
+    event.stopPropagation();
+    capturePointer(event);
     onCommitStart?.();
-    if (index === null) {
-      // 空白处:插入新点,随即拖它。
-      const next = [...points, [nx, ny] as CurvePoint].sort((a, b) => a[0] - b[0]);
-      index = next.findIndex((p) => p[0] === nx && p[1] === ny);
-      setPoints(next);
+    dragRef.current = index;
+  };
+
+  const onMove = (event: React.PointerEvent) => {
+    if (dragRef.current == null) return;
+    const i = dragRef.current;
+    const [ux, uy] = toUnit(event.clientX, event.clientY);
+    const next = [...points];
+    // 端点 x 锁死 0/1;内部点夹在左右邻点之间 —— 顺序永不改变,索引全程稳定。
+    const isFirst = i === 0;
+    const isLast = i === next.length - 1;
+    const x = isFirst
+      ? 0
+      : isLast
+        ? 1
+        : clamp01(Math.min(Math.max(ux, next[i - 1][0] + MIN_GAP), next[i + 1][0] - MIN_GAP));
+    next[i] = [x, uy];
+    previewPoints(next);
+  };
+
+  const onUp = () => {
+    if (dragRef.current == null) return;
+    dragRef.current = null;
+    // 松手提交草稿里的当前曲线(dragRef 先清,让 props 回读能正常接管)。
+    commitPoints(points);
+  };
+
+  // 曲线/空白处按下 → 原地加点并立刻开始拖它:一次手势完成「加点 + 调整」,
+  // 而不是先点一下、再去找那颗新点重新拖。
+  const addPointAndDrag = (event: React.PointerEvent) => {
+    const [ux, uy] = toUnit(event.clientX, event.clientY);
+    let left = 0;
+    let right = 1;
+    for (const [x] of points) {
+      if (x <= ux) left = Math.max(left, x);
+      if (x >= ux) right = Math.min(right, x);
     }
-    dragIndex.current = index;
-    (event.target as Element).setPointerCapture?.(event.pointerId);
-  };
-
-  const onPointerMove = (event: React.PointerEvent) => {
-    if (dragIndex.current === null) return;
-    const i = dragIndex.current;
-    const [nx, ny] = toNorm(event);
-    const isEndpoint = i === 0 || i === points.length - 1;
-    // 端点只能上下移(x 锁 0 / 1);内部点 x 夹在左右邻点之间。
-    const next = points.map((p, idx) => {
-      if (idx !== i) return p;
-      if (isEndpoint) return [p[0], ny] as CurvePoint;
-      const lo = points[idx - 1][0] + 0.01;
-      const hi = points[idx + 1][0] - 0.01;
-      return [Math.max(lo, Math.min(hi, nx)), ny] as CurvePoint;
-    });
-    onChange({ ...base, [channel]: next }); // 不排序(拖动中位序不变),松手时才归位
-  };
-
-  const onPointerUp = () => {
-    if (dragIndex.current !== null) setPoints(points);
-    dragIndex.current = null;
-  };
-
-  const removePoint = (i: number) => {
-    if (i === 0 || i === points.length - 1) return; // 端点不可删
+    if (left + MIN_GAP > right - MIN_GAP) return; // 这里塞不下新点,忽略这次按下
+    const x = clamp01(Math.min(Math.max(ux, left + MIN_GAP), right - MIN_GAP));
     onCommitStart?.();
-    setPoints(points.filter((_, idx) => idx !== i));
+    const newPoint: CurvePoint = [x, uy];
+    const pts = [...points, newPoint].sort((a, b) => a[0] - b[0]);
+    const index = pts.indexOf(newPoint); // 按引用定位,避免浮点相等误抓到别的点
+    previewPoints(pts);
+    capturePointer(event);
+    dragRef.current = index;
+  };
+
+  const removePoint = (event: React.MouseEvent, index: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (index === 0 || index === points.length - 1) return; // 端点不可删
+    onCommitStart?.();
+    commitPoints(points.filter((_, i) => i !== index));
   };
 
   const resetChannel = () => {
     onCommitStart?.();
-    onChange({ ...base, [channel]: [...IDENTITY_CURVE] });
+    commitPoints(IDENTITY_CURVE.map((p) => [...p] as CurvePoint));
   };
-
-  // 采样描出曲线路径(与预览/导出一致的分段线性)。
-  const linePath = React.useMemo(() => {
-    const N = 48;
-    const pts: string[] = [];
-    for (let i = 0; i <= N; i++) {
-      const x = i / N;
-      const y = evalCurve(points, x);
-      pts.push(`${(x * 100).toFixed(2)},${((1 - y) * 100).toFixed(2)}`);
-    }
-    return "M" + pts.join(" L");
-  }, [points]);
 
   const active = CHANNELS.find((c) => c.key === channel)!;
 
@@ -144,34 +184,32 @@ export function CurveEditor({
       <svg
         ref={svgRef}
         className="curve-plot"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
+        viewBox={`0 0 ${W} ${H}`}
+        onPointerDown={addPointAndDrag}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerLeave={onUp}
       >
         {/* 网格 + identity 参考对角线 */}
-        {[25, 50, 75].map((v) => (
-          <React.Fragment key={v}>
-            <line x1={v} y1={0} x2={v} y2={100} className="curve-grid" />
-            <line x1={0} y1={v} x2={100} y2={v} className="curve-grid" />
+        {[0.25, 0.5, 0.75].map((g) => (
+          <React.Fragment key={g}>
+            <line x1={sx(g)} y1={sy(0)} x2={sx(g)} y2={sy(1)} className="curve-grid" />
+            <line x1={sx(0)} y1={sy(g)} x2={sx(1)} y2={sy(g)} className="curve-grid" />
           </React.Fragment>
         ))}
-        <line x1={0} y1={100} x2={100} y2={0} className="curve-diagonal" />
-        <path d={linePath} className="curve-line" style={{ stroke: active.stroke }} />
+        <line x1={sx(0)} y1={sy(0)} x2={sx(1)} y2={sy(1)} className="curve-diagonal" />
+        <path d={pathFor(points)} className="curve-line" style={{ stroke: active.stroke }} />
         {points.map(([px, py], i) => (
           <circle
             key={i}
-            cx={px * 100}
-            cy={(1 - py) * 100}
-            r={2.6}
+            cx={sx(px)}
+            cy={sy(py)}
+            r={4}
             className="curve-point"
             style={{ fill: active.stroke }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              removePoint(i);
-            }}
+            onPointerDown={(event) => onPointDown(event, i)}
+            onContextMenu={(event) => removePoint(event, i)}
+            onDoubleClick={(event) => removePoint(event, i)}
           />
         ))}
       </svg>

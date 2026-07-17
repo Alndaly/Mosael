@@ -34,20 +34,44 @@ export function curvesAreIdentity(c: ColorCurves | undefined): boolean {
   return isIdentityChannel(c.luma) && isIdentityChannel(c.r) && isIdentityChannel(c.g) && isIdentityChannel(c.b);
 }
 
-/** 在 x∈[0,1] 处求曲线值(排序后控制点间线性插值)。 */
+/** 在 x∈[0,1] 处求曲线值:单调三次 Hermite(Fritsch–Carlson)。
+ *  共线点(含 identity)精确还原直线、其余平滑且不过冲 —— 编辑器画的曲线、
+ *  预览查表、导出近似三者共用同一条函数。 */
 export function evalCurve(points: CurvePoint[], x: number): number {
   const pts = [...(points ?? IDENTITY_CURVE)].sort((a, b) => a[0] - b[0]);
   if (pts.length === 0) return x;
-  if (x <= pts[0][0]) return pts[0][1];
-  for (let i = 1; i < pts.length; i++) {
-    if (x <= pts[i][0]) {
-      const [x0, y0] = pts[i - 1];
-      const [x1, y1] = pts[i];
-      const t = x1 === x0 ? 0 : (x - x0) / (x1 - x0);
-      return y0 + (y1 - y0) * t;
-    }
+  if (pts.length === 1 || x <= pts[0][0]) return pts[0][1];
+  const n = pts.length;
+  if (x >= pts[n - 1][0]) return pts[n - 1][1];
+
+  // 段宽 h、割线斜率 d,再按 FC 规则求各点切线 m(异号/零斜率处切线置 0 保单调)。
+  const h: number[] = [];
+  const d: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1][0] - pts[i][0];
+    h.push(dx);
+    d.push(dx === 0 ? 0 : (pts[i + 1][1] - pts[i][1]) / dx);
   }
-  return pts[pts.length - 1][1];
+  const m: number[] = [d[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] * d[i] <= 0) m.push(0);
+    else m.push((3 * (h[i - 1] + h[i])) / ((2 * h[i] + h[i - 1]) / d[i - 1] + (h[i] + 2 * h[i - 1]) / d[i]));
+  }
+  m.push(d[n - 2]);
+
+  for (let i = 0; i < n - 1; i++) {
+    if (x > pts[i + 1][0]) continue;
+    const t = h[i] === 0 ? 0 : (x - pts[i][0]) / h[i];
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (
+      (2 * t3 - 3 * t2 + 1) * pts[i][1] +
+      (t3 - 2 * t2 + t) * h[i] * m[i] +
+      (-2 * t3 + 3 * t2) * pts[i + 1][1] +
+      (t3 - t2) * h[i] * m[i + 1]
+    );
+  }
+  return pts[n - 1][1];
 }
 
 export const CURVES_FILTER_ID = "mibu-color-curves";

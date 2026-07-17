@@ -3852,8 +3852,10 @@
   color: var(--foreground);
 }
 .curve-plot {
+  /* viewBox 224×160 定比例(不拉伸):控制点保持正圆,命中区域不变形。 */
+  display: block;
   width: 100%;
-  aspect-ratio: 1;
+  height: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel-inset);
