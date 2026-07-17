@@ -1,5 +1,5 @@
 import React from "react";
-import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
+import { Activity, Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl, type Asset, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
+import { Scopes } from "@/features/editor/Scopes";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -34,6 +35,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const masterMuted = useEditorStore((state) => state.muted);
   const { setPlayhead, setPlaying, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
     useEditorStore.getState();
+  const [showScopes, setShowScopes] = React.useState(false);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -300,6 +302,11 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           {activeSubtitle?.text_override && (
             <div className="monitor-subtitle">{activeSubtitle.text_override}</div>
           )}
+          {showScopes && (
+            <div className="monitor-scopes" onClick={(event) => event.stopPropagation()}>
+              <Scopes videoRef={videoRef} filter={cssFilter} />
+            </div>
+          )}
           {activeOverlayClip && overlayAsset && (
             overlayAsset.kind === "image" ? (
               <img
@@ -367,6 +374,16 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           <span className="monitor-total"> / {formatTimecode(totalDuration)}</span>
         </div>
         <div className="monitor-buttons">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={showScopes ? "monitor-active" : undefined}
+            onClick={() => setShowScopes((on) => !on)}
+            aria-label={t("scopes")}
+            title={t("scopes")}
+          >
+            <Activity size={14} />
+          </Button>
           <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label="mute">
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>

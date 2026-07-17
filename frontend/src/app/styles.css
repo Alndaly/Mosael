@@ -3234,6 +3234,53 @@
   pointer-events: none;
   white-space: pre-wrap;
 }
+.monitor-scopes {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 268px;
+  max-width: 60%;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(8, 8, 10, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+}
+.scopes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scopes-head {
+  display: flex;
+}
+.scopes-seg {
+  flex: 1;
+  height: 24px;
+}
+.scopes-canvas-wrap {
+  position: relative;
+}
+.scopes-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: #0b0b0d;
+}
+.scopes-blocked {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+}
 .subtitle-input {
   width: 100%;
   padding: 7px 9px;
