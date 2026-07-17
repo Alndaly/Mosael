@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Notification, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, Notification, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
@@ -120,6 +120,11 @@ function createWindow() {
     },
   });
   win.setMenuBarVisibility(false);
+  // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
   if (isDev) {
     win.loadURL(process.env.MIBU_FRONTEND_URL || "http://127.0.0.1:5173");
   } else {

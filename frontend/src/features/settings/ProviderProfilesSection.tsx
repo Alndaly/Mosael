@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Plus, Power, Trash2 } from "lucide-react";
+import { ExternalLink, KeyRound, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -14,6 +14,17 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
+
+/** 各供应商创建密钥的官方控制台入口(告知用户"去哪拿 key")。外链走系统浏览器。 */
+const VENDOR_DOCS: Record<string, string> = {
+  alibaba: "https://bailian.console.aliyun.com/?tab=model#/api-key",
+  bytedance: "https://console.volcengine.com/ark",
+  moonshot: "https://platform.moonshot.cn/console/api-keys",
+  minimax: "https://platform.minimaxi.com/user-center/basic-information/interface-key",
+  openai: "https://platform.openai.com/api-keys",
+  google: "https://aistudio.google.com/app/apikey",
+  kuaishou: "https://klingai.com/",
+};
 
 export function ProviderProfilesSection() {
   const t = useI18n();
@@ -70,6 +81,8 @@ export function ProviderProfilesSection() {
   });
 
   const vendorLabel = (value: string) => (vendors.data ?? []).find((item) => item.vendor === value)?.label ?? value;
+  const preset = (vendors.data ?? []).find((item) => item.vendor === vendor) ?? null;
+  const docsUrl = VENDOR_DOCS[vendor];
 
   return (
     <SettingsGroup
@@ -109,7 +122,15 @@ export function ProviderProfilesSection() {
             <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label className="wf-field">
-            <span>API Key</span>
+            <span>
+              API Key
+              {docsUrl && (
+                <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
+                  {t("providerGetKey")}
+                  <ExternalLink size={11} />
+                </a>
+              )}
+            </span>
             <Input
               type="password"
               placeholder={t("providerKeyPlaceholder")}
@@ -120,14 +141,22 @@ export function ProviderProfilesSection() {
           <label className="wf-field">
             <span>Base URL</span>
             <Input
-              placeholder={t("providerBaseUrl")}
+              placeholder={preset?.base_url || t("providerBaseUrl")}
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
             />
+            <small>
+              {preset?.base_url
+                ? t("providerBaseUrlDefault").replace("{url}", preset.base_url)
+                : t("providerBaseUrlRequired")}
+            </small>
           </label>
           <label className="wf-field">
             <span>{t("providerModelLabel")}</span>
             <Input placeholder={t("providerModel")} value={model} onChange={(event) => setModel(event.target.value)} />
+            {preset?.default_model && (
+              <small>{t("providerModelExample").replace("{model}", preset.default_model)}</small>
+            )}
           </label>
           <div className="task-create-actions">
             <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>
