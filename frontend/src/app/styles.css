@@ -3722,6 +3722,84 @@
   line-height: 1.5;
 }
 
+/* 色调曲线编辑器 */
+.curve-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.curve-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.curve-tab {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: border-color 100ms, color 100ms;
+}
+.curve-tab.active {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.curve-reset {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.curve-reset:hover {
+  color: var(--foreground);
+}
+.curve-plot {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-inset);
+  touch-action: none;
+  cursor: crosshair;
+}
+.curve-grid {
+  stroke: var(--border);
+  stroke-width: 0.4;
+  vector-effect: non-scaling-stroke;
+}
+.curve-diagonal {
+  stroke: var(--border-strong);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+}
+.curve-line {
+  fill: none;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.curve-point {
+  stroke: var(--panel);
+  stroke-width: 1;
+  cursor: grab;
+  vector-effect: non-scaling-stroke;
+}
+.curve-point:active {
+  cursor: grabbing;
+}
+.curve-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 /* Transcript polish: speaker chips, row states, stats */
 .tsd-speaker {
   font-style: normal;

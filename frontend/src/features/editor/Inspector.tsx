@@ -5,6 +5,8 @@ import type { Asset, Clip, Sequence } from "@/api/client";
 import { Slider } from "@/components/ui/slider";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
+import { CurveEditor } from "@/features/editor/CurveEditor";
+import type { ColorCurves } from "@/features/editor/colorCurves";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↖", x: 0.05, y: 0.06 },
@@ -295,10 +297,13 @@ function ColorGradePanel({
   const grade = Object.fromEntries(
     GRADE_KEYS.map((key) => [key, Number((effects.color as Record<string, number> | undefined)?.[key]) || 0]),
   ) as Record<GradeKey, number>;
-  const hasGrade = GRADE_KEYS.some((key) => grade[key]) || Boolean(effects.filter);
+  const curColor = (effects.color ?? {}) as Record<string, unknown>;
+  const hasGrade =
+    GRADE_KEYS.some((key) => grade[key]) || Boolean(effects.filter) || Boolean(curColor.curves);
   const applyGrade = (key: GradeKey, raw: string) => {
     const value = Math.max(-1, Math.min(1, Number(raw) / 100));
-    onSetEffects(clip.id, { ...clip.effects, color: { ...grade, [key]: value } });
+    // 从完整 color 展开,保住 curves 等非滑杆字段。
+    onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, [key]: value } });
   };
   const resetAll = () => {
     const next = { ...clip.effects } as Record<string, unknown>;
@@ -353,6 +358,16 @@ function ColorGradePanel({
           ))}
         </div>
       ))}
+      <div className="pip-controls">
+        <span className="pip-label">{t("gradeGroupCurves")}</span>
+        <CurveEditor
+          key={clip.id}
+          curves={curColor.curves as ColorCurves | undefined}
+          onChange={(next) =>
+            onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, curves: next } })
+          }
+        />
+      </div>
       <p className="color-hint">{t("colorScopeHint")}</p>
     </div>
   );
