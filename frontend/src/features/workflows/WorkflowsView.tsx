@@ -61,6 +61,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
@@ -147,6 +148,36 @@ function WfNode({ data, selected }: NodeProps) {
 }
 
 const NODE_COMPONENT_TYPES = { wf: WfNode };
+
+/** 配置字段 key → 人类可读标签键(Dify 式:面板不暴露裸 config key)。 */
+const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
+  prompt: "wffPrompt",
+  system: "wffSystem",
+  profile_id: "wffProfile",
+  model: "wffModel",
+  query: "wffQuery",
+  limit: "wffLimit",
+  plugin_id: "wffPlugin",
+  tool_name: "wffTool",
+  input: "wffInput",
+  asset_id: "wffAsset",
+  sequence_id: "wffSequence",
+  provider: "wffProvider",
+  kind: "wffKind",
+  account_id: "wffAccount",
+  title: "wffTitle",
+  description: "wffDescription",
+  left: "wffLeft",
+  op: "wffOp",
+  right: "wffRight",
+  method: "wffMethod",
+  url: "wffUrl",
+  headers: "wffHeaders",
+  body: "wffBody",
+  code: "wffCode",
+  template: "wffTemplate",
+  params: "wffParams",
+};
 
 /** 连线统一带闭合箭头,方向一目了然。 */
 const DEFAULT_EDGE_OPTIONS = {
@@ -928,9 +959,22 @@ function NodeInspector({
   };
 
   return (
-    <aside className="wf-inspector panel">
-      <div className="panel-head">
-        <h2>{node.name || meta?.label || node.type}</h2>
+    <aside className="wf-inspector panel" aria-label={node.name || meta?.label || node.type}>
+      <div className="panel-head wf-inspector-head">
+        <span className={`wf-node-icon wf-icon-${node.type} wf-inspector-icon`}>
+          {NODE_ICONS[node.type] ?? <Type size={13} />}
+        </span>
+        <div className="wf-inspector-heading">
+          {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。 */}
+          <input
+            className="wf-inspector-name"
+            value={node.name ?? ""}
+            placeholder={meta?.label ?? node.type}
+            aria-label={t("wfNodeName")}
+            onChange={(event) => onChange({ name: event.target.value })}
+          />
+          <small>{meta?.label ?? node.type}</small>
+        </div>
         {onDelete && (
           <button type="button" className="inspector-delete" aria-label={t("delete")} onClick={onDelete}>
             <Trash2 size={13} />
@@ -938,10 +982,6 @@ function NodeInspector({
         )}
       </div>
       <div className="wf-inspector-body">
-        <label className="wf-field">
-          <span>{t("wfNodeName")}</span>
-          <input value={node.name ?? ""} onChange={(event) => onChange({ name: event.target.value })} />
-        </label>
         {meta && <p className="wf-node-desc">{meta.description}</p>}
         {bindingNotice && (
           <ConfigNotice
@@ -1048,11 +1088,12 @@ function NodeInspector({
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key);
+          const labelKey = FIELD_LABEL_KEYS[key];
           return (
             <label className="wf-field" key={key}>
               <span>
-                {key}
-                {spec?.required ? " *" : ""}
+                {labelKey ? t(labelKey) : key}
+                {spec?.required ? <em className="wf-field-req">*</em> : null}
               </span>
               {options ? (
                 <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>

@@ -5427,12 +5427,68 @@
   gap: 4px;
 }
 
+/* Dify 式字段标签:正常大小写、不喊叫(此前 uppercase 把 PROFILE_ID 喊得很技术)。 */
 .wf-field > span {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  color: var(--foreground);
+}
+
+.wf-field-req {
+  color: var(--destructive);
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* 属性面板头部:节点语义色图标 + 内联可编辑名称 + 类型标签(Dify 式身份) */
+.wf-inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-inspector-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+.wf-inspector-heading {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.wf-inspector-name {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 1px 4px;
+  margin-left: -4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  min-width: 0;
+}
+
+.wf-inspector-name:hover {
+  border-color: var(--border);
+}
+
+.wf-inspector-name:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--background);
+}
+
+.wf-inspector-heading small {
+  padding-left: 0;
   color: var(--muted-foreground);
+  font-size: 10.5px;
 }
 
 .wf-field input,
