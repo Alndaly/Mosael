@@ -130,12 +130,11 @@ Each `WfNode` renders:
 - In-app: build `llm → export` with a data edge from `llm.text` to `export.sequence_id`; run;
   confirm identical behavior to the `{{llm-1.text}}` reference.
 
-## Open questions
+## Decisions (all confirmed 2026-07-18)
 
-1. ~~Convert legacy `{{var}}` to data edges?~~ **Decided: yes, convert (see Migration).**
-2. Data-edge visual: draw only the data wire, or also a faint control wire between the two
-   nodes? **Recommendation: data wire only** — it already implies "B waits for A", so a second
-   grey line between the same pair is redundant clutter. (Awaiting confirmation.)
-3. Multi-output nodes: per-output sockets vs single socket + output picker. **Recommendation:
-   per-output sockets** (ComfyUI-style) — most Mibu nodes have 1–3 outputs, so the extra dots
-   are cheap and make "which output" obvious at a glance. (Awaiting confirmation.)
+1. **Legacy `{{var}}` → data edges** (see Migration).
+2. **Data wire only** — a data edge already implies "B waits for A"; no separate control wire
+   between the same pair. Control edges are used only for pure ordering/concurrency (no data).
+3. **Per-output sockets** (ComfyUI-style) — one socket per declared output on the node's right
+   side; drag from the specific output. Most Mibu nodes have 1–3 outputs, so the dots are cheap
+   and make "which output" obvious at a glance.
