@@ -43,7 +43,20 @@ export function App() {
   React.useEffect(() => {
     const desktop = window.mibuDesktop;
     if (!desktop) return;
-    document.documentElement.classList.add("is-desktop", desktop.platform === "darwin" ? "is-mac" : "is-win");
+    const isWin = desktop.platform !== "darwin";
+    document.documentElement.classList.add("is-desktop", isWin ? "is-win" : "is-mac");
+    // Win/Linux:标题栏三键叠层颜色随主题(mac 无叠层)。跟 <html> 的 .dark 类走。
+    if (!isWin || !desktop.setTitleOverlay) return;
+    const push = () =>
+      desktop.setTitleOverlay!(
+        document.documentElement.classList.contains("dark")
+          ? { color: "#15181e", symbolColor: "#e7eaf0" }
+          : { color: "#ffffff", symbolColor: "#656c78" },
+      );
+    push();
+    const observer = new MutationObserver(push);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
   return (
     <QueryClientProvider client={queryClient}>

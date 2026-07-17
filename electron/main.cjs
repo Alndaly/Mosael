@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Notification, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
@@ -98,6 +98,84 @@ function stopBackend() {
   }
 }
 
+/** 应用菜单(中文标签 + 标准 role 行为/快捷键)。mac 是全局顶部菜单栏;
+ *  Win/Linux 菜单栏默认隐藏(无边框自绘标题),Alt 唤起,快捷键始终生效。 */
+function buildAppMenu() {
+  const isMac = process.platform === "darwin";
+  const about = {
+    label: "关于 Mibu",
+    click: () =>
+      dialog.showMessageBox({
+        type: "info",
+        title: "Mibu",
+        message: "Mibu",
+        detail: `版本 ${app.getVersion()}`,
+        buttons: ["好"],
+      }),
+  };
+  const template = [
+    ...(isMac
+      ? [
+          {
+            label: "Mibu",
+            submenu: [
+              about,
+              { type: "separator" },
+              { role: "services", label: "服务" },
+              { type: "separator" },
+              { role: "hide", label: "隐藏 Mibu" },
+              { role: "hideOthers", label: "隐藏其他" },
+              { role: "unhide", label: "全部显示" },
+              { type: "separator" },
+              { role: "quit", label: "退出 Mibu" },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: "文件",
+      submenu: [isMac ? { role: "close", label: "关闭窗口" } : { role: "quit", label: "退出" }],
+    },
+    {
+      label: "编辑",
+      submenu: [
+        { role: "undo", label: "撤销" },
+        { role: "redo", label: "重做" },
+        { type: "separator" },
+        { role: "cut", label: "剪切" },
+        { role: "copy", label: "复制" },
+        { role: "paste", label: "粘贴" },
+        { role: "selectAll", label: "全选" },
+      ],
+    },
+    {
+      label: "视图",
+      submenu: [
+        { role: "reload", label: "重新加载" },
+        { role: "forceReload", label: "强制重新加载" },
+        { role: "toggleDevTools", label: "开发者工具" },
+        { type: "separator" },
+        { role: "resetZoom", label: "实际大小" },
+        { role: "zoomIn", label: "放大" },
+        { role: "zoomOut", label: "缩小" },
+        { type: "separator" },
+        { role: "togglefullscreen", label: "全屏" },
+      ],
+    },
+    {
+      label: "窗口",
+      submenu: [
+        { role: "minimize", label: "最小化" },
+        ...(isMac
+          ? [{ role: "zoom", label: "缩放" }, { type: "separator" }, { role: "front", label: "前置全部窗口" }]
+          : [{ role: "close", label: "关闭" }]),
+      ],
+    },
+    ...(isMac ? [] : [{ label: "帮助", submenu: [about] }]),
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   const isMac = process.platform === "darwin";
   const win = new BrowserWindow({
@@ -119,7 +197,9 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+  // 无边框自绘标题:菜单栏默认隐藏,Win/Linux 下按 Alt 唤起(快捷键始终有效)。
   win.setMenuBarVisibility(false);
+  win.autoHideMenuBar = true;
   // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
@@ -208,6 +288,18 @@ app.whenReady().then(async () => {
       requirePublish().hidePublishView();
     } catch (e) {
       console.warn("[publish] exit 忽略:", e.message);
+    }
+  });
+
+  buildAppMenu();
+  // Win/Linux:标题栏三键叠层颜色随前端主题(mibuDesktop.setTitleOverlay)。mac 无叠层。
+  ipcMain.on("mibu:title-overlay", (event, colors) => {
+    if (process.platform === "darwin" || !colors) return;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    try {
+      win?.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: 44 });
+    } catch {
+      // 老版本 / 非 overlay 窗口:忽略。
     }
   });
 

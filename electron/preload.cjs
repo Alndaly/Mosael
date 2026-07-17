@@ -4,7 +4,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
-contextBridge.exposeInMainWorld("mibuDesktop", { platform: process.platform });
+// setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
+contextBridge.exposeInMainWorld("mibuDesktop", {
+  platform: process.platform,
+  setTitleOverlay: (colors) => ipcRenderer.send("mibu:title-overlay", colors),
+});
 
 contextBridge.exposeInMainWorld("mibuPublish", {
   login: (accountId, platform) => ipcRenderer.invoke("publish:login", { accountId, platform }),
