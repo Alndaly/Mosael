@@ -156,7 +156,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <div className="feature-view">
         <div className="publish-col">
           {seg}
-          <div className="publish-body">
+          <div className="publish-body empty-center">
             <EmptyState
               icon={<Rocket size={22} />}
               title={t("publishEmptyTitle")}
@@ -219,7 +219,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           {selected ? (
             <PublishDetail key={selected.id} task={selected} onDelete={() => setDeleting(selected)} />
           ) : (
-            <EmptyState icon={<Rocket size={22} />} title={t("publishEmptyTitle")} body={t("publishEmptyBody")} />
+            <div className="empty-center">
+              <EmptyState icon={<Rocket size={22} />} title={t("publishEmptyTitle")} body={t("publishEmptyBody")} />
+            </div>
           )}
         </div>
       </div>
@@ -273,16 +275,18 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   const items = accounts.data ?? [];
   if (accounts.isSuccess && items.length === 0) {
     return (
-      <EmptyState
-        icon={<Users size={22} />}
-        title={t("publishNoAccountsTitle")}
-        body={t("publishNoAccountsBody")}
-        action={
-          <Button onClick={onAdd}>
-            <Plus size={15} /> {t("publishAccountAdd")}
-          </Button>
-        }
-      />
+      <div className="empty-center">
+        <EmptyState
+          icon={<Users size={22} />}
+          title={t("publishNoAccountsTitle")}
+          body={t("publishNoAccountsBody")}
+          action={
+            <Button onClick={onAdd}>
+              <Plus size={15} /> {t("publishAccountAdd")}
+            </Button>
+          }
+        />
+      </div>
     );
   }
 

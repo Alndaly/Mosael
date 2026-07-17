@@ -558,6 +558,14 @@
   text-align: center;
 }
 
+/* 空状态在非 flex 容器(如 .publish-body 的 block/overflow 上下文)里 margin:auto 只能
+   横向居中 —— 用这个包裹把它撑满可用高度并两轴居中。 */
+.empty-center {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+}
+
 .empty-state-icon {
   display: grid;
   place-items: center;
