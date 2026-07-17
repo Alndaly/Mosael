@@ -88,16 +88,16 @@ Each `WfNode` renders:
 - Control edge: node → node, as today.
 - Type compatibility: **not enforced** in this design (soft hints deferred to a later phase).
 
-### Migration (decided 2026-07-18)
+### Migration (dropped 2026-07-18 — project not live, no compat needed)
 
 - Adding `kind` defaults existing edges to `"control"` — no data migration needed for stored
   graphs.
-- **Legacy `{{var}}` refs are converted to data edges.** When a field's whole value is a pure
-  `{{source.output}}` reference, it is materialized as a `kind:"data"` edge (source.output →
-  target.input) on load and shown as a wire; the config field switches to "connect" mode.
-  Mixed rich-text templates (`"总结 {{a.text}} 和 {{b.text}}"`) stay as inline `{{var}}` text
-  (they can't be a single socket) and resolve via priority rule 3 — so `{{var}}` remains valid
-  syntax, just no longer the *primary* way to express a single-value binding.
+- **No legacy `{{var}}` → data-edge migration is built.** The project isn't live, so there's no
+  old data to be compatible with; the auto-materialize-on-load pass was cut. Connect-mode
+  bindings are created fresh as explicit data edges (inspector toggle / socket drag).
+- Inline `{{var}}` stays a first-class feature for **mixed** rich-text templates
+  (`"总结 {{a.text}} 和 {{b.text}}"`) — those can't be a single socket. The `/` picker + chips
+  + backend `interpolate` remain. Single-value bindings use data edges.
 
 ## Visual
 

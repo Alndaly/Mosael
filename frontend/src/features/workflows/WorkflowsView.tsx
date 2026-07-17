@@ -205,11 +205,6 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   params: "wffParams",
 };
 
-/** 整个值恰好是单个 {{node.output}} 引用 → 该字段处于"连接输出"模式。 */
-function isPureRef(value: unknown): boolean {
-  return typeof value === "string" && /^\s*\{\{\s*[\w.-]+\s*\}\}\s*$/.test(value);
-}
-
 /** 连线统一带闭合箭头,方向一目了然。 */
 const DEFAULT_EDGE_OPTIONS = {
   markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
