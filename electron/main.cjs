@@ -2,9 +2,12 @@ const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeImage, sh
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
-// 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron";
-// 打包版由 productName 决定。这里强制成 Mibu,让开发态也一致。必须在 app ready 前调用。
+// 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
+// macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
+// 这里的 setName 影响 app.getName()/部分弹窗,setAppUserModelId 影响 Windows 任务栏归组。
+// 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
 app.setName("Mibu");
+app.setAppUserModelId("dev.mibu.studio");
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
