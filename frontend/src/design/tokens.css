@@ -103,8 +103,11 @@
   --track-overlay-border: #bba6ec;
   --track-overlay-text: #4a3585;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+  /* 自带 Inter(拉丁)保证跨平台一致的现代观感,CJK 交给系统苹方/雅黑;
+     代码字体自带 JetBrains Mono。见 main.tsx 的 @fontsource 引入。 */
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
   font-family: var(--font-sans);
 }
 
