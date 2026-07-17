@@ -819,6 +819,20 @@ function NodeInspector({
     [graph, node.id, registry],
   );
 
+  // 失效引用:本节点配置里引用了图中已不存在的节点(通常是上游被删)。
+  const staleRefs = React.useMemo(() => {
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    const found: Array<{ key: string; ref: string }> = [];
+    for (const [key, val] of Object.entries(node.config ?? {})) {
+      for (const { ref, sourceId } of extractRefs(val)) {
+        if (!ids.has(sourceId) && !found.some((f) => f.key === key && f.ref === ref)) {
+          found.push({ key, ref });
+        }
+      }
+    }
+    return found;
+  }, [node.config, graph.nodes]);
+
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
     queryKey: ["provider-profiles"],
@@ -870,6 +884,11 @@ function NodeInspector({
   })();
 
   const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
+
+  // 重新指向:把某字段里的失效引用整体替换为新引用(空串=移除该引用)。
+  const repoint = (key: string, oldRef: string, newRef: string) => {
+    setConfig(key, String(config[key] ?? "").split(oldRef).join(newRef));
+  };
 
   const insertVariable = (key: string, ref: string) => {
     const el = fieldRefs.current[key];
@@ -932,6 +951,44 @@ function NodeInspector({
             tone={bindingNotice.error ? "error" : "warn"}
           />
         )}
+        {staleRefs.length > 0 && (
+          <div className="wf-stale-refs">
+            <span className="wf-stale-title">
+              <AlertTriangle size={12} /> {t("wfStaleRefsTitle")}
+            </span>
+            {staleRefs.map(({ key, ref }) => (
+              <div className="wf-stale-row" key={`${key}-${ref}`}>
+                <code className="wf-stale-chip">{ref}</code>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="wf-stale-repoint">
+                      {t("wfRepoint")}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="wf-repoint-pop">
+                    {variables.map((valid) => (
+                      <button
+                        key={valid}
+                        type="button"
+                        className="wf-repoint-opt"
+                        onClick={() => repoint(key, ref, valid)}
+                      >
+                        {valid.replace(/[{}]/g, "")}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="wf-repoint-opt danger"
+                      onClick={() => repoint(key, ref, "")}
+                    >
+                      {t("wfRemoveRef")}
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            ))}
+          </div>
+        )}
         {node.type === "ai_generate" && (
           <label className="wf-field">
             <span>{t("wfModelPreset")}</span>
@@ -957,7 +1014,34 @@ function NodeInspector({
             </Select>
           </label>
         )}
-        {specs.map(([key, spec]) => {
+        {node.type === "llm" && (
+          <label className="wf-field">
+            <span>{t("wfLlmPreset")}</span>
+            <Select
+              value={(config.preset as string) || "balanced"}
+              onValueChange={(next) => setConfig("preset", next)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="precise">{t("wfPresetPrecise")}</SelectItem>
+                <SelectItem value="balanced">{t("wfPresetBalanced")}</SelectItem>
+                <SelectItem value="creative">{t("wfPresetCreative")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <small>
+              {config.preset === "precise"
+                ? t("wfPresetPreciseHint")
+                : config.preset === "creative"
+                  ? t("wfPresetCreativeHint")
+                  : t("wfPresetBalancedHint")}
+            </small>
+          </label>
+        )}
+        {specs
+          .filter(([key]) => !(node.type === "llm" && key === "preset"))
+          .map(([key, spec]) => {
           const value = config[key];
           const isObject = spec?.type === "object";
           const isTemplate = spec?.type === "template" || spec?.type === "code";

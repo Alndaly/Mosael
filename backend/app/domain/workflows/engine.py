@@ -200,6 +200,10 @@ def _trim_outputs(outputs: dict[str, Any]) -> dict[str, Any]:
 # ---------- 节点执行器 ----------
 
 
+# 生成风格预设 → temperature(替代让用户填裸数值)。默认均衡。
+_LLM_PRESET_TEMPS = {"precise": 0.1, "balanced": 0.4, "creative": 0.9}
+
+
 def _handle_llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     profile = _pick_profile(db, config.get("profile_id"))
     messages: list[dict[str, Any]] = []
@@ -208,10 +212,11 @@ def _handle_llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     messages.append({"role": "user", "content": str(config.get("prompt", ""))})
     base_url = profile.base_url.rstrip("/")
     model = str(config.get("model") or profile.default_model)
+    temperature = _LLM_PRESET_TEMPS.get(str(config.get("preset") or "balanced"), 0.4)
     response = httpx.post(
         f"{base_url}/chat/completions",
         headers={"Authorization": f"Bearer {profile.api_key}"},
-        json={"model": model, "messages": messages, "temperature": 0.4},
+        json={"model": model, "messages": messages, "temperature": temperature},
         timeout=LLM_TIMEOUT_SECONDS,
     )
     response.raise_for_status()

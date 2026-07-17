@@ -5575,6 +5575,87 @@
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
+/* 失效引用:红框块 + 每条一枚红 chip 与「重新指向」入口 */
+.wf-stale-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--destructive) 6%, transparent);
+}
+
+.wf-stale-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--destructive);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wf-stale-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wf-stale-chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 45%, transparent);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  text-decoration: line-through;
+}
+
+.wf-stale-repoint {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.wf-stale-repoint:hover {
+  border-color: var(--border-strong);
+}
+
+.wf-repoint-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  padding: 5px;
+}
+
+.wf-repoint-opt {
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+.wf-repoint-opt:hover {
+  background: var(--muted);
+}
+
+.wf-repoint-opt.danger {
+  color: var(--destructive);
+  font-family: inherit;
+}
+
 /* `/` 唤起的光标锚定变量弹窗(镜像 div 定位) */
 .var-textarea-wrap {
   position: relative;

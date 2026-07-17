@@ -42,6 +42,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "prompt": {"type": "template", "required": True, "description": "用户提示词,支持 {{变量}}"},
             "system": {"type": "template", "description": "系统提示词"},
+            "preset": {
+                "type": "string",
+                "description": "生成风格(替代裸 temperature)",
+                "options": ["precise", "balanced", "creative"],
+            },
             "profile_id": {"type": "string", "description": "供应商配置 id,留空自动选择"},
             "model": {"type": "string", "description": "模型名,留空用配置默认"},
         },
