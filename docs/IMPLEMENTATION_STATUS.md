@@ -133,6 +133,17 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Subtitle tracks: clips.asset_id nullable (0010), text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
 - Chrome: page headers removed app-wide (slim action toolbars instead), AI Studio 对话/生成 segmented control in the chat sidebar, visible timeline clip-action buttons, redesigned monitor transport (circular play, custom volume), hairline-only panel resizers, ChatGPT-grade assistant message typography, media-library covers fixed (missing auth token on thumbnail URLs).
 
+### Professional color grading (mibu-video parity + beyond)
+
+Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the Monitor's CSS/SVG preview both consume it, and it burns into FFmpeg on export.
+
+- 16-slider primary grade (exposure/contrast/temperature/…): normalized [-1,1], mapped to eq/curves/hue/colortemperature/vibrance/colorbalance/unsharp/vignette in the executor.
+- DaVinci-style tone curves (`colorCurves.ts`): Luma/R/G/B control points → `curves=` in export and an SVG `feComponentTransfer` in preview, both composing master∘channel (the real FFmpeg order); near-duplicate x-points de-duped at plan time so the vf chain can't be rejected. Channel-tabbed `CurveEditor` with drag/add/remove/reset.
+- Color-grade presets (`colorPresets.ts`): six curated looks (Vivid/B&W/Warm/Cool/Cinematic/Fade) as pure data that fill the sliders + a signature curve; active preset highlighted by exact match; presets preserve an applied LUT.
+- Per-clip color undo/redo (`useColorHistory.ts`): a dedicated stack, separate from the timeline's global undo, snapshotting color+filter before each edit (slider commit, preset, reset, curve gesture).
+- 3D LUT: `.cube` upload/store/list/delete (`luts` table, per-workspace storage, header validator) + `lut3d` burn-in after the primary grade; `LutPicker` in the color panel wired to `effects.color.lut` (preview is export-only for LUTs).
+- Scopes: histogram + waveform sampled from the current frame on an rAF loop, reflecting the grade via `ctx.filter`. A dedicated crossOrigin sampling video (cache-buster) reads untainted pixels without touching the main playback video.
+
 ### Plugin runtime (plan §19.6)
 
 - Process-isolated execution: manifest `entry` script spawned per call with one JSON request on stdin / one JSON response on stdout ({ok, output|error}), 60s timeout, 1MB output cap, minimal env, cwd = plugin dir, entry path confined to the plugin directory.
