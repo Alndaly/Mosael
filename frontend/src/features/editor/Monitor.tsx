@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
+import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -87,9 +88,9 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
-    color?: Record<string, number>;
+    color?: Record<string, number> & { curves?: ColorCurves };
   };
-  const { cssFilter, vignette } = React.useMemo(() => {
+  const { cssFilter, vignette, curveTables } = React.useMemo(() => {
     const parts: string[] = [];
     const preset = FILTER_CSS[String(activeEffects.filter ?? "")];
     if (preset) parts.push(preset);
@@ -109,7 +110,10 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     if (v("tint")) parts.push(`hue-rotate(${(v("tint") * -8).toFixed(1)}deg)`);
     const fadeAmount = Math.max(0, v("fade"));
     if (fadeAmount) parts.push(`contrast(${(1 - fadeAmount * 0.25).toFixed(3)}) brightness(${(1 + fadeAmount * 0.08).toFixed(3)})`);
-    return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")) };
+    // 色调曲线无法用 CSS filter 函数表达 → 引用一次性渲染的 SVG feComponentTransfer 滤镜精确查表。
+    const tables = colorCurvesTables(grade.curves);
+    if (tables) parts.push(`url(#${CURVES_FILTER_ID})`);
+    return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
@@ -252,6 +256,18 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   return (
     <div className="monitor-stack">
       <audio ref={audioRef} preload="auto" />
+      {/* 曲线预览滤镜:逐通道 feComponentTransfer 查表,cssFilter 里以 url(#id) 引用。 */}
+      {curveTables && (
+        <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+          <filter id={CURVES_FILTER_ID} colorInterpolationFilters="sRGB">
+            <feComponentTransfer>
+              <feFuncR type="table" tableValues={curveTables.r} />
+              <feFuncG type="table" tableValues={curveTables.g} />
+              <feFuncB type="table" tableValues={curveTables.b} />
+            </feComponentTransfer>
+          </filter>
+        </svg>
+      )}
       <div className="monitor-stage">
         <div className="monitor-frame-wrap" ref={stageRef} onClick={playToggle}>
           <video

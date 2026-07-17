@@ -69,3 +69,24 @@ def test_hash_stable_for_same_content():
     p1 = make_plan([clip("c1", "a1", 0, 0, 4)])
     p2 = make_plan([clip("c1", "a1", 0, 0, 4)])
     assert p1.render_plan_hash == p2.render_plan_hash
+
+
+def test_clip_curves_emit_ffmpeg_specs():
+    c = clip("c1", "a1", 0, 0, 5)
+    c["effects"] = {"color": {"curves": {
+        "luma": [[0, 0], [0.5, 0.7], [1, 1]],
+        "r": [[0, 0], [1, 1]],                  # identity → dropped
+        "g": [[0, 0.1], [0.5, 0.6], [0.502, 0.9], [1, 1]],  # 0.5/0.502 near-dup → 0.502 dropped
+    }}}
+    plan = make_plan([c])
+    curves = plan.video_segments[0].curves
+    assert curves == (
+        ("master", "0.000/0.000 0.500/0.700 1.000/1.000"),
+        ("g", "0.000/0.100 0.500/0.600 1.000/1.000"),
+    ), curves
+
+
+def test_identity_curves_are_dropped():
+    c = clip("c1", "a1", 0, 0, 5)
+    c["effects"] = {"color": {"curves": {"luma": [[0, 0], [1, 1]]}}}
+    assert make_plan([c]).video_segments[0].curves == ()

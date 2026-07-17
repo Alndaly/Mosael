@@ -38,6 +38,10 @@ class Segment:
     # Manual grade: sorted (name, value) pairs, names from GRADE_FIELDS, values
     # clamped to [-1, 1] (0 entries dropped). Mirrors mibu-video's color panel.
     grade: tuple[tuple[str, float], ...] = ()
+    # Tone curves (DaVinci-style Luma/R/G/B), pre-formatted per channel as
+    # (ffmpeg_key, "x/y x/y ...") — identity channels dropped, near-dup points
+    # removed at plan time. Empty when all channels are identity.
+    curves: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -217,6 +221,7 @@ def build_render_plan(
                     for field in GRADE_FIELDS
                     if _grade_value(grade, field)
                 ),
+                curves=_curve_specs(grade.get("curves")),
             )
         )
         cursor = start + duration
@@ -296,6 +301,49 @@ def _grade_value(grade: dict, key: str) -> float:
         return max(-1.0, min(1.0, float(grade.get(key) or 0.0)))
     except (TypeError, ValueError):
         return 0.0
+
+
+def _curve_spec(points: object) -> str:
+    """One channel's points → ffmpeg curves spec ``"x/y x/y ..."``, or "" if identity.
+
+    ffmpeg's curves filter rejects the WHOLE chain ("points too close / not strictly
+    increasing") if two points round to the same x at .3f — since color and subtitle
+    burn-in share this vf, one bad point would crash both. So drop near-duplicates
+    (< 0.004 apart) rather than let it through."""
+    if not isinstance(points, (list, tuple)):
+        return ""
+    valid: list[tuple[float, float]] = []
+    for p in points:
+        if isinstance(p, (list, tuple)) and len(p) == 2:
+            try:
+                valid.append((max(0.0, min(1.0, float(p[0]))), max(0.0, min(1.0, float(p[1])))))
+            except (TypeError, ValueError):
+                continue
+    if len(valid) < 2:
+        return ""
+    valid.sort()
+    deduped: list[tuple[float, float]] = []
+    for x, y in valid:
+        if deduped and x - deduped[-1][0] < 0.004:
+            continue
+        deduped.append((x, y))
+    if len(deduped) < 2:
+        return ""
+    if len(deduped) == 2 and deduped[0] == (0.0, 0.0) and deduped[1] == (1.0, 1.0):
+        return ""  # identity → skip
+    return " ".join(f"{x:.3f}/{y:.3f}" for x, y in deduped)
+
+
+def _curve_specs(curves: object) -> tuple[tuple[str, str], ...]:
+    """{luma|r|g|b: points} → ffmpeg per-channel specs. ffmpeg composes master∘channel."""
+    if not isinstance(curves, dict):
+        return ()
+    out: list[tuple[str, str]] = []
+    for channel, ff_key in (("luma", "master"), ("r", "r"), ("g", "g"), ("b", "b")):
+        spec = _curve_spec(curves.get(channel))
+        if spec:
+            out.append((ff_key, spec))
+    return tuple(out)
 
 
 def _clip_fades(clip: dict, duration: float) -> tuple[float, float]:
