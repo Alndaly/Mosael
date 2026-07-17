@@ -58,6 +58,15 @@ export function App() {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, []);
+
+  // 全屏时系统窗口控件消失 → 撤掉顶栏为它们预留的边距(mac 76px / Win 148px)。
+  React.useEffect(() => {
+    const desktop = window.mibuDesktop;
+    if (!desktop?.onFullscreen) return;
+    return desktop.onFullscreen((fullscreen) => {
+      document.documentElement.classList.toggle("is-fullscreen", fullscreen);
+    });
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>

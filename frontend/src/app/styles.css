@@ -274,6 +274,14 @@
   padding-right: 148px;
 }
 
+/* 全屏:系统窗口控件消失,撤掉预留边距(否则左/右白出一块)。特异性高于上面两条,顺序无关。 */
+.is-desktop.is-mac.is-fullscreen .topbar {
+  padding-left: 10px;
+}
+.is-desktop.is-win.is-fullscreen .topbar {
+  padding-right: 10px;
+}
+
 
 .topbar {
   display: flex;

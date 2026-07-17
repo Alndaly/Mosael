@@ -32,5 +32,6 @@ interface Window {
   mibuDesktop?: {
     platform: string;
     setTitleOverlay?: (colors: { color: string; symbolColor: string }) => void;
+    onFullscreen?: (callback: (fullscreen: boolean) => void) => () => void;
   };
 }

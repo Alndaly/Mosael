@@ -8,6 +8,12 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("mibuDesktop", {
   platform: process.platform,
   setTitleOverlay: (colors) => ipcRenderer.send("mibu:title-overlay", colors),
+  // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。
+  onFullscreen: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("mibu:fullscreen", listener);
+    return () => ipcRenderer.removeListener("mibu:fullscreen", listener);
+  },
 });
 
 contextBridge.exposeInMainWorld("mibuPublish", {

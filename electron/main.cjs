@@ -200,6 +200,13 @@ function createWindow() {
   // 无边框自绘标题:菜单栏默认隐藏,Win/Linux 下按 Alt 唤起(快捷键始终有效)。
   win.setMenuBarVisibility(false);
   win.autoHideMenuBar = true;
+  // 全屏时系统窗口控件(mac 红绿灯 / Win 标题栏三键)消失,顶栏为它们预留的边距要撤掉。
+  const sendFullscreen = () => {
+    if (!win.isDestroyed()) win.webContents.send("mibu:fullscreen", win.isFullScreen());
+  };
+  win.on("enter-full-screen", sendFullscreen);
+  win.on("leave-full-screen", sendFullscreen);
+  win.webContents.on("did-finish-load", sendFullscreen);
   // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
