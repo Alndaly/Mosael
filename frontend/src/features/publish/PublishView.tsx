@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bug, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
+import { Bug, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Globe, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -238,6 +238,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<PublishAccount | null>(null);
   const [removing, setRemoving] = React.useState<PublishAccount | null>(null);
+  const [proxyEditing, setProxyEditing] = React.useState<PublishAccount | null>(null);
 
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, staleTime: Infinity });
   const accounts = useQuery({
@@ -255,7 +256,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
 
   const patch = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean } }) =>
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean; proxy?: string | null } }) =>
       patchPublishAccount(id, body),
     onSuccess: () => {
       setRenaming(null);
@@ -306,6 +307,11 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
               <div className={account.enabled ? "acct-card panel" : "acct-card panel disabled"}>
                 <div className="acct-head">
                   <span className="acct-platform">{meta?.label ?? account.platform}</span>
+                  {isBrowser && account.proxy && (
+                    <em className="acct-proxy" title={account.proxy}>
+                      <Globe size={10} /> {t("publishProxyOn")}
+                    </em>
+                  )}
                   {isBrowser ? (
                     <em className={`publish-binding b-${account.binding_status}`}>
                       {t(`binding_${account.binding_status}` as never)}
@@ -366,6 +372,11 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
             </ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => setRenaming(account)}>{t("rename")}</ContextMenuItem>
+              {isBrowser && (
+                <ContextMenuItem onSelect={() => setProxyEditing(account)}>
+                  <Globe /> {t("publishProxySet")}
+                </ContextMenuItem>
+              )}
               {isBrowser && window.mibuPublish && (
                 <ContextMenuItem
                   onSelect={() => {
@@ -399,7 +410,55 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
         onCancel={() => setRemoving(null)}
         onConfirm={() => removing && remove.mutate(removing.id)}
       />
+      <ProxyDialog
+        account={proxyEditing}
+        onClose={() => setProxyEditing(null)}
+        onSave={(value) => {
+          if (proxyEditing) patch.mutate({ id: proxyEditing.id, body: { proxy: value } });
+          setProxyEditing(null);
+        }}
+      />
     </div>
+  );
+}
+
+/** 设置某账号的代理(空 = 清除走直连)。下次打开该账号视图时生效。 */
+function ProxyDialog({
+  account,
+  onClose,
+  onSave,
+}: {
+  account: PublishAccount | null;
+  onClose: () => void;
+  onSave: (proxy: string) => void;
+}) {
+  const t = useI18n();
+  const [value, setValue] = React.useState("");
+  React.useEffect(() => {
+    setValue(account?.proxy ?? "");
+  }, [account]);
+  return (
+    <ModalShell open={account !== null} onOpenChange={(next) => !next && onClose()} title={t("publishProxySet")}>
+      <div className="task-create-form">
+        <label className="wf-field">
+          <span>{t("publishProxy")}</span>
+          <Input
+            autoFocus
+            value={value}
+            placeholder="http://user:pass@host:port"
+            spellCheck={false}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <small>{t("publishProxyHint")}</small>
+        </label>
+        <div className="task-create-actions">
+          <Button variant="ghost" onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button onClick={() => onSave(value.trim())}>{t("save")}</Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -487,11 +546,13 @@ function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspa
   const [platform, setPlatform] = React.useState("folder");
   const [name, setName] = React.useState("");
   const [config, setConfig] = React.useState<Record<string, string>>({});
+  const [proxy, setProxy] = React.useState("");
 
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, enabled: open, staleTime: Infinity });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
 
   const meta = (platforms.data ?? []).find((item) => item.platform === platform) ?? null;
+  const isBrowser = meta?.executor === "browser";
   const configSpecs = Object.entries((meta?.config ?? {}) as Record<string, { description?: string; required?: boolean }>);
 
   const create = useMutation({
@@ -501,10 +562,12 @@ function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspa
         platform,
         name: name.trim() || meta?.label || platform,
         config,
+        proxy: isBrowser ? proxy.trim() || null : null,
       }),
     onSuccess: () => {
       setName("");
       setConfig({});
+      setProxy("");
       refresh();
       toast.success(t("publishAccountAdded"));
       onClose();
@@ -554,6 +617,18 @@ function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspa
             {spec?.description && <small>{spec.description}</small>}
           </label>
         ))}
+        {isBrowser && (
+          <label className="wf-field">
+            <span>{t("publishProxy")}</span>
+            <Input
+              value={proxy}
+              placeholder="http://user:pass@host:port"
+              spellCheck={false}
+              onChange={(event) => setProxy(event.target.value)}
+            />
+            <small>{t("publishProxyHint")}</small>
+          </label>
+        )}
         <div className="task-create-actions">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("close")}

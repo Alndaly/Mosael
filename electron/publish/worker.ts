@@ -129,7 +129,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   const t = toAdapterTask(bt);
   const driver = views.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
   try {
-    await views.configureAccount(t.accountId, null);
+    await views.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
     await adapter.openCreatorPage();
     plog("runTask creator page opened:", bt.id, driver.url());
@@ -241,7 +241,7 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
   };
   try {
     plog("recheck start:", acc.account_id, platform);
-    await views.configureAccount(acc.account_id, null);
+    await views.configureAccount(acc.account_id, acc.proxy ?? null);
     const driver = views.getDriver(acc.account_id); // ensure() 建视图但不 show —— 后台静默检查
     const adapter = createAdapter(platform, driver, stub);
     await adapter.openCreatorPage();
@@ -372,7 +372,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
   loginAccounts.add(accountId);
   const gen = generation;
   try {
-    await views.configureAccount(accountId, null);
+    await views.configureAccount(accountId, await backend.accountProxy(accountId));
     const driver = views.getDriver(accountId);
     // 亮出视图即占据前台单槽,loop 不再对该账号启动新复检;在飞的旧复检 goto 会被下面
     // 登录 goto 的 loadURL 自然覆盖(ERR_ABORTED),不会与登录页互抢。
@@ -445,7 +445,7 @@ export async function openPage(accountId: string, platform: string): Promise<voi
     views.show(views.visibleAccountId);
     return;
   }
-  await views.configureAccount(accountId, null);
+  await views.configureAccount(accountId, await backend.accountProxy(accountId));
   const driver = views.getDriver(accountId);
   const current = driver.url();
   views.show(accountId);
@@ -463,7 +463,7 @@ export async function inspectAccount(accountId: string, platform: string): Promi
   if (views.visibleAccountId && views.visibleAccountId !== accountId) {
     return views.openDevTools(views.visibleAccountId);
   }
-  await views.configureAccount(accountId, null);
+  await views.configureAccount(accountId, await backend.accountProxy(accountId));
   const driver = views.getDriver(accountId);
   const current = driver.url();
   views.show(accountId);

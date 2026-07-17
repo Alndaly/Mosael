@@ -122,14 +122,16 @@ WEBHOOK_TIMEOUT_SECONDS = 60
 
 
 def create_account(
-    db: Session, *, workspace_id: str, platform: str, name: str, config: dict[str, Any]
+    db: Session, *, workspace_id: str, platform: str, name: str, config: dict[str, Any], proxy: str | None = None
 ) -> PublishAccount:
     platform = normalize_platform(platform)
     meta = PUBLISH_PLATFORMS[platform]
     for key, spec in meta["config"].items():
         if isinstance(spec, dict) and spec.get("required") and not str(config.get(key, "")).strip():
             raise PublishDomainError(f"平台 {platform} 缺少必填配置 {key}")
-    account = PublishAccount(workspace_id=workspace_id, platform=platform, name=name, config=config)
+    account = PublishAccount(
+        workspace_id=workspace_id, platform=platform, name=name, config=config, proxy=(proxy or "").strip() or None
+    )
     db.add(account)
     db.commit()
     db.refresh(account)

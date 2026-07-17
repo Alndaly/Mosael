@@ -211,6 +211,26 @@ export interface paths {
         patch: operations["patch_account_api_publish_worker_account_patch"];
         trace?: never;
     };
+    "/api/publish/worker/account/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Account
+         * @description 执行器打开某账号视图前拿它的连接参数(目前只有 proxy)。
+         */
+        get: operations["worker_account_api_publish_worker_account__account_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/worker/heartbeat": {
         parameters: {
             query?: never;
@@ -453,6 +473,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/luts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Luts */
+        get: operations["list_luts_api_luts_get"];
+        put?: never;
+        /** Upload Lut */
+        post: operations["upload_lut_api_luts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/luts/{lut_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Lut */
+        delete: operations["delete_lut_api_luts__lut_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Lut */
+        patch: operations["rename_lut_api_luts__lut_id__patch"];
         trace?: never;
     };
     "/api/sequences": {
@@ -841,6 +897,23 @@ export interface paths {
         get: operations["get_job_api_jobs__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Job Route */
+        post: operations["cancel_job_route_api_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2175,6 +2248,15 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_lut_api_luts_post */
+        Body_upload_lut_api_luts_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name?: string | null;
+            /** File */
+            file: string;
+        };
         /** ClaimRequest */
         ClaimRequest: {
             /** Exclude Accounts */
@@ -2604,6 +2686,26 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** LutOut */
+        LutOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Size */
+            size: number;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** LutUpdate */
+        LutUpdate: {
+            /** Name */
+            name: string;
+        };
         /** MoveClipRequest */
         MoveClipRequest: {
             /** Timeline Start */
@@ -2887,6 +2989,8 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             };
+            /** Proxy */
+            proxy?: string | null;
         };
         /** PublishAccountOut */
         PublishAccountOut: {
@@ -2904,6 +3008,8 @@ export interface components {
             };
             /** Enabled */
             enabled: boolean;
+            /** Proxy */
+            proxy?: string | null;
             /**
              * Binding Status
              * @default unknown
@@ -2931,6 +3037,8 @@ export interface components {
             } | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Proxy */
+            proxy?: string | null;
         };
         /** PublishCopyRequest */
         PublishCopyRequest: {
@@ -3902,6 +4010,39 @@ export interface operations {
             };
         };
     };
+    worker_account_api_publish_worker_account__account_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     heartbeat_api_publish_worker_heartbeat_post: {
         parameters: {
             query?: never;
@@ -4510,6 +4651,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_luts_api_luts_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LutOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_lut_api_luts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_lut_api_luts_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LutOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lut_api_luts__lut_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lut_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_lut_api_luts__lut_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lut_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LutUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LutOut"];
                 };
             };
             /** @description Validation Error */
@@ -5302,6 +5571,37 @@ export interface operations {
         };
     };
     get_job_api_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_job_route_api_jobs__job_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;

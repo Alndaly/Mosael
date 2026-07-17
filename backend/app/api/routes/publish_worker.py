@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession
+from app.db.models import PublishAccount
 from app.domain.publish import PublishDomainError
 from app.domain.publish import worker as publish_worker
 
@@ -79,6 +80,15 @@ def patch_account(body: AccountPatchRequest, db: DbSession) -> dict[str, Any]:
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"id": account.id, "binding_status": account.binding_status}
+
+
+@router.get("/publish/worker/account/{account_id}")
+def worker_account(account_id: str, db: DbSession) -> dict[str, Any]:
+    """执行器打开某账号视图前拿它的连接参数(目前只有 proxy)。"""
+    account = db.get(PublishAccount, account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"id": account.id, "proxy": account.proxy}
 
 
 @router.post("/publish/worker/heartbeat")

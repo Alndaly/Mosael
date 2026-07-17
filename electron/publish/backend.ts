@@ -10,6 +10,7 @@ interface BackendTask {
   account_id: string;
   account_name: string;
   platform: string;
+  proxy: string | null;
   video_path: string;
   title: string;
   tags: string[];
@@ -40,6 +41,7 @@ interface CheckAccount {
   account_id: string;
   platform: string;
   name: string | null;
+  proxy?: string | null;
   // 复检前的登录态:执行器据此判断「从 bound 变 login_required」才发失效通知。
   binding_status?: string | null;
 }
@@ -78,6 +80,16 @@ export function patchAccount(
 
 export function heartbeat(): Promise<unknown> {
   return req("/worker/heartbeat", "POST");
+}
+
+/** 打开某账号视图前拿它的代理(用户手动登录/看页/检查页面时;后台任务/复检的代理走 claim 负载)。 */
+export async function accountProxy(accountId: string): Promise<string | null> {
+  try {
+    const { proxy } = await req<{ proxy: string | null }>(`/worker/account/${accountId}`);
+    return proxy ?? null;
+  } catch {
+    return null; // 拿不到就直连,别挡住手动操作
+  }
 }
 
 export type { BackendTask, CheckAccount };

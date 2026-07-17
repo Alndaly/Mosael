@@ -5789,10 +5789,11 @@
 .acct-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
 }
 
 .acct-platform {
+  margin-right: auto; /* 平台名靠左,代理/登录态徽标靠右成组 */
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -5802,6 +5803,21 @@
 
 .acct-head .publish-binding {
   margin-left: 0;
+}
+
+.acct-proxy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-style: normal;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  max-width: 130px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .acct-name {

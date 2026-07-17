@@ -2313,6 +2313,14 @@ function patchAccount(accountId, patch) {
 function heartbeat() {
   return req("/worker/heartbeat", "POST");
 }
+async function accountProxy(accountId) {
+  try {
+    const { proxy } = await req(`/worker/account/${accountId}`);
+    return proxy ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // electron/publish/worker.ts
 var views = null;
@@ -2392,7 +2400,7 @@ async function runTask(bt) {
   const t = toAdapterTask(bt);
   const driver = views.getDriver(t.accountId);
   try {
-    await views.configureAccount(t.accountId, null);
+    await views.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
     await adapter.openCreatorPage();
     plog("runTask creator page opened:", bt.id, driver.url());
@@ -2492,7 +2500,7 @@ async function checkAccountStatus(acc) {
   };
   try {
     plog("recheck start:", acc.account_id, platform);
-    await views.configureAccount(acc.account_id, null);
+    await views.configureAccount(acc.account_id, acc.proxy ?? null);
     const driver = views.getDriver(acc.account_id);
     const adapter = createAdapter(platform, driver, stub);
     await adapter.openCreatorPage();
@@ -2587,7 +2595,7 @@ async function openLogin(accountId, platform) {
   loginAccounts.add(accountId);
   const gen = generation;
   try {
-    await views.configureAccount(accountId, null);
+    await views.configureAccount(accountId, await accountProxy(accountId));
     const driver = views.getDriver(accountId);
     views.show(accountId);
     const def = resolvePlatform(platform);
@@ -2647,7 +2655,7 @@ async function openPage(accountId, platform) {
     views.show(views.visibleAccountId);
     return;
   }
-  await views.configureAccount(accountId, null);
+  await views.configureAccount(accountId, await accountProxy(accountId));
   const driver = views.getDriver(accountId);
   const current = driver.url();
   views.show(accountId);
@@ -2661,7 +2669,7 @@ async function inspectAccount(accountId, platform) {
   if (views.visibleAccountId && views.visibleAccountId !== accountId) {
     return views.openDevTools(views.visibleAccountId);
   }
-  await views.configureAccount(accountId, null);
+  await views.configureAccount(accountId, await accountProxy(accountId));
   const driver = views.getDriver(accountId);
   const current = driver.url();
   views.show(accountId);

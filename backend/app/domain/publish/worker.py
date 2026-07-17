@@ -86,6 +86,7 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         "account_id": account.id,
         "account_name": account.name,
         "platform": account.platform,
+        "proxy": account.proxy,
         "video_path": str(resolve_key(asset.file_key)),
         "title": task.title,
         "tags": list(task.tags or []),
@@ -211,6 +212,7 @@ def claim_check(db: Session) -> dict[str, Any] | None:
                 "account_id": account.id,
                 "platform": account.platform,
                 "name": account.name,
+                "proxy": account.proxy,
                 "binding_status": previous,
             }
     return None

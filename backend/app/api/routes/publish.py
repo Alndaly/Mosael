@@ -61,7 +61,12 @@ def create_account_route(body: PublishAccountCreate, db: DbSession, user: Curren
     ensure_workspace_access(db, user, body.workspace_id)
     try:
         return create_account(
-            db, workspace_id=body.workspace_id, platform=body.platform, name=body.name, config=body.config
+            db,
+            workspace_id=body.workspace_id,
+            platform=body.platform,
+            name=body.name,
+            config=body.config,
+            proxy=body.proxy,
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -80,6 +85,9 @@ def update_account(account_id: str, body: PublishAccountUpdate, db: DbSession, u
         account.config = changes["config"]
     if changes.get("enabled") is not None:
         account.enabled = changes["enabled"]
+    if "proxy" in changes:
+        # 空串 → 清成 None(直连);否则存去空白后的值。
+        account.proxy = (changes["proxy"] or "").strip() or None
     db.commit()
     db.refresh(account)
     return account

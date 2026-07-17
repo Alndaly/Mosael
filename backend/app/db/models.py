@@ -382,6 +382,9 @@ class PublishAccount(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # 该账号内嵌视图走的代理(矩阵防关联):http(s)://[user:pass@]host:port 或 socks5://host:port。
+    # 空 = 直连。执行器把它喂给该账号 session 分区的 setProxy。
+    proxy: Mapped[str | None] = mapped_column(String(300), nullable=True)
     # 浏览器平台的登录态(老版 BINDING_STATUSES):unknown/checking/bound/login_required/...
     binding_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -585,12 +585,15 @@ class PublishAccountCreate(BaseModel):
     platform: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=160)
     config: dict = Field(default_factory=dict)
+    proxy: str | None = Field(default=None, max_length=300)
 
 
 class PublishAccountUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     config: dict | None = None
     enabled: bool | None = None
+    # 空串 = 清除代理走直连;None = 不改。
+    proxy: str | None = Field(default=None, max_length=300)
 
 
 class PublishAccountOut(OrmModel):
@@ -600,6 +603,7 @@ class PublishAccountOut(OrmModel):
     name: str
     config: dict
     enabled: bool
+    proxy: str | None = None
     binding_status: str = "unknown"
     last_error: str | None = None
     last_checked_at: datetime | None = None

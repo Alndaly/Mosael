@@ -348,6 +348,7 @@ export function createPublishAccount(body: {
   platform: string;
   name: string;
   config: Record<string, unknown>;
+  proxy?: string | null;
 }): Promise<PublishAccount> {
   return api<PublishAccount>("/api/publish/accounts", { method: "POST", body: JSON.stringify(body) });
 }
@@ -358,7 +359,7 @@ export function deletePublishAccount(accountId: string): Promise<unknown> {
 
 export function patchPublishAccount(
   accountId: string,
-  body: { name?: string; enabled?: boolean },
+  body: { name?: string; enabled?: boolean; proxy?: string | null },
 ): Promise<PublishAccount> {
   return api<PublishAccount>(`/api/publish/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
 }
