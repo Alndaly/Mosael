@@ -27,7 +27,7 @@ from app.domain.publish import (
 from app.media.paths import resolve_key
 
 # 登录态复检间隔:bound/login_required 的账号超过该时长未查就该复检。
-BINDING_RECHECK_HOURS = 3
+BINDING_RECHECK_HOURS = 12
 
 _last_heartbeat: float | None = None
 
