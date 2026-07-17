@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld("mibuPublish", {
   login: (accountId, platform) => ipcRenderer.invoke("publish:login", { accountId, platform }),
   openPage: (accountId, platform) => ipcRenderer.invoke("publish:openPage", { accountId, platform }),
   inspect: (accountId, platform) => ipcRenderer.invoke("publish:inspect", { accountId, platform }),
+  navigate: (url) => ipcRenderer.invoke("publish:navigate", { url }),
+  back: () => ipcRenderer.invoke("publish:back"),
+  forward: () => ipcRenderer.invoke("publish:forward"),
+  reload: () => ipcRenderer.invoke("publish:reload"),
   hideView: () => ipcRenderer.invoke("publish:hideView"),
   onViewState: (callback) => {
     const listener = (_event, state) => callback(state);

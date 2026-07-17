@@ -192,6 +192,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("publish:login", (_e, { accountId, platform }) => requirePublish().openLogin(accountId, platform));
   ipcMain.handle("publish:openPage", (_e, { accountId, platform }) => requirePublish().openPage(accountId, platform));
   ipcMain.handle("publish:inspect", (_e, { accountId, platform }) => requirePublish().inspectAccount(accountId, platform));
+  ipcMain.handle("publish:navigate", (_e, { url }) => requirePublish().navigateView(url));
+  ipcMain.handle("publish:back", () => requirePublish().viewBack());
+  ipcMain.handle("publish:forward", () => requirePublish().viewForward());
+  ipcMain.handle("publish:reload", () => requirePublish().viewReload());
   ipcMain.handle("publish:hideView", () => requirePublish().hidePublishView());
   // 账号视图里注入的「返回 Mibu」按钮(accountview-preload.cjs)→ 收起内嵌视图。
   ipcMain.on("publish:exit", () => {

@@ -1,6 +1,6 @@
 import React from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, FolderPlus } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Film, FolderPlus, Loader2, RotateCw, X } from "lucide-react";
 
 import { api, type ProjectWithStats, type Workspace } from "@/api/client";
 import { AuthProvider, useAuth } from "@/app/auth";
@@ -49,21 +49,89 @@ export function App() {
   );
 }
 
-/** Electron 内嵌发布视图可见时的顶部返回条(老版 PublishViewBar 的等价):
-    视图从 48px 处铺开,这条必须恰好 48px 高,否则露出穿帮。 */
+/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Mibu。
+ *  内嵌视图从 48px 处铺开,这条必须恰好 48px 高,否则中间露出 App 顶栏穿帮。
+ *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
 function PublishViewBar() {
-  const [state, setState] = React.useState<{ visible: boolean; accountName: string | null }>({
+  const t = useI18n();
+  const [state, setState] = React.useState<PublishViewState>({
     visible: false,
+    accountId: null,
     accountName: null,
   });
+  const [address, setAddress] = React.useState("");
+  const [editing, setEditing] = React.useState(false);
   React.useEffect(() => window.mibuPublish?.onViewState((next) => setState(next)), []);
+  // 地址随导航更新,但用户正在输入时不覆盖(否则打字被主进程回报打断)。
+  React.useEffect(() => {
+    if (!editing) setAddress(state.url ?? "");
+  }, [state.url, editing]);
   if (!state.visible) return null;
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = address.trim();
+    if (value) void window.mibuPublish?.navigate(value);
+    (event.currentTarget.querySelector("input") as HTMLInputElement | null)?.blur();
+  };
+
   return (
-    <div className="publish-view-bar titlebar-no-drag">
-      <button type="button" onClick={() => void window.mibuPublish?.hideView()}>
-        ← 返回 Mibu
+    <div className="publish-view-bar">
+      <div className="pvb-nav titlebar-no-drag">
+        <button
+          type="button"
+          className="pvb-icon"
+          disabled={!state.canGoBack}
+          onClick={() => void window.mibuPublish?.back()}
+          title={t("navBack")}
+          aria-label={t("navBack")}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <button
+          type="button"
+          className="pvb-icon"
+          disabled={!state.canGoForward}
+          onClick={() => void window.mibuPublish?.forward()}
+          title={t("navForward")}
+          aria-label={t("navForward")}
+        >
+          <ChevronRight size={16} />
+        </button>
+        <button
+          type="button"
+          className="pvb-icon"
+          onClick={() => void window.mibuPublish?.reload()}
+          title={state.loading ? t("navStop") : t("navReload")}
+          aria-label={state.loading ? t("navStop") : t("navReload")}
+        >
+          {state.loading ? <X size={15} /> : <RotateCw size={14} />}
+        </button>
+      </div>
+      <form className="pvb-address titlebar-no-drag" onSubmit={submit}>
+        {state.loading && <Loader2 size={13} className="pvb-spin" />}
+        <input
+          value={address}
+          spellCheck={false}
+          placeholder={t("addressPlaceholder")}
+          onChange={(event) => setAddress(event.target.value)}
+          onFocus={(event) => {
+            setEditing(true);
+            event.target.select();
+          }}
+          onBlur={() => {
+            setEditing(false);
+            setAddress(state.url ?? "");
+          }}
+        />
+      </form>
+      <button
+        type="button"
+        className="pvb-back titlebar-no-drag"
+        onClick={() => void window.mibuPublish?.hideView()}
+      >
+        <ArrowLeft size={14} /> {t("publishBackToMibu")}
       </button>
-      <span>{state.accountName ?? ""}</span>
     </div>
   );
 }

@@ -1,10 +1,9 @@
-// 内嵌账号视图的 preload:往平台页面里注入一个「← 返回 Mibu」悬浮按钮。
+// 内嵌账号视图的 preload:只做反检测补丁。
 //
-// 为什么需要:内嵌账号视图(WebContentsView)与主 UI 是同级视图。用户在平台页面里点过之后,输入
-// 焦点在账号视图上;此时点主 UI 顶栏的「返回」,macOS 会把「首次点击」用于切换 web contents 的焦点
-// 而吞掉那次点击(偶发失灵)。把返回按钮做进账号视图本身,点击就永远发生在「当前聚焦的视图」内,
-// 100% 生效。顶栏那个「返回」和 Esc 仍保留作双保险。
-const { ipcRenderer, webFrame } = require("electron");
+// 返回主 UI 走内嵌浏览器工具栏(主窗口 HTML 的「← 返回 Mibu」+ Esc,见 accountViews.ts /
+// App.tsx)——曾经往页面里注入过一个悬浮返回钮兜底 macOS 焦点吞点击,现已移除:工具栏那条本身
+// 在主窗口视图里,不涉及跨 webContents 首点丢失,注入钮反而挡住平台页面右上角。
+const { webFrame } = require("electron");
 
 // 反检测:视图是 contextIsolation 的,preload 改 navigator 影响不到页面「主世界」——必须用
 // webFrame.executeJavaScript 把补丁注进主世界,且趁 preload 执行(document_start 前、页面脚本跑之前)
@@ -43,56 +42,3 @@ try {
 } catch (e) {
   /* 注入失败不影响自动化主流程 */
 }
-
-const BTN_ID = "__mibu_exit_btn";
-
-// 返回按钮文案跟随应用语言。preload 在平台页面的渲染进程里跑,拿不到 userData 路径,
-// 同步问主进程一次即可(语言切换会整页重载,不需要热更新)。
-const LOCALE = (() => {
-  try {
-    return ipcRenderer.sendSync("app:getLocale") === "en" ? "en" : "zh";
-  } catch {
-    return "zh";
-  }
-})();
-const EXIT_LABEL = LOCALE === "en" ? "← Back to Mibu" : "← 返回 Mibu"; // i18n-ok 主进程词典外的双语常量
-
-function injectExitButton() {
-  try {
-    if (!document.documentElement) return;
-    if (document.getElementById(BTN_ID)) return;
-    const btn = document.createElement("button");
-    btn.id = BTN_ID;
-    btn.type = "button";
-    btn.textContent = EXIT_LABEL;
-    Object.assign(btn.style, {
-      position: "fixed",
-      top: "10px",
-      right: "16px",
-      zIndex: "2147483647", // 盖在平台页面一切之上
-      padding: "6px 12px",
-      borderRadius: "999px",
-      border: "1px solid rgba(255,255,255,.18)",
-      background: "rgba(17,20,26,.92)",
-      color: "#e6eaf0",
-      font: "600 12px/1 system-ui, -apple-system, 'PingFang SC', sans-serif",
-      cursor: "pointer",
-      boxShadow: "0 4px 16px rgba(0,0,0,.35)",
-      WebkitAppRegion: "no-drag",
-    });
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      ipcRenderer.send("publish:exit"); // 主进程收到 → 收起内嵌视图,把窗口还给 UI
-    });
-    document.documentElement.appendChild(btn);
-  } catch {
-    /* 注入失败不影响自动化主流程 */
-  }
-}
-
-// 每次导航后(平台页面常是 SPA,也监听一下)重新注入。
-window.addEventListener("DOMContentLoaded", injectExitButton);
-window.addEventListener("load", injectExitButton);
-// 平台 SPA 可能重绘掉我们的按钮 —— 定时补一下(便宜,2s 一次)。
-setInterval(injectExitButton, 2000);

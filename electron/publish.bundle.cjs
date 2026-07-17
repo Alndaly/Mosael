@@ -31,11 +31,15 @@ var index_exports = {};
 __export(index_exports, {
   hidePublishView: () => hidePublishView,
   inspectAccount: () => inspectAccount,
+  navigateView: () => navigateView,
   openLogin: () => openLogin,
   openPage: () => openPage,
   setLocale: () => setLocale,
   startPublishWorker: () => startPublishWorker,
-  stopPublishWorker: () => stopPublishWorker
+  stopPublishWorker: () => stopPublishWorker,
+  viewBack: () => viewBack,
+  viewForward: () => viewForward,
+  viewReload: () => viewReload
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -1082,6 +1086,29 @@ var AccountViewManager = class {
   get visibleAccountId() {
     return this.visibleId;
   }
+  visibleWebContents() {
+    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+    return view && !view.webContents.isDestroyed() ? view.webContents : null;
+  }
+  /** 工具栏导航:全部作用于当前可见视图,内部动作发生在「已聚焦的视图」里,稳。 */
+  navigate(rawUrl) {
+    const wc = this.visibleWebContents();
+    if (!wc) return;
+    const url = normalizeAddress(rawUrl);
+    if (url) void wc.loadURL(url);
+  }
+  back() {
+    this.visibleWebContents()?.navigationHistory.goBack();
+  }
+  forward() {
+    this.visibleWebContents()?.navigationHistory.goForward();
+  }
+  reload() {
+    const wc = this.visibleWebContents();
+    if (!wc) return;
+    if (wc.isLoading()) wc.stop();
+    else wc.reload();
+  }
   /**
    * Open detached DevTools on an account's embedded view (or the currently
    * visible one) — used to probe/calibrate selectors against the live platform
@@ -1164,6 +1191,13 @@ var AccountViewManager = class {
       view.webContents.on("before-input-event", (_event, input) => {
         if (input.type === "keyDown" && input.key === "Escape") this.hide();
       });
+      const sync = () => {
+        if (this.visibleId === accountId) this.emit();
+      };
+      view.webContents.on("did-navigate", sync);
+      view.webContents.on("did-navigate-in-page", sync);
+      view.webContents.on("did-start-loading", sync);
+      view.webContents.on("did-stop-loading", sync);
       view.setBackgroundColor("#ffffff");
       this.views.set(accountId, view);
       this.drivers.set(accountId, new PageDriver(view.webContents));
@@ -1196,13 +1230,27 @@ var AccountViewManager = class {
     });
   }
   emit() {
+    const wc = this.visibleWebContents();
     this.onViewChanged({
       visible: this.visibleId !== null,
       accountId: this.visibleId,
-      accountName: this.visibleId ? this.nameOf(this.visibleId) : null
+      accountName: this.visibleId ? this.nameOf(this.visibleId) : null,
+      url: wc ? wc.getURL() : "",
+      canGoBack: wc ? wc.navigationHistory.canGoBack() : false,
+      canGoForward: wc ? wc.navigationHistory.canGoForward() : false,
+      loading: wc ? wc.isLoading() : false
     });
   }
 };
+function normalizeAddress(input) {
+  const value = input.trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(value) || /^localhost(:\d+)?(\/.*)?$/i.test(value)) {
+    return `https://${value}`;
+  }
+  return `https://www.bing.com/search?q=${encodeURIComponent(value)}`;
+}
 
 // electron/publish/platforms.ts
 var PLATFORM_DEFINITIONS = [
@@ -2623,6 +2671,18 @@ async function inspectAccount(accountId, platform) {
   }
   return views.openDevTools(accountId);
 }
+function navigateView(url) {
+  views?.navigate(url);
+}
+function viewBack() {
+  views?.back();
+}
+function viewForward() {
+  views?.forward();
+}
+function viewReload() {
+  views?.reload();
+}
 function hidePublishView() {
   views?.hide();
 }
@@ -2630,9 +2690,13 @@ function hidePublishView() {
 0 && (module.exports = {
   hidePublishView,
   inspectAccount,
+  navigateView,
   openLogin,
   openPage,
   setLocale,
   startPublishWorker,
-  stopPublishWorker
+  stopPublishWorker,
+  viewBack,
+  viewForward,
+  viewReload
 });

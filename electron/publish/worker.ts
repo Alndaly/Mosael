@@ -474,6 +474,20 @@ export async function inspectAccount(accountId: string, platform: string): Promi
   return views.openDevTools(accountId);
 }
 
+/** 内嵌浏览器工具栏:导航当前可见视图。 */
+export function navigateView(url: string): void {
+  views?.navigate(url);
+}
+export function viewBack(): void {
+  views?.back();
+}
+export function viewForward(): void {
+  views?.forward();
+}
+export function viewReload(): void {
+  views?.reload();
+}
+
 /** 收起内嵌视图,把窗口还给 React UI。 */
 export function hidePublishView(): void {
   views?.hide();

@@ -25,6 +25,11 @@ export interface ViewState {
   visible: boolean;
   accountId: string | null;
   accountName: string | null;
+  // 内嵌浏览器工具栏状态(仅可见视图有效):当前地址、前进/后退可用、加载中。
+  url?: string;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  loading?: boolean;
 }
 
 /** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{dryRun,description,shortTitle}。 */

@@ -90,6 +90,31 @@ export class AccountViewManager {
     return this.visibleId;
   }
 
+  private visibleWebContents(): Electron.WebContents | null {
+    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+    return view && !view.webContents.isDestroyed() ? view.webContents : null;
+  }
+
+  /** 工具栏导航:全部作用于当前可见视图,内部动作发生在「已聚焦的视图」里,稳。 */
+  navigate(rawUrl: string): void {
+    const wc = this.visibleWebContents();
+    if (!wc) return;
+    const url = normalizeAddress(rawUrl);
+    if (url) void wc.loadURL(url);
+  }
+  back(): void {
+    this.visibleWebContents()?.navigationHistory.goBack();
+  }
+  forward(): void {
+    this.visibleWebContents()?.navigationHistory.goForward();
+  }
+  reload(): void {
+    const wc = this.visibleWebContents();
+    if (!wc) return;
+    if (wc.isLoading()) wc.stop();
+    else wc.reload();
+  }
+
   /**
    * Open detached DevTools on an account's embedded view (or the currently
    * visible one) — used to probe/calibrate selectors against the live platform
@@ -182,6 +207,14 @@ export class AccountViewManager {
       view.webContents.on("before-input-event", (_event, input) => {
         if (input.type === "keyDown" && input.key === "Escape") this.hide();
       });
+      // 地址/加载态变化 → 刷新工具栏(仅当前可见视图才广播)。
+      const sync = () => {
+        if (this.visibleId === accountId) this.emit();
+      };
+      view.webContents.on("did-navigate", sync);
+      view.webContents.on("did-navigate-in-page", sync);
+      view.webContents.on("did-start-loading", sync);
+      view.webContents.on("did-stop-loading", sync);
       view.setBackgroundColor("#ffffff");
       this.views.set(accountId, view);
       this.drivers.set(accountId, new PageDriver(view.webContents));
@@ -218,10 +251,27 @@ export class AccountViewManager {
   }
 
   private emit(): void {
+    const wc = this.visibleWebContents();
     this.onViewChanged({
       visible: this.visibleId !== null,
       accountId: this.visibleId,
       accountName: this.visibleId ? this.nameOf(this.visibleId) : null,
+      url: wc ? wc.getURL() : "",
+      canGoBack: wc ? wc.navigationHistory.canGoBack() : false,
+      canGoForward: wc ? wc.navigationHistory.canGoForward() : false,
+      loading: wc ? wc.isLoading() : false,
     });
   }
+}
+
+/** 地址栏输入归一化:补协议、看着像域名就直接访问,否则丢给必应搜索。 */
+function normalizeAddress(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  // 形如 example.com / localhost:3000 / 带路径的裸域名 → 补 https。
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(value) || /^localhost(:\d+)?(\/.*)?$/i.test(value)) {
+    return `https://${value}`;
+  }
+  return `https://www.bing.com/search?q=${encodeURIComponent(value)}`;
 }
