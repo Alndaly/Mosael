@@ -88,12 +88,16 @@ Each `WfNode` renders:
 - Control edge: node → node, as today.
 - Type compatibility: **not enforced** in this design (soft hints deferred to a later phase).
 
-### Migration
+### Migration (decided 2026-07-18)
 
 - Adding `kind` defaults existing edges to `"control"` — no data migration needed for stored
   graphs.
-- Existing `{{var}}` refs keep resolving (priority rule 3). Optionally, a one-time pass can
-  render a pure-`{{ref}}` field as a data edge on load (visual only) — decide in Phase 4.
+- **Legacy `{{var}}` refs are converted to data edges.** When a field's whole value is a pure
+  `{{source.output}}` reference, it is materialized as a `kind:"data"` edge (source.output →
+  target.input) on load and shown as a wire; the config field switches to "connect" mode.
+  Mixed rich-text templates (`"总结 {{a.text}} 和 {{b.text}}"`) stay as inline `{{var}}` text
+  (they can't be a single socket) and resolve via priority rule 3 — so `{{var}}` remains valid
+  syntax, just no longer the *primary* way to express a single-value binding.
 
 ## Visual
 
@@ -128,8 +132,10 @@ Each `WfNode` renders:
 
 ## Open questions
 
-1. Phase 4: convert legacy `{{var}}` to data edges, or keep both representations indefinitely?
-2. Should a data edge auto-create the implied control ordering only, or also show a faint
-   control wire? (Proposed: ordering only; the data wire itself conveys the dependency.)
-3. Per-output sockets (Phase 2) vs a single output socket with an output picker — which reads
-   better on dense graphs?
+1. ~~Convert legacy `{{var}}` to data edges?~~ **Decided: yes, convert (see Migration).**
+2. Data-edge visual: draw only the data wire, or also a faint control wire between the two
+   nodes? **Recommendation: data wire only** — it already implies "B waits for A", so a second
+   grey line between the same pair is redundant clutter. (Awaiting confirmation.)
+3. Multi-output nodes: per-output sockets vs single socket + output picker. **Recommendation:
+   per-output sockets** (ComfyUI-style) — most Mibu nodes have 1–3 outputs, so the extra dots
+   are cheap and make "which output" obvious at a glance. (Awaiting confirmation.)
