@@ -5006,8 +5006,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
   flex-wrap: wrap;
+  padding: 2px 2px 8px;
 }
 
 .wf-title {
@@ -5058,8 +5059,23 @@
   flex-wrap: wrap;
 }
 
+/* 「添加节点」是 Select 触发器,默认 bg-panel 在暗色下显得"暗/填充";统一成和其余
+   工具按钮一致的透明描边样式(高度/字号本来就一致:h-7 / 12px)。 */
+.wf-toolbar-actions .wf-add-node {
+  background: transparent;
+  border-radius: 6px;
+}
+
 .wf-add-node span {
   font-size: 12px;
+}
+
+/* 破坏性删除按钮与操作组之间的分隔,视觉上分清"操作"和"删除"。 */
+.wf-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border);
 }
 
 /* 画布区:检查器是画布内右侧浮层(Dify 式),不参与布局。 */
@@ -5231,7 +5247,7 @@
   height: 28px;
   padding: 0 9px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted-foreground);
   font-size: 12px;
@@ -5591,6 +5607,11 @@
 .wf-ref-slot {
   position: relative;
   padding-left: 12px;
+}
+
+/* 连接态的"选择上游输出"下拉占满字段剩余全宽。 */
+.wf-ref-slot :where(button, [role="combobox"]) {
+  width: 100%;
 }
 
 .wf-ref-slot::before {

@@ -130,7 +130,8 @@ function WfNode({ data, selected }: NodeProps) {
         <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
         <span className="wf-node-text">
           <strong>{d.label}</strong>
-          <small>{d.typeLabel}</small>
+          {/* 未改名时 label 就是类型名,别再重复显示一行类型。 */}
+          {d.label !== d.typeLabel && <small>{d.typeLabel}</small>}
         </span>
       </div>
       {badge && (
@@ -701,10 +702,8 @@ function WorkflowEditor({
           </span>
           <span className="wf-title-text">
             <strong>{workflow.name}</strong>
-            <small>
-              {t("wfNodeCount").replace("{n}", String(graph.nodes.length))}
-              {dirty ? ` · ${t("wfUnsaved")}` : ""}
-            </small>
+            {/* 节点数已在左栏列表显示,这里只留未保存状态,避免重复。 */}
+            {dirty && <small>{t("wfUnsaved")}</small>}
           </span>
         </button>
         <div className="wf-toolbar-actions">
@@ -788,6 +787,7 @@ function WorkflowEditor({
           >
             <Play size={13} /> {t("wfRun")}
           </Button>
+          <div className="wf-toolbar-sep" />
           <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>
@@ -1191,7 +1191,8 @@ function NodeInspector({
             aria-label={t("wfNodeName")}
             onChange={(event) => onChange({ name: event.target.value })}
           />
-          <small>{meta?.label ?? node.type}</small>
+          {/* 名称输入的 placeholder 已是类型名;仅在改过名(与类型不同)时才补一行类型。 */}
+          {node.name && node.name !== (meta?.label ?? node.type) && <small>{meta?.label ?? node.type}</small>}
         </div>
         {onDelete && (
           <button type="button" className="inspector-delete" aria-label={t("delete")} onClick={onDelete}>
