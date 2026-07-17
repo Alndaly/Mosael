@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bug, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Globe, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 
 import {
   api,
@@ -42,7 +43,7 @@ const BLOCKED = new Set(["login_required", "waiting_manual", "permission_require
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [tab, setTab] = React.useState<"records" | "accounts">("records");
+  const [tab, setTab] = usePersistentTab<"records" | "accounts">("publish", "records", ["records", "accounts"]);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   // 任务中心深链(mibu:open-* 事件通道):直接选中那条发布记录。

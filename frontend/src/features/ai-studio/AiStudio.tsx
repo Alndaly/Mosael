@@ -18,10 +18,11 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 
 export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
-  const [tab, setTab] = React.useState<"chat" | "generate">("chat");
+  const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
     <div className="seg" role="tablist">
