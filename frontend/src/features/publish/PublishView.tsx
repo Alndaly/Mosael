@@ -243,8 +243,13 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   const accounts = useQuery({
     queryKey: ["publish-accounts", workspace.id],
     queryFn: () => listPublishAccounts(workspace.id),
-    // 复检/登录会在后台改登录态,轮询把徽标拉回真实状态。
-    refetchInterval: 10000,
+    // 复检/登录在后台改登录态,轮询把徽标拉回真实状态。自适应:有账号在过渡态
+    // (checking/unknown,马上会翻)时 3s 快轮询尽快抓到翻转,全都稳定后降到 20s。
+    refetchInterval: (query) => {
+      const data = (query.state.data ?? []) as PublishAccount[];
+      const transitioning = data.some((a) => a.binding_status === "checking" || a.binding_status === "unknown");
+      return transitioning ? 3000 : 20000;
+    },
     refetchIntervalInBackground: true,
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });

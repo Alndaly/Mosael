@@ -25,7 +25,18 @@ import { SchedulerView } from "@/features/scheduler/SchedulerView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 import { SettingsView } from "@/features/settings/SettingsView";
 
-const queryClient = new QueryClient();
+// 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
+// 给个合理缓存窗口:短时间切回同页直接用缓存,不重拉不闪;需要实时的 query 各自设了 refetchInterval,
+// 不受影响。获焦不全量重拉(Electron 频繁获焦会加剧闪烁)。
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 export function App() {
   // 桌面(Electron 无边框窗)样式适配:红绿灯占位、标题拖拽区按 is-desktop/is-mac 生效。
