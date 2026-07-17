@@ -1,6 +1,10 @@
-const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeImage, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
+
+// 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron";
+// 打包版由 productName 决定。这里强制成 Mibu,让开发态也一致。必须在 app ready 前调用。
+app.setName("Mibu");
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
@@ -299,6 +303,14 @@ app.whenReady().then(async () => {
   });
 
   buildAppMenu();
+  // 关于面板信息(mac 标准关于弹窗)。
+  app.setAboutPanelOptions({ applicationName: "Mibu", applicationVersion: app.getVersion() });
+  // Dock 图标:打包版走 .icns;开发态未打包时 Dock 用的是 Electron 默认图标,这里用打进仓库的
+  // build/icon.png 覆盖(路径不存在时 createFromPath 返回空图,跳过)。
+  if (process.platform === "darwin" && app.dock) {
+    const dockIcon = nativeImage.createFromPath(path.join(__dirname, "..", "build", "icon.png"));
+    if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+  }
   // Win/Linux:标题栏三键叠层颜色随前端主题(mibuDesktop.setTitleOverlay)。mac 无叠层。
   ipcMain.on("mibu:title-overlay", (event, colors) => {
     if (process.platform === "darwin" || !colors) return;
