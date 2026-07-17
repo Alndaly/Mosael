@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
+import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↖", x: 0.05, y: 0.06 },
@@ -16,7 +17,6 @@ const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
 ];
 const PIP_SIZES = [0.25, 0.33, 0.5];
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const FILTER_PRESETS = ["", "bw", "warm", "cool", "vivid", "fade"] as const;
 
 /** mibu-video 调色面板的完整参数集,按老版分组呈现。 */
 const GRADE_GROUPS = [
@@ -300,6 +300,16 @@ function ColorGradePanel({
   const curColor = (effects.color ?? {}) as Record<string, unknown>;
   const hasGrade =
     GRADE_KEYS.some((key) => grade[key]) || Boolean(effects.filter) || Boolean(curColor.curves);
+  // 预设高亮:滤镜与调色预设互斥,滤镜在时不高亮任一调色预设。
+  const activePreset = effects.filter ? null : matchColorPreset(curColor);
+  const isCleanColor = !effects.filter && !curColor.curves && !GRADE_KEYS.some((key) => grade[key]);
+  const applyPreset = (payload: Record<string, unknown> | null) => {
+    const next = { ...clip.effects } as Record<string, unknown>;
+    delete next.filter; // 调色预设是唯一真源,清掉遗留的 CSS 滤镜
+    if (payload) next.color = payload;
+    else delete next.color;
+    onSetEffects(clip.id, next);
+  };
   const applyGrade = (key: GradeKey, raw: string) => {
     const value = Math.max(-1, Math.min(1, Number(raw) / 100));
     // 从完整 color 展开,保住 curves 等非滑杆字段。
@@ -326,15 +336,23 @@ function ColorGradePanel({
       <div className="pip-controls">
         <span className="pip-label">{t("stylePresets")}</span>
         <div className="pip-row color-presets">
-          {FILTER_PRESETS.map((preset) => (
+          <button
+            type="button"
+            className={isCleanColor ? "pip-btn active" : "pip-btn"}
+            title={t("colorPresetHint")}
+            onClick={() => applyPreset(null)}
+          >
+            {t("colorPreset_none")}
+          </button>
+          {COLOR_PRESETS.map((preset) => (
             <button
-              key={preset || "none"}
+              key={preset.key}
               type="button"
-              className={(effects.filter ?? "") === preset ? "pip-btn active" : "pip-btn"}
-              title={t("filterPresetHint")}
-              onClick={() => onSetEffects(clip.id, { ...clip.effects, filter: preset || undefined })}
+              className={activePreset === preset.key ? "pip-btn active" : "pip-btn"}
+              title={t("colorPresetHint")}
+              onClick={() => applyPreset(presetColorPayload(preset))}
             >
-              {t(preset ? (`filter_${preset}` as never) : ("filter_none" as never))}
+              {t(`colorPreset_${preset.key}` as never)}
             </button>
           ))}
         </div>
@@ -346,6 +364,8 @@ function ColorGradePanel({
             <div className="grade-slider" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
               <Slider
+                // 值入 key:套预设后重挂,让非受控滑杆的滑块跳到预设值。
+                key={`${key}-${clip.id}-${Math.round((grade[key] ?? 0) * 100)}`}
                 min={POSITIVE_ONLY.has(key) ? 0 : -100}
                 max={100}
                 step={5}
