@@ -250,6 +250,19 @@
   -webkit-app-region: no-drag;
 }
 
+/* 登录 / 加载等居中屏没有顶栏,整块背景当拖拽区,否则无边框窗按住顶部拖不动;
+   卡片内的输入框/按钮/链接各自 no-drag,点击照常。 */
+.is-desktop .center {
+  -webkit-app-region: drag;
+}
+.is-desktop .center input,
+.is-desktop .center textarea,
+.is-desktop .center button,
+.is-desktop .center a,
+.is-desktop .center [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
 /* mac:红绿灯在全宽顶栏左侧(trafficLightPosition x14 y15),面包屑给它让位。 */
 .is-desktop.is-mac .topbar {
   padding-left: 76px;
