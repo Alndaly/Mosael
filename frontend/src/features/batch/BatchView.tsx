@@ -137,7 +137,7 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
           {selected ? (
             <BatchDetail key={selected.id} batch={selected} workspaceId={workspace.id} onDelete={() => setDeleting(selected)} />
           ) : (
-            <EmptyState icon={<Layers size={22} />} title={t("batchEmptyTitle")} body={t("batchEmptyBody")} />
+            <EmptyState icon={<Layers size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>

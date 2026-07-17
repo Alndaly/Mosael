@@ -98,6 +98,9 @@ export const messages = {
     monVolume: "音量",
     monFullscreen: "全屏",
     crumbNoProject: "未选择项目",
+    // 主从页面:列表有内容但未选中时,详情区显示"去选择"而非复用整页空态的"还没有X"。
+    pickDetailTitle: "选择一项查看",
+    pickDetailBody: "从左侧列表选一项,这里显示它的详情。",
     mediaSelectMode: "选择",
     mediaSelectedCount: "已选 {n} 项",
     mediaSelectAll: "全选",
@@ -823,6 +826,8 @@ export const messages = {
     monVolume: "Volume",
     monFullscreen: "Fullscreen",
     crumbNoProject: "No project selected",
+    pickDetailTitle: "Select an item",
+    pickDetailBody: "Pick one from the list to see its details here.",
     mediaSelectMode: "Select",
     mediaSelectedCount: "{n} selected",
     mediaSelectAll: "Select all",

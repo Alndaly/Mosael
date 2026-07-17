@@ -220,7 +220,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <PublishDetail key={selected.id} task={selected} onDelete={() => setDeleting(selected)} />
           ) : (
             <div className="empty-center">
-              <EmptyState icon={<Rocket size={22} />} title={t("publishEmptyTitle")} body={t("publishEmptyBody")} />
+              <EmptyState icon={<Rocket size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
             </div>
           )}
         </div>

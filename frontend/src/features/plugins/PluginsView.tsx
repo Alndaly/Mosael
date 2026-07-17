@@ -90,7 +90,7 @@ export function PluginsView() {
           {selected ? (
             <PluginDetail plugin={selected} />
           ) : (
-            <EmptyState icon={<Plug size={22} />} title={t("noPlugins")} body={t("noPluginsGuide")} />
+            <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>

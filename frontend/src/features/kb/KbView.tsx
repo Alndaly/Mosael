@@ -233,7 +233,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
           {selected ? (
             <KbDocumentEditor key={selected.id} documentId={selected.id} onDelete={() => setDeleting(selected)} />
           ) : (
-            <EmptyState icon={<BookOpen size={22} />} title={t("kbEmptyTitle")} body={t("kbEmptyBody")} />
+            <EmptyState icon={<BookOpen size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>

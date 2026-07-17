@@ -308,7 +308,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               workspaceId={workspace.id}
             />
           ) : (
-            <EmptyState icon={<WorkflowIcon size={22} />} title={t("wfEmptyTitle")} body={t("wfEmptyBody")} />
+            <EmptyState icon={<WorkflowIcon size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>

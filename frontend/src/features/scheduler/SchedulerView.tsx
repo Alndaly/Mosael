@@ -144,7 +144,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           {selected ? (
             <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
           ) : (
-            <EmptyState icon={<Timer size={22} />} title={t("noTasks")} body={t("noTasksGuide")} />
+            <EmptyState icon={<Timer size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>
