@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeWorkflow, extractRefs, type AnalyzeContext, type RegistryLike } from "./analyze";
+import {
+  analyzeWorkflow,
+  extractRefs,
+  typesCompatible,
+  type AnalyzeContext,
+  type RegistryLike,
+} from "./analyze";
 import type { WorkflowGraph } from "@/api/client";
 
 const registry: RegistryLike = {
@@ -16,6 +22,7 @@ const registry: RegistryLike = {
       ai_generate: {
         config: { provider: { type: "string", required: true }, prompt: { type: "template", required: true } },
       },
+      transcribe_asset: { config: { asset_id: { type: "template", required: true } } },
       template: { config: { template: { type: "template", required: true } } },
     };
     return table[type];
@@ -46,7 +53,56 @@ describe("extractRefs", () => {
   });
 });
 
+describe("typesCompatible", () => {
+  it("any and text slots accept anything; concrete types must match", () => {
+    expect(typesCompatible("text", "any")).toBe(true);
+    expect(typesCompatible("asset", "any")).toBe(true);
+    expect(typesCompatible("text", "text")).toBe(true);
+    expect(typesCompatible("number", "text")).toBe(true); // text slot stringifies
+    expect(typesCompatible("asset", "asset")).toBe(true);
+    expect(typesCompatible("text", "asset")).toBe(false); // wiring text into an asset slot
+    expect(typesCompatible("any", "asset")).toBe(true); // unknown source → don't alarm
+  });
+});
+
 describe("analyzeWorkflow", () => {
+  it("warns on a data edge whose output type mismatches a strong input slot", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "llm-1", type: "llm", config: { prompt: "hi", profile_id: "p1" } },
+        { id: "tr", type: "transcribe_asset", config: { asset_id: "" } },
+      ],
+      [
+        { id: "e1", source: "start", target: "llm-1" },
+        // llm.text (text) → transcribe.asset_id (expects asset) → mismatch
+        { id: "d1", source: "llm-1", target: "tr", kind: "data", source_output: "text", target_input: "asset_id" },
+      ],
+    );
+    const a = analyzeWorkflow(g, registry, fullCtx);
+    const mismatch = a.byNode.get("tr")?.find((i) => i.code === "type-mismatch");
+    expect(mismatch).toMatchObject({ severity: "warn", expected: "asset", actual: "text", configKey: "asset_id" });
+    // 软提示不阻断运行。
+    expect(a.runnable).toBe(true);
+  });
+
+  it("does not warn when an asset output feeds an asset slot", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "alibaba", prompt: "cat" } },
+        { id: "tr", type: "transcribe_asset", config: { asset_id: "" } },
+      ],
+      [
+        { id: "e1", source: "start", target: "gen" },
+        { id: "d1", source: "gen", target: "tr", kind: "data", source_output: "asset_id", target_input: "asset_id" },
+      ],
+    );
+    const a = analyzeWorkflow(g, registry, fullCtx);
+    expect(a.byNode.get("tr")?.some((i) => i.code === "type-mismatch")).toBeFalsy();
+  });
+
+
   it("passes a fully-wired, configured graph", () => {
     const g = graph(
       [

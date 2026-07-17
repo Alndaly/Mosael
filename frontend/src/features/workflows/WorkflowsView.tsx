@@ -74,7 +74,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
-import { analyzeWorkflow, extractRefs, type NodeIssue } from "@/features/workflows/analyze";
+import { analyzeWorkflow, extractRefs, type DataType, type NodeIssue } from "@/features/workflows/analyze";
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -416,9 +416,19 @@ function issueText(t: ReturnType<typeof useI18n>, issue: NodeIssue): string {
       return t("wfIssueProviderMissing");
     case "gen-provider-unconfigured":
       return t("wfIssueGenUnconfigured");
+    case "type-mismatch":
+      return t("wfIssueTypeMismatch")
+        .replace("{expected}", typeName(t, issue.expected))
+        .replace("{actual}", typeName(t, issue.actual));
     default:
       return issue.code;
   }
+}
+
+/** DataType → 本地化名。 */
+function typeName(t: ReturnType<typeof useI18n>, type: DataType | undefined): string {
+  const key = `wfType_${type ?? "any"}` as MessageKey;
+  return t(key);
 }
 
 function WorkflowEditor({

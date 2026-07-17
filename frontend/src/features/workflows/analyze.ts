@@ -14,7 +14,8 @@ export type IssueCode =
   | "stale-var" // 配置里引用了已删除的节点
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
-  | "gen-provider-unconfigured"; // AI 生成选的服务商没配密钥
+  | "gen-provider-unconfigured" // AI 生成选的服务商没配密钥
+  | "type-mismatch"; // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
 
 export interface NodeIssue {
   nodeId: string;
@@ -22,10 +23,50 @@ export interface NodeIssue {
   nodeType: string;
   severity: IssueSeverity;
   code: IssueCode;
-  /** issue 关联的配置字段名(必填缺失 / 失效引用所在字段)。 */
+  /** issue 关联的配置字段名(必填缺失 / 失效引用 / 类型不匹配所在字段)。 */
   configKey?: string;
   /** stale-var:失效的完整引用,如 "{{llm-1.text}}"。 */
   ref?: string;
+  /** type-mismatch:期望/实际类型,拼进文案。 */
+  expected?: DataType;
+  actual?: DataType;
+}
+
+/** 软数据类型:仅用于就绪检查提示,不阻断运行(模板终究是字符串插值)。 */
+export type DataType = "text" | "asset" | "sequence" | "number" | "json" | "any";
+
+// 节点输出类型。未列出的输出(plugin_tool.output / code.output / start.*)按 any。
+const OUTPUT_TYPES: Record<string, Record<string, DataType>> = {
+  llm: { text: "text" },
+  kb_search: { text: "text", results: "json" },
+  transcribe_asset: { text: "text" },
+  export_sequence: { asset_id: "asset" },
+  ai_generate: { asset_id: "asset", generation_id: "text" },
+  publish: { result: "json" },
+  condition: { result: "text" },
+  http_request: { status: "number", text: "text", json: "json" },
+  template: { text: "text" },
+};
+
+// 输入字段的期望类型。只标"强类型"槽(asset/sequence/number);其余按 any(宽松,不提示)。
+const INPUT_TYPES: Record<string, Record<string, DataType>> = {
+  transcribe_asset: { asset_id: "asset" },
+  export_sequence: { sequence_id: "sequence" },
+  publish: { asset_id: "asset" },
+};
+
+export function outputType(nodeType: string, output: string): DataType {
+  return OUTPUT_TYPES[nodeType]?.[output] ?? "any";
+}
+
+export function inputType(nodeType: string, key: string): DataType {
+  return INPUT_TYPES[nodeType]?.[key] ?? "any";
+}
+
+/** 软兼容:any 通配;text 槽接受一切(都能字符串化);同类型兼容;否则不兼容。 */
+export function typesCompatible(source: DataType, target: DataType): boolean {
+  if (target === "any" || source === "any" || target === "text") return true;
+  return source === target;
 }
 
 export interface AnalyzeContext {
@@ -111,6 +152,12 @@ export function analyzeWorkflow(
   const nodeIds = new Set(graph.nodes.map((n) => n.id));
   const reachable = reachableFromStart(graph);
   const hasStart = graph.nodes.some((n) => n.type === "start");
+  // 被数据边喂的输入,即便字面量为空也算已满足(与后端 validate_graph 同源)。
+  const dataBound = new Set(
+    graph.edges
+      .filter((edge) => edge.kind === "data" && edge.target_input)
+      .map((edge) => `${edge.target}:${edge.target_input}`),
+  );
 
   for (const node of graph.nodes) {
     const nodeName = node.name || node.type;
@@ -122,7 +169,8 @@ export function analyzeWorkflow(
     // 必填字段 + 失效引用(逐字段)
     for (const [key, rawSpec] of Object.entries(meta?.config ?? {})) {
       const spec = (rawSpec ?? {}) as ConfigSpecLike;
-      if (spec.required && isEmpty(config[key])) push("error", "required-missing", { configKey: key });
+      if (spec.required && isEmpty(config[key]) && !dataBound.has(`${node.id}:${key}`))
+        push("error", "required-missing", { configKey: key });
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
@@ -149,6 +197,29 @@ export function analyzeWorkflow(
 
     // 断连:有 start 时,非 start 节点却到不了 → 游离
     if (hasStart && node.type !== "start" && !reachable.has(node.id)) push("warn", "disconnected");
+  }
+
+  // 数据边:软类型校验(不阻断)。目标输入是强类型槽、上游输出类型又对不上时给提醒。
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  for (const edge of graph.edges) {
+    if (edge.kind !== "data" || !edge.source_output || !edge.target_input) continue;
+    const source = nodeById.get(edge.source);
+    const target = nodeById.get(edge.target);
+    if (!source || !target) continue;
+    const actual = outputType(source.type, edge.source_output);
+    const expected = inputType(target.type, edge.target_input);
+    if (!typesCompatible(actual, expected)) {
+      issues.push({
+        nodeId: target.id,
+        nodeName: target.name || target.type,
+        nodeType: target.type,
+        severity: "warn",
+        code: "type-mismatch",
+        configKey: edge.target_input,
+        expected,
+        actual,
+      });
+    }
   }
 
   const byNode = new Map<string, NodeIssue[]>();
