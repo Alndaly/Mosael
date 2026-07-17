@@ -5111,14 +5111,79 @@
 .wf-node {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   min-width: 172px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
   padding: 9px 12px;
   transition: border-color 100ms;
+}
+
+.wf-node.has-io {
+  min-width: 210px;
+}
+
+/* 头部行:图标 + 名称/类型(原来的紧凑行)。 */
+.wf-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 数据接点体:左输入 / 右输出两列,分居两侧。 */
+.wf-node-io {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.wf-io-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wf-io-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+}
+
+.wf-io-col.out .wf-io-row {
+  justify-content: flex-end;
+}
+
+.wf-io-label {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.wf-io-col.out .wf-io-label {
+  font-family: var(--font-mono);
+}
+
+/* 数据接点:比控制端点小一圈的圆点,坐在节点边线上。 */
+.wf-socket.react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1.5px solid var(--primary);
+}
+
+.wf-io-col.in .wf-socket.react-flow__handle-left {
+  left: -12px;
+}
+
+.wf-io-col.out .wf-socket.react-flow__handle-right {
+  right: -12px;
 }
 
 /* 就绪度:缺配置=红描边,提醒(断连等)=琥珀描边。选中态优先级更高,放其后。 */
@@ -5411,6 +5476,12 @@
 .wf-canvas .react-flow__edge-text {
   font-size: 9.5px;
   fill: var(--muted-foreground);
+}
+
+/* 数据边:蓝色实线,区别于控制边(灰)。 */
+.wf-canvas .react-flow__edge.wf-edge-data .react-flow__edge-path {
+  stroke: var(--primary);
+  stroke-width: 2;
 }
 
 /* MiniMap:全平面小地图 */

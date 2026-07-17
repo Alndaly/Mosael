@@ -242,8 +242,19 @@ export interface WorkflowGraph {
     name?: string;
     position?: { x: number; y: number };
     config?: Record<string, unknown>;
+    /** 以输入接点(连接态)暴露在节点左侧的 config 字段名。 */
+    inputs?: string[];
   }>;
-  edges: Array<{ id: string; source: string; target: string; source_handle?: string | null }>;
+  edges: Array<{
+    id: string;
+    source: string;
+    target: string;
+    source_handle?: string | null;
+    /** 缺省 / "control" = 执行边;"data" = 数据边(带 source_output → target_input)。 */
+    kind?: "control" | "data";
+    source_output?: string;
+    target_input?: string;
+  }>;
 }
 
 export type AgentSessionInfo = components["schemas"]["AgentSessionOut"];

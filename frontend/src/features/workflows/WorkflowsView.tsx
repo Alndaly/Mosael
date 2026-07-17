@@ -98,26 +98,41 @@ interface WfNodeData extends Record<string, unknown> {
   typeLabel: string;
   /** 就绪度角标:分析出的最高严重度 + 问题条数 + 悬浮明细。 */
   badge?: { severity: "error" | "warn"; count: number; title: string } | null;
+  /** 数据接点:左侧输入(连接态字段)、右侧输出(节点声明的 outputs)。 */
+  inputs?: string[];
+  outputs?: string[];
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
     条件节点右侧是「真/假」两个分支端点,其余节点单一出口。
     缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
 function WfNode({ data, selected }: NodeProps) {
+  const t = useI18n();
   const d = data as WfNodeData;
   const isCondition = d.nodeType === "condition";
   const badge = d.badge ?? null;
+  const inputs = d.inputs ?? [];
+  const outputs = d.outputs ?? [];
+  // 条件节点保持紧凑(真/假分支端点),不上数据 IO 体;其余节点显示输入/输出接点。
+  const showIo = !isCondition && (inputs.length > 0 || outputs.length > 0);
   return (
     <div
-      className={`wf-node${selected ? " selected" : ""}${badge ? ` has-issue is-${badge.severity}` : ""}`}
+      className={`wf-node${showIo ? " has-io" : ""}${selected ? " selected" : ""}${
+        badge ? ` has-issue is-${badge.severity}` : ""
+      }`}
       data-node-type={d.nodeType}
     >
-      {d.nodeType !== "start" && <Handle type="target" position={Position.Left} className="wf-handle" />}
-      <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
-      <span className="wf-node-text">
-        <strong>{d.label}</strong>
-        <small>{d.typeLabel}</small>
-      </span>
+      {/* 控制入(左上) */}
+      {d.nodeType !== "start" && (
+        <Handle type="target" position={Position.Left} className="wf-handle wf-ctrl" style={{ top: 22 }} />
+      )}
+      <div className="wf-node-header">
+        <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
+        <span className="wf-node-text">
+          <strong>{d.label}</strong>
+          <small>{d.typeLabel}</small>
+        </span>
+      </div>
       {badge && (
         <span className={`wf-node-badge is-${badge.severity}`} title={badge.title} aria-label={badge.title}>
           <AlertTriangle size={11} />
@@ -126,25 +141,33 @@ function WfNode({ data, selected }: NodeProps) {
       )}
       {isCondition ? (
         <>
-          <Handle
-            id="true"
-            type="source"
-            position={Position.Right}
-            className="wf-handle wf-handle-true"
-            style={{ top: "32%" }}
-          />
-          <Handle
-            id="false"
-            type="source"
-            position={Position.Right}
-            className="wf-handle wf-handle-false"
-            style={{ top: "68%" }}
-          />
+          <Handle id="true" type="source" position={Position.Right} className="wf-handle wf-handle-true" style={{ top: "32%" }} />
+          <Handle id="false" type="source" position={Position.Right} className="wf-handle wf-handle-false" style={{ top: "68%" }} />
           <span className="wf-branch-label true">真</span>
           <span className="wf-branch-label false">假</span>
         </>
       ) : (
-        <Handle type="source" position={Position.Right} className="wf-handle" />
+        <Handle type="source" position={Position.Right} className="wf-handle wf-ctrl" style={{ top: 22 }} />
+      )}
+      {showIo && (
+        <div className="wf-node-io">
+          <div className="wf-io-col in">
+            {inputs.map((key) => (
+              <div className="wf-io-row" key={key}>
+                <Handle id={`in:${key}`} type="target" position={Position.Left} className="wf-socket" />
+                <span className="wf-io-label">{FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}</span>
+              </div>
+            ))}
+          </div>
+          <div className="wf-io-col out">
+            {outputs.map((output) => (
+              <div className="wf-io-row" key={output}>
+                <span className="wf-io-label">{output}</span>
+                <Handle id={`out:${output}`} type="source" position={Position.Right} className="wf-socket" />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -347,20 +370,37 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
       label: node.name || registry.get(node.type)?.label || node.type,
       nodeType: node.type,
       typeLabel: registry.get(node.type)?.label ?? node.type,
+      inputs: node.inputs ?? [],
+      // 过滤通配输出(如 start 的 *params),它们不是可连接的具体接点。
+      outputs: (registry.get(node.type)?.outputs ?? []).filter((output) => !output.startsWith("*")),
     } satisfies WfNodeData,
     deletable: node.type !== "start",
   }));
 }
 
 function toFlowEdges(graph: WorkflowGraph): Edge[] {
-  return (graph.edges ?? []).map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.source_handle ?? undefined,
-    label: edge.source_handle === "true" ? "真" : edge.source_handle === "false" ? "假" : undefined,
-    className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
-  }));
+  return (graph.edges ?? []).map((edge) => {
+    // 数据边:接输出接点 out:x → 输入接点 in:y,带语义色曲线;控制边保持原样。
+    if (edge.kind === "data") {
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.source_output ? `out:${edge.source_output}` : undefined,
+        targetHandle: edge.target_input ? `in:${edge.target_input}` : undefined,
+        className: "wf-edge-data",
+        data: { kind: "data" },
+      };
+    }
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.source_handle ?? undefined,
+      label: edge.source_handle === "true" ? "真" : edge.source_handle === "false" ? "假" : undefined,
+      className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
+    };
+  });
 }
 
 /** issue code → 本地化文案(角标 tooltip / checklist 行都用它)。 */
