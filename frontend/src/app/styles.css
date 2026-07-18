@@ -12,9 +12,7 @@
      add per-context padding or font overrides. Look = hairline
      joined group (border + inner dividers), active = accent tint.
    - Master-detail pages (settings/plugins/scheduler): list column
-     200–260px. Detail column fills the remaining width, EXCEPT
-     reading/form content (settings) caps at 780px so rows don't
-     stretch and controls stay near their labels (cf. AI Studio 760).
+     200–260px, detail column fills the remaining width (full-width).
    - FLAT: no drop shadows anywhere (--shadow-* resolve to none);
      separation = hairline borders + background value steps. Focus
      rings, active-indicator insets and in-video effects are fine.
@@ -1465,10 +1463,8 @@
 
 .settings-content {
   min-width: 0;
-  /* Cap the reading/interaction width to the existing scale (AI Studio 760 /
-     chat 780) so rows don't stretch edge-to-edge and controls stay near their
-     labels. */
-  max-width: 780px;
+  /* Full-width detail pane (per request): groups/cards fill the remaining width
+     so there's no empty gutter. Rows keep label-left / control-right. */
   display: grid;
   align-content: start;
   gap: 20px;
