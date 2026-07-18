@@ -64,7 +64,19 @@ def init_db() -> None:
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_kb_schema()
     _migrate_agent_sessions()
+    _migrate_clip_transform()
     Base.metadata.create_all(bind=engine)
+
+
+def _migrate_clip_transform() -> None:
+    """加列迁移(保留时间线):clips 增加 transform(片段变换)。"""
+    inspector = inspect(engine)
+    if "clips" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("clips")}
+    if "transform" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE clips ADD COLUMN transform JSON"))
 
 
 def session_scope() -> Generator[Session, None, None]:

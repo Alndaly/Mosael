@@ -225,6 +225,8 @@ class Clip(Base):
     linked_clip_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     text_override: Mapped[str | None] = mapped_column(Text, nullable=True)
     effects: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    # 片段变换(缩放/位移/旋转/透明度);空 = 恒等。{scale,x,y,rotation,opacity}
+    transform: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

@@ -750,6 +750,23 @@ export interface paths {
         patch: operations["set_clip_speed_api_sequences__sequence_id__clips__clip_id__speed_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/transform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Clip Transform */
+        patch: operations["set_clip_transform_api_sequences__sequence_id__clips__clip_id__transform_patch"];
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}/ripple": {
         parameters: {
             query?: never;
@@ -2541,6 +2558,10 @@ export interface components {
             effects: {
                 [key: string]: unknown;
             };
+            /** Transform */
+            transform?: {
+                [key: string]: unknown;
+            };
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -3802,6 +3823,13 @@ export interface components {
         SetClipTextRequest: {
             /** Text */
             text: string;
+        };
+        /** SetClipTransformRequest */
+        SetClipTransformRequest: {
+            /** Transform */
+            transform?: {
+                [key: string]: unknown;
+            };
         };
         /** SetTrackStateRequest */
         SetTrackStateRequest: {
@@ -5733,6 +5761,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetClipSpeedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_clip_transform_api_sequences__sequence_id__clips__clip_id__transform_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClipTransformRequest"];
             };
         };
         responses: {

@@ -7255,6 +7255,46 @@
   line-height: 1.4;
 }
 
+/* 剪辑检查器:片段变换控件 */
+.transform-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.transform-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.transform-reset {
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+}
+.transform-reset:hover {
+  color: var(--foreground);
+}
+.transform-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+.transform-row-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.transform-row input[type="range"] {
+  width: 100%;
+}
+.transform-row-value {
+  font-size: 11px;
+  text-align: right;
+  color: var(--muted-foreground);
+}
+
 /* AI Studio 工具调用卡:流式实时更新 + 消息里持久化 */
 .tool-cards {
   display: flex;

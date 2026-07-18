@@ -417,6 +417,53 @@ def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Seque
     return sequence
 
 
+_TRANSFORM_DEFAULTS: dict[str, float] = {"scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0}
+_TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
+    "scale": (0.1, 4.0),
+    "x": (-2.0, 2.0),
+    "y": (-2.0, 2.0),
+    "rotation": (-180.0, 180.0),
+    "opacity": (0.0, 1.0),
+}
+
+
+def clean_transform(raw: dict[str, Any]) -> dict[str, float]:
+    """归一化片段变换:补默认、转 float、按范围钳制。"""
+    out: dict[str, float] = {}
+    for key, default in _TRANSFORM_DEFAULTS.items():
+        try:
+            value = float(raw.get(key, default))
+        except (TypeError, ValueError) as exc:
+            raise SequenceDomainError(f"transform.{key} 必须是数字") from exc
+        lo, hi = _TRANSFORM_BOUNDS[key]
+        out[key] = max(lo, min(hi, value))
+    return out
+
+
+@dataclass(frozen=True)
+class SetClipTransform:
+    clip_id: str
+    transform: dict[str, Any]
+    actor_id: str | None = None
+
+
+def set_clip_transform(db: Session, sequence_id: str, op: SetClipTransform) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    previous = dict(clip.transform or {})
+    clip.transform = clean_transform(op.transform)
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_transform",
+        payload={"clip_id": clip.id, "transform": clip.transform, "previous": previous},
+        summary={"operation": "set_clip_transform", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 @dataclass(frozen=True)
 class SplitClip:
     """Cut a clip into two at a source-time point — nothing is removed."""

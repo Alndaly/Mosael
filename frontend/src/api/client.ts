@@ -176,6 +176,17 @@ export function setClipSpeed(sequenceId: string, clipId: string, speed: number):
   });
 }
 
+export function setClipTransform(
+  sequenceId: string,
+  clipId: string,
+  transform: Record<string, number>,
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/transform`, {
+    method: "PATCH",
+    body: JSON.stringify({ transform }),
+  });
+}
+
 export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
 }

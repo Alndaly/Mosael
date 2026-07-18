@@ -86,6 +86,17 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const activeClip =
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeAsset = activeClip?.asset_id ? (assetById.get(activeClip.asset_id) ?? null) : null;
+  // 片段变换(缩放/位移/旋转/透明度)→ CSS,预览里实时呈现。
+  const clipTransformStyle = React.useMemo<React.CSSProperties>(() => {
+    const tf = (activeClip?.transform ?? {}) as Record<string, number>;
+    const scale = tf.scale ?? 1;
+    const rotation = tf.rotation ?? 0;
+    const opacity = tf.opacity ?? 1;
+    const x = (tf.x ?? 0) * 50;
+    const y = (tf.y ?? 0) * 50;
+    if (scale === 1 && rotation === 0 && opacity === 1 && x === 0 && y === 0) return {};
+    return { transform: `translate(${x}%, ${y}%) scale(${scale}) rotate(${rotation}deg)`, opacity };
+  }, [activeClip?.transform]);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
@@ -275,7 +286,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
           <video
             ref={videoRef}
             className="monitor-video"
-            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined }}
+            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined, ...clipTransformStyle }}
             muted={false}
             playsInline
             preload="auto"
@@ -285,7 +296,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
               className="monitor-video"
               src={assetFileUrl(activeAsset.id)}
               alt=""
-              style={{ filter: cssFilter || undefined }}
+              style={{ filter: cssFilter || undefined, ...clipTransformStyle }}
             />
           )}
           {!activeClip && (

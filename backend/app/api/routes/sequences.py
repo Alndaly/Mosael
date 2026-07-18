@@ -17,6 +17,7 @@ from app.api.schemas import (
     SequenceOut,
     SetClipEffectsRequest,
     SetClipSpeedRequest,
+    SetClipTransformRequest,
     SetClipTextRequest,
     SetTrackStateRequest,
     SplitClipRequest,
@@ -40,6 +41,7 @@ from app.domain.sequences.operations import (
     SequenceDomainError,
     SetClipEffects,
     SetClipSpeed,
+    SetClipTransform,
     SetClipText,
     SetTrackState,
     SplitClip,
@@ -52,6 +54,7 @@ from app.domain.sequences.operations import (
     ripple_delete_clip as ripple_delete_clip_operation,
     set_clip_effects as set_clip_effects_operation,
     set_clip_speed as set_clip_speed_operation,
+    set_clip_transform as set_clip_transform_operation,
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
     insert_clip as insert_clip_operation,
@@ -185,6 +188,19 @@ def set_clip_speed(
 ) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, speed=body.speed)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/transform", response_model=SequenceOut)
+def set_clip_transform(
+    sequence_id: str, clip_id: str, body: SetClipTransformRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(
+        lambda: set_clip_transform_operation(
+            db, sequence_id, SetClipTransform(clip_id=clip_id, transform=body.transform)
+        )
+    )
     return _get_sequence(db, sequence_id)
 
 

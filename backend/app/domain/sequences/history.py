@@ -28,6 +28,7 @@ UNDOABLE_KINDS = (
     "set_track_state",
     "ripple_delete_clip",
     "set_clip_speed",
+    "set_clip_transform",
     "set_clip_text",
 )
 
@@ -176,6 +177,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["previous"]
+    elif operation.kind == "set_clip_transform":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.transform = payload["previous"]
     elif operation.kind == "set_clip_text":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.text_override = payload["previous"]
@@ -234,6 +238,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["speed"]
+    elif operation.kind == "set_clip_transform":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.transform = payload["transform"]
     elif operation.kind == "set_clip_text":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.text_override = payload["text"]

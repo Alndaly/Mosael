@@ -40,6 +40,7 @@ EDIT_OP_KINDS = (
     "add_track",
     "remove_track",
     "set_clip_effects",
+    "set_clip_transform",
 )
 
 
@@ -252,6 +253,8 @@ def _execute_edit_timeline(db: Session, payload: dict[str, Any]) -> dict[str, An
             seq_ops.remove_track(db, sequence_id, seq_ops.RemoveTrack(**args))
         elif kind == "set_clip_effects":
             seq_ops.set_clip_effects(db, sequence_id, seq_ops.SetClipEffects(**args))
+        elif kind == "set_clip_transform":
+            seq_ops.set_clip_transform(db, sequence_id, seq_ops.SetClipTransform(**args))
         applied += 1
     sequence = db.get(Sequence, sequence_id)
     return {"applied_operations": applied, "sequence_revision": sequence.revision if sequence else None}

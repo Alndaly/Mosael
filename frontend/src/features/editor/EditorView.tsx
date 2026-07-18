@@ -20,6 +20,7 @@ import {
   splitClip,
   setClipEffects,
   setClipSpeed,
+  setClipTransform,
   setClipText,
   trimClip,
   undoSequence,
@@ -262,6 +263,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
       setClipEffects(sequence!.id, clipId, effects),
+    onSuccess: refreshSequences,
+  });
+  const setTransformMutation = useMutation({
+    mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, number> }) =>
+      setClipTransform(sequence!.id, clipId, transform),
     onSuccess: refreshSequences,
   });
   const cutRangeMutation = useMutation({
@@ -509,6 +515,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               isOverlayClip={isOverlayClip}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
+              onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
               onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}

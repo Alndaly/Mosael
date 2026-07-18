@@ -41,6 +41,7 @@ export function Inspector({
   isOverlayClip,
   onDeleteClip,
   onSetEffects,
+  onSetTransform,
   onSetSpeed,
   onSetText,
   onClose,
@@ -52,6 +53,7 @@ export function Inspector({
   isOverlayClip: boolean;
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
+  onSetTransform?: (clipId: string, transform: Record<string, number>) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
   onSetText?: (clipId: string, text: string) => void;
   /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
@@ -83,6 +85,21 @@ export function Inspector({
     if (!selectedClip) return;
     onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
   };
+
+  const transform = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    opacity: 1,
+    ...((selectedClip?.transform as Record<string, number>) ?? {}),
+  };
+  const applyTransform = (patch: Partial<typeof transform>) => {
+    if (!selectedClip || !onSetTransform) return;
+    onSetTransform(selectedClip.id, { ...transform, ...patch });
+  };
+  const isIdentityTransform =
+    transform.scale === 1 && transform.x === 0 && transform.y === 0 && transform.rotation === 0 && transform.opacity === 1;
 
   // 字幕片段没有调色;切换选中对象时回到属性页。
   React.useEffect(() => {
@@ -226,6 +243,46 @@ export function Inspector({
                   defaultValue={effects.fade_out ?? 0}
                   onBlur={(event) => applyFade("fade_out", event.target.value)}
                 />
+              </div>
+            )}
+            {!isTextClip && onSetTransform && (
+              <div className="pip-controls transform-controls">
+                <div className="transform-head">
+                  <span className="pip-label">{t("transformTitle")}</span>
+                  {!isIdentityTransform && (
+                    <button
+                      type="button"
+                      className="transform-reset"
+                      onClick={() => applyTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
+                    >
+                      {t("transformReset")}
+                    </button>
+                  )}
+                </div>
+                {(
+                  [
+                    { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%` },
+                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°` },
+                    { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%` },
+                    { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
+                    { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
+                  ] as const
+                ).map((row) => (
+                  <label key={row.key} className="transform-row">
+                    <span className="transform-row-label">{row.label}</span>
+                    <input
+                      key={`${row.key}-${selectedClip.id}-${transform[row.key]}`}
+                      type="range"
+                      min={row.min}
+                      max={row.max}
+                      step={row.step}
+                      defaultValue={transform[row.key]}
+                      onPointerUp={(event) => applyTransform({ [row.key]: Number((event.target as HTMLInputElement).value) })}
+                      onKeyUp={(event) => applyTransform({ [row.key]: Number((event.target as HTMLInputElement).value) })}
+                    />
+                    <span className="transform-row-value timecode">{row.fmt(transform[row.key])}</span>
+                  </label>
+                ))}
               </div>
             )}
             {isOverlayClip && (

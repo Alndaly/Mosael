@@ -173,6 +173,7 @@ class ClipOut(OrmModel):
     linked_clip_id: str | None
     text_override: str | None
     effects: dict
+    transform: dict = Field(default_factory=dict)
 
 
 class TrackOut(OrmModel):
@@ -247,6 +248,10 @@ class SetClipEffectsRequest(BaseModel):
 
 class SetClipSpeedRequest(BaseModel):
     speed: float = Field(ge=0.25, le=4.0)
+
+
+class SetClipTransformRequest(BaseModel):
+    transform: dict = Field(default_factory=dict)  # {scale,x,y,rotation,opacity};后端按范围钳制
 
 
 class InsertTextClipRequest(BaseModel):
