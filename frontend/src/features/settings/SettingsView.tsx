@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, ImageIcon, KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, X } from "lucide-react";
+import { AudioLines, ImageIcon, KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -13,6 +13,7 @@ import { FeishuSection } from "@/features/settings/FeishuSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
+import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -22,9 +23,9 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
-type SectionId = "account" | "appearance" | "providers" | "transcribe" | "voice" | "feishu" | "backend";
+type SectionId = "account" | "team" | "appearance" | "providers" | "transcribe" | "voice" | "feishu" | "backend";
 
-const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "transcribe", "voice", "feishu", "backend"];
+const SECTION_IDS: SectionId[] = ["account", "team", "appearance", "providers", "transcribe", "voice", "feishu", "backend"];
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -42,6 +43,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
   const nav: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
     { id: "account", label: t("settingsAccount"), icon: <UserRound size={14} /> },
+    { id: "team", label: t("teamTitle"), icon: <Users size={14} /> },
     { id: "appearance", label: t("settingsAppearance"), icon: <Palette size={14} /> },
     { id: "providers", label: t("settingsProviders"), icon: <KeyRound size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
@@ -67,6 +69,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         </nav>
         <div className="settings-content">
           {section === "account" && <AccountSection />}
+          {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (
             <>
               <AppearanceSection />

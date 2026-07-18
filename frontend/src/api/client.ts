@@ -45,6 +45,31 @@ export type User = components["schemas"]["UserOut"];
 export type AuthOut = components["schemas"]["AuthOut"];
 
 export type Workspace = components["schemas"]["WorkspaceOut"];
+export type WorkspaceMember = components["schemas"]["WorkspaceMemberOut"];
+export type MembersInfo = components["schemas"]["MembersOut"];
+
+export function listMembers(workspaceId: string): Promise<MembersInfo> {
+  return api<MembersInfo>(`/api/workspaces/${workspaceId}/members`);
+}
+export function addMember(workspaceId: string, body: { username: string; password?: string; role: string }): Promise<WorkspaceMember> {
+  return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members`, { method: "POST", body: JSON.stringify(body) });
+}
+export function setMemberRole(workspaceId: string, userId: string, role: string): Promise<WorkspaceMember> {
+  return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });
+}
+export function setMemberPerms(workspaceId: string, userId: string, perms: Record<string, boolean>): Promise<WorkspaceMember> {
+  return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${userId}/perms`, { method: "PATCH", body: JSON.stringify({ perms }) });
+}
+export function removeMember(workspaceId: string, userId: string): Promise<void> {
+  return api<void>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
+}
+export function renameWorkspace(workspaceId: string, name: string): Promise<{ id: string; name: string }> {
+  return api(`/api/workspaces/${workspaceId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+export function deleteWorkspace(workspaceId: string): Promise<void> {
+  return api<void>(`/api/workspaces/${workspaceId}`, { method: "DELETE" });
+}
+
 export type Project = components["schemas"]["ProjectOut"];
 export type ProjectWithStats = components["schemas"]["ProjectWithStatsOut"];
 export type Asset = components["schemas"]["AssetOut"];
