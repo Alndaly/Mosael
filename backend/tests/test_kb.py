@@ -105,6 +105,13 @@ def test_retrieval_test_returns_scores() -> None:
     assert results and results[0]["document_id"] == doc["id"]
     assert results[0]["score"] > 0 and results[0]["from_graph"] is False
 
+    # 多词查询按 AND 命中(过去整体当短语匹配会漏);含 <3 字词走 LIKE 回退
+    multi = client.post(f"/api/kb/datasets/{ds}/retrieval-test", json={"query": "黄昏 调色"}).json()
+    assert multi and multi[0]["document_id"] == doc["id"]
+    # 有一个词不在正文里则应无命中(AND 语义)
+    none = client.post(f"/api/kb/datasets/{ds}/retrieval-test", json={"query": "黄昏 不存在的词"}).json()
+    assert none == []
+
 
 def test_kb_url_import_uses_extractor(monkeypatch) -> None:
     client = fresh_client()

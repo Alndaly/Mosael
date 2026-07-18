@@ -165,10 +165,13 @@ def reindex_dataset(db: Session, dataset: KbDataset) -> int:
 
 
 def _fts_ranked(db: Session, dataset_id: str, query: str, limit: int) -> list[tuple[str, str]]:
-    """FTS5 trigram(bm25 排序),短查询回退 LIKE;返回 [(chunk_id, document_id)],按库过滤。"""
+    """FTS5 trigram(bm25 排序),多词按 AND 组合;含 <3 字的词(trigram 无法索引)时整体回退
+    LIKE(每个词都要命中)。返回 [(chunk_id, document_id)],按库过滤。"""
+    terms = [term for term in query.split() if term] or [query]
     rows: list[tuple[str, str]] = []
-    if len(query) >= MIN_FTS_QUERY_CHARS:
-        fts_query = '"' + query.replace('"', '""') + '"'
+    # 每个词都能形成 trigram(≥3 字)才走 FTS;否则回退 LIKE。
+    if all(len(term) >= MIN_FTS_QUERY_CHARS for term in terms):
+        fts_query = " AND ".join('"' + term.replace('"', '""') + '"' for term in terms)
         rows = [
             (row[0], row[1])
             for row in db.execute(
@@ -180,14 +183,10 @@ def _fts_ranked(db: Session, dataset_id: str, query: str, limit: int) -> list[tu
             )
         ]
     if not rows:
-        rows = [
-            (chunk.id, chunk.document_id)
-            for chunk in db.scalars(
-                select(KbChunk)
-                .where(KbChunk.dataset_id == dataset_id, KbChunk.text.like(f"%{query}%"))
-                .limit(limit)
-            )
-        ]
+        stmt = select(KbChunk).where(KbChunk.dataset_id == dataset_id)
+        for term in terms:  # LIKE 回退:所有词都要出现
+            stmt = stmt.where(KbChunk.text.like(f"%{term}%"))
+        rows = [(chunk.id, chunk.document_id) for chunk in db.scalars(stmt.limit(limit))]
     return rows
 
 
