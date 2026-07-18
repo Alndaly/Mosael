@@ -9,6 +9,18 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 
 const PROVIDER_ID = "mibu";
 
+// 上下文压缩(S7):超过阈值时只把最近若干条喂给 LLM,避免长对话撑爆上下文窗口。
+// 切点回退到最近的一条 user 消息,保证不切断 assistant 工具调用与其 toolResult 的配对。
+const COMPACT_OVER = 40;
+const COMPACT_KEEP = 24;
+
+function compactContext(messages: AgentMessage[]): AgentMessage[] {
+  if (messages.length <= COMPACT_OVER) return messages;
+  let start = messages.length - COMPACT_KEEP;
+  while (start > 0 && (messages[start] as { role?: string }).role !== "user") start -= 1;
+  return start > 0 ? messages.slice(start) : messages;
+}
+
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
 function buildModels(baseUrl: string, apiKey: string, modelId: string): { models: Models; model: Model<"openai-completions"> } {
   const model: Model<"openai-completions"> = {
@@ -68,6 +80,8 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   const agent = new Agent({
     initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },
     streamFn: (m, context, options) => models.stream(m, context, options),
+    // 每次 LLM 调用前压缩上下文;state.messages 保留全量(多轮记忆不受影响)
+    transformContext: async (messages) => compactContext(messages),
   });
   let full = "";
   agent.subscribe((event) => {
