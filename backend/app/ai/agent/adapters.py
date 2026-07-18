@@ -127,6 +127,10 @@ def _run_claude_streaming(
                 session_id = event.get("session_id")
                 is_error = bool(event.get("is_error"))
         process.wait(timeout=TURN_TIMEOUT_SECONDS)
+        # 优先透传 CLI 自己给出的结果错误(如 "Not logged in · Please run /login"),
+        # 否则非零退出只会显示无意义的 "exited with code 1"。
+        if is_error and result_text:
+            raise AdapterError(_tail(result_text))
         if process.returncode != 0:
             stderr_tail = _tail(process.stderr.read() if process.stderr else "")
             raise AdapterError(stderr_tail or f"agent exited with code {process.returncode}")
