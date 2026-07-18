@@ -12,6 +12,7 @@ import json
 import logging
 import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any, Callable
 
 import httpx
@@ -100,104 +101,157 @@ def _apply_data_edges(
     return config
 
 
-def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
-    """分支感知执行:只有从 start 沿「活跃连线」可达的节点才会运行。
+MAX_PARALLEL_NODES = 8
 
-    条件节点把 true/false 写进 result,出边按 source_handle 匹配才算活跃;
-    未被任何活跃入边触达的节点整段跳过(Dify 语义),并发 skipped 事件。
+
+def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
+    """依赖驱动的并行执行:一个节点的全部前驱都完成后才可运行,彼此独立的分支**同时**跑
+    (线程池,节点多为 I/O 型:LLM / HTTP / 子任务)。
+
+    分支语义不变:条件节点把 true/false 写进 result,出边按 source_handle 匹配才算活跃;
+    未被任何活跃入边触达的节点整段跳过(Dify 语义)。编排(调度 + 事件 + job)只在主线程用
+    传入的 db;每个节点在 worker 线程里用**各自的 SessionLocal**,互不干扰。
     """
-    order = topo_order(workflow.graph)
-    edges = list(workflow.graph.get("edges") or [])
-    total = max(len(order), 1)
+    graph = workflow.graph
+    order = topo_order(graph)  # 校验 DAG + 稳定顺序
+    order_ids = [str(node["id"]) for node in order]
+    nodes_by_id = {str(node["id"]): node for node in (graph.get("nodes") or [])}
+    edges = list(graph.get("edges") or [])
+    node_types = {nid: str(node.get("type")) for nid, node in nodes_by_id.items()}
+    incoming: dict[str, list[dict[str, Any]]] = {nid: [] for nid in nodes_by_id}
+    for edge in edges:
+        source, target = str(edge.get("source")), str(edge.get("target"))
+        if source in nodes_by_id and target in nodes_by_id:
+            incoming[target].append(edge)
+    total = max(len(order_ids), 1)
+    wf_id, wf_name = workflow.id, workflow.name
+
     context: dict[str, dict[str, Any]] = {}
     executed: set[str] = set()
+    done: set[str] = set()  # executed ∪ skipped
+    lock = threading.Lock()
 
-    def incoming_active(node_id: str) -> bool:
-        node_edges = [edge for edge in edges if str(edge.get("target")) == node_id]
+    def node_label(nid: str) -> str:
+        return str(nodes_by_id[nid].get("name") or NODE_TYPES[node_types[nid]]["label"])
+
+    def incoming_active(nid: str) -> bool:
+        node_edges = incoming.get(nid, [])
         if not node_edges:
             return False
         for edge in node_edges:
             source = str(edge.get("source"))
-            if source not in executed:
-                continue
-            source_type = next((str(n.get("type")) for n in order if str(n.get("id")) == source), "")
-            if source_type == "condition":
+            with lock:
+                if source not in executed:
+                    continue
+                source_result = context.get(source, {}).get("result")
+            if node_types.get(source) == "condition":
                 wanted = str(edge.get("source_handle") or "true")
-                actual = "true" if context.get(source, {}).get("result") else "false"
-                if wanted != actual:
+                if wanted != ("true" if source_result else "false"):
                     continue
             return True
         return False
 
-    job.status = "running"
-    job.message = f"工作流运行中: {workflow.name}"
-    db.commit()
-
-    for index, node in enumerate(order):
-        # 用户取消(cancel_job 把 job 翻 failed):节点边界停下,不再执行后续节点。
-        db.refresh(job)
-        if job.status == "failed":
-            db.add(TaskEvent(job_id=job.id, type="workflow.cancelled", payload={"at_node": index}))
-            db.commit()
-            return context
-
-        node_id = str(node["id"])
-        node_type = str(node["type"])
-        node_name = str(node.get("name") or NODE_TYPES[node_type]["label"])
-
-        if node_type != "start" and not incoming_active(node_id):
-            db.add(
-                TaskEvent(
-                    job_id=job.id,
-                    type="workflow.node.skipped",
-                    payload={"node_id": node_id, "name": node_name},
-                )
-            )
-            job.progress = (index + 1) / total
-            db.commit()
-            continue
-
-        db.add(
-            TaskEvent(
-                job_id=job.id,
-                type="workflow.node.started",
-                payload={"node_id": node_id, "node_type": node_type, "name": node_name},
-            )
-        )
-        db.commit()
-
-        handler = _HANDLERS.get(node_type)
-        if handler is None:
-            raise WorkflowDomainError(f"节点类型 {node_type} 没有执行器")
-        config = _apply_data_edges(node_id, dict(node.get("config") or {}), edges, context)
-        config = interpolate(config, context)
-        if node_type == "start":
+    def run_node(nid: str) -> dict[str, Any]:
+        node = nodes_by_id[nid]
+        ntype = node_types[nid]
+        with lock:
+            snapshot = dict(context)
+        config = _apply_data_edges(nid, dict(node.get("config") or {}), edges, snapshot)
+        config = interpolate(config, snapshot)
+        if ntype == "start":
             merged = dict(config.get("params") or {})
             merged.update(params or {})
-            outputs = merged
-        else:
-            outputs = handler(db, workflow, config)
-        context[node_id] = outputs
-        executed.add(node_id)
+            return merged
+        handler = _HANDLERS.get(ntype)
+        if handler is None:
+            raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
+        # 每个节点用独立 session(SQLAlchemy Session 非线程安全),workflow 也在本 session 重取。
+        with SessionLocal() as node_db:
+            wf = node_db.get(Workflow, wf_id)
+            return handler(node_db, wf, config)
 
-        db.add(
-            TaskEvent(
-                job_id=job.id,
-                type="workflow.node.finished",
-                payload={"node_id": node_id, "name": node_name, "outputs": _trim_outputs(outputs)},
-            )
-        )
-        job.progress = (index + 1) / total
-        db.commit()
+    job.status = "running"
+    job.message = f"工作流运行中: {wf_name}"
+    db.commit()
 
-    db.refresh(job)
-    if job.status == "failed":
+    processed = 0
+    scheduled: set[str] = set()
+    error: Exception | None = None
+    cancelled = False
+
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
+        futures: dict[Any, str] = {}
+
+        def schedule_ready() -> None:
+            nonlocal processed
+            for nid in order_ids:
+                if nid in scheduled:
+                    continue
+                if not all(str(edge.get("source")) in done for edge in incoming.get(nid, [])):
+                    continue
+                scheduled.add(nid)
+                if nid != "start" and not incoming_active(nid):
+                    with lock:
+                        done.add(nid)
+                    db.add(TaskEvent(job_id=job.id, type="workflow.node.skipped", payload={"node_id": nid, "name": node_label(nid)}))
+                    processed += 1
+                    job.progress = processed / total
+                    db.commit()
+                    continue
+                db.add(
+                    TaskEvent(
+                        job_id=job.id,
+                        type="workflow.node.started",
+                        payload={"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)},
+                    )
+                )
+                db.commit()
+                futures[pool.submit(run_node, nid)] = nid
+
+        schedule_ready()
+        while futures and error is None and not cancelled:
+            # 用户取消(cancel_job 把 job 翻 failed):不再调度新节点,在飞的节点跑完即止。
+            db.refresh(job)
+            if job.status == "failed":
+                cancelled = True
+                db.add(TaskEvent(job_id=job.id, type="workflow.cancelled", payload={"pending": len(futures)}))
+                db.commit()
+                break
+            completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
+            for future in completed:
+                nid = futures.pop(future)
+                try:
+                    outputs = future.result()
+                except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
+                    error = exc
+                    break
+                with lock:
+                    context[nid] = outputs
+                    executed.add(nid)
+                    done.add(nid)
+                processed += 1
+                db.add(
+                    TaskEvent(
+                        job_id=job.id,
+                        type="workflow.node.finished",
+                        payload={"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)},
+                    )
+                )
+                job.progress = processed / total
+                db.commit()
+            if error is None and not cancelled:
+                schedule_ready()
+
+    if error is not None:
+        raise error
+    if cancelled:
         return context
+
     job.status = "succeeded"
     job.progress = 1.0
-    job.message = f"工作流完成: {workflow.name}"
-    job.result = {"context": {node_id: _trim_outputs(outputs) for node_id, outputs in context.items()}}
-    db.add(TaskEvent(job_id=job.id, type="workflow.finished", payload={"nodes": len(order), "executed": len(executed)}))
+    job.message = f"工作流完成: {wf_name}"
+    job.result = {"context": {nid: _trim_outputs(out) for nid, out in context.items()}}
+    db.add(TaskEvent(job_id=job.id, type="workflow.finished", payload={"nodes": len(order_ids), "executed": len(executed)}))
     db.commit()
     return context
 

@@ -393,3 +393,37 @@ def test_parallel_fanout_and_join() -> None:
     assert ctx["a"]["text"] == "A:X"
     assert ctx["b"]["text"] == "B:X"  # 两条分流都跑了
     assert ctx["join"]["text"] == "A:X|B:X"  # join 拿到两侧、只跑一次
+
+def test_parallel_branches_run_concurrently() -> None:
+    """两条独立分支各睡 1s:真并发则总墙钟 ≈ 1s(远小于串行的 2s)。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    sleeper = "import time\ntime.sleep(1.0)\noutput = 1"
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "c1", "type": "code", "config": {"code": sleeper, "input": {}}},
+            {"id": "c2", "type": "code", "config": {"code": sleeper, "input": {}}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "c1"},
+            {"id": "e2", "source": "start", "target": "c2"},
+        ],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "并发", "graph": graph})
+    assert wf.status_code == 200, wf.text
+    started = time.monotonic()
+    run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.1)
+    elapsed = time.monotonic() - started
+    assert job["status"] == "succeeded", job
+    assert job["result"]["context"]["c1"]["output"] == 1
+    assert job["result"]["context"]["c2"]["output"] == 1
+    # 串行会 ≥ 2s;并发应明显更短。给足子进程/调度开销余量。
+    assert elapsed < 1.8, f"两条 1s 分支耗时 {elapsed:.2f}s,疑似未并发"
