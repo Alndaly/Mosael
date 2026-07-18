@@ -54,8 +54,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "kb_search": {
         "label": "知识库检索",
-        "description": "检索工作区知识库,输出片段文本。",
+        "description": "检索指定知识库,输出片段文本。",
         "config": {
+            "dataset_id": {"type": "string", "description": "选择要检索的知识库(留空则用工作区内首个)"},
             "query": {"type": "template", "required": True},
             "limit": {"type": "number", "description": "返回条数,默认 5"},
         },
