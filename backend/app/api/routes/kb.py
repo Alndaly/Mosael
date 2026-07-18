@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -153,8 +154,8 @@ def delete_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> Respons
 # ---------- 文档(挂在 dataset 下) ----------
 
 
-def _ingest_sync(db: DbSession, document: KbDocument, dataset: KbDataset) -> None:
-    """同步摄取:分块 + 索引,回填状态/错误(转成异步在下一片)。"""
+def _reindex_now(db: DbSession, document: KbDocument, dataset: KbDataset) -> None:
+    """就地(同步)重建索引,回填状态/错误。用于编辑/重建这类正文已就绪的快路径。"""
     document.status = "processing"
     try:
         kb.reindex_document(db, document, dataset)
@@ -163,6 +164,54 @@ def _ingest_sync(db: DbSession, document: KbDocument, dataset: KbDataset) -> Non
     except Exception as exc:  # noqa: BLE001 - 失败落库,不再 500 死路
         document.status = "error"
         document.error = str(exc)[:800]
+
+
+def _enqueue_ingest(document_id: str, *, temp_path: str | None = None, temp_filename: str | None = None) -> None:
+    """后台摄取:抓取(url)/转换(file)/分块/索引,全程更新 status;失败落 error。
+    导入接口据此立即返回 queued 文档,不再阻塞在数百秒的 MinerU/抓取上。"""
+
+    def run() -> None:
+        from app.core.db import SessionLocal
+
+        try:
+            with SessionLocal() as db:
+                document = db.get(KbDocument, document_id)
+                if document is None:
+                    return
+                dataset = db.get(KbDataset, document.dataset_id)
+                if dataset is None:
+                    return
+                document.status = "processing"
+                db.commit()
+                try:
+                    if document.source_type == "url" and not (document.content or "").strip():
+                        title, textc = kb.fetch_url_as_text(document.source_ref)
+                        if not textc.strip():
+                            raise ValueError("页面没有可提取的正文")
+                        if title.strip():  # 抓到网页标题就用它替换占位的 url 标题
+                            document.title = title[:300]
+                        document.content = textc[:400_000]
+                    elif document.source_type == "file" and temp_path:
+                        textc = kb_convert.convert_file_to_markdown(Path(temp_path), temp_filename or "upload")
+                        if not textc.strip():
+                            raise kb_convert.KbConvertError(f"{temp_filename or '文件'} 没有可提取的文本内容")
+                        document.content = textc[:400_000]
+                    kb.reindex_document(db, document, dataset)
+                    document.status = "completed"
+                    document.error = ""
+                    db.commit()
+                except Exception as exc:  # noqa: BLE001 - 失败落库,前端可见可重试
+                    db.rollback()
+                    document = db.get(KbDocument, document_id)
+                    if document is not None:
+                        document.status = "error"
+                        document.error = str(exc)[:800]
+                        db.commit()
+        finally:
+            if temp_path:
+                Path(temp_path).unlink(missing_ok=True)
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 @router.get("/kb/datasets/{dataset_id}/documents", response_model=list[KbDocumentOut])
@@ -176,6 +225,7 @@ def list_documents(dataset_id: str, db: DbSession, user: CurrentUser) -> list[Kb
 
 @router.post("/kb/datasets/{dataset_id}/documents", response_model=KbDocumentOut)
 def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+    """建笔记文档:立即返回 queued,后台分块/索引。"""
     dataset = _require_dataset(db, user, dataset_id)
     document = KbDocument(
         workspace_id=dataset.workspace_id,
@@ -185,37 +235,32 @@ def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user
         source_type=body.source_type,
         source_ref=body.source_ref,
         tags=_clean_tags(body.tags),
+        status="queued",
     )
     db.add(document)
-    db.flush()
-    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
+    _enqueue_ingest(document.id)
     return _doc_out(document, with_content=True)
 
 
 @router.post("/kb/datasets/{dataset_id}/documents/import-url", response_model=KbDocumentOut)
 def import_url(dataset_id: str, body: KbUrlImportRequest, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+    """导入网页:立即返回 queued,后台抓取正文 + 索引;抓取失败落 status=error。"""
     dataset = _require_dataset(db, user, dataset_id)
-    try:
-        title, textc = kb.fetch_url_as_text(body.url)
-    except kb.KbImportError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if not textc.strip():
-        raise HTTPException(status_code=422, detail="页面没有可提取的正文")
     document = KbDocument(
         workspace_id=dataset.workspace_id,
         dataset_id=dataset.id,
-        title=title[:300] or body.url[:300],
-        content=textc[:400_000],
+        title=body.url[:300],
+        content="",
         source_type="url",
         source_ref=body.url,
+        status="queued",
     )
     db.add(document)
-    db.flush()
-    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
+    _enqueue_ingest(document.id)
     return _doc_out(document, with_content=True)
 
 
@@ -226,7 +271,8 @@ def import_file(
     user: CurrentUser,
     file: UploadFile = File(...),
 ) -> KbDocumentOut:
-    """上传文件并经转换引擎(MinerU/markitdown/纯文本)转成 markdown 文档。"""
+    """上传文件:同步只做类型/大小校验 + 落盘临时文件,立即返回 queued;
+    后台转换(MinerU/markitdown/纯文本)+ 索引,转换失败落 status=error。"""
     dataset = _require_dataset(db, user, dataset_id)
     filename = file.filename or "upload"
     suffix = Path(filename).suffix.lower()
@@ -237,29 +283,25 @@ def import_file(
     if len(payload) > MAX_IMPORT_FILE_BYTES:
         raise HTTPException(status_code=422, detail="文件超过 80MB 上限")
 
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as handle:
-        handle.write(payload)
-        handle.flush()
-        try:
-            textc = kb_convert.convert_file_to_markdown(Path(handle.name), filename)
-        except kb_convert.KbConvertError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # 转换在后台,临时文件不能随请求销毁 → delete=False,worker 处理完再删。
+    handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    handle.write(payload)
+    handle.flush()
+    handle.close()
 
-    if not textc.strip():
-        raise HTTPException(status_code=422, detail=f"{filename} 没有可提取的文本内容")
     document = KbDocument(
         workspace_id=dataset.workspace_id,
         dataset_id=dataset.id,
         title=Path(filename).stem[:300] or filename[:300],
-        content=textc[:400_000],
+        content="",
         source_type="file",
         source_ref=filename,
+        status="queued",
     )
     db.add(document)
-    db.flush()
-    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
+    _enqueue_ingest(document.id, temp_path=handle.name, temp_filename=filename)
     return _doc_out(document, with_content=True)
 
 
@@ -284,7 +326,7 @@ def update_document(document_id: str, body: KbDocumentUpdate, db: DbSession, use
     if changed_text:
         dataset = db.get(KbDataset, document.dataset_id)
         if dataset is not None:
-            _ingest_sync(db, document, dataset)
+            _reindex_now(db, document, dataset)
     db.commit()
     db.refresh(document)
     return _doc_out(document, with_content=True)
@@ -313,7 +355,7 @@ def reindex_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDo
     dataset = db.get(KbDataset, document.dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    _ingest_sync(db, document, dataset)
+    _reindex_now(db, document, dataset)
     db.commit()
     db.refresh(document)
     return _doc_out(document, with_content=True)

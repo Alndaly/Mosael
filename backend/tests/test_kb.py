@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from app.domain import kb
 from tests.util import fresh_client
 
@@ -13,6 +15,23 @@ def _dataset(client, ws: str, **settings) -> str:
     if settings:
         client.patch(f"/api/kb/datasets/{ds['id']}", json=settings)
     return ds["id"]
+
+
+def _wait(client, doc_id: str, timeout: float = 5.0) -> dict:
+    """异步摄取:轮询直到 completed/error。"""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        doc = client.get(f"/api/kb/documents/{doc_id}").json()
+        if doc.get("status") in ("completed", "error"):
+            return doc
+        time.sleep(0.02)
+    return client.get(f"/api/kb/documents/{doc_id}").json()
+
+
+def _add_note(client, ds: str, **body) -> dict:
+    """建笔记并等待索引完成,返回完成态文档。"""
+    doc = client.post(f"/api/kb/datasets/{ds}/documents", json=body).json()
+    return _wait(client, doc["id"])
 
 
 def test_dataset_crud() -> None:
@@ -45,6 +64,7 @@ def test_kb_note_crud_and_chinese_search() -> None:
         },
     ).json()
     assert doc["source_type"] == "note" and doc["tags"] == ["脚本", "旅拍"]
+    doc = _wait(client, doc["id"])  # 异步摄取
     assert doc["status"] == "completed" and doc["chunk_count"] >= 1
 
     listed = client.get(f"/api/kb/datasets/{ds}/documents").json()
@@ -80,10 +100,7 @@ def test_retrieval_test_returns_scores() -> None:
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws)
-    doc = client.post(
-        f"/api/kb/datasets/{ds}/documents",
-        json={"title": "调色", "content": "海边的镜头语言与调色参考,黄昏色温偏暖。"},
-    ).json()
+    doc = _add_note(client, ds, title="调色", content="海边的镜头语言与调色参考,黄昏色温偏暖。")
     results = client.post(f"/api/kb/datasets/{ds}/retrieval-test", json={"query": "调色参考"}).json()
     assert results and results[0]["document_id"] == doc["id"]
     assert results[0]["score"] > 0 and results[0]["from_graph"] is False
@@ -95,13 +112,15 @@ def test_kb_url_import_uses_extractor(monkeypatch) -> None:
     ds = _dataset(client, ws)
 
     monkeypatch.setattr(kb, "fetch_url_as_text", lambda url: ("示例文章", "第一段正文。\n\n第二段有关键词穿越机。"))
-    doc = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com/a"}).json()
-    assert doc["title"] == "示例文章" and doc["source_type"] == "url"
+    created = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com/a"}).json()
+    doc = _wait(client, created["id"])
+    assert doc["title"] == "示例文章" and doc["source_type"] == "url" and doc["status"] == "completed"
     hits = client.get(f"/api/kb/datasets/{ds}/search?q=穿越机").json()
     assert hits and hits[0]["document_id"] == doc["id"]
 
 
-def test_kb_url_import_error_maps_to_422(monkeypatch) -> None:
+def test_kb_url_import_error_stored_on_document(monkeypatch) -> None:
+    """异步摄取:抓取失败不再 422,而是落成 status=error 的文档(前端可见可重试)。"""
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws)
@@ -110,8 +129,10 @@ def test_kb_url_import_error_maps_to_422(monkeypatch) -> None:
         raise kb.KbImportError("抓取失败: timeout")
 
     monkeypatch.setattr(kb, "fetch_url_as_text", boom)
-    response = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com"})
-    assert response.status_code == 422 and "抓取失败" in response.text
+    created = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com"})
+    assert created.status_code == 200
+    doc = _wait(client, created.json()["id"])
+    assert doc["status"] == "error" and "抓取失败" in doc["error"]
 
 
 def test_chunk_text_paragraphs_and_long_split() -> None:
@@ -143,11 +164,13 @@ def test_kb_file_import_txt_and_md() -> None:
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws)
-    doc = client.post(
+    created = client.post(
         f"/api/kb/datasets/{ds}/documents/import-file",
         files={"file": ("拍摄清单.md", "# 清单\n\n无人机镜头三组。".encode(), "text/markdown")},
     ).json()
-    assert doc["title"] == "拍摄清单" and doc["source_type"] == "file"
+    assert created["title"] == "拍摄清单" and created["source_type"] == "file"
+    doc = _wait(client, created["id"])
+    assert doc["status"] == "completed"
     hits = client.get(f"/api/kb/datasets/{ds}/search?q=无人机镜头").json()
     assert hits and hits[0]["document_id"] == doc["id"]
 
@@ -189,12 +212,8 @@ def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws, retrieval_mode="hybrid")
-    doc_a = client.post(
-        f"/api/kb/datasets/{ds}/documents", json={"title": "文档A", "content": "海边的镜头语言与调色参考。"}
-    ).json()
-    doc_b = client.post(
-        f"/api/kb/datasets/{ds}/documents", json={"title": "文档B", "content": "海边的旅拍脚本与分镜。"}
-    ).json()
+    doc_a = _add_note(client, ds, title="文档A", content="海边的镜头语言与调色参考。")
+    doc_b = _add_note(client, ds, title="文档B", content="海边的旅拍脚本与分镜。")
 
     from app.core.db import SessionLocal
     from app.db.models import KbChunk
@@ -243,12 +262,8 @@ def test_kb_graph_expansion_merges_related_docs(monkeypatch) -> None:
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws, graph_enabled=True)
-    doc_hit = client.post(
-        f"/api/kb/datasets/{ds}/documents", json={"title": "命中文档", "content": "冲浪板评测与海浪运镜。"}
-    ).json()
-    doc_related = client.post(
-        f"/api/kb/datasets/{ds}/documents", json={"title": "相关文档", "content": "装备清单:防水壳、脚绳。"}
-    ).json()
+    doc_hit = _add_note(client, ds, title="命中文档", content="冲浪板评测与海浪运镜。")
+    doc_related = _add_note(client, ds, title="相关文档", content="装备清单:防水壳、脚绳。")
 
     from app.core.db import SessionLocal
     from app.db.models import KbChunk
