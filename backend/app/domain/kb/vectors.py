@@ -67,18 +67,19 @@ def _get_client() -> Any:
 
 
 def _ensure_collection(client: Any) -> None:
-    if client.has_collection(COLLECTION):
-        return
-    client.create_collection(
-        collection_name=COLLECTION,
-        dimension=settings.kb_embedding_dim,
-        primary_field_name="id",
-        id_type="string",
-        max_length=64,
-        vector_field_name="vector",
-        metric_type="IP",
-        auto_id=False,
-    )
+    if not client.has_collection(COLLECTION):
+        client.create_collection(
+            collection_name=COLLECTION,
+            dimension=settings.kb_embedding_dim,
+            primary_field_name="id",
+            id_type="string",
+            max_length=64,
+            vector_field_name="vector",
+            metric_type="IP",
+            auto_id=False,
+        )
+    # milvus-lite 重开进程后集合可能是 released 状态,查询前需显式 load(幂等)
+    client.load_collection(COLLECTION)
 
 
 def upsert_document_vectors(db: Session, *, workspace_id: str, document_id: str, chunks: list[tuple[str, str]]) -> None:

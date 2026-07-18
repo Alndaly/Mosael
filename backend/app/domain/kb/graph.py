@@ -64,7 +64,7 @@ def extract_entities(db: Session, text: str) -> list[dict[str, str]]:
                 "messages": [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
                 "temperature": 0,
             },
-            timeout=60,
+            timeout=180,  # 本地模型冷启动加载可能超过 60s
         )
         response.raise_for_status()
         content = str(response.json()["choices"][0]["message"]["content"])

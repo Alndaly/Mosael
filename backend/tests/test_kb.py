@@ -193,7 +193,10 @@ def test_kb_file_import_rejects_unknown_type() -> None:
     assert response.status_code == 422
 
 
-def test_kb_graph_endpoint_degrades_without_neo4j() -> None:
+def test_kb_graph_endpoint_degrades_without_neo4j(monkeypatch) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "neo4j_uri", "")  # 无论本机 .env 是否配了 Neo4j,都测降级路径
     client = fresh_client()
     ws = _workspace(client)
     ds = _dataset(client, ws)
@@ -215,7 +218,13 @@ def test_kb_convert_engine_selection(monkeypatch) -> None:
     assert convert.active_engine() == "text"
 
 
-def test_kb_status_endpoint() -> None:
+def test_kb_status_endpoint(monkeypatch) -> None:
+    from app.core.config import settings
+
+    # 无论本机 .env 是否配了向量/图谱,都断言未配置时的降级状态
+    monkeypatch.setattr(settings, "kb_embedding_vendor", "")
+    monkeypatch.setattr(settings, "kb_embedding_model", "")
+    monkeypatch.setattr(settings, "neo4j_uri", "")
     client = fresh_client()
     status = client.get("/api/kb/status").json()
     assert status["convert_engine"] in ("markitdown", "mineru", "text")
