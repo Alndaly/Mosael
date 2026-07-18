@@ -3,7 +3,7 @@
  * Mibu passes per turn (base URL + key + model), then run a turn through pi's
  * Agent and stream text deltas back out. Tools/hooks come in S3+.
  */
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createModels, createProvider, type Model, type Models } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
@@ -44,13 +44,20 @@ export interface PiTurnInput {
   prompt: string;
   provider: { baseUrl: string; apiKey: string };
   model: string;
+  tools: AgentTool[];
 }
 
-/** Run one turn through pi's Agent; emit each text delta, return the full text. */
-export async function runPiTurn(input: PiTurnInput, onDelta: (delta: string) => void): Promise<string> {
+export interface PiTurnHandlers {
+  onDelta: (delta: string) => void;
+  onToolStart: (toolCallId: string, name: string, args: unknown) => void;
+  onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
+}
+
+/** Run one turn through pi's Agent; stream text + tool events, return full text. */
+export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<string> {
   const { models, model } = buildModels(input.provider.baseUrl, input.provider.apiKey, input.model);
   const agent = new Agent({
-    initialState: { systemPrompt: input.systemPrompt, model },
+    initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools },
     streamFn: (m, context, options) => models.stream(m, context, options),
   });
   let full = "";
@@ -58,7 +65,11 @@ export async function runPiTurn(input: PiTurnInput, onDelta: (delta: string) => 
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       const delta = event.assistantMessageEvent.delta;
       full += delta;
-      onDelta(delta);
+      handlers.onDelta(delta);
+    } else if (event.type === "tool_execution_start") {
+      handlers.onToolStart(event.toolCallId, event.toolName, event.args);
+    } else if (event.type === "tool_execution_end") {
+      handlers.onToolEnd(event.toolCallId, event.result, event.isError);
     }
   });
   await agent.prompt(input.prompt);

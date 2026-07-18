@@ -11,13 +11,25 @@ import * as readline from "node:readline";
 
 import { log, send, type Request } from "./protocol.js";
 import { runPiTurn } from "./pi.js";
+import { buildReadonlyTools } from "./tools.js";
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
   if (msg.provider?.baseUrl && msg.model) {
+    const tools = buildReadonlyTools(msg.apiBase, msg.token, msg.workspaceId);
     const text = await runPiTurn(
-      { systemPrompt: msg.systemPrompt, prompt, provider: { baseUrl: msg.provider.baseUrl, apiKey: msg.provider.apiKey }, model: msg.model },
-      (delta) => send({ type: "text_delta", turnId, delta }),
+      {
+        systemPrompt: msg.systemPrompt,
+        prompt,
+        provider: { baseUrl: msg.provider.baseUrl, apiKey: msg.provider.apiKey },
+        model: msg.model,
+        tools,
+      },
+      {
+        onDelta: (delta) => send({ type: "text_delta", turnId, delta }),
+        onToolStart: (toolCallId, name, args) => send({ type: "tool_start", turnId, toolCallId, name, args }),
+        onToolEnd: (toolCallId, result) => send({ type: "tool_end", turnId, toolCallId, result }),
+      },
     );
     send({ type: "turn_done", turnId, text, sessionState: null });
     return;
