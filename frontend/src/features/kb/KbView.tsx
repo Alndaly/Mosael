@@ -14,13 +14,19 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -660,34 +666,55 @@ function CreateDatasetDialog({
   onSubmit: (body: { name: string; description: string }) => void;
 }) {
   const t = useI18n();
-  const [name, setName] = React.useState("");
-  const [description, setDescription] = React.useState("");
+  const form = useForm<{ name: string; description: string }>({
+    resolver: zodResolver(z.object({ name: z.string().trim().min(1, t("fieldRequired")), description: z.string() })),
+    defaultValues: { name: "", description: "" },
+  });
   React.useEffect(() => {
-    if (open) {
-      setName("");
-      setDescription("");
-    }
+    if (open) form.reset({ name: "", description: "" });
   }, [open]);
+  const submit = form.handleSubmit((values) =>
+    onSubmit({ name: values.name.trim(), description: values.description.trim() }),
+  );
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={t("kbNewDataset")}>
-      <div className="grid gap-3">
-        <label className="wf-field">
-          <span>{t("kbDatasetName")}</span>
-          <Input autoFocus value={name} placeholder={t("kbDatasetNamePh")} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label className="wf-field">
-          <span>{t("kbDatasetDesc")}</span>
-          <Input value={description} onChange={(event) => setDescription(event.target.value)} />
-        </label>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={!name.trim() || pending} onClick={() => onSubmit({ name: name.trim(), description: description.trim() })}>
-            {pending ? <Loader2 size={13} className="spin" /> : null} {t("create")}
-          </Button>
-        </div>
-      </div>
+      <Form {...form}>
+        <form className="grid gap-3" onSubmit={submit} noValidate>
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("kbDatasetName")}</FormLabel>
+                <FormControl>
+                  <Input autoFocus placeholder={t("kbDatasetNamePh")} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("kbDatasetDesc")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? <Loader2 size={13} className="spin" /> : null} {t("create")}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </ModalShell>
   );
 }
@@ -706,25 +733,46 @@ function KbUrlDialog({
   onSubmit: (url: string) => void;
 }) {
   const t = useI18n();
-  const [url, setUrl] = React.useState("");
+  const form = useForm<{ url: string }>({
+    resolver: zodResolver(z.object({ url: z.string().trim().regex(/^https?:\/\//, t("kbUrlInvalid")) })),
+    defaultValues: { url: "" },
+  });
   React.useEffect(() => {
-    if (open) setUrl("");
+    if (open) form.reset({ url: "" });
   }, [open]);
+  const submit = form.handleSubmit((values) => onSubmit(values.url.trim()));
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={t("kbImportUrl")}>
-      <div className="grid gap-3">
-        <p className="text-[13px] text-muted-foreground">{t("kbImportUrlBody")}</p>
-        <Input autoFocus value={url} placeholder="https://…" onChange={(event) => setUrl(event.target.value)} />
-        {error && <p className="login-error">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={!/^https?:\/\//.test(url.trim()) || pending} onClick={() => onSubmit(url.trim())}>
-            {pending ? <Loader2 size={13} className="spin" /> : null} {t("kbImport")}
-          </Button>
-        </div>
-      </div>
+      <Form {...form}>
+        <form className="grid gap-3" onSubmit={submit} noValidate>
+          <p className="text-[13px] text-muted-foreground">{t("kbImportUrlBody")}</p>
+          <FormField
+            control={form.control}
+            name="url"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <Input autoFocus placeholder="https://…" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? <Loader2 size={13} className="spin" /> : null} {t("kbImport")}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </ModalShell>
   );
 }

@@ -1,5 +1,8 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { ExternalLink, KeyRound, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
@@ -7,6 +10,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/ui/modals";
@@ -14,6 +18,7 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
+type ProfileForm = { vendor: string; name: string; api_key: string; base_url: string; default_model: string };
 
 /** 各供应商创建密钥的官方控制台入口(告知用户"去哪拿 key")。外链走系统浏览器。 */
 const VENDOR_DOCS: Record<string, string> = {
@@ -31,11 +36,7 @@ export function ProviderProfilesSection() {
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
-  const [name, setName] = React.useState("");
-  const [vendor, setVendor] = React.useState("moonshot");
-  const [apiKey, setApiKey] = React.useState("");
-  const [baseUrl, setBaseUrl] = React.useState("");
-  const [model, setModel] = React.useState("");
+  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", api_key: "", base_url: "", default_model: "" };
 
   const profiles = useQuery({
     queryKey: ["provider-profiles"],
@@ -47,43 +48,55 @@ export function ProviderProfilesSection() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["provider-profiles"] });
 
-  const resetForm = () => {
-    setName("");
-    setApiKey("");
-    setBaseUrl("");
-    setModel("");
-  };
+  const schema = React.useMemo(() => {
+    const base = z.object({
+      vendor: z.string(),
+      name: z.string().trim().min(1, t("fieldRequired")),
+      api_key: z.string(),
+      base_url: z.string(),
+      default_model: z.string(),
+    });
+    // API key required when creating; on edit a blank key means "keep existing".
+    return editing
+      ? base
+      : base.refine((data) => data.api_key.trim().length > 0, { message: t("fieldRequired"), path: ["api_key"] });
+  }, [editing, t]);
+  const form = useForm<ProfileForm>({ resolver: zodResolver(schema), defaultValues: EMPTY });
+  const vendor = form.watch("vendor");
+
   const closeModal = () => {
     setAdding(false);
     setEditing(null);
-    resetForm();
+    form.reset(EMPTY);
   };
   const openCreate = () => {
     setEditing(null);
-    resetForm();
-    setVendor("moonshot");
+    form.reset(EMPTY);
     setAdding(true);
   };
   const openEdit = (profile: ProviderProfile) => {
     setAdding(false);
     setEditing(profile);
-    setName(profile.name);
-    setVendor(profile.vendor);
-    setApiKey(""); // 密钥只存掩码,留空表示保持不变
-    setBaseUrl(profile.base_url);
-    setModel(profile.default_model);
+    // 密钥只存掩码,留空表示保持不变
+    form.reset({
+      vendor: profile.vendor,
+      name: profile.name,
+      api_key: "",
+      base_url: profile.base_url,
+      default_model: profile.default_model,
+    });
   };
 
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: ProfileForm) =>
       api<ProviderProfile>("/api/settings/providers", {
         method: "POST",
         body: JSON.stringify({
-          name: name.trim(),
-          vendor,
-          api_key: apiKey.trim(),
-          base_url: baseUrl.trim(),
-          default_model: model.trim(),
+          name: values.name.trim(),
+          vendor: values.vendor,
+          api_key: values.api_key.trim(),
+          base_url: values.base_url.trim(),
+          default_model: values.default_model.trim(),
         }),
       }),
     onSuccess: () => {
@@ -92,21 +105,25 @@ export function ProviderProfilesSection() {
     },
   });
   const update = useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: ({ id, values }: { id: string; values: ProfileForm }) =>
       api<ProviderProfile>(`/api/settings/providers/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          name: name.trim(),
-          base_url: baseUrl.trim(),
-          default_model: model.trim(),
+          name: values.name.trim(),
+          base_url: values.base_url.trim(),
+          default_model: values.default_model.trim(),
           // 只有真正输入了新 key 才提交,否则后端保持原值
-          ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+          ...(values.api_key.trim() ? { api_key: values.api_key.trim() } : {}),
         }),
       }),
     onSuccess: () => {
       closeModal();
       void refresh();
     },
+  });
+  const submit = form.handleSubmit((values) => {
+    if (editing) update.mutate({ id: editing.id, values });
+    else create.mutate(values);
   });
   const toggle = useMutation({
     mutationFn: (profile: ProviderProfile) =>
@@ -140,94 +157,125 @@ export function ProviderProfilesSection() {
         onOpenChange={(next) => !next && closeModal()}
         title={editing ? t("providerEdit") : t("providerAdd")}
       >
-        <form
-          className="task-create-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (editing) {
-              if (name.trim()) update.mutate(editing.id);
-            } else if (name.trim() && apiKey.trim()) {
-              create.mutate();
-            }
-          }}
-        >
-          <label className="wf-field">
-            <span>{t("providerVendorLabel")}</span>
-            {editing ? (
-              // 供应商类型是解析主键、编辑时不可改;直接只读显示,避免非预设 vendor 的空下拉
-              <Input value={vendorLabel(vendor)} disabled readOnly />
-            ) : (
-              <Select value={vendor} onValueChange={setVendor}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(vendors.data ?? []).map((preset) => (
-                    <SelectItem key={preset.vendor} value={preset.vendor}>
-                      {preset.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {preset?.capabilities && <small className="provider-caps">{preset.capabilities}</small>}
-          </label>
-          <label className="wf-field">
-            <span>{t("providerNameLabel")}</span>
-            <Input placeholder={t("providerName")} value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <label className="wf-field">
-            <span>
-              API Key
-              {docsUrl && (
-                <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
-                  {t("providerGetKey")}
-                  <ExternalLink size={11} />
-                </a>
+        <Form {...form}>
+          <form className="task-create-form" onSubmit={submit} noValidate>
+            <FormField
+              control={form.control}
+              name="vendor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("providerVendorLabel")}</FormLabel>
+                  {editing ? (
+                    // 供应商类型是解析主键、编辑时不可改;只读显示,避免非预设 vendor 的空下拉
+                    <Input value={vendorLabel(field.value)} disabled readOnly />
+                  ) : (
+                    <FormControl>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(vendors.data ?? []).map((item) => (
+                            <SelectItem key={item.vendor} value={item.vendor}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  )}
+                  {preset?.capabilities && (
+                    <FormDescription className="provider-caps">{preset.capabilities}</FormDescription>
+                  )}
+                </FormItem>
               )}
-            </span>
-            <Input
-              type="password"
-              placeholder={editing ? t("providerKeyKeepPlaceholder") : t("providerKeyPlaceholder")}
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
             />
-          </label>
-          <label className="wf-field">
-            <span>Base URL</span>
-            <Input
-              placeholder={preset?.base_url || t("providerBaseUrl")}
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("providerNameLabel")}</FormLabel>
+                  <FormControl>
+                    <Input placeholder={t("providerName")} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <small>
-              {preset?.base_url
-                ? t("providerBaseUrlDefault").replace("{url}", preset.base_url)
-                : t("providerBaseUrlRequired")}
-            </small>
-          </label>
-          <label className="wf-field">
-            <span>{t("providerModelLabel")}</span>
-            <Input placeholder={t("providerModel")} value={model} onChange={(event) => setModel(event.target.value)} />
-            {preset?.default_model && (
-              <small>{t("providerModelExample").replace("{model}", preset.default_model)}</small>
-            )}
-          </label>
-          <div className="task-create-actions">
-            <Button type="button" variant="outline" size="sm" onClick={closeModal}>
-              {t("cancel")}
-            </Button>
-            {editing ? (
-              <Button type="submit" size="sm" disabled={!name.trim() || update.isPending}>
-                {t("save")}
+            <FormField
+              control={form.control}
+              name="api_key"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    API Key
+                    {docsUrl && (
+                      <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
+                        {t("providerGetKey")}
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder={editing ? t("providerKeyKeepPlaceholder") : t("providerKeyPlaceholder")}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="base_url"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Base URL</FormLabel>
+                  <FormControl>
+                    <Input placeholder={preset?.base_url || t("providerBaseUrl")} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {preset?.base_url
+                      ? t("providerBaseUrlDefault").replace("{url}", preset.base_url)
+                      : t("providerBaseUrlRequired")}
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="default_model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("providerModelLabel")}</FormLabel>
+                  <FormControl>
+                    <Input placeholder={t("providerModel")} {...field} />
+                  </FormControl>
+                  {preset?.default_model && (
+                    <FormDescription>{t("providerModelExample").replace("{model}", preset.default_model)}</FormDescription>
+                  )}
+                </FormItem>
+              )}
+            />
+            <div className="task-create-actions">
+              <Button type="button" variant="outline" size="sm" onClick={closeModal}>
+                {t("cancel")}
               </Button>
-            ) : (
-              <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
-                <Plus size={13} /> {t("providerAdd")}
+              <Button type="submit" size="sm" disabled={editing ? update.isPending : create.isPending}>
+                {editing ? (
+                  t("save")
+                ) : (
+                  <>
+                    <Plus size={13} /> {t("providerAdd")}
+                  </>
+                )}
               </Button>
-            )}
-          </div>
-        </form>
+            </div>
+          </form>
+        </Form>
       </ModalShell>
 
       <SettingsBlock>

@@ -1,24 +1,26 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { AlertTriangle } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type EmbeddingConfig = components["schemas"]["KbEmbeddingConfigOut"];
+type EmbForm = { provider_profile_id: string; model: string; dim: number };
 
 export function KbEmbeddingSection() {
   const t = useI18n();
   const qc = useQueryClient();
-  const [providerId, setProviderId] = React.useState("");
-  const [model, setModel] = React.useState("");
-  const [dim, setDim] = React.useState(768);
   const [initialDim, setInitialDim] = React.useState(768);
 
   const profiles = useQuery({
@@ -30,34 +32,48 @@ export function KbEmbeddingSection() {
     queryFn: () => api<EmbeddingConfig>("/api/settings/kb-embedding"),
   });
 
+  const form = useForm<EmbForm>({
+    resolver: zodResolver(
+      z.object({
+        provider_profile_id: z.string(),
+        model: z.string().trim().min(1, t("fieldRequired")),
+        dim: z.number().min(1, t("fieldRequired")),
+      }),
+    ),
+    defaultValues: { provider_profile_id: "", model: "", dim: 768 },
+  });
+
   // 配置载入后回填一次表单
   React.useEffect(() => {
     if (!config.data) return;
-    setProviderId(config.data.provider_profile_id ?? "");
-    setModel(config.data.model);
-    setDim(config.data.dim || 768);
+    form.reset({
+      provider_profile_id: config.data.provider_profile_id ?? "",
+      model: config.data.model,
+      dim: config.data.dim || 768,
+    });
     setInitialDim(config.data.dim || 768);
   }, [config.data]);
 
   const save = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: EmbForm) =>
       api<EmbeddingConfig>("/api/settings/kb-embedding", {
         method: "PUT",
         body: JSON.stringify({
-          provider_profile_id: providerId || null,
-          model: model.trim(),
-          dim,
+          provider_profile_id: values.provider_profile_id || null,
+          model: values.model.trim(),
+          dim: values.dim,
         }),
       }),
-    onSuccess: () => {
-      setInitialDim(dim);
+    onSuccess: (_data, values) => {
+      setInitialDim(values.dim);
       void qc.invalidateQueries({ queryKey: ["kb-embedding"] });
       void qc.invalidateQueries({ queryKey: ["kb-status"] });
     },
   });
+  const submit = form.handleSubmit((values) => save.mutate(values));
 
   const enabledProfiles = (profiles.data ?? []).filter((profile) => profile.enabled);
-  const dimChanged = dim !== initialDim;
+  const dimChanged = form.watch("dim") !== initialDim;
   // 两个查询都就绪再挂表单:否则 Radix Select 会在选项挂载前拿到 value,显示空占位。
   const ready = profiles.data !== undefined && config.data !== undefined;
 
@@ -67,58 +83,77 @@ export function KbEmbeddingSection() {
         {!ready ? null : enabledProfiles.length === 0 ? (
           <p className="feishu-empty">{t("kbEmbedNoProvider")}</p>
         ) : (
-          <form
-            className="task-create-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (model.trim() && dim > 0) save.mutate();
-            }}
-          >
-            <label className="wf-field">
-              <span>{t("kbEmbedProvider")}</span>
-              {/* key 随 value 变化强制重挂,规避 Radix 对「初始受控值」不刷新显示文本的问题 */}
-              <Select key={providerId || "none"} value={providerId} onValueChange={setProviderId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("kbEmbedPickProvider")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {enabledProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="wf-field">
-              <span>{t("kbEmbedModel")}</span>
-              <Input
-                placeholder={t("kbEmbedModelPlaceholder")}
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
+          <Form {...form}>
+            <form className="task-create-form" onSubmit={submit} noValidate>
+              <FormField
+                control={form.control}
+                name="provider_profile_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("kbEmbedProvider")}</FormLabel>
+                    <FormControl>
+                      {/* key 随 value 变化强制重挂,规避 Radix 初始受控值不刷新显示文本 */}
+                      <Select key={field.value || "none"} value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("kbEmbedPickProvider")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {enabledProfiles.map((profile) => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  </FormItem>
+                )}
               />
-            </label>
-            <label className="wf-field">
-              <span>{t("kbEmbedDim")}</span>
-              <Input
-                type="number"
-                min={1}
-                value={dim}
-                onChange={(event) => setDim(Number(event.target.value) || 0)}
+              <FormField
+                control={form.control}
+                name="model"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("kbEmbedModel")}</FormLabel>
+                    <FormControl>
+                      <Input placeholder={t("kbEmbedModelPlaceholder")} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {dimChanged && (
-                <small className="kb-embed-warn">
-                  <AlertTriangle size={12} /> {t("kbEmbedDimWarn")}
-                </small>
-              )}
-            </label>
-            <div className="task-create-actions">
-              <small className="kb-embed-note">{t("kbEmbedRebuildNote")}</small>
-              <Button type="submit" size="sm" disabled={!model.trim() || dim <= 0 || save.isPending}>
-                {t("save")}
-              </Button>
-            </div>
-          </form>
+              <FormField
+                control={form.control}
+                name="dim"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("kbEmbedDim")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={field.value}
+                        onChange={(event) => field.onChange(Number(event.target.value) || 0)}
+                      />
+                    </FormControl>
+                    {dimChanged ? (
+                      <small className="kb-embed-warn">
+                        <AlertTriangle size={12} /> {t("kbEmbedDimWarn")}
+                      </small>
+                    ) : (
+                      <FormMessage />
+                    )}
+                  </FormItem>
+                )}
+              />
+              <div className="task-create-actions">
+                <small className="kb-embed-note">{t("kbEmbedRebuildNote")}</small>
+                <Button type="submit" size="sm" disabled={save.isPending}>
+                  {t("save")}
+                </Button>
+              </div>
+            </form>
+          </Form>
         )}
       </SettingsBlock>
     </SettingsGroup>

@@ -1,8 +1,12 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -50,30 +54,41 @@ export function RenameDialog({
   onSubmit: (value: string) => void;
 }) {
   const t = useI18n();
-  const [value, setValue] = React.useState(initialValue);
+  const form = useForm<{ value: string }>({
+    resolver: zodResolver(z.object({ value: z.string().trim().min(1, t("fieldRequired")) })),
+    defaultValues: { value: initialValue },
+  });
   React.useEffect(() => {
-    if (open) setValue(initialValue);
+    if (open) form.reset({ value: initialValue });
   }, [open, initialValue]);
+  const submit = form.handleSubmit((values) => onSubmit(values.value.trim()));
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={title}>
-      <form
-        className="grid gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (value.trim()) onSubmit(value.trim());
-        }}
-      >
-        <Input autoFocus value={value} onChange={(event) => setValue(event.target.value)} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" size="sm" disabled={!value.trim()}>
-            {t("confirm")}
-          </Button>
-        </div>
-      </form>
+      <Form {...form}>
+        <form className="grid gap-3" onSubmit={submit} noValidate>
+          <FormField
+            control={form.control}
+            name="value"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <Input autoFocus {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" size="sm">
+              {t("confirm")}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </ModalShell>
   );
 }
