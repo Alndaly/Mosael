@@ -86,6 +86,26 @@ class Asset(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class Voice(Base):
+    """A cloned voice = a short reference clip + its transcript. Zero-shot TTS
+    engines (F5-TTS / Fish Speech) synthesize new speech in this voice from the
+    (reference audio + reference text + target text) triple. Workspace-scoped."""
+
+    __tablename__ = "voices"
+    __table_args__ = (Index("idx_voices_workspace_created", "workspace_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    reference_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reference_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="upload")  # upload | speaker
+    source_asset_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_speaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Lut(Base):
     """A 3D color lookup table (.cube), uploaded per workspace and burned in with
     ffmpeg lut3d at export. Referenced from clip.effects.color.lut by id."""

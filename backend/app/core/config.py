@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     asr_provider: str = "auto"  # "auto" | "funasr" | "whisperx"
     asr_whisper_model: str = "small"
 
+    # TTS / voice cloning. Heavy f5-tts/fish-speech run in a separate interpreter
+    # (empty tts_python autodetects: env → sibling mibu-video venv → this one).
+    tts_python: str = ""
+    tts_engine: str = "f5-tts"  # "f5-tts" | "fish-speech"
+
     # 知识库增强层(全部可选,未配置时基线 FTS5 始终可用)。
     # 文件转换:auto = MinerU(配了 token)→ markitdown → 纯文本
     kb_convert_engine: str = "auto"  # auto|mineru|markitdown|text
