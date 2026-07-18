@@ -50,8 +50,21 @@ class WorkspaceMember(Base):
 
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    role: Mapped[str] = mapped_column(String(40), nullable=False, default="owner")
+    role: Mapped[str] = mapped_column(String(40), nullable=False, default="owner")  # owner|admin|editor|viewer
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class WorkspaceMemberPerm(Base):
+    """Per-member fine-grained permission override. Absence of a row = fall back to the
+    member's role default (see app/core/roles.py). Relational (one row per overridden
+    perm) so new perms need no migration. Owner always has all perms — overrides ignored."""
+
+    __tablename__ = "workspace_member_perms"
+
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    perm: Mapped[str] = mapped_column(String(40), primary_key=True)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class Project(Base):

@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember
+from app.core.roles import effective_perms, has_perm, role_at_least
+from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, WorkspaceMemberPerm
 
 """
 Single permission entry point (plan §9.3).
@@ -37,7 +38,7 @@ def get_current_user(
     return user
 
 
-def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
+def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
     member = db.scalar(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -45,7 +46,56 @@ def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
         )
     )
     if member is None:
+        # Non-members get 404, never 403 — don't leak that the workspace exists.
         raise HTTPException(status_code=404, detail="Not found")
+    return member
+
+
+def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
+    """Membership gate (any role) — used by read paths and as the base for the
+    role/perm gates below."""
+    _membership(db, user, workspace_id)
+
+
+def member_overrides(db: Session, workspace_id: str, user_id: str) -> dict[str, bool]:
+    rows = db.scalars(
+        select(WorkspaceMemberPerm).where(
+            WorkspaceMemberPerm.workspace_id == workspace_id,
+            WorkspaceMemberPerm.user_id == user_id,
+        )
+    )
+    return {row.perm: row.allowed for row in rows}
+
+
+def workspace_role(db: Session, user: User, workspace_id: str) -> str | None:
+    member = db.scalar(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == user.id,
+        )
+    )
+    return member.role if member else None
+
+
+def ensure_workspace_role(db: Session, user: User, workspace_id: str, minimum: str) -> str:
+    """Member must hold at least `minimum` role. Returns the caller's role."""
+    member = _membership(db, user, workspace_id)
+    if not role_at_least(member.role, minimum):
+        raise HTTPException(status_code=403, detail="Insufficient workspace role")
+    return member.role
+
+
+def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str) -> None:
+    """Member must have `perm` — role default, adjusted by any per-member override.
+    This is the write gate: mutating routes call it instead of ensure_workspace_access."""
+    member = _membership(db, user, workspace_id)
+    overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
+    if not has_perm(member.role, overrides, perm):
+        raise HTTPException(status_code=403, detail=f"Permission denied: {perm}")
+
+
+def effective_member_perms(db: Session, workspace_id: str, user_id: str, role: str) -> dict[str, bool]:
+    return effective_perms(role, member_overrides(db, workspace_id, user_id))
 
 
 def require_asset(db: Session, user: User, asset_id: str) -> Asset:
