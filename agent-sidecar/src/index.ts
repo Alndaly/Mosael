@@ -10,10 +10,20 @@
 import * as readline from "node:readline";
 
 import { log, send, type Request } from "./protocol.js";
+import { runPiTurn } from "./pi.js";
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
-  const text = `「sidecar echo」pi 尚未接入(S1)。收到 prompt:${prompt ?? ""}`;
+  if (msg.provider?.baseUrl && msg.model) {
+    const text = await runPiTurn(
+      { systemPrompt: msg.systemPrompt, prompt, provider: { baseUrl: msg.provider.baseUrl, apiKey: msg.provider.apiKey }, model: msg.model },
+      (delta) => send({ type: "text_delta", turnId, delta }),
+    );
+    send({ type: "turn_done", turnId, text, sessionState: null });
+    return;
+  }
+  // 无 provider:退回 echo(便于纯传输测试)
+  const text = `「sidecar echo」未提供 provider/model。收到 prompt:${prompt ?? ""}`;
   for (const ch of text) send({ type: "text_delta", turnId, delta: ch });
   send({ type: "turn_done", turnId, text, sessionState: null });
 }
