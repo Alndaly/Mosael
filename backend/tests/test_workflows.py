@@ -359,3 +359,37 @@ def test_cancel_running_workflow() -> None:
     # 已结束的任务再取消 → 409
     again = client.post(f"/api/jobs/{job_id}/cancel")
     assert again.status_code == 409
+
+def test_parallel_fanout_and_join() -> None:
+    """纯分流并发:start 拉两条控制边到 a/b(都跑),再各拉一条到 join(join 只跑一次、在两者之后)。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"t": "X"}}},
+            {"id": "a", "type": "template", "config": {"template": "A:{{start.t}}"}},
+            {"id": "b", "type": "template", "config": {"template": "B:{{start.t}}"}},
+            {"id": "join", "type": "template", "config": {"template": "{{a.text}}|{{b.text}}"}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "a"},
+            {"id": "e2", "source": "start", "target": "b"},
+            {"id": "e3", "source": "a", "target": "join"},
+            {"id": "e4", "source": "b", "target": "join"},
+        ],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "并行", "graph": graph})
+    assert wf.status_code == 200, wf.text
+    run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    ctx = job["result"]["context"]
+    assert ctx["a"]["text"] == "A:X"
+    assert ctx["b"]["text"] == "B:X"  # 两条分流都跑了
+    assert ctx["join"]["text"] == "A:X|B:X"  # join 拿到两侧、只跑一次
