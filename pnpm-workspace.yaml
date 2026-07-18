@@ -1,9 +1,12 @@
 packages:
   - "frontend"
+  - "agent-sidecar"
 
 allowBuilds:
+  '@google/genai': false
   electron: true
   esbuild: true
+  protobufjs: false
 
 onlyBuiltDependencies:
   - electron

@@ -1,0 +1,21 @@
+{
+  "name": "@mibu/agent-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mibu AI agent sidecar — embeds the pi coding agent (pi-agent-core) and speaks newline-delimited JSON over stdio with the Python backend.",
+  "type": "module",
+  "main": "dist/sidecar.cjs",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/sidecar.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.80.10",
+    "@earendil-works/pi-ai": "0.80.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.0"
+  }
+}
