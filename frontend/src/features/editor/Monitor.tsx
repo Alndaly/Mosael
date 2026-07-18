@@ -86,6 +86,17 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   const activeClip =
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeAsset = activeClip?.asset_id ? (assetById.get(activeClip.asset_id) ?? null) : null;
+  // 改画幅:画框宽高比 + 填充模式(cover 裁剪 / contain 留黑边 / blur 模糊背景)。
+  const fillMode = ((sequence.reframe as { fill_mode?: string } | undefined)?.fill_mode ?? "cover") as
+    | "cover"
+    | "contain"
+    | "blur";
+  const frameStyle = React.useMemo<React.CSSProperties>(
+    () => ({ aspectRatio: `${sequence.width} / ${sequence.height}` }),
+    [sequence.width, sequence.height],
+  );
+  const fitStyle: React.CSSProperties = { objectFit: fillMode === "cover" ? "cover" : "contain" };
+  const bgVideoRef = React.useRef<HTMLVideoElement | null>(null);
   // 片段变换(缩放/位移/旋转/透明度)→ CSS,预览里实时呈现。
   const clipTransformStyle = React.useMemo<React.CSSProperties>(() => {
     const tf = (activeClip?.transform ?? {}) as Record<string, number>;
@@ -211,6 +222,16 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
     } else if (!playing && !video.paused) {
       video.pause();
     }
+    // 模糊背景:第二路静音视频松同步(装饰用,不必逐帧精确)
+    const bg = bgVideoRef.current;
+    if (bg && fillMode === "blur") {
+      if (bg.src !== video.src) bg.src = video.src;
+      if (Math.abs(bg.currentTime - desired) > 0.3) bg.currentTime = desired;
+      bg.playbackRate = video.playbackRate;
+      bg.muted = true;
+      if (playing && bg.paused) bg.play().catch(() => undefined);
+      else if (!playing && !bg.paused) bg.pause();
+    }
   }, [playhead, playing, activeClip, activeAsset, isImage, playbackRate, volume, masterMuted]);
 
   // Keep the audio-track element in lockstep as well.
@@ -282,11 +303,20 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
         </svg>
       )}
       <div className="monitor-stage">
-        <div className="monitor-frame-wrap" ref={stageRef} onClick={playToggle}>
+        <div className="monitor-frame-wrap" ref={stageRef} onClick={playToggle} style={frameStyle}>
+          {fillMode === "blur" && activeClip && (
+            <div className="monitor-blur-bg" aria-hidden>
+              {isImage && activeAsset ? (
+                <img className="monitor-blur-media" src={assetFileUrl(activeAsset.id)} alt="" />
+              ) : (
+                <video ref={bgVideoRef} className="monitor-blur-media" muted playsInline preload="auto" />
+              )}
+            </div>
+          )}
           <video
             ref={videoRef}
             className="monitor-video"
-            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined, ...clipTransformStyle }}
+            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
             muted={false}
             playsInline
             preload="auto"
@@ -296,7 +326,7 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
               className="monitor-video"
               src={assetFileUrl(activeAsset.id)}
               alt=""
-              style={{ filter: cssFilter || undefined, ...clipTransformStyle }}
+              style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
             />
           )}
           {!activeClip && (

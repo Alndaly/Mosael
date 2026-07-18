@@ -42,6 +42,7 @@ export function Inspector({
   onDeleteClip,
   onSetEffects,
   onSetTransform,
+  onReframe,
   onSetSpeed,
   onSetText,
   onClose,
@@ -54,6 +55,7 @@ export function Inspector({
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
   onSetTransform?: (clipId: string, transform: Record<string, number>) => void;
+  onReframe?: (width: number, height: number, fillMode: string) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
   onSetText?: (clipId: string, text: string) => void;
   /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
@@ -333,6 +335,55 @@ export function Inspector({
               {sequence.width}×{sequence.height} · {sequence.fps}fps
             </dd>
           </dl>
+          {onReframe && (
+            <div className="pip-controls">
+              <span className="pip-label">{t("reframeTitle")}</span>
+              <div className="pip-row">
+                {(
+                  [
+                    { label: "16:9", w: 1920, h: 1080 },
+                    { label: "9:16", w: 1080, h: 1920 },
+                    { label: "1:1", w: 1080, h: 1080 },
+                    { label: "4:5", w: 1080, h: 1350 },
+                  ] as const
+                ).map((preset) => {
+                  const fill = (sequence.reframe as { fill_mode?: string })?.fill_mode ?? "cover";
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className={sequence.width === preset.w && sequence.height === preset.h ? "pip-btn active" : "pip-btn"}
+                      onClick={() => onReframe(preset.w, preset.h, fill)}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="pip-label">{t("reframeFill")}</span>
+              <div className="pip-row">
+                {(
+                  [
+                    { key: "cover", label: t("fillCover") },
+                    { key: "contain", label: t("fillContain") },
+                    { key: "blur", label: t("fillBlur") },
+                  ] as const
+                ).map((mode) => {
+                  const fill = (sequence.reframe as { fill_mode?: string })?.fill_mode ?? "cover";
+                  return (
+                    <button
+                      key={mode.key}
+                      type="button"
+                      className={fill === mode.key ? "pip-btn active" : "pip-btn"}
+                      onClick={() => onReframe(sequence.width, sequence.height, mode.key)}
+                    >
+                      {mode.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <p className="inspector-hint">{t("noSelection")}</p>
         </div>
       )}

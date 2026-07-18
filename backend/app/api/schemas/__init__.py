@@ -187,6 +187,12 @@ class TrackOut(OrmModel):
     clips: list[ClipOut] = Field(default_factory=list)
 
 
+class SetSequenceReframeRequest(BaseModel):
+    width: int = Field(ge=16, le=8192)
+    height: int = Field(ge=16, le=8192)
+    fill_mode: str = Field(default="cover", pattern="^(cover|contain|blur)$")
+
+
 class SequenceOut(OrmModel):
     id: str
     workspace_id: str
@@ -195,6 +201,7 @@ class SequenceOut(OrmModel):
     width: int
     height: int
     fps: float
+    reframe: dict = Field(default_factory=dict)
     revision: int
     can_undo: bool = False
     can_redo: bool = False

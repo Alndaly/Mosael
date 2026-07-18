@@ -18,6 +18,7 @@ from app.api.schemas import (
     SetClipEffectsRequest,
     SetClipSpeedRequest,
     SetClipTransformRequest,
+    SetSequenceReframeRequest,
     SetClipTextRequest,
     SetTrackStateRequest,
     SplitClipRequest,
@@ -42,6 +43,7 @@ from app.domain.sequences.operations import (
     SetClipEffects,
     SetClipSpeed,
     SetClipTransform,
+    SetSequenceReframe,
     SetClipText,
     SetTrackState,
     SplitClip,
@@ -55,6 +57,7 @@ from app.domain.sequences.operations import (
     set_clip_effects as set_clip_effects_operation,
     set_clip_speed as set_clip_speed_operation,
     set_clip_transform as set_clip_transform_operation,
+    set_sequence_reframe as set_sequence_reframe_operation,
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
     insert_clip as insert_clip_operation,
@@ -199,6 +202,19 @@ def set_clip_transform(
     _apply(
         lambda: set_clip_transform_operation(
             db, sequence_id, SetClipTransform(clip_id=clip_id, transform=body.transform)
+        )
+    )
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/reframe", response_model=SequenceOut)
+def set_sequence_reframe(
+    sequence_id: str, body: SetSequenceReframeRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(
+        lambda: set_sequence_reframe_operation(
+            db, sequence_id, SetSequenceReframe(width=body.width, height=body.height, fill_mode=body.fill_mode)
         )
     )
     return _get_sequence(db, sequence_id)

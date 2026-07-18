@@ -464,6 +464,39 @@ def set_clip_transform(db: Session, sequence_id: str, op: SetClipTransform) -> S
     return sequence
 
 
+_FILL_MODES = ("cover", "contain", "blur")
+
+
+@dataclass(frozen=True)
+class SetSequenceReframe:
+    width: int
+    height: int
+    fill_mode: str = "cover"
+    actor_id: str | None = None
+
+
+def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) -> Sequence:
+    """改画幅(横转竖等):改序列输出宽高 + 填充模式。"""
+    sequence = _require_sequence(db, sequence_id)
+    if not (16 <= op.width <= 8192 and 16 <= op.height <= 8192):
+        raise SequenceDomainError("画幅尺寸需在 16–8192 之间")
+    fill_mode = op.fill_mode if op.fill_mode in _FILL_MODES else "cover"
+    previous = {"width": sequence.width, "height": sequence.height, "reframe": dict(sequence.reframe or {})}
+    sequence.width = int(op.width)
+    sequence.height = int(op.height)
+    sequence.reframe = {"fill_mode": fill_mode}
+    _record_operation(
+        db,
+        sequence,
+        kind="set_sequence_reframe",
+        payload={"width": sequence.width, "height": sequence.height, "reframe": sequence.reframe, "previous": previous},
+        summary={"operation": "set_sequence_reframe"},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 @dataclass(frozen=True)
 class SplitClip:
     """Cut a clip into two at a source-time point — nothing is removed."""

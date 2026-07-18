@@ -69,14 +69,15 @@ def init_db() -> None:
 
 
 def _migrate_clip_transform() -> None:
-    """加列迁移(保留时间线):clips 增加 transform(片段变换)。"""
+    """加列迁移(保留时间线):clips 增加 transform,sequences 增加 reframe。"""
     inspector = inspect(engine)
-    if "clips" not in set(inspector.get_table_names()):
-        return
-    columns = {col["name"] for col in inspector.get_columns("clips")}
-    if "transform" not in columns:
+    tables = set(inspector.get_table_names())
+    if "clips" in tables and "transform" not in {c["name"] for c in inspector.get_columns("clips")}:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE clips ADD COLUMN transform JSON"))
+    if "sequences" in tables and "reframe" not in {c["name"] for c in inspector.get_columns("sequences")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE sequences ADD COLUMN reframe JSON"))
 
 
 def session_scope() -> Generator[Session, None, None]:

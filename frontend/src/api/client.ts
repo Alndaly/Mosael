@@ -187,6 +187,16 @@ export function setClipTransform(
   });
 }
 
+export function setSequenceReframe(
+  sequenceId: string,
+  reframe: { width: number; height: number; fill_mode: string },
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/reframe`, {
+    method: "PATCH",
+    body: JSON.stringify(reframe),
+  });
+}
+
 export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
 }

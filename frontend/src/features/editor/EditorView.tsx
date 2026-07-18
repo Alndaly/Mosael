@@ -21,6 +21,7 @@ import {
   setClipEffects,
   setClipSpeed,
   setClipTransform,
+  setSequenceReframe,
   setClipText,
   trimClip,
   undoSequence,
@@ -270,6 +271,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       setClipTransform(sequence!.id, clipId, transform),
     onSuccess: refreshSequences,
   });
+  const reframeMutation = useMutation({
+    mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: string }) =>
+      setSequenceReframe(sequence!.id, { width, height, fill_mode: fillMode }),
+    onSuccess: refreshSequences,
+  });
   const cutRangeMutation = useMutation({
     mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
       cutClipRange(sequence!.id, clipId, { src_start: srcStart, src_end: srcEnd }),
@@ -516,6 +522,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
               onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
+              onReframe={(width, height, fillMode) => reframeMutation.mutate({ width, height, fillMode })}
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
               onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
