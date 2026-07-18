@@ -363,7 +363,7 @@ function AssetTile({ asset }: { asset: Asset }) {
   const hasThumb = asset.kind !== "audio" && !thumbFailed;
   return (
     <article className="asset-tile">
-      <div className="asset-thumb">
+      <div className="asset-thumb" data-kind={asset.kind}>
         {hasThumb ? (
           <img
             src={assetThumbnailUrl(asset.id)}
@@ -374,7 +374,10 @@ function AssetTile({ asset }: { asset: Asset }) {
         ) : (
           <span className="asset-thumb-fallback">{kindIcon(asset.kind)}</span>
         )}
-        {duration != null && <span className="asset-duration timecode">{formatSeconds(duration)}</span>}
+        {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
+        {asset.kind !== "image" && duration != null && (
+          <span className="asset-duration timecode">{formatSeconds(duration)}</span>
+        )}
       </div>
       <div className="asset-caption">
         <strong title={asset.name}>{asset.name}</strong>
@@ -398,7 +401,7 @@ function AssetTile({ asset }: { asset: Asset }) {
         )}
         <span className="asset-specs timecode">
           {width ? `${width}×${asset.media_info.height}` : "—"}
-          {fps ? ` · ${Math.round(Number(fps))}fps` : ""}
+          {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
         </span>
       </div>

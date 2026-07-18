@@ -775,6 +775,12 @@
   object-fit: cover;
 }
 
+/* 图片可能是竖图/极端比例(如二维码 1080×1605):在固定 16:9 封面框里 contain 完整显示,
+   而不是 cover 裁成看不清的横条。封面高度由 aspect-ratio 统一封顶,网格保持整齐。 */
+.asset-thumb[data-kind="image"] img {
+  object-fit: contain;
+}
+
 .asset-duration {
   position: absolute;
   right: 6px;
