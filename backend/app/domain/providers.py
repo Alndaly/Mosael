@@ -70,6 +70,13 @@ def resolve_profile(db: Session, vendor: str, profile_id: str | None = None) -> 
     )
 
 
+def first_enabled_profile(db: Session) -> ProviderProfile | None:
+    """第一个启用的供应商(任意 vendor),给 AI 助手对话用。"""
+    return db.scalar(
+        select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at).limit(1)
+    )
+
+
 def resolve_secret(db: Session, vendor: str) -> str | None:
     """Profile key first; legacy credentials row as fallback."""
     profile = resolve_profile(db, vendor)

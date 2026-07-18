@@ -158,6 +158,16 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             workspace_id=session.workspace_id,
             skills_index=skills_index_for_prompt() or "(暂无技能)",
         )
+        # pi 适配器需要一个对话模型:取第一个启用的供应商 + 其默认模型
+        provider_dict: dict | None = None
+        agent_model: str | None = None
+        if session.adapter == "pi":
+            from app.domain.providers import first_enabled_profile
+
+            profile = first_enabled_profile(db)
+            if profile is not None:
+                provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
+                agent_model = profile.default_model
         try:
             result: TurnResult = run_turn(
                 session.adapter,
@@ -167,6 +177,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 token=token,
                 adapter_session_id=session.adapter_session_id,
                 on_delta=lambda delta: _stream_append(session_id, delta),
+                provider=provider_dict,
+                model=agent_model,
+                workspace_id=session.workspace_id,
             )
             final_text = result.text
             db.add(

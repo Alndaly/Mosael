@@ -52,12 +52,92 @@ def run_turn(
     token: str,
     adapter_session_id: str | None,
     on_delta: "Callable[[str], None] | None" = None,
+    provider: dict | None = None,
+    model: str | None = None,
+    workspace_id: str = "",
 ) -> TurnResult:
     if adapter == "claude":
         return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
     if adapter == "opencode":
         return _run_opencode(prompt, system_prompt, api_base, token, adapter_session_id)
+    if adapter == "pi":
+        return _run_pi(
+            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_session_id, on_delta
+        )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
+
+
+def _pi_sidecar_command() -> tuple[str, str]:
+    node = os.environ.get("MIBU_AGENT_BIN_NODE") or shutil.which("node") or "node"
+    repo_root = Path(__file__).resolve().parents[4]
+    sidecar = os.environ.get("MIBU_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
+    return node, sidecar
+
+
+def _run_pi(
+    prompt: str,
+    system_prompt: str,
+    api_base: str,
+    token: str,
+    workspace_id: str,
+    provider: dict | None,
+    model: str | None,
+    adapter_session_id: str | None,
+    on_delta: Callable[[str], None] | None,
+) -> TurnResult:
+    """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
+    its JSONL events. The sidecar's tools call back into Mibu's REST with the
+    service token; mutations still flow through confirmation cards."""
+    if not provider or not model:
+        raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
+    node, sidecar = _pi_sidecar_command()
+    if not Path(sidecar).exists():
+        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+
+    frame = {
+        "type": "run_turn",
+        "turnId": adapter_session_id or "turn",
+        "prompt": prompt,
+        "systemPrompt": system_prompt,
+        "workspaceId": workspace_id,
+        "apiBase": api_base,
+        "token": token,
+        "provider": {
+            "baseUrl": provider.get("base_url", ""),
+            "apiKey": provider.get("api_key", ""),
+            "vendor": provider.get("vendor", ""),
+        },
+        "model": model,
+    }
+    process = subprocess.Popen(
+        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ}
+    )
+    assert process.stdin is not None and process.stdout is not None
+    process.stdin.write(json.dumps(frame) + "\n")
+    process.stdin.flush()
+    process.stdin.close()
+
+    result_text: str | None = None
+    for line in process.stdout:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = event.get("type")
+        if kind == "text_delta" and on_delta is not None:
+            on_delta(str(event.get("delta", "")))
+        elif kind == "turn_done":
+            result_text = str(event.get("text", ""))
+        elif kind == "error":
+            raise AdapterError(_tail(str(event.get("message", "pi sidecar error"))))
+    process.wait(timeout=TURN_TIMEOUT_SECONDS)
+    if result_text is None:
+        stderr_tail = _tail(process.stderr.read() if process.stderr else "")
+        raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
+    return TurnResult(text=result_text.strip(), adapter_session_id=adapter_session_id)
 
 
 def build_claude_command(

@@ -670,7 +670,7 @@ class AgentSessionCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None
     title: str = Field(default="新对话", max_length=200)
-    adapter: str | None = Field(default=None, pattern="^(claude|opencode)$")
+    adapter: str | None = Field(default=None, pattern="^(claude|opencode|pi)$")
 
 
 class AgentSessionOut(OrmModel):
