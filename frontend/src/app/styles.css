@@ -2696,31 +2696,94 @@
 }
 
 .chat-bubble.thinking {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--muted-foreground);
+}
+
+/* 助手行:头像 + 正文两栏,与右侧用户药丸对称,不再是一坨裸文本。 */
+.chat-assistant {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.chat-avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.chat-assistant-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 助手的操作条(复制/耗时)缩进到正文列,与头像对齐。 */
+.chat-bubble.assistant .chat-msg-meta {
+  padding-left: 36px;
+}
+
+.chat-bubble.assistant.streaming .chat-msg-meta,
+.chat-bubble.assistant.streaming .chat-assistant-body .chat-msg-meta {
+  padding-left: 0;
+}
+
+/* 思考态:头像 + 标签一行。 */
+.chat-thinking-label {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   color: var(--muted-foreground);
 }
 
-.chat-error {
-  display: block;
-  margin-top: 6px;
+/* 失败轮:紧凑错误卡(告警图标 + 友好文案 + 可展开详情),而非大号裸文本。 */
+.chat-msg-failed {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--foreground);
+}
+
+.chat-msg-failed > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--destructive);
+}
+
+.chat-msg-failed-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-error-toggle {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: none;
   background: none;
   padding: 0;
   color: var(--destructive);
   font-size: 11px;
   cursor: pointer;
-  text-align: left;
 }
 
-.chat-error pre {
-  margin: 4px 0 0;
-  padding: 6px 6px;
+.chat-error-detail {
+  margin: 2px 0 0;
+  padding: 6px;
   border-radius: 4px;
   background: var(--panel-inset);
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: 10.5px;
   white-space: pre-wrap;
   word-break: break-all;
 }

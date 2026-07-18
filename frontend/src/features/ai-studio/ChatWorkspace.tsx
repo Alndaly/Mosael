@@ -251,7 +251,6 @@ export function ChatWorkspace({
                   onClick={() => setSessionId(item.id)}
                 >
                   <strong>{item.title}</strong>
-                  <small>{item.adapter}</small>
                 </button>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -293,17 +292,29 @@ export function ChatWorkspace({
               ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
-                  <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
-                  <div className="chat-msg-meta live">
-                    <Loader2 size={11} className="spin" />
-                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  <div className="chat-assistant">
+                    <span className="chat-avatar" aria-hidden>
+                      <Bot size={14} />
+                    </span>
+                    <div className="chat-assistant-body">
+                      <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
+                      <div className="chat-msg-meta live">
+                        <Loader2 size={11} className="spin" />
+                        <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
               {running && !streamText && (
                 <div className="chat-bubble assistant thinking">
-                  <Loader2 size={13} className="spin" /> {t("chatThinking")}
-                  <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  <span className="chat-avatar" aria-hidden>
+                    <Bot size={14} />
+                  </span>
+                  <span className="chat-thinking-label">
+                    <Loader2 size={13} className="spin" /> {t("chatThinking")}
+                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  </span>
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
@@ -432,15 +443,35 @@ function ChatBubble({ message }: { message: AgentMessage }) {
   return (
     <div className={`chat-bubble ${message.role}`}>
       {message.role === "assistant" ? (
-        <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
+        <div className="chat-assistant">
+          <span className="chat-avatar" aria-hidden>
+            <Bot size={14} />
+          </span>
+          <div className="chat-assistant-body">
+            {message.error ? (
+              // 失败轮:整条渲染成紧凑错误卡,而不是把「执行失败」当正常回答的裸文本铺开。
+              <div className="chat-msg-failed">
+                <CircleAlert size={14} />
+                <div className="chat-msg-failed-body">
+                  <span>{message.content}</span>
+                  {/* 详情是 button 的兄弟节点,不再把 <pre> 塞进 <button>(非法 HTML)。 */}
+                  <button
+                    type="button"
+                    className="chat-error-toggle"
+                    onClick={() => setShowError((value) => !value)}
+                  >
+                    {t("chatErrorDetail")}
+                  </button>
+                  {showError && <pre className="chat-error-detail">{message.error}</pre>}
+                </div>
+              </div>
+            ) : (
+              <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="chat-bubble-content">{message.content}</div>
-      )}
-      {message.error && (
-        <button type="button" className="chat-error" onClick={() => setShowError((value) => !value)}>
-          <CircleAlert size={11} /> {t("chatErrorDetail")}
-          {showError && <pre>{message.error}</pre>}
-        </button>
       )}
       <div className="chat-msg-meta">
         <button type="button" className="chat-msg-copy" title={t("copyMessage")} onClick={copy}>
