@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.domain.kb import config as kb_config
 from app.domain.providers import resolve_profile
 
 """
@@ -26,7 +27,7 @@ _client: Any | None = None
 
 
 def vector_tier_enabled() -> bool:
-    return bool(settings.kb_embedding_vendor and settings.kb_embedding_model)
+    return kb_config.get().enabled
 
 
 class EmbeddingError(RuntimeError):
@@ -34,15 +35,16 @@ class EmbeddingError(RuntimeError):
 
 
 def embed_texts(db: Session, texts: list[str]) -> list[list[float]]:
-    profile = resolve_profile(db, settings.kb_embedding_vendor)
+    cfg = kb_config.get()
+    profile = resolve_profile(db, cfg.vendor, cfg.provider_profile_id)
     if profile is None:
-        raise EmbeddingError(f"没有可用的 {settings.kb_embedding_vendor} 供应商配置")
+        raise EmbeddingError("没有可用的嵌入供应商配置")
     base_url = profile.base_url.rstrip("/")
     try:
         response = httpx.post(
             f"{base_url}/embeddings",
             headers={"Authorization": f"Bearer {profile.api_key}"},
-            json={"model": settings.kb_embedding_model, "input": texts},
+            json={"model": cfg.model, "input": texts},
             timeout=60,
         )
         response.raise_for_status()
@@ -70,7 +72,7 @@ def _ensure_collection(client: Any) -> None:
     if not client.has_collection(COLLECTION):
         client.create_collection(
             collection_name=COLLECTION,
-            dimension=settings.kb_embedding_dim,
+            dimension=kb_config.get().dim,
             primary_field_name="id",
             id_type="string",
             max_length=64,
@@ -110,6 +112,18 @@ def delete_document_vectors(document_id: str) -> None:
         _get_client().delete(collection_name=COLLECTION, filter=f'document_id == "{document_id}"')
     except Exception:  # noqa: BLE001 - 降级路径
         logger.exception("KB vector delete failed")
+
+
+def reset_collection() -> None:
+    """Drop and recreate the collection empty at the current embedding dim.
+    Used when the vector dimension changed — old vectors are no longer valid."""
+    client = _get_client()
+    try:
+        if client.has_collection(COLLECTION):
+            client.drop_collection(COLLECTION)
+    except Exception:  # noqa: BLE001 - 降级路径
+        logger.exception("KB drop collection failed")
+    _ensure_collection(client)  # recreate at kb_config.get().dim + load
 
 
 def dense_search(db: Session, workspace_id: str, query: str, *, limit: int = 20) -> list[tuple[str, str]]:

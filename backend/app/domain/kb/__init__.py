@@ -337,3 +337,27 @@ def fetch_url_as_text(url: str, *, timeout: float = 20.0) -> tuple[str, str]:
     extractor = _TextExtractor()
     extractor.feed(response.text)
     return extractor.title.strip() or url, extractor.text()
+
+
+def rebuild_all_vectors(db: Session, *, dim_changed: bool) -> None:
+    """嵌入配置(供应商/模型/维度)变更后重嵌全部文档向量。
+    维度变了先把集合丢弃重建;供应商/模型变了向量值也变,同样需要重嵌。
+    调用方负责放到后台线程。逐文档失败只降级。"""
+    if not kb_vectors.vector_tier_enabled():
+        return
+    if dim_changed:
+        kb_vectors.reset_collection()
+    documents = db.scalars(select(KbDocument)).all()
+    for document in documents:
+        rows = [
+            (chunk.id, chunk.text)
+            for chunk in db.scalars(select(KbChunk).where(KbChunk.document_id == document.id))
+        ]
+        if not rows:
+            continue
+        try:
+            kb_vectors.upsert_document_vectors(
+                db, workspace_id=document.workspace_id, document_id=document.id, chunks=rows
+            )
+        except Exception:  # noqa: BLE001 - 降级
+            logger.exception("KB re-embed failed for %s", document.id)

@@ -7230,6 +7230,20 @@
   margin-top: 4px;
 }
 
+/* 知识库嵌入配置:重建警告 + 后台重嵌说明 */
+.kb-embed-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--warning, #b45309);
+}
+.kb-embed-note {
+  flex: 1;
+  align-self: center;
+  color: var(--muted-foreground);
+}
+
 /* Cmd+K 无结果空状态:与全局 EmptyState 同语言的紧凑版(居中 + 主色淡底图标)。 */
 .cmdk-empty {
   display: grid;

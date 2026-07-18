@@ -55,3 +55,31 @@ def test_vendor_presets_listed() -> None:
     presets = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
     assert "moonshot" in presets and "minimax" in presets
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
+
+
+def test_kb_embedding_config_put_get() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "本地 Ollama", "vendor": "openai-compatible", "api_key": "x",
+              "base_url": "http://localhost:11434/v1"},
+    ).json()
+
+    saved = client.put(
+        "/api/settings/kb-embedding",
+        json={"provider_profile_id": profile["id"], "model": "nomic-embed-text", "dim": 768},
+    ).json()
+    assert saved["provider_profile_id"] == profile["id"]
+    assert saved["model"] == "nomic-embed-text"
+    assert saved["dim"] == 768
+    assert saved["enabled"] is True
+
+    fetched = client.get("/api/settings/kb-embedding").json()
+    assert fetched == saved  # persisted, overrides the env fallback
+
+    # Unknown provider is rejected.
+    assert client.put(
+        "/api/settings/kb-embedding",
+        json={"provider_profile_id": "does-not-exist", "model": "m", "dim": 8},
+    ).status_code == 404

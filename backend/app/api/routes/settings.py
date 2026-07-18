@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
@@ -7,12 +9,17 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     CredentialSetRequest,
     CredentialStatusOut,
+    KbEmbeddingConfigOut,
+    KbEmbeddingConfigUpdate,
     ProviderProfileCreate,
     ProviderProfileOut,
     ProviderProfileUpdate,
     VendorPresetOut,
 )
-from app.db.models import Credential, ProviderProfile
+from app.core.db import SessionLocal
+from app.db.models import Credential, KbEmbeddingConfig, ProviderProfile
+from app.domain import kb
+from app.domain.kb import config as kb_config
 from app.domain.providers import VENDOR_PRESETS
 
 router = APIRouter(tags=["settings"])
@@ -82,7 +89,54 @@ def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -
     if profile is not None:
         db.delete(profile)
         db.commit()
+        kb_config.refresh()  # 嵌入配置可能引用了被删的供应商(FK 已 SET NULL)
     return Response(status_code=204)
+
+
+def _kb_embedding_out() -> KbEmbeddingConfigOut:
+    cfg = kb_config.get()
+    return KbEmbeddingConfigOut(
+        provider_profile_id=cfg.provider_profile_id, model=cfg.model, dim=cfg.dim, enabled=cfg.enabled
+    )
+
+
+@router.get("/settings/kb-embedding", response_model=KbEmbeddingConfigOut)
+def get_kb_embedding(db: DbSession, user: CurrentUser) -> KbEmbeddingConfigOut:
+    return _kb_embedding_out()
+
+
+@router.put("/settings/kb-embedding", response_model=KbEmbeddingConfigOut)
+def set_kb_embedding(
+    body: KbEmbeddingConfigUpdate, db: DbSession, user: CurrentUser
+) -> KbEmbeddingConfigOut:
+    if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    old = kb_config.get()
+    row = db.get(KbEmbeddingConfig, "default")
+    if row is None:
+        row = KbEmbeddingConfig(id="default")
+        db.add(row)
+    row.provider_profile_id = body.provider_profile_id
+    row.model = body.model.strip()
+    row.dim = body.dim
+    db.commit()
+    kb_config.refresh()
+
+    new = kb_config.get()
+    changed = (
+        old.provider_profile_id != new.provider_profile_id
+        or old.model != new.model
+        or old.dim != new.dim
+    )
+    if changed and new.enabled:
+        dim_changed = old.dim != new.dim
+
+        def run() -> None:
+            with SessionLocal() as session:
+                kb.rebuild_all_vectors(session, dim_changed=dim_changed)
+
+        threading.Thread(target=run, daemon=True).start()
+    return _kb_embedding_out()
 
 
 @router.get("/settings/credentials", response_model=list[CredentialStatusOut])

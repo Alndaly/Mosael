@@ -434,6 +434,22 @@ class ProviderProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class KbEmbeddingConfig(Base):
+    """Singleton (id='default') runtime config for the KB vector tier: which
+    provider profile + embedding model + vector dimension. Overrides the
+    MIBU_KB_EMBEDDING_* env fallback so it can be edited from the UI."""
+
+    __tablename__ = "kb_embedding_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    provider_profile_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    dim: Mapped[int] = mapped_column(Integer, nullable=False, default=1024)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Credential(Base):
     __tablename__ = "credentials"
 

@@ -1661,6 +1661,24 @@ export interface paths {
         patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
         trace?: never;
     };
+    "/api/settings/kb-embedding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kb Embedding */
+        get: operations["get_kb_embedding_api_settings_kb_embedding_get"];
+        /** Set Kb Embedding */
+        put: operations["set_kb_embedding_api_settings_kb_embedding_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/credentials": {
         parameters: {
             query?: never;
@@ -2896,6 +2914,35 @@ export interface components {
             content?: string | null;
             /** Tags */
             tags?: string[] | null;
+        };
+        /** KbEmbeddingConfigOut */
+        KbEmbeddingConfigOut: {
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Dim
+             * @default 0
+             */
+            dim: number;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+        };
+        /** KbEmbeddingConfigUpdate */
+        KbEmbeddingConfigUpdate: {
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model: string;
+            /** Dim */
+            dim: number;
         };
         /** KbGraphEdge */
         KbGraphEdge: {
@@ -7826,6 +7873,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_kb_embedding_api_settings_kb_embedding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbEmbeddingConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_kb_embedding_api_settings_kb_embedding_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KbEmbeddingConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbEmbeddingConfigOut"];
                 };
             };
             /** @description Validation Error */

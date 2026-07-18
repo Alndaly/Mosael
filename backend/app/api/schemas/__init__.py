@@ -338,6 +338,19 @@ class ProviderProfileOut(OrmModel):
     key_hint: str = ""
 
 
+class KbEmbeddingConfigOut(BaseModel):
+    provider_profile_id: str | None = None
+    model: str = ""
+    dim: int = 0
+    enabled: bool = False
+
+
+class KbEmbeddingConfigUpdate(BaseModel):
+    provider_profile_id: str | None = None
+    model: str = Field(min_length=1, max_length=120)
+    dim: int = Field(ge=1, le=8192)
+
+
 class VendorPresetOut(BaseModel):
     vendor: str
     label: str
