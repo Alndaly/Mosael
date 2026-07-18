@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, CircleAlert, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, CircleAlert, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, Wrench, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -16,6 +16,29 @@ import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type PromptSkill = components["schemas"]["PromptSkillOut"];
+
+/** pi 工具调用卡:后端从 sidecar 事件累积,流里实时更新、消息 payload 里持久化。 */
+type ToolCard = { id: string; name: string; args?: unknown; status: "running" | "done" | "error"; result?: unknown };
+
+function ToolCards({ tools }: { tools: ToolCard[] | undefined }) {
+  if (!tools || tools.length === 0) return null;
+  return (
+    <div className="tool-cards">
+      {tools.map((tool) => (
+        <span key={tool.id} className={`tool-card ${tool.status}`} title={tool.name}>
+          {tool.status === "running" ? (
+            <Loader2 size={11} className="spin" />
+          ) : tool.status === "error" ? (
+            <CircleAlert size={11} />
+          ) : (
+            <Wrench size={11} />
+          )}
+          <span className="tool-card-name">{tool.name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export function ChatWorkspace({
   workspace,
@@ -48,6 +71,7 @@ export function ChatWorkspace({
     },
   });
   const [streamText, setStreamText] = React.useState<string>("");
+  const [streamTools, setStreamTools] = React.useState<ToolCard[]>([]);
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -56,6 +80,7 @@ export function ChatWorkspace({
       if (streamingRef.current === targetSessionId) return;
       streamingRef.current = targetSessionId;
       setStreamText("");
+      setStreamTools([]);
       try {
         const token = getAuthToken();
         const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
@@ -75,8 +100,11 @@ export function ChatWorkspace({
             const line = event.split("\n").find((item) => item.startsWith("data: "));
             if (!line) continue;
             try {
-              const payload = JSON.parse(line.slice(6)) as { text: string; done: boolean };
-              if (streamingRef.current === targetSessionId) setStreamText(payload.text);
+              const payload = JSON.parse(line.slice(6)) as { text: string; done: boolean; tools?: ToolCard[] };
+              if (streamingRef.current === targetSessionId) {
+                setStreamText(payload.text);
+                setStreamTools(payload.tools ?? []);
+              }
             } catch {
               // partial frame — ignore
             }
@@ -86,6 +114,7 @@ export function ChatWorkspace({
         if (streamingRef.current === targetSessionId) {
           streamingRef.current = null;
           setStreamText("");
+          setStreamTools([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
         }
@@ -293,6 +322,7 @@ export function ChatWorkspace({
               ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
+                  <ToolCards tools={streamTools} />
                   <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
                   <div className="chat-msg-meta live">
                     <Loader2 size={11} className="spin" />
@@ -302,8 +332,11 @@ export function ChatWorkspace({
               )}
               {running && !streamText && (
                 <div className="chat-bubble assistant thinking">
-                  <Loader2 size={13} className="spin" /> {t("chatThinking")}
-                  <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  <ToolCards tools={streamTools} />
+                  <span className="chat-thinking-row">
+                    <Loader2 size={13} className="spin" /> {t("chatThinking")}
+                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                  </span>
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
@@ -421,7 +454,8 @@ function ChatBubble({ message }: { message: AgentMessage }) {
   const t = useI18n();
   const [showError, setShowError] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const duration = (message.payload as { duration_seconds?: number } | null)?.duration_seconds;
+  const payload = message.payload as { duration_seconds?: number; tools?: ToolCard[] } | null;
+  const duration = payload?.duration_seconds;
 
   const copy = () => {
     void navigator.clipboard.writeText(message.content).then(() => {
@@ -432,6 +466,7 @@ function ChatBubble({ message }: { message: AgentMessage }) {
 
   return (
     <div className={`chat-bubble ${message.role}`}>
+      {message.role === "assistant" && <ToolCards tools={payload?.tools} />}
       {message.role === "assistant" ? (
         message.error ? (
           // 失败轮:紧凑错误卡,而不是把「执行失败」当正常回答的裸文本铺开。

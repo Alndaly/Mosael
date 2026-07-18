@@ -29,7 +29,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
       {
         onDelta: (delta) => send({ type: "text_delta", turnId, delta }),
         onToolStart: (toolCallId, name, args) => send({ type: "tool_start", turnId, toolCallId, name, args }),
-        onToolEnd: (toolCallId, result) => send({ type: "tool_end", turnId, toolCallId, result }),
+        onToolEnd: (toolCallId, result, isError) => send({ type: "tool_end", turnId, toolCallId, result, isError }),
       },
     );
     send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState });

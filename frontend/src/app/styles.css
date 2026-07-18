@@ -7251,6 +7251,40 @@
   line-height: 1.4;
 }
 
+/* AI Studio 工具调用卡:流式实时更新 + 消息里持久化 */
+.tool-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tool-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--border);
+  background: var(--muted);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.tool-card.done {
+  color: var(--foreground);
+}
+.tool-card.error {
+  color: var(--destructive, #dc2626);
+  border-color: color-mix(in srgb, var(--destructive, #dc2626) 40%, var(--border));
+}
+.tool-card-name {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.chat-thinking-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* 默认供应商:每能力一行 —— 能力名 + 供应商下拉 + 模型下拉 */
 .provider-defaults {
   display: flex;

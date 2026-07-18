@@ -51,12 +51,36 @@ _streams: dict[str, dict] = {}
 def get_stream_state(session_id: str) -> dict:
     with _streams_lock:
         state = _streams.get(session_id)
-        return dict(state) if state else {"text": "", "done": True, "seq": 0}
+        if not state:
+            return {"text": "", "done": True, "seq": 0, "tools": []}
+        snapshot = dict(state)
+        snapshot["tools"] = [dict(card) for card in state["tools"]]
+        return snapshot
 
 
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
-        _streams[session_id] = {"text": "", "done": False, "seq": 0}
+        _streams[session_id] = {"text": "", "done": False, "seq": 0, "tools": []}
+
+
+def _stream_tool_event(session_id: str, event: dict) -> None:
+    """pi 工具事件 → 流里的工具卡:tool_start 建卡(running),tool_end 更新(done/error)。"""
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if state is None:
+            return
+        cards: list[dict] = state["tools"]
+        if event.get("type") == "tool_start":
+            cards.append(
+                {"id": event.get("toolCallId"), "name": event.get("name"), "args": event.get("args"), "status": "running"}
+            )
+        elif event.get("type") == "tool_end":
+            for card in cards:
+                if card["id"] == event.get("toolCallId"):
+                    card["status"] = "error" if event.get("isError") else "done"
+                    card["result"] = event.get("result")
+                    break
+        state["seq"] += 1
 
 
 def _stream_append(session_id: str, delta: str) -> None:
@@ -69,7 +93,7 @@ def _stream_append(session_id: str, delta: str) -> None:
 
 def _stream_finish(session_id: str, final_text: str) -> None:
     with _streams_lock:
-        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0})
+        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0, "tools": []})
         state["text"] = final_text
         state["done"] = True
         state["seq"] += 1
@@ -193,6 +217,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 token=token,
                 adapter_session_id=session.adapter_session_id,
                 on_delta=lambda delta: _stream_append(session_id, delta),
+                on_tool=lambda event: _stream_tool_event(session_id, event),
                 provider=provider_dict,
                 model=agent_model,
                 workspace_id=session.workspace_id,
@@ -201,12 +226,16 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             final_text = result.text
             if result.adapter_state is not None:
                 session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
+            tool_cards = get_stream_state(session_id)["tools"]  # 持久化工具卡到消息,turn 结束后仍可见
             db.add(
                 AgentMessage(
                     session_id=session.id,
                     role="assistant",
                     content=result.text,
-                    payload={"duration_seconds": round(time.monotonic() - turn_started, 1)},
+                    payload={
+                        "duration_seconds": round(time.monotonic() - turn_started, 1),
+                        **({"tools": tool_cards} if tool_cards else {}),
+                    },
                 )
             )
             if result.adapter_session_id:

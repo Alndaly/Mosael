@@ -57,6 +57,7 @@ def run_turn(
     model: str | None = None,
     workspace_id: str = "",
     adapter_state: object | None = None,
+    on_tool: "Callable[[dict], None] | None" = None,
 ) -> TurnResult:
     if adapter == "claude":
         return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
@@ -64,7 +65,7 @@ def run_turn(
         return _run_opencode(prompt, system_prompt, api_base, token, adapter_session_id)
     if adapter == "pi":
         return _run_pi(
-            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_state, on_delta
+            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_state, on_delta, on_tool
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
@@ -86,6 +87,7 @@ def _run_pi(
     model: str | None,
     adapter_state: object | None,
     on_delta: Callable[[str], None] | None,
+    on_tool: Callable[[dict], None] | None = None,
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Mibu's REST with the
@@ -134,6 +136,8 @@ def _run_pi(
         kind = event.get("type")
         if kind == "text_delta" and on_delta is not None:
             on_delta(str(event.get("delta", "")))
+        elif kind in ("tool_start", "tool_end") and on_tool is not None:
+            on_tool(event)
         elif kind == "turn_done":
             result_text = str(event.get("text", ""))
             result_state = event.get("sessionState")

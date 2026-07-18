@@ -109,7 +109,7 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
             state = host.get_stream_state(session_id)
             if state["seq"] != last_seq:
                 last_seq = state["seq"]
-                yield f"data: {json.dumps({'text': state['text'], 'done': state['done']})}\n\n"
+                yield f"data: {json.dumps({'text': state['text'], 'done': state['done'], 'tools': state['tools']})}\n\n"
             if state["done"]:
                 break
             await asyncio.sleep(0.1)
