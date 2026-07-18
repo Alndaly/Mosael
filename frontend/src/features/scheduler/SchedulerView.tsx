@@ -261,11 +261,11 @@ function CreateTaskDialog({
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("createTask")}>
       <div className="task-create-form">
-        <label className="wf-field">
+        <div className="wf-field">
           <span>{t("taskNameLabel")}</span>
           <Input value={name} placeholder={selectedWorkflow?.name ?? ""} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label className="wf-field">
+        </div>
+        <div className="wf-field">
           <span>{t("wfBoundWorkflow")}</span>
           <Select value={workflowId ?? ""} onValueChange={setWorkflowId}>
             <SelectTrigger>
@@ -283,8 +283,8 @@ function CreateTaskDialog({
             <small>{t("noWorkflowHint")}</small>
           )}
           {selectedWorkflow?.description && <small>{selectedWorkflow.description}</small>}
-        </label>
-        <label className="wf-field">
+        </div>
+        <div className="wf-field">
           <span>{t("taskTriggerLabel")}</span>
           <Select value={trigger} onValueChange={(value) => setTrigger(value as typeof trigger)}>
             <SelectTrigger>
@@ -297,25 +297,28 @@ function CreateTaskDialog({
             </SelectContent>
           </Select>
           {trigger === "webhook" && <small>{t("webhookCreateHint")}</small>}
-        </label>
+        </div>
         {trigger === "scheduled" && (
-          <div className="task-sched-config">
-            <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="hourly">{t("triggerHourly")}</SelectItem>
-                <SelectItem value="daily">{t("triggerDailyAt")}</SelectItem>
-              </SelectContent>
-            </Select>
-            {schedKind === "daily" && (
-              <Input
-                type="time"
-                value={dailyTime}
-                onChange={(event) => setDailyTime(event.target.value || "09:00")}
-              />
-            )}
+          <div className="wf-field">
+            <span>{t("taskSchedFreq")}</span>
+            <div className="task-sched-config">
+              <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hourly">{t("triggerHourly")}</SelectItem>
+                  <SelectItem value="daily">{t("triggerDailyAt")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {schedKind === "daily" && (
+                <Input
+                  type="time"
+                  value={dailyTime}
+                  onChange={(event) => setDailyTime(event.target.value || "09:00")}
+                />
+              )}
+            </div>
           </div>
         )}
         <div className="task-create-actions">

@@ -5074,6 +5074,11 @@
   border-color: var(--input);
   border-radius: 6px;
 }
+/* 这个 Select 当"添加"动作菜单用,从不保留值 → Radix 恒置 data-placeholder,
+   触发器文字被 data-[placeholder]:text-muted-foreground 打灰;强制回正常前景色。 */
+.wf-toolbar-actions .wf-add-node[data-placeholder] {
+  color: var(--foreground);
+}
 .wf-toolbar-actions .wf-add-node:hover {
   background: var(--muted);
 }
@@ -6741,8 +6746,15 @@
   gap: 6px;
 }
 
+/* 频率下拉撑满整行(每小时时)；选到"每天"再并排跟一个定宽时间选择器。 */
+.task-sched-config > button {
+  flex: 1;
+  min-width: 0;
+}
+
 .task-sched-config input[type="time"] {
-  width: 110px;
+  width: 120px;
+  flex: none;
 }
 
 /* Webhook 触发地址:超长 URL 截断 + 复制按钮 */

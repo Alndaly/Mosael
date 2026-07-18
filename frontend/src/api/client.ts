@@ -426,6 +426,12 @@ export function deleteProject(projectId: string): Promise<unknown> {
   return api(`/api/projects/${projectId}`, { method: "DELETE" });
 }
 
+export function listAssets(workspaceId: string, projectId?: string): Promise<Asset[]> {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (projectId) params.set("project_id", projectId);
+  return api<Asset[]>(`/api/assets?${params.toString()}`);
+}
+
 export function renameAsset(assetId: string, name: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }

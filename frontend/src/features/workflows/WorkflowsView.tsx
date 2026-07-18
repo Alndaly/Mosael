@@ -54,6 +54,7 @@ import {
   createWorkflow,
   deleteWorkflow,
   fetchWorkflowNodeTypes,
+  listAssets,
   listCredentials,
   listPublishAccounts,
   listWorkflows,
@@ -836,21 +837,26 @@ function WorkflowEditor({
                   });
                   if (matches.length === 0)
                     return <div className="wf-nodesearch-empty">{t("wfNodeSearchEmpty")}</div>;
-                  return matches.map((node) => (
-                    <button
-                      key={node.id}
-                      type="button"
-                      className={`wf-nodesearch-row${node.id === selectedNodeId ? " is-active" : ""}`}
-                      onClick={() => {
-                        focusNode(node.id);
-                        setNodeSearchOpen(false);
-                        setNodeSearch("");
-                      }}
-                    >
-                      <span className="wf-nodesearch-name">{node.name || (registry.get(node.type)?.label ?? node.type)}</span>
-                      <span className="wf-nodesearch-type">{registry.get(node.type)?.label ?? node.type}</span>
-                    </button>
-                  ));
+                  return matches.map((node) => {
+                    const label = registry.get(node.type)?.label ?? node.type;
+                    // 未改名时 name 就是类型标签,再补一列类型纯属重复 → 仅改过名才显示类型。
+                    const typeSub = node.name && node.name !== label ? label : null;
+                    return (
+                      <button
+                        key={node.id}
+                        type="button"
+                        className={`wf-nodesearch-row${node.id === selectedNodeId ? " is-active" : ""}`}
+                        onClick={() => {
+                          focusNode(node.id);
+                          setNodeSearchOpen(false);
+                          setNodeSearch("");
+                        }}
+                      >
+                        <span className="wf-nodesearch-name">{node.name || label}</span>
+                        {typeSub && <span className="wf-nodesearch-type">{typeSub}</span>}
+                      </button>
+                    );
+                  });
                 })()}
               </div>
             </PopoverContent>
@@ -1178,6 +1184,13 @@ function NodeInspector({
     queryFn: listCredentials,
     enabled: node.type === "ai_generate",
   });
+  // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
+  const hasAssetField = specs.some(([key]) => inputType(node.type, key) === "asset");
+  const assets = useQuery({
+    queryKey: ["workflow-assets", workspaceId],
+    queryFn: () => listAssets(workspaceId),
+    enabled: hasAssetField,
+  });
 
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
@@ -1304,6 +1317,13 @@ function NodeInspector({
     if (node.type === "publish" && key === "account_id") {
       return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
     }
+    // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。
+    if (inputType(node.type, key) === "asset") {
+      return (assets.data ?? []).map((asset) => ({
+        value: asset.id,
+        label: asset.name || asset.original_filename,
+      }));
+    }
     return null;
   };
 
@@ -1380,7 +1400,7 @@ function NodeInspector({
           </div>
         )}
         {node.type === "ai_generate" && (
-          <label className="wf-field">
+          <div className="wf-field">
             <span>{t("wfModelPreset")}</span>
             <Select
               value=""
@@ -1402,10 +1422,10 @@ function NodeInspector({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </div>
         )}
         {node.type === "llm" && (
-          <label className="wf-field">
+          <div className="wf-field">
             <span>{t("wfLlmPreset")}</span>
             <Select
               value={(config.preset as string) || "balanced"}
@@ -1427,7 +1447,7 @@ function NodeInspector({
                   ? t("wfPresetCreativeHint")
                   : t("wfPresetBalancedHint")}
             </small>
-          </label>
+          </div>
         )}
         {specs
           .filter(([key]) => !(node.type === "llm" && key === "preset"))
@@ -1444,7 +1464,7 @@ function NodeInspector({
           const boundEdge = connected ? dataEdgeFor(key) : null;
           const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
           return (
-            <label className="wf-field" key={key}>
+            <div className="wf-field" key={key}>
               <span>
                 {labelKey ? t(labelKey) : key}
                 {spec?.required ? <em className="wf-field-req">*</em> : null}
@@ -1529,7 +1549,7 @@ function NodeInspector({
                 </div>
               )}
               {spec?.description && <small>{spec.description}</small>}
-            </label>
+            </div>
           );
         })}
         {meta && (
