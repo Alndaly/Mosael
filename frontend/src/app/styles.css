@@ -5059,11 +5059,15 @@
   flex-wrap: wrap;
 }
 
-/* 「添加节点」是 Select 触发器,默认 bg-panel 在暗色下显得"暗/填充";统一成和其余
-   工具按钮一致的透明描边样式(高度/字号本来就一致:h-7 / 12px)。 */
+/* 「添加节点」是 Select 触发器(默认 bg-panel + border-border,比 outline 按钮偏灰/偏暗),
+   统一成和 outline 按钮完全一致的底色/边框(bg-card + border-input);高度/字号本来就一致(h-7/12px)。 */
 .wf-toolbar-actions .wf-add-node {
-  background: transparent;
+  background: var(--card);
+  border-color: var(--input);
   border-radius: 6px;
+}
+.wf-toolbar-actions .wf-add-node:hover {
+  background: var(--muted);
 }
 
 .wf-add-node span {
