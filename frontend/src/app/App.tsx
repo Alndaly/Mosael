@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Film, FolderPlus, Loader2, Rotate
 
 import { api, type ProjectWithStats, type Workspace } from "@/api/client";
 import { AuthProvider, useAuth } from "@/app/auth";
+import { AppearanceProvider } from "@/app/appearance";
 import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences";
 import { Toaster } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
@@ -70,13 +71,15 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
-        <TooltipProvider delayDuration={300}>
-          <AuthProvider>
-            <AuthGate />
-            <AppToaster />
-            <PublishViewBar />
-          </AuthProvider>
-        </TooltipProvider>
+        <AppearanceProvider>
+          <TooltipProvider delayDuration={300}>
+            <AuthProvider>
+              <AuthGate />
+              <AppToaster />
+              <PublishViewBar />
+            </AuthProvider>
+          </TooltipProvider>
+        </AppearanceProvider>
       </PreferencesProvider>
     </QueryClientProvider>
   );

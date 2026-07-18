@@ -165,6 +165,27 @@
   --track-overlay-text: #cfc0f2;
 }
 
+/* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
+   背景层透出来;搭配 styles.css 里对容器加 backdrop-filter 形成毛玻璃。
+   --app-surface-opacity 由外观设置驱动。仅在支持 backdrop-filter 时启用,
+   否则表面保持不透明以保可读性。字面色值是各主题的实底,避免 var 自引用。 */
+@supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root[data-appearance="glass"] {
+    --background: color-mix(in srgb, #f3f4f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --card: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --popover: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-subtle: color-mix(in srgb, #f6f7fa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-inset: color-mix(in srgb, #eceef3 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+  }
+  :root[data-appearance="glass"].dark {
+    --background: color-mix(in srgb, #0d0f13 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --card: color-mix(in srgb, #15181e calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --popover: color-mix(in srgb, #1b1f26 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-subtle: color-mix(in srgb, #12151a calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-inset: color-mix(in srgb, #0f1216 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+  }
+}
+
 * {
   box-sizing: border-box;
   border-color: var(--border);

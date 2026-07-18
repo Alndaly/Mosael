@@ -1,8 +1,11 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
+import { ImageIcon, KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
+import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
+import { Slider } from "@/components/ui/slider";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -11,7 +14,7 @@ import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServerPicker } from "@/components/layout/ServerPicker";
@@ -62,7 +65,12 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         </nav>
         <div className="settings-content">
           {section === "account" && <AccountSection />}
-          {section === "appearance" && <AppearanceSection />}
+          {section === "appearance" && (
+            <>
+              <AppearanceSection />
+              <BackgroundSection />
+            </>
+          )}
           {section === "providers" && (
             <>
               <ProviderProfilesSection />
@@ -143,6 +151,165 @@ function AppearanceSection() {
         </div>
       </SettingsRow>
     </SettingsGroup>
+  );
+}
+
+/** 自定义外观:整体背景(渐变预设 / 上传图片)+ 表面透明度、磨玻璃模糊、背景压暗。
+    全部即时预览,存 localStorage(逐设备)。无背景时应用保持原不透明外观。 */
+function BackgroundSection() {
+  const t = useI18n();
+  const appearance = useAppearance();
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const active = appearance.kind !== "none" && !(appearance.kind === "image" && !appearance.image);
+
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      appearance.setImage(await compressImageFile(file));
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+  const chooseKind = (kind: BackgroundKind) => {
+    if (kind === "image" && !appearance.image) fileRef.current?.click();
+    else appearance.update({ kind });
+  };
+
+  return (
+    <SettingsGroup title={t("appearanceBgTitle")} description={t("appearanceBgDesc")}>
+      <SettingsRow label={t("appearanceBgSource")} description={t("appearanceBgSourceDesc")}>
+        <div className="seg">
+          {(["none", "preset", "image"] as BackgroundKind[]).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={appearance.kind === kind ? "seg-btn active" : "seg-btn"}
+              onClick={() => chooseKind(kind)}
+            >
+              {kind === "none" ? t("appearanceBgNone") : kind === "preset" ? t("appearanceBgPreset") : t("appearanceBgImage")}
+            </button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      {appearance.kind === "preset" && (
+        <SettingsBlock>
+          <div className="bg-presets">
+            {BACKGROUND_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={appearance.preset === preset.id ? "bg-preset active" : "bg-preset"}
+                style={{ backgroundImage: preset.css }}
+                onClick={() => appearance.update({ preset: preset.id })}
+              >
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </SettingsBlock>
+      )}
+
+      {appearance.kind === "image" && (
+        <SettingsBlock>
+          <div className="bg-image-row">
+            {appearance.image ? (
+              <div className="bg-image-preview" style={{ backgroundImage: `url(${appearance.image})` }} />
+            ) : (
+              <div className="bg-image-empty">
+                <ImageIcon size={16} /> {t("appearanceBgNoImage")}
+              </div>
+            )}
+            <div className="bg-image-actions">
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                <Upload size={13} /> {appearance.image ? t("appearanceBgReplace") : t("appearanceBgUpload")}
+              </Button>
+              {appearance.image && (
+                <Button variant="ghost" size="sm" onClick={() => appearance.clearImage()}>
+                  <X size={13} /> {t("appearanceBgRemove")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </SettingsBlock>
+      )}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden-input"
+        onChange={(event) => {
+          void pickImage(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+
+      {active && (
+        <>
+          <SliderRow
+            label={t("appearanceOpacity")}
+            value={appearance.surfaceOpacity}
+            min={0.35}
+            max={1}
+            step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(v) => appearance.update({ surfaceOpacity: v })}
+          />
+          <SliderRow
+            label={t("appearanceBlur")}
+            value={appearance.blur}
+            min={0}
+            max={32}
+            step={1}
+            format={(v) => `${Math.round(v)}px`}
+            onChange={(v) => appearance.update({ blur: v })}
+          />
+          <SliderRow
+            label={t("appearanceDim")}
+            value={appearance.dim}
+            min={0}
+            max={0.75}
+            step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(v) => appearance.update({ dim: v })}
+          />
+        </>
+      )}
+
+      <SettingsRow label={t("appearanceReset")} description={t("appearanceResetDesc")}>
+        <Button variant="outline" size="sm" onClick={() => appearance.reset()}>
+          <RotateCcw size={13} /> {t("appearanceReset")}
+        </Button>
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <SettingsRow label={label}>
+      <div className="appearance-slider">
+        <Slider value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} />
+        <span className="appearance-slider-val">{format(value)}</span>
+      </div>
+    </SettingsRow>
   );
 }
 

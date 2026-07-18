@@ -48,6 +48,31 @@
   min-height: 0;
 }
 
+/* 自定义外观背景层:固定铺满视口,位于全部内容之下。--app-bg-image 由外观
+   设置注入(渐变预设或用户图片);无自定义背景时为 none,该层不可见。 */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--app-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* 压暗遮罩:提升背景上文字对比。强度由 --app-bg-dim 驱动。 */
+.app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--app-bg-dim, 0));
+}
+
+:root:not([data-appearance="glass"]) .app-bg {
+  display: none;
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -1658,6 +1683,96 @@
   gap: 6px;
   color: var(--destructive);
   font-size: 11.5px;
+}
+
+/* 自定义外观:预设色板 / 图片上传 / 滑杆 */
+.bg-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.bg-preset {
+  position: relative;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow 120ms, transform 80ms;
+}
+
+.bg-preset span {
+  position: absolute;
+  left: 7px;
+  bottom: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.bg-preset:hover {
+  transform: translateY(-1px);
+}
+
+.bg-preset.active {
+  box-shadow: 0 0 0 2px var(--primary);
+  border-color: var(--primary);
+}
+
+.bg-image-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bg-image-preview {
+  width: 128px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.bg-image-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 128px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+.bg-image-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.appearance-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.appearance-slider .appearance-slider-val {
+  width: 42px;
+  text-align: right;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-section {
@@ -7859,6 +7974,25 @@
     background: var(--glass-chrome);
     -webkit-backdrop-filter: blur(14px) saturate(1.4);
     backdrop-filter: blur(14px) saturate(1.4);
+  }
+
+  /* ---- 自定义外观(有背景层时)的整体磨玻璃 ---- */
+  /* 工作区主体:半透明 + 背景模糊,让背景层以毛玻璃质感透出。 */
+  :root[data-appearance="glass"] .shell-content {
+    -webkit-backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.3);
+    backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.3);
+  }
+
+  /* chrome 与常见内容面板改用用户设定的模糊强度,保持全局一致。 */
+  :root[data-appearance="glass"] .topbar,
+  :root[data-appearance="glass"] .rail,
+  :root[data-appearance="glass"] .card,
+  :root[data-appearance="glass"] .sg,
+  :root[data-appearance="glass"] .settings-section,
+  :root[data-appearance="glass"] .project-card,
+  :root[data-appearance="glass"] .welcome {
+    -webkit-backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.35);
+    backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.35);
   }
 }
 
