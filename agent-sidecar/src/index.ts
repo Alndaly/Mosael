@@ -11,12 +11,12 @@ import * as readline from "node:readline";
 
 import { log, send, type Request } from "./protocol.js";
 import { runPiTurn } from "./pi.js";
-import { buildReadonlyTools } from "./tools.js";
+import { buildAllTools } from "./tools.js";
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
   if (msg.provider?.baseUrl && msg.model) {
-    const tools = buildReadonlyTools(msg.apiBase, msg.token, msg.workspaceId);
+    const tools = buildAllTools(msg.apiBase, msg.token, msg.workspaceId);
     const text = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,
