@@ -78,7 +78,15 @@ function DefaultRow({
         disabled={!providerId || modelOptions.length === 0}
       >
         <SelectTrigger className="provider-default-select">
-          <SelectValue placeholder={t("agentModelPlaceholder")} />
+          <SelectValue
+            placeholder={
+              !providerId
+                ? t("providerDefaultsPickFirst")
+                : modelOptions.length === 0
+                  ? t("providerDefaultsNoModels")
+                  : t("agentModelPlaceholder")
+            }
+          />
         </SelectTrigger>
         <SelectContent>
           {modelOptions.map((name) => (

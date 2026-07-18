@@ -7349,6 +7349,12 @@
   width: 100%;
   min-width: 0;
 }
+/* 禁用态(未选供应商/无可用模型)要一眼看出不可点,别让人以为点击没反应 */
+.provider-default-select:disabled,
+.provider-default-select[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* AI Studio 对话模型选择器:composer 里紧凑呈现 */
 .model-picker-trigger {
