@@ -93,6 +93,20 @@ export function Timeline({
     const src = allClips.find((item) => item.id === dragDraft.clipId);
     return src ? (dragDraft.src_out - dragDraft.src_in) / (src.speed || 1) : 0;
   }, [dragDraft, allClips]);
+
+  // Insert-mode ripple preview: downstream clips on the target track part only by
+  // the actual overlap (mirrors the backend), so a nudge doesn't shove everything.
+  const insertRipple = React.useMemo(() => {
+    if (editMode !== "insert" || !dragDraft || dragDraft.kind !== "move") return null;
+    const start = dragDraft.timeline_start;
+    const end = start + dragMoveDuration;
+    const downstream = (tracks.find((t) => t.id === dragDraft.trackId)?.clips ?? []).filter(
+      (c) => c.id !== dragDraft.clipId && c.timeline_start >= start - 1e-9,
+    );
+    if (!downstream.length) return null;
+    const shift = end - Math.min(...downstream.map((c) => c.timeline_start));
+    return shift > 1e-9 ? { trackId: dragDraft.trackId, from: start, shift } : null;
+  }, [editMode, dragDraft, dragMoveDuration, tracks]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
   // Waveforms for audio-track clips whose assets have a cached waveform.
@@ -673,13 +687,11 @@ export function Timeline({
                   // Insert-mode preview: clips at/after the drop point slide right by the
                   // dragged clip's duration, showing where the ripple will land them.
                   const partingShift =
-                    editMode === "insert" &&
-                    dragDraft &&
-                    dragDraft.kind === "move" &&
-                    dragDraft.trackId === track.id &&
-                    clip.id !== dragDraft.clipId &&
-                    clip.timeline_start >= dragDraft.timeline_start - 1e-9
-                      ? dragMoveDuration
+                    insertRipple &&
+                    insertRipple.trackId === track.id &&
+                    clip.id !== dragDraft?.clipId &&
+                    clip.timeline_start >= insertRipple.from - 1e-9
+                      ? insertRipple.shift
                       : 0;
                   const displayLeft = display.timeline_start + partingShift;
                   const waveform = track.kind === "audio" && clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;

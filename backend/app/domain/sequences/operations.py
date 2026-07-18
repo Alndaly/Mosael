@@ -126,20 +126,29 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
 
     shifted: list[dict[str, Any]] = []
     if op.ripple:
+        # Insert edit: make room for the clip at its new spot by pushing the
+        # downstream clips right — but only by the actual OVERLAP, and only when
+        # there is a real collision. Shifting everyone by the full clip duration
+        # (regardless of overlap) exploded the timeline on any nudge.
         duration = (clip.src_out - clip.src_in) / (clip.speed or 1)
-        followers = db.scalars(
-            select(Clip).where(
-                Clip.track_id == clip.track_id,
-                Clip.id != clip.id,
-                Clip.timeline_start >= op.timeline_start - 1e-9,
+        moved_end = op.timeline_start + duration
+        downstream = list(
+            db.scalars(
+                select(Clip).where(
+                    Clip.track_id == clip.track_id,
+                    Clip.id != clip.id,
+                    Clip.timeline_start >= op.timeline_start - 1e-9,
+                )
             )
         )
-        for other in followers:
-            new_start = other.timeline_start + duration
-            shifted.append(
-                {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
-            )
-            other.timeline_start = new_start
+        overlap = moved_end - min((c.timeline_start for c in downstream), default=moved_end)
+        if downstream and overlap > 1e-9:
+            for other in downstream:  # shift all downstream by the same amount → gaps preserved
+                new_start = other.timeline_start + overlap
+                shifted.append(
+                    {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
+                )
+                other.timeline_start = new_start
 
     _record_operation(
         db,
