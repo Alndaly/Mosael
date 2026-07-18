@@ -1,114 +1,102 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, FileText, FileUp, Link2, Loader2, NotebookPen, Pencil, Search, Tag, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  FileUp,
+  Link2,
+  Loader2,
+  NotebookPen,
+  Plus,
+  RotateCw,
+  Search,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
-import { TagsDialog } from "@/features/media/TagsDialog";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KbTiptap } from "@/features/kb/KbTiptap";
 
+type KbDataset = components["schemas"]["KbDatasetOut"];
 type KbDocument = components["schemas"]["KbDocumentOut"];
+type KbChunk = components["schemas"]["KbChunkOut"];
 type KbSearchResult = components["schemas"]["KbSearchResultOut"];
+type KbGraph = components["schemas"]["KbGraphOut"];
+
+/** 后端 detail 错误解析:api() 抛的是原始响应体,统一取出 {"detail": ...}。 */
+function errText(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.detail === "string") return parsed.detail;
+  } catch {
+    // 非 JSON,原样返回
+  }
+  return raw;
+}
 
 /**
- * 知识库(计划 §6.9 / Phase 13):创作资料的第二大脑 —— 脚本、文案、
- * 风格指南、网页资料统一 markdown 入库,FTS 检索,智能体可通过
- * search_kb / read_kb_document 使用同一份数据。
+ * 知识库(Dify 式 datasets):工作区内多个命名知识库,每个含文档 + 分块 + 检索/图谱设置。
+ * 详情分四页:文档 / 召回测试 / 知识图谱 / 设置。检索基线 FTS5,向量/Neo4j 图谱为可选增强。
  */
 export function KbView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [query, setQuery] = React.useState("");
-  const [urlDialogOpen, setUrlDialogOpen] = React.useState(false);
-  const [deleting, setDeleting] = React.useState<KbDocument | null>(null);
-  const [renaming, setRenaming] = React.useState<KbDocument | null>(null);
+  const [datasetId, setDatasetId] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [renaming, setRenaming] = React.useState<KbDataset | null>(null);
+  const [deleting, setDeleting] = React.useState<KbDataset | null>(null);
 
-  const documents = useQuery({
-    queryKey: ["kb-documents", workspace.id],
-    queryFn: () => api<KbDocument[]>(`/api/kb/documents?workspace_id=${workspace.id}`),
+  const datasets = useQuery({
+    queryKey: ["kb-datasets", workspace.id],
+    queryFn: () => api<KbDataset[]>(`/api/kb/datasets?workspace_id=${workspace.id}`),
   });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["kb-datasets", workspace.id] });
 
-  // Cmd+K 面板选中知识库文档后跳转到本页并选中该文档。
-  React.useEffect(() => {
-    const onOpenDoc = (event: Event) => setSelectedId((event as CustomEvent<string>).detail);
-    window.addEventListener("mibu:open-kb-doc", onOpenDoc);
-    return () => window.removeEventListener("mibu:open-kb-doc", onOpenDoc);
-  }, []);
-  const search = useQuery({
-    queryKey: ["kb-search", workspace.id, query],
-    enabled: query.trim().length > 0,
-    queryFn: () => api<KbSearchResult[]>(`/api/kb/search?workspace_id=${workspace.id}&q=${encodeURIComponent(query)}`),
-  });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["kb-documents", workspace.id] });
-
-  const createNote = useMutation({
-    mutationFn: () =>
-      api<KbDocument>("/api/kb/documents", {
+  const createDataset = useMutation({
+    mutationFn: (body: { name: string; description: string }) =>
+      api<KbDataset>("/api/kb/datasets", {
         method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id, title: t("kbUntitled"), content: "" }),
+        body: JSON.stringify({ workspace_id: workspace.id, ...body }),
       }),
-    onSuccess: (doc) => {
-      setSelectedId(doc.id);
-      setQuery("");
+    onSuccess: (ds) => {
+      setCreating(false);
+      setDatasetId(ds.id);
       void refresh();
     },
   });
-  const importUrl = useMutation({
-    mutationFn: (url: string) =>
-      api<KbDocument>("/api/kb/documents/import-url", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id, url }),
-      }),
-    onSuccess: (doc) => {
-      setUrlDialogOpen(false);
-      setSelectedId(doc.id);
-      void refresh();
-    },
-  });
-  // 文件统一交给后端转换引擎(MinerU/markitdown):PDF/Word/PPT/Excel 都能进。
-  const importFile = useMutation({
-    mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.set("workspace_id", workspace.id);
-      form.set("file", file);
-      return api<KbDocument>("/api/kb/documents/import-file", { method: "POST", body: form });
-    },
-    onSuccess: (doc) => {
-      setSelectedId(doc.id);
-      void refresh();
-    },
-  });
-  const removeDoc = useMutation({
-    mutationFn: (id: string) => api(`/api/kb/documents/${id}`, { method: "DELETE" }),
-    onSuccess: (_data, id) => {
-      setDeleting(null);
-      if (selectedId === id) setSelectedId(null);
-      void refresh();
-    },
-  });
-  const renameDoc = useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) =>
-      api<KbDocument>(`/api/kb/documents/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
-    onSuccess: (doc) => {
+  const renameDataset = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api<KbDataset>(`/api/kb/datasets/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+    onSuccess: () => {
       setRenaming(null);
       void refresh();
-      void qc.invalidateQueries({ queryKey: ["kb-document", doc.id] });
+    },
+  });
+  const removeDataset = useMutation({
+    mutationFn: (id: string) => api(`/api/kb/datasets/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      setDeleting(null);
+      if (datasetId === id) setDatasetId(null);
+      void refresh();
     },
   });
 
-  const listed = documents.data ?? [];
-  const selected = listed.find((doc) => doc.id === selectedId) ?? listed[0] ?? null;
-  const searching = query.trim().length > 0;
+  const listed = datasets.data ?? [];
+  const selected = listed.find((ds) => ds.id === datasetId) ?? listed[0] ?? null;
 
-  if (documents.isSuccess && listed.length === 0) {
+  if (datasets.isSuccess && listed.length === 0) {
     return (
       <div className="feature-view">
         <EmptyState
@@ -116,22 +104,16 @@ export function KbView({ workspace }: { workspace: Workspace }) {
           title={t("kbEmptyTitle")}
           body={t("kbEmptyBody")}
           action={
-            <div className="kb-empty-actions">
-              <Button size="sm" onClick={() => createNote.mutate()}>
-                <NotebookPen size={13} /> {t("kbNewNote")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setUrlDialogOpen(true)}>
-                <Link2 size={13} /> {t("kbImportUrl")}
-              </Button>
-            </div>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus size={13} /> {t("kbNewDataset")}
+            </Button>
           }
         />
-        <KbUrlDialog
-          open={urlDialogOpen}
-          pending={importUrl.isPending}
-          error={importUrl.isError ? String((importUrl.error as Error).message) : null}
-          onCancel={() => setUrlDialogOpen(false)}
-          onSubmit={(url) => importUrl.mutate(url)}
+        <CreateDatasetDialog
+          open={creating}
+          pending={createDataset.isPending}
+          onCancel={() => setCreating(false)}
+          onSubmit={(body) => createDataset.mutate(body)}
         />
       </div>
     );
@@ -143,137 +125,277 @@ export function KbView({ workspace }: { workspace: Workspace }) {
         <aside className="plugins-list kb-list panel">
           <div className="panel-head">
             <h2>{t("kbTitle")}</h2>
-            <div className="kb-list-actions">
-              <Button size="icon-sm" variant="ghost" title={t("kbNewNote")} onClick={() => createNote.mutate()}>
-                <NotebookPen size={14} />
-              </Button>
-              <Button size="icon-sm" variant="ghost" title={t("kbImportUrl")} onClick={() => setUrlDialogOpen(true)}>
-                <Link2 size={14} />
-              </Button>
-              <Button asChild size="icon-sm" variant="ghost" title={t("kbImportFile")}>
-                <label>
-                  <input
-                    type="file"
-                    accept=".md,.txt,.markdown,.pdf,.docx,.doc,.pptx,.xlsx,.xls,.html,.htm,.csv,.epub"
-                    className="hidden-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) importFile.mutate(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  {importFile.isPending ? <Loader2 size={14} className="spin" /> : <FileUp size={14} />}
-                </label>
-              </Button>
-            </div>
+            <Button size="icon-sm" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
+              <Plus size={14} />
+            </Button>
           </div>
-          <div className="kb-search">
-            <Search size={13} />
-            <input
-              value={query}
-              placeholder={t("kbSearchPlaceholder")}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-          {(importFile.isError || importFile.isPending) && (
-            <p className={importFile.isPending ? "kb-import-status" : "kb-import-status error"}>
-              {importFile.isPending ? t("kbConverting") : String((importFile.error as Error).message)}
-            </p>
-          )}
           <div className="plugins-list-body">
-            {searching
-              ? (search.data ?? []).map((hit) => (
+            {listed.map((ds) => (
+              <ContextMenu key={ds.id}>
+                <ContextMenuTrigger asChild>
                   <button
-                    key={`${hit.document_id}-${hit.chunk_index}`}
                     type="button"
-                    className={selected?.id === hit.document_id ? "kb-hit active" : "kb-hit"}
-                    onClick={() => setSelectedId(hit.document_id)}
+                    className={selected?.id === ds.id ? "plugins-item active" : "plugins-item"}
+                    onClick={() => setDatasetId(ds.id)}
                   >
-                    <strong>{hit.title}</strong>
-                    <span>{hit.snippet.slice(0, 90)}</span>
+                    <span className="kb-item-icon">
+                      <BookOpen size={14} />
+                    </span>
+                    <span className="plugins-item-text">
+                      <strong>{ds.name}</strong>
+                      <small>{t("kbDocCount").replace("{n}", String(ds.document_count))}</small>
+                    </span>
                   </button>
-                ))
-              : listed.map((doc) => (
-                  <ContextMenu key={doc.id}>
-                    <ContextMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className={selected?.id === doc.id ? "plugins-item active" : "plugins-item"}
-                        onClick={() => setSelectedId(doc.id)}
-                      >
-                        <span className="kb-item-icon">{sourceIcon(doc.source_type)}</span>
-                        <span className="plugins-item-text">
-                          <strong>{doc.title}</strong>
-                          <small>
-                            {sourceLabel(doc.source_type, t)}
-                            {(doc.tags ?? []).length > 0 ? ` · ${(doc.tags ?? []).join(" / ")}` : ""}
-                          </small>
-                        </span>
-                      </button>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onSelect={() => setRenaming(doc)}>
-                        <Pencil /> {t("rename")}
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem destructive onSelect={() => setDeleting(doc)}>
-                        <Trash2 /> {t("delete")}
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))}
-            {searching && search.isSuccess && (search.data ?? []).length === 0 && (
-              <div className="empty-inline">
-                <Search size={14} /> {t("kbNoResults")}
-              </div>
-            )}
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => setRenaming(ds)}>{t("rename")}</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem destructive onSelect={() => setDeleting(ds)}>
+                    <Trash2 /> {t("delete")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            ))}
           </div>
         </aside>
-        <div className="plugins-detail">
+        <div className="plugins-detail kb-detail">
           {selected ? (
-            <KbDocumentEditor key={selected.id} documentId={selected.id} onDelete={() => setDeleting(selected)} />
+            <DatasetDetail key={selected.id} dataset={selected} workspace={workspace} />
           ) : (
             <EmptyState icon={<BookOpen size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
         </div>
       </div>
 
+      <CreateDatasetDialog
+        open={creating}
+        pending={createDataset.isPending}
+        onCancel={() => setCreating(false)}
+        onSubmit={(body) => createDataset.mutate(body)}
+      />
       <RenameDialog
         open={renaming !== null}
         title={t("rename")}
-        initialValue={renaming?.title ?? ""}
+        initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
-        onSubmit={(title) => renaming && renameDoc.mutate({ id: renaming.id, title })}
-      />
-      <KbUrlDialog
-        open={urlDialogOpen}
-        pending={importUrl.isPending}
-        error={importUrl.isError ? String((importUrl.error as Error).message) : null}
-        onCancel={() => setUrlDialogOpen(false)}
-        onSubmit={(url) => importUrl.mutate(url)}
+        onSubmit={(name) => renaming && renameDataset.mutate({ id: renaming.id, name })}
       />
       <ConfirmDialog
         open={deleting !== null}
         title={t("deleteConfirmTitle")}
-        body={t("kbDeleteBody")}
+        body={t("kbDeleteDatasetBody")}
         onCancel={() => setDeleting(null)}
-        onConfirm={() => deleting && removeDoc.mutate(deleting.id)}
+        onConfirm={() => deleting && removeDataset.mutate(deleting.id)}
       />
     </div>
   );
 }
 
-function KbDocumentEditor({ documentId, onDelete }: { documentId: string; onDelete: () => void }) {
+function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: Workspace }) {
+  const t = useI18n();
+  return (
+    <div className="kb-dataset">
+      <div className="kb-dataset-head">
+        <h2>{dataset.name}</h2>
+        {dataset.description && <p>{dataset.description}</p>}
+      </div>
+      <Tabs defaultValue="docs" className="kb-tabs">
+        <TabsList>
+          <TabsTrigger value="docs">
+            <FileText size={13} /> {t("kbTabDocs")}
+          </TabsTrigger>
+          <TabsTrigger value="recall">
+            <Search size={13} /> {t("kbTabRecall")}
+          </TabsTrigger>
+          <TabsTrigger value="graph">
+            <Sparkles size={13} /> {t("kbTabGraph")}
+          </TabsTrigger>
+          <TabsTrigger value="settings">{t("kbTabSettings")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="docs">
+          <DocumentsTab dataset={dataset} workspace={workspace} />
+        </TabsContent>
+        <TabsContent value="recall">
+          <RecallTestTab dataset={dataset} />
+        </TabsContent>
+        <TabsContent value="graph">
+          <GraphTab dataset={dataset} />
+        </TabsContent>
+        <TabsContent value="settings">
+          <SettingsTab dataset={dataset} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline"> = {
+  completed: "secondary",
+  error: "outline",
+  processing: "default",
+  queued: "outline",
+};
+
+function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [editingTags, setEditingTags] = React.useState(false);
-  const [dirty, setDirty] = React.useState(false);
+  const [openDocId, setOpenDocId] = React.useState<string | null>(null);
+  const [urlOpen, setUrlOpen] = React.useState(false);
+
+  const documents = useQuery({
+    queryKey: ["kb-documents", dataset.id],
+    queryFn: () => api<KbDocument[]>(`/api/kb/datasets/${dataset.id}/documents`),
+    // 有文档在处理时轮询,直到全部落定(异步摄取)。
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((d) => d.status === "queued" || d.status === "processing") ? 1000 : false,
+  });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["kb-documents", dataset.id] });
+    void qc.invalidateQueries({ queryKey: ["kb-datasets", workspace.id] });
+  };
+
+  const createNote = useMutation({
+    mutationFn: () =>
+      api<KbDocument>(`/api/kb/datasets/${dataset.id}/documents`, {
+        method: "POST",
+        body: JSON.stringify({ title: t("kbUntitled"), content: "" }),
+      }),
+    onSuccess: (doc) => {
+      setOpenDocId(doc.id);
+      refresh();
+    },
+  });
+  const importUrl = useMutation({
+    mutationFn: (url: string) =>
+      api<KbDocument>(`/api/kb/datasets/${dataset.id}/documents/import-url`, {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      }),
+    onSuccess: () => {
+      setUrlOpen(false);
+      refresh();
+    },
+  });
+  const importFile = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.set("file", file);
+      return api<KbDocument>(`/api/kb/datasets/${dataset.id}/documents/import-file`, { method: "POST", body: form });
+    },
+    onSuccess: () => refresh(),
+  });
+  const removeDoc = useMutation({
+    mutationFn: (id: string) => api(`/api/kb/documents/${id}`, { method: "DELETE" }),
+    onSuccess: (_d, id) => {
+      if (openDocId === id) setOpenDocId(null);
+      refresh();
+    },
+  });
+  const reindexDoc = useMutation({
+    mutationFn: (id: string) => api<KbDocument>(`/api/kb/documents/${id}/reindex`, { method: "POST" }),
+    onSuccess: () => refresh(),
+  });
+
+  if (openDocId) {
+    return <DocumentDetail documentId={openDocId} onBack={() => setOpenDocId(null)} onChanged={refresh} />;
+  }
+
+  const docs = documents.data ?? [];
+  return (
+    <div className="kb-docs">
+      <div className="kb-docs-actions">
+        <Button size="sm" variant="outline" onClick={() => createNote.mutate()} disabled={createNote.isPending}>
+          <NotebookPen size={13} /> {t("kbNewNote")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setUrlOpen(true)}>
+          <Link2 size={13} /> {t("kbImportUrl")}
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <label>
+            <input
+              type="file"
+              accept=".md,.txt,.markdown,.pdf,.docx,.doc,.pptx,.xlsx,.xls,.html,.htm,.csv,.epub"
+              className="hidden-input"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) importFile.mutate(file);
+                event.currentTarget.value = "";
+              }}
+            />
+            {importFile.isPending ? <Loader2 size={13} className="spin" /> : <FileUp size={13} />} {t("kbImportFile")}
+          </label>
+        </Button>
+      </div>
+      {importFile.isError && <p className="kb-inline-error">{errText(importFile.error)}</p>}
+
+      {docs.length === 0 ? (
+        <EmptyState icon={<FileText size={20} />} title={t("kbNoDocsTitle")} body={t("kbNoDocsBody")} />
+      ) : (
+        <div className="kb-doc-rows">
+          {docs.map((doc) => (
+            <div key={doc.id} className="kb-doc-row">
+              <button type="button" className="kb-doc-open" onClick={() => setOpenDocId(doc.id)}>
+                <span className="kb-doc-title">{doc.title}</span>
+                <span className="kb-doc-meta">
+                  <Badge
+                    variant={STATUS_VARIANT[doc.status] ?? "default"}
+                    className={doc.status === "error" ? "kb-badge-error" : undefined}
+                  >
+                    {t(`kbStatus_${doc.status}` as never)}
+                  </Badge>
+                  <span className="kb-doc-chunks timecode">{t("kbChunksN").replace("{n}", String(doc.chunk_count))}</span>
+                  {doc.status === "error" && doc.error && <span className="kb-doc-errhint">{doc.error}</span>}
+                </span>
+              </button>
+              <div className="kb-doc-row-tools">
+                {doc.status === "error" && (
+                  <Button size="icon-sm" variant="ghost" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
+                    <RotateCw size={13} />
+                  </Button>
+                )}
+                <Button size="icon-sm" variant="ghost" title={t("delete")} onClick={() => removeDoc.mutate(doc.id)}>
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <KbUrlDialog
+        open={urlOpen}
+        pending={importUrl.isPending}
+        error={importUrl.isError ? errText(importUrl.error) : null}
+        onCancel={() => setUrlOpen(false)}
+        onSubmit={(url) => importUrl.mutate(url)}
+      />
+    </div>
+  );
+}
+
+function DocumentDetail({
+  documentId,
+  onBack,
+  onChanged,
+}: {
+  documentId: string;
+  onBack: () => void;
+  onChanged: () => void;
+}) {
+  const t = useI18n();
+  const qc = useQueryClient();
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
+  const [dirty, setDirty] = React.useState(false);
 
   const doc = useQuery({
     queryKey: ["kb-document", documentId],
     queryFn: () => api<KbDocument>(`/api/kb/documents/${documentId}`),
+  });
+  const chunks = useQuery({
+    queryKey: ["kb-chunks", documentId, doc.data?.updated_at],
+    enabled: Boolean(doc.data),
+    queryFn: () => api<KbChunk[]>(`/api/kb/documents/${documentId}/chunks`),
   });
 
   React.useEffect(() => {
@@ -285,75 +407,259 @@ function KbDocumentEditor({ documentId, onDelete }: { documentId: string; onDele
   }, [doc.data?.id, doc.data?.updated_at]);
 
   const save = useMutation({
-    mutationFn: (body: { title?: string; content?: string; tags?: string[] }) =>
+    mutationFn: (body: { title?: string; content?: string }) =>
       api<KbDocument>(`/api/kb/documents/${documentId}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => {
       setDirty(false);
-      setEditingTags(false);
       void qc.invalidateQueries({ queryKey: ["kb-document", documentId] });
-      void qc.invalidateQueries({ queryKey: ["kb-documents"] });
+      onChanged();
     },
   });
 
   if (!doc.data) return null;
-  const data = doc.data;
 
   return (
-    <div className="plugins-detail-body kb-editor">
-      <div className="kb-editor-head">
-        <input
-          className="kb-title-input"
-          value={title}
-          onChange={(event) => {
-            setTitle(event.target.value);
-            setDirty(true);
-          }}
-        />
-        <div className="kb-editor-tools">
-          {dirty ? (
-            <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ title: title.trim() || data.title, content })}>
-              {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSave")}
-            </Button>
-          ) : (
-            <span className="kb-saved-hint">{t("kbSaved")}</span>
-          )}
-          <Button size="icon-sm" variant="ghost" title={t("editTags")} onClick={() => setEditingTags(true)}>
-            <Tag size={14} />
+    <div className="kb-doc-detail">
+      <div className="kb-doc-detail-head">
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          ← {t("back")}
+        </Button>
+        {dirty ? (
+          <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ title: title.trim() || doc.data!.title, content })}>
+            {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSave")}
           </Button>
-          <Button size="icon-sm" variant="ghost" className="sched-delete" title={t("delete")} onClick={onDelete}>
-            <Trash2 size={14} />
-          </Button>
-        </div>
-        <div className="kb-editor-meta">
-          <span>{sourceLabel(data.source_type, t)}</span>
-          {data.source_ref && data.source_type === "url" && (
-            <a href={data.source_ref} target="_blank" rel="noreferrer">
-              {data.source_ref}
-            </a>
-          )}
-          {(data.tags ?? []).map((tag) => (
-            <span className="tag-chip readonly" key={tag}>
-              {tag}
-            </span>
-          ))}
-        </div>
+        ) : (
+          <span className="kb-saved-hint">{t("kbSaved")}</span>
+        )}
       </div>
+      <input
+        className="kb-title-input"
+        value={title}
+        onChange={(event) => {
+          setTitle(event.target.value);
+          setDirty(true);
+        }}
+      />
       <KbTiptap
-        key={data.id}
-        initialMarkdown={data.content ?? ""}
+        key={doc.data.id}
+        initialMarkdown={doc.data.content ?? ""}
         onChange={(markdown) => {
           setContent(markdown);
           setDirty(true);
         }}
       />
-      <TagsDialog
-        open={editingTags}
-        title={t("editTags")}
-        initialTags={data.tags ?? []}
-        onCancel={() => setEditingTags(false)}
-        onSubmit={(tags) => save.mutate({ tags })}
-      />
+      <div className="kb-chunks">
+        <h3>{t("kbChunksTitle").replace("{n}", String((chunks.data ?? []).length))}</h3>
+        <div className="kb-chunk-list">
+          {(chunks.data ?? []).map((chunk) => (
+            <div key={chunk.id} className="kb-chunk">
+              <span className="kb-chunk-idx timecode">#{chunk.chunk_index + 1}</span>
+              <p>{chunk.text}</p>
+              <span className="kb-chunk-len timecode">{chunk.char_count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function RecallTestTab({ dataset }: { dataset: KbDataset }) {
+  const t = useI18n();
+  const [query, setQuery] = React.useState("");
+  const run = useMutation({
+    mutationFn: (q: string) =>
+      api<KbSearchResult[]>(`/api/kb/datasets/${dataset.id}/retrieval-test`, {
+        method: "POST",
+        body: JSON.stringify({ query: q }),
+      }),
+  });
+
+  return (
+    <div className="kb-recall">
+      <form
+        className="kb-recall-bar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (query.trim()) run.mutate(query.trim());
+        }}
+      >
+        <Input value={query} placeholder={t("kbRecallPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
+        <Button type="submit" size="sm" disabled={!query.trim() || run.isPending}>
+          {run.isPending ? <Loader2 size={13} className="spin" /> : <Search size={13} />} {t("kbRecallRun")}
+        </Button>
+      </form>
+      <p className="kb-recall-hint">{t("kbRecallHint")}</p>
+      {run.isSuccess && (run.data ?? []).length === 0 && (
+        <div className="empty-inline">
+          <Search size={14} /> {t("kbNoResults")}
+        </div>
+      )}
+      <div className="kb-recall-results">
+        {(run.data ?? []).map((hit, i) => (
+          <div key={`${hit.document_id}-${hit.chunk_index}-${i}`} className="kb-recall-hit">
+            <div className="kb-recall-hit-head">
+              <strong>{hit.title}</strong>
+              <span className="kb-recall-score timecode">{hit.score.toFixed(4)}</span>
+              {hit.from_graph && <Badge variant="secondary">{t("kbFromGraph")}</Badge>}
+            </div>
+            <p>{hit.snippet}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GraphTab({ dataset }: { dataset: KbDataset }) {
+  const t = useI18n();
+  const graph = useQuery({
+    queryKey: ["kb-graph", dataset.id],
+    queryFn: () => api<KbGraph>(`/api/kb/datasets/${dataset.id}/graph`),
+  });
+  if (graph.isLoading) return <div className="kb-graph-state"><Loader2 size={16} className="spin" /></div>;
+  if (!graph.data?.enabled) {
+    return (
+      <EmptyState
+        icon={<Sparkles size={20} />}
+        title={t("kbGraphOffTitle")}
+        body={t("kbGraphOffBody")}
+      />
+    );
+  }
+  if ((graph.data.nodes ?? []).length === 0) {
+    return <EmptyState icon={<Sparkles size={20} />} title={t("kbGraphEmptyTitle")} body={t("kbGraphEmptyBody")} />;
+  }
+  // 力导向可视化在下一片接入;先列出实体作为占位。
+  const entities = (graph.data.nodes ?? []).filter((n) => n.kind === "entity");
+  return (
+    <div className="kb-graph-placeholder">
+      <p>{t("kbGraphEntities").replace("{n}", String(entities.length))}</p>
+      <div className="kb-graph-chips">
+        {entities.map((node) => (
+          <span key={node.id} className="tag-chip readonly">
+            {node.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsTab({ dataset }: { dataset: KbDataset }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [form, setForm] = React.useState({
+    name: dataset.name,
+    description: dataset.description,
+    retrieval_mode: dataset.retrieval_mode,
+    top_k: dataset.top_k,
+    chunk_size: dataset.chunk_size,
+    chunk_overlap: dataset.chunk_overlap,
+    graph_enabled: dataset.graph_enabled,
+  });
+  const save = useMutation({
+    mutationFn: () => api<KbDataset>(`/api/kb/datasets/${dataset.id}`, { method: "PATCH", body: JSON.stringify(form) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kb-datasets", dataset.workspace_id] }),
+  });
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
+
+  return (
+    <div className="kb-settings">
+      <label className="wf-field">
+        <span>{t("kbDatasetName")}</span>
+        <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
+      </label>
+      <label className="wf-field">
+        <span>{t("kbDatasetDesc")}</span>
+        <Input value={form.description} onChange={(event) => set("description", event.target.value)} />
+      </label>
+      <div className="wf-field">
+        <span>{t("kbRetrievalMode")}</span>
+        <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fts">{t("kbModeFts")}</SelectItem>
+            <SelectItem value="hybrid">{t("kbModeHybrid")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <label className="wf-field">
+        <span>{t("kbTopK")}</span>
+        <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
+      </label>
+      <div className="kb-settings-row">
+        <label className="wf-field">
+          <span>{t("kbChunkSize")}</span>
+          <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
+        </label>
+        <label className="wf-field">
+          <span>{t("kbChunkOverlap")}</span>
+          <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
+        </label>
+      </div>
+      <small className="kb-settings-note">{t("kbChunkNote")}</small>
+      <label className="kb-switch-row">
+        <span>
+          <strong>{t("kbGraphEnabled")}</strong>
+          <small>{t("kbGraphEnabledDesc")}</small>
+        </span>
+        <Switch checked={form.graph_enabled} onCheckedChange={(v) => set("graph_enabled", v)} />
+      </label>
+      <div className="kb-settings-actions">
+        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSaveSettings")}
+        </Button>
+        {save.isSuccess && <span className="kb-saved-hint">{t("kbSaved")}</span>}
+      </div>
+    </div>
+  );
+}
+
+function CreateDatasetDialog({
+  open,
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  open: boolean;
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (body: { name: string; description: string }) => void;
+}) {
+  const t = useI18n();
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  React.useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+    }
+  }, [open]);
+  return (
+    <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={t("kbNewDataset")}>
+      <div className="grid gap-3">
+        <label className="wf-field">
+          <span>{t("kbDatasetName")}</span>
+          <Input autoFocus value={name} placeholder={t("kbDatasetNamePh")} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="wf-field">
+          <span>{t("kbDatasetDesc")}</span>
+          <Input value={description} onChange={(event) => setDescription(event.target.value)} />
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" disabled={!name.trim() || pending} onClick={() => onSubmit({ name: name.trim(), description: description.trim() })}>
+            {pending ? <Loader2 size={13} className="spin" /> : null} {t("create")}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -392,16 +698,4 @@ function KbUrlDialog({
       </div>
     </ModalShell>
   );
-}
-
-function sourceIcon(sourceType: string) {
-  if (sourceType === "url") return <Link2 size={14} />;
-  if (sourceType === "file") return <FileText size={14} />;
-  return <NotebookPen size={14} />;
-}
-
-function sourceLabel(sourceType: string, t: (key: MessageKey) => string): string {
-  if (sourceType === "url") return t("kbSourceUrl");
-  if (sourceType === "file") return t("kbSourceFile");
-  return t("kbSourceNote");
 }

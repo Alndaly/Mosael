@@ -28,12 +28,16 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
 
 def _migrate_kb_schema() -> None:
     """KB 彻底重写(Dify 式 datasets):项目未上线,旧 kb 表直接删表重建。
-    幂等:仅当旧结构存在(有 kb_documents 却无 kb_datasets)时 DROP 一次,create_all 随后重建。"""
-    tables = set(inspect(engine).get_table_names())
-    if "kb_documents" in tables and "kb_datasets" not in tables:
+    以「kb_documents 是否有 dataset_id 列」判定旧结构 —— 比按表存在判定更稳,
+    能修复「kb_datasets 已建但 kb_documents 仍是旧列」的半迁移中间态。create_all 随后重建。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "kb_documents" not in tables:
+        return
+    columns = {col["name"] for col in inspector.get_columns("kb_documents")}
+    if "dataset_id" not in columns:  # 旧结构 → 全量删表重建
         with engine.begin() as conn:
-            # 先删子表 / FTS 虚表,再删父表(FK)
-            for table in ("kb_chunks_fts", "kb_chunks", "kb_documents"):
+            for table in ("kb_chunks_fts", "kb_chunks", "kb_documents", "kb_datasets"):
                 conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 

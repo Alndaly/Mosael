@@ -4535,6 +4535,297 @@
   gap: 6px;
 }
 
+/* ---------- 知识库 v2(Dify 式 datasets) ---------- */
+.kb-detail {
+  min-height: 0;
+}
+
+.kb-dataset {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 12px;
+}
+
+.kb-dataset-head h2 {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.kb-dataset-head p {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.kb-tabs {
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
+
+/* 每个 tab 面板独立滚动,页面本身不滚 */
+.kb-docs,
+.kb-recall,
+.kb-settings,
+.kb-doc-detail,
+.kb-graph-placeholder {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 文档页 */
+.kb-docs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kb-inline-error {
+  color: var(--destructive);
+  font-size: 12px;
+}
+
+.kb-doc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 4px 6px 4px 10px;
+  transition: border-color 100ms;
+}
+
+.kb-doc-row:hover {
+  border-color: var(--border-strong);
+}
+
+.kb-doc-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-doc-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.kb-doc-chunks {
+  font-size: 11px;
+}
+
+.kb-doc-errhint {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--destructive);
+  font-size: 11px;
+}
+
+.kb-doc-row-tools {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.kb-badge-error {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+/* 文档详情 + 分块 */
+.kb-doc-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kb-chunks h3 {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.kb-chunk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-chunk {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-inset);
+  padding: 8px 10px;
+}
+
+.kb-chunk-idx {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.kb-chunk p {
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.kb-chunk-len {
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+}
+
+/* 召回测试 */
+.kb-recall-bar {
+  display: flex;
+  gap: 6px;
+}
+
+.kb-recall-bar > :first-child {
+  flex: 1;
+}
+
+.kb-recall-hint {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.kb-recall-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-recall-hit {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  padding: 8px 10px;
+}
+
+.kb-recall-hit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.kb-recall-hit-head strong {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-recall-score {
+  color: var(--primary);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.kb-recall-hit p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* 知识图谱(占位) */
+.kb-graph-state {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted-foreground);
+}
+
+.kb-graph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 设置 */
+.kb-settings {
+  max-width: 520px;
+}
+
+.kb-settings-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kb-settings-note {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.kb-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.kb-switch-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.kb-switch-row small {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.kb-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
 /* Task center (任务总线统一入口) */
 .taskcenter-btn {
   position: relative;

@@ -2961,13 +2961,13 @@
         }
       }
     },
-    "/api/kb/documents": {
+    "/api/kb/datasets": {
       "get": {
         "tags": [
           "kb"
         ],
-        "summary": "List Documents",
-        "operationId": "list_documents_api_kb_documents_get",
+        "summary": "List Datasets",
+        "operationId": "list_datasets_api_kb_datasets_get",
         "parameters": [
           {
             "name": "workspace_id",
@@ -2987,9 +2987,219 @@
                 "schema": {
                   "type": "array",
                   "items": {
+                    "$ref": "#/components/schemas/KbDatasetOut"
+                  },
+                  "title": "Response List Datasets Api Kb Datasets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Create Dataset",
+        "operationId": "create_dataset_api_kb_datasets_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KbDatasetCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/datasets/{dataset_id}": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Get Dataset",
+        "operationId": "get_dataset_api_kb_datasets__dataset_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Update Dataset",
+        "operationId": "update_dataset_api_kb_datasets__dataset_id__patch",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KbDatasetUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Delete Dataset",
+        "operationId": "delete_dataset_api_kb_datasets__dataset_id__delete",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/datasets/{dataset_id}/documents": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "List Documents",
+        "operationId": "list_documents_api_kb_datasets__dataset_id__documents_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
                     "$ref": "#/components/schemas/KbDocumentOut"
                   },
-                  "title": "Response List Documents Api Kb Documents Get"
+                  "title": "Response List Documents Api Kb Datasets  Dataset Id  Documents Get"
                 }
               }
             }
@@ -3011,7 +3221,19 @@
           "kb"
         ],
         "summary": "Create Document",
-        "operationId": "create_document_api_kb_documents_post",
+        "description": "建笔记文档:立即返回 queued,后台分块/索引。",
+        "operationId": "create_document_api_kb_datasets__dataset_id__documents_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3046,22 +3268,34 @@
         }
       }
     },
-    "/api/kb/documents/import-url": {
+    "/api/kb/datasets/{dataset_id}/documents/import-url": {
       "post": {
         "tags": [
           "kb"
         ],
         "summary": "Import Url",
-        "operationId": "import_url_api_kb_documents_import_url_post",
+        "description": "导入网页:立即返回 queued,后台抓取正文 + 索引;抓取失败落 status=error。",
+        "operationId": "import_url_api_kb_datasets__dataset_id__documents_import_url_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/KbUrlImportRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3087,23 +3321,34 @@
         }
       }
     },
-    "/api/kb/documents/import-file": {
+    "/api/kb/datasets/{dataset_id}/documents/import-file": {
       "post": {
         "tags": [
           "kb"
         ],
         "summary": "Import File",
-        "description": "上传文件并经转换引擎(MinerU/markitdown/纯文本)转成 markdown 文档。",
-        "operationId": "import_file_api_kb_documents_import_file_post",
+        "description": "上传文件:同步只做类型/大小校验 + 落盘临时文件,立即返回 queued;\n后台转换(MinerU/markitdown/纯文本)+ 索引,转换失败落 status=error。",
+        "operationId": "import_file_api_kb_datasets__dataset_id__documents_import_file_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_import_file_api_kb_documents_import_file_post"
+                "$ref": "#/components/schemas/Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -3112,38 +3357,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/KbDocumentOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/kb/status": {
-      "get": {
-        "tags": [
-          "kb"
-        ],
-        "summary": "Kb Status",
-        "description": "各增强层的启用状态,前端用来给出能力提示。",
-        "operationId": "kb_status_api_kb_status_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KbStatusOut"
                 }
               }
             }
@@ -3286,21 +3499,166 @@
         }
       }
     },
-    "/api/kb/search": {
+    "/api/kb/documents/{document_id}/chunks": {
       "get": {
         "tags": [
           "kb"
         ],
-        "summary": "Search Kb",
-        "operationId": "search_kb_api_kb_search_get",
+        "summary": "List Chunks",
+        "operationId": "list_chunks_api_kb_documents__document_id__chunks_get",
         "parameters": [
           {
-            "name": "workspace_id",
-            "in": "query",
+            "name": "document_id",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Workspace Id"
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KbChunkOut"
+                  },
+                  "title": "Response List Chunks Api Kb Documents  Document Id  Chunks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/documents/{document_id}/reindex": {
+      "post": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Reindex Document",
+        "operationId": "reindex_document_api_kb_documents__document_id__reindex_post",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/datasets/{dataset_id}/retrieval-test": {
+      "post": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Retrieval Test",
+        "description": "召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。",
+        "operationId": "retrieval_test_api_kb_datasets__dataset_id__retrieval_test_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KbRetrievalTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KbSearchResultOut"
+                  },
+                  "title": "Response Retrieval Test Api Kb Datasets  Dataset Id  Retrieval Test Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/datasets/{dataset_id}/search": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Search Dataset",
+        "operationId": "search_dataset_api_kb_datasets__dataset_id__search_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
             }
           },
           {
@@ -3333,7 +3691,124 @@
                   "items": {
                     "$ref": "#/components/schemas/KbSearchResultOut"
                   },
-                  "title": "Response Search Kb Api Kb Search Get"
+                  "title": "Response Search Dataset Api Kb Datasets  Dataset Id  Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/datasets/{dataset_id}/graph": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Dataset Graph",
+        "description": "整库知识图谱(文档↔实体二部图),给前端力导向可视化。未配 Neo4j 时 enabled=False。",
+        "operationId": "dataset_graph_api_kb_datasets__dataset_id__graph_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbGraphOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/documents/{document_id}/graph": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Document Graph",
+        "description": "单文档子图。",
+        "operationId": "document_graph_api_kb_documents__document_id__graph_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbGraphOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/status": {
+      "get": {
+        "tags": [
+          "kb"
+        ],
+        "summary": "Kb Status",
+        "operationId": "kb_status_api_kb_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbStatusOut"
                 }
               }
             }
@@ -5944,6 +6419,82 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Clear Invocations",
+        "description": "清空调用记录;带 plugin_id 只清该插件的。",
+        "operationId": "clear_invocations_api_plugins_invocations_delete",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/invocations/{invocation_id}": {
+      "delete": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Delete Invocation",
+        "operationId": "delete_invocation_api_plugins_invocations__invocation_id__delete",
+        "parameters": [
+          {
+            "name": "invocation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invocation Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/agent/sessions": {
@@ -7197,12 +7748,8 @@
         ],
         "title": "Body_import_asset_api_assets_import_post"
       },
-      "Body_import_file_api_kb_documents_import_file_post": {
+      "Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post": {
         "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
@@ -7211,10 +7758,9 @@
         },
         "type": "object",
         "required": [
-          "workspace_id",
           "file"
         ],
-        "title": "Body_import_file_api_kb_documents_import_file_post"
+        "title": "Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post"
       },
       "Body_upload_lut_api_luts_post": {
         "properties": {
@@ -8071,12 +8617,249 @@
         ],
         "title": "JobOut"
       },
-      "KbDocumentCreate": {
+      "KbChunkOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "char_count": {
+            "type": "integer",
+            "title": "Char Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "chunk_index",
+          "text"
+        ],
+        "title": "KbChunkOut"
+      },
+      "KbDatasetCreate": {
         "properties": {
           "workspace_id": {
             "type": "string",
             "title": "Workspace Id"
           },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "name"
+        ],
+        "title": "KbDatasetCreate"
+      },
+      "KbDatasetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "retrieval_mode": {
+            "type": "string",
+            "title": "Retrieval Mode"
+          },
+          "top_k": {
+            "type": "integer",
+            "title": "Top K"
+          },
+          "score_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Threshold"
+          },
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size"
+          },
+          "chunk_overlap": {
+            "type": "integer",
+            "title": "Chunk Overlap"
+          },
+          "graph_enabled": {
+            "type": "boolean",
+            "title": "Graph Enabled"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "description",
+          "retrieval_mode",
+          "top_k",
+          "chunk_size",
+          "chunk_overlap",
+          "graph_enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "KbDatasetOut"
+      },
+      "KbDatasetUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "retrieval_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(fts|hybrid)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Mode"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "score_threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Threshold"
+          },
+          "chunk_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 4000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Size"
+          },
+          "chunk_overlap": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Overlap"
+          },
+          "graph_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph Enabled"
+          }
+        },
+        "type": "object",
+        "title": "KbDatasetUpdate"
+      },
+      "KbDocumentCreate": {
+        "properties": {
           "title": {
             "type": "string",
             "maxLength": 300,
@@ -8112,7 +8895,6 @@
         },
         "type": "object",
         "required": [
-          "workspace_id",
           "title"
         ],
         "title": "KbDocumentCreate"
@@ -8126,6 +8908,10 @@
           "workspace_id": {
             "type": "string",
             "title": "Workspace Id"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
           },
           "title": {
             "type": "string",
@@ -8154,6 +8940,21 @@
             "type": "string",
             "title": "Status"
           },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "chunk_count": {
+            "type": "integer",
+            "title": "Chunk Count",
+            "default": 0
+          },
+          "char_count": {
+            "type": "integer",
+            "title": "Char Count",
+            "default": 0
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -8180,6 +8981,7 @@
         "required": [
           "id",
           "workspace_id",
+          "dataset_id",
           "title",
           "source_type",
           "source_ref",
@@ -8236,6 +9038,142 @@
         "type": "object",
         "title": "KbDocumentUpdate"
       },
+      "KbGraphEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "weight": {
+            "type": "integer",
+            "title": "Weight",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "title": "KbGraphEdge"
+      },
+      "KbGraphNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "title": "KbGraphNode"
+      },
+      "KbGraphOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/KbGraphNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/KbGraphEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "KbGraphOut"
+      },
+      "KbRetrievalTestRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "score_threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Threshold"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "KbRetrievalTestRequest"
+      },
       "KbSearchResultOut": {
         "properties": {
           "document_id": {
@@ -8269,6 +9207,11 @@
             "type": "number",
             "title": "Score",
             "default": 0.0
+          },
+          "from_graph": {
+            "type": "boolean",
+            "title": "From Graph",
+            "default": false
           }
         },
         "type": "object",
@@ -8311,10 +9254,6 @@
       },
       "KbUrlImportRequest": {
         "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
           "url": {
             "type": "string",
             "maxLength": 600,
@@ -8324,7 +9263,6 @@
         },
         "type": "object",
         "required": [
-          "workspace_id",
           "url"
         ],
         "title": "KbUrlImportRequest"

@@ -988,7 +988,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/kb/documents": {
+    "/api/kb/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Datasets */
+        get: operations["list_datasets_api_kb_datasets_get"];
+        put?: never;
+        /** Create Dataset */
+        post: operations["create_dataset_api_kb_datasets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/datasets/{dataset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dataset */
+        get: operations["get_dataset_api_kb_datasets__dataset_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Dataset */
+        delete: operations["delete_dataset_api_kb_datasets__dataset_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Dataset */
+        patch: operations["update_dataset_api_kb_datasets__dataset_id__patch"];
+        trace?: never;
+    };
+    "/api/kb/datasets/{dataset_id}/documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -996,17 +1033,20 @@ export interface paths {
             cookie?: never;
         };
         /** List Documents */
-        get: operations["list_documents_api_kb_documents_get"];
+        get: operations["list_documents_api_kb_datasets__dataset_id__documents_get"];
         put?: never;
-        /** Create Document */
-        post: operations["create_document_api_kb_documents_post"];
+        /**
+         * Create Document
+         * @description 建笔记文档:立即返回 queued,后台分块/索引。
+         */
+        post: operations["create_document_api_kb_datasets__dataset_id__documents_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/kb/documents/import-url": {
+    "/api/kb/datasets/{dataset_id}/documents/import-url": {
         parameters: {
             query?: never;
             header?: never;
@@ -1015,15 +1055,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import Url */
-        post: operations["import_url_api_kb_documents_import_url_post"];
+        /**
+         * Import Url
+         * @description 导入网页:立即返回 queued,后台抓取正文 + 索引;抓取失败落 status=error。
+         */
+        post: operations["import_url_api_kb_datasets__dataset_id__documents_import_url_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/kb/documents/import-file": {
+    "/api/kb/datasets/{dataset_id}/documents/import-file": {
         parameters: {
             query?: never;
             header?: never;
@@ -1034,29 +1077,10 @@ export interface paths {
         put?: never;
         /**
          * Import File
-         * @description 上传文件并经转换引擎(MinerU/markitdown/纯文本)转成 markdown 文档。
+         * @description 上传文件:同步只做类型/大小校验 + 落盘临时文件,立即返回 queued;
+         *     后台转换(MinerU/markitdown/纯文本)+ 索引,转换失败落 status=error。
          */
-        post: operations["import_file_api_kb_documents_import_file_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/kb/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Kb Status
-         * @description 各增强层的启用状态,前端用来给出能力提示。
-         */
-        get: operations["kb_status_api_kb_status_get"];
-        put?: never;
-        post?: never;
+        post: operations["import_file_api_kb_datasets__dataset_id__documents_import_file_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1082,15 +1106,126 @@ export interface paths {
         patch: operations["update_document_api_kb_documents__document_id__patch"];
         trace?: never;
     };
-    "/api/kb/search": {
+    "/api/kb/documents/{document_id}/chunks": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Search Kb */
-        get: operations["search_kb_api_kb_search_get"];
+        /** List Chunks */
+        get: operations["list_chunks_api_kb_documents__document_id__chunks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/documents/{document_id}/reindex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reindex Document */
+        post: operations["reindex_document_api_kb_documents__document_id__reindex_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/datasets/{dataset_id}/retrieval-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieval Test
+         * @description 召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。
+         */
+        post: operations["retrieval_test_api_kb_datasets__dataset_id__retrieval_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/datasets/{dataset_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Dataset */
+        get: operations["search_dataset_api_kb_datasets__dataset_id__search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/datasets/{dataset_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset Graph
+         * @description 整库知识图谱(文档↔实体二部图),给前端力导向可视化。未配 Neo4j 时 enabled=False。
+         */
+        get: operations["dataset_graph_api_kb_datasets__dataset_id__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/documents/{document_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document Graph
+         * @description 单文档子图。
+         */
+        get: operations["document_graph_api_kb_documents__document_id__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Kb Status */
+        get: operations["kb_status_api_kb_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1818,7 +1953,28 @@ export interface paths {
         get: operations["list_invocations_api_plugins_invocations_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Clear Invocations
+         * @description 清空调用记录;带 plugin_id 只清该插件的。
+         */
+        delete: operations["clear_invocations_api_plugins_invocations_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/invocations/{invocation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Invocation */
+        delete: operations["delete_invocation_api_plugins_invocations__invocation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2241,10 +2397,8 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_import_file_api_kb_documents_import_file_post */
-        Body_import_file_api_kb_documents_import_file_post: {
-            /** Workspace Id */
-            workspace_id: string;
+        /** Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post */
+        Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post: {
             /** File */
             file: string;
         };
@@ -2581,10 +2735,91 @@ export interface components {
              */
             updated_at: string;
         };
-        /** KbDocumentCreate */
-        KbDocumentCreate: {
+        /** KbChunkOut */
+        KbChunkOut: {
+            /** Id */
+            id: string;
+            /** Chunk Index */
+            chunk_index: number;
+            /** Text */
+            text: string;
+            /**
+             * Char Count
+             * @default 0
+             */
+            char_count: number;
+        };
+        /** KbDatasetCreate */
+        KbDatasetCreate: {
             /** Workspace Id */
             workspace_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /** KbDatasetOut */
+        KbDatasetOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Retrieval Mode */
+            retrieval_mode: string;
+            /** Top K */
+            top_k: number;
+            /** Score Threshold */
+            score_threshold?: number | null;
+            /** Chunk Size */
+            chunk_size: number;
+            /** Chunk Overlap */
+            chunk_overlap: number;
+            /** Graph Enabled */
+            graph_enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Document Count
+             * @default 0
+             */
+            document_count: number;
+        };
+        /** KbDatasetUpdate */
+        KbDatasetUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Retrieval Mode */
+            retrieval_mode?: string | null;
+            /** Top K */
+            top_k?: number | null;
+            /** Score Threshold */
+            score_threshold?: number | null;
+            /** Chunk Size */
+            chunk_size?: number | null;
+            /** Chunk Overlap */
+            chunk_overlap?: number | null;
+            /** Graph Enabled */
+            graph_enabled?: boolean | null;
+        };
+        /** KbDocumentCreate */
+        KbDocumentCreate: {
             /** Title */
             title: string;
             /**
@@ -2611,6 +2846,8 @@ export interface components {
             id: string;
             /** Workspace Id */
             workspace_id: string;
+            /** Dataset Id */
+            dataset_id: string;
             /** Title */
             title: string;
             /** Source Type */
@@ -2623,6 +2860,21 @@ export interface components {
             tags?: string[];
             /** Status */
             status: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /**
+             * Chunk Count
+             * @default 0
+             */
+            chunk_count: number;
+            /**
+             * Char Count
+             * @default 0
+             */
+            char_count: number;
             /**
              * Created At
              * Format: date-time
@@ -2645,6 +2897,49 @@ export interface components {
             /** Tags */
             tags?: string[] | null;
         };
+        /** KbGraphEdge */
+        KbGraphEdge: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /** KbGraphNode */
+        KbGraphNode: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /** Ref */
+            ref?: string | null;
+            /** Entity Type */
+            entity_type?: string | null;
+        };
+        /** KbGraphOut */
+        KbGraphOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Nodes */
+            nodes?: components["schemas"]["KbGraphNode"][];
+            /** Edges */
+            edges?: components["schemas"]["KbGraphEdge"][];
+        };
+        /** KbRetrievalTestRequest */
+        KbRetrievalTestRequest: {
+            /** Query */
+            query: string;
+            /** Top K */
+            top_k?: number | null;
+            /** Score Threshold */
+            score_threshold?: number | null;
+        };
         /** KbSearchResultOut */
         KbSearchResultOut: {
             /** Document Id */
@@ -2664,6 +2959,11 @@ export interface components {
              * @default 0
              */
             score: number;
+            /**
+             * From Graph
+             * @default false
+             */
+            from_graph: boolean;
         };
         /** KbStatusOut */
         KbStatusOut: {
@@ -2681,8 +2981,6 @@ export interface components {
         };
         /** KbUrlImportRequest */
         KbUrlImportRequest: {
-            /** Workspace Id */
-            workspace_id: string;
             /** Url */
             url: string;
         };
@@ -5760,13 +6058,172 @@ export interface operations {
             };
         };
     };
-    list_documents_api_kb_documents_get: {
+    list_datasets_api_kb_datasets_get: {
         parameters: {
             query: {
                 workspace_id: string;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDatasetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dataset_api_kb_datasets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KbDatasetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dataset_api_kb_datasets__dataset_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dataset_api_kb_datasets__dataset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dataset_api_kb_datasets__dataset_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KbDatasetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_documents_api_kb_datasets__dataset_id__documents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5791,11 +6248,13 @@ export interface operations {
             };
         };
     };
-    create_document_api_kb_documents_post: {
+    create_document_api_kb_datasets__dataset_id__documents_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                dataset_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -5824,11 +6283,13 @@ export interface operations {
             };
         };
     };
-    import_url_api_kb_documents_import_url_post: {
+    import_url_api_kb_datasets__dataset_id__documents_import_url_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                dataset_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -5857,16 +6318,18 @@ export interface operations {
             };
         };
     };
-    import_file_api_kb_documents_import_file_post: {
+    import_file_api_kb_datasets__dataset_id__documents_import_file_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                dataset_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_import_file_api_kb_documents_import_file_post"];
+                "multipart/form-data": components["schemas"]["Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post"];
             };
         };
         responses: {
@@ -5877,35 +6340,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KbDocumentOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    kb_status_api_kb_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KbStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -6014,13 +6448,202 @@ export interface operations {
             };
         };
     };
-    search_kb_api_kb_search_get: {
+    list_chunks_api_kb_documents__document_id__chunks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbChunkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reindex_document_api_kb_documents__document_id__reindex_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retrieval_test_api_kb_datasets__dataset_id__retrieval_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KbRetrievalTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbSearchResultOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_dataset_api_kb_datasets__dataset_id__search_get: {
         parameters: {
             query: {
-                workspace_id: string;
                 q: string;
                 limit?: number;
             };
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbSearchResultOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dataset_graph_api_kb_datasets__dataset_id__graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbGraphOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_graph_api_kb_documents__document_id__graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbGraphOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kb_status_api_kb_status_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -6033,7 +6656,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KbSearchResultOut"][];
+                    "application/json": components["schemas"]["KbStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -7930,6 +8553,64 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PluginInvocationOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_invocations_api_plugins_invocations_delete: {
+        parameters: {
+            query?: {
+                plugin_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_invocation_api_plugins_invocations__invocation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
