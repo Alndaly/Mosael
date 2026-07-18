@@ -65,6 +65,36 @@ export function listAsrModels(): Promise<AsrModel[]> {
 export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
+
+export type Voice = components["schemas"]["VoiceOut"];
+export type TtsEngine = components["schemas"]["TtsEngineOut"];
+export function listVoices(workspaceId: string): Promise<Voice[]> {
+  return api<Voice[]>(`/api/voices?workspace_id=${workspaceId}`);
+}
+export function uploadVoice(args: { workspaceId: string; name: string; referenceText: string; file: File }): Promise<Voice> {
+  const form = new FormData();
+  form.append("workspace_id", args.workspaceId);
+  form.append("name", args.name);
+  form.append("reference_text", args.referenceText);
+  form.append("file", args.file);
+  return api<Voice>("/api/voices/upload", { method: "POST", body: form });
+}
+export function deleteVoice(id: string): Promise<void> {
+  return api<void>(`/api/voices/${id}`, { method: "DELETE" });
+}
+export function synthesizeVoice(id: string, body: { text: string; project_id?: string | null }): Promise<Job> {
+  return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
+}
+export function voiceSampleUrl(id: string): string {
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/voices/${id}/sample${suffix}`;
+}
+export function listTtsModels(): Promise<TtsEngine[]> {
+  return api<TtsEngine[]>("/api/tts/models");
+}
+export function downloadTtsModel(id: string): Promise<TtsEngine> {
+  return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/download`, { method: "POST" });
+}
 export type GenerationModel = components["schemas"]["GenerationModelOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];

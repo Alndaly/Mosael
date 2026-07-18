@@ -42,6 +42,7 @@ import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
 import { SubtitlePanel } from "./SubtitlePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
+import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 
 export function EditorView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
@@ -58,13 +59,14 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
 
 const PANEL_SIZES_KEY = "mibu.editor.panels.v2";
 
-type LeftTab = "media" | "transcript" | "subtitle";
+type LeftTab = "media" | "transcript" | "subtitle" | "voice";
 
 /** 素材是缩略图列表,窄即可;逐字稿是整篇文档,需要宽栏。宽度按页签分别记忆。 */
 const LEFT_WIDTH_BOUNDS: Record<LeftTab, { min: number; max: number; fallback: number }> = {
   media: { min: 180, max: 480, fallback: 252 },
   transcript: { min: 300, max: 620, fallback: 420 },
   subtitle: { min: 240, max: 520, fallback: 320 },
+  voice: { min: 240, max: 520, fallback: 320 },
 };
 
 interface PanelSizes {
@@ -99,13 +101,14 @@ function readPanelSizes(): PanelSizes {
         media: clampLeft("media", parsed.left?.media),
         transcript: clampLeft("transcript", parsed.left?.transcript),
         subtitle: clampLeft("subtitle", parsed.left?.subtitle),
+        voice: clampLeft("voice", parsed.left?.voice),
       },
       right: Math.min(480, Math.max(200, Number(parsed.right) || 264)),
       timeline: Math.min(560, Math.max(160, Number(parsed.timeline) || 252)),
     };
   } catch {
     return {
-      left: { media: 252, transcript: 420, subtitle: 320 },
+      left: { media: 252, transcript: 420, subtitle: 320, voice: 320 },
       right: 264,
       timeline: 252,
     };
@@ -566,6 +569,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onAddToTimeline={addAssetToTimeline}
           tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />}
         />
+      ) : leftTab === "voice" ? (
+        <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
       ) : (
         <section className="panel media-panel">
           <div className="panel-head">
@@ -687,8 +692,8 @@ function LeftTabs({
   tab,
   onChange,
 }: {
-  tab: "media" | "transcript" | "subtitle";
-  onChange: (tab: "media" | "transcript" | "subtitle") => void;
+  tab: LeftTab;
+  onChange: (tab: LeftTab) => void;
 }) {
   const t = useI18n();
   return (
@@ -713,6 +718,13 @@ function LeftTabs({
         onClick={() => onChange("subtitle")}
       >
         {t("subtitleTab")}
+      </button>
+      <button
+        type="button"
+        className={tab === "voice" ? "panel-tab active" : "panel-tab"}
+        onClick={() => onChange("voice")}
+      >
+        {t("voiceTab")}
       </button>
     </div>
   );
