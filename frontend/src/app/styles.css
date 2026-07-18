@@ -3440,6 +3440,39 @@
   font-size: 12px;
 }
 
+/* shadcn Form primitives (react-hook-form). One field = label + control +
+   description/message, on the global 4px rhythm. Scoped under .form-item
+   (0,2,0) so container `X p`/`X label` rules can't override the colours. */
+.form-item {
+  display: grid;
+  gap: 5px;
+}
+
+.form-item .form-label {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.form-item .form-label-error {
+  color: var(--destructive);
+}
+
+.form-item .form-description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.form-item .form-message {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .login-switch {
   border: none;
   background: none;

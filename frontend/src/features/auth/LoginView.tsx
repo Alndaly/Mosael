@@ -1,50 +1,74 @@
 import React from "react";
 import { Film } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ServerPicker } from "@/components/layout/ServerPicker";
+import type { MessageKey } from "@/app/messages";
+
+type LoginValues = { username: string; password: string; confirm: string };
+
+/** Map a raw API error body to a friendly, accurate message — instead of always
+ * blaming the credentials (a server/network error is not a wrong password). */
+function friendlyAuthError(raw: string, mode: "login" | "register", t: (key: MessageKey) => string): string {
+  try {
+    const detail = (JSON.parse(raw) as { detail?: unknown }).detail;
+    if (typeof detail === "string" && detail.toLowerCase().includes("exists")) return t("usernameTaken");
+  } catch {
+    /* not JSON (e.g. network failure) → fall through */
+  }
+  if (!raw || raw.toLowerCase().includes("failed to fetch") || raw.toLowerCase().includes("networkerror")) {
+    return t("loginNetworkError");
+  }
+  return mode === "login" ? t("loginFailed") : t("registerFailed");
+}
 
 export function LoginView() {
   const t = useI18n();
   const { hasUsers, login, register } = useAuth();
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [confirm, setConfirm] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
-  const [busy, setBusy] = React.useState(false);
+
+  const schema = React.useMemo(() => {
+    const base = z.object({
+      username: z.string().min(1, t("fieldRequired")),
+      password: z.string().min(4, t("passwordTooShort")),
+      confirm: z.string(),
+    });
+    return mode === "register"
+      ? base.refine((data) => data.password === data.confirm, { message: t("passwordMismatch"), path: ["confirm"] })
+      : base;
+  }, [mode, t]);
+
+  const form = useForm<LoginValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { username: "", password: "", confirm: "" },
+    mode: "onSubmit",
+  });
 
   React.useEffect(() => {
     setMode(hasUsers ? "login" : "register");
   }, [hasUsers]);
 
-  const mismatch = mode === "register" && confirm.length > 0 && confirm !== password;
-  const canSubmit = Boolean(username && password && (mode === "login" || confirm === password));
-
   const switchMode = () => {
-    setMode(mode === "login" ? "register" : "login");
-    setConfirm("");
-    setError(null);
+    setMode((current) => (current === "login" ? "register" : "login"));
+    form.reset();
   };
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!canSubmit) return;
-    setBusy(true);
-    setError(null);
+  const onSubmit = form.handleSubmit(async (values) => {
     try {
-      if (mode === "login") await login(username, password);
-      else await register(username, password);
+      if (mode === "login") await login(values.username, values.password);
+      else await register(values.username, values.password);
     } catch (err) {
-      setError(mode === "login" ? t("loginFailed") : t("registerFailed"));
-    } finally {
-      setBusy(false);
+      form.setError("root", { message: friendlyAuthError((err as Error).message, mode, t) });
     }
-  };
+  });
 
   return (
     <div className="center">
@@ -57,37 +81,62 @@ export function LoginView() {
             <h1>Mibu</h1>
             <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
           </div>
-          <form className="login-form" onSubmit={submit}>
-            <Input
-              autoFocus
-              placeholder={t("username")}
-              value={username}
-              autoComplete="username"
-              onChange={(event) => setUsername(event.target.value)}
-            />
-            <Input
-              type="password"
-              placeholder={t("password")}
-              value={password}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-            {mode === "register" && (
-              <Input
-                type="password"
-                placeholder={t("confirmPassword")}
-                value={confirm}
-                autoComplete="new-password"
-                aria-invalid={mismatch}
-                onChange={(event) => setConfirm(event.target.value)}
+          <Form {...form}>
+            <form className="login-form" onSubmit={onSubmit} noValidate>
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input autoFocus placeholder={t("username")} autoComplete="username" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            )}
-            {mismatch && <p className="login-error">{t("passwordMismatch")}</p>}
-            {error && <p className="login-error">{error}</p>}
-            <Button type="submit" disabled={busy || !canSubmit}>
-              {mode === "login" ? t("signIn") : t("createAccount")}
-            </Button>
-          </form>
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder={t("password")}
+                        autoComplete={mode === "login" ? "current-password" : "new-password"}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {mode === "register" && (
+                <FormField
+                  control={form.control}
+                  name="confirm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder={t("confirmPassword")}
+                          autoComplete="new-password"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {form.formState.errors.root && <p className="login-error">{form.formState.errors.root.message}</p>}
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {mode === "login" ? t("signIn") : t("createAccount")}
+              </Button>
+            </form>
+          </Form>
           <button type="button" className="login-switch" onClick={switchMode}>
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
