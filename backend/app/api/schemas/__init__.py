@@ -389,6 +389,34 @@ class KbEmbeddingConfigUpdate(BaseModel):
     dim: int = Field(ge=1, le=8192)
 
 
+class VoiceOut(BaseModel):
+    id: str
+    name: str
+    reference_text: str = ""
+    source: str = "upload"
+    source_speaker: str | None = None
+    has_reference: bool = True
+    created_at: datetime
+
+
+class TtsEngineOut(BaseModel):
+    id: str
+    label: str
+    detail: str
+    status: str
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    expected_bytes: int = 0
+    speed_bps: float = 0.0
+    eta_seconds: float | None = None
+    message: str = ""
+
+
+class SynthesizeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    project_id: str | None = None
+
+
 class AsrModelOut(BaseModel):
     id: str
     engine: str
