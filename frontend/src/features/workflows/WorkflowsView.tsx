@@ -1,5 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useStore } from "zustand";
 import {
   Background,
   Controls,
@@ -38,8 +39,10 @@ import {
   Play,
   Plus,
   Rocket,
+  Redo2,
   Save,
   Search,
+  Undo2,
   Sparkles,
   Trash2,
   Type,
@@ -77,6 +80,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
+import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import {
   analyzeWorkflow,
   extractRefs,
@@ -477,11 +481,57 @@ function WorkflowEditor({
   const qc = useQueryClient();
   const registry = React.useMemo(() => new Map(nodeTypes.map((item) => [item.type, item])), [nodeTypes]);
 
-  // graph 是唯一事实:configs/names 存这里;React Flow 只管几何与选中。
-  const [graph, setGraph] = React.useState<WorkflowGraph>(() => structuredClone(workflow.graph as unknown as WorkflowGraph));
+  // graph 是唯一事实(configs/names);放进 zustand+zundo store 拿撤销/重做,React Flow 只管几何与选中。
+  // 每个 WorkflowEditor 一个 store(按 workflow.id 重挂),历史不跨工作流。
+  const graphStoreRef = React.useRef<ReturnType<typeof createWorkflowGraphStore> | null>(null);
+  if (graphStoreRef.current === null) {
+    graphStoreRef.current = createWorkflowGraphStore(structuredClone(workflow.graph as unknown as WorkflowGraph));
+  }
+  const graphStore = graphStoreRef.current;
+  const graph = useStore(graphStore, (s) => s.graph);
+  const setGraph = useStore(graphStore, (s) => s.setGraph);
+  const canUndo = useStore(graphStore.temporal, (s) => s.pastStates.length > 0);
+  const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph));
   const [dirty, setDirty] = React.useState(false);
+
+  // 撤销/重做:temporal 改的是 store.graph,再从新 graph 重建 React Flow 的 nodes/edges。
+  const syncFromGraph = React.useCallback(() => {
+    const next = graphStore.getState().graph;
+    setNodes(toFlowNodes(next, registry));
+    setEdges(toFlowEdges(next));
+    setDirty(true);
+  }, [graphStore, registry]);
+  const undo = React.useCallback(() => {
+    if (graphStore.temporal.getState().pastStates.length === 0) return;
+    graphStore.temporal.getState().undo();
+    syncFromGraph();
+  }, [graphStore, syncFromGraph]);
+  const redo = React.useCallback(() => {
+    if (graphStore.temporal.getState().futureStates.length === 0) return;
+    graphStore.temporal.getState().redo();
+    syncFromGraph();
+  }, [graphStore, syncFromGraph]);
+
+  // Cmd/Ctrl+Z 撤销,Cmd+Shift+Z / Ctrl+Y 重做;输入框 / 代码编辑器(contenteditable)内不劫持。
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((key === "z" && event.shiftKey) || key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -795,6 +845,13 @@ function WorkflowEditor({
                 ))}
             </SelectContent>
           </Select>
+          <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
+            <Undo2 size={14} />
+          </Button>
+          <Button variant="ghost" size="icon-sm" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
+            <Redo2 size={14} />
+          </Button>
+          <div className="wf-toolbar-sep" />
           <Button
             variant={agentOpen ? "secondary" : "outline"}
             size="sm"
