@@ -153,18 +153,23 @@ export function ProviderProfilesSection() {
         >
           <label className="wf-field">
             <span>{t("providerVendorLabel")}</span>
-            <Select value={vendor} onValueChange={setVendor} disabled={editing !== null}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(vendors.data ?? []).map((preset) => (
-                  <SelectItem key={preset.vendor} value={preset.vendor}>
-                    {preset.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {editing ? (
+              // 供应商类型是解析主键、编辑时不可改;直接只读显示,避免非预设 vendor 的空下拉
+              <Input value={vendorLabel(vendor)} disabled readOnly />
+            ) : (
+              <Select value={vendor} onValueChange={setVendor}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(vendors.data ?? []).map((preset) => (
+                    <SelectItem key={preset.vendor} value={preset.vendor}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </label>
           <label className="wf-field">
             <span>{t("providerNameLabel")}</span>
