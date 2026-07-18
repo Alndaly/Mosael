@@ -769,14 +769,19 @@
   color: var(--muted-foreground);
 }
 
+/* 绝对定位让 img 脱离网格流:否则竖图的固有高度会把 grid 行撑高、压过 aspect-ratio,
+   封面就超出 16:9(视频恰好 ~16:9 所以看不出,竖图/二维码才暴露)。脱流后高度只由
+   aspect-ratio 决定,内容再也撑不高盒子。 */
 .asset-thumb img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
 /* 图片可能是竖图/极端比例(如二维码 1080×1605):在固定 16:9 封面框里 contain 完整显示,
-   而不是 cover 裁成看不清的横条。封面高度由 aspect-ratio 统一封顶,网格保持整齐。 */
+   而不是 cover 裁成看不清的横条。 */
 .asset-thumb[data-kind="image"] img {
   object-fit: contain;
 }
