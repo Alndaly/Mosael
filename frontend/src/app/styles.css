@@ -2941,6 +2941,10 @@
   resize: none;
   outline: none;
 }
+.chat-composer textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1; /* Firefox 默认给 placeholder 降透明度,显式置 1 保持一致 */
+}
 
 .chat-attachments {
   border-top: none;
