@@ -16,6 +16,7 @@ from app.api.schemas import (
     KbDocumentCreate,
     KbDocumentOut,
     KbDocumentUpdate,
+    KbGraphOut,
     KbRetrievalTestRequest,
     KbSearchResultOut,
     KbStatusOut,
@@ -377,6 +378,26 @@ def retrieval_test(
 def search_dataset(dataset_id: str, q: str, db: DbSession, user: CurrentUser, limit: int = 8) -> list[dict]:
     dataset = _require_dataset(db, user, dataset_id)
     return kb.search(db, dataset, q, top_k=max(1, min(50, limit)))
+
+
+# ---------- 知识图谱可视化 ----------
+
+
+@router.get("/kb/datasets/{dataset_id}/graph", response_model=KbGraphOut)
+def dataset_graph(dataset_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """整库知识图谱(文档↔实体二部图),给前端力导向可视化。未配 Neo4j 时 enabled=False。"""
+    _require_dataset(db, user, dataset_id)
+    doc_ids = list(
+        db.scalars(select(KbDocument.id).where(KbDocument.dataset_id == dataset_id))
+    )
+    return kb_graph.graph_overview(doc_ids)
+
+
+@router.get("/kb/documents/{document_id}/graph", response_model=KbGraphOut)
+def document_graph(document_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """单文档子图。"""
+    document = _require_document(db, user, document_id)
+    return kb_graph.graph_overview([document.id])
 
 
 @router.get("/kb/status", response_model=KbStatusOut)

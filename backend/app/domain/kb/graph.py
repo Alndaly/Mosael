@@ -124,6 +124,45 @@ def delete_document_graph(document_id: str) -> None:
         logger.exception("KB graph delete failed")
 
 
+def graph_overview(document_ids: list[str], *, limit: int = 300) -> dict[str, Any]:
+    """给可视化用的二部图:文档节点 + 实体节点 + 文档→实体(提及)边,限定在给定文档集内。
+    返回 {enabled, nodes, edges};未配 Neo4j 或出错则 enabled=False/空。"""
+    if not graph_tier_enabled() or not document_ids:
+        return {"enabled": graph_tier_enabled(), "nodes": [], "edges": []}
+    try:
+        with _get_driver().session() as session:
+            records = session.run(
+                "MATCH (d:Document)-[:HAS_CHUNK]->(:Chunk)-[:MENTIONS]->(e:Entity) "
+                "WHERE d.id IN $docs "
+                "RETURN d.id AS doc_id, d.title AS doc_title, e.name AS ent_name, "
+                "e.type AS ent_type, count(*) AS weight "
+                "ORDER BY weight DESC LIMIT $limit",
+                docs=document_ids, limit=limit,
+            )
+            nodes: dict[str, dict[str, Any]] = {}
+            edges: list[dict[str, Any]] = []
+            for record in records:
+                doc_key = f"doc:{record['doc_id']}"
+                ent_key = f"ent:{record['ent_name']}"
+                nodes[doc_key] = {
+                    "id": doc_key,
+                    "label": record["doc_title"] or record["doc_id"],
+                    "kind": "document",
+                    "ref": record["doc_id"],
+                }
+                nodes[ent_key] = {
+                    "id": ent_key,
+                    "label": record["ent_name"],
+                    "kind": "entity",
+                    "entity_type": record["ent_type"] or "",
+                }
+                edges.append({"source": doc_key, "target": ent_key, "weight": int(record["weight"])})
+            return {"enabled": True, "nodes": list(nodes.values()), "edges": edges}
+    except Exception:  # noqa: BLE001 - 降级路径
+        logger.exception("KB graph overview failed")
+        return {"enabled": True, "nodes": [], "edges": []}
+
+
 def expand_related_chunks(workspace_id: str, seed_document_ids: list[str], *, limit: int = 12) -> list[tuple[str, str]]:
     """种子文档 → 共享实体 → 其他文档的相关 chunk;返回 [(chunk_id, document_id)]。"""
     if not graph_tier_enabled() or not seed_document_ids:

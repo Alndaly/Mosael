@@ -186,6 +186,15 @@ def test_kb_file_import_rejects_unknown_type() -> None:
     assert response.status_code == 422
 
 
+def test_kb_graph_endpoint_degrades_without_neo4j() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    ds = _dataset(client, ws)
+    _add_note(client, ds, title="图谱", content="海边冲浪与运镜。")
+    graph = client.get(f"/api/kb/datasets/{ds}/graph").json()
+    assert graph["enabled"] is False and graph["nodes"] == [] and graph["edges"] == []
+
+
 def test_kb_convert_engine_selection(monkeypatch) -> None:
     from app.core.config import settings
     from app.domain.kb import convert

@@ -835,6 +835,26 @@ class KbRetrievalTestRequest(BaseModel):
     score_threshold: float | None = Field(default=None, ge=0, le=1)
 
 
+class KbGraphNode(BaseModel):
+    id: str
+    label: str
+    kind: str  # document|entity
+    ref: str | None = None  # document 节点的真实文档 id
+    entity_type: str | None = None
+
+
+class KbGraphEdge(BaseModel):
+    source: str
+    target: str
+    weight: int = 1
+
+
+class KbGraphOut(BaseModel):
+    enabled: bool
+    nodes: list[KbGraphNode] = Field(default_factory=list)
+    edges: list[KbGraphEdge] = Field(default_factory=list)
+
+
 class KbStatusOut(BaseModel):
     convert_engine: str
     vector_enabled: bool
