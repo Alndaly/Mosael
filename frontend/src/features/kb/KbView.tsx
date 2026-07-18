@@ -26,6 +26,7 @@ import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { KbGraphCanvas } from "@/features/kb/KbGraphCanvas";
 import { KbTiptap } from "@/features/kb/KbTiptap";
 
 type KbDataset = components["schemas"]["KbDatasetOut"];
@@ -538,18 +539,19 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
   if ((graph.data.nodes ?? []).length === 0) {
     return <EmptyState icon={<Sparkles size={20} />} title={t("kbGraphEmptyTitle")} body={t("kbGraphEmptyBody")} />;
   }
-  // 力导向可视化在下一片接入;先列出实体作为占位。
-  const entities = (graph.data.nodes ?? []).filter((n) => n.kind === "entity");
+  const entityCount = (graph.data.nodes ?? []).filter((n) => n.kind === "entity").length;
   return (
-    <div className="kb-graph-placeholder">
-      <p>{t("kbGraphEntities").replace("{n}", String(entities.length))}</p>
-      <div className="kb-graph-chips">
-        {entities.map((node) => (
-          <span key={node.id} className="tag-chip readonly">
-            {node.label}
-          </span>
-        ))}
+    <div className="kb-graph">
+      <div className="kb-graph-legend">
+        <span className="kb-graph-key kind-document">
+          <i /> {t("kbGraphDoc")}
+        </span>
+        <span className="kb-graph-key kind-entity">
+          <i /> {t("kbGraphEntity")}
+        </span>
+        <span className="kb-graph-count">{t("kbGraphEntities").replace("{n}", String(entityCount))}</span>
       </div>
+      <KbGraphCanvas nodes={graph.data.nodes ?? []} edges={graph.data.edges ?? []} />
     </div>
   );
 }

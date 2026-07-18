@@ -4794,7 +4794,7 @@
   line-height: 1.55;
 }
 
-/* 知识图谱(占位) */
+/* 知识图谱 */
 .kb-graph-state {
   display: grid;
   place-items: center;
@@ -4802,10 +4802,88 @@
   color: var(--muted-foreground);
 }
 
-.kb-graph-chips {
+.kb-graph {
+  height: 100%;
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.kb-graph-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.kb-graph-key i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.kb-graph-key.kind-document i {
+  background: var(--primary);
+}
+
+.kb-graph-key.kind-entity i {
+  background: #d97706;
+}
+
+.kb-graph-count {
+  margin-left: auto;
+}
+
+.kb-graph-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-inset);
+  touch-action: none;
+  cursor: grab;
+}
+
+.kb-graph-svg:active {
+  cursor: grabbing;
+}
+
+.kb-graph-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.kb-graph-node {
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+
+.kb-graph-node circle {
+  stroke: var(--card);
+  stroke-width: 1.5;
+}
+
+.kb-graph-node.kind-document circle {
+  fill: var(--primary);
+}
+
+.kb-graph-node.kind-entity circle {
+  fill: #d97706;
+}
+
+.kb-graph-node text {
+  fill: var(--foreground);
+  font-size: 10px;
+  pointer-events: none;
 }
 
 /* 设置:分组卡片,不再是一列裸输入 */
