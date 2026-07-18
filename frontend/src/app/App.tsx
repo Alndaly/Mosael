@@ -183,15 +183,54 @@ function AuthGate() {
   return <WorkspaceGate />;
 }
 
+const ACTIVE_WORKSPACE_KEY = "mibu:workspace";
+
+function readStoredWorkspaceId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistWorkspaceId(id: string) {
+  try {
+    localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
+  } catch {
+    /* 隐私模式:退化为内存态 */
+  }
+}
+
 function WorkspaceGate() {
   const t = useI18n();
   const qc = useQueryClient();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/api/workspaces") });
+  // The active workspace is persisted so a refresh — or a newer workspace appearing at
+  // list[0] (newest first) — can't switch the user out of the workspace their jobs/projects live in.
+  const [activeId, setActiveId] = React.useState<string | null>(readStoredWorkspaceId);
   const createWorkspace = useMutation({
     mutationFn: () => api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name: t("workspaceDefault") }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workspaces"] }),
+    onSuccess: (created) => {
+      persistWorkspaceId(created.id);
+      setActiveId(created.id);
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+    },
   });
-  const workspace = workspaces.data?.[0] ?? null;
+  const list = workspaces.data;
+  const workspace = list?.find((item) => item.id === activeId) ?? list?.[0] ?? null;
+
+  // Stamp the resolved workspace so the very first load (empty storage) pins list[0].
+  React.useEffect(() => {
+    if (workspace && workspace.id !== activeId) {
+      persistWorkspaceId(workspace.id);
+      setActiveId(workspace.id);
+    }
+  }, [workspace, activeId]);
+
+  const selectWorkspace = React.useCallback((id: string) => {
+    persistWorkspaceId(id);
+    setActiveId(id);
+  }, []);
 
   if (workspaces.isLoading) return <div className="center">{t("connecting")}</div>;
   if (!workspace) {
@@ -210,7 +249,7 @@ function WorkspaceGate() {
       </div>
     );
   }
-  return <Studio workspace={workspace} />;
+  return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
 }
 
 const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "batch", "publish", "kb", "settings", "workflows", "scheduler", "plugins"];
@@ -230,10 +269,29 @@ function writeHash(view: StudioView, projectId: string | null) {
   if (window.location.hash !== next) window.history.replaceState(null, "", next);
 }
 
-function Studio({ workspace }: { workspace: Workspace }) {
+function Studio({
+  workspace,
+  workspaces,
+  onSelectWorkspace,
+}: {
+  workspace: Workspace;
+  workspaces: Workspace[];
+  onSelectWorkspace: (id: string) => void;
+}) {
   const initial = React.useMemo(readHash, []);
   const [view, setView] = React.useState<StudioView>(initial.view);
   const [projectId, setProjectId] = React.useState<string | null>(initial.projectId);
+
+  // Switching workspaces: the open project belongs to the previous workspace, so
+  // drop it and return home. The ref skips the initial mount (hash restore).
+  const lastWorkspaceRef = React.useRef(workspace.id);
+  React.useEffect(() => {
+    if (lastWorkspaceRef.current !== workspace.id) {
+      lastWorkspaceRef.current = workspace.id;
+      setProjectId(null);
+      setView("home");
+    }
+  }, [workspace.id]);
 
   React.useEffect(() => {
     writeHash(view, projectId);
@@ -265,6 +323,8 @@ function Studio({ workspace }: { workspace: Workspace }) {
       onViewChange={setView}
       workspaceId={workspace.id}
       workspaceName={workspace.name}
+      workspaces={workspaces}
+      onSelectWorkspace={onSelectWorkspace}
       projectName={project?.name ?? null}
     >
       {view === "home" && <HomeView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}

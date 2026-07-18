@@ -2,6 +2,7 @@ export const messages = {
   "zh-CN": {
     // Shell
     workspaceDefault: "默认工作区",
+    workspaceSwitch: "切换工作区",
     projectDefault: "第一个项目",
     connecting: "正在连接后端...",
     welcomeText: "先创建一个工作区，开始搭建新的 AI 视频创作工作台。",
@@ -842,6 +843,7 @@ export const messages = {
   "en-US": {
     // Shell
     workspaceDefault: "Default workspace",
+    workspaceSwitch: "Switch workspace",
     projectDefault: "First project",
     connecting: "Connecting to backend...",
     welcomeText: "Create a workspace to start building the new AI video studio.",

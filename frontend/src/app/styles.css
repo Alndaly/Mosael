@@ -332,6 +332,83 @@
   color: var(--border-strong);
 }
 
+/* 面包屑首段的工作区切换器:静态时和纯文本一样,可点时露出小箭头。 */
+.topbar-ws-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  margin: 0 -4px;
+  padding: 3px 4px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.topbar-ws-trigger:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.topbar-ws-trigger svg {
+  color: var(--muted-foreground);
+}
+
+.topbar-ws-pop {
+  width: 240px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.topbar-ws-head {
+  padding: 4px 8px 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.topbar-ws-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 7px 8px;
+  color: var(--foreground);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.topbar-ws-item:hover {
+  background: var(--secondary);
+}
+
+.topbar-ws-item.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.topbar-ws-item .topbar-ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-ws-item svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
 /* 顶栏全局搜索按钮(⌘K) */
 .topbar-search {
   display: inline-flex;

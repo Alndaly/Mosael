@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent
-from app.domain.jobs import clear_finished_jobs, prune_task_events
+from app.domain.jobs import clear_finished_jobs, prune_task_events, reconcile_orphaned_jobs
 from tests.util import fresh_client
 
 
@@ -55,3 +55,28 @@ def test_job_events_endpoint_and_clear_finished() -> None:
     assert result == {"removed": 1}
     remaining = client.get(f"/api/jobs?workspace_id={ws['id']}").json()
     assert [job["id"] for job in remaining] == [running_id]
+
+
+def test_reconcile_orphaned_jobs_on_restart() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        running = seed_job(db, ws["id"], status="running", events=1)
+        queued = Job(workspace_id=ws["id"], kind="transcribe", status="queued", message="x")
+        # Publish jobs run on the external desktop worker — a backend restart must NOT fail them.
+        publish = Job(workspace_id=ws["id"], kind="publish", status="running", message="x")
+        done = seed_job(db, ws["id"], status="succeeded", events=1)
+        db.add_all([queued, publish])
+        db.commit()
+        ids = (running.id, queued.id, publish.id, done.id)
+
+    with SessionLocal() as db:
+        assert reconcile_orphaned_jobs(db) == 2  # running + queued in-process jobs
+
+    with SessionLocal() as db:
+        states = {jid: db.get(Job, jid).status for jid in ids}
+    running_id, queued_id, publish_id, done_id = ids
+    assert states[running_id] == "failed"
+    assert states[queued_id] == "failed"
+    assert states[publish_id] == "running"    # external worker untouched
+    assert states[done_id] == "succeeded"     # already terminal, left alone

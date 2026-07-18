@@ -15,6 +15,13 @@ TERMINAL_KEEP_EVENTS = 5
 EVENT_RETENTION_DAYS = 30
 
 
+# Publish jobs are driven by the external desktop worker (a separate Electron
+# process that polls the publish-worker endpoint), so they can legitimately stay
+# "running" across a backend restart. Every other kind runs in an in-process
+# daemon thread that dies with the process — those are orphaned by a restart.
+EXTERNAL_WORKER_KINDS = ("publish",)
+
+
 def create_job(
     db: Session,
     *,
@@ -28,6 +35,28 @@ def create_job(
     db.flush()
     db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))
     return job
+
+
+def reconcile_orphaned_jobs(db: Session) -> int:
+    """Fail in-process jobs left `queued`/`running` by a backend restart.
+
+    Their daemon-thread workers cannot survive the process, so they would
+    otherwise sit frozen at their last progress forever. Publish jobs are exempt
+    (external worker). Returns the number of jobs reconciled.
+    """
+    stale = db.scalars(
+        select(Job)
+        .where(Job.status.in_(("queued", "running")))
+        .where(Job.kind.notin_(EXTERNAL_WORKER_KINDS))
+    ).all()
+    for job in stale:
+        job.status = "failed"
+        job.message = "已中断"
+        job.error = "后端重启导致任务中断,请重新发起"
+        db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
+    if stale:
+        db.commit()
+    return len(stale)
 
 
 def cancel_job(db: Session, job: Job) -> Job:

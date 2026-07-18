@@ -3,6 +3,8 @@ import {
   BookOpen,
   Bot,
   CalendarClock,
+  Check,
+  ChevronsUpDown,
   FolderOpen,
   Home,
   Languages,
@@ -19,6 +21,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import type { Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -68,6 +71,8 @@ export function AppShell({
   onViewChange,
   workspaceId,
   workspaceName,
+  workspaces = [],
+  onSelectWorkspace,
   projectName,
   actions,
   children,
@@ -76,6 +81,8 @@ export function AppShell({
   onViewChange: (view: StudioView) => void;
   workspaceId?: string;
   workspaceName: string;
+  workspaces?: Workspace[];
+  onSelectWorkspace?: (id: string) => void;
   projectName: string | null;
   actions?: React.ReactNode;
   children: React.ReactNode;
@@ -96,7 +103,12 @@ export function AppShell({
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
             <div className="topbar-crumb">
-              <span className="topbar-crumb-ws">{displayWorkspaceName(workspaceName, t)}</span>
+              <WorkspaceSwitcher
+                workspaceId={workspaceId}
+                workspaceName={workspaceName}
+                workspaces={workspaces}
+                onSelectWorkspace={onSelectWorkspace}
+              />
               <span className="topbar-sep">/</span>
               <h1 className={scoped ? "topbar-crumb-page muted" : "topbar-crumb-page"}>{pageLabel}</h1>
               {scoped && (
@@ -185,6 +197,55 @@ export function AppShell({
       </aside>
       <main className="shell-content">{children}</main>
     </div>
+  );
+}
+
+/** 面包屑首段的工作区切换器。单一工作区时退化为纯文本(无多余下拉);
+    多工作区时给一个 Popover 列表——这样任务/项目落在非首个工作区里也能被切回去。 */
+function WorkspaceSwitcher({
+  workspaceId,
+  workspaceName,
+  workspaces,
+  onSelectWorkspace,
+}: {
+  workspaceId?: string;
+  workspaceName: string;
+  workspaces: Workspace[];
+  onSelectWorkspace?: (id: string) => void;
+}) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+
+  if (workspaces.length < 2 || !onSelectWorkspace) {
+    return <span className="topbar-crumb-ws">{displayWorkspaceName(workspaceName, t)}</span>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="topbar-crumb-ws topbar-ws-trigger" aria-label={t("workspaceSwitch")}>
+          {displayWorkspaceName(workspaceName, t)}
+          <ChevronsUpDown size={12} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="topbar-ws-pop" align="start" sideOffset={8}>
+        <div className="topbar-ws-head">{t("workspaceSwitch")}</div>
+        {workspaces.map((ws) => (
+          <button
+            key={ws.id}
+            type="button"
+            className={ws.id === workspaceId ? "topbar-ws-item active" : "topbar-ws-item"}
+            onClick={() => {
+              setOpen(false);
+              if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
+            }}
+          >
+            <span className="topbar-ws-name">{displayWorkspaceName(ws.name, t)}</span>
+            {ws.id === workspaceId && <Check size={13} />}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }
 
