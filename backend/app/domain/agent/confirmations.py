@@ -167,15 +167,27 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     if confirmation.tool in ("generate_image", "generate_video"):
         from app.domain.generation import create_generation_job, ensure_builtin_generation_models
         from app.domain.generation.runner import start_generation_thread
+        from app.domain.provider_defaults import resolve_default
 
         ensure_builtin_generation_models(db)
         kind = "image" if confirmation.tool == "generate_image" else "video"
+        provider = str(payload.get("provider", "")).strip()
+        model = str(payload.get("model", "")).strip()
+        # 未显式指定(或仍是 mock)时,取该能力配置的默认供应商;都没有再回退 mock
+        if not provider or provider == "mock":
+            default_profile, default_model = resolve_default(db, kind)
+            if default_profile is not None and default_model:
+                provider, model = default_profile.vendor, default_model
+        if not provider:
+            provider = "mock"
+        if not model:
+            model = f"mock-{kind}"
         generation, job = create_generation_job(
             db,
             workspace_id=confirmation.workspace_id,
             project_id=payload.get("project_id"),
-            provider=str(payload.get("provider", "mock")),
-            model=str(payload.get("model", f"mock-{kind}")),
+            provider=provider,
+            model=model,
             kind=kind,
             prompt=str(payload["prompt"]),
             parameters=dict(payload.get("parameters") or {}),

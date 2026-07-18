@@ -159,7 +159,7 @@ export function buildMutationTools(apiBase: string, token: string, workspaceId: 
     {
       name: "generate_image",
       label: "生成图片",
-      description: "根据提示词生成图片素材(有 AI 成本,需用户确认)。批准后素材落入素材池。",
+      description: "根据提示词生成图片素材(有 AI 成本,需用户确认)。不传 provider/model 则用设置里的默认图像供应商。批准后素材落入素材池。",
       parameters: Type.Object({
         prompt: Type.String({ description: "图片描述" }),
         model: Type.Optional(Type.String()),
@@ -170,7 +170,7 @@ export function buildMutationTools(apiBase: string, token: string, workspaceId: 
         return jsonResult(
           await propose(
             "generate_image",
-            { prompt: p.prompt, provider: p.provider || "mock", model: p.model || "mock-image", parameters: {} },
+            { prompt: p.prompt, provider: p.provider || "", model: p.model || "", parameters: {} },
             signal,
           ),
         );
@@ -179,7 +179,7 @@ export function buildMutationTools(apiBase: string, token: string, workspaceId: 
     {
       name: "generate_video",
       label: "生成视频",
-      description: "根据提示词生成视频素材(有 AI 成本,需用户确认)。",
+      description: "根据提示词生成视频素材(有 AI 成本,需用户确认)。不传 provider/model 则用设置里的默认视频供应商。",
       parameters: Type.Object({
         prompt: Type.String({ description: "视频描述" }),
         model: Type.Optional(Type.String()),
@@ -190,7 +190,7 @@ export function buildMutationTools(apiBase: string, token: string, workspaceId: 
         return jsonResult(
           await propose(
             "generate_video",
-            { prompt: p.prompt, provider: p.provider || "mock", model: p.model || "mock-video", parameters: {} },
+            { prompt: p.prompt, provider: p.provider || "", model: p.model || "", parameters: {} },
             signal,
           ),
         );
