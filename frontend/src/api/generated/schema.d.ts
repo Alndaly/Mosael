@@ -1661,6 +1661,27 @@ export interface paths {
         patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Provider Models
+         * @description 列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
+         *     取不到时回退到该供应商的默认模型,保证选择器至少有一项。
+         */
+        get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/kb-embedding": {
         parameters: {
             query?: never;
@@ -2049,8 +2070,8 @@ export interface paths {
         delete: operations["delete_agent_session_api_agent_sessions__session_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Agent Session */
-        patch: operations["rename_agent_session_api_agent_sessions__session_id__patch"];
+        /** Update Agent Session */
+        patch: operations["update_agent_session_api_agent_sessions__session_id__patch"];
         trace?: never;
     };
     "/api/agent/sessions/{session_id}/stream": {
@@ -2212,6 +2233,10 @@ export interface components {
             title: string;
             /** Adapter */
             adapter?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
         };
         /** AgentSessionOut */
         AgentSessionOut: {
@@ -2227,6 +2252,10 @@ export interface components {
             origin: string;
             /** Adapter */
             adapter: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
             /** Status */
             status: string;
             /**
@@ -2239,6 +2268,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AgentSessionUpdate */
+        AgentSessionUpdate: {
+            /** Title */
+            title?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
         };
         /** AgentSkillOut */
         AgentSkillOut: {
@@ -7891,6 +7929,37 @@ export interface operations {
             };
         };
     };
+    list_provider_models_api_settings_providers__profile_id__models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_kb_embedding_api_settings_kb_embedding_get: {
         parameters: {
             query?: never;
@@ -8927,7 +8996,7 @@ export interface operations {
             };
         };
     };
-    rename_agent_session_api_agent_sessions__session_id__patch: {
+    update_agent_session_api_agent_sessions__session_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -8938,7 +9007,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RenameRequest"];
+                "application/json": components["schemas"]["AgentSessionUpdate"];
             };
         };
         responses: {

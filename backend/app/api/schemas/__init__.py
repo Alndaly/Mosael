@@ -671,6 +671,14 @@ class AgentSessionCreate(BaseModel):
     project_id: str | None = None
     title: str = Field(default="新对话", max_length=200)
     adapter: str | None = Field(default=None, pattern="^(claude|opencode|pi)$")
+    provider_profile_id: str | None = None
+    model: str | None = Field(default=None, max_length=120)
+
+
+class AgentSessionUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    provider_profile_id: str | None = None
+    model: str | None = Field(default=None, max_length=120)
 
 
 class AgentSessionOut(OrmModel):
@@ -680,6 +688,8 @@ class AgentSessionOut(OrmModel):
     title: str
     origin: str
     adapter: str
+    provider_profile_id: str | None = None
+    model: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime

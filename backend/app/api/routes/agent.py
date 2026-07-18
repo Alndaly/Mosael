@@ -10,12 +10,12 @@ from sqlalchemy import select
 from app.ai.agent import host
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
-    RenameRequest,
     AgentManifestOut,
     AgentMessageCreate,
     AgentMessageOut,
     AgentSessionCreate,
     AgentSessionOut,
+    AgentSessionUpdate,
     AgentSkillOut,
     PromptSkillOut,
 )
@@ -36,6 +36,8 @@ def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentU
         project_id=body.project_id,
         title=body.title,
         adapter=body.adapter,
+        provider_profile_id=body.provider_profile_id,
+        model=body.model,
     )
 
 
@@ -75,9 +77,14 @@ def post_agent_message(
 
 
 @router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
-def rename_agent_session(session_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> AgentSession:
+def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
     session = _require_session(db, user, session_id)
-    session.title = body.name
+    if body.title is not None:
+        session.title = body.title
+    if body.provider_profile_id is not None:
+        session.provider_profile_id = body.provider_profile_id or None
+    if body.model is not None:
+        session.model = body.model or None
     db.commit()
     db.refresh(session)
     return session

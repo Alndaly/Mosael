@@ -41,6 +41,19 @@ def _migrate_kb_schema() -> None:
                 conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 
+def _migrate_agent_sessions() -> None:
+    """加列迁移(保留对话历史):agent_sessions 增加 provider_profile_id / model。"""
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("agent_sessions")}
+    with engine.begin() as conn:
+        if "provider_profile_id" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN provider_profile_id VARCHAR(64)"))
+        if "model" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN model VARCHAR(120)"))
+
+
 def init_db() -> None:
     from app.db import models  # noqa: F401
 
@@ -48,6 +61,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_kb_schema()
+    _migrate_agent_sessions()
     Base.metadata.create_all(bind=engine)
 
 

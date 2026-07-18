@@ -93,6 +93,8 @@ def create_session(
     external_key: str | None = None,
     title: str = "新对话",
     adapter: str | None = None,
+    provider_profile_id: str | None = None,
+    model: str | None = None,
 ) -> AgentSession:
     session = AgentSession(
         workspace_id=workspace_id,
@@ -101,6 +103,8 @@ def create_session(
         external_key=external_key,
         title=title,
         adapter=adapter or default_adapter(),
+        provider_profile_id=provider_profile_id,
+        model=model or None,
     )
     db.add(session)
     db.commit()
@@ -158,16 +162,20 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             workspace_id=session.workspace_id,
             skills_index=skills_index_for_prompt() or "(暂无技能)",
         )
-        # pi 适配器需要一个对话模型:取第一个启用的供应商 + 其默认模型
+        # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
         provider_dict: dict | None = None
         agent_model: str | None = None
         if session.adapter == "pi":
-            from app.domain.providers import first_enabled_profile
+            from app.domain.providers import first_enabled_profile, resolve_profile
 
-            profile = first_enabled_profile(db)
+            profile = None
+            if session.provider_profile_id:
+                profile = resolve_profile(db, "", session.provider_profile_id)
+            if profile is None:
+                profile = first_enabled_profile(db)
             if profile is not None:
                 provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
-                agent_model = profile.default_model
+                agent_model = session.model or profile.default_model
         try:
             result: TurnResult = run_turn(
                 session.adapter,

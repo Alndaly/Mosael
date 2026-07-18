@@ -73,7 +73,7 @@ def test_agent_session_rename_and_delete() -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
 
-    renamed = client.patch(f"/api/agent/sessions/{session['id']}", json={"name": "剪辑讨论"}).json()
+    renamed = client.patch(f"/api/agent/sessions/{session['id']}", json={"title": "剪辑讨论"}).json()
     assert renamed["title"] == "剪辑讨论"
 
     assert client.delete(f"/api/agent/sessions/{session['id']}").status_code == 204

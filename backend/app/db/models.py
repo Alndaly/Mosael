@@ -495,6 +495,11 @@ class AgentSession(Base):
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
     adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="claude")
     adapter_session_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # 对话用的供应商 + 模型(pi 适配器);空则回退第一个启用供应商及其默认模型
+    provider_profile_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

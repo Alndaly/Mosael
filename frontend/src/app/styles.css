@@ -7251,6 +7251,18 @@
   line-height: 1.4;
 }
 
+/* AI Studio 对话模型选择器:composer 里紧凑呈现 */
+.model-picker-trigger {
+  height: 28px;
+  width: auto;
+  min-width: 0;
+  max-width: 220px;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
 /* Cmd+K 无结果空状态:与全局 EmptyState 同语言的紧凑版(居中 + 主色淡底图标)。 */
 .cmdk-empty {
   display: grid;

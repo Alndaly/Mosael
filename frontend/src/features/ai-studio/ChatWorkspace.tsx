@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -170,7 +171,7 @@ export function ChatWorkspace({
 
   const renameSession = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api<AgentSession>(`/api/agent/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+      api<AgentSession>(`/api/agent/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title: name }) }),
     onSuccess: () => {
       setRenamingSession(null);
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
@@ -396,6 +397,7 @@ export function ChatWorkspace({
                       {uploadAttachment.isPending ? <Loader2 size={14} className="spin" /> : <Paperclip size={14} />}
                     </label>
                   </Button>
+                  <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                 </div>
                 <Button
                   type="submit"

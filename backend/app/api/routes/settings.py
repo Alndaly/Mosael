@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 
+import httpx
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
@@ -82,6 +83,30 @@ def update_provider_profile(
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
+
+
+@router.get("/settings/providers/{profile_id}/models", response_model=list[str])
+def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[str]:
+    """列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
+    取不到时回退到该供应商的默认模型,保证选择器至少有一项。"""
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    fallback = [profile.default_model] if profile.default_model else []
+    if not profile.base_url:
+        return fallback
+    try:
+        resp = httpx.get(
+            f"{profile.base_url.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {profile.api_key}"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", [])
+        models = sorted({str(item["id"]) for item in data if item.get("id")})
+        return models or fallback
+    except Exception:  # noqa: BLE001 - 取不到就降级到默认模型
+        return fallback
 
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
