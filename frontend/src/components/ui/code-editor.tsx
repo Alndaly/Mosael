@@ -33,9 +33,14 @@ export const CodeEditor = React.forwardRef<
     minHeight?: number;
     maxHeight?: number;
     placeholder?: string;
+    /** 关掉行号/折叠槽:小 JSON 配置块用,单行时不至于挂个孤零零的行号。 */
+    gutter?: boolean;
     onBlur?: () => void;
   }
->(function CodeEditor({ value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, onBlur }, ref) {
+>(function CodeEditor(
+  { value, onChange, language, minHeight = 96, maxHeight = 320, placeholder, gutter = true, onBlur },
+  ref,
+) {
   const dark = useIsDark();
   const cmRef = React.useRef<ReactCodeMirrorRef>(null);
 
@@ -72,8 +77,8 @@ export const CodeEditor = React.forwardRef<
         maxHeight={`${maxHeight}px`}
         extensions={language === "python" ? [python()] : [json()]}
         basicSetup={{
-          lineNumbers: true,
-          foldGutter: true,
+          lineNumbers: gutter,
+          foldGutter: gutter,
           highlightActiveLine: false,
           autocompletion: false,
           highlightActiveLineGutter: false,

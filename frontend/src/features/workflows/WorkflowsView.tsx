@@ -966,7 +966,8 @@ function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unk
     <CodeEditor
       value={text}
       language="json"
-      minHeight={72}
+      minHeight={34}
+      gutter={false}
       onChange={setText}
       onBlur={() => {
         try {
