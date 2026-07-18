@@ -69,15 +69,19 @@ def init_db() -> None:
 
 
 def _migrate_clip_transform() -> None:
-    """加列迁移(保留时间线):clips 增加 transform,sequences 增加 reframe。"""
+    """加列迁移(保留时间线):clips 增加 transform,sequences 增加 reframe。
+    ALTER ADD COLUMN 会把老行留成 NULL,而 Out schema 要 dict → 必须回填 '{}'。"""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    if "clips" in tables and "transform" not in {c["name"] for c in inspector.get_columns("clips")}:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE clips ADD COLUMN transform JSON"))
-    if "sequences" in tables and "reframe" not in {c["name"] for c in inspector.get_columns("sequences")}:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE sequences ADD COLUMN reframe JSON"))
+    with engine.begin() as conn:
+        if "clips" in tables:
+            if "transform" not in {c["name"] for c in inspector.get_columns("clips")}:
+                conn.execute(text("ALTER TABLE clips ADD COLUMN transform JSON"))
+            conn.execute(text("UPDATE clips SET transform = '{}' WHERE transform IS NULL"))
+        if "sequences" in tables:
+            if "reframe" not in {c["name"] for c in inspector.get_columns("sequences")}:
+                conn.execute(text("ALTER TABLE sequences ADD COLUMN reframe JSON"))
+            conn.execute(text("UPDATE sequences SET reframe = '{}' WHERE reframe IS NULL"))
 
 
 def session_scope() -> Generator[Session, None, None]:

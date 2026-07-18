@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OrmModel(BaseModel):
@@ -175,6 +175,11 @@ class ClipOut(OrmModel):
     effects: dict
     transform: dict = Field(default_factory=dict)
 
+    @field_validator("transform", "effects", mode="before")
+    @classmethod
+    def _none_to_dict(cls, value: object) -> object:
+        return {} if value is None else value
+
 
 class TrackOut(OrmModel):
     id: str
@@ -203,6 +208,11 @@ class SequenceOut(OrmModel):
     fps: float
     reframe: dict = Field(default_factory=dict)
     revision: int
+
+    @field_validator("reframe", mode="before")
+    @classmethod
+    def _reframe_none_to_dict(cls, value: object) -> object:
+        return {} if value is None else value
     can_undo: bool = False
     can_redo: bool = False
     tracks: list[TrackOut] = Field(default_factory=list)
