@@ -189,6 +189,8 @@ class TrackOut(OrmModel):
     position: int
     locked: bool
     muted: bool
+    solo: bool = False
+    duck: bool = False
     clips: list[ClipOut] = Field(default_factory=list)
 
 
@@ -253,6 +255,8 @@ class SplitClipRequest(BaseModel):
 class SetTrackStateRequest(BaseModel):
     muted: bool | None = None
     locked: bool | None = None
+    solo: bool | None = None
+    duck: bool | None = None
 
 
 class AddTrackRequest(BaseModel):

@@ -61,7 +61,7 @@ export function Timeline({
   onSplitClip?: (clipId: string) => void;
   onSplitClipAt?: (clipId: string, srcTime: number) => void;
   onDuplicateClip?: (clipId: string) => void;
-  onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean }) => void;
+  onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -506,6 +506,24 @@ export function Timeline({
                   >
                     {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
                   </button>
+                  <button
+                    type="button"
+                    className={track.solo ? "tl-label-tool on" : "tl-label-tool"}
+                    aria-label={track.solo ? t("trackUnsolo") : t("trackSolo")}
+                    onClick={() => onSetTrackState(track.id, { solo: !track.solo })}
+                  >
+                    <span className="tl-label-badge">S</span>
+                  </button>
+                  {track.kind === "audio" && (
+                    <button
+                      type="button"
+                      className={track.duck ? "tl-label-tool on" : "tl-label-tool"}
+                      aria-label={track.duck ? t("trackUnduck") : t("trackDuck")}
+                      onClick={() => onSetTrackState(track.id, { duck: !track.duck })}
+                    >
+                      <span className="tl-label-badge">D</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={track.locked ? "tl-label-tool on" : "tl-label-tool"}

@@ -82,6 +82,12 @@ def _migrate_clip_transform() -> None:
             if "reframe" not in {c["name"] for c in inspector.get_columns("sequences")}:
                 conn.execute(text("ALTER TABLE sequences ADD COLUMN reframe JSON"))
             conn.execute(text("UPDATE sequences SET reframe = '{}' WHERE reframe IS NULL"))
+        if "tracks" in tables:
+            track_cols = {c["name"] for c in inspector.get_columns("tracks")}
+            if "solo" not in track_cols:
+                conn.execute(text("ALTER TABLE tracks ADD COLUMN solo BOOLEAN NOT NULL DEFAULT 0"))
+            if "duck" not in track_cols:
+                conn.execute(text("ALTER TABLE tracks ADD COLUMN duck BOOLEAN NOT NULL DEFAULT 0"))
 
 
 def session_scope() -> Generator[Session, None, None]:

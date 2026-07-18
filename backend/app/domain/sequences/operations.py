@@ -511,6 +511,8 @@ class SetTrackState:
     track_id: str
     muted: bool | None = None
     locked: bool | None = None
+    solo: bool | None = None
+    duck: bool | None = None
     actor_id: str | None = None
 
 
@@ -563,11 +565,15 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
         raise SequenceDomainError("Track not found")
-    previous = {"muted": track.muted, "locked": track.locked}
+    previous = {"muted": track.muted, "locked": track.locked, "solo": track.solo, "duck": track.duck}
     if op.muted is not None:
         track.muted = op.muted
     if op.locked is not None:
         track.locked = op.locked
+    if op.solo is not None:
+        track.solo = op.solo
+    if op.duck is not None:
+        track.duck = op.duck
     _record_operation(
         db,
         sequence,
@@ -576,6 +582,8 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
             "track_id": track.id,
             "muted": track.muted,
             "locked": track.locked,
+            "solo": track.solo,
+            "duck": track.duck,
             "previous": previous,
         },
         summary={"operation": "set_track_state", "track_id": track.id},

@@ -7269,6 +7269,12 @@
   line-height: 1.4;
 }
 
+.tl-label-badge {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* 剪辑检查器:片段变换控件 */
 .transform-controls {
   display: flex;

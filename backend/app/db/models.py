@@ -204,6 +204,8 @@ class Track(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    solo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    duck: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # 有其它音频时压低本轨
 
     sequence: Mapped[Sequence] = relationship(back_populates="tracks")
     clips: Mapped[list["Clip"]] = relationship(back_populates="track", cascade="all, delete-orphan", order_by="Clip.timeline_start")

@@ -3870,6 +3870,10 @@ export interface components {
             muted?: boolean | null;
             /** Locked */
             locked?: boolean | null;
+            /** Solo */
+            solo?: boolean | null;
+            /** Duck */
+            duck?: boolean | null;
         };
         /** SplitClipRequest */
         SplitClipRequest: {
@@ -3910,6 +3914,16 @@ export interface components {
             locked: boolean;
             /** Muted */
             muted: boolean;
+            /**
+             * Solo
+             * @default false
+             */
+            solo: boolean;
+            /**
+             * Duck
+             * @default false
+             */
+            duck: boolean;
             /** Clips */
             clips?: components["schemas"]["ClipOut"][];
         };

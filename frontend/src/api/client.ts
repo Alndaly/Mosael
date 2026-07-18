@@ -211,7 +211,7 @@ export function splitClip(sequenceId: string, clipId: string, srcTime: number): 
 export function setTrackState(
   sequenceId: string,
   trackId: string,
-  body: { muted?: boolean; locked?: boolean },
+  body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean },
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, {
     method: "PATCH",

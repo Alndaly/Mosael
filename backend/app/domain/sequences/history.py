@@ -154,8 +154,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_track_state":
         track = db.get(Track, payload["track_id"])
         if track is not None:
-            track.muted = payload["previous"]["muted"]
-            track.locked = payload["previous"]["locked"]
+            prev = payload["previous"]
+            track.muted, track.locked = prev["muted"], prev["locked"]
+            track.solo, track.duck = prev.get("solo", False), prev.get("duck", False)
     elif operation.kind == "add_track":
         track = db.get(Track, payload["track_id"])
         if track is not None:
@@ -218,8 +219,8 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_track_state":
         track = db.get(Track, payload["track_id"])
         if track is not None:
-            track.muted = payload["muted"]
-            track.locked = payload["locked"]
+            track.muted, track.locked = payload["muted"], payload["locked"]
+            track.solo, track.duck = payload.get("solo", False), payload.get("duck", False)
     elif operation.kind == "add_track":
         db.add(
             Track(

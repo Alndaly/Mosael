@@ -68,11 +68,16 @@ export function Inspector({
   const effects = (selectedClip?.effects ?? {}) as {
     fade_in?: number;
     fade_out?: number;
+    video_fade_in?: number;
+    video_fade_out?: number;
     filter?: string;
     color?: Partial<Record<GradeKey, number>>;
   };
 
-  const applyFade = (key: "fade_in" | "fade_out", raw: string) => {
+  const applyFade = (
+    key: "fade_in" | "fade_out" | "video_fade_in" | "video_fade_out",
+    raw: string,
+  ) => {
     if (!selectedClip) return;
     const value = Math.max(0, Number(raw) || 0);
     onSetEffects(selectedClip.id, { ...selectedClip.effects, [key]: value });
@@ -225,26 +230,52 @@ export function Inspector({
             )}
             {!isTextClip && (
               <div className="pip-controls">
-                <span className="pip-label">{t("fadeIn")}</span>
-                <input
-                  key={`fi-${selectedClip.id}`}
-                  className="fade-input"
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  defaultValue={effects.fade_in ?? 0}
-                  onBlur={(event) => applyFade("fade_in", event.target.value)}
-                />
-                <span className="pip-label">{t("fadeOut")}</span>
-                <input
-                  key={`fo-${selectedClip.id}`}
-                  className="fade-input"
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  defaultValue={effects.fade_out ?? 0}
-                  onBlur={(event) => applyFade("fade_out", event.target.value)}
-                />
+                <span className="pip-label">{t("videoFade")}</span>
+                <div className="pip-row">
+                  <input
+                    key={`vfi-${selectedClip.id}`}
+                    className="fade-input"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    defaultValue={effects.video_fade_in ?? 0}
+                    onBlur={(event) => applyFade("video_fade_in", event.target.value)}
+                    aria-label={t("fadeIn")}
+                  />
+                  <input
+                    key={`vfo-${selectedClip.id}`}
+                    className="fade-input"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    defaultValue={effects.video_fade_out ?? 0}
+                    onBlur={(event) => applyFade("video_fade_out", event.target.value)}
+                    aria-label={t("fadeOut")}
+                  />
+                </div>
+                <span className="pip-label">{t("audioFade")}</span>
+                <div className="pip-row">
+                  <input
+                    key={`fi-${selectedClip.id}`}
+                    className="fade-input"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    defaultValue={effects.fade_in ?? 0}
+                    onBlur={(event) => applyFade("fade_in", event.target.value)}
+                    aria-label={t("fadeIn")}
+                  />
+                  <input
+                    key={`fo-${selectedClip.id}`}
+                    className="fade-input"
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    defaultValue={effects.fade_out ?? 0}
+                    onBlur={(event) => applyFade("fade_out", event.target.value)}
+                    aria-label={t("fadeOut")}
+                  />
+                </div>
               </div>
             )}
             {!isTextClip && onSetTransform && (
