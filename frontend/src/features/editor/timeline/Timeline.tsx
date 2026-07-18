@@ -27,6 +27,27 @@ import { TimelineClip } from "./TimelineClip";
 const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 26;
 
+// Peaks are expensive (slice + downsample over the whole waveform) and were recomputed for
+// EVERY audio clip on EVERY dragDraft change — the drag felt laggy. Cache by the inputs that
+// actually affect the shape; during a drag only the dragged clip's key changes, the rest hit.
+function cachedPeaks(
+  cache: Map<string, number[]>,
+  assetId: string,
+  waveform: WaveformData,
+  srcIn: number,
+  srcOut: number,
+  clipWidth: number,
+): number[] {
+  const buckets = Math.max(24, Math.floor(clipWidth / 3));
+  const key = `${assetId}:${srcIn.toFixed(3)}:${srcOut.toFixed(3)}:${buckets}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const value = downsamplePeaks(slicePeaks(waveform.peaks, waveform.duration, srcIn, srcOut), buckets);
+  if (cache.size > 400) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
 export interface TrimPayload {
   timeline_start: number;
   src_in: number;
@@ -74,6 +95,7 @@ export function Timeline({
   const { setPlayhead, zoomBy, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
+  const peaksCache = React.useRef<Map<string, number[]>>(new Map());
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
   const tool = useEditorStore((state) => state.tool);
   const editMode = useEditorStore((state) => state.editMode);
@@ -697,12 +719,10 @@ export function Timeline({
                   const displayLeft = display.timeline_start + partingShift;
                   const waveform = track.kind === "audio" && clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;
                   const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
-                  const peaks = waveform
-                    ? downsamplePeaks(
-                        slicePeaks(waveform.peaks, waveform.duration, display.src_in, display.src_out),
-                        Math.max(24, Math.floor(clipWidth / 3)),
-                      )
-                    : undefined;
+                  const peaks =
+                    waveform && clip.asset_id
+                      ? cachedPeaks(peaksCache.current, clip.asset_id, waveform, display.src_in, display.src_out, clipWidth)
+                      : undefined;
                   return (
                     <TimelineClip
                       key={clip.id}

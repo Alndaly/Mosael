@@ -165,10 +165,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const sequence = sequences.data?.[0] ?? null;
 
   const refreshSequences = () => qc.invalidateQueries({ queryKey: ["sequences", project.id] });
-  const settleDraft = async () => {
-    await refreshSequences();
-    useEditorStore.getState().setDragDraft(null);
-  };
+  // Drag ops return the updated sequence — write it straight into the cache (no refetch
+  // round-trip) so the clip lands at its final spot in the SAME commit the draft clears.
+  // Awaiting an invalidate/refetch here instead left a stale-data window: the clip flashed
+  // back to its original slot/track ("闪烁 / 换轨失败") and added drop lag.
+  const applySequence = (updated: Sequence) =>
+    qc.setQueryData<Sequence[]>(["sequences", project.id], (old) =>
+      (old ?? []).map((item) => (item.id === updated.id ? updated : item)),
+    );
+  const clearDraft = () => useEditorStore.getState().setDragDraft(null);
 
   const uploadAsset = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project.id, file }),
@@ -205,12 +210,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       trackId?: string;
       ripple?: boolean;
     }) => moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
-    onSettled: settleDraft,
+    onSuccess: applySequence,
+    onError: () => void refreshSequences(),
+    onSettled: clearDraft,
   });
   const trimClipMutation = useMutation({
     mutationFn: ({ clipId, payload }: { clipId: string; payload: TrimPayload }) =>
       trimClip(sequence!.id, clipId, payload),
-    onSettled: settleDraft,
+    onSuccess: applySequence,
+    onError: () => void refreshSequences(),
+    onSettled: clearDraft,
   });
   const deleteClipMutation = useMutation({
     mutationFn: (clipId: string) => deleteClip(sequence!.id, clipId),
@@ -250,9 +259,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
       const updated = await addTrack(sequence!.id, "video");
       const created = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
-      if (created) await moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: created.id });
+      if (!created) return updated;
+      return moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: created.id });
     },
-    onSettled: settleDraft,
+    onSuccess: applySequence,
+    onError: () => void refreshSequences(),
+    onSettled: clearDraft,
   });
   const setTextMutation = useMutation({
     mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
