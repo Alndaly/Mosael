@@ -196,8 +196,16 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
   return (
     <div className="kb-dataset">
       <div className="kb-dataset-head">
-        <h2>{dataset.name}</h2>
-        {dataset.description && <p>{dataset.description}</p>}
+        <div className="kb-dataset-head-main">
+          <span className="kb-dataset-avatar">
+            <BookOpen size={16} />
+          </span>
+          <div>
+            <h2>{dataset.name}</h2>
+            {dataset.description && <p>{dataset.description}</p>}
+          </div>
+          <Badge variant="secondary">{t("kbDocCount").replace("{n}", String(dataset.document_count))}</Badge>
+        </div>
       </div>
       <Tabs defaultValue="docs" className="kb-tabs">
         <TabsList>
@@ -567,48 +575,67 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
 
   return (
     <div className="kb-settings">
-      <label className="wf-field">
-        <span>{t("kbDatasetName")}</span>
-        <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
-      </label>
-      <label className="wf-field">
-        <span>{t("kbDatasetDesc")}</span>
-        <Input value={form.description} onChange={(event) => set("description", event.target.value)} />
-      </label>
-      <div className="wf-field">
-        <span>{t("kbRetrievalMode")}</span>
-        <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fts">{t("kbModeFts")}</SelectItem>
-            <SelectItem value="hybrid">{t("kbModeHybrid")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <label className="wf-field">
-        <span>{t("kbTopK")}</span>
-        <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
-      </label>
-      <div className="kb-settings-row">
+      <section className="kb-set-group">
+        <div className="kb-set-group-title">{t("kbSetBasic")}</div>
         <label className="wf-field">
-          <span>{t("kbChunkSize")}</span>
-          <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
+          <span>{t("kbDatasetName")}</span>
+          <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
         </label>
         <label className="wf-field">
-          <span>{t("kbChunkOverlap")}</span>
-          <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
+          <span>{t("kbDatasetDesc")}</span>
+          <Input value={form.description} placeholder={t("kbDatasetDescPh")} onChange={(event) => set("description", event.target.value)} />
         </label>
-      </div>
-      <small className="kb-settings-note">{t("kbChunkNote")}</small>
-      <label className="kb-switch-row">
-        <span>
-          <strong>{t("kbGraphEnabled")}</strong>
-          <small>{t("kbGraphEnabledDesc")}</small>
-        </span>
-        <Switch checked={form.graph_enabled} onCheckedChange={(v) => set("graph_enabled", v)} />
-      </label>
+      </section>
+
+      <section className="kb-set-group">
+        <div className="kb-set-group-title">{t("kbSetRetrieval")}</div>
+        <div className="kb-settings-row">
+          <div className="wf-field">
+            <span>{t("kbRetrievalMode")}</span>
+            <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fts">{t("kbModeFts")}</SelectItem>
+                <SelectItem value="hybrid">{t("kbModeHybrid")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <label className="wf-field">
+            <span>{t("kbTopK")}</span>
+            <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
+          </label>
+        </div>
+        {form.retrieval_mode === "hybrid" && <small className="kb-settings-note">{t("kbHybridNote")}</small>}
+      </section>
+
+      <section className="kb-set-group">
+        <div className="kb-set-group-title">{t("kbSetChunk")}</div>
+        <div className="kb-settings-row">
+          <label className="wf-field">
+            <span>{t("kbChunkSize")}</span>
+            <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
+          </label>
+          <label className="wf-field">
+            <span>{t("kbChunkOverlap")}</span>
+            <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
+          </label>
+        </div>
+        <small className="kb-settings-note">{t("kbChunkNote")}</small>
+      </section>
+
+      <section className="kb-set-group">
+        <div className="kb-set-group-title">{t("kbSetEnhance")}</div>
+        <label className="kb-switch-row">
+          <span>
+            <strong>{t("kbGraphEnabled")}</strong>
+            <small>{t("kbGraphEnabledDesc")}</small>
+          </span>
+          <Switch checked={form.graph_enabled} onCheckedChange={(v) => set("graph_enabled", v)} />
+        </label>
+      </section>
+
       <div className="kb-settings-actions">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSaveSettings")}

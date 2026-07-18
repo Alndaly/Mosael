@@ -4548,15 +4548,40 @@
   gap: 12px;
 }
 
+.kb-dataset-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kb-dataset-avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.kb-dataset-head-main > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .kb-dataset-head h2 {
   font-size: 15px;
   font-weight: 650;
 }
 
 .kb-dataset-head p {
-  margin-top: 2px;
+  margin-top: 1px;
   color: var(--muted-foreground);
-  font-size: 12.5px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kb-tabs {
@@ -4783,9 +4808,28 @@
   gap: 4px;
 }
 
-/* 设置 */
+/* 设置:分组卡片,不再是一列裸输入 */
 .kb-settings {
-  max-width: 520px;
+  max-width: 560px;
+  gap: 12px;
+}
+
+.kb-set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 12px 14px;
+}
+
+.kb-set-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
 }
 
 .kb-settings-row {
