@@ -314,10 +314,22 @@ def _pick_profile(db: Session, profile_id: Any) -> ProviderProfile:
 
 
 def _handle_kb_search(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    from app.db.models import KbDataset
     from app.domain.kb import search
 
     limit = int(config.get("limit") or 5)
-    results = search(db, workflow.workspace_id, str(config.get("query", "")), limit=limit)
+    dataset_id = str(config.get("dataset_id", "")).strip()
+    dataset = db.get(KbDataset, dataset_id) if dataset_id else None
+    if dataset is None:
+        # 未指定库时退回工作区内最早的知识库,保持节点可用。
+        dataset = db.scalars(
+            select(KbDataset)
+            .where(KbDataset.workspace_id == workflow.workspace_id)
+            .order_by(KbDataset.created_at)
+        ).first()
+    if dataset is None:
+        return {"text": "", "results": []}
+    results = search(db, dataset, str(config.get("query", "")), top_k=limit)
     text = "\n\n".join(f"[{item['title']}] {item['snippet']}" for item in results)
     return {"text": text, "results": results}
 

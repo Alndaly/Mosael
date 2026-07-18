@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
@@ -26,12 +26,24 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
     cursor.close()
 
 
+def _migrate_kb_schema() -> None:
+    """KB 彻底重写(Dify 式 datasets):项目未上线,旧 kb 表直接删表重建。
+    幂等:仅当旧结构存在(有 kb_documents 却无 kb_datasets)时 DROP 一次,create_all 随后重建。"""
+    tables = set(inspect(engine).get_table_names())
+    if "kb_documents" in tables and "kb_datasets" not in tables:
+        with engine.begin() as conn:
+            # 先删子表 / FTS 虚表,再删父表(FK)
+            for table in ("kb_chunks_fts", "kb_chunks", "kb_documents"):
+                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+
+
 def init_db() -> None:
     from app.db import models  # noqa: F401
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
+    _migrate_kb_schema()
     Base.metadata.create_all(bind=engine)
 
 

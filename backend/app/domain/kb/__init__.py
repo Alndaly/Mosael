@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy import delete as sa_delete, select, text as sa_text
 from sqlalchemy.orm import Session
 
-from app.db.models import KbChunk, KbDocument
+from app.db.models import KbChunk, KbDataset, KbDocument
 from app.domain.kb import graph as kb_graph
 from app.domain.kb import vectors as kb_vectors
 
@@ -66,45 +66,64 @@ def chunk_text(text: str, *, target: int = CHUNK_TARGET_CHARS, overlap: int = CH
 def _ensure_fts(db: Session) -> None:
     db.execute(
         sa_text(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS kb_chunks_fts "
-            "USING fts5(text, chunk_id UNINDEXED, document_id UNINDEXED, workspace_id UNINDEXED, tokenize='trigram')"
+            "CREATE VIRTUAL TABLE IF NOT EXISTS kb_chunks_fts USING fts5("
+            "text, chunk_id UNINDEXED, document_id UNINDEXED, dataset_id UNINDEXED, "
+            "workspace_id UNINDEXED, tokenize='trigram')"
         )
     )
 
 
-def reindex_document(db: Session, document: KbDocument) -> int:
-    """重建该文档的 chunk 与 FTS 行;返回 chunk 数。增强层索引进后台线程。"""
+def reindex_document(db: Session, document: KbDocument, dataset: KbDataset) -> int:
+    """按 dataset 的分块设置重建该文档的 chunk 与 FTS 行;回填 chunk_count/char_count;返回 chunk 数。
+    增强层(向量/图谱)索引进后台线程,失败降级。"""
     _ensure_fts(db)
     db.execute(sa_delete(KbChunk).where(KbChunk.document_id == document.id))
     db.execute(sa_text("DELETE FROM kb_chunks_fts WHERE document_id = :doc"), {"doc": document.id})
     body = f"{document.title}\n\n{document.content}".strip()
-    pieces = chunk_text(body)
+    pieces = chunk_text(body, target=dataset.chunk_size, overlap=dataset.chunk_overlap)
     chunk_rows: list[tuple[str, str]] = []
     for index, piece in enumerate(pieces):
         chunk = KbChunk(
             workspace_id=document.workspace_id,
+            dataset_id=document.dataset_id,
             document_id=document.id,
             chunk_index=index,
             text=piece,
+            char_count=len(piece),
         )
         db.add(chunk)
         db.flush()
         chunk_rows.append((chunk.id, piece))
         db.execute(
             sa_text(
-                "INSERT INTO kb_chunks_fts (text, chunk_id, document_id, workspace_id) "
-                "VALUES (:text, :chunk_id, :document_id, :workspace_id)"
+                "INSERT INTO kb_chunks_fts (text, chunk_id, document_id, dataset_id, workspace_id) "
+                "VALUES (:text, :chunk_id, :document_id, :dataset_id, :workspace_id)"
             ),
-            {"text": piece, "chunk_id": chunk.id, "document_id": document.id, "workspace_id": document.workspace_id},
+            {
+                "text": piece,
+                "chunk_id": chunk.id,
+                "document_id": document.id,
+                "dataset_id": document.dataset_id,
+                "workspace_id": document.workspace_id,
+            },
         )
+    document.chunk_count = len(pieces)
+    document.char_count = len(document.content or "")
     _schedule_enhanced_index(
-        workspace_id=document.workspace_id, document_id=document.id, title=document.title, chunks=chunk_rows
+        workspace_id=document.workspace_id,
+        document_id=document.id,
+        title=document.title,
+        chunks=chunk_rows,
+        graph_enabled=dataset.graph_enabled,
     )
     return len(pieces)
 
 
-def _schedule_enhanced_index(*, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]]) -> None:
-    if not (kb_vectors.vector_tier_enabled() or kb_graph.graph_tier_enabled()):
+def _schedule_enhanced_index(
+    *, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]], graph_enabled: bool
+) -> None:
+    want_graph = graph_enabled and kb_graph.graph_tier_enabled()
+    if not (kb_vectors.vector_tier_enabled() or want_graph):
         return
 
     def run() -> None:
@@ -117,12 +136,13 @@ def _schedule_enhanced_index(*, workspace_id: str, document_id: str, title: str,
                 )
             except Exception:  # noqa: BLE001 - 降级
                 logger.exception("KB vector indexing failed for %s", document_id)
-            try:
-                kb_graph.upsert_document_graph(
-                    session, workspace_id=workspace_id, document_id=document_id, title=title, chunks=chunks
-                )
-            except Exception:  # noqa: BLE001 - 降级
-                logger.exception("KB graph indexing failed for %s", document_id)
+            if want_graph:
+                try:
+                    kb_graph.upsert_document_graph(
+                        session, workspace_id=workspace_id, document_id=document_id, title=title, chunks=chunks
+                    )
+                except Exception:  # noqa: BLE001 - 降级
+                    logger.exception("KB graph indexing failed for %s", document_id)
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -135,17 +155,17 @@ def delete_document(db: Session, document: KbDocument) -> None:
     db.delete(document)
 
 
-def reindex_workspace(db: Session, workspace_id: str) -> int:
-    """定时任务「知识库重建」的执行体:全量重建 chunk/FTS。"""
-    documents = db.scalars(select(KbDocument).where(KbDocument.workspace_id == workspace_id)).all()
+def reindex_dataset(db: Session, dataset: KbDataset) -> int:
+    """整库重建(分块设置改动后调用):全量重建 chunk/FTS。"""
+    documents = db.scalars(select(KbDocument).where(KbDocument.dataset_id == dataset.id)).all()
     total = 0
     for document in documents:
-        total += reindex_document(db, document)
+        total += reindex_document(db, document, dataset)
     return total
 
 
-def _fts_ranked(db: Session, workspace_id: str, query: str, limit: int) -> list[tuple[str, str]]:
-    """FTS5 trigram(bm25 排序),短查询回退 LIKE;返回 [(chunk_id, document_id)]。"""
+def _fts_ranked(db: Session, dataset_id: str, query: str, limit: int) -> list[tuple[str, str]]:
+    """FTS5 trigram(bm25 排序),短查询回退 LIKE;返回 [(chunk_id, document_id)],按库过滤。"""
     rows: list[tuple[str, str]] = []
     if len(query) >= MIN_FTS_QUERY_CHARS:
         fts_query = '"' + query.replace('"', '""') + '"'
@@ -154,9 +174,9 @@ def _fts_ranked(db: Session, workspace_id: str, query: str, limit: int) -> list[
             for row in db.execute(
                 sa_text(
                     "SELECT chunk_id, document_id FROM kb_chunks_fts "
-                    "WHERE workspace_id = :ws AND kb_chunks_fts MATCH :q ORDER BY rank LIMIT :limit"
+                    "WHERE dataset_id = :ds AND kb_chunks_fts MATCH :q ORDER BY rank LIMIT :limit"
                 ),
-                {"ws": workspace_id, "q": fts_query, "limit": limit},
+                {"ds": dataset_id, "q": fts_query, "limit": limit},
             )
         ]
     if not rows:
@@ -164,45 +184,62 @@ def _fts_ranked(db: Session, workspace_id: str, query: str, limit: int) -> list[
             (chunk.id, chunk.document_id)
             for chunk in db.scalars(
                 select(KbChunk)
-                .where(KbChunk.workspace_id == workspace_id, KbChunk.text.like(f"%{query}%"))
+                .where(KbChunk.dataset_id == dataset_id, KbChunk.text.like(f"%{query}%"))
                 .limit(limit)
             )
         ]
     return rows
 
 
-def search(db: Session, workspace_id: str, query: str, *, limit: int = 8) -> list[dict[str, Any]]:
-    """混合检索:FTS + 向量(若启用)RRF 融合,再用图谱实体扩展补充;
-    每篇文档只留最佳块。任何增强层失败都自动降级为纯 FTS。"""
+def search(
+    db: Session,
+    dataset: KbDataset,
+    query: str,
+    *,
+    top_k: int | None = None,
+    score_threshold: float | None = None,
+) -> list[dict[str, Any]]:
+    """库内混合检索:FTS +(若启用)向量 RRF 融合,再用图谱共享实体扩展;每篇文档只留最佳块。
+    top_k/score_threshold 缺省时取 dataset 设置。任何增强层失败自动降级为纯 FTS。
+    结果含 from_graph 标记(该命中是否来自图谱扩展),供召回测试展示。"""
     cleaned = query.strip()
     if not cleaned:
         return []
     _ensure_fts(db)
+    limit = top_k if top_k is not None else dataset.top_k
+    threshold = score_threshold if score_threshold is not None else dataset.score_threshold
 
-    ranked_lists: list[list[tuple[str, str]]] = [_fts_ranked(db, workspace_id, cleaned, limit * 4)]
-    dense = kb_vectors.dense_search(db, workspace_id, cleaned, limit=limit * 4)
-    if dense:
-        ranked_lists.append(dense)
+    ranked_lists: list[list[tuple[str, str]]] = [_fts_ranked(db, dataset.id, cleaned, limit * 4)]
+    if dataset.retrieval_mode == "hybrid":
+        dense = kb_vectors.dense_search(db, dataset.workspace_id, cleaned, limit=limit * 4)
+        if dense:
+            ranked_lists.append(dense)
 
     # RRF 融合(chunk 级):score = Σ 1/(K + rank)
     scores: dict[str, float] = {}
     chunk_doc: dict[str, str] = {}
+    from_graph: set[str] = set()
     for ranked in ranked_lists:
         for rank, (chunk_id, document_id) in enumerate(ranked):
             scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
             chunk_doc[chunk_id] = document_id
 
     # 图谱扩展:用融合后的头部文档做种子,共享实体的相关 chunk 以低权重并入。
-    seed_docs: list[str] = []
-    for chunk_id in sorted(scores, key=lambda cid: -scores[cid]):
-        document_id = chunk_doc[chunk_id]
-        if document_id not in seed_docs:
-            seed_docs.append(document_id)
-        if len(seed_docs) >= 3:
-            break
-    for rank, (chunk_id, document_id) in enumerate(kb_graph.expand_related_chunks(workspace_id, seed_docs)):
-        scores[chunk_id] = scores.get(chunk_id, 0.0) + 0.5 / (RRF_K + rank + 1)
-        chunk_doc[chunk_id] = document_id
+    if dataset.graph_enabled and kb_graph.graph_tier_enabled():
+        seed_docs: list[str] = []
+        for chunk_id in sorted(scores, key=lambda cid: -scores[cid]):
+            document_id = chunk_doc[chunk_id]
+            if document_id not in seed_docs:
+                seed_docs.append(document_id)
+            if len(seed_docs) >= 3:
+                break
+        for rank, (chunk_id, document_id) in enumerate(
+            kb_graph.expand_related_chunks(dataset.workspace_id, seed_docs)
+        ):
+            if chunk_id not in scores:
+                from_graph.add(chunk_id)
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + 0.5 / (RRF_K + rank + 1)
+            chunk_doc[chunk_id] = document_id
 
     best_per_doc: dict[str, tuple[str, float]] = {}
     for chunk_id, score in scores.items():
@@ -215,6 +252,8 @@ def search(db: Session, workspace_id: str, query: str, *, limit: int = 8) -> lis
     results: list[dict[str, Any]] = []
     for document_id in ordered_docs[:limit]:
         chunk_id, score = best_per_doc[document_id]
+        if threshold is not None and score < threshold:
+            continue
         chunk = db.get(KbChunk, chunk_id)
         document = db.get(KbDocument, document_id)
         if chunk is None or document is None:
@@ -228,6 +267,7 @@ def search(db: Session, workspace_id: str, query: str, *, limit: int = 8) -> lis
                 "chunk_index": chunk.chunk_index,
                 "snippet": chunk.text[:400],
                 "score": round(score, 5),
+                "from_graph": chunk_id in from_graph,
             }
         )
     return results

@@ -8,66 +8,109 @@ def _workspace(client) -> str:
     return client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
 
+def _dataset(client, ws: str, **settings) -> str:
+    ds = client.post("/api/kb/datasets", json={"workspace_id": ws, "name": "默认库"}).json()
+    if settings:
+        client.patch(f"/api/kb/datasets/{ds['id']}", json=settings)
+    return ds["id"]
+
+
+def test_dataset_crud() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    ds = client.post("/api/kb/datasets", json={"workspace_id": ws, "name": "脚本库", "description": "存脚本"}).json()
+    assert ds["name"] == "脚本库" and ds["top_k"] == 5 and ds["chunk_size"] == 500
+
+    listed = client.get(f"/api/kb/datasets?workspace_id={ws}").json()
+    assert len(listed) == 1 and listed[0]["document_count"] == 0
+
+    patched = client.patch(f"/api/kb/datasets/{ds['id']}", json={"top_k": 8, "graph_enabled": True}).json()
+    assert patched["top_k"] == 8 and patched["graph_enabled"] is True
+
+    assert client.delete(f"/api/kb/datasets/{ds['id']}").status_code == 204
+    assert client.get(f"/api/kb/datasets?workspace_id={ws}").json() == []
+
+
 def test_kb_note_crud_and_chinese_search() -> None:
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws)
 
     doc = client.post(
-        "/api/kb/documents",
+        f"/api/kb/datasets/{ds}/documents",
         json={
-            "workspace_id": ws,
             "title": "海边旅拍脚本",
             "content": "开场航拍海面。\n\n第二幕:黄昏时分的沙滩慢镜头,旁白介绍目的地。\n\n结尾定格在日落。",
             "tags": ["脚本", "旅拍"],
         },
     ).json()
     assert doc["source_type"] == "note" and doc["tags"] == ["脚本", "旅拍"]
+    assert doc["status"] == "completed" and doc["chunk_count"] >= 1
 
-    listed = client.get(f"/api/kb/documents?workspace_id={ws}").json()
+    listed = client.get(f"/api/kb/datasets/{ds}/documents").json()
     assert len(listed) == 1 and listed[0]["content"] is None  # 列表不带正文
 
     detail = client.get(f"/api/kb/documents/{doc['id']}").json()
     assert "黄昏时分" in detail["content"]
 
+    # 分块可见
+    chunks = client.get(f"/api/kb/documents/{doc['id']}/chunks").json()
+    assert chunks and chunks[0]["char_count"] > 0
+
     # 中文 FTS(trigram):按短语命中
-    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=黄昏时分").json()
+    hits = client.get(f"/api/kb/datasets/{ds}/search?q=黄昏时分").json()
     assert hits and hits[0]["document_id"] == doc["id"]
     assert "黄昏时分" in hits[0]["snippet"]
 
     # 两字短查询走 LIKE 回退
-    short_hits = client.get(f"/api/kb/search?workspace_id={ws}&q=航拍").json()
+    short_hits = client.get(f"/api/kb/datasets/{ds}/search?q=航拍").json()
     assert short_hits and short_hits[0]["document_id"] == doc["id"]
 
     # 编辑正文后旧词消失、新词可检索
     client.patch(f"/api/kb/documents/{doc['id']}", json={"content": "全新的城市夜景延时素材清单。"})
-    assert client.get(f"/api/kb/search?workspace_id={ws}&q=黄昏时分").json() == []
-    assert client.get(f"/api/kb/search?workspace_id={ws}&q=城市夜景").json() != []
+    assert client.get(f"/api/kb/datasets/{ds}/search?q=黄昏时分").json() == []
+    assert client.get(f"/api/kb/datasets/{ds}/search?q=城市夜景").json() != []
 
     assert client.delete(f"/api/kb/documents/{doc['id']}").status_code == 204
-    assert client.get(f"/api/kb/documents?workspace_id={ws}").json() == []
-    assert client.get(f"/api/kb/search?workspace_id={ws}&q=城市夜景").json() == []
+    assert client.get(f"/api/kb/datasets/{ds}/documents").json() == []
+    assert client.get(f"/api/kb/datasets/{ds}/search?q=城市夜景").json() == []
+
+
+def test_retrieval_test_returns_scores() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    ds = _dataset(client, ws)
+    doc = client.post(
+        f"/api/kb/datasets/{ds}/documents",
+        json={"title": "调色", "content": "海边的镜头语言与调色参考,黄昏色温偏暖。"},
+    ).json()
+    results = client.post(f"/api/kb/datasets/{ds}/retrieval-test", json={"query": "调色参考"}).json()
+    assert results and results[0]["document_id"] == doc["id"]
+    assert results[0]["score"] > 0 and results[0]["from_graph"] is False
 
 
 def test_kb_url_import_uses_extractor(monkeypatch) -> None:
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws)
 
     monkeypatch.setattr(kb, "fetch_url_as_text", lambda url: ("示例文章", "第一段正文。\n\n第二段有关键词穿越机。"))
-    doc = client.post("/api/kb/documents/import-url", json={"workspace_id": ws, "url": "https://example.com/a"}).json()
+    doc = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com/a"}).json()
     assert doc["title"] == "示例文章" and doc["source_type"] == "url"
-    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=穿越机").json()
+    hits = client.get(f"/api/kb/datasets/{ds}/search?q=穿越机").json()
     assert hits and hits[0]["document_id"] == doc["id"]
 
 
 def test_kb_url_import_error_maps_to_422(monkeypatch) -> None:
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws)
 
     def boom(url: str):
         raise kb.KbImportError("抓取失败: timeout")
 
     monkeypatch.setattr(kb, "fetch_url_as_text", boom)
-    response = client.post("/api/kb/documents/import-url", json={"workspace_id": ws, "url": "https://example.com"})
+    response = client.post(f"/api/kb/datasets/{ds}/documents/import-url", json={"url": "https://example.com"})
     assert response.status_code == 422 and "抓取失败" in response.text
 
 
@@ -80,42 +123,41 @@ def test_chunk_text_paragraphs_and_long_split() -> None:
     long_paragraph = "字" * 1000
     long_chunks = kb.chunk_text(long_paragraph, target=300, overlap=30)
     assert len(long_chunks) >= 3
-    # 相邻块保留重叠
     assert long_chunks[0][-30:] == long_chunks[1][:30]
 
 
 def test_kb_workspace_scoping() -> None:
     client = fresh_client()
     ws = _workspace(client)
-    doc = client.post(
-        "/api/kb/documents", json={"workspace_id": ws, "title": "内部资料", "content": "机密内容"}
-    ).json()
+    ds = _dataset(client, ws)
+    doc = client.post(f"/api/kb/datasets/{ds}/documents", json={"title": "内部资料", "content": "机密内容"}).json()
 
     from tests.util import second_client
 
     other = second_client()
     assert other.get(f"/api/kb/documents/{doc['id']}").status_code in (403, 404)
+    assert other.get(f"/api/kb/datasets/{ds}").status_code in (403, 404)
 
 
-def test_kb_file_import_txt_and_md(tmp_path) -> None:
+def test_kb_file_import_txt_and_md() -> None:
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws)
     doc = client.post(
-        "/api/kb/documents/import-file",
-        data={"workspace_id": ws},
+        f"/api/kb/datasets/{ds}/documents/import-file",
         files={"file": ("拍摄清单.md", "# 清单\n\n无人机镜头三组。".encode(), "text/markdown")},
     ).json()
     assert doc["title"] == "拍摄清单" and doc["source_type"] == "file"
-    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=无人机镜头").json()
+    hits = client.get(f"/api/kb/datasets/{ds}/search?q=无人机镜头").json()
     assert hits and hits[0]["document_id"] == doc["id"]
 
 
 def test_kb_file_import_rejects_unknown_type() -> None:
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws)
     response = client.post(
-        "/api/kb/documents/import-file",
-        data={"workspace_id": ws},
+        f"/api/kb/datasets/{ds}/documents/import-file",
         files={"file": ("movie.mp4", b"\x00\x01", "video/mp4")},
     )
     assert response.status_code == 422
@@ -138,19 +180,20 @@ def test_kb_status_endpoint() -> None:
     client = fresh_client()
     status = client.get("/api/kb/status").json()
     assert status["convert_engine"] in ("markitdown", "mineru", "text")
-    assert status["vector_enabled"] is False  # 未配置 embedding 时向量层关闭
+    assert status["vector_enabled"] is False
     assert status["graph_enabled"] is False
 
 
 def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
-    """向量层命中的文档要能被 RRF 提到前面(用假 dense 结果验证融合逻辑)。"""
+    """hybrid 模式下,向量层命中的文档要能被 RRF 提到前面。"""
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws, retrieval_mode="hybrid")
     doc_a = client.post(
-        "/api/kb/documents", json={"workspace_id": ws, "title": "文档A", "content": "海边的镜头语言与调色参考。"}
+        f"/api/kb/datasets/{ds}/documents", json={"title": "文档A", "content": "海边的镜头语言与调色参考。"}
     ).json()
     doc_b = client.post(
-        "/api/kb/documents", json={"workspace_id": ws, "title": "文档B", "content": "海边的旅拍脚本与分镜。"}
+        f"/api/kb/datasets/{ds}/documents", json={"title": "文档B", "content": "海边的旅拍脚本与分镜。"}
     ).json()
 
     from app.core.db import SessionLocal
@@ -162,16 +205,16 @@ def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
         chunk_b = session.scalars(select(KbChunk).where(KbChunk.document_id == doc_b["id"])).first()
         chunk_b_id = chunk_b.id
 
-    # 假向量层:强烈偏向文档B
-    monkeypatch.setattr(kb_domain.kb_vectors, "dense_search", lambda db, ws_, q, limit=20: [(chunk_b_id, doc_b["id"])] * 1)
+    monkeypatch.setattr(
+        kb_domain.kb_vectors, "dense_search", lambda db, ws_, q, limit=20: [(chunk_b_id, doc_b["id"])]
+    )
 
-    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=海边").json()
+    hits = client.get(f"/api/kb/datasets/{ds}/search?q=海边").json()
     assert [h["document_id"] for h in hits][0] == doc_b["id"]
     assert {h["document_id"] for h in hits} == {doc_a["id"], doc_b["id"]}
 
 
 def test_kb_milvus_lite_roundtrip(tmp_path, monkeypatch) -> None:
-    """真实 milvus-lite:建库、写入、按 workspace 过滤检索、删除。"""
     from app.core.config import settings
     from app.domain.kb import vectors
 
@@ -196,14 +239,15 @@ def test_kb_milvus_lite_roundtrip(tmp_path, monkeypatch) -> None:
 
 
 def test_kb_graph_expansion_merges_related_docs(monkeypatch) -> None:
-    """图谱层扩展出的低权重相关文档要出现在结果尾部(不喧宾夺主)。"""
+    """graph_enabled 库:图谱扩展出的低权重相关文档要出现在结果尾部,并带 from_graph。"""
     client = fresh_client()
     ws = _workspace(client)
+    ds = _dataset(client, ws, graph_enabled=True)
     doc_hit = client.post(
-        "/api/kb/documents", json={"workspace_id": ws, "title": "命中文档", "content": "冲浪板评测与海浪运镜。"}
+        f"/api/kb/datasets/{ds}/documents", json={"title": "命中文档", "content": "冲浪板评测与海浪运镜。"}
     ).json()
     doc_related = client.post(
-        "/api/kb/documents", json={"workspace_id": ws, "title": "相关文档", "content": "装备清单:防水壳、脚绳。"}
+        f"/api/kb/datasets/{ds}/documents", json={"title": "相关文档", "content": "装备清单:防水壳、脚绳。"}
     ).json()
 
     from app.core.db import SessionLocal
@@ -215,13 +259,15 @@ def test_kb_graph_expansion_merges_related_docs(monkeypatch) -> None:
         related_chunk = session.scalars(select(KbChunk).where(KbChunk.document_id == doc_related["id"])).first()
         related_id = related_chunk.id
 
+    monkeypatch.setattr(kb_domain.kb_graph, "graph_tier_enabled", lambda: True)
     monkeypatch.setattr(
         kb_domain.kb_graph,
         "expand_related_chunks",
         lambda ws_, seeds, limit=12: [(related_id, doc_related["id"])] if doc_hit["id"] in seeds else [],
     )
 
-    hits = client.get(f"/api/kb/search?workspace_id={ws}&q=冲浪板").json()
+    hits = client.get(f"/api/kb/datasets/{ds}/search?q=冲浪板").json()
     ids = [h["document_id"] for h in hits]
-    assert ids[0] == doc_hit["id"]          # 直接命中排最前
-    assert doc_related["id"] in ids          # 图谱扩展的相关文档并入结果
+    assert ids[0] == doc_hit["id"]
+    assert doc_related["id"] in ids
+    assert any(h["from_graph"] for h in hits if h["document_id"] == doc_related["id"])

@@ -570,24 +570,57 @@ class PluginInvocation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
-class KbDocument(Base):
-    """知识库文档(计划 §6.9):正文 markdown 直接入库,检索走 kb_chunks 的 FTS。"""
+class KbDataset(Base):
+    """知识库(Dify 式 dataset):一个工作区可有多个命名知识库,各自分组文档 + 独立检索/分块/图谱设置。"""
 
-    __tablename__ = "kb_documents"
-    __table_args__ = (Index("idx_kb_documents_workspace_updated", "workspace_id", "updated_at"),)
+    __tablename__ = "kb_datasets"
+    __table_args__ = (Index("idx_kb_datasets_workspace_updated", "workspace_id", "updated_at"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # 检索设置
+    retrieval_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="fts")  # fts|hybrid
+    top_k: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    score_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)  # None = 不设阈值
+    # 分块设置(改动后重索引全库)
+    chunk_size: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
+    chunk_overlap: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    # 关联知识图谱(Neo4j)开关;无 Neo4j/LLM 时静默降级
+    graph_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+    documents: Mapped[list["KbDocument"]] = relationship(
+        back_populates="dataset", cascade="all, delete-orphan"
+    )
+
+
+class KbDocument(Base):
+    """知识库文档:正文 markdown 入库,异步转换/分块/索引;检索走 kb_chunks 的 FTS(+ 可选向量/图谱)。"""
+
+    __tablename__ = "kb_documents"
+    __table_args__ = (Index("idx_kb_documents_dataset_updated", "dataset_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("kb_datasets.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     source_type: Mapped[str] = mapped_column(String(24), nullable=False, default="note")  # note|file|url
     source_ref: Mapped[str] = mapped_column(String(600), nullable=False, default="")
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="ready")  # ready|error
+    # 真实生命周期:queued(刚建)→ processing(后台转换/索引中)→ completed | error
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    error: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
+    dataset: Mapped[KbDataset] = relationship(back_populates="documents")
     chunks: Mapped[list["KbChunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan", order_by="KbChunk.chunk_index"
     )
@@ -599,8 +632,10 @@ class KbChunk(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("kb_datasets.id", ondelete="CASCADE"), nullable=False)
     document_id: Mapped[str] = mapped_column(ForeignKey("kb_documents.id", ondelete="CASCADE"), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     document: Mapped[KbDocument] = relationship(back_populates="chunks")

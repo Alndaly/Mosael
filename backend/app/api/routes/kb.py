@@ -4,20 +4,25 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    KbChunkOut,
+    KbDatasetCreate,
+    KbDatasetOut,
+    KbDatasetUpdate,
     KbDocumentCreate,
     KbDocumentOut,
     KbDocumentUpdate,
+    KbRetrievalTestRequest,
     KbSearchResultOut,
     KbStatusOut,
     KbUrlImportRequest,
 )
 from app.core.config import settings
 from app.core.permissions import ensure_workspace_access
-from app.db.models import KbDocument
+from app.db.models import KbChunk, KbDataset, KbDocument
 from app.domain import kb
 from app.domain.kb import convert as kb_convert
 from app.domain.kb import graph as kb_graph
@@ -37,37 +42,144 @@ def _clean_tags(tags: list[str]) -> list[str]:
     return cleaned
 
 
-def _out(document: KbDocument, *, with_content: bool) -> KbDocumentOut:
+def _doc_out(document: KbDocument, *, with_content: bool) -> KbDocumentOut:
     payload = KbDocumentOut.model_validate(document)
-    if not with_content:
-        payload.content = None
-    else:
-        payload.content = document.content
+    payload.content = document.content if with_content else None
     return payload
+
+
+def _dataset_out(dataset: KbDataset, *, document_count: int = 0) -> KbDatasetOut:
+    payload = KbDatasetOut.model_validate(dataset)
+    payload.document_count = document_count
+    return payload
+
+
+def _require_dataset(db: DbSession, user: CurrentUser, dataset_id: str) -> KbDataset:
+    dataset = db.get(KbDataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    ensure_workspace_access(db, user, dataset.workspace_id)
+    return dataset
 
 
 def _require_document(db: DbSession, user: CurrentUser, document_id: str) -> KbDocument:
     document = db.get(KbDocument, document_id)
     if document is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="文档不存在")
     ensure_workspace_access(db, user, document.workspace_id)
     return document
 
 
-@router.get("/kb/documents", response_model=list[KbDocumentOut])
-def list_documents(workspace_id: str, db: DbSession, user: CurrentUser) -> list[KbDocumentOut]:
+# ---------- 知识库(dataset) ----------
+
+
+@router.get("/kb/datasets", response_model=list[KbDatasetOut])
+def list_datasets(workspace_id: str, db: DbSession, user: CurrentUser) -> list[KbDatasetOut]:
     ensure_workspace_access(db, user, workspace_id)
-    documents = db.scalars(
-        select(KbDocument).where(KbDocument.workspace_id == workspace_id).order_by(KbDocument.updated_at.desc())
+    datasets = db.scalars(
+        select(KbDataset).where(KbDataset.workspace_id == workspace_id).order_by(KbDataset.updated_at.desc())
     ).all()
-    return [_out(document, with_content=False) for document in documents]
+    counts = dict(
+        db.execute(
+            select(KbDocument.dataset_id, func.count(KbDocument.id))
+            .where(KbDocument.workspace_id == workspace_id)
+            .group_by(KbDocument.dataset_id)
+        ).all()
+    )
+    return [_dataset_out(dataset, document_count=counts.get(dataset.id, 0)) for dataset in datasets]
 
 
-@router.post("/kb/documents", response_model=KbDocumentOut)
-def create_document(body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+@router.post("/kb/datasets", response_model=KbDatasetOut)
+def create_dataset(body: KbDatasetCreate, db: DbSession, user: CurrentUser) -> KbDatasetOut:
     ensure_workspace_access(db, user, body.workspace_id)
-    document = KbDocument(
+    dataset = KbDataset(
         workspace_id=body.workspace_id,
+        name=body.name.strip(),
+        description=body.description.strip(),
+    )
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+    return _dataset_out(dataset)
+
+
+@router.get("/kb/datasets/{dataset_id}", response_model=KbDatasetOut)
+def get_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> KbDatasetOut:
+    dataset = _require_dataset(db, user, dataset_id)
+    count = db.scalar(select(func.count(KbDocument.id)).where(KbDocument.dataset_id == dataset_id)) or 0
+    return _dataset_out(dataset, document_count=count)
+
+
+@router.patch("/kb/datasets/{dataset_id}", response_model=KbDatasetOut)
+def update_dataset(dataset_id: str, body: KbDatasetUpdate, db: DbSession, user: CurrentUser) -> KbDatasetOut:
+    dataset = _require_dataset(db, user, dataset_id)
+    reindex = False
+    if body.name is not None:
+        dataset.name = body.name.strip()
+    if body.description is not None:
+        dataset.description = body.description.strip()
+    if body.retrieval_mode is not None:
+        dataset.retrieval_mode = body.retrieval_mode
+    if body.top_k is not None:
+        dataset.top_k = body.top_k
+    if body.score_threshold is not None or "score_threshold" in body.model_fields_set:
+        dataset.score_threshold = body.score_threshold
+    if body.graph_enabled is not None:
+        dataset.graph_enabled = body.graph_enabled
+    if body.chunk_size is not None and body.chunk_size != dataset.chunk_size:
+        dataset.chunk_size = body.chunk_size
+        reindex = True
+    if body.chunk_overlap is not None and body.chunk_overlap != dataset.chunk_overlap:
+        dataset.chunk_overlap = body.chunk_overlap
+        reindex = True
+    if reindex:
+        kb.reindex_dataset(db, dataset)
+    db.commit()
+    db.refresh(dataset)
+    count = db.scalar(select(func.count(KbDocument.id)).where(KbDocument.dataset_id == dataset_id)) or 0
+    return _dataset_out(dataset, document_count=count)
+
+
+@router.delete("/kb/datasets/{dataset_id}", status_code=204)
+def delete_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> Response:
+    dataset = _require_dataset(db, user, dataset_id)
+    for document in db.scalars(select(KbDocument).where(KbDocument.dataset_id == dataset_id)):
+        kb.delete_document(db, document)
+    db.delete(dataset)
+    db.commit()
+    return Response(status_code=204)
+
+
+# ---------- 文档(挂在 dataset 下) ----------
+
+
+def _ingest_sync(db: DbSession, document: KbDocument, dataset: KbDataset) -> None:
+    """同步摄取:分块 + 索引,回填状态/错误(转成异步在下一片)。"""
+    document.status = "processing"
+    try:
+        kb.reindex_document(db, document, dataset)
+        document.status = "completed"
+        document.error = ""
+    except Exception as exc:  # noqa: BLE001 - 失败落库,不再 500 死路
+        document.status = "error"
+        document.error = str(exc)[:800]
+
+
+@router.get("/kb/datasets/{dataset_id}/documents", response_model=list[KbDocumentOut])
+def list_documents(dataset_id: str, db: DbSession, user: CurrentUser) -> list[KbDocumentOut]:
+    _require_dataset(db, user, dataset_id)
+    documents = db.scalars(
+        select(KbDocument).where(KbDocument.dataset_id == dataset_id).order_by(KbDocument.updated_at.desc())
+    ).all()
+    return [_doc_out(document, with_content=False) for document in documents]
+
+
+@router.post("/kb/datasets/{dataset_id}/documents", response_model=KbDocumentOut)
+def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+    dataset = _require_dataset(db, user, dataset_id)
+    document = KbDocument(
+        workspace_id=dataset.workspace_id,
+        dataset_id=dataset.id,
         title=body.title.strip(),
         content=body.content,
         source_type=body.source_type,
@@ -76,45 +188,46 @@ def create_document(body: KbDocumentCreate, db: DbSession, user: CurrentUser) ->
     )
     db.add(document)
     db.flush()
-    kb.reindex_document(db, document)
+    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
-    return _out(document, with_content=True)
+    return _doc_out(document, with_content=True)
 
 
-@router.post("/kb/documents/import-url", response_model=KbDocumentOut)
-def import_url(body: KbUrlImportRequest, db: DbSession, user: CurrentUser) -> KbDocumentOut:
-    ensure_workspace_access(db, user, body.workspace_id)
+@router.post("/kb/datasets/{dataset_id}/documents/import-url", response_model=KbDocumentOut)
+def import_url(dataset_id: str, body: KbUrlImportRequest, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+    dataset = _require_dataset(db, user, dataset_id)
     try:
-        title, text = kb.fetch_url_as_text(body.url)
+        title, textc = kb.fetch_url_as_text(body.url)
     except kb.KbImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if not text.strip():
+    if not textc.strip():
         raise HTTPException(status_code=422, detail="页面没有可提取的正文")
     document = KbDocument(
-        workspace_id=body.workspace_id,
-        title=title[:300],
-        content=text[:400_000],
+        workspace_id=dataset.workspace_id,
+        dataset_id=dataset.id,
+        title=title[:300] or body.url[:300],
+        content=textc[:400_000],
         source_type="url",
         source_ref=body.url,
     )
     db.add(document)
     db.flush()
-    kb.reindex_document(db, document)
+    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
-    return _out(document, with_content=True)
+    return _doc_out(document, with_content=True)
 
 
-@router.post("/kb/documents/import-file", response_model=KbDocumentOut)
+@router.post("/kb/datasets/{dataset_id}/documents/import-file", response_model=KbDocumentOut)
 def import_file(
+    dataset_id: str,
     db: DbSession,
     user: CurrentUser,
-    workspace_id: str = Form(...),
     file: UploadFile = File(...),
 ) -> KbDocumentOut:
     """上传文件并经转换引擎(MinerU/markitdown/纯文本)转成 markdown 文档。"""
-    ensure_workspace_access(db, user, workspace_id)
+    dataset = _require_dataset(db, user, dataset_id)
     filename = file.filename or "upload"
     suffix = Path(filename).suffix.lower()
     supported = kb_convert.TEXT_SUFFIXES | kb_convert.CONVERTIBLE_SUFFIXES | kb_convert.MINERU_SUFFIXES
@@ -128,42 +241,32 @@ def import_file(
         handle.write(payload)
         handle.flush()
         try:
-            text = kb_convert.convert_file_to_markdown(Path(handle.name), filename)
+            textc = kb_convert.convert_file_to_markdown(Path(handle.name), filename)
         except kb_convert.KbConvertError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if not text.strip():
-        raise HTTPException(status_code=422, detail="文件没有可提取的文本内容")
+    if not textc.strip():
+        raise HTTPException(status_code=422, detail=f"{filename} 没有可提取的文本内容")
     document = KbDocument(
-        workspace_id=workspace_id,
+        workspace_id=dataset.workspace_id,
+        dataset_id=dataset.id,
         title=Path(filename).stem[:300] or filename[:300],
-        content=text[:400_000],
+        content=textc[:400_000],
         source_type="file",
         source_ref=filename,
     )
     db.add(document)
     db.flush()
-    kb.reindex_document(db, document)
+    _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
-    return _out(document, with_content=True)
-
-
-@router.get("/kb/status", response_model=KbStatusOut)
-def kb_status(user: CurrentUser) -> KbStatusOut:
-    """各增强层的启用状态,前端用来给出能力提示。"""
-    return KbStatusOut(
-        convert_engine=kb_convert.active_engine(),
-        vector_enabled=kb_vectors.vector_tier_enabled(),
-        graph_enabled=kb_graph.graph_tier_enabled(),
-        embedding_model=settings.kb_embedding_model if kb_vectors.vector_tier_enabled() else "",
-    )
+    return _doc_out(document, with_content=True)
 
 
 @router.get("/kb/documents/{document_id}", response_model=KbDocumentOut)
 def get_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDocumentOut:
     document = _require_document(db, user, document_id)
-    return _out(document, with_content=True)
+    return _doc_out(document, with_content=True)
 
 
 @router.patch("/kb/documents/{document_id}", response_model=KbDocumentOut)
@@ -179,10 +282,12 @@ def update_document(document_id: str, body: KbDocumentUpdate, db: DbSession, use
     if body.tags is not None:
         document.tags = _clean_tags(body.tags)
     if changed_text:
-        kb.reindex_document(db, document)
+        dataset = db.get(KbDataset, document.dataset_id)
+        if dataset is not None:
+            _ingest_sync(db, document, dataset)
     db.commit()
     db.refresh(document)
-    return _out(document, with_content=True)
+    return _doc_out(document, with_content=True)
 
 
 @router.delete("/kb/documents/{document_id}", status_code=204)
@@ -193,7 +298,50 @@ def delete_document(document_id: str, db: DbSession, user: CurrentUser) -> Respo
     return Response(status_code=204)
 
 
-@router.get("/kb/search", response_model=list[KbSearchResultOut])
-def search_kb(workspace_id: str, q: str, db: DbSession, user: CurrentUser, limit: int = 8) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
-    return kb.search(db, workspace_id, q, limit=max(1, min(20, limit)))
+@router.get("/kb/documents/{document_id}/chunks", response_model=list[KbChunkOut])
+def list_chunks(document_id: str, db: DbSession, user: CurrentUser) -> list[KbChunkOut]:
+    document = _require_document(db, user, document_id)
+    chunks = db.scalars(
+        select(KbChunk).where(KbChunk.document_id == document.id).order_by(KbChunk.chunk_index)
+    ).all()
+    return [KbChunkOut.model_validate(chunk) for chunk in chunks]
+
+
+@router.post("/kb/documents/{document_id}/reindex", response_model=KbDocumentOut)
+def reindex_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDocumentOut:
+    document = _require_document(db, user, document_id)
+    dataset = db.get(KbDataset, document.dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    _ingest_sync(db, document, dataset)
+    db.commit()
+    db.refresh(document)
+    return _doc_out(document, with_content=True)
+
+
+# ---------- 检索测试 / 搜索 ----------
+
+
+@router.post("/kb/datasets/{dataset_id}/retrieval-test", response_model=list[KbSearchResultOut])
+def retrieval_test(
+    dataset_id: str, body: KbRetrievalTestRequest, db: DbSession, user: CurrentUser
+) -> list[dict]:
+    """召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。"""
+    dataset = _require_dataset(db, user, dataset_id)
+    return kb.search(db, dataset, body.query, top_k=body.top_k, score_threshold=body.score_threshold)
+
+
+@router.get("/kb/datasets/{dataset_id}/search", response_model=list[KbSearchResultOut])
+def search_dataset(dataset_id: str, q: str, db: DbSession, user: CurrentUser, limit: int = 8) -> list[dict]:
+    dataset = _require_dataset(db, user, dataset_id)
+    return kb.search(db, dataset, q, top_k=max(1, min(50, limit)))
+
+
+@router.get("/kb/status", response_model=KbStatusOut)
+def kb_status(user: CurrentUser) -> KbStatusOut:
+    return KbStatusOut(
+        convert_engine=kb_convert.active_engine(),
+        vector_enabled=kb_vectors.vector_tier_enabled(),
+        graph_enabled=kb_graph.graph_tier_enabled(),
+        embedding_model=settings.kb_embedding_model if kb_vectors.vector_tier_enabled() else "",
+    )

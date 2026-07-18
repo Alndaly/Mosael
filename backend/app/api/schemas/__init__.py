@@ -750,8 +750,43 @@ class AgentSkillOut(BaseModel):
     permissions: list = Field(default_factory=list)
 
 
-class KbDocumentCreate(BaseModel):
+# ---------- 知识库(Dify 式 dataset) ----------
+
+
+class KbDatasetCreate(BaseModel):
     workspace_id: str
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+
+
+class KbDatasetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    retrieval_mode: str | None = Field(default=None, pattern="^(fts|hybrid)$")
+    top_k: int | None = Field(default=None, ge=1, le=50)
+    score_threshold: float | None = Field(default=None, ge=0, le=1)
+    chunk_size: int | None = Field(default=None, ge=100, le=4000)
+    chunk_overlap: int | None = Field(default=None, ge=0, le=1000)
+    graph_enabled: bool | None = None
+
+
+class KbDatasetOut(OrmModel):
+    id: str
+    workspace_id: str
+    name: str
+    description: str
+    retrieval_mode: str
+    top_k: int
+    score_threshold: float | None = None
+    chunk_size: int
+    chunk_overlap: int
+    graph_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    document_count: int = 0  # 列表附带,计算得出
+
+
+class KbDocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     content: str = Field(default="", max_length=400_000)
     source_type: str = Field(default="note", pattern="^(note|file|url)$")
@@ -766,22 +801,38 @@ class KbDocumentUpdate(BaseModel):
 
 
 class KbUrlImportRequest(BaseModel):
-    workspace_id: str
     url: str = Field(min_length=8, max_length=600)
 
 
 class KbDocumentOut(OrmModel):
     id: str
     workspace_id: str
+    dataset_id: str
     title: str
     source_type: str
     source_ref: str
     summary: str
     tags: list[str] = Field(default_factory=list)
     status: str
+    error: str = ""
+    chunk_count: int = 0
+    char_count: int = 0
     created_at: datetime
     updated_at: datetime
     content: str | None = None  # 列表不带正文,详情才带
+
+
+class KbChunkOut(OrmModel):
+    id: str
+    chunk_index: int
+    text: str
+    char_count: int = 0
+
+
+class KbRetrievalTestRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    top_k: int | None = Field(default=None, ge=1, le=50)
+    score_threshold: float | None = Field(default=None, ge=0, le=1)
 
 
 class KbStatusOut(BaseModel):
@@ -799,6 +850,7 @@ class KbSearchResultOut(BaseModel):
     chunk_index: int
     snippet: str
     score: float = 0.0
+    from_graph: bool = False
 
 
 class PromptSkillOut(BaseModel):
