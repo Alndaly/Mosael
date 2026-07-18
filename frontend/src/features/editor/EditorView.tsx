@@ -173,7 +173,26 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     qc.setQueryData<Sequence[]>(["sequences", project.id], (old) =>
       (old ?? []).map((item) => (item.id === updated.id ? updated : item)),
     );
-  const clearDraft = () => useEditorStore.getState().setDragDraft(null);
+  // Clearing the drag draft the instant a move settles renders ONE stale frame — the draft
+  // (zustand) clears synchronously while the fresh sequence (react-query) propagates on a
+  // deferred notification, so the clip flashes back to its old slot. Instead, arm this flag on
+  // settle and let the effect below drop the draft on the render that actually shows the new
+  // data. The draft pins the clip at its dropped spot the whole time → no flicker.
+  const draftSettleRef = React.useRef(false);
+  const settleWith = (updated: Sequence) => {
+    applySequence(updated);
+    draftSettleRef.current = true;
+  };
+  const resyncAfterFailedDrag = () => {
+    draftSettleRef.current = true;
+    void refreshSequences();
+  };
+  React.useEffect(() => {
+    if (draftSettleRef.current) {
+      draftSettleRef.current = false;
+      useEditorStore.getState().setDragDraft(null);
+    }
+  }, [sequence]);
 
   const uploadAsset = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project.id, file }),
@@ -210,16 +229,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       trackId?: string;
       ripple?: boolean;
     }) => moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
-    onSuccess: applySequence,
-    onError: () => void refreshSequences(),
-    onSettled: clearDraft,
+    onSuccess: settleWith,
+    onError: resyncAfterFailedDrag,
   });
   const trimClipMutation = useMutation({
     mutationFn: ({ clipId, payload }: { clipId: string; payload: TrimPayload }) =>
       trimClip(sequence!.id, clipId, payload),
-    onSuccess: applySequence,
-    onError: () => void refreshSequences(),
-    onSettled: clearDraft,
+    onSuccess: settleWith,
+    onError: resyncAfterFailedDrag,
   });
   const deleteClipMutation = useMutation({
     mutationFn: (clipId: string) => deleteClip(sequence!.id, clipId),
@@ -262,9 +279,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       if (!created) return updated;
       return moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: created.id });
     },
-    onSuccess: applySequence,
-    onError: () => void refreshSequences(),
-    onSettled: clearDraft,
+    onSuccess: settleWith,
+    onError: resyncAfterFailedDrag,
   });
   const setTextMutation = useMutation({
     mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
