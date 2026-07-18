@@ -1,11 +1,12 @@
 import React from "react";
-import { Film } from "lucide-react";
+import { CircleAlert, Film } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -83,6 +84,12 @@ export function LoginView() {
           </div>
           <Form {...form}>
             <form className="login-form" onSubmit={onSubmit} noValidate>
+              {form.formState.errors.root && (
+                <Alert variant="destructive">
+                  <CircleAlert size={14} />
+                  <AlertDescription>{form.formState.errors.root.message}</AlertDescription>
+                </Alert>
+              )}
               <FormField
                 control={form.control}
                 name="username"
@@ -131,7 +138,6 @@ export function LoginView() {
                   )}
                 />
               )}
-              {form.formState.errors.root && <p className="login-error">{form.formState.errors.root.message}</p>}
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {mode === "login" ? t("signIn") : t("createAccount")}
               </Button>
