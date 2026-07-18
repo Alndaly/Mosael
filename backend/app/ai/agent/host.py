@@ -166,16 +166,24 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         provider_dict: dict | None = None
         agent_model: str | None = None
         if session.adapter == "pi":
+            from app.domain.provider_defaults import resolve_default
             from app.domain.providers import first_enabled_profile, resolve_profile
 
+            # 解析顺序:会话选定 → 「对话」能力的默认供应商 → 第一个启用供应商
             profile = None
+            model = session.model or ""
             if session.provider_profile_id:
                 profile = resolve_profile(db, "", session.provider_profile_id)
+            if profile is None:
+                default_profile, default_model = resolve_default(db, "chat")
+                if default_profile is not None:
+                    profile = default_profile
+                    model = model or default_model
             if profile is None:
                 profile = first_enabled_profile(db)
             if profile is not None:
                 provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
-                agent_model = session.model or profile.default_model
+                agent_model = model or profile.default_model
         try:
             result: TurnResult = run_turn(
                 session.adapter,

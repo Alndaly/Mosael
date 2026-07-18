@@ -1661,6 +1661,43 @@ export interface paths {
         patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
         trace?: never;
     };
+    "/api/settings/provider-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Provider Defaults
+         * @description 每种能力(chat/image/video)的默认供应商+模型;未配置的返回空默认。
+         */
+        get: operations["list_provider_defaults_api_settings_provider_defaults_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/provider-defaults/{capability}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Provider Default */
+        put: operations["set_provider_default_api_settings_provider_defaults__capability__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/models": {
         parameters: {
             query?: never;
@@ -3302,6 +3339,28 @@ export interface components {
             source: string;
             /** Body */
             body?: string | null;
+        };
+        /** ProviderDefaultOut */
+        ProviderDefaultOut: {
+            /** Capability */
+            capability: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+        };
+        /** ProviderDefaultUpdate */
+        ProviderDefaultUpdate: {
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
         };
         /** ProviderProfileCreate */
         ProviderProfileCreate: {
@@ -7916,6 +7975,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_provider_defaults_api_settings_provider_defaults_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefaultOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_provider_default_api_settings_provider_defaults__capability__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDefaultUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefaultOut"];
                 };
             };
             /** @description Validation Error */

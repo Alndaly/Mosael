@@ -7251,6 +7251,27 @@
   line-height: 1.4;
 }
 
+/* 默认供应商:每能力一行 —— 能力名 + 供应商下拉 + 模型下拉 */
+.provider-defaults {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.provider-default-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.provider-default-cap {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.provider-default-select {
+  width: 100%;
+  min-width: 0;
+}
+
 /* AI Studio 对话模型选择器:composer 里紧凑呈现 */
 .model-picker-trigger {
   height: 28px;

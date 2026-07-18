@@ -12,13 +12,16 @@ from app.api.schemas import (
     CredentialStatusOut,
     KbEmbeddingConfigOut,
     KbEmbeddingConfigUpdate,
+    ProviderDefaultOut,
+    ProviderDefaultUpdate,
     ProviderProfileCreate,
     ProviderProfileOut,
     ProviderProfileUpdate,
     VendorPresetOut,
 )
 from app.core.db import SessionLocal
-from app.db.models import Credential, KbEmbeddingConfig, ProviderProfile
+from app.db.models import Credential, KbEmbeddingConfig, ProviderDefault, ProviderProfile
+from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.providers import VENDOR_PRESETS
@@ -83,6 +86,42 @@ def update_provider_profile(
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
+
+
+@router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
+def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
+    """每种能力(chat/image/video)的默认供应商+模型;未配置的返回空默认。"""
+    rows = {row.capability: row for row in db.scalars(select(ProviderDefault))}
+    out: list[ProviderDefaultOut] = []
+    for capability in CAPABILITIES:
+        row = rows.get(capability)
+        out.append(
+            ProviderDefaultOut(
+                capability=capability,
+                provider_profile_id=row.provider_profile_id if row else None,
+                model=row.model if row else "",
+            )
+        )
+    return out
+
+
+@router.put("/settings/provider-defaults/{capability}", response_model=ProviderDefaultOut)
+def set_provider_default(
+    capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
+) -> ProviderDefaultOut:
+    if capability not in CAPABILITIES:
+        raise HTTPException(status_code=404, detail="未知能力")
+    if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    row = db.get(ProviderDefault, capability)
+    if row is None:
+        row = ProviderDefault(capability=capability)
+        db.add(row)
+    row.provider_profile_id = body.provider_profile_id or None
+    row.model = body.model.strip()
+    db.commit()
+    db.refresh(row)
+    return ProviderDefaultOut(capability=row.capability, provider_profile_id=row.provider_profile_id, model=row.model)
 
 
 @router.get("/settings/providers/{profile_id}/models", response_model=list[str])

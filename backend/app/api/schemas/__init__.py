@@ -338,6 +338,17 @@ class ProviderProfileOut(OrmModel):
     key_hint: str = ""
 
 
+class ProviderDefaultOut(BaseModel):
+    capability: str
+    provider_profile_id: str | None = None
+    model: str = ""
+
+
+class ProviderDefaultUpdate(BaseModel):
+    provider_profile_id: str | None = None
+    model: str = Field(default="", max_length=120)
+
+
 class KbEmbeddingConfigOut(BaseModel):
     provider_profile_id: str | None = None
     model: str = ""

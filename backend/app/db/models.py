@@ -434,6 +434,21 @@ class ProviderProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class ProviderDefault(Base):
+    """每种能力的默认供应商 + 模型(统一到 ProviderProfile)。
+    capability 作主键:chat / image / video(embedding 单独走 KbEmbeddingConfig,
+    因其还带向量维度)。用到该能力且未显式指定时取此默认。"""
+
+    __tablename__ = "provider_defaults"
+
+    capability: Mapped[str] = mapped_column(String(24), primary_key=True)  # chat | image | video
+    provider_profile_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class KbEmbeddingConfig(Base):
     """Singleton (id='default') runtime config for the KB vector tier: which
     provider profile + embedding model + vector dimension. Overrides the

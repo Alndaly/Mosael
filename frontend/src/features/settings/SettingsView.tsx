@@ -8,6 +8,7 @@ import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
+import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           {section === "providers" && (
             <>
               <ProviderProfilesSection />
+              <ProviderDefaultsSection />
               <KbEmbeddingSection />
             </>
           )}
