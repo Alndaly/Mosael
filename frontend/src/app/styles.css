@@ -2665,6 +2665,26 @@
   z-index: 2;
 }
 
+/* 拖片段到最上方时出现的「新建视频图层」落点提示条 */
+.tl-newlayer-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border-top: 1.5px dashed var(--primary);
+  border-bottom: 1.5px dashed var(--primary);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 4;
+}
+
 .tl-playhead {
   position: absolute;
   top: 0;

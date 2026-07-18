@@ -241,6 +241,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!.id, kind),
     onSuccess: refreshSequences,
   });
+  // Drag a clip above the top video track → create a new video layer and drop it there.
+  const moveClipToNewLayerMutation = useMutation({
+    mutationFn: async ({ clipId, timelineStart }: { clipId: string; timelineStart: number }) => {
+      const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
+      const updated = await addTrack(sequence!.id, "video");
+      const created = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
+      if (created) await moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: created.id });
+    },
+    onSettled: settleDraft,
+  });
   const setTextMutation = useMutation({
     mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
     onSuccess: refreshSequences,
@@ -607,6 +617,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onInsertClip={(args) => insertClipMutation.mutate(args)}
           onMoveClip={(clipId, timelineStart, trackId, ripple) =>
             moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple })
+          }
+          onMoveClipToNewLayer={(clipId, timelineStart) =>
+            moveClipToNewLayerMutation.mutate({ clipId, timelineStart })
           }
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}

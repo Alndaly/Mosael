@@ -38,6 +38,7 @@ export function Timeline({
   assets,
   onInsertClip,
   onMoveClip,
+  onMoveClipToNewLayer,
   onTrimClip,
   onAddTrack,
   onRemoveTrack,
@@ -53,6 +54,7 @@ export function Timeline({
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
   onMoveClip: (clipId: string, timelineStart: number, trackId?: string, ripple?: boolean) => void;
+  onMoveClipToNewLayer?: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
   onRemoveTrack?: (trackId: string) => void;
@@ -78,6 +80,8 @@ export function Timeline({
   const [dropGhost, setDropGhost] = React.useState<{ trackId: string; start: number; duration: number } | null>(null);
   const [marquee, setMarquee] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  // True while dragging a video clip above the top track — drop creates a new layer.
+  const [newLayerDrag, setNewLayerDrag] = React.useState(false);
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
@@ -212,10 +216,17 @@ export function Timeline({
     const target = event.currentTarget as HTMLElement;
     capturePointer(target, event.pointerId);
 
+    let wantNewLayer = false;
     const onMove = (moveEvent: PointerEvent) => {
       const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
       const resolved = resolveMove(origin, rawStart, candidates, pxPerSecond);
-      const lane = laneTrackAt(moveEvent.clientY, track.kind);
+      const rect = canvasRef.current?.getBoundingClientRect();
+      // Dragged above the topmost lane → intent to spin up a new video layer.
+      wantNewLayer = Boolean(
+        rect && onMoveClipToNewLayer && track.kind === "video" && moveEvent.clientY - rect.top - RULER_HEIGHT < 0,
+      );
+      setNewLayerDrag(wantNewLayer);
+      const lane = wantNewLayer ? null : laneTrackAt(moveEvent.clientY, track.kind);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
         trackId: lane?.id ?? track.id,
@@ -228,8 +239,11 @@ export function Timeline({
     const onUp = () => {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
+      setNewLayerDrag(false);
       const draft = useEditorStore.getState().dragDraft;
-      if (
+      if (wantNewLayer && onMoveClipToNewLayer && draft && draft.clipId === clip.id) {
+        onMoveClipToNewLayer(clip.id, draft.timeline_start);
+      } else if (
         draft &&
         draft.clipId === clip.id &&
         (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id)
@@ -510,6 +524,7 @@ export function Timeline({
                 ["← / →", t("hintFrameStep")],
                 ["⇧点击", t("hintMultiSelect")],
                 [t("hintDragLabel"), t("hintDragBody")],
+                ["↕", t("hintVerticalDrag")],
               ].map(([key, body]) => (
                 <div className="tl-help-row" key={key}>
                   <kbd>{key}</kbd>
@@ -596,6 +611,11 @@ export function Timeline({
                 </div>
               ))}
             </div>
+            {newLayerDrag && (
+              <div className="tl-newlayer-hint" style={{ top: RULER_HEIGHT }}>
+                <Plus size={12} /> {t("dropNewLayer")}
+              </div>
+            )}
             {tracks.map((track) => (
               <div
                 className={
