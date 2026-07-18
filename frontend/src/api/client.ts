@@ -67,6 +67,7 @@ export function downloadAsrModel(id: string): Promise<AsrModel> {
 }
 
 export type Voice = components["schemas"]["VoiceOut"];
+export type Transcript = components["schemas"]["TranscriptOut"];
 export type TtsEngine = components["schemas"]["TtsEngineOut"];
 export function listVoices(workspaceId: string): Promise<Voice[]> {
   return api<Voice[]>(`/api/voices?workspace_id=${workspaceId}`);

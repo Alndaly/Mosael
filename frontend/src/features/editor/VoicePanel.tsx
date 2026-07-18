@@ -1,22 +1,26 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mic, Play, Square, Trash2, Upload, Wand2 } from "lucide-react";
+import { Loader2, Mic, Play, Square, Trash2, Upload, UsersRound, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   api,
   deleteVoice,
+  listAssets,
   listVoices,
   synthesizeVoice,
   uploadVoice,
+  voiceFromSpeaker,
   voiceSampleUrl,
   type Job,
   type Project,
+  type Transcript,
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 /** 声音克隆面板:上传参考音频 → 生成音色;选音色 + 输入文本 → 合成配音,
@@ -141,6 +145,41 @@ export function VoicePanel({
     void audioRef.current.play().catch(() => undefined);
   };
 
+  // Clone from a transcribed speaker: pick a transcribed asset → its speaker.
+  const [speakerOpen, setSpeakerOpen] = React.useState(false);
+  const [spAsset, setSpAsset] = React.useState("");
+  const [spSpeaker, setSpSpeaker] = React.useState("");
+  const [spName, setSpName] = React.useState("");
+  const assets = useQuery({
+    queryKey: ["assets", workspace.id, project.id],
+    queryFn: () => listAssets(workspace.id, project.id),
+    enabled: speakerOpen,
+  });
+  const clipAssets = (assets.data ?? []).filter((asset) => asset.kind === "video" || asset.kind === "audio");
+  const transcript = useQuery({
+    queryKey: ["transcript", spAsset],
+    queryFn: () => api<Transcript>(`/api/assets/${spAsset}/transcript`),
+    enabled: speakerOpen && Boolean(spAsset),
+    retry: false,
+  });
+  const speakers = React.useMemo(
+    () => [...new Set((transcript.data?.segments ?? []).map((seg) => seg.speaker).filter((s): s is string => !!s))],
+    [transcript.data],
+  );
+  const fromSpeaker = useMutation({
+    mutationFn: () => voiceFromSpeaker({ asset_id: spAsset, speaker: spSpeaker || null, name: spName }),
+    onSuccess: (voice) => {
+      void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+      setSpeakerOpen(false);
+      setSpAsset("");
+      setSpSpeaker("");
+      setSpName("");
+      setSelected(voice.id);
+      toast.success(t("voiceCreated"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   return (
     <section className="panel media-panel voice-panel">
       <div className="panel-head">{tabs}</div>
@@ -168,10 +207,82 @@ export function VoicePanel({
 
         <div className="voice-list-head">
           <span>{t("voiceLibrary")}</span>
-          <Button size="sm" variant="outline" onClick={() => setUploadOpen((open) => !open)}>
-            <Upload size={12} /> {t("voiceUpload")}
-          </Button>
+          <div className="voice-head-actions">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSpeakerOpen((open) => !open);
+                setUploadOpen(false);
+              }}
+            >
+              <UsersRound size={12} /> {t("voiceFromSpeaker")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setUploadOpen((open) => !open);
+                setSpeakerOpen(false);
+              }}
+            >
+              <Upload size={12} /> {t("voiceUpload")}
+            </Button>
+          </div>
         </div>
+
+        {speakerOpen && (
+          <div className="voice-upload">
+            <Select
+              value={spAsset}
+              onValueChange={(value) => {
+                setSpAsset(value);
+                setSpSpeaker("");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("voicePickAsset")} />
+              </SelectTrigger>
+              <SelectContent>
+                {clipAssets.map((asset) => (
+                  <SelectItem key={asset.id} value={asset.id}>
+                    {asset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {spAsset &&
+              (transcript.isError ? (
+                <p className="voice-hint">{t("voiceNoTranscript")}</p>
+              ) : speakers.length > 0 ? (
+                <Select value={spSpeaker} onValueChange={setSpSpeaker}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("voicePickSpeaker")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {speakers.map((speaker) => (
+                      <SelectItem key={speaker} value={speaker}>
+                        {speaker}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : transcript.isLoading ? null : (
+                <p className="voice-hint">{t("voiceNoSpeakers")}</p>
+              ))}
+            <Input placeholder={t("voiceName")} value={spName} onChange={(event) => setSpName(event.target.value)} />
+            <div className="voice-upload-actions">
+              <span className="voice-hint">{t("voiceFromSpeakerHint")}</span>
+              <Button
+                size="sm"
+                disabled={!spAsset || !spSpeaker || fromSpeaker.isPending}
+                onClick={() => fromSpeaker.mutate()}
+              >
+                {fromSpeaker.isPending ? <Loader2 size={12} className="spin" /> : null} {t("voiceDoClone")}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {uploadOpen && (
           <div className="voice-upload">
