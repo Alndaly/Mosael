@@ -5400,6 +5400,85 @@
   white-space: nowrap;
 }
 
+/* 节点查找弹层:搜索框 + 命中列表,点击某行把画布聚焦到该节点。 */
+.wf-nodesearch-pop {
+  width: 280px;
+  padding: 6px;
+}
+
+.wf-nodesearch-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 32px;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+
+.wf-nodesearch-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.wf-nodesearch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.wf-nodesearch-empty {
+  padding: 10px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+
+.wf-nodesearch-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-nodesearch-row:hover {
+  background: var(--muted);
+}
+
+.wf-nodesearch-row.is-active {
+  background: var(--accent);
+}
+
+.wf-nodesearch-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-nodesearch-type {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
 .wf-node:hover {
   border-color: var(--border-strong);
 }

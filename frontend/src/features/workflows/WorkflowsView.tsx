@@ -16,6 +16,7 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -38,6 +39,7 @@ import {
   Plus,
   Rocket,
   Save,
+  Search,
   Sparkles,
   Trash2,
   Type,
@@ -482,6 +484,33 @@ function WorkflowEditor({
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [agentOpen, setAgentOpen] = React.useState(false);
+  const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
+  const [nodeSearch, setNodeSearch] = React.useState("");
+  const rfRef = React.useRef<ReactFlowInstance | null>(null);
+
+  /**
+   * 把视口居中到某坐标上。x 方向右移半个检查器宽度(约 150px),让节点落在被检查器
+   * 遮挡之外的可视区。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
+   * getNode 会取空;而 setCenter 只改视口变换,不依赖节点已登记。
+   */
+  const focusPosition = React.useCallback((x: number, y: number, duration = 350) => {
+    const instance = rfRef.current;
+    if (!instance) return;
+    const zoom = Math.max(instance.getZoom(), 0.6);
+    // +150/zoom:把节点从画布中心再往左推半个检查器宽度,躲开右侧悬浮检查器。
+    instance.setCenter(x + 210 / 2 + 150 / zoom, y + 72 / 2, { zoom, duration });
+  }, []);
+
+  /** 选中并聚焦某节点(节点搜索用;从当前 graph 取坐标)。 */
+  const focusNode = React.useCallback(
+    (nodeId: string) => {
+      const target = graph.nodes.find((node) => node.id === nodeId);
+      if (!target) return;
+      setSelectedNodeId(nodeId);
+      focusPosition(target.position?.x ?? 0, target.position?.y ?? 0);
+    },
+    [graph.nodes, focusPosition],
+  );
 
   // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
   const lastSyncedRef = React.useRef(workflow.updated_at);
@@ -658,15 +687,18 @@ function WorkflowEditor({
     for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
       config[key] = spec?.type === "object" ? {} : "";
     }
+    const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
     const next: WorkflowGraph = {
       ...graph,
-      nodes: [
-        ...graph.nodes,
-        { id, type, name: meta.label, position: { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 }, config },
-      ],
+      nodes: [...graph.nodes, { id, type, name: meta.label, position, config }],
     };
     applyGraph(next);
     setSelectedNodeId(id);
+    // 新节点排在最右、又会被右侧检查器盖住 → 加完把视口聚焦过去,别让人找不到。
+    // 延后两帧 + 瞬时定位(duration 0):applyGraph 会替换整份节点数组触发重挂重测量,
+    // 期间的重渲染会打断 setCenter 的 d3 过渡(动画停在起点=看似没动);瞬时定位无过渡可打断,
+    // 一旦落定就不会被后续重渲染重置。
+    requestAnimationFrame(() => requestAnimationFrame(() => focusPosition(position.x, position.y, 0)));
   };
 
   const save = useMutation({
@@ -768,6 +800,61 @@ function WorkflowEditor({
           >
             <Bot size={13} /> {t("wfAgentTitle")}
           </Button>
+          <Popover
+            open={nodeSearchOpen}
+            onOpenChange={(open) => {
+              setNodeSearchOpen(open);
+              if (!open) setNodeSearch("");
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon-sm" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
+                <Search size={14} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="wf-nodesearch-pop">
+              <div className="wf-nodesearch-field">
+                <Search size={13} />
+                <input
+                  autoFocus
+                  value={nodeSearch}
+                  onChange={(event) => setNodeSearch(event.target.value)}
+                  placeholder={t("wfNodeSearchPlaceholder")}
+                />
+              </div>
+              <div className="wf-nodesearch-list">
+                {(() => {
+                  const query = nodeSearch.trim().toLowerCase();
+                  const matches = graph.nodes.filter((node) => {
+                    if (!query) return true;
+                    const label = (registry.get(node.type)?.label ?? node.type).toLowerCase();
+                    return (
+                      (node.name || "").toLowerCase().includes(query) ||
+                      node.type.toLowerCase().includes(query) ||
+                      label.includes(query)
+                    );
+                  });
+                  if (matches.length === 0)
+                    return <div className="wf-nodesearch-empty">{t("wfNodeSearchEmpty")}</div>;
+                  return matches.map((node) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      className={`wf-nodesearch-row${node.id === selectedNodeId ? " is-active" : ""}`}
+                      onClick={() => {
+                        focusNode(node.id);
+                        setNodeSearchOpen(false);
+                        setNodeSearch("");
+                      }}
+                    >
+                      <span className="wf-nodesearch-name">{node.name || (registry.get(node.type)?.label ?? node.type)}</span>
+                      <span className="wf-nodesearch-type">{registry.get(node.type)?.label ?? node.type}</span>
+                    </button>
+                  ));
+                })()}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -839,6 +926,12 @@ function WorkflowEditor({
             nodes={displayNodes}
             edges={edges}
             nodeTypes={NODE_COMPONENT_TYPES}
+            onInit={(instance) => {
+              rfRef.current = instance as unknown as ReactFlowInstance;
+              // 只在挂载时 fit 一次(切换工作流会因 key 重挂而重跑)。用命令式而非声明式
+              // fitView 属性:后者会在每次新增未测量节点时重新 fit,把手动聚焦覆盖掉。
+              requestAnimationFrame(() => instance.fitView({ padding: 0.25, maxZoom: 1 }));
+            }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -847,8 +940,6 @@ function WorkflowEditor({
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
             onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
             onPaneClick={() => setSelectedNodeId(null)}
-            fitView
-            fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
             defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
