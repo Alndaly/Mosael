@@ -388,6 +388,20 @@ class KbEmbeddingConfigUpdate(BaseModel):
     dim: int = Field(ge=1, le=8192)
 
 
+class AsrModelOut(BaseModel):
+    id: str
+    engine: str
+    label: str
+    detail: str
+    status: str  # "installed" | "missing" | "downloading" | "failed"
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    expected_bytes: int = 0
+    speed_bps: float = 0.0
+    eta_seconds: float | None = None
+    message: str = ""
+
+
 class VendorPresetOut(BaseModel):
     vendor: str
     label: str

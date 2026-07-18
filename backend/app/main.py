@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.asr import router as asr_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.confirmations import router as confirmations_router
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(assets_router, prefix="/api", dependencies=protected)
+    app.include_router(asr_router, prefix="/api", dependencies=protected)
     app.include_router(luts_router, prefix="/api", dependencies=protected)
     app.include_router(sequences_router, prefix="/api", dependencies=protected)
     app.include_router(jobs_router, prefix="/api", dependencies=protected)

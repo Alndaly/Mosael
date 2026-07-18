@@ -126,6 +126,31 @@ def to_segment_ins(segments: list[dict]) -> list[SegmentIn]:
     return parsed
 
 
+def _watch_model_download(job_id: str, provider: str) -> threading.Event:
+    """While a transcribe is running, if its model isn't installed yet, poll the
+    download and map it onto job progress 0.25→0.9. Returns a stop Event."""
+    from app.audio import asr_models
+
+    stop = threading.Event()
+    entry = asr_models.entry_for_transcribe(provider)
+    if entry is None or asr_models.is_installed(entry):
+        return stop  # nothing to download → leave the job at 0.25 during inference
+
+    def _loop() -> None:
+        while not stop.wait(2.0):
+            fraction = asr_models.measure_fraction(entry)
+            with SessionLocal() as db:
+                job = db.get(Job, job_id)
+                if job is None or job.status != "running":
+                    return
+                job.progress = round(0.25 + fraction * 0.6, 4)  # 0.25..0.85
+                job.message = f"首次转写:下载模型中 {int(fraction * 100)}%"
+                db.commit()
+
+    threading.Thread(target=_loop, daemon=True).start()
+    return stop
+
+
 def start_transcription(db: Session, asset_id: str) -> Job:
     asset = db.get(Asset, asset_id)
     if asset is None:
@@ -167,7 +192,13 @@ def _run_transcription(job_id: str, asset_id: str) -> None:
                 _extract_audio(source, wav)
                 job.progress = 0.25
                 db.commit()
-                output = run_asr(wav, python, provider)
+                # First transcribe on a machine downloads ~2GB of models inside the
+                # library — surface that as job progress instead of a frozen 25%.
+                stop = _watch_model_download(job_id, provider)
+                try:
+                    output = run_asr(wav, python, provider)
+                finally:
+                    stop.set()
 
             segments = to_segment_ins(output.get("segments") or [])
             if not segments:

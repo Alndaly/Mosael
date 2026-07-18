@@ -150,10 +150,47 @@ def run_whisperx(request: dict[str, Any]) -> dict[str, Any]:
     return {"language": language, "segments": whisperx_segments(aligned)}
 
 
+def warmup_funasr(request: dict[str, Any]) -> dict[str, Any]:
+    """Construct the FunASR pipeline so its sub-models (paraformer/vad/punc/spk)
+    download to the ModelScope cache, without running inference."""
+    from funasr import AutoModel
+
+    kwargs: dict[str, Any] = dict(
+        model=request.get("funasr_model", "paraformer-zh"),
+        vad_model=request.get("funasr_vad_model", "fsmn-vad"),
+        punc_model=request.get("funasr_punc_model", "ct-punc"),
+        hub=request.get("funasr_hub", "ms"),
+        device="cpu",
+        disable_update=True,
+    )
+    spk_model = request.get("funasr_spk_model", "cam++")
+    if spk_model:
+        kwargs["spk_model"] = spk_model
+    AutoModel(**kwargs)
+    return {"ok": True}
+
+
+def warmup_whisperx(request: dict[str, Any]) -> dict[str, Any]:
+    """Download the WhisperX (faster-whisper) model + the zh alignment model."""
+    import whisperx
+
+    model_name = request.get("whisper_model", "small")
+    whisperx.load_model(model_name, "cpu", compute_type="int8", language=request.get("language") or None)
+    try:
+        whisperx.load_align_model(language_code=request.get("language") or "zh", device="cpu")
+    except Exception:  # noqa: BLE001 — alignment model is optional for warmup
+        pass
+    return {"ok": True}
+
+
 def main() -> None:
     request = json.loads(sys.stdin.read())
     provider = (request.get("provider") or "funasr").strip().lower()
-    output = run_funasr(request) if provider == "funasr" else run_whisperx(request)
+    action = (request.get("action") or "transcribe").strip().lower()
+    if action == "warmup":
+        output = warmup_funasr(request) if provider == "funasr" else warmup_whisperx(request)
+    else:
+        output = run_funasr(request) if provider == "funasr" else run_whisperx(request)
     with open(sys.argv[1], "w", encoding="utf-8") as handle:
         json.dump(output, handle, ensure_ascii=False)
 

@@ -57,6 +57,14 @@ export type TaskEvent = components["schemas"]["TaskEventOut"];
 export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
   return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
 }
+
+export type AsrModel = components["schemas"]["AsrModelOut"];
+export function listAsrModels(): Promise<AsrModel[]> {
+  return api<AsrModel[]>("/api/asr/models");
+}
+export function downloadAsrModel(id: string): Promise<AsrModel> {
+  return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
+}
 export type GenerationModel = components["schemas"]["GenerationModelOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];

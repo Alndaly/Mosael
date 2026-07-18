@@ -1,12 +1,13 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut, MessageSquare, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
+import { KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, Server, Sun, UserRound } from "lucide-react";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
+import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
@@ -17,9 +18,9 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
-type SectionId = "account" | "appearance" | "providers" | "feishu" | "backend";
+type SectionId = "account" | "appearance" | "providers" | "transcribe" | "feishu" | "backend";
 
-const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "feishu", "backend"];
+const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "transcribe", "feishu", "backend"];
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -39,6 +40,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "account", label: t("settingsAccount"), icon: <UserRound size={14} /> },
     { id: "appearance", label: t("settingsAppearance"), icon: <Palette size={14} /> },
     { id: "providers", label: t("settingsProviders"), icon: <KeyRound size={14} /> },
+    { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
     { id: "backend", label: t("settingsBackend"), icon: <Server size={14} /> },
   ];
@@ -68,6 +70,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               <KbEmbeddingSection />
             </>
           )}
+          {section === "transcribe" && <AsrModelsSection />}
           {section === "feishu" && <FeishuSection workspace={workspace} />}
           {section === "backend" && <BackendSection workspace={workspace} />}
         </div>

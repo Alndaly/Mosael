@@ -1545,6 +1545,121 @@
   gap: 8px;
 }
 
+/* 转写模型下载卡片 */
+.asr-model-list {
+  display: grid;
+  gap: 8px;
+}
+
+.asr-model-empty {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.asr-model {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  padding: 10px 12px;
+}
+
+.asr-model-installed {
+  border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+}
+
+.asr-model-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.asr-model-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.asr-model-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.asr-model-title strong {
+  font-size: 13px;
+}
+
+.asr-model-engine {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.asr-model-size {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.asr-model-detail {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.asr-model-action {
+  flex-shrink: 0;
+}
+
+.asr-model-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.asr-model-progresslabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.asr-model-progress {
+  display: grid;
+  gap: 5px;
+}
+
+.asr-model-progressmeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.asr-model-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--destructive);
+  font-size: 11.5px;
+}
+
 .settings-section {
   display: grid;
   gap: 4px;

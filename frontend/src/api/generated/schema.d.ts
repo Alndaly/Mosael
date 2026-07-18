@@ -475,6 +475,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asr/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Asr Models
+         * @description Downloadable transcription models with install/download status.
+         */
+        get: operations["list_asr_models_api_asr_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/asr/models/{model_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Asr Model
+         * @description Deliberately (pre-)download a model in the external ASR interpreter.
+         */
+        post: operations["download_asr_model_api_asr_models__model_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/luts": {
         parameters: {
             query?: never;
@@ -2384,6 +2424,46 @@ export interface components {
             model: string;
             /** Frames */
             frames: number;
+        };
+        /** AsrModelOut */
+        AsrModelOut: {
+            /** Id */
+            id: string;
+            /** Engine */
+            engine: string;
+            /** Label */
+            label: string;
+            /** Detail */
+            detail: string;
+            /** Status */
+            status: string;
+            /**
+             * Downloaded Bytes
+             * @default 0
+             */
+            downloaded_bytes: number;
+            /**
+             * Total Bytes
+             * @default 0
+             */
+            total_bytes: number;
+            /**
+             * Expected Bytes
+             * @default 0
+             */
+            expected_bytes: number;
+            /**
+             * Speed Bps
+             * @default 0
+             */
+            speed_bps: number;
+            /** Eta Seconds */
+            eta_seconds?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
         };
         /** AssetCreate */
         AssetCreate: {
@@ -5173,6 +5253,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_asr_models_api_asr_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsrModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_asr_model_api_asr_models__model_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsrModelOut"];
                 };
             };
             /** @description Validation Error */
