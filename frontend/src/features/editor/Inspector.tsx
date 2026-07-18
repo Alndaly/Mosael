@@ -301,20 +301,19 @@ export function Inspector({
                     { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
                   ] as const
                 ).map((row) => (
-                  <label key={row.key} className="transform-row">
+                  <div key={row.key} className="transform-row">
                     <span className="transform-row-label">{row.label}</span>
-                    <input
+                    <Slider
+                      // 值入 key:改画幅/重置后重挂,让非受控滑块跳到新值。
                       key={`${row.key}-${selectedClip.id}-${transform[row.key]}`}
-                      type="range"
                       min={row.min}
                       max={row.max}
                       step={row.step}
-                      defaultValue={transform[row.key]}
-                      onPointerUp={(event) => applyTransform({ [row.key]: Number((event.target as HTMLInputElement).value) })}
-                      onKeyUp={(event) => applyTransform({ [row.key]: Number((event.target as HTMLInputElement).value) })}
+                      defaultValue={[transform[row.key]]}
+                      onValueCommit={([value]) => applyTransform({ [row.key]: value })}
                     />
                     <span className="transform-row-value timecode">{row.fmt(transform[row.key])}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
             )}
