@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, KeyRound, Plus, Power, Trash2 } from "lucide-react";
+import { ExternalLink, KeyRound, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -30,6 +30,7 @@ export function ProviderProfilesSection() {
   const t = useI18n();
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
+  const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
   const [name, setName] = React.useState("");
   const [vendor, setVendor] = React.useState("moonshot");
   const [apiKey, setApiKey] = React.useState("");
@@ -46,6 +47,33 @@ export function ProviderProfilesSection() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["provider-profiles"] });
 
+  const resetForm = () => {
+    setName("");
+    setApiKey("");
+    setBaseUrl("");
+    setModel("");
+  };
+  const closeModal = () => {
+    setAdding(false);
+    setEditing(null);
+    resetForm();
+  };
+  const openCreate = () => {
+    setEditing(null);
+    resetForm();
+    setVendor("moonshot");
+    setAdding(true);
+  };
+  const openEdit = (profile: ProviderProfile) => {
+    setAdding(false);
+    setEditing(profile);
+    setName(profile.name);
+    setVendor(profile.vendor);
+    setApiKey(""); // 密钥只存掩码,留空表示保持不变
+    setBaseUrl(profile.base_url);
+    setModel(profile.default_model);
+  };
+
   const create = useMutation({
     mutationFn: () =>
       api<ProviderProfile>("/api/settings/providers", {
@@ -59,11 +87,24 @@ export function ProviderProfilesSection() {
         }),
       }),
     onSuccess: () => {
-      setAdding(false);
-      setName("");
-      setApiKey("");
-      setBaseUrl("");
-      setModel("");
+      closeModal();
+      void refresh();
+    },
+  });
+  const update = useMutation({
+    mutationFn: (id: string) =>
+      api<ProviderProfile>(`/api/settings/providers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: name.trim(),
+          base_url: baseUrl.trim(),
+          default_model: model.trim(),
+          // 只有真正输入了新 key 才提交,否则后端保持原值
+          ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+        }),
+      }),
+    onSuccess: () => {
+      closeModal();
       void refresh();
     },
   });
@@ -89,22 +130,30 @@ export function ProviderProfilesSection() {
       title={t("settingsProviders")}
       description={t("providerSectionDesc")}
       actions={
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+        <Button variant="outline" size="sm" onClick={openCreate}>
           <Plus size={13} /> {t("providerAdd")}
         </Button>
       }
     >
-      <ModalShell open={adding} onOpenChange={(next) => !next && setAdding(false)} title={t("providerAdd")}>
+      <ModalShell
+        open={adding || editing !== null}
+        onOpenChange={(next) => !next && closeModal()}
+        title={editing ? t("providerEdit") : t("providerAdd")}
+      >
         <form
           className="task-create-form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (name.trim() && apiKey.trim()) create.mutate();
+            if (editing) {
+              if (name.trim()) update.mutate(editing.id);
+            } else if (name.trim() && apiKey.trim()) {
+              create.mutate();
+            }
           }}
         >
           <label className="wf-field">
             <span>{t("providerVendorLabel")}</span>
-            <Select value={vendor} onValueChange={setVendor}>
+            <Select value={vendor} onValueChange={setVendor} disabled={editing !== null}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -133,7 +182,7 @@ export function ProviderProfilesSection() {
             </span>
             <Input
               type="password"
-              placeholder={t("providerKeyPlaceholder")}
+              placeholder={editing ? t("providerKeyKeepPlaceholder") : t("providerKeyPlaceholder")}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
@@ -159,12 +208,18 @@ export function ProviderProfilesSection() {
             )}
           </label>
           <div className="task-create-actions">
-            <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>
+            <Button type="button" variant="outline" size="sm" onClick={closeModal}>
               {t("cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
-              <Plus size={13} /> {t("providerAdd")}
-            </Button>
+            {editing ? (
+              <Button type="submit" size="sm" disabled={!name.trim() || update.isPending}>
+                {t("save")}
+              </Button>
+            ) : (
+              <Button type="submit" size="sm" disabled={!name.trim() || !apiKey.trim() || create.isPending}>
+                <Plus size={13} /> {t("providerAdd")}
+              </Button>
+            )}
           </div>
         </form>
       </ModalShell>
@@ -186,6 +241,9 @@ export function ProviderProfilesSection() {
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="feishu-bot-actions">
+                <Button variant="ghost" size="icon-sm" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
+                  <Pencil size={13} />
+                </Button>
                 <Button variant="ghost" size="icon-sm" onClick={() => toggle.mutate(profile)} aria-label="toggle">
                   <Power size={13} />
                 </Button>
