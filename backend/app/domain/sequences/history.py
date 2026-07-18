@@ -136,6 +136,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["previous_timeline_start"]
         clip.track_id = payload.get("previous_track_id", clip.track_id)
+        for entry in payload.get("shifted", []):
+            other = _require_clip_row(db, entry["clip_id"])
+            other.timeline_start = entry["previous_timeline_start"]
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         previous = payload["previous"]
@@ -202,6 +205,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]
         clip.track_id = payload["track_id"]
+        for entry in payload.get("shifted", []):
+            other = _require_clip_row(db, entry["clip_id"])
+            other.timeline_start = entry["timeline_start"]
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]

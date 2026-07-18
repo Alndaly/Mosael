@@ -27,6 +27,10 @@ export interface DraggingAsset {
 /** "select" drags/moves clips; "blade" splits a clip where you click. */
 export type ToolMode = "select" | "blade";
 
+/** DaVinci-style edit mode. "insert" ripples downstream clips aside when you
+ * drop; "overwrite" drops in place (clips may overlap). */
+export type EditMode = "insert" | "overwrite";
+
 interface EditorState {
   playhead: number;
   playing: boolean;
@@ -40,6 +44,7 @@ interface EditorState {
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
   tool: ToolMode;
+  editMode: EditMode;
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
@@ -55,6 +60,8 @@ interface EditorState {
   setDragDraft: (draft: DragDraft | null) => void;
   setDraggingAsset: (asset: DraggingAsset | null) => void;
   setTool: (tool: ToolMode) => void;
+  setEditMode: (mode: EditMode) => void;
+  toggleEditMode: () => void;
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
@@ -72,6 +79,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   dragDraft: null,
   draggingAsset: null,
   tool: "select",
+  editMode: "overwrite",
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
   togglePlaying: () => set((state) => ({ playing: !state.playing })),
@@ -100,4 +108,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
   setTool: (tool) => set({ tool }),
+  setEditMode: (editMode) => set({ editMode }),
+  toggleEditMode: () => set((state) => ({ editMode: state.editMode === "insert" ? "overwrite" : "insert" })),
 }));

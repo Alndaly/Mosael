@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, BetweenHorizontalStart, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -52,7 +52,7 @@ export function Timeline({
   sequence: Sequence;
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
-  onMoveClip: (clipId: string, timelineStart: number, trackId?: string) => void;
+  onMoveClip: (clipId: string, timelineStart: number, trackId?: string, ripple?: boolean) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
   onRemoveTrack?: (trackId: string) => void;
@@ -74,12 +74,21 @@ export function Timeline({
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
   const tool = useEditorStore((state) => state.tool);
+  const editMode = useEditorStore((state) => state.editMode);
   const [dropGhost, setDropGhost] = React.useState<{ trackId: string; start: number; duration: number } | null>(null);
   const [marquee, setMarquee] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [helpOpen, setHelpOpen] = React.useState(false);
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
+
+  // Insert mode: while dragging, downstream clips on the target track visibly part
+  // to make room (DaVinci "段落挤开"). This is the timeline width of the dragged clip.
+  const dragMoveDuration = React.useMemo(() => {
+    if (!dragDraft || dragDraft.kind !== "move") return 0;
+    const src = allClips.find((item) => item.id === dragDraft.clipId);
+    return src ? (dragDraft.src_out - dragDraft.src_in) / (src.speed || 1) : 0;
+  }, [dragDraft, allClips]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
   // Waveforms for audio-track clips whose assets have a cached waveform.
@@ -225,7 +234,9 @@ export function Timeline({
         draft.clipId === clip.id &&
         (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id)
       ) {
-        onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined);
+        // Insert mode ripples the destination track's downstream clips aside.
+        const ripple = useEditorStore.getState().editMode === "insert";
+        onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple);
       } else {
         useEditorStore.getState().setDragDraft(null);
       }
@@ -331,6 +342,26 @@ export function Timeline({
               onClick={() => useEditorStore.getState().setTool("blade")}
             >
               <Slice size={12} /> {t("toolBlade")}
+            </button>
+          </div>
+          <div className="seg tl-tool-seg" role="group" aria-label={t("editMode")}>
+            <button
+              type="button"
+              className={editMode === "overwrite" ? "seg-btn active" : "seg-btn"}
+              title={t("editModeOverwriteHint")}
+              aria-pressed={editMode === "overwrite"}
+              onClick={() => useEditorStore.getState().setEditMode("overwrite")}
+            >
+              <Replace size={12} /> {t("editModeOverwrite")}
+            </button>
+            <button
+              type="button"
+              className={editMode === "insert" ? "seg-btn active" : "seg-btn"}
+              title={t("editModeInsertHint")}
+              aria-pressed={editMode === "insert"}
+              onClick={() => useEditorStore.getState().setEditMode("insert")}
+            >
+              <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
             </button>
           </div>
           <span className="timecode tl-readout">
@@ -619,6 +650,18 @@ export function Timeline({
                   if (dragDraft && dragDraft.clipId === clip.id && dragDraft.trackId !== track.id) return null;
                   const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
                   const display = draft ?? clip;
+                  // Insert-mode preview: clips at/after the drop point slide right by the
+                  // dragged clip's duration, showing where the ripple will land them.
+                  const partingShift =
+                    editMode === "insert" &&
+                    dragDraft &&
+                    dragDraft.kind === "move" &&
+                    dragDraft.trackId === track.id &&
+                    clip.id !== dragDraft.clipId &&
+                    clip.timeline_start >= dragDraft.timeline_start - 1e-9
+                      ? dragMoveDuration
+                      : 0;
+                  const displayLeft = display.timeline_start + partingShift;
                   const waveform = track.kind === "audio" && clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;
                   const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks = waveform
@@ -632,7 +675,7 @@ export function Timeline({
                       key={clip.id}
                       trackKind={track.kind}
                       name={clip.text_override ?? (clip.asset_id ? assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8) : "")}
-                      left={timeToPx(display.timeline_start, pxPerSecond)}
+                      left={timeToPx(displayLeft, pxPerSecond)}
                       width={clipWidth}
                       selected={selectedClipIds.includes(clip.id)}
                       dragging={Boolean(draft)}

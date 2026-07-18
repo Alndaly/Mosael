@@ -191,8 +191,17 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: refreshSequences,
   });
   const moveClipMutation = useMutation({
-    mutationFn: ({ clipId, timelineStart, trackId }: { clipId: string; timelineStart: number; trackId?: string }) =>
-      moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null }),
+    mutationFn: ({
+      clipId,
+      timelineStart,
+      trackId,
+      ripple,
+    }: {
+      clipId: string;
+      timelineStart: number;
+      trackId?: string;
+      ripple?: boolean;
+    }) => moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
     onSettled: settleDraft,
   });
   const trimClipMutation = useMutation({
@@ -596,7 +605,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           sequence={sequence}
           assets={assets.data ?? []}
           onInsertClip={(args) => insertClipMutation.mutate(args)}
-          onMoveClip={(clipId, timelineStart, trackId) => moveClipMutation.mutate({ clipId, timelineStart, trackId })}
+          onMoveClip={(clipId, timelineStart, trackId, ripple) =>
+            moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple })
+          }
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}

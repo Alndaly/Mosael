@@ -132,7 +132,7 @@ export function insertClip(
 export function moveClip(
   sequenceId: string,
   clipId: string,
-  body: { timeline_start: number; track_id?: string | null },
+  body: { timeline_start: number; track_id?: string | null; ripple?: boolean },
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/move`, {
     method: "PATCH",

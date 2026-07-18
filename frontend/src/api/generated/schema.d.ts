@@ -3250,6 +3250,11 @@ export interface components {
             timeline_start: number;
             /** Track Id */
             track_id?: string | null;
+            /**
+             * Ripple
+             * @default false
+             */
+            ripple: boolean;
         };
         /** NotificationListOut */
         NotificationListOut: {

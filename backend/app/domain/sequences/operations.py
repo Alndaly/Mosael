@@ -28,6 +28,9 @@ class MoveClip:
     clip_id: str
     timeline_start: float
     track_id: str | None = None
+    # Insert-edit (DaVinci "insert" mode): push destination-track clips at or
+    # after the drop point right by this clip's duration to make room.
+    ripple: bool = False
     actor_id: str | None = None
 
 
@@ -120,6 +123,24 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
 
     previous_start = clip.timeline_start
     clip.timeline_start = op.timeline_start
+
+    shifted: list[dict[str, Any]] = []
+    if op.ripple:
+        duration = (clip.src_out - clip.src_in) / (clip.speed or 1)
+        followers = db.scalars(
+            select(Clip).where(
+                Clip.track_id == clip.track_id,
+                Clip.id != clip.id,
+                Clip.timeline_start >= op.timeline_start - 1e-9,
+            )
+        )
+        for other in followers:
+            new_start = other.timeline_start + duration
+            shifted.append(
+                {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
+            )
+            other.timeline_start = new_start
+
     _record_operation(
         db,
         sequence,
@@ -130,6 +151,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
             "timeline_start": op.timeline_start,
             "previous_timeline_start": previous_start,
             "previous_track_id": previous_track_id,
+            "shifted": shifted,
         },
         summary={"operation": "move_clip", "clip_id": clip.id},
         actor_id=op.actor_id,

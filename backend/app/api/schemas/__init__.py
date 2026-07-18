@@ -231,6 +231,7 @@ class InsertClipRequest(BaseModel):
 class MoveClipRequest(BaseModel):
     timeline_start: float
     track_id: str | None = None
+    ripple: bool = False
 
 
 class TrimClipRequest(BaseModel):
