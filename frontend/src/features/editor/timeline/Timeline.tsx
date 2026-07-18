@@ -227,9 +227,10 @@ export function Timeline({
     const startX = event.clientX;
     const origin = { ...clip };
     const candidates = snapEnabled ? snapCandidates(allClips, clip.id, playhead) : [];
-    const target = event.currentTarget as HTMLElement;
-    capturePointer(target, event.pointerId);
 
+    // Listen on window, NOT the clip element: a cross-track drag hides the clip in its
+    // source lane (it unmounts), which would sever element-bound listeners mid-drag and
+    // freeze the drag with no pointerup. window survives the unmount. (Mirrors startMarquee.)
     let wantNewLayer = false;
     const onMove = (moveEvent: PointerEvent) => {
       const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
@@ -251,8 +252,8 @@ export function Timeline({
       });
     };
     const onUp = () => {
-      target.removeEventListener("pointermove", onMove);
-      target.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       setNewLayerDrag(false);
       const draft = useEditorStore.getState().dragDraft;
       if (wantNewLayer && onMoveClipToNewLayer && draft && draft.clipId === clip.id) {
@@ -269,8 +270,8 @@ export function Timeline({
         useEditorStore.getState().setDragDraft(null);
       }
     };
-    target.addEventListener("pointermove", onMove);
-    target.addEventListener("pointerup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   const startClipTrim = (event: React.PointerEvent, track: Track, clipId: string, edge: "start" | "end") => {
