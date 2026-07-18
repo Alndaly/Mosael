@@ -82,6 +82,9 @@ export function uploadVoice(args: { workspaceId: string; name: string; reference
 export function deleteVoice(id: string): Promise<void> {
   return api<void>(`/api/voices/${id}`, { method: "DELETE" });
 }
+export function voiceFromSpeaker(body: { asset_id: string; speaker?: string | null; name?: string }): Promise<Voice> {
+  return api<Voice>("/api/voices/from-speaker", { method: "POST", body: JSON.stringify(body) });
+}
 export function synthesizeVoice(id: string, body: { text: string; project_id?: string | null }): Promise<Job> {
   return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
 }

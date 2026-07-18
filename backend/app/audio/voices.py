@@ -64,6 +64,67 @@ def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: st
     return voice
 
 
+def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speaker: str | None, name: str) -> Voice:
+    """Clone a voice from a transcribed asset: pull up to ~8s of the given
+    speaker's own audio (their transcript segments) as the reference clip, and
+    their transcript text as the reference text."""
+    from app.db.models import Transcript, new_id
+
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workspace_id:
+        raise VoiceError("素材不存在")
+    if not asset.file_key:
+        raise VoiceError("素材没有本地文件")
+    transcript = db.scalar(select(Transcript).where(Transcript.asset_id == asset_id))
+    if transcript is None:
+        raise VoiceError("该素材还没有逐字稿,请先转写")
+
+    segments = [
+        seg
+        for seg in transcript.segments
+        if (speaker is None or seg.speaker == speaker) and seg.end_time - seg.start_time >= 0.2
+    ]
+    picked: list = []
+    total = 0.0
+    for seg in segments:
+        picked.append(seg)
+        total += seg.end_time - seg.start_time
+        if total >= 8.0:
+            break
+    if not picked:
+        raise VoiceError("没有找到该说话人的可用片段")
+
+    reference_text = " ".join(seg.text.strip() for seg in picked if seg.text.strip())[:2000]
+    voice_id = new_id()
+    target_dir = voice_dir(workspace_id, voice_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    ref = target_dir / "reference.wav"
+    # Select just this speaker's ranges in one pass and re-stamp timestamps.
+    expr = "+".join(f"between(t,{seg.start_time:.3f},{seg.end_time:.3f})" for seg in picked)
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(resolve_key(asset.file_key)), "-vn",
+         "-af", f"aselect='{expr}',asetpts=N/SR/TB", "-ac", "1", "-ar", "24000", str(ref)],
+        capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode != 0 or not ref.exists():
+        raise VoiceError(f"提取说话人音频失败: {result.stderr[-300:]}")
+
+    voice = Voice(
+        id=voice_id,
+        workspace_id=workspace_id,
+        name=name.strip() or (speaker or "说话人音色"),
+        reference_text=reference_text,
+        reference_key=voice_key(workspace_id, voice_id, "reference.wav"),
+        source="speaker",
+        source_asset_id=asset_id,
+        source_speaker=speaker,
+    )
+    db.add(voice)
+    db.commit()
+    db.refresh(voice)
+    return voice
+
+
 def list_voices(db: Session, workspace_id: str) -> list[Voice]:
     return list(
         db.scalars(select(Voice).where(Voice.workspace_id == workspace_id).order_by(Voice.created_at.desc()))
@@ -177,6 +238,7 @@ def _run_synthesis(job_id: str, voice_id: str, text: str, project_id: str | None
 __all__ = [
     "VoiceError",
     "create_from_upload",
+    "create_from_speaker",
     "list_voices",
     "get_voice",
     "delete_voice",

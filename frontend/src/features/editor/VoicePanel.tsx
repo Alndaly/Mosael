@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mic, Play, Trash2, Upload, Wand2 } from "lucide-react";
+import { Loader2, Mic, Play, Square, Trash2, Upload, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -41,6 +41,45 @@ export function VoicePanel({
   const [file, setFile] = React.useState<File | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const [recording, setRecording] = React.useState(false);
+  const [recordSecs, setRecordSecs] = React.useState(0);
+  const recorderRef = React.useRef<MediaRecorder | null>(null);
+  const timerRef = React.useRef<number | null>(null);
+
+  const stopTimer = () => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+  };
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        setFile(new File([blob], `recording-${Date.now()}.webm`, { type: blob.type }));
+        stream.getTracks().forEach((track) => track.stop());
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      setRecording(true);
+      setRecordSecs(0);
+      timerRef.current = window.setInterval(() => setRecordSecs((s) => s + 1), 1000);
+    } catch {
+      toast.error(t("voiceMicDenied"));
+    }
+  };
+  const stopRecording = () => {
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+    setRecording(false);
+    stopTimer();
+  };
+  React.useEffect(() => () => stopTimer(), []);
 
   const list = voices.data ?? [];
   const activeVoice = selected ?? list[0]?.id ?? null;
@@ -151,18 +190,29 @@ export function VoicePanel({
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             <div className="voice-upload-actions">
-              <Button size="sm" variant="ghost" onClick={() => fileRef.current?.click()}>
-                {file ? file.name.slice(0, 24) : t("voicePickFile")}
-              </Button>
+              <div className="voice-upload-source">
+                <Button size="sm" variant="ghost" disabled={recording} onClick={() => fileRef.current?.click()}>
+                  {file && !recording ? file.name.slice(0, 18) : t("voicePickFile")}
+                </Button>
+                {recording ? (
+                  <Button size="sm" variant="destructive" onClick={stopRecording}>
+                    <Square size={11} /> {recordSecs}s
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="ghost" onClick={startRecording}>
+                    <Mic size={12} /> {t("voiceRecord")}
+                  </Button>
+                )}
+              </div>
               <Button
                 size="sm"
-                disabled={!name.trim() || !file || upload.isPending}
+                disabled={!name.trim() || !file || recording || upload.isPending}
                 onClick={() => upload.mutate()}
               >
                 {upload.isPending ? <Loader2 size={12} className="spin" /> : null} {t("confirm")}
               </Button>
             </div>
-            <p className="voice-hint">{t("voiceUploadHint")}</p>
+            <p className="voice-hint">{recording ? t("voiceRecording") : t("voiceUploadHint")}</p>
           </div>
         )}
 

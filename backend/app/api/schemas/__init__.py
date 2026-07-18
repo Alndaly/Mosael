@@ -417,6 +417,12 @@ class SynthesizeRequest(BaseModel):
     project_id: str | None = None
 
 
+class VoiceFromSpeakerRequest(BaseModel):
+    asset_id: str
+    speaker: str | None = None
+    name: str = ""
+
+
 class AsrModelOut(BaseModel):
     id: str
     engine: str

@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import JobOut, SynthesizeRequest, TtsEngineOut, VoiceOut
+from app.api.schemas import JobOut, SynthesizeRequest, TtsEngineOut, VoiceFromSpeakerRequest, VoiceOut
 from app.audio import tts_models, voices
 from app.core.permissions import ensure_workspace_access
 
@@ -54,6 +54,23 @@ def upload_voice(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
+    return _voice_out(voice)
+
+
+@router.post("/voices/from-speaker", response_model=VoiceOut)
+def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: CurrentUser) -> dict:
+    from app.db.models import Asset
+
+    asset = db.get(Asset, body.asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="素材不存在")
+    ensure_workspace_access(db, user, asset.workspace_id)
+    try:
+        voice = voices.create_from_speaker(
+            db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name
+        )
+    except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _voice_out(voice)
 
 

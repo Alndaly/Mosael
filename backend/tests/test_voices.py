@@ -7,13 +7,13 @@ import wave
 from tests.util import fresh_client
 
 
-def _tiny_wav() -> bytes:
+def _tiny_wav(seconds: int = 1) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "w") as handle:
         handle.setnchannels(1)
         handle.setsampwidth(2)
         handle.setframerate(16000)
-        handle.writeframes(b"\x00\x00" * 16000)  # 1s silence
+        handle.writeframes(b"\x00\x00" * 16000 * seconds)
     return buf.getvalue()
 
 
@@ -54,6 +54,40 @@ def test_voice_upload_list_synthesize_delete() -> None:
     # Delete.
     assert client.delete(f"/api/voices/{voice['id']}").status_code == 204
     assert client.get(f"/api/voices?workspace_id={ws['id']}").json() == []
+
+
+def test_voice_from_transcribed_speaker() -> None:
+    from app.core.db import SessionLocal
+    from app.domain.transcripts.operations import SegmentIn, attach_transcript
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": proj["id"]},
+        files={"file": ("clip.wav", _tiny_wav(3), "audio/wav")},
+    ).json()
+
+    with SessionLocal() as db:
+        attach_transcript(
+            db,
+            asset_id=asset["id"],
+            language="zh",
+            segments=[
+                SegmentIn(start_time=0.0, end_time=1.0, text="你好世界", speaker="SPEAKER_00", tokens=()),
+                SegmentIn(start_time=1.0, end_time=2.0, text="欢迎收看", speaker="SPEAKER_00", tokens=()),
+            ],
+            source="test",
+        )
+
+    voice = client.post(
+        "/api/voices/from-speaker",
+        json={"asset_id": asset["id"], "speaker": "SPEAKER_00", "name": "甲"},
+    ).json()
+    assert voice["name"] == "甲"
+    assert voice["source"] == "speaker"
+    assert "你好世界" in voice["reference_text"]
 
 
 def test_tts_models_listed() -> None:
