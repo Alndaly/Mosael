@@ -74,7 +74,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
-import { analyzeWorkflow, extractRefs, type DataType, type NodeIssue } from "@/features/workflows/analyze";
+import {
+  analyzeWorkflow,
+  extractRefs,
+  inputType,
+  outputType,
+  typesCompatible,
+  type DataType,
+  type NodeIssue,
+} from "@/features/workflows/analyze";
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -155,7 +163,13 @@ function WfNode({ data, selected }: NodeProps) {
           <div className="wf-io-col in">
             {inputs.map((key) => (
               <div className="wf-io-row" key={key}>
-                <Handle id={`in:${key}`} type="target" position={Position.Left} className="wf-socket" />
+                <Handle
+                  id={`in:${key}`}
+                  type="target"
+                  position={Position.Left}
+                  className="wf-socket"
+                  data-dtype={inputType(d.nodeType, key)}
+                />
                 <span className="wf-io-label">{FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}</span>
               </div>
             ))}
@@ -164,7 +178,13 @@ function WfNode({ data, selected }: NodeProps) {
             {outputs.map((output) => (
               <div className="wf-io-row" key={output}>
                 <span className="wf-io-label">{output}</span>
-                <Handle id={`out:${output}`} type="source" position={Position.Right} className="wf-socket" />
+                <Handle
+                  id={`out:${output}`}
+                  type="source"
+                  position={Position.Right}
+                  className="wf-socket"
+                  data-dtype={outputType(d.nodeType, output)}
+                />
               </div>
             ))}
           </div>
@@ -375,16 +395,25 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
 }
 
 function toFlowEdges(graph: WorkflowGraph): Edge[] {
+  const nodeType = new Map((graph.nodes ?? []).map((node) => [node.id, node.type]));
   return (graph.edges ?? []).map((edge) => {
     // 数据边:接输出接点 out:x → 输入接点 in:y。蓝色流动虚线,不带箭头(终点是接点)。
     if (edge.kind === "data") {
+      // 类型不匹配的数据边染成警示色(软提示,与就绪检查同源,不阻断)。
+      const mismatch =
+        edge.source_output &&
+        edge.target_input &&
+        !typesCompatible(
+          outputType(nodeType.get(edge.source) ?? "", edge.source_output),
+          inputType(nodeType.get(edge.target) ?? "", edge.target_input),
+        );
       return {
         id: edge.id,
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.source_output ? `out:${edge.source_output}` : undefined,
         targetHandle: edge.target_input ? `in:${edge.target_input}` : undefined,
-        className: "wf-edge-data",
+        className: mismatch ? "wf-edge-data wf-edge-mismatch" : "wf-edge-data",
         animated: true,
         markerEnd: undefined,
         data: { kind: "data" },

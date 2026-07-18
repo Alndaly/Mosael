@@ -5197,6 +5197,26 @@
   border: 1.5px solid var(--primary);
 }
 
+/* 接点按数据类型上色(ComfyUI 式:一眼看出这条口是什么类型)。 */
+.wf-socket[data-dtype="text"] {
+  border-color: #64748b;
+}
+.wf-socket[data-dtype="asset"] {
+  border-color: #c026d3;
+}
+.wf-socket[data-dtype="sequence"] {
+  border-color: #e11d48;
+}
+.wf-socket[data-dtype="number"] {
+  border-color: #d97706;
+}
+.wf-socket[data-dtype="json"] {
+  border-color: #0891b2;
+}
+.wf-socket[data-dtype="any"] {
+  border-color: var(--border-strong);
+}
+
 .wf-io-col.in .wf-socket.react-flow__handle-left {
   left: -12px;
 }
@@ -5506,6 +5526,10 @@
 }
 .wf-canvas .react-flow__edge.wf-edge-data.selected .react-flow__edge-path {
   stroke-width: 2.6;
+}
+/* 类型不匹配的数据边:琥珀警示(软提示,能连但提醒,与就绪检查同源)。 */
+.wf-canvas .react-flow__edge.wf-edge-data.wf-edge-mismatch .react-flow__edge-path {
+  stroke: #d97706;
 }
 @keyframes wf-dash {
   to {
