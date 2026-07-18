@@ -17,9 +17,9 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "inline-flex h-7 items-center justify-between gap-1.5 rounded-md border border-border bg-panel px-2 text-xs",
+        "inline-flex h-7 max-w-full min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-panel px-2 text-xs",
         "text-foreground outline-none transition-colors hover:border-border-strong",
-        "focus-visible:border-primary data-[placeholder]:text-muted-foreground [&>span]:truncate",
+        "focus-visible:border-primary data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:truncate",
         className,
       )}
       {...props}
