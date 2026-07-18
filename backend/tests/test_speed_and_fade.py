@@ -89,3 +89,29 @@ def test_audio_overlay_fades_in_command(monkeypatch) -> None:
     )
     command = " ".join(build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4")))
     assert "afade=t=out:st=3.0:d=1.0" in command
+
+
+def _cmd_for_fill(fill_mode: str, monkeypatch) -> str:
+    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    from app.media.render_executor import build_ffmpeg_command
+    from pathlib import Path as _P
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1080, height=1920, fps=30,
+        clips=[base_clip()], assets=ASSETS, fill_mode=fill_mode,
+    )
+    return " ".join(build_ffmpeg_command(plan, lambda k: _P("/media") / k, _P("/out.mp4")))
+
+
+def test_fill_mode_cover_crops(monkeypatch) -> None:
+    cmd = _cmd_for_fill("cover", monkeypatch)
+    assert "force_original_aspect_ratio=increase" in cmd and "crop=1080:1920" in cmd
+
+
+def test_fill_mode_contain_letterboxes(monkeypatch) -> None:
+    cmd = _cmd_for_fill("contain", monkeypatch)
+    assert "force_original_aspect_ratio=decrease" in cmd and "pad=1080:1920" in cmd
+
+
+def test_fill_mode_blur_has_blurred_background(monkeypatch) -> None:
+    cmd = _cmd_for_fill("blur", monkeypatch)
+    assert "gblur" in cmd and "split=2" in cmd

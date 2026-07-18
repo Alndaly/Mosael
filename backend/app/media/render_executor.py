@@ -140,6 +140,23 @@ def _escape_filter_path(path: Path) -> str:
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
+def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
+    """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。"""
+    head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
+    end = f",fps={fps},format=yuv420p,setsar=1{tail}[v{i}]"
+    if fill_mode == "cover":
+        return f"{head},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}{end}"
+    if fill_mode == "blur":
+        return (
+            f"{head},split=2[bg{i}][fg{i}];"
+            f"[bg{i}]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},gblur=sigma=20[bgb{i}];"
+            f"[fg{i}]scale={width}:{height}:force_original_aspect_ratio=decrease[fgc{i}];"
+            f"[bgb{i}][fgc{i}]overlay=(W-w)/2:(H-h)/2{end}"
+        )
+    # contain(留黑边)
+    return f"{head},scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2{end}"
+
+
 def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     args: list[str] = ["ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
@@ -158,9 +175,10 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
             preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
             filters.append(
-                f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
-                f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p,setsar=1{preset}{video_fades}[v{i}]"
+                _base_video_chain(
+                    input_index, i, src.src_in, src.src_out, setpts, width, height, fps,
+                    f"{preset}{video_fades}", plan.output.fill_mode,
+                )
             )
             if probe_has_audio(path):
                 tempo = _atempo_chain(segment.speed)

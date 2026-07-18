@@ -69,6 +69,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         width=sequence.width,
         height=sequence.height,
         fps=sequence.fps,
+        fill_mode=str((sequence.reframe or {}).get("fill_mode", "cover")),
         clips=base_clips,
         assets=assets,
         overlay_clips=overlay_clips,

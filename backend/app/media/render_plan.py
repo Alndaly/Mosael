@@ -52,6 +52,7 @@ class OutputSettings:
     width: int
     height: int
     fps: float
+    fill_mode: str = "cover"  # cover 裁剪 / contain 留黑边 / blur 模糊背景
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,7 @@ def build_render_plan(
     audio_clips: list[dict] | None = None,
     subtitle_clips: list[dict] | None = None,
     luts: dict[str, str] | None = None,
+    fill_mode: str = "cover",
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
@@ -298,7 +300,9 @@ def build_render_plan(
         sequence_revision=revision,
         timeline_duration=round(duration, 6),
         video_segments=tuple(segments),
-        output=OutputSettings(width=width, height=height, fps=fps),
+        output=OutputSettings(
+            width=width, height=height, fps=fps, fill_mode=fill_mode if fill_mode in ("cover", "contain", "blur") else "cover"
+        ),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),
         subtitles=tuple(subtitles),
