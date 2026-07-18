@@ -84,9 +84,15 @@ async function ensureBackend() {
       stdio = "ignore";
     }
   }
+  const backendEnv = { ...process.env, MIBU_BACKEND_PORT: String(BACKEND_PORT) };
+  if (!isDev) {
+    // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
+    backendEnv.MIBU_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
+    backendEnv.MIBU_AGENT_BIN_NODE = process.execPath;
+  }
   backend = spawn(command, args, {
     cwd,
-    env: { ...process.env, MIBU_BACKEND_PORT: String(BACKEND_PORT) },
+    env: backendEnv,
     stdio,
   });
   backend.on("exit", (code) => {

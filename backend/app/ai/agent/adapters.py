@@ -115,8 +115,13 @@ def _run_pi(
         "model": model,
         "sessionState": adapter_state,
     }
+    # 打包版把 Electron 二进制当 node 用(MIBU_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
+    # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
+    env = {**os.environ}
+    if os.environ.get("MIBU_AGENT_BIN_NODE"):
+        env["ELECTRON_RUN_AS_NODE"] = "1"
     process = subprocess.Popen(
-        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ}
+        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")

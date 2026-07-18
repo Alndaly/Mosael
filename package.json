@@ -7,9 +7,10 @@
   "packageManager": "pnpm@11.6.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
+    "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:backend": "cd backend && .venv/bin/pyinstaller --noconfirm --clean --onedir --name mibu-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on run_backend.py",
-    "build:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:backend && electron-builder --mac dir",
-    "dist:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:backend && electron-builder --mac dmg",
+    "build:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
+    "dist:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
     "dev": "pnpm --dir frontend electron:dev"
@@ -34,6 +35,10 @@
       {
         "from": "backend/dist/mibu-backend",
         "to": "backend/mibu-backend"
+      },
+      {
+        "from": "agent-sidecar/dist/sidecar.cjs",
+        "to": "agent-sidecar/sidecar.cjs"
       }
     ],
     "mac": {
