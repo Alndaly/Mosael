@@ -423,6 +423,20 @@ class VoiceFromSpeakerRequest(BaseModel):
     name: str = ""
 
 
+class TtsConfigOut(BaseModel):
+    engine: str
+    python_path: str = ""
+    source: str = "hf-mirror"
+    worker_ready: bool = False  # an interpreter with the engine installed was found
+    worker_python: str = ""  # the resolved interpreter path (for display)
+
+
+class TtsConfigUpdate(BaseModel):
+    engine: str = Field(pattern="^(f5-tts|fish-speech)$")
+    python_path: str = ""
+    source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
+
+
 class AsrModelOut(BaseModel):
     id: str
     engine: str

@@ -95,3 +95,22 @@ def test_tts_models_listed() -> None:
     client.post("/api/workspaces", json={"name": "W"})
     rows = client.get("/api/tts/models").json()
     assert {r["id"] for r in rows} == {"f5-tts", "fish-speech"}
+
+
+def test_tts_config_get_and_update() -> None:
+    from app.domain import tts_config
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    got = client.get("/api/settings/tts").json()
+    assert got["engine"] == "f5-tts" and got["source"] == "hf-mirror"
+    assert "worker_ready" in got
+
+    saved = client.put(
+        "/api/settings/tts",
+        json={"engine": "fish-speech", "python_path": "/tmp/py", "source": "modelscope"},
+    ).json()
+    assert saved["engine"] == "fish-speech" and saved["source"] == "modelscope"
+    assert tts_config.get().engine == "fish-speech"  # cache refreshed
+    # invalid engine rejected
+    assert client.put("/api/settings/tts", json={"engine": "nope", "source": "hf"}).status_code == 422

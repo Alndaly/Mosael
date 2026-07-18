@@ -617,6 +617,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/tts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tts Config */
+        get: operations["get_tts_config_api_settings_tts_get"];
+        /** Set Tts Config */
+        put: operations["set_tts_config_api_settings_tts_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/models": {
         parameters: {
             query?: never;
@@ -4260,6 +4278,46 @@ export interface components {
             /** Src Out */
             src_out: number;
         };
+        /** TtsConfigOut */
+        TtsConfigOut: {
+            /** Engine */
+            engine: string;
+            /**
+             * Python Path
+             * @default
+             */
+            python_path: string;
+            /**
+             * Source
+             * @default hf-mirror
+             */
+            source: string;
+            /**
+             * Worker Ready
+             * @default false
+             */
+            worker_ready: boolean;
+            /**
+             * Worker Python
+             * @default
+             */
+            worker_python: string;
+        };
+        /** TtsConfigUpdate */
+        TtsConfigUpdate: {
+            /** Engine */
+            engine: string;
+            /**
+             * Python Path
+             * @default
+             */
+            python_path: string;
+            /**
+             * Source
+             * @default hf-mirror
+             */
+            source: string;
+        };
         /** TtsEngineOut */
         TtsEngineOut: {
             /** Id */
@@ -5746,6 +5804,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tts_config_api_settings_tts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_tts_config_api_settings_tts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TtsConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsConfigOut"];
                 };
             };
             /** @description Validation Error */

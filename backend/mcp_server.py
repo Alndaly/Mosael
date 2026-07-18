@@ -268,18 +268,31 @@ def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) ->
 
 
 @mcp.tool()
-def search_kb(query: str, workspace_id: str = "", limit: int = 6) -> list[dict[str, Any]]:
-    """Search the workspace knowledge base (scripts, briefs, notes, imported articles).
+def search_kb(query: str, workspace_id: str = "", dataset_id: str = "", limit: int = 6) -> list[dict[str, Any]]:
+    """Search the knowledge base (scripts, briefs, notes, imported articles).
 
     Use this BEFORE writing copy, planning a cut, or answering questions about
     the user's project background — the KB holds their scripts, style guides
-    and reference material. Returns per-document best-matching snippets with
-    document_id; call read_kb_document for the full text. Chinese and English
-    queries both work (trigram index). Do NOT use for media assets — that is
-    list_assets/analyze_asset.
+    and reference material. Returns per-chunk best-matching snippets with
+    document_id and score; call read_kb_document for the full text. Chinese and
+    English queries both work (trigram index). Do NOT use for media assets —
+    that is list_assets/analyze_asset.
+
+    The KB is organised into datasets. Pass dataset_id to search one dataset;
+    leave it empty to search every dataset in the workspace (results merged and
+    re-ranked by score). Leave workspace_id empty to use the first workspace.
     """
+    if dataset_id:
+        return _get(f"/api/kb/datasets/{dataset_id}/search", {"q": query, "limit": limit})
+
     ws = workspace_id or _default_workspace_id()
-    return _get("/api/kb/search", {"workspace_id": ws, "q": query, "limit": limit})
+    datasets = _get("/api/kb/datasets", {"workspace_id": ws})
+    hits: list[dict[str, Any]] = []
+    for dataset in datasets:
+        hits.extend(_get(f"/api/kb/datasets/{dataset['id']}/search", {"q": query, "limit": limit}))
+    # Each dataset ranks independently; merge and keep the globally best `limit`.
+    hits.sort(key=lambda hit: hit.get("score", 0.0), reverse=True)
+    return hits[:limit]
 
 
 @mcp.tool()

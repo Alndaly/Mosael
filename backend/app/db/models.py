@@ -491,6 +491,20 @@ class KbEmbeddingConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class TtsConfig(Base):
+    """Singleton (id='default') runtime config for voice cloning: which engine,
+    the external interpreter that has f5-tts/fish-speech installed, and the model
+    download source. Overrides the MIBU_TTS_* env fallback so it's UI-editable."""
+
+    __tablename__ = "tts_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    engine: Mapped[str] = mapped_column(String(32), nullable=False, default="f5-tts")  # f5-tts | fish-speech
+    python_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")  # empty = autodetect
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="hf-mirror")  # hf | hf-mirror | modelscope
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class Credential(Base):
     __tablename__ = "credentials"
 

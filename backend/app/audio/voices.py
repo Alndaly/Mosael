@@ -6,6 +6,7 @@ the timeline like any other clip.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import threading
@@ -186,8 +187,13 @@ def _run_synthesis(job_id: str, voice_id: str, text: str, project_id: str | None
             ref = reference_path(voice)
             if not ref.is_file():
                 raise VoiceError("音色参考音频缺失")
-            engine = settings.tts_engine
-            python = resolve_tts_python(None)  # placeholder fallback works on any interpreter
+            from app.domain import tts_config
+
+            cfg = tts_config.get()
+            engine = cfg.engine
+            engine_module = "fish_speech" if engine == "fish-speech" else "f5_tts"
+            python = resolve_tts_python(engine_module)  # real engine if installed, else placeholder fallback
+            worker_env = {**os.environ, "HF_ENDPOINT": cfg.hf_endpoint}
             with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {
@@ -198,8 +204,8 @@ def _run_synthesis(job_id: str, voice_id: str, text: str, project_id: str | None
                     "text": text,
                 }
                 proc = subprocess.run(
-                    [python, str(WORKER_PATH), str(out_wav)],
-                    input=json.dumps(request), capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS,
+                    [python, str(WORKER_PATH), str(out_wav)], input=json.dumps(request),
+                    capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS, env=worker_env,
                 )
                 if proc.returncode != 0 or not out_wav.exists():
                     raise VoiceError(f"语音合成失败: {proc.stderr[-400:]}")

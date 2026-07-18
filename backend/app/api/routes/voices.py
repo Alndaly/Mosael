@@ -8,9 +8,18 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import JobOut, SynthesizeRequest, TtsEngineOut, VoiceFromSpeakerRequest, VoiceOut
+from app.api.schemas import (
+    JobOut,
+    SynthesizeRequest,
+    TtsConfigOut,
+    TtsConfigUpdate,
+    TtsEngineOut,
+    VoiceFromSpeakerRequest,
+    VoiceOut,
+)
 from app.audio import tts_models, voices
 from app.core.permissions import ensure_workspace_access
+from app.domain import tts_config
 
 router = APIRouter(tags=["voices"])
 
@@ -106,6 +115,32 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
         return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id)
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _tts_config_out() -> dict:
+    cfg = tts_config.get()
+    return {"engine": cfg.engine, "python_path": cfg.python_path, "source": cfg.source, **tts_models.probe_interpreter(cfg.engine)}
+
+
+@router.get("/settings/tts", response_model=TtsConfigOut)
+def get_tts_config(db: DbSession, user: CurrentUser) -> dict:
+    return _tts_config_out()
+
+
+@router.put("/settings/tts", response_model=TtsConfigOut)
+def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> dict:
+    from app.db.models import TtsConfig
+
+    row = db.get(TtsConfig, "default")
+    if row is None:
+        row = TtsConfig(id="default")
+        db.add(row)
+    row.engine = body.engine
+    row.python_path = body.python_path.strip()
+    row.source = body.source
+    db.commit()
+    tts_config.refresh()
+    return _tts_config_out()
 
 
 @router.get("/tts/models", response_model=list[TtsEngineOut])

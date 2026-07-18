@@ -100,16 +100,45 @@ def _is_installed(engine: TtsEngine) -> bool:
 # ---------------------------------------------------------------------------
 # Interpreter resolution (mirrors ASR)
 # ---------------------------------------------------------------------------
+def _worker_env() -> dict[str, str]:
+    """Env for the TTS worker subprocess: point HuggingFace at the configured
+    mirror so first-use model downloads work (e.g. hf-mirror in CN)."""
+    from app.domain import tts_config
+
+    env = dict(os.environ)
+    env["HF_ENDPOINT"] = tts_config.get().hf_endpoint
+    return env
+
+
 def candidate_pythons() -> list[Path]:
+    from app.domain import tts_config
+
     candidates: list[Path] = []
-    if settings.tts_python:
-        candidates.append(Path(settings.tts_python).expanduser())
+    configured = tts_config.get().python_path
+    if configured:
+        candidates.append(Path(configured).expanduser())
     repo_root = Path(__file__).resolve().parents[3]
     candidates.append(repo_root.parent / "mibu-video" / "backend" / ".venv" / "bin" / "python")
     import sys
 
     candidates.append(Path(sys.executable))
     return candidates
+
+
+def probe_interpreter(engine_id: str) -> dict[str, Any]:
+    """Whether some candidate interpreter can import the engine (i.e. real
+    synthesis is available). Returns {worker_ready, worker_python}."""
+    module = "fish_speech" if engine_id == "fish-speech" else "f5_tts"
+    for python in candidate_pythons():
+        if not python.is_file():
+            continue
+        try:
+            probe = subprocess.run([str(python), "-c", f"import {module}"], capture_output=True, timeout=60)
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if probe.returncode == 0:
+            return {"worker_ready": True, "worker_python": str(python)}
+    return {"worker_ready": False, "worker_python": ""}
 
 
 def resolve_tts_python(engine_module: str | None = None) -> str:
@@ -229,7 +258,7 @@ def _run_download(engine_id: str) -> None:
     last_bytes, last_time = _measure(engine), started
     proc = subprocess.Popen(
         [python, str(WORKER_PATH), str(output_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=_worker_env(),
     )
     assert proc.stdin is not None
     proc.stdin.write(json.dumps({"action": "warmup", "engine": engine.id}))

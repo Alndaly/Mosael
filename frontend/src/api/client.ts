@@ -99,6 +99,13 @@ export function listTtsModels(): Promise<TtsEngine[]> {
 export function downloadTtsModel(id: string): Promise<TtsEngine> {
   return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
+export type TtsConfig = components["schemas"]["TtsConfigOut"];
+export function getTtsConfig(): Promise<TtsConfig> {
+  return api<TtsConfig>("/api/settings/tts");
+}
+export function updateTtsConfig(body: { engine: string; python_path: string; source: string }): Promise<TtsConfig> {
+  return api<TtsConfig>("/api/settings/tts", { method: "PUT", body: JSON.stringify(body) });
+}
 export type GenerationModel = components["schemas"]["GenerationModelOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];

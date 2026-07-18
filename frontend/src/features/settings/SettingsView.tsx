@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ImageIcon, KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, X } from "lucide-react";
+import { AudioLines, ImageIcon, KeyRound, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -11,6 +11,7 @@ import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
+import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
@@ -21,9 +22,9 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
-type SectionId = "account" | "appearance" | "providers" | "transcribe" | "feishu" | "backend";
+type SectionId = "account" | "appearance" | "providers" | "transcribe" | "voice" | "feishu" | "backend";
 
-const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "transcribe", "feishu", "backend"];
+const SECTION_IDS: SectionId[] = ["account", "appearance", "providers", "transcribe", "voice", "feishu", "backend"];
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -44,6 +45,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "appearance", label: t("settingsAppearance"), icon: <Palette size={14} /> },
     { id: "providers", label: t("settingsProviders"), icon: <KeyRound size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
+    { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
     { id: "backend", label: t("settingsBackend"), icon: <Server size={14} /> },
   ];
@@ -79,6 +81,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             </>
           )}
           {section === "transcribe" && <AsrModelsSection />}
+          {section === "voice" && <VoiceCloneSection />}
           {section === "feishu" && <FeishuSection workspace={workspace} />}
           {section === "backend" && <BackendSection workspace={workspace} />}
         </div>
