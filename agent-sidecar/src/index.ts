@@ -17,13 +17,14 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
   const { turnId, prompt } = msg;
   if (msg.provider?.baseUrl && msg.model) {
     const tools = buildAllTools(msg.apiBase, msg.token, msg.workspaceId);
-    const text = await runPiTurn(
+    const result = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,
         prompt,
         provider: { baseUrl: msg.provider.baseUrl, apiKey: msg.provider.apiKey },
         model: msg.model,
         tools,
+        sessionState: msg.sessionState,
       },
       {
         onDelta: (delta) => send({ type: "text_delta", turnId, delta }),
@@ -31,7 +32,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         onToolEnd: (toolCallId, result) => send({ type: "tool_end", turnId, toolCallId, result }),
       },
     );
-    send({ type: "turn_done", turnId, text, sessionState: null });
+    send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState });
     return;
   }
   // 无 provider:退回 echo(便于纯传输测试)

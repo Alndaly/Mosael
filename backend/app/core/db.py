@@ -52,6 +52,8 @@ def _migrate_agent_sessions() -> None:
             conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN provider_profile_id VARCHAR(64)"))
         if "model" not in columns:
             conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN model VARCHAR(120)"))
+        if "adapter_state" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN adapter_state JSON"))
 
 
 def init_db() -> None:

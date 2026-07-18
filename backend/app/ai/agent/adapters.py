@@ -27,6 +27,7 @@ class AdapterError(RuntimeError):
 class TurnResult:
     text: str
     adapter_session_id: str | None = None
+    adapter_state: object | None = None  # pi: 序列化的消息数组,用于下一轮多轮记忆
 
 
 def mibu_mcp_config(api_base: str, token: str) -> dict:
@@ -55,6 +56,7 @@ def run_turn(
     provider: dict | None = None,
     model: str | None = None,
     workspace_id: str = "",
+    adapter_state: object | None = None,
 ) -> TurnResult:
     if adapter == "claude":
         return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
@@ -62,7 +64,7 @@ def run_turn(
         return _run_opencode(prompt, system_prompt, api_base, token, adapter_session_id)
     if adapter == "pi":
         return _run_pi(
-            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_session_id, on_delta
+            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_state, on_delta
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
@@ -82,12 +84,13 @@ def _run_pi(
     workspace_id: str,
     provider: dict | None,
     model: str | None,
-    adapter_session_id: str | None,
+    adapter_state: object | None,
     on_delta: Callable[[str], None] | None,
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Mibu's REST with the
-    service token; mutations still flow through confirmation cards."""
+    service token; mutations still flow through confirmation cards. adapter_state
+    carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
         raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
     node, sidecar = _pi_sidecar_command()
@@ -96,7 +99,7 @@ def _run_pi(
 
     frame = {
         "type": "run_turn",
-        "turnId": adapter_session_id or "turn",
+        "turnId": "turn",
         "prompt": prompt,
         "systemPrompt": system_prompt,
         "workspaceId": workspace_id,
@@ -108,6 +111,7 @@ def _run_pi(
             "vendor": provider.get("vendor", ""),
         },
         "model": model,
+        "sessionState": adapter_state,
     }
     process = subprocess.Popen(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ}
@@ -118,6 +122,7 @@ def _run_pi(
     process.stdin.close()
 
     result_text: str | None = None
+    result_state: object | None = None
     for line in process.stdout:
         line = line.strip()
         if not line:
@@ -131,13 +136,14 @@ def _run_pi(
             on_delta(str(event.get("delta", "")))
         elif kind == "turn_done":
             result_text = str(event.get("text", ""))
+            result_state = event.get("sessionState")
         elif kind == "error":
             raise AdapterError(_tail(str(event.get("message", "pi sidecar error"))))
     process.wait(timeout=TURN_TIMEOUT_SECONDS)
     if result_text is None:
         stderr_tail = _tail(process.stderr.read() if process.stderr else "")
         raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
-    return TurnResult(text=result_text.strip(), adapter_session_id=adapter_session_id)
+    return TurnResult(text=result_text.strip(), adapter_state=result_state)
 
 
 def build_claude_command(

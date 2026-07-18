@@ -81,7 +81,7 @@ def on_turn_finished(callback: Callable[[str], None]) -> None:
 
 
 def default_adapter() -> str:
-    return os.environ.get("MIBU_AGENT_CLI", "claude")
+    return os.environ.get("MIBU_AGENT_CLI", "pi")
 
 
 def create_session(
@@ -196,8 +196,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 provider=provider_dict,
                 model=agent_model,
                 workspace_id=session.workspace_id,
+                adapter_state=session.adapter_state,
             )
             final_text = result.text
+            if result.adapter_state is not None:
+                session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
             db.add(
                 AgentMessage(
                     session_id=session.id,

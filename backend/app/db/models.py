@@ -515,6 +515,8 @@ class AgentSession(Base):
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # pi 适配器无 --resume:存 pi 序列化的消息数组做多轮记忆(下轮回灌 initialState.messages)
+    adapter_state: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

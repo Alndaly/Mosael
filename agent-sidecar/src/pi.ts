@@ -3,7 +3,7 @@
  * Mibu passes per turn (base URL + key + model), then run a turn through pi's
  * Agent and stream text deltas back out. Tools/hooks come in S3+.
  */
-import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createModels, createProvider, type Model, type Models } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
@@ -45,6 +45,14 @@ export interface PiTurnInput {
   provider: { baseUrl: string; apiKey: string };
   model: string;
   tools: AgentTool[];
+  /** pi 上轮序列化的消息数组(多轮记忆);首轮为空。 */
+  sessionState?: unknown;
+}
+
+export interface PiTurnResult {
+  text: string;
+  /** 本轮结束后的完整消息数组,回存给下一轮。 */
+  sessionState: AgentMessage[];
 }
 
 export interface PiTurnHandlers {
@@ -53,11 +61,12 @@ export interface PiTurnHandlers {
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
 }
 
-/** Run one turn through pi's Agent; stream text + tool events, return full text. */
-export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<string> {
+/** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
+export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<PiTurnResult> {
   const { models, model } = buildModels(input.provider.baseUrl, input.provider.apiKey, input.model);
+  const priorMessages = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
   const agent = new Agent({
-    initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools },
+    initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },
     streamFn: (m, context, options) => models.stream(m, context, options),
   });
   let full = "";
@@ -73,5 +82,5 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     }
   });
   await agent.prompt(input.prompt);
-  return full;
+  return { text: full, sessionState: agent.state.messages };
 }
