@@ -41,6 +41,7 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
             label=preset.get("label", vendor),
             base_url=preset.get("base_url", ""),
             default_model=preset.get("default_model", ""),
+            capabilities=preset.get("capabilities", ""),
         )
         for vendor, preset in VENDOR_PRESETS.items()
     ]

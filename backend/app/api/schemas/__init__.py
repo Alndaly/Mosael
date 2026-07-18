@@ -356,6 +356,7 @@ class VendorPresetOut(BaseModel):
     label: str
     base_url: str = ""
     default_model: str = ""
+    capabilities: str = ""
 
 
 class CredentialSetRequest(BaseModel):

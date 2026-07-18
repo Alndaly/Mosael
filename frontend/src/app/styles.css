@@ -7244,6 +7244,13 @@
   color: var(--muted-foreground);
 }
 
+/* 供应商能力文案:选中供应商后展示其支持的能力 */
+.provider-caps {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
 /* Cmd+K 无结果空状态:与全局 EmptyState 同语言的紧凑版(居中 + 主色淡底图标)。 */
 .cmdk-empty {
   display: grid;

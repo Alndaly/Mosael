@@ -3882,6 +3882,11 @@ export interface components {
              * @default
              */
             default_model: string;
+            /**
+             * Capabilities
+             * @default
+             */
+            capabilities: string;
         };
         /** WorkflowAiEditRequest */
         WorkflowAiEditRequest: {

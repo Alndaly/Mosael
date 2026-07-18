@@ -170,6 +170,7 @@ export function ProviderProfilesSection() {
                 </SelectContent>
               </Select>
             )}
+            {preset?.capabilities && <small className="provider-caps">{preset.capabilities}</small>}
           </label>
           <label className="wf-field">
             <span>{t("providerNameLabel")}</span>

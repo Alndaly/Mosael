@@ -12,22 +12,49 @@ remains a fallback so earlier setups keep working.
 """
 
 VENDOR_PRESETS: dict[str, dict[str, str]] = {
-    "alibaba": {"label": "阿里云 DashScope (qwen)", "base_url": "https://dashscope.aliyuncs.com"},
-    "bytedance": {"label": "火山方舟 ARK (Seedance/Doubao)", "base_url": "https://ark.cn-beijing.volces.com/api/v3"},
+    "alibaba": {
+        "label": "阿里云 DashScope (qwen)",
+        "base_url": "https://dashscope.aliyuncs.com",
+        "capabilities": "对话、图像与视频生成、向量嵌入(通义千问 / 万相)",
+    },
+    "bytedance": {
+        "label": "火山方舟 ARK (Seedance/Doubao)",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "capabilities": "视频生成(Seedance)、对话与视觉(Doubao)、图像",
+    },
     "moonshot": {
         "label": "Kimi (Moonshot)",
         "base_url": "https://api.moonshot.cn/v1",
         "default_model": "moonshot-v1-8k-vision-preview",
+        "capabilities": "对话、长文本、视觉理解(不支持图像 / 视频生成)",
     },
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",
         "default_model": "MiniMax-VL-01",
+        "capabilities": "对话、视频生成(海螺)、语音合成、图像",
     },
-    "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1", "default_model": "gpt-image-2"},
-    "openai-compatible": {"label": "OpenAI 兼容端点", "base_url": ""},
-    "google": {"label": "Google (Veo/Gemini)", "base_url": ""},
-    "kuaishou": {"label": "快手 (Kling)", "base_url": ""},
+    "openai": {
+        "label": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "default_model": "gpt-image-2",
+        "capabilities": "对话、图像生成(gpt-image)、向量嵌入",
+    },
+    "openai-compatible": {
+        "label": "OpenAI 兼容端点",
+        "base_url": "",
+        "capabilities": "任意 OpenAI 兼容端点(本地 Ollama / vLLM / 第三方),能力随所接服务而定",
+    },
+    "google": {
+        "label": "Google (Veo/Gemini)",
+        "base_url": "",
+        "capabilities": "对话(Gemini)、图像(Imagen)、视频(Veo)、向量嵌入",
+    },
+    "kuaishou": {
+        "label": "快手 (Kling)",
+        "base_url": "",
+        "capabilities": "视频与图像生成(可灵 Kling)",
+    },
 }
 
 
