@@ -1371,6 +1371,14 @@
   padding: 0 2px;
 }
 
+/* 头部操作区:多个按钮之间留间距(此前无样式,按钮会挨在一起)。 */
+.sg-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .sg-head-text h2 {
   margin: 0;
   font-size: 17px;
