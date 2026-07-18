@@ -374,6 +374,52 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     [sequence, insertClipMutation],
   );
 
+  // 剪贴板(片段级复制/剪切/粘贴)+ 图层上下移。
+  const clipboardRef = React.useRef<{ assetId: string; srcIn: number; srcOut: number; trackId: string } | null>(null);
+  const findSelectedClip = React.useCallback(() => {
+    if (!sequence) return null;
+    const id = useEditorStore.getState().selectedClipId;
+    if (!id) return null;
+    for (const track of sequence.tracks ?? []) {
+      const clip = (track.clips ?? []).find((item) => item.id === id);
+      if (clip) return clip;
+    }
+    return null;
+  }, [sequence]);
+  const copyClip = React.useCallback(() => {
+    const clip = findSelectedClip();
+    if (!clip?.asset_id) return;
+    clipboardRef.current = { assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out, trackId: clip.track_id };
+  }, [findSelectedClip]);
+  const pasteClip = React.useCallback(() => {
+    const cb = clipboardRef.current;
+    if (!cb || !sequence) return;
+    const playhead = useEditorStore.getState().playhead;
+    const track =
+      (sequence.tracks ?? []).find((item) => item.id === cb.trackId) ??
+      (sequence.tracks ?? []).find((item) => item.kind === "video");
+    if (!track) return;
+    insertClipMutation.mutate({ trackId: track.id, assetId: cb.assetId, timelineStart: playhead, srcIn: cb.srcIn, srcOut: cb.srcOut });
+  }, [sequence, insertClipMutation]);
+  const cutClip = React.useCallback(() => {
+    const clip = findSelectedClip();
+    if (!clip?.asset_id) return;
+    clipboardRef.current = { assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out, trackId: clip.track_id };
+    deleteClipMutation.mutate(clip.id);
+  }, [findSelectedClip, deleteClipMutation]);
+  const moveClipLayer = React.useCallback(
+    (direction: -1 | 1) => {
+      const clip = findSelectedClip();
+      if (!clip || !sequence) return;
+      const videoTracks = (sequence.tracks ?? []).filter((item) => item.kind === "video").sort((a, b) => a.position - b.position);
+      const index = videoTracks.findIndex((item) => item.id === clip.track_id);
+      const target = index >= 0 ? videoTracks[index + direction] : undefined;
+      if (!target) return;
+      moveClipMutation.mutate({ clipId: clip.id, timelineStart: clip.timeline_start, trackId: target.id });
+    },
+    [findSelectedClip, sequence, moveClipMutation],
+  );
+
   const addAssetToTimeline = (asset: Asset) => {
     if (!sequence) return;
     const track = (sequence.tracks ?? []).find((item) => trackAcceptsAsset(item, asset));
@@ -401,6 +447,21 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
         event.preventDefault();
         duplicateClip();
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        copyClip();
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "x") {
+        event.preventDefault();
+        cutClip();
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        pasteClip();
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "]") {
+        event.preventDefault();
+        moveClipLayer(1);
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "[") {
+        event.preventDefault();
+        moveClipLayer(-1);
       } else if (event.key.toLowerCase() === "s" && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
         splitAtPlayhead();
@@ -430,7 +491,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sequence?.id, splitAtPlayhead, duplicateClip]);
+  }, [sequence?.id, splitAtPlayhead, duplicateClip, copyClip, cutClip, pasteClip, moveClipLayer]);
 
   if (!sequence) {
     return (
