@@ -31,6 +31,7 @@ from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
+from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(publish_worker_router, prefix="/api")
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
+    app.include_router(workspaces_router, prefix="/api", dependencies=protected)
     app.include_router(assets_router, prefix="/api", dependencies=protected)
     app.include_router(asr_router, prefix="/api", dependencies=protected)
     app.include_router(voices_router, prefix="/api", dependencies=protected)

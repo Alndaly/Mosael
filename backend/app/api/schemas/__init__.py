@@ -35,6 +35,37 @@ class WorkspaceCreate(BaseModel):
 class WorkspaceOut(OrmModel):
     id: str
     name: str
+    role: str | None = None  # the caller's role in this workspace (None if unknown)
+
+
+class WorkspaceMemberOut(BaseModel):
+    user_id: str
+    username: str
+    role: str
+    perms: dict[str, bool]  # effective perms (role defaults + overrides)
+    is_self: bool = False
+
+
+class MembersOut(BaseModel):
+    members: list[WorkspaceMemberOut]
+    my_role: str
+    perm_keys: list[str]  # every togglable perm, for the override UI
+    role_defaults: dict[str, dict[str, bool]]  # role → its default perm set
+
+
+class AddMemberRequest(BaseModel):
+    username: str = Field(min_length=2, max_length=80)
+    # Required only when creating a brand-new account; ignored when adding an existing user.
+    password: str = Field(default="", max_length=200)
+    role: str = Field(default="editor", pattern="^(admin|editor|viewer)$")
+
+
+class SetRoleRequest(BaseModel):
+    role: str = Field(pattern="^(owner|admin|editor|viewer)$")
+
+
+class SetMemberPermsRequest(BaseModel):
+    perms: dict[str, bool]
 
 
 class ProjectCreate(BaseModel):

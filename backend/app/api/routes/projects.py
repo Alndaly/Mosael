@@ -12,25 +12,25 @@ router = APIRouter(tags=["projects"])
 
 
 @router.post("/workspaces", response_model=WorkspaceOut)
-def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> Workspace:
+def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> WorkspaceOut:
     workspace = Workspace(name=body.name)
     db.add(workspace)
     db.flush()
     db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
     db.commit()
     db.refresh(workspace)
-    return workspace
+    return WorkspaceOut(id=workspace.id, name=workspace.name, role="owner")
 
 
 @router.get("/workspaces", response_model=list[WorkspaceOut])
-def list_workspaces(db: DbSession, user: CurrentUser) -> list[Workspace]:
-    stmt = (
-        select(Workspace)
+def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut]:
+    rows = db.execute(
+        select(Workspace, WorkspaceMember.role)
         .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
         .where(WorkspaceMember.user_id == user.id)
         .order_by(Workspace.created_at.desc())
-    )
-    return list(db.scalars(stmt))
+    ).all()
+    return [WorkspaceOut(id=ws.id, name=ws.name, role=role) for ws, role in rows]
 
 
 @router.post("/projects", response_model=ProjectOut)

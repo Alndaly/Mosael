@@ -319,6 +319,77 @@ export interface paths {
         patch: operations["rename_project_api_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Workspace */
+        delete: operations["delete_workspace_api_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Workspace */
+        patch: operations["rename_workspace_api_workspaces__workspace_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_api_workspaces__workspace_id__members_get"];
+        put?: never;
+        /** Add Member */
+        post: operations["add_member_api_workspaces__workspace_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Member */
+        delete: operations["remove_member_api_workspaces__workspace_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Set Member Role */
+        patch: operations["set_member_role_api_workspaces__workspace_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/members/{user_id}/perms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Member Perms */
+        patch: operations["set_member_perms_api_workspaces__workspace_id__members__user_id__perms_patch"];
+        trace?: never;
+    };
     "/api/assets": {
         parameters: {
             query?: never;
@@ -2442,6 +2513,21 @@ export interface components {
             /** Profile Name */
             profile_name?: string | null;
         };
+        /** AddMemberRequest */
+        AddMemberRequest: {
+            /** Username */
+            username: string;
+            /**
+             * Password
+             * @default
+             */
+            password: string;
+            /**
+             * Role
+             * @default editor
+             */
+            role: string;
+        };
         /** AddTrackRequest */
         AddTrackRequest: {
             /** Kind */
@@ -3382,6 +3468,21 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** MembersOut */
+        MembersOut: {
+            /** Members */
+            members: components["schemas"]["WorkspaceMemberOut"][];
+            /** My Role */
+            my_role: string;
+            /** Perm Keys */
+            perm_keys: string[];
+            /** Role Defaults */
+            role_defaults: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
         /** MoveClipRequest */
         MoveClipRequest: {
             /** Timeline Start */
@@ -4033,6 +4134,18 @@ export interface components {
             /** Transform */
             transform?: Record<string, never>;
         };
+        /** SetMemberPermsRequest */
+        SetMemberPermsRequest: {
+            /** Perms */
+            perms: {
+                [key: string]: boolean;
+            };
+        };
+        /** SetRoleRequest */
+        SetRoleRequest: {
+            /** Role */
+            role: string;
+        };
         /** SetSequenceReframeRequest */
         SetSequenceReframeRequest: {
             /** Width */
@@ -4473,12 +4586,32 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** WorkspaceMemberOut */
+        WorkspaceMemberOut: {
+            /** User Id */
+            user_id: string;
+            /** Username */
+            username: string;
+            /** Role */
+            role: string;
+            /** Perms */
+            perms: {
+                [key: string]: boolean;
+            };
+            /**
+             * Is Self
+             * @default false
+             */
+            is_self: boolean;
+        };
         /** WorkspaceOut */
         WorkspaceOut: {
             /** Id */
             id: string;
             /** Name */
             name: string;
+            /** Role */
+            role?: string | null;
         };
     };
     responses: never;
@@ -5075,6 +5208,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_api_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_workspace_api_workspaces__workspace_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_workspaces__workspace_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_member_api_workspaces__workspace_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_api_workspaces__workspace_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_member_role_api_workspaces__workspace_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_member_perms_api_workspaces__workspace_id__members__user_id__perms_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemberPermsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberOut"];
                 };
             };
             /** @description Validation Error */
