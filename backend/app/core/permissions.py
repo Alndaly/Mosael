@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextvars
+
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -51,10 +53,35 @@ def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
     return member
 
 
-def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
-    """Membership gate (any role) — used by read paths and as the base for the
-    role/perm gates below."""
+# The current request's HTTP method, bound by the ASGI middleware in app/main.py.
+# Lets the shared access chokepoint stay read-open but write-gated without every route
+# passing the method through. Defaults to GET so non-HTTP call paths (tests, workers,
+# daemon jobs) are treated as reads and never spuriously 403.
+_request_method: contextvars.ContextVar[str] = contextvars.ContextVar("mibu_request_method", default="GET")
+_MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def bind_request_method(method: str) -> None:
+    _request_method.set((method or "GET").upper())
+
+
+def ensure_workspace_member(db: Session, user: User, workspace_id: str) -> None:
+    """Pure membership gate, method-agnostic — for read-only POSTs (search / retrieval
+    test) that must stay open to viewers."""
     _membership(db, user, workspace_id)
+
+
+def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
+    """The universal scoped-route chokepoint (also reached via require_asset /
+    require_sequence_access). Any member may read; a mutating request additionally
+    requires the `edit` perm, so viewers — and members with `edit` revoked — are
+    read-only everywhere without per-route wiring. Routes needing a different perm
+    (credentials, ai, delete, …) call ensure_workspace_perm explicitly instead."""
+    member = _membership(db, user, workspace_id)
+    if _request_method.get() in _MUTATING:
+        overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
+        if not has_perm(member.role, overrides, "edit"):
+            raise HTTPException(status_code=403, detail="Permission denied: edit")
 
 
 def member_overrides(db: Session, workspace_id: str, user_id: str) -> dict[str, bool]:

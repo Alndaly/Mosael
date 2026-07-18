@@ -23,7 +23,7 @@ from app.api.schemas import (
     KbUrlImportRequest,
 )
 from app.core.config import settings
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_member
 from app.db.models import KbChunk, KbDataset, KbDocument
 from app.domain import kb
 from app.domain.kb import convert as kb_convert
@@ -369,8 +369,12 @@ def reindex_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDo
 def retrieval_test(
     dataset_id: str, body: KbRetrievalTestRequest, db: DbSession, user: CurrentUser
 ) -> list[dict]:
-    """召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。"""
-    dataset = _require_dataset(db, user, dataset_id)
+    """召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。
+    只读操作(虽是 POST),用成员级校验而非写权限,viewer 也能跑。"""
+    dataset = db.get(KbDataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    ensure_workspace_member(db, user, dataset.workspace_id)
     return kb.search(db, dataset, body.query, top_k=body.top_k, score_threshold=body.score_threshold)
 
 

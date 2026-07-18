@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProjectCreate, ProjectOut, ProjectWithStatsOut, RenameRequest, WorkspaceCreate, WorkspaceOut
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace, WorkspaceMember
 
 router = APIRouter(tags=["projects"])
@@ -35,7 +35,7 @@ def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut]:
 
 @router.post("/projects", response_model=ProjectOut)
 def create_project(body: ProjectCreate, db: DbSession, user: CurrentUser) -> Project:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     project = Project(workspace_id=body.workspace_id, name=body.name)
     db.add(project)
     db.commit()
@@ -106,6 +106,7 @@ def list_projects(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
 @router.patch("/projects/{project_id}", response_model=ProjectOut)
 def rename_project(project_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> Project:
     project = _require_project(db, user, project_id)
+    ensure_workspace_perm(db, user, project.workspace_id, "edit")
     project.name = body.name
     db.commit()
     db.refresh(project)
@@ -115,6 +116,7 @@ def rename_project(project_id: str, body: RenameRequest, db: DbSession, user: Cu
 @router.delete("/projects/{project_id}", status_code=204)
 def delete_project(project_id: str, db: DbSession, user: CurrentUser) -> Response:
     project = _require_project(db, user, project_id)
+    ensure_workspace_perm(db, user, project.workspace_id, "delete")
     db.delete(project)
     db.commit()
     return Response(status_code=204)

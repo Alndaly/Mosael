@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, TranscriptAttachRequest, TranscriptOut
 from app.audio.service import AsrError, start_transcription
-from app.core.permissions import ensure_workspace_access, require_asset
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Transcript
 from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -23,7 +23,7 @@ router = APIRouter(tags=["assets"])
 
 @router.post("/assets", response_model=AssetOut)
 def create_asset(body: AssetCreate, db: DbSession, user: CurrentUser) -> Asset:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     asset = Asset(**body.model_dump())
     db.add(asset)
     db.commit()
@@ -40,7 +40,7 @@ def import_asset(
     name: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> Asset:
-    ensure_workspace_access(db, user, workspace_id)
+    ensure_workspace_perm(db, user, workspace_id, "upload")
     return import_uploaded_asset(
         db,
         workspace_id=workspace_id,
@@ -63,6 +63,7 @@ def list_assets(workspace_id: str, db: DbSession, user: CurrentUser, project_id:
 @router.patch("/assets/{asset_id}", response_model=AssetOut)
 def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentUser) -> Asset:
     asset = require_asset(db, user, asset_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "edit")
     if body.name is not None:
         asset.name = body.name
     if body.tags is not None:
@@ -81,6 +82,7 @@ def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentU
 @router.delete("/assets/{asset_id}", status_code=204)
 def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
     asset = require_asset(db, user, asset_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "delete")
     in_use = db.scalar(select(Clip.id).where(Clip.asset_id == asset_id).limit(1))
     if in_use is not None:
         raise HTTPException(status_code=422, detail="素材正在时间线中使用，请先从时间线移除")
@@ -99,6 +101,7 @@ def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession,
     from app.ai.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         result = analyze_asset(db, asset, body.question, body.profile_id)
     except AnalysisError as exc:
@@ -109,7 +112,8 @@ def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession,
 @router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)
 def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, user: CurrentUser) -> Transcript:
     if db.get(Asset, asset_id) is not None:
-        require_asset(db, user, asset_id)
+        asset = require_asset(db, user, asset_id)
+        ensure_workspace_perm(db, user, asset.workspace_id, "edit")
     try:
         transcript = attach_transcript(
             db,
@@ -139,7 +143,8 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
 
 @router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
 def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser):
-    require_asset(db, user, asset_id)
+    asset = require_asset(db, user, asset_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         return start_transcription(db, asset_id)
     except AsrError as exc:
