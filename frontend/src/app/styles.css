@@ -4886,10 +4886,16 @@
   pointer-events: none;
 }
 
-/* 设置:分组卡片,不再是一列裸输入 */
+/* 设置:分组卡片铺满整宽的响应式网格(自适应列数),不再一列缩在左边留大片空白 */
 .kb-settings {
-  max-width: 560px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-content: start;
   gap: 12px;
+}
+
+.kb-settings > .kb-settings-actions {
+  grid-column: 1 / -1;
 }
 
 .kb-set-group {
