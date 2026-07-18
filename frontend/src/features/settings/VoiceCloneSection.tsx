@@ -33,7 +33,7 @@ function fmtSpeed(bps: number): string {
   return `${Math.round(bps / 1000)} KB/s`;
 }
 
-type ConfigForm = { engine: string; python_path: string; source: string };
+type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
@@ -48,14 +48,29 @@ export function VoiceCloneSection() {
   });
 
   const form = useForm<ConfigForm>({
-    resolver: zodResolver(z.object({ engine: z.string(), python_path: z.string(), source: z.string() })),
-    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror" },
+    resolver: zodResolver(
+      z.object({
+        engine: z.string(),
+        python_path: z.string(),
+        source: z.string(),
+        fish_repo_dir: z.string(),
+        fish_model_dir: z.string(),
+      }),
+    ),
+    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", fish_repo_dir: "", fish_model_dir: "" },
   });
   React.useEffect(() => {
     if (config.data) {
-      form.reset({ engine: config.data.engine, python_path: config.data.python_path, source: config.data.source });
+      form.reset({
+        engine: config.data.engine,
+        python_path: config.data.python_path,
+        source: config.data.source,
+        fish_repo_dir: config.data.fish_repo_dir ?? "",
+        fish_model_dir: config.data.fish_model_dir ?? "",
+      });
     }
   }, [config.data]);
+  const isFish = form.watch("engine") === "fish-speech";
 
   const save = useMutation({
     mutationFn: (values: ConfigForm) => updateTtsConfig(values),
@@ -145,6 +160,36 @@ export function VoiceCloneSection() {
                 </FormItem>
               )}
             />
+            {isFish && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="fish_repo_dir"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("voiceCloneFishRepo")}</FormLabel>
+                      <FormControl>
+                        <Input placeholder="/path/to/fish-speech" {...field} />
+                      </FormControl>
+                      <FormDescription>{t("voiceCloneFishRepoHint")}</FormDescription>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="fish_model_dir"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("voiceCloneFishModel")}</FormLabel>
+                      <FormControl>
+                        <Input placeholder="/path/to/fish-speech-s2-pro" {...field} />
+                      </FormControl>
+                      <FormDescription>{t("voiceCloneFishModelHint")}</FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
             <div className="task-create-actions">
               <Button type="submit" size="sm" disabled={save.isPending}>
                 {t("save")}

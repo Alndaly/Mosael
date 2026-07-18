@@ -427,6 +427,8 @@ class TtsConfigOut(BaseModel):
     engine: str
     python_path: str = ""
     source: str = "hf-mirror"
+    fish_repo_dir: str = ""  # Fish Speech source checkout
+    fish_model_dir: str = ""  # Fish Speech weights dir (contains codec.pth)
     worker_ready: bool = False  # an interpreter with the engine installed was found
     worker_python: str = ""  # the resolved interpreter path (for display)
 
@@ -435,6 +437,8 @@ class TtsConfigUpdate(BaseModel):
     engine: str = Field(pattern="^(f5-tts|fish-speech)$")
     python_path: str = ""
     source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
+    fish_repo_dir: str = ""
+    fish_model_dir: str = ""
 
 
 class AsrModelOut(BaseModel):

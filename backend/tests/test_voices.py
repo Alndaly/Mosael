@@ -108,9 +108,17 @@ def test_tts_config_get_and_update() -> None:
 
     saved = client.put(
         "/api/settings/tts",
-        json={"engine": "fish-speech", "python_path": "/tmp/py", "source": "modelscope"},
+        json={
+            "engine": "fish-speech",
+            "python_path": "/tmp/py",
+            "source": "modelscope",
+            "fish_repo_dir": "/tmp/fish-speech",
+            "fish_model_dir": "/tmp/s2-pro",
+        },
     ).json()
     assert saved["engine"] == "fish-speech" and saved["source"] == "modelscope"
+    assert saved["fish_repo_dir"] == "/tmp/fish-speech" and saved["fish_model_dir"] == "/tmp/s2-pro"
     assert tts_config.get().engine == "fish-speech"  # cache refreshed
+    assert tts_config.get().fish_repo_dir == "/tmp/fish-speech"
     # invalid engine rejected
     assert client.put("/api/settings/tts", json={"engine": "nope", "source": "hf"}).status_code == 422

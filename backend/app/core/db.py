@@ -65,7 +65,21 @@ def init_db() -> None:
     _migrate_kb_schema()
     _migrate_agent_sessions()
     _migrate_clip_transform()
+    _migrate_tts_config()
     Base.metadata.create_all(bind=engine)
+
+
+def _migrate_tts_config() -> None:
+    """加列迁移:tts_config 增加 Fish Speech 的源码目录 / 模型目录列。"""
+    inspector = inspect(engine)
+    if "tts_config" not in set(inspector.get_table_names()):
+        return
+    cols = {c["name"] for c in inspector.get_columns("tts_config")}
+    with engine.begin() as conn:
+        if "fish_repo_dir" not in cols:
+            conn.execute(text("ALTER TABLE tts_config ADD COLUMN fish_repo_dir VARCHAR(500) NOT NULL DEFAULT ''"))
+        if "fish_model_dir" not in cols:
+            conn.execute(text("ALTER TABLE tts_config ADD COLUMN fish_model_dir VARCHAR(500) NOT NULL DEFAULT ''"))
 
 
 def _migrate_clip_transform() -> None:

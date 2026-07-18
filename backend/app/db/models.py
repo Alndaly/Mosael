@@ -502,6 +502,10 @@ class TtsConfig(Base):
     engine: Mapped[str] = mapped_column(String(32), nullable=False, default="f5-tts")  # f5-tts | fish-speech
     python_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")  # empty = autodetect
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="hf-mirror")  # hf | hf-mirror | modelscope
+    # Fish Speech runs from a source checkout + a local weights dir (with codec.pth);
+    # empty = reuse a sibling mibu-video setup if present. See domain/tts_config.py.
+    fish_repo_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    fish_model_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

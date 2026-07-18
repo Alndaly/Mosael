@@ -83,6 +83,14 @@ def _dir_size(path: Path) -> int:
 
 
 def _measure(engine: TtsEngine) -> int:
+    # Fish Speech reuses a local weights dir (configured / sibling mibu-video), not the
+    # HF hub cache — measure that so a reused setup reads as installed, not "missing".
+    if engine.id == "fish-speech":
+        from app.domain import tts_config
+
+        model = tts_config.get().resolved_fish_model
+        if model and Path(model).is_dir():
+            return _dir_size(Path(model))
     total = 0
     for name in engine.cache_dirs:
         for root in _hf_roots():
@@ -102,11 +110,17 @@ def _is_installed(engine: TtsEngine) -> bool:
 # ---------------------------------------------------------------------------
 def _worker_env() -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
-    mirror so first-use model downloads work (e.g. hf-mirror in CN)."""
+    mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the
+    resolved Fish Speech source-checkout + weights dirs the worker runs from."""
     from app.domain import tts_config
 
+    cfg = tts_config.get()
     env = dict(os.environ)
-    env["HF_ENDPOINT"] = tts_config.get().hf_endpoint
+    env["HF_ENDPOINT"] = cfg.hf_endpoint
+    if cfg.resolved_fish_repo:
+        env["MIBU_FISH_REPO_DIR"] = cfg.resolved_fish_repo
+    if cfg.resolved_fish_model:
+        env["MIBU_FISH_MODEL_DIR"] = cfg.resolved_fish_model
     return env
 
 
@@ -125,15 +139,32 @@ def candidate_pythons() -> list[Path]:
     return candidates
 
 
+def _probe_code(engine_id: str) -> str | None:
+    """Python one-liner proving the engine is importable, or None if a required
+    resource (Fish Speech checkout / weights) is missing → not ready."""
+    if engine_id != "fish-speech":
+        return "import f5_tts"
+    from app.domain import tts_config
+
+    cfg = tts_config.get()
+    repo, model = cfg.resolved_fish_repo, cfg.resolved_fish_model
+    if not repo or not model:
+        return None
+    # fish_speech lives in the source checkout, not a pip package — put it on sys.path first.
+    return f"import sys; sys.path.insert(0, {repo!r}); import fish_speech"
+
+
 def probe_interpreter(engine_id: str) -> dict[str, Any]:
     """Whether some candidate interpreter can import the engine (i.e. real
     synthesis is available). Returns {worker_ready, worker_python}."""
-    module = "fish_speech" if engine_id == "fish-speech" else "f5_tts"
+    code = _probe_code(engine_id)
+    if code is None:
+        return {"worker_ready": False, "worker_python": ""}
     for python in candidate_pythons():
         if not python.is_file():
             continue
         try:
-            probe = subprocess.run([str(python), "-c", f"import {module}"], capture_output=True, timeout=60)
+            probe = subprocess.run([str(python), "-c", code], capture_output=True, timeout=60)
         except (subprocess.SubprocessError, OSError):
             continue
         if probe.returncode == 0:

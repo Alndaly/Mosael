@@ -119,7 +119,14 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
 
 def _tts_config_out() -> dict:
     cfg = tts_config.get()
-    return {"engine": cfg.engine, "python_path": cfg.python_path, "source": cfg.source, **tts_models.probe_interpreter(cfg.engine)}
+    return {
+        "engine": cfg.engine,
+        "python_path": cfg.python_path,
+        "source": cfg.source,
+        "fish_repo_dir": cfg.fish_repo_dir,
+        "fish_model_dir": cfg.fish_model_dir,
+        **tts_models.probe_interpreter(cfg.engine),
+    }
 
 
 @router.get("/settings/tts", response_model=TtsConfigOut)
@@ -138,6 +145,8 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     row.engine = body.engine
     row.python_path = body.python_path.strip()
     row.source = body.source
+    row.fish_repo_dir = body.fish_repo_dir.strip()
+    row.fish_model_dir = body.fish_model_dir.strip()
     db.commit()
     tts_config.refresh()
     return _tts_config_out()

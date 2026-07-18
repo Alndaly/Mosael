@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import struct
 import sys
 import wave
+from pathlib import Path
 from typing import Any
 
 
@@ -74,10 +76,85 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
     return "f5-tts"
 
 
+_FISH_HINT = (
+    "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。"
+    "在设置→声音克隆填『源码目录』『模型目录』,或设置 MIBU_FISH_REPO_DIR / MIBU_FISH_MODEL_DIR。"
+)
+
+
+def _pick_device() -> str:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+    except Exception:  # noqa: BLE001
+        pass
+    return "cpu"
+
+
+def _fish_repo_dir() -> Path:
+    """The official fish-speech source checkout — its ``tools.server.*`` modules live at
+    the repo root (not in the pip ``fish_speech`` package), so it must go on sys.path."""
+    configured = os.environ.get("MIBU_FISH_REPO_DIR", "").strip()
+    if configured and Path(configured).expanduser().is_dir():
+        return Path(configured).expanduser()
+    raise RuntimeError(_FISH_HINT + "(源码目录未找到)")
+
+
+def _fish_model_dir() -> Path:
+    """The weights directory: config.json + model safetensors + codec.pth at its root."""
+    configured = os.environ.get("MIBU_FISH_MODEL_DIR", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if (path / "codec.pth").is_file():
+            return path
+    raise RuntimeError(_FISH_HINT + "(模型目录缺少 codec.pth)")
+
+
 def run_fish(request: dict[str, Any], output_path: str) -> str:
-    # Fish Speech S2 Pro runs from a source checkout (tools.server). Ported in a
-    # later slice; until then fall back to the placeholder so the flow works.
-    raise ModuleNotFoundError("fish-speech not wired yet")
+    """Zero-shot clone via Fish Speech S2 Pro's official inference API. Runs the LLM +
+    codec locally from a source checkout; conditions on (reference audio + its transcript)."""
+    repo = _fish_repo_dir()
+    model_dir = _fish_model_dir()
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+
+    from fish_speech.utils.schema import ServeReferenceAudio, ServeTTSRequest  # type: ignore
+    from tools.server.inference import inference_wrapper  # type: ignore
+    from tools.server.model_manager import ModelManager  # type: ignore
+
+    device = _pick_device()
+    manager = ModelManager(
+        mode="tts",
+        device=device,
+        half=device.startswith("cuda"),
+        compile=False,
+        llama_checkpoint_path=str(model_dir),
+        decoder_checkpoint_path=str(model_dir / "codec.pth"),
+        decoder_config_name="modded_dac_vq",
+    )
+
+    reference_wav = request.get("reference_wav")
+    if not reference_wav:
+        raise RuntimeError("Fish Speech 需要参考音频")
+    references = [
+        ServeReferenceAudio(
+            audio=Path(reference_wav).read_bytes(),
+            # The ref transcript keeps the clone intelligible — a wrong/empty one garbles output.
+            text=request.get("reference_text") or "",
+        )
+    ]
+    payload = ServeTTSRequest(text=request["text"], references=references, format="wav", streaming=False)
+    audio = next(inference_wrapper(payload, manager.tts_inference_engine))
+    sample_rate = int(manager.tts_inference_engine.decoder_model.sample_rate)
+
+    import soundfile as sf  # type: ignore
+
+    sf.write(output_path, audio, sample_rate, format="WAV")
+    return "fish-speech"
 
 
 def synthesize(request: dict[str, Any], output_path: str) -> str:
@@ -96,7 +173,9 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
     engine = (request.get("engine") or "f5-tts").strip().lower()
     try:
         if engine == "fish-speech":
-            run_fish({**request, "text": "预热", "reference_wav": None}, output_path)
+            from huggingface_hub import snapshot_download  # type: ignore
+
+            snapshot_download(repo_id="fishaudio/s2-pro")  # → HF cache; progress polled by host
         else:
             from f5_tts.api import F5TTS
 

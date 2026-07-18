@@ -2474,9 +2474,7 @@ export interface components {
             /** Content */
             content: string;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /** Error */
             error: string | null;
             /**
@@ -2640,9 +2638,7 @@ export interface components {
              */
             file_key: string;
             /** Media Info */
-            media_info?: {
-                [key: string]: unknown;
-            };
+            media_info?: Record<string, never>;
         };
         /** AssetOut */
         AssetOut: {
@@ -2663,9 +2659,7 @@ export interface components {
             /** File Key */
             file_key: string;
             /** Media Info */
-            media_info: {
-                [key: string]: unknown;
-            };
+            media_info: Record<string, never>;
             /** Tags */
             tags?: string[];
             /** Created At */
@@ -2702,18 +2696,14 @@ export interface components {
             /** Name */
             name: string;
             /** Params List */
-            params_list: {
-                [key: string]: unknown;
-            }[];
+            params_list: Record<string, never>[];
         };
         /** BatchItemOut */
         BatchItemOut: {
             /** Index */
             index: number;
             /** Params */
-            params: {
-                [key: string]: unknown;
-            };
+            params: Record<string, never>;
             /** Job Id */
             job_id: string | null;
             /** Status */
@@ -2820,13 +2810,9 @@ export interface components {
             /** Text Override */
             text_override: string | null;
             /** Effects */
-            effects: {
-                [key: string]: unknown;
-            };
+            effects: Record<string, never>;
             /** Transform */
-            transform?: {
-                [key: string]: unknown;
-            };
+            transform?: Record<string, never>;
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -2835,9 +2821,7 @@ export interface components {
             /** Tool */
             tool: string;
             /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
+            payload?: Record<string, never>;
             /**
              * Requested By
              * @default external-agent
@@ -2857,15 +2841,11 @@ export interface components {
             /** Summary */
             summary: string;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /** Status */
             status: string;
             /** Result */
-            result: {
-                [key: string]: unknown;
-            };
+            result: Record<string, never>;
             /** Error */
             error: string | null;
             /** Requested By */
@@ -2989,9 +2969,7 @@ export interface components {
             /** Prompt */
             prompt: string;
             /** Parameters */
-            parameters?: {
-                [key: string]: unknown;
-            };
+            parameters?: Record<string, never>;
             /** Source Asset Ids */
             source_asset_ids?: string[];
         };
@@ -3015,9 +2993,7 @@ export interface components {
             /** Kind */
             kind: string;
             /** Request */
-            request: {
-                [key: string]: unknown;
-            };
+            request: Record<string, never>;
             /** Result Asset Id */
             result_asset_id: string | null;
         };
@@ -3034,9 +3010,7 @@ export interface components {
             /** Enabled */
             enabled: boolean;
             /** Capabilities */
-            capabilities: {
-                [key: string]: unknown;
-            };
+            capabilities: Record<string, never>;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3094,13 +3068,9 @@ export interface components {
             /** Message */
             message: string;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /** Result */
-            result: {
-                [key: string]: unknown;
-            };
+            result: Record<string, never>;
             /** Error */
             error: string | null;
             /**
@@ -3446,9 +3416,7 @@ export interface components {
             /** Link */
             link: string | null;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /** Read At */
             read_at: string | null;
             /**
@@ -3473,13 +3441,9 @@ export interface components {
             /** Status */
             status: string;
             /** Input */
-            input: {
-                [key: string]: unknown;
-            };
+            input: Record<string, never>;
             /** Output */
-            output: {
-                [key: string]: unknown;
-            };
+            output: Record<string, never>;
             /** Error */
             error: string | null;
             /**
@@ -3491,9 +3455,7 @@ export interface components {
         /** PluginInvokeRequest */
         PluginInvokeRequest: {
             /** Input */
-            input?: {
-                [key: string]: unknown;
-            };
+            input?: Record<string, never>;
         };
         /** PluginOut */
         PluginOut: {
@@ -3506,9 +3468,7 @@ export interface components {
             /** Enabled */
             enabled: boolean;
             /** Manifest */
-            manifest: {
-                [key: string]: unknown;
-            };
+            manifest: Record<string, never>;
         };
         /** PluginPermissionGrantOut */
         PluginPermissionGrantOut: {
@@ -3550,9 +3510,7 @@ export interface components {
              */
             description: string;
             /** Input Schema */
-            input_schema?: {
-                [key: string]: unknown;
-            };
+            input_schema?: Record<string, never>;
             /** Permissions */
             permissions?: unknown[];
             /** Skills */
@@ -3719,9 +3677,7 @@ export interface components {
             /** Name */
             name: string;
             /** Config */
-            config?: {
-                [key: string]: unknown;
-            };
+            config?: Record<string, never>;
             /** Proxy */
             proxy?: string | null;
         };
@@ -3736,9 +3692,7 @@ export interface components {
             /** Name */
             name: string;
             /** Config */
-            config: {
-                [key: string]: unknown;
-            };
+            config: Record<string, never>;
             /** Enabled */
             enabled: boolean;
             /** Proxy */
@@ -3765,9 +3719,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Config */
-            config?: {
-                [key: string]: unknown;
-            } | null;
+            config?: Record<string, never> | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Proxy */
@@ -3831,9 +3783,7 @@ export interface components {
             /** Description */
             description: string;
             /** Config */
-            config: {
-                [key: string]: unknown;
-            };
+            config: Record<string, never>;
             /**
              * Executor
              * @default local
@@ -3877,9 +3827,7 @@ export interface components {
             /** Error */
             error: string | null;
             /** Result */
-            result: {
-                [key: string]: unknown;
-            };
+            result: Record<string, never>;
             /** Job Id */
             job_id: string | null;
             /**
@@ -3923,9 +3871,7 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Schedule */
-            schedule?: {
-                [key: string]: unknown;
-            };
+            schedule?: Record<string, never>;
             /**
              * Timezone
              * @default UTC
@@ -3937,9 +3883,7 @@ export interface components {
              */
             enabled: boolean;
             /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
+            payload?: Record<string, never>;
         };
         /** ScheduledTaskOut */
         ScheduledTaskOut: {
@@ -3956,17 +3900,13 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Schedule */
-            schedule: {
-                [key: string]: unknown;
-            };
+            schedule: Record<string, never>;
             /** Timezone */
             timezone: string;
             /** Enabled */
             enabled: boolean;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /** Next Run At */
             next_run_at: string | null;
             /** Last Run At */
@@ -3993,9 +3933,7 @@ export interface components {
             /** Status */
             status: string;
             /** Result */
-            result: {
-                [key: string]: unknown;
-            };
+            result: Record<string, never>;
             /** Error */
             error: string | null;
             /** Started At */
@@ -4010,17 +3948,13 @@ export interface components {
             /** Trigger Type */
             trigger_type?: string | null;
             /** Schedule */
-            schedule?: {
-                [key: string]: unknown;
-            } | null;
+            schedule?: Record<string, never> | null;
             /** Timezone */
             timezone?: string | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
+            payload?: Record<string, never> | null;
         };
         /** SequenceCreate */
         SequenceCreate: {
@@ -4063,9 +3997,7 @@ export interface components {
             /** Fps */
             fps: number;
             /** Reframe */
-            reframe?: {
-                [key: string]: unknown;
-            };
+            reframe?: Record<string, never>;
             /** Revision */
             revision: number;
             /**
@@ -4084,9 +4016,7 @@ export interface components {
         /** SetClipEffectsRequest */
         SetClipEffectsRequest: {
             /** Effects */
-            effects?: {
-                [key: string]: unknown;
-            };
+            effects?: Record<string, never>;
         };
         /** SetClipSpeedRequest */
         SetClipSpeedRequest: {
@@ -4101,9 +4031,7 @@ export interface components {
         /** SetClipTransformRequest */
         SetClipTransformRequest: {
             /** Transform */
-            transform?: {
-                [key: string]: unknown;
-            };
+            transform?: Record<string, never>;
         };
         /** SetSequenceReframeRequest */
         SetSequenceReframeRequest: {
@@ -4149,9 +4077,7 @@ export interface components {
             /** Type */
             type: string;
             /** Payload */
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: Record<string, never>;
             /**
              * Created At
              * Format: date-time
@@ -4293,6 +4219,16 @@ export interface components {
              */
             source: string;
             /**
+             * Fish Repo Dir
+             * @default
+             */
+            fish_repo_dir: string;
+            /**
+             * Fish Model Dir
+             * @default
+             */
+            fish_model_dir: string;
+            /**
              * Worker Ready
              * @default false
              */
@@ -4317,6 +4253,16 @@ export interface components {
              * @default hf-mirror
              */
             source: string;
+            /**
+             * Fish Repo Dir
+             * @default
+             */
+            fish_repo_dir: string;
+            /**
+             * Fish Model Dir
+             * @default
+             */
+            fish_model_dir: string;
         };
         /** TtsEngineOut */
         TtsEngineOut: {
@@ -4444,18 +4390,14 @@ export interface components {
             /** Instruction */
             instruction: string;
             /** Graph */
-            graph?: {
-                [key: string]: unknown;
-            } | null;
+            graph?: Record<string, never> | null;
             /** Profile Id */
             profile_id?: string | null;
         };
         /** WorkflowAiEditResponse */
         WorkflowAiEditResponse: {
             /** Graph */
-            graph: {
-                [key: string]: unknown;
-            };
+            graph: Record<string, never>;
             /**
              * Summary
              * @default
@@ -4474,9 +4416,7 @@ export interface components {
              */
             description: string;
             /** Graph */
-            graph?: {
-                [key: string]: unknown;
-            } | null;
+            graph?: Record<string, never> | null;
         };
         /** WorkflowNodeTypeOut */
         WorkflowNodeTypeOut: {
@@ -4487,9 +4427,7 @@ export interface components {
             /** Description */
             description: string;
             /** Config */
-            config: {
-                [key: string]: unknown;
-            };
+            config: Record<string, never>;
             /** Outputs */
             outputs: string[];
         };
@@ -4504,9 +4442,7 @@ export interface components {
             /** Description */
             description: string;
             /** Graph */
-            graph: {
-                [key: string]: unknown;
-            };
+            graph: Record<string, never>;
             /**
              * Created At
              * Format: date-time
@@ -4521,9 +4457,7 @@ export interface components {
         /** WorkflowRunRequest */
         WorkflowRunRequest: {
             /** Params */
-            params?: {
-                [key: string]: unknown;
-            };
+            params?: Record<string, never>;
         };
         /** WorkflowUpdate */
         WorkflowUpdate: {
@@ -4532,9 +4466,7 @@ export interface components {
             /** Description */
             description?: string | null;
             /** Graph */
-            graph?: {
-                [key: string]: unknown;
-            } | null;
+            graph?: Record<string, never> | null;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
@@ -4689,9 +4621,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4720,9 +4650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -4746,9 +4674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4781,9 +4707,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4816,9 +4740,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4847,9 +4769,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -4869,9 +4789,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -4895,9 +4813,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4928,9 +4844,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -4959,9 +4873,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -4981,9 +4893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -6900,9 +6810,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */
@@ -7090,9 +6998,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Validation Error */

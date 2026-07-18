@@ -103,7 +103,13 @@ export type TtsConfig = components["schemas"]["TtsConfigOut"];
 export function getTtsConfig(): Promise<TtsConfig> {
   return api<TtsConfig>("/api/settings/tts");
 }
-export function updateTtsConfig(body: { engine: string; python_path: string; source: string }): Promise<TtsConfig> {
+export function updateTtsConfig(body: {
+  engine: string;
+  python_path: string;
+  source: string;
+  fish_repo_dir?: string;
+  fish_model_dir?: string;
+}): Promise<TtsConfig> {
   return api<TtsConfig>("/api/settings/tts", { method: "PUT", body: JSON.stringify(body) });
 }
 export type GenerationModel = components["schemas"]["GenerationModelOut"];
