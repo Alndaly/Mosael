@@ -46,7 +46,7 @@ CATALOG: tuple[TtsEngine, ...] = (
     TtsEngine(
         id="fish-speech",
         label="Fish Speech S2 Pro",
-        detail="零样本克隆,支持情感标签,占用更大",
+        detail="零样本克隆,支持情感标签;一键下载源码 + 权重,占用更大",
         cache_dirs=("models--fishaudio--s2-pro",),
         expected_bytes=4_000_000_000,
         module="fish_speech",
@@ -280,16 +280,82 @@ def start_download(engine_id: str) -> dict[str, Any]:
     return _status_dict(engine)
 
 
+_FISH_SOURCE_URL = "https://github.com/fishaudio/fish-speech"
+
+
+def _ensure_fish_source() -> None:
+    """Clone the official Fish Speech source into the managed dir (its ``fish_speech`` package
+    and ``tools.server.*`` modules aren't on PyPI, so real synthesis needs the checkout).
+    No-op if already present; raises with a readable hint on failure."""
+    from app.domain import tts_config
+
+    repo = tts_config.MANAGED_FISH_REPO
+    if (repo / tts_config.FISH_REPO_MARKER).is_file():
+        return
+    _store.set("fish-speech", _Live(status="downloading", total=_BY_ID["fish-speech"].expected_bytes,
+                                    message="拉取 Fish Speech 源码…"))
+    repo.parent.mkdir(parents=True, exist_ok=True)
+    if repo.is_dir() and any(repo.iterdir()):
+        # A prior half-clone — wipe so `git clone` into it succeeds.
+        import shutil
+
+        shutil.rmtree(repo, ignore_errors=True)
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", _FISH_SOURCE_URL, str(repo)],
+            capture_output=True, text=True, timeout=600,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("未找到 git,无法拉取 Fish Speech 源码") from exc
+    except subprocess.SubprocessError as exc:
+        raise RuntimeError(f"拉取 Fish Speech 源码失败:{exc}") from exc
+    if result.returncode != 0 or not (repo / tts_config.FISH_REPO_MARKER).is_file():
+        raise RuntimeError(f"拉取 Fish Speech 源码失败:{(result.stderr or '')[-300:]}")
+
+
+def _download_python() -> str:
+    """First existing candidate interpreter — the TTS env that has huggingface_hub, used to
+    run the weights snapshot. Falls back to this process's interpreter."""
+    import sys
+
+    for python in candidate_pythons():
+        if python.is_file():
+            return str(python)
+    return sys.executable
+
+
 def _run_download(engine_id: str) -> None:
     engine = _BY_ID[engine_id]
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     output_path = settings.data_dir / f"tts-warmup-{engine_id}.wav"
-    python = resolve_tts_python(engine.module)
+
+    env = _worker_env()
+    progress_dir: Path | None = None
+    if engine_id == "fish-speech":
+        from app.domain import tts_config
+
+        try:
+            _ensure_fish_source()
+        except RuntimeError as exc:
+            _store.set(engine.id, _Live(status="failed", message=str(exc)[:400]))
+            return
+        # Snapshot weights into the managed model dir (flat: codec.pth at root) and measure it
+        # for live progress — resolved_fish_model won't resolve until codec.pth lands.
+        progress_dir = tts_config.MANAGED_FISH_MODEL
+        progress_dir.mkdir(parents=True, exist_ok=True)
+        env["MIBU_FISH_MODEL_DIR"] = str(progress_dir)
+        python = _download_python()
+    else:
+        python = resolve_tts_python(engine.module)
+
+    def measure() -> int:
+        return _dir_size(progress_dir) if progress_dir is not None else _measure(engine)
+
     started = time.monotonic()
-    last_bytes, last_time = _measure(engine), started
+    last_bytes, last_time = measure(), started
     proc = subprocess.Popen(
         [python, str(WORKER_PATH), str(output_path)],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=_worker_env(),
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )
     assert proc.stdin is not None
     proc.stdin.write(json.dumps({"action": "warmup", "engine": engine.id}))
@@ -298,7 +364,7 @@ def _run_download(engine_id: str) -> None:
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
         now = time.monotonic()
-        current = _measure(engine)
+        current = measure()
         dt = max(now - last_time, 1e-3)
         speed = max(0.0, (current - last_bytes) / dt)
         remaining = max(0, engine.expected_bytes - current)
@@ -310,6 +376,12 @@ def _run_download(engine_id: str) -> None:
         last_bytes, last_time = current, now
 
     stderr = (proc.stderr.read() if proc.stderr else "")[-600:]
+    if engine_id == "fish-speech":
+        # Managed dirs just changed on disk — drop the cached resolution so probe/synthesis
+        # pick them up without a restart.
+        from app.domain import tts_config
+
+        tts_config.refresh()
     if _is_installed(engine):
         _store.clear(engine.id)
     else:

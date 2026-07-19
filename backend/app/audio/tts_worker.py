@@ -175,7 +175,13 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         if engine == "fish-speech":
             from huggingface_hub import snapshot_download  # type: ignore
 
-            snapshot_download(repo_id="fishaudio/s2-pro")  # → HF cache; progress polled by host
+            # Managed install: land weights flat in MIBU_FISH_MODEL_DIR (codec.pth + config
+            # at its root, which run_fish reads). Without a target, fall back to the HF cache.
+            target = os.environ.get("MIBU_FISH_MODEL_DIR", "").strip()
+            if target:
+                snapshot_download(repo_id="fishaudio/s2-pro", local_dir=target)
+            else:
+                snapshot_download(repo_id="fishaudio/s2-pro")  # → HF cache; progress polled by host
         else:
             from f5_tts.api import F5TTS
 
