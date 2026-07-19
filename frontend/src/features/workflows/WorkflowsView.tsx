@@ -770,11 +770,19 @@ function WorkflowEditor({
     mutationFn: () => updateWorkflow(workflow.id, { graph }),
     onSuccess: () => {
       setDirty(false);
-      toast.success(t("wfSaved"));
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
     },
     onError: (error: Error) => toast.error(t("wfSaveFailed"), { description: error.message }),
   });
+  // Real-time save (Dify-style): debounce-save the graph whenever it changes, so there's no
+  // manual "save" step. A save clears `dirty`; a rapid edit reschedules the pending save.
+  const saveRef = React.useRef(save);
+  saveRef.current = save;
+  React.useEffect(() => {
+    if (!dirty) return;
+    const id = window.setTimeout(() => saveRef.current.mutate(), 700);
+    return () => window.clearTimeout(id);
+  }, [dirty, graph]);
   const rename = useMutation({
     mutationFn: (name: string) => updateWorkflow(workflow.id, { name }),
     onSuccess: () => {
@@ -979,13 +987,23 @@ function WorkflowEditor({
               )}
             </PopoverContent>
           </Popover>
-          <Button variant="outline" size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-            <Save size={13} /> {t("save")}
-          </Button>
+          <span className="wf-save-status" aria-live="polite">
+            {save.isPending ? (
+              <>
+                <Loader2 size={12} className="spin" /> {t("wfSaving")}
+              </>
+            ) : dirty ? (
+              t("wfUnsaved")
+            ) : (
+              <>
+                <Save size={12} /> {t("wfSavedShort")}
+              </>
+            )}
+          </span>
           <Button
             size="sm"
             disabled={run.isPending || dirty || !analysis.runnable}
-            title={dirty ? t("wfSaveFirst") : !analysis.runnable ? t("wfRunBlocked") : undefined}
+            title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : undefined}
             onClick={() => run.mutate()}
           >
             <Play size={13} /> {t("wfRun")}
