@@ -10,6 +10,8 @@ import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geo
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { AudioElement } from "@/features/editor/AudioElement";
 import { MonitorElement } from "@/features/editor/MonitorElement";
+import { CanvasStage } from "@/features/editor/playback/CanvasStage";
+import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
 import { Scopes } from "@/features/editor/Scopes";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
@@ -149,6 +151,18 @@ export function Monitor({
     return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
+  // WebCodecs compositor (opt-in): draw the base video frame on a canvas from its proxy.
+  // The base <video> stays mounted for audio (WebAudio mixing lands in S3); the canvas
+  // just overlays it. Falls back to the plain element on any decode error.
+  const compositorOn = useCompositorEnabled() && compositorSupported();
+  const [canvasFailed, setCanvasFailed] = React.useState(false);
+  React.useEffect(() => setCanvasFailed(false), [activeAsset?.id]);
+  const baseProxyReady =
+    compositorOn &&
+    !canvasFailed &&
+    !isImage &&
+    activeAsset?.kind === "video" &&
+    (activeAsset?.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready";
   // Every audio clip active at the playhead, across ALL audio tracks — each plays via its own
   // <AudioElement> so multiple audio tracks (e.g. music + detached audio) sound together.
   const activeAudioClips = React.useMemo(
@@ -333,6 +347,18 @@ export function Monitor({
               src={assetFileUrl(activeAsset.id)}
               alt=""
               style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
+            />
+          )}
+          {baseProxyReady && activeClip && activeAsset && (
+            <CanvasStage
+              key={activeAsset.id}
+              clip={activeClip}
+              asset={activeAsset}
+              width={sequence.width}
+              height={sequence.height}
+              className="monitor-video"
+              style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
+              onError={() => setCanvasFailed(true)}
             />
           )}
           {!activeClip && (

@@ -68,6 +68,9 @@ def build_proxy(source: Path, target: Path) -> bool:
         # Fixed 30-frame GOP (a keyframe every 30 frames, no scene-cut keyframes)
         # → the compositor can seek to a nearby sync sample cheaply.
         "-g", "30", "-keyint_min", "30", "-sc_threshold", "0",
+        # No B-frames: decode order == presentation order (cts == dts), so the
+        # WebCodecs compositor never has to reorder frames — seeking is trivial.
+        "-bf", "0",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         "-c:a", "aac", "-b:a", "128k",
         str(target),
