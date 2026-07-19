@@ -26,6 +26,8 @@ PROXY_NAME = "proxy.mp4"
 # Height cap for the proxy. The compositor decodes this, not the original, so a
 # 720p ceiling keeps decode cheap while staying crisp on typical preview panes.
 PROXY_HEIGHT = 720
+# Bound concurrent ffmpeg transcodes (a startup backfill can queue one job per video at once).
+_TRANSCODE_SLOTS = threading.Semaphore(2)
 
 
 def proxy_path(asset_directory: Path) -> Path:
@@ -114,30 +116,38 @@ def _run_proxy(job_id: str, asset_id: str) -> None:
         job = db.get(Job, job_id)
         if job is None:
             return
-        job.status = "running"
-        job.message = "生成预览代理中"
-        job.progress = 0.1
-        db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
-        db.commit()
-
-        asset = db.get(Asset, asset_id)
-        if asset is None or not asset.file_key:
-            _fail(db, job_id, asset_id, "素材文件缺失")
-            return
-        source = resolve_key(asset.file_key)
-        target = proxy_path(source.parent)
-        if build_proxy(source, target):
-            key = proxy_key_for(asset)
-            _set_proxy_meta(db, asset_id, "ready", key=key)
-            job = db.get(Job, job_id)
-            job.status = "succeeded"
-            job.progress = 1.0
-            job.message = "预览代理完成"
-            job.result = {"proxy_key": key}
-            db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"proxy_key": key}))
+        try:
+            job.status = "running"
+            job.message = "生成预览代理中"
+            job.progress = 0.1
+            db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
             db.commit()
-        else:
-            _fail(db, job_id, asset_id, "ffmpeg 代理转码失败")
+
+            asset = db.get(Asset, asset_id)
+            if asset is None or not asset.file_key:
+                _fail(db, job_id, asset_id, "素材文件缺失")
+                return
+            source = resolve_key(asset.file_key)
+            target = proxy_path(source.parent)
+            # Cap concurrent transcodes so a startup backfill of a big library doesn't spawn a
+            # ffmpeg per video at once and thrash the machine.
+            with _TRANSCODE_SLOTS:
+                ok = build_proxy(source, target)
+            if ok:
+                key = proxy_key_for(asset)
+                _set_proxy_meta(db, asset_id, "ready", key=key)
+                job = db.get(Job, job_id)
+                job.status = "succeeded"
+                job.progress = 1.0
+                job.message = "预览代理完成"
+                job.result = {"proxy_key": key}
+                db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"proxy_key": key}))
+                db.commit()
+            else:
+                _fail(db, job_id, asset_id, "ffmpeg 代理转码失败")
+        except Exception as exc:  # a worker thread must record failure, never die silently
+            db.rollback()
+            _fail(db, job_id, asset_id, str(exc)[:500])
 
 
 def _fail(db: Session, job_id: str, asset_id: str, reason: str) -> None:
