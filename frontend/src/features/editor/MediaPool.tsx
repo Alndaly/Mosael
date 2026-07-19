@@ -1,12 +1,13 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { CircleDot, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -25,6 +26,7 @@ export function MediaPool({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const [recorderOpen, setRecorderOpen] = React.useState(false);
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -63,7 +65,11 @@ export function MediaPool({
             <ImagePlus size={14} /> {t("import")}
           </label>
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
+          <CircleDot size={14} /> {t("record")}
+        </Button>
       </div>
+      <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={onImportFile} />
       <div className="pool-list">
         {assets.map((asset) => (
           <ContextMenu key={asset.id}>
