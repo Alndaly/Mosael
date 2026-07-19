@@ -66,6 +66,31 @@ _AUDIO_ASSETS = {"a": {"file_key": "a"}, "m": {"file_key": "m"}, "v": {"file_key
 _BASE_CLIP = [{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 10}]
 
 
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_overlay_video_audio_mixed_but_silent_source_skipped(tmp_path) -> None:
+    """An overlay video-track clip's own audio is mixed over the base (marked optional so the
+    executor probes it); an optional source with no audio stream is skipped, not fatal."""
+    from app.media.render_executor import build_ffmpeg_command
+
+    tone = tmp_path / "tone.m4a"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", str(tone)],
+        check=True, timeout=30,
+    )
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets={"a": {"file_key": "a"}, "tone": {"file_key": "tone.m4a"}, "sil": {"file_key": "sil"}},
+        audio_clips=[
+            {"id": "ov", "asset_id": "tone", "timeline_start": 0, "src_in": 0, "src_out": 2, "optional": True},
+            {"id": "silent", "asset_id": "sil", "timeline_start": 0, "src_in": 0, "src_out": 2, "optional": True},
+        ],
+    )
+    assert [a.optional for a in plan.audio_overlays] == [True, True]
+    resolve = lambda key: (tmp_path / key) if key == "tone.m4a" else Path("/nonexistent/" + key)
+    graph = " ".join(build_ffmpeg_command(plan, resolve, tmp_path / "o.mp4"))
+    assert "amix=inputs=2" in graph  # base + tone only; the silent (missing-audio) overlay was skipped
+
+
 def test_solo_silences_non_soloed_audio_and_base() -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=320, height=180, fps=30,

@@ -344,12 +344,16 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         filters.append(f"{video_label}subtitles=filename='{_escape_filter_path(ass_path)}'{out_label}")
         video_label = out_label
 
-    # Audio-track clips mixed over the base audio.
+    # Audio-track clips + overlay video-track clips' audio, mixed over the base audio. An
+    # overlay source may be a video without an audio stream (or an image) — probe and skip it,
+    # since mapping [n:a] on a source with no audio would fail the whole render.
     audio_label = "[abase]"
     if plan.audio_overlays:
         mix_inputs = ["[abase]"]
         for i, item in enumerate(plan.audio_overlays):
             path = resolve(item.source.file_key)
+            if item.optional and not probe_has_audio(path):
+                continue  # overlay video-track source with no audio stream
             args += ["-i", str(path)]
             src = item.source
             delay_ms = int(item.start * 1000)
@@ -367,8 +371,9 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             )
             mix_inputs.append(f"[aov{i}]")
             input_index += 1
-        filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
-        audio_label = "[amix]"
+        if len(mix_inputs) > 1:
+            filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
+            audio_label = "[amix]"
 
     args += [
         "-filter_complex",

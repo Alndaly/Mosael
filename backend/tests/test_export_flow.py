@@ -77,6 +77,49 @@ def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
     assert abs(exported["media_info"]["duration"] - 2.5) < 0.2
 
 
+def test_export_video_on_overlay_track_renders_with_audio(tmp_path: Path) -> None:
+    """Regression: after the z-order flip, a video on an upper track with an empty bottom track
+    used to fail export ("no clips to render") and drop its audio. The base must be the
+    bottom-most track WITH clips, and the overlay video's audio must be mixed in."""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    source = tmp_path / "src.mp4"
+    make_test_video(source, 1.5)
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": project["id"]},
+        files={"file": ("src.mp4", source.read_bytes(), "video/mp4")},
+    ).json()
+    sequence = client.post(
+        "/api/sequences",
+        json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main", "width": 320, "height": 180},
+    ).json()
+    video_track = next(track for track in sequence["tracks"] if track["kind"] == "video")
+    client.post(
+        f"/api/sequences/{sequence['id']}/clips",
+        json={"track_id": video_track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": 1.5},
+    )
+    # Add a second video track — it becomes the (empty) bottom "base"; the clip is now an overlay.
+    client.post(f"/api/sequences/{sequence['id']}/tracks", json={"kind": "video"})
+
+    job = client.post(f"/api/sequences/{sequence['id']}/export").json()
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.5)
+    assert job["status"] == "succeeded", job.get("error")
+
+    output = settings.data_dir / "exports" / f"{job['id']}.mp4"
+    streams = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(output)],
+        capture_output=True, text=True,
+    ).stdout
+    assert "video" in streams and "audio" in streams  # the overlay video's audio survived export
+
+
 def test_export_empty_sequence_rejected() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

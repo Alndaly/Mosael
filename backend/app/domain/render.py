@@ -44,19 +44,27 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
     subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
-    # PR/DaVinci z-order: the topmost timeline video track renders on top. video_tracks is sorted
-    # by position ascending (top row first), so the base (bottom layer, full frame) is the LAST
-    # track, and tracks above composite upward — emitted so the top row (index 0) is last = on top.
-    base_track = video_tracks[-1] if video_tracks else None
+    # PR/DaVinci z-order: the topmost timeline video track renders on top. The base (full-frame
+    # bottom layer) is the BOTTOM-MOST video track that actually has clips — empty tracks below
+    # it contribute nothing, and treating an empty bottom track as the base would drop the whole
+    # render ("no clips to render"). Tracks above the base composite as overlays (top row last).
+    video_tracks_with_clips = [track for track in video_tracks if track.clips]
+    base_track = video_tracks_with_clips[-1] if video_tracks_with_clips else None
     base_clips = [clip_dict(clip) for clip in (base_track.clips if base_track else [])]
-    overlay_clips = [
-        clip_dict(clip) for track in reversed(video_tracks[:-1]) if not track.muted for clip in track.clips
-    ]
-    # Attach each audio clip's track solo/duck so the plan can mix (solo silences non-soloed
-    # tracks; duck lowers a ducked track under overlapping non-ducked audio).
+    overlay_tracks = [track for track in video_tracks_with_clips[:-1] if not track.muted]
+    overlay_clips = [clip_dict(clip) for track in reversed(overlay_tracks) for clip in track.clips]
+    # Audio to mix over the base: every audio-track clip PLUS every overlay video-track clip's
+    # own audio (so a video on an upper track sounds, not just the base track — matching the
+    # preview). Attach each clip's track solo/duck so the plan can mix (solo silences non-soloed
+    # tracks; duck lowers a ducked track under overlapping non-ducked audio). The executor probes
+    # and skips overlay sources that have no audio stream (silent videos / images).
     audio_clips = [
         {**clip_dict(clip), "solo": track.solo, "duck": track.duck}
         for track in audio_tracks
+        for clip in track.clips
+    ] + [
+        {**clip_dict(clip), "solo": track.solo, "duck": track.duck, "optional": True}
+        for track in reversed(overlay_tracks)
         for clip in track.clips
     ]
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]

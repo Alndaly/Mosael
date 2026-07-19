@@ -110,6 +110,9 @@ class AudioItem:
     # Ducking (闪避): timeline-time windows where this clip's gain is lowered because a
     # non-ducked audio source (e.g. a voiceover on another track) overlaps it.
     duck_windows: tuple[tuple[float, float], ...] = ()
+    # From an overlay video track: its source may have no audio stream (silent video / image),
+    # so the executor probes and skips it. Audio-track clips (optional=False) are always mixed.
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -351,6 +354,7 @@ def build_render_plan(
                 fade_in=fade_in,
                 fade_out=fade_out,
                 duck_windows=windows,
+                optional=bool(clip.get("optional")),
             )
         )
         duration = max(duration, start + clip_duration)
