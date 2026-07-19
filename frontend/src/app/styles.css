@@ -2227,18 +2227,26 @@
 .panel-tabs {
   display: flex;
   gap: 2px;
+  flex-shrink: 0; /* never let the actions squeeze the tabs into char-wrapping */
+}
+
+.panel-head-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .panel-tab {
   border: none;
   border-radius: 4px;
   background: transparent;
-  padding: 4px 9px;
+  padding: 4px 7px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+  white-space: nowrap; /* CJK labels must stay on one line */
   cursor: pointer;
   transition: background-color 100ms, color 100ms;
 }

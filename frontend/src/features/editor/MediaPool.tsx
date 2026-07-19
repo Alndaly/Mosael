@@ -50,24 +50,33 @@ export function MediaPool({
     <section className="panel media-panel">
       <div className="panel-head">
         {tabs ?? <h2>{t("media")}</h2>}
-        <Button asChild variant="outline" size="sm" disabled={uploading}>
-          <label>
-            <input
-              type="file"
-              accept="video/*,audio/*,image/*"
-              className="hidden-input"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                if (file) onImportFile(file);
-                event.currentTarget.value = "";
-              }}
-            />
-            <ImagePlus size={14} /> {t("import")}
-          </label>
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
-          <CircleDot size={14} /> {t("record")}
-        </Button>
+        <div className="panel-head-actions">
+          {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
+          <Button asChild variant="outline" size="icon-sm" disabled={uploading} title={t("import")} aria-label={t("import")}>
+            <label>
+              <input
+                type="file"
+                accept="video/*,audio/*,image/*"
+                className="hidden-input"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) onImportFile(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <ImagePlus size={14} />
+            </label>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => setRecorderOpen(true)}
+            title={t("record")}
+            aria-label={t("record")}
+          >
+            <CircleDot size={14} />
+          </Button>
+        </div>
       </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={onImportFile} />
       <div className="pool-list">
