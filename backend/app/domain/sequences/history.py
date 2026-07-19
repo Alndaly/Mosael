@@ -35,6 +35,7 @@ UNDOABLE_KINDS = (
     "set_clip_transform",
     "set_sequence_reframe",
     "set_clip_text",
+    "set_subtitle_style",
 )
 
 

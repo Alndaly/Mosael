@@ -50,6 +50,23 @@ def test_subtitle_track_and_text_clip_lifecycle() -> None:
     assert next(t for t in redone["tracks"] if t["kind"] == "subtitle")["clips"][0]["text_override"] == "大家好"
 
 
+def test_subtitle_style_is_undoable() -> None:
+    """Regression: set_subtitle_style must be in UNDOABLE_KINDS — otherwise undo silently skips
+    it and reverts an unrelated earlier edit (the clip its own op left untouched)."""
+    client = fresh_client()
+    sequence = setup_sequence(client)
+    seq_id = sequence["id"]
+    # An earlier undoable edit that must NOT be touched when we undo the style change.
+    client.post(f"/api/sequences/{seq_id}/tracks", json={"kind": "subtitle"})
+
+    client.put(f"/api/sequences/{seq_id}/subtitle-style", json={"style": {"font_size": 50}})
+    assert client.get(f"/api/sequences/{seq_id}").json()["subtitle_style"]["font_size"] == 50
+
+    undone = client.post(f"/api/sequences/{seq_id}/undo").json()
+    assert (undone.get("subtitle_style") or {}).get("font_size") != 50  # the style change reverted
+    assert any(t["kind"] == "subtitle" for t in undone["tracks"])  # the earlier track edit untouched
+
+
 def test_text_clip_rejected_on_video_track() -> None:
     client = fresh_client()
     sequence = setup_sequence(client)
