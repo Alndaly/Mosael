@@ -7785,6 +7785,145 @@
   min-width: 52px;
 }
 
+/* Execution-history drawer (right side of the canvas). */
+.wf-history {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 12, 14, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  z-index: 40;
+  overflow: hidden;
+}
+.wf-history-head {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.wf-history-head h2 {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.wf-history-body {
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  min-height: 0;
+}
+.wf-history-runs {
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+  padding: 4px;
+}
+.wf-history-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--foreground);
+}
+.wf-history-run:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.wf-history-run.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+.wf-history-run-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.wf-history-run-msg {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wf-history-run-meta {
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.wf-history-run-chev {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.wf-history-detail {
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+.wf-history-error {
+  font-size: 11.5px;
+  color: var(--destructive, #e5484d);
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.wf-history-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wf-history-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.wf-history-step.skipped {
+  opacity: 0.55;
+}
+.wf-history-step-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wf-history-step-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.wf-history-empty {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  padding: 12px 8px;
+  text-align: center;
+}
+.wf-hist-ok {
+  color: #3fb950;
+}
+.wf-hist-err {
+  color: #e5484d;
+}
+.wf-hist-run {
+  color: var(--primary);
+}
+
 .wf-agent-composer textarea:focus-visible {
   outline: none;
   border-color: var(--primary);

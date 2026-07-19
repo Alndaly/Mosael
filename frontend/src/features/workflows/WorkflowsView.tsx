@@ -35,6 +35,7 @@ import {
   Flag,
   GitBranch,
   Globe,
+  History,
   Languages,
   Link2,
   Loader2,
@@ -87,6 +88,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
 import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
+import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import {
   analyzeWorkflow,
@@ -508,6 +510,7 @@ function WorkflowEditor({
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph));
   const [dirty, setDirty] = React.useState(false);
+  const [showHistory, setShowHistory] = React.useState(false);
 
   // 撤销/重做:temporal 改的是 store.graph,再从新 graph 重建 React Flow 的 nodes/edges。
   const syncFromGraph = React.useCallback(() => {
@@ -1008,6 +1011,16 @@ function WorkflowEditor({
           >
             <Play size={13} /> {t("wfRun")}
           </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("wfHistory")}
+            title={t("wfHistory")}
+            className={showHistory ? "wf-active" : undefined}
+            onClick={() => setShowHistory((v) => !v)}
+          >
+            <History size={14} />
+          </Button>
           <div className="wf-toolbar-sep" />
           <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
@@ -1047,6 +1060,7 @@ function WorkflowEditor({
         {agentOpen && (
           <WorkflowAgentChat workflowId={workflow.id} workflowName={workflow.name} onClose={() => setAgentOpen(false)} />
         )}
+        {showHistory && <WorkflowRunHistory workflowId={workflow.id} onClose={() => setShowHistory(false)} />}
         {selectedNode && (
           <NodeInspector
             node={selectedNode}

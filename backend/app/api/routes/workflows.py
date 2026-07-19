@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from typing import TYPE_CHECKING
@@ -98,6 +99,21 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: Current
         return start_workflow_job(db, workflow, params=body.params)
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/workflows/{workflow_id}/runs", response_model=list[JobOut])
+def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 50) -> list[Job]:
+    """Execution history: the workflow's run jobs, newest first. Per-run node steps come from
+    the existing GET /jobs/{job_id}/events (workflow.node.* events)."""
+    workflow = _get(db, workflow_id)
+    ensure_workspace_access(db, user, workflow.workspace_id)
+    jobs = db.scalars(
+        select(Job)
+        .where(Job.kind == "workflow", Job.workspace_id == workflow.workspace_id)
+        .order_by(Job.created_at.desc())
+        .limit(max(1, min(200, limit)))
+    ).all()
+    return [job for job in jobs if (job.payload or {}).get("workflow_id") == workflow_id]
 
 
 @router.post("/workflows/{workflow_id}/ai-edit", response_model=WorkflowAiEditResponse)

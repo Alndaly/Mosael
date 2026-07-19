@@ -445,6 +445,11 @@ export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
   return api<WorkflowNodeType[]>("/api/workflows/node-types");
 }
 
+/** Execution history — this workflow's run jobs, newest first. */
+export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
+  return api<Job[]>(`/api/workflows/${workflowId}/runs`);
+}
+
 export function aiEditWorkflow(
   workflowId: string,
   body: { instruction: string; graph?: WorkflowGraph },
