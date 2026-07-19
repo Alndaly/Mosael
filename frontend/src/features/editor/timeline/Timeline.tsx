@@ -142,7 +142,8 @@ export function Timeline({
   const waveformAssetIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const track of tracks) {
-      if (track.kind !== "audio") continue;
+      // Video clips carry their own audio too — show its waveform, like PR/DaVinci.
+      if (track.kind !== "audio" && track.kind !== "video") continue;
       for (const clip of track.clips ?? []) {
         if (clip.asset_id && assetById.get(clip.asset_id)?.media_info.has_waveform) ids.add(clip.asset_id);
       }
@@ -759,7 +760,10 @@ export function Timeline({
                       ? insertRipple.shift
                       : 0;
                   const displayLeft = display.timeline_start + partingShift;
-                  const waveform = track.kind === "audio" && clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;
+                  const waveform =
+                    (track.kind === "audio" || track.kind === "video") && clip.asset_id
+                      ? waveformByAsset.get(clip.asset_id)
+                      : undefined;
                   const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks =
                     waveform && clip.asset_id

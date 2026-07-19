@@ -3190,6 +3190,16 @@
   opacity: 0.3;
 }
 
+/* Video clips keep their label readable — their audio waveform sits as a slim strip along
+   the bottom (PR/DaVinci style) rather than filling the block. */
+.tl-clip-video .tl-clip-wave {
+  inset: auto 1px 2px 1px;
+  height: 42%;
+}
+.tl-clip-video .tl-clip-wave polygon {
+  opacity: 0.3;
+}
+
 .tl-clip-name {
   position: relative;
   z-index: 1;
