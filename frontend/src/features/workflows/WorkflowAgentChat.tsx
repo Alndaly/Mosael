@@ -299,17 +299,8 @@ export function WorkflowAgentChat({
             event.target.value = "";
           }}
         />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t("wfAgentAttach")}
-          title={t("wfAgentAttach")}
-          onClick={() => fileRef.current?.click()}
-        >
-          <Paperclip size={14} />
-        </Button>
         <textarea
-          rows={2}
+          rows={1}
           value={draft}
           placeholder={t("wfAgentPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}
@@ -320,14 +311,27 @@ export function WorkflowAgentChat({
             }
           }}
         />
-        <Button
-          size="icon-sm"
-          aria-label={t("chatSend")}
-          disabled={(!draft.trim() && attachments.length === 0) || running || send.isPending || !sessionId}
-          onClick={submit}
-        >
-          <Send size={13} />
-        </Button>
+        <div className="wf-agent-actions">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="wf-agent-attach"
+            aria-label={t("wfAgentAttach")}
+            title={t("wfAgentAttach")}
+            onClick={() => fileRef.current?.click()}
+          >
+            <Paperclip size={15} />
+          </Button>
+          <Button
+            size="icon-sm"
+            className="wf-agent-send"
+            aria-label={t("chatSend")}
+            disabled={(!draft.trim() && attachments.length === 0) || running || send.isPending || !sessionId}
+            onClick={submit}
+          >
+            <Send size={14} />
+          </Button>
+        </div>
       </div>
     </aside>
   );

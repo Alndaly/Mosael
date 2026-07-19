@@ -7744,36 +7744,59 @@
   color: var(--muted-foreground);
 }
 
+/* ChatGPT-style composer: one rounded container holds the auto-growing textarea (top) and an
+   action row (attach left, send right). Focus ring lives on the container, not the textarea. */
 .wf-agent-composer {
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  border-top: 1px solid var(--border);
-  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px;
+  padding: 8px 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  transition: border-color 100ms;
+}
+.wf-agent-composer:focus-within {
+  border-color: var(--ring);
 }
 
 .wf-agent-composer textarea {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  padding: 6px 9px;
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
   font-size: 12.5px;
   line-height: 1.5;
   font-family: inherit;
   color: var(--foreground);
   resize: none;
+  /* Grow with content (Chromium 123+; Electron shell is 128) instead of a fixed row count. */
+  field-sizing: content;
+  min-height: 22px;
+  max-height: 160px;
+  overflow-y: auto;
 }
 .wf-agent-composer textarea::placeholder {
   color: var(--muted-foreground);
-  opacity: 0.7;
+  opacity: 0.8;
+}
+.wf-agent-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* Circular send, matching ChatGPT; disabled state reads as muted (handled by Button variant). */
+.wf-agent-send,
+.wf-agent-attach {
+  border-radius: 999px;
 }
 .wf-agent-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 6px 6px 0;
+  padding: 4px 14px 0;
 }
 .wf-agent-chip {
   display: inline-flex;
@@ -7951,7 +7974,6 @@
 
 .wf-agent-composer textarea:focus-visible {
   outline: none;
-  border-color: var(--primary);
 }
 
 /* ---------- 批量页 ---------- */
