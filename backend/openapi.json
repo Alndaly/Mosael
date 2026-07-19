@@ -2997,6 +2997,58 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/subtitle-style": {
+      "put": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Set Subtitle Style",
+        "operationId": "set_subtitle_style_api_sequences__sequence_id__subtitle_style_put",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSubtitleStyleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/subtitles/generate": {
       "post": {
         "tags": [
@@ -12768,6 +12820,10 @@
             "type": "object",
             "title": "Reframe"
           },
+          "subtitle_style": {
+            "type": "object",
+            "title": "Subtitle Style"
+          },
           "revision": {
             "type": "integer",
             "title": "Revision"
@@ -12910,6 +12966,19 @@
           "height"
         ],
         "title": "SetSequenceReframeRequest"
+      },
+      "SetSubtitleStyleRequest": {
+        "properties": {
+          "style": {
+            "type": "object",
+            "title": "Style"
+          }
+        },
+        "type": "object",
+        "required": [
+          "style"
+        ],
+        "title": "SetSubtitleStyleRequest"
       },
       "SetTrackStateRequest": {
         "properties": {

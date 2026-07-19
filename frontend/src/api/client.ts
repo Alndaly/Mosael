@@ -328,6 +328,13 @@ export function generateSubtitles(
   });
 }
 
+export function setSubtitleStyle(sequenceId: string, style: Record<string, unknown>): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/subtitle-style`, {
+    method: "PUT",
+    body: JSON.stringify({ style }),
+  });
+}
+
 export function insertTextClip(
   sequenceId: string,
   body: { track_id: string; text: string; timeline_start: number; duration: number },

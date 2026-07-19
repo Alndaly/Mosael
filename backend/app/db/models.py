@@ -218,6 +218,7 @@ class Sequence(Base):
     fps: Mapped[float] = mapped_column(Float, nullable=False, default=30.0)
     # 改画幅:{fill_mode: cover|contain|blur, scale, x, y};空 = 默认 cover 无平移缩放
     reframe: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    subtitle_style: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

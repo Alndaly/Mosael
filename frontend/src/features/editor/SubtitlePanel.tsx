@@ -1,5 +1,10 @@
 import React from "react";
-import { Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { readSubtitleStyle, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 
 import type { Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -17,6 +22,8 @@ export function SubtitlePanel({
   onAddSubtitle,
   onGenerate,
   generating,
+  style,
+  onSetStyle,
   onDeleteClip,
 }: {
   sequence: Sequence;
@@ -24,6 +31,8 @@ export function SubtitlePanel({
   onAddSubtitle: () => void;
   onGenerate?: () => void;
   generating?: boolean;
+  style?: Record<string, unknown>;
+  onSetStyle?: (style: Record<string, unknown>) => void;
   onDeleteClip: (clipId: string) => void;
 }) {
   const t = useI18n();
@@ -41,6 +50,7 @@ export function SubtitlePanel({
 
   return (
     <div className="sub-panel">
+      {onSetStyle && <SubtitleStyleControls style={style} onSetStyle={onSetStyle} />}
       <div className="sub-list">
         {subtitles.length === 0 && (
           <div className="empty-inline">
@@ -98,6 +108,67 @@ export function SubtitlePanel({
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
       </div>
+    </div>
+  );
+}
+
+function SubtitleStyleControls({
+  style,
+  onSetStyle,
+}: {
+  style?: Record<string, unknown>;
+  onSetStyle: (style: Record<string, unknown>) => void;
+}) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const s = readSubtitleStyle(style);
+  const patch = (next: Partial<SubtitleStyle>) => onSetStyle({ ...s, ...next });
+
+  return (
+    <div className="sub-style">
+      <button type="button" className="sub-style-head" onClick={() => setOpen((v) => !v)}>
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {t("subtitleStyle")}
+      </button>
+      {open && (
+        <div className="sub-style-body">
+          <label className="sub-style-row">
+            <span>{t("subFontSize")}</span>
+            <Slider min={10} max={120} step={1} defaultValue={[s.font_size]} onValueCommit={([v]) => patch({ font_size: v })} />
+            <em>{Math.round(s.font_size)}</em>
+          </label>
+          <label className="sub-style-row">
+            <span>{t("subColor")}</span>
+            <input type="color" value={s.color} onChange={(e) => patch({ color: e.target.value })} />
+          </label>
+          <label className="sub-style-row">
+            <span>{t("subBg")}</span>
+            <input type="color" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
+            <Slider min={0} max={1} step={0.05} defaultValue={[s.bg_opacity]} onValueCommit={([v]) => patch({ bg_opacity: v })} />
+          </label>
+          <label className="sub-style-row">
+            <span>{t("subBold")}</span>
+            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
+          </label>
+          <label className="sub-style-row">
+            <span>{t("subPosition")}</span>
+            <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bottom">{t("subPosBottom")}</SelectItem>
+                <SelectItem value="center">{t("subPosCenter")}</SelectItem>
+                <SelectItem value="top">{t("subPosTop")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="sub-style-row">
+            <span>{t("subOffset")}</span>
+            <Slider min={0} max={45} step={1} defaultValue={[s.offset]} onValueCommit={([v]) => patch({ offset: v })} />
+            <em>{Math.round(s.offset)}%</em>
+          </label>
+        </div>
+      )}
     </div>
   );
 }

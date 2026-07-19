@@ -10,6 +10,7 @@ import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geo
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { MonitorElement } from "@/features/editor/MonitorElement";
 import { Scopes } from "@/features/editor/Scopes";
+import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -333,7 +334,12 @@ export function Monitor({
             />
           )}
           {activeSubtitle?.text_override && (
-            <div className="monitor-subtitle">{activeSubtitle.text_override}</div>
+            <div
+              className="monitor-subtitle"
+              style={subtitleCss(readSubtitleStyle(sequence.subtitle_style as Record<string, unknown>), sequence.width)}
+            >
+              {activeSubtitle.text_override}
+            </div>
           )}
           {showScopes && (
             <div className="monitor-scopes" onClick={(event) => event.stopPropagation()}>

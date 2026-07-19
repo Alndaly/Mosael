@@ -984,6 +984,23 @@ export interface paths {
         patch: operations["move_track_api_sequences__sequence_id__tracks__track_id__move_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/subtitle-style": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Subtitle Style */
+        put: operations["set_subtitle_style_api_sequences__sequence_id__subtitle_style_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/subtitles/generate": {
         parameters: {
             query?: never;
@@ -4243,6 +4260,8 @@ export interface components {
             fps: number;
             /** Reframe */
             reframe?: Record<string, never>;
+            /** Subtitle Style */
+            subtitle_style?: Record<string, never>;
             /** Revision */
             revision: number;
             /**
@@ -4301,6 +4320,11 @@ export interface components {
              * @default cover
              */
             fill_mode: string;
+        };
+        /** SetSubtitleStyleRequest */
+        SetSubtitleStyleRequest: {
+            /** Style */
+            style: Record<string, never>;
         };
         /** SetTrackStateRequest */
         SetTrackStateRequest: {
@@ -6927,6 +6951,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveTrackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_subtitle_style_api_sequences__sequence_id__subtitle_style_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSubtitleStyleRequest"];
             };
         };
         responses: {

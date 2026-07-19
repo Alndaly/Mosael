@@ -20,6 +20,7 @@ from app.api.schemas import (
     SetClipTransformRequest,
     SetSequenceReframeRequest,
     SetClipTextRequest,
+    SetSubtitleStyleRequest,
     SetTrackStateRequest,
     GenerateSubtitlesRequest,
     MoveTrackRequest,
@@ -50,6 +51,7 @@ from app.domain.sequences.operations import (
     SetClipTransform,
     SetSequenceReframe,
     SetClipText,
+    SetSubtitleStyle,
     SetTrackState,
     SplitClip,
     SplitClipPoints,
@@ -64,6 +66,7 @@ from app.domain.sequences.operations import (
     set_clip_speed as set_clip_speed_operation,
     set_clip_transform as set_clip_transform_operation,
     set_sequence_reframe as set_sequence_reframe_operation,
+    set_subtitle_style as set_subtitle_style_operation,
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
     split_clip_at_points as split_clip_points_operation,
@@ -185,6 +188,13 @@ def set_track_state(
 def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_track_operation(db, sequence_id, MoveTrack(track_id=track_id, direction=body.direction)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.put("/sequences/{sequence_id}/subtitle-style", response_model=SequenceOut)
+def set_subtitle_style(sequence_id: str, body: SetSubtitleStyleRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: set_subtitle_style_operation(db, sequence_id, SetSubtitleStyle(style=body.style)))
     return _get_sequence(db, sequence_id)
 
 

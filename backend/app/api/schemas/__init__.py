@@ -240,11 +240,12 @@ class SequenceOut(OrmModel):
     height: int
     fps: float
     reframe: dict = Field(default_factory=dict)
+    subtitle_style: dict = Field(default_factory=dict)
     revision: int
 
-    @field_validator("reframe", mode="before")
+    @field_validator("reframe", "subtitle_style", mode="before")
     @classmethod
-    def _reframe_none_to_dict(cls, value: object) -> object:
+    def _none_to_dict(cls, value: object) -> object:
         return {} if value is None else value
     can_undo: bool = False
     can_redo: bool = False
@@ -301,6 +302,10 @@ class SubtitleCueInput(BaseModel):
 class GenerateSubtitlesRequest(BaseModel):
     track_id: str
     cues: list[SubtitleCueInput] = Field(min_length=1)
+
+
+class SetSubtitleStyleRequest(BaseModel):
+    style: dict
 
 
 class SetTrackStateRequest(BaseModel):

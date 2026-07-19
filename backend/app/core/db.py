@@ -93,9 +93,13 @@ def _migrate_clip_transform() -> None:
                 conn.execute(text("ALTER TABLE clips ADD COLUMN transform JSON"))
             conn.execute(text("UPDATE clips SET transform = '{}' WHERE transform IS NULL"))
         if "sequences" in tables:
-            if "reframe" not in {c["name"] for c in inspector.get_columns("sequences")}:
+            seq_cols = {c["name"] for c in inspector.get_columns("sequences")}
+            if "reframe" not in seq_cols:
                 conn.execute(text("ALTER TABLE sequences ADD COLUMN reframe JSON"))
             conn.execute(text("UPDATE sequences SET reframe = '{}' WHERE reframe IS NULL"))
+            if "subtitle_style" not in seq_cols:
+                conn.execute(text("ALTER TABLE sequences ADD COLUMN subtitle_style JSON"))
+            conn.execute(text("UPDATE sequences SET subtitle_style = '{}' WHERE subtitle_style IS NULL"))
         if "tracks" in tables:
             track_cols = {c["name"] for c in inspector.get_columns("tracks")}
             if "solo" not in track_cols:

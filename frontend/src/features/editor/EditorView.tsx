@@ -10,6 +10,7 @@ import {
   api,
   generateSubtitles,
   getAuthToken,
+  setSubtitleStyle,
   cutClipRange,
   cutClipRanges,
   deleteClip,
@@ -369,6 +370,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const subtitleStyleMutation = useMutation({
+    mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(sequence!.id, style),
+    onSuccess: (updated) => applySequence(updated),
+  });
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
     onSuccess: refreshSequences,
@@ -705,6 +710,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onAddSubtitle={() => addSubtitleMutation.mutate()}
               onGenerate={() => generateSubtitlesMutation.mutate()}
               generating={generateSubtitlesMutation.isPending}
+              style={(sequence.subtitle_style ?? {}) as Record<string, unknown>}
+              onSetStyle={(style) => subtitleStyleMutation.mutate(style)}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
             />
           )}

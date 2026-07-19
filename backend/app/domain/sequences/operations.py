@@ -611,6 +611,65 @@ def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) 
     return sequence
 
 
+_SUBTITLE_POSITIONS = ("bottom", "center", "top")
+_SUBTITLE_DEFAULTS: dict[str, Any] = {
+    "font_size": 32.0,
+    "color": "#ffffff",
+    "bg_color": "#000000",
+    "bg_opacity": 0.5,
+    "bold": True,
+    "position": "bottom",
+    "offset": 8.0,  # % of frame height from the edge (or from center for position=center)
+    "show_speaker": False,
+}
+
+
+def clean_subtitle_style(raw: dict[str, Any]) -> dict[str, Any]:
+    """归一化字幕样式:补默认、钳制范围、白名单枚举(参考 mibu-video SubtitleStyle)。"""
+    raw = raw or {}
+
+    def num(key: str, lo: float, hi: float) -> float:
+        try:
+            return max(lo, min(hi, float(raw.get(key, _SUBTITLE_DEFAULTS[key]))))
+        except (TypeError, ValueError):
+            return float(_SUBTITLE_DEFAULTS[key])
+
+    position = raw.get("position", "bottom")
+    return {
+        "font_size": num("font_size", 10, 160),
+        "color": str(raw.get("color", "#ffffff"))[:9],
+        "bg_color": str(raw.get("bg_color", "#000000"))[:9],
+        "bg_opacity": num("bg_opacity", 0, 1),
+        "bold": bool(raw.get("bold", True)),
+        "position": position if position in _SUBTITLE_POSITIONS else "bottom",
+        "offset": num("offset", 0, 45),
+        "show_speaker": bool(raw.get("show_speaker", False)),
+    }
+
+
+@dataclass(frozen=True)
+class SetSubtitleStyle:
+    style: dict[str, Any]
+    actor_id: str | None = None
+
+
+def set_subtitle_style(db: Session, sequence_id: str, op: SetSubtitleStyle) -> Sequence:
+    """字幕全局样式(字号/颜色/背景/位置等),存在序列上。"""
+    sequence = _require_sequence(db, sequence_id)
+    previous = dict(sequence.subtitle_style or {})
+    sequence.subtitle_style = clean_subtitle_style(op.style)
+    _record_operation(
+        db,
+        sequence,
+        kind="set_subtitle_style",
+        payload={"style": sequence.subtitle_style, "previous": previous},
+        summary={"operation": "set_subtitle_style"},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 @dataclass(frozen=True)
 class SplitClip:
     """Cut a clip into two at a source-time point — nothing is removed."""
