@@ -455,6 +455,33 @@ export function Monitor({
               {activeSubtitle.text_override}
             </div>
           )}
+          {/* TEMP diagnostic (enable via localStorage['mibu.subdebug']='1') — remove after we find why
+              app subtitles don't render for some sequences. Reports the runtime decision on-screen. */}
+          {typeof window !== "undefined" && window.localStorage.getItem("mibu.subdebug") === "1" && (
+            <div
+              style={{
+                position: "absolute",
+                top: 4,
+                left: 4,
+                zIndex: 50,
+                background: "rgba(0,0,0,0.85)",
+                color: "#4ade80",
+                font: "11px ui-monospace, monospace",
+                padding: "3px 6px",
+                borderRadius: 4,
+                pointerEvents: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {`subs:${subtitleClips.length} t:${playhead.toFixed(2)} active:${activeSubtitle?.text_override ? "YES" : "NULL"} comp:${String(compositorActive)}`}
+              {activeSubtitle == null &&
+                subtitleClips.length > 0 &&
+                ` near:${subtitleClips
+                  .map((c) => `${c.timeline_start.toFixed(1)}-${clipEnd(c).toFixed(1)}`)
+                  .slice(0, 4)
+                  .join(",")}`}
+            </div>
+          )}
           {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}
           {!compositorActive &&
             activeOverlayClips.map((clip) => {
