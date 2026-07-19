@@ -40,6 +40,7 @@ import {
   Repeat,
   RefreshCw,
   Filter,
+  ArrowLeft,
   Link2,
   Loader2,
   Mic,
@@ -563,6 +564,8 @@ function WorkflowEditor({
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
   // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
   const [dragging, setDragging] = React.useState(false);
+  // Drill-in: double-click a loop node to edit its nested body sub-graph in an overlay canvas.
+  const [editingLoopId, setEditingLoopId] = React.useState<string | null>(null);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
 
   /**
@@ -1066,6 +1069,10 @@ function WorkflowEditor({
             connectionRadius={36}
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
             onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+            onNodeDoubleClick={(_event, node) => {
+              const g = graph.nodes.find((item) => item.id === node.id);
+              if (g && (g.type === "loop_foreach" || g.type === "loop_while")) setEditingLoopId(node.id);
+            }}
             onPaneClick={() => setSelectedNodeId(null)}
             defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
@@ -1080,6 +1087,28 @@ function WorkflowEditor({
           <WorkflowAgentChat workflowId={workflow.id} workflowName={workflow.name} onClose={() => setAgentOpen(false)} />
         )}
         {showHistory && <WorkflowRunHistory workflowId={workflow.id} onClose={() => setShowHistory(false)} />}
+        {editingLoopId &&
+          (() => {
+            const loopNode = graph.nodes.find((item) => item.id === editingLoopId);
+            if (!loopNode) return null;
+            return (
+              <LoopBodyEditor
+                loopNode={loopNode}
+                registry={registry}
+                nodeTypes={nodeTypes}
+                workspaceId={workspaceId}
+                onChange={(body) =>
+                  applyGraph({
+                    ...graph,
+                    nodes: graph.nodes.map((item) =>
+                      item.id === editingLoopId ? { ...item, config: { ...(item.config ?? {}), body } } : item,
+                    ),
+                  })
+                }
+                onClose={() => setEditingLoopId(null)}
+              />
+            );
+          })()}
         {selectedNode && (
           <NodeInspector
             node={selectedNode}
@@ -1237,6 +1266,208 @@ function CodeField({
 }
 
 /** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
+/** Drill-in editor for a loop node's nested `body` sub-graph (Dify-style). A self-contained
+ *  mini-canvas: add/connect/move/delete/config body nodes; changes flow up via onChange. */
+function LoopBodyEditor({
+  loopNode,
+  registry,
+  nodeTypes,
+  workspaceId,
+  onChange,
+  onClose,
+}: {
+  loopNode: WorkflowGraph["nodes"][number];
+  registry: Map<string, WorkflowNodeType>;
+  nodeTypes: WorkflowNodeType[];
+  workspaceId: string;
+  onChange: (body: WorkflowGraph) => void;
+  onClose: () => void;
+}) {
+  const t = useI18n();
+  const initialBody = ((loopNode.config?.body as WorkflowGraph | undefined) ?? { nodes: [], edges: [] });
+  const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
+  const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody));
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
+  const commit = React.useCallback(
+    (next: WorkflowGraph) => {
+      setBody(next);
+      setNodes(toFlowNodes(next, registry));
+      setEdges(toFlowEdges(next));
+      onChange(next);
+    },
+    [registry, onChange],
+  );
+
+  const onNodesChange = React.useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((current) => applyNodeChanges(changes, current));
+      setBody((current) => {
+        let next = current;
+        for (const change of changes) {
+          if (change.type === "position" && change.position) {
+            next = {
+              ...next,
+              nodes: next.nodes.map((node) =>
+                node.id === change.id ? { ...node, position: { x: change.position!.x, y: change.position!.y } } : node,
+              ),
+            };
+          } else if (change.type === "remove") {
+            next = {
+              ...next,
+              nodes: next.nodes.filter((node) => node.id !== change.id),
+              edges: next.edges.filter((edge) => edge.source !== change.id && edge.target !== change.id),
+            };
+          }
+        }
+        if (next !== current) onChange(next);
+        return next;
+      });
+    },
+    [onChange],
+  );
+
+  const onEdgesChange = React.useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges((current) => applyEdgeChanges(changes, current));
+      setBody((current) => {
+        let next = current;
+        for (const change of changes) {
+          if (change.type === "remove") next = { ...next, edges: next.edges.filter((edge) => edge.id !== change.id) };
+        }
+        if (next !== current) onChange(next);
+        return next;
+      });
+    },
+    [onChange],
+  );
+
+  const onConnect = React.useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      const srcHandle = connection.sourceHandle ?? undefined;
+      const tgtHandle = connection.targetHandle ?? undefined;
+      let next: WorkflowGraph;
+      if (srcHandle?.startsWith("out:") && tgtHandle?.startsWith("in:")) {
+        const output = srcHandle.slice(4);
+        const targetInput = tgtHandle.slice(3);
+        const kept = body.edges.filter(
+          (edge) => !(edge.kind === "data" && edge.target === connection.target && edge.target_input === targetInput),
+        );
+        next = {
+          ...body,
+          edges: [
+            ...kept,
+            { id: `d-${connection.source}-${output}-${connection.target}-${targetInput}`, source: connection.source, target: connection.target, kind: "data", source_output: output, target_input: targetInput },
+          ],
+          nodes: body.nodes.map((node) =>
+            node.id === connection.target
+              ? { ...node, inputs: Array.from(new Set([...(node.inputs ?? []), targetInput])), config: { ...(node.config ?? {}), [targetInput]: "" } }
+              : node,
+          ),
+        };
+      } else {
+        const id = `e-${connection.source}${srcHandle ? `-${srcHandle}` : ""}-${connection.target}`;
+        if (body.edges.some((edge) => edge.id === id)) return;
+        next = { ...body, edges: [...body.edges, { id, source: connection.source, target: connection.target, source_handle: srcHandle ?? null }] };
+      }
+      commit(next);
+    },
+    [body, commit],
+  );
+
+  const addNode = (type: string) => {
+    const meta = registry.get(type);
+    if (!meta || type === "start") return;
+    const base = type.replace(/_/g, "-");
+    let index = 1;
+    while (body.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
+    const maxX = Math.max(0, ...body.nodes.map((node) => node.position?.x ?? 0));
+    const config: Record<string, unknown> = {};
+    for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
+      config[key] = spec?.type === "object" ? {} : "";
+    }
+    commit({
+      ...body,
+      nodes: [
+        ...body.nodes,
+        { id: `${base}-${index}`, type, name: meta.label, position: { x: maxX + 240, y: 140 + (body.nodes.length % 3) * 90 }, config },
+      ],
+    });
+  };
+
+  const selectedNode = selectedId ? (body.nodes.find((node) => node.id === selectedId) ?? null) : null;
+
+  return (
+    <div className="wf-loop-overlay">
+      <div className="wf-loop-head">
+        <button type="button" className="wf-loop-back" onClick={onClose}>
+          <ArrowLeft size={14} /> {t("wfLoopBack")}
+        </button>
+        <span className="wf-loop-crumb">
+          <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
+        </span>
+        <Select onValueChange={addNode} value="">
+          <SelectTrigger className="wf-add-node" aria-label={t("wfAddNode")}>
+            <Plus size={12} />
+            <span>{t("wfAddNode")}</span>
+          </SelectTrigger>
+          <SelectContent>
+            {nodeTypes
+              .filter((meta) => meta.type !== "start")
+              .map((meta) => (
+                <SelectItem key={meta.type} value={meta.type}>
+                  {meta.label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="wf-loop-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_COMPONENT_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={(_event, node) => setSelectedId(node.id)}
+          onPaneClick={() => setSelectedId(null)}
+          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          deleteKeyCode={["Backspace", "Delete"]}
+          onInit={(instance) => requestAnimationFrame(() => instance.fitView({ padding: 0.3, maxZoom: 1 }))}
+        >
+          <Background gap={20} size={1.2} />
+          <Controls showInteractive={false} position="bottom-left" />
+        </ReactFlow>
+        {body.nodes.length === 0 && <div className="wf-loop-empty">{t("wfLoopEmptyHint")}</div>}
+        {selectedNode && (
+          <NodeInspector
+            node={selectedNode}
+            meta={registry.get(selectedNode.type) ?? null}
+            graph={body}
+            registry={registry}
+            workspaceId={workspaceId}
+            onChange={(patch) =>
+              commit({ ...body, nodes: body.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)) })
+            }
+            onApplyGraph={(next) => commit(next)}
+            onDelete={() => {
+              commit({
+                ...body,
+                nodes: body.nodes.filter((node) => node.id !== selectedNode.id),
+                edges: body.edges.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id),
+              });
+              setSelectedId(null);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NodeInspector({
   node,
   meta,
