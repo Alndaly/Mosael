@@ -164,21 +164,63 @@ def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bo
     return "".join(chunks)
 
 
-def _srt_timestamp(seconds: float) -> str:
-    total_ms = max(0, int(round(seconds * 1000)))
-    hours, rest = divmod(total_ms, 3_600_000)
-    minutes, rest = divmod(rest, 60_000)
-    secs, ms = divmod(rest, 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+def _ass_timestamp(seconds: float) -> str:
+    total_cs = max(0, int(round(seconds * 100)))
+    hours, rest = divmod(total_cs, 360_000)
+    minutes, rest = divmod(rest, 6_000)
+    secs, cs = divmod(rest, 100)
+    return f"{hours:d}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-def _build_srt(plan: RenderPlan) -> str:
-    blocks = []
-    for index, item in enumerate(plan.subtitles, start=1):
-        blocks.append(
-            f"{index}\n{_srt_timestamp(item.start)} --> {_srt_timestamp(item.start + item.duration)}\n{item.text}\n"
-        )
-    return "\n".join(blocks)
+def _ass_color(hex_color: str, alpha: int = 0) -> str:
+    """#RRGGBB → ASS &HAABBGGRR (alpha 0=opaque, 255=transparent)."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"&H{alpha & 0xFF:02X}{b:02X}{g:02X}{r:02X}"
+
+
+def _ass_text(text: str) -> str:
+    # ASS uses {} for override tags and \N for line breaks; neutralise stray braces.
+    return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
+
+
+def _build_ass(plan: RenderPlan) -> str:
+    """A styled ASS subtitle file matching the preview's subtitle_style (font size in native
+    frame pixels, text/box colour + box opacity, bold, position, vertical offset)."""
+    style = plan.subtitle_style
+    w, h = plan.output.width, plan.output.height
+    align = {"bottom": 2, "center": 5, "top": 8}.get(style.position, 2)
+    box_alpha = round((1.0 - style.bg_opacity) * 255)
+    has_box = style.bg_opacity > 0
+    border_style = 3 if has_box else 1  # 3 = opaque box (BackColour), 1 = plain/outline
+    outline = round(style.font_size * 0.12) if has_box else 0  # box padding
+    margin_v = 0 if style.position == "center" else round(style.offset / 100.0 * h)
+    primary = _ass_color(style.color)
+    back = _ass_color(style.bg_color, box_alpha)
+    bold = -1 if style.bold else 0
+
+    header = (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {w}\n"
+        f"PlayResY: {h}\n"
+        "WrapStyle: 2\n"
+        "ScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,Sans,{style.font_size:g},{primary},&H000000FF,{back},{back},{bold},"
+        f"0,0,0,100,100,0,0,{border_style},{outline},0,{align},40,40,{margin_v},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    lines = [
+        f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
+        f"Default,,0,0,0,,{_ass_text(item.text)}"
+        for item in plan.subtitles
+    ]
+    return header + "\n".join(lines) + "\n"
 
 
 def _escape_filter_path(path: Path) -> str:
@@ -286,13 +328,14 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         video_label = out_label
         input_index += 1
 
-    # Burned-in subtitles from subtitle tracks (SRT + libass).
+    # Burned-in subtitles from subtitle tracks: a styled ASS file (libass) so font size,
+    # colour, background box, bold, position and offset match the preview's subtitle_style.
     if plan.subtitles:
-        srt_path = output_path.with_suffix(".srt")
-        srt_path.parent.mkdir(parents=True, exist_ok=True)
-        srt_path.write_text(_build_srt(plan), encoding="utf-8")
+        ass_path = output_path.with_suffix(".ass")
+        ass_path.parent.mkdir(parents=True, exist_ok=True)
+        ass_path.write_text(_build_ass(plan), encoding="utf-8")
         out_label = "[vsub]"
-        filters.append(f"{video_label}subtitles=filename='{_escape_filter_path(srt_path)}'{out_label}")
+        filters.append(f"{video_label}subtitles=filename='{_escape_filter_path(ass_path)}'{out_label}")
         video_label = out_label
 
     # Audio-track clips mixed over the base audio.

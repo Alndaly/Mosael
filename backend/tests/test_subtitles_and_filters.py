@@ -61,7 +61,7 @@ def test_text_clip_rejected_on_video_track() -> None:
     assert res.status_code == 422
 
 
-def test_plan_collects_subtitles_and_srt_burnin(tmp_path) -> None:
+def test_plan_collects_subtitles_and_ass_burnin(tmp_path) -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,
         clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 8}],
@@ -76,8 +76,30 @@ def test_plan_collects_subtitles_and_srt_burnin(tmp_path) -> None:
     out = tmp_path / "out.mp4"
     command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, out))
     assert "subtitles=filename=" in command
-    srt = (tmp_path / "out.srt").read_text(encoding="utf-8")
-    assert "00:00:01,000 --> 00:00:03,000" in srt and "你好" in srt
+    ass = (tmp_path / "out.ass").read_text(encoding="utf-8")
+    assert "Dialogue: 0,0:00:01.00,0:00:03.00,Default" in ass and "你好" in ass
+
+
+def test_subtitle_style_flows_into_ass(tmp_path) -> None:
+    """subtitle_style → ASS Style line: font size, top alignment, opaque box, bold."""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1920, height=1080, fps=30,
+        clips=[{"id": "c1", "asset_id": "a1", "timeline_start": 0, "src_in": 0, "src_out": 4}],
+        assets=ASSETS,
+        subtitle_clips=[{"id": "t1", "asset_id": None, "timeline_start": 0, "src_in": 0, "src_out": 2, "text_override": "hi"}],
+        subtitle_style={"font_size": 48, "color": "#ff0000", "bg_color": "#000000",
+                        "bg_opacity": 1.0, "bold": True, "position": "top", "offset": 10},
+    )
+    build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "out.mp4")
+    ass = (tmp_path / "out.ass").read_text(encoding="utf-8")
+    style_line = next(line for line in ass.splitlines() if line.startswith("Style: Default"))
+    fields = style_line.split(",")
+    assert fields[2] == "48"  # Fontsize
+    assert fields[3] == "&H000000FF"  # PrimaryColour = red, opaque
+    assert fields[7] == "-1"  # Bold
+    assert fields[15] == "3"  # BorderStyle = opaque box (bg_opacity 1.0)
+    assert fields[18] == "8"  # Alignment = top-centre
+    assert fields[21] == str(round(0.10 * 1080))  # MarginV = 108
 
 
 def test_filter_preset_in_plan_and_command(tmp_path) -> None:

@@ -75,6 +75,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
+        subtitle_style=sequence.subtitle_style,
         luts=luts,
     )
 

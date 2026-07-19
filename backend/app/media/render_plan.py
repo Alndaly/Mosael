@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
 
 """
@@ -112,6 +113,23 @@ class SubtitleItem:
 
 
 @dataclass(frozen=True)
+class SubtitleStyleSpec:
+    """Sequence-level subtitle appearance, mirroring the frontend SUBTITLE_DEFAULTS so burned-in
+    subs match the preview. font_size is native-frame pixels; offset is % of frame height."""
+
+    font_size: float = 32.0
+    color: str = "#ffffff"
+    bg_color: str = "#000000"
+    bg_opacity: float = 0.5
+    bold: bool = True
+    position: str = "bottom"  # bottom | center | top
+    offset: float = 8.0
+
+
+DEFAULT_SUBTITLE_STYLE = SubtitleStyleSpec()
+
+
+@dataclass(frozen=True)
 class RenderPlan:
     sequence_id: str
     sequence_revision: int
@@ -121,6 +139,7 @@ class RenderPlan:
     overlays: tuple[OverlayItem, ...] = ()
     audio_overlays: tuple[AudioItem, ...] = ()
     subtitles: tuple[SubtitleItem, ...] = ()
+    subtitle_style: SubtitleStyleSpec = DEFAULT_SUBTITLE_STYLE
     render_plan_hash: str = field(default="")
 
     def with_hash(self) -> "RenderPlan":
@@ -136,6 +155,7 @@ class RenderPlan:
             overlays=self.overlays,
             audio_overlays=self.audio_overlays,
             subtitles=self.subtitles,
+            subtitle_style=self.subtitle_style,
             render_plan_hash=digest,
         )
 
@@ -145,6 +165,8 @@ class RenderPlanError(ValueError):
 
 
 GAP_EPSILON = 1e-6
+
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 # Full manual-grade field set, ported from mibu-video's color panel. All values
@@ -195,6 +217,7 @@ def build_render_plan(
     overlay_clips: list[dict] | None = None,
     audio_clips: list[dict] | None = None,
     subtitle_clips: list[dict] | None = None,
+    subtitle_style: dict | None = None,
     luts: dict[str, str] | None = None,
     fill_mode: str = "cover",
 ) -> RenderPlan:
@@ -325,8 +348,37 @@ def build_render_plan(
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),
         subtitles=tuple(subtitles),
+        subtitle_style=_read_subtitle_style(subtitle_style),
     )
     return plan.with_hash()
+
+
+def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
+    """sequence.subtitle_style → a validated spec, falling back to defaults per field."""
+    if not isinstance(raw, dict):
+        return DEFAULT_SUBTITLE_STYLE
+    d = DEFAULT_SUBTITLE_STYLE
+
+    def num(key: str, default: float, lo: float, hi: float) -> float:
+        try:
+            return max(lo, min(hi, float(raw.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
+    def color(key: str, default: str) -> str:
+        value = str(raw.get(key, default)).strip()
+        return value if _HEX_RE.match(value) else default
+
+    position = str(raw.get("position", d.position))
+    return SubtitleStyleSpec(
+        font_size=num("font_size", d.font_size, 4.0, 400.0),
+        color=color("color", d.color),
+        bg_color=color("bg_color", d.bg_color),
+        bg_opacity=num("bg_opacity", d.bg_opacity, 0.0, 1.0),
+        bold=bool(raw.get("bold", d.bold)),
+        position=position if position in ("bottom", "center", "top") else d.position,
+        offset=num("offset", d.offset, 0.0, 100.0),
+    )
 
 
 def _read_transform(clip: dict) -> Transform:
