@@ -245,6 +245,61 @@ def test_loop_foreach_iterates_body_and_feeds_downstream() -> None:
     assert context["join"]["output"] == "第0项:甲 | 第1项:乙 | 第2项:丙"
 
 
+def test_loop_while_repeats_until_condition_false() -> None:
+    """while 循环:每轮跑内嵌子图,子图里的条件节点决定是否继续;带最大次数上限。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {
+        "nodes": [{"id": "check", "type": "condition", "config": {"left": "{{loop.index}}", "op": "lt", "right": "2"}}],
+        "edges": [],
+    }
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "loop", "type": "loop_while", "config": {"body": body, "condition": "{{check.result}}", "max_iterations": 10}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "loop"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "条件循环", "graph": graph})
+    assert workflow.status_code == 200, workflow.text
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    # index 0,1 → check true (continue); index 2 → 2<2 false → stop. 3 runs total.
+    assert job["result"]["context"]["loop"]["iterations"] == 3
+
+
+def test_loop_while_respects_max_iterations() -> None:
+    """条件恒真时 max_iterations 兜底,不会无限循环。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {"nodes": [{"id": "t", "type": "template", "config": {"template": "{{loop.index}}"}}], "edges": []}
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "loop", "type": "loop_while", "config": {"body": body, "condition": "yes", "max_iterations": 4}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "loop"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "兜底", "graph": graph})
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    assert job["result"]["context"]["loop"]["iterations"] == 4
+
+
 def test_loop_foreach_rejects_start_in_body() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

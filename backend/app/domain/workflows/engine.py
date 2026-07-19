@@ -37,8 +37,9 @@ from app.domain.workflows import (
 # Loop nodes carry config that references the loop scope / body nodes ({{loop.*}}, {{body_node.x}}),
 # which must NOT be resolved at the outer scope — they're interpolated per-iteration inside the
 # loop handler / run_subgraph. LOOP_RAW_KEYS are the config fields kept verbatim for that reason.
-LOOP_TYPES = frozenset({"loop_foreach"})
-LOOP_RAW_KEYS = ("body", "output")
+LOOP_TYPES = frozenset({"loop_foreach", "loop_while"})
+LOOP_RAW_KEYS = ("body", "output", "condition")
+LOOP_WHILE_HARD_CAP = 1000
 
 
 def _interpolate_loop_config(config: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -739,6 +740,39 @@ def _handle_loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]
     return {"results": results, "count": len(results)}
 
 
+def _truthy(value: Any) -> bool:
+    """Loop-condition truthiness: real bools/None as-is; strings "false"/"0"/"" (any case) are False."""
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "false", "0", "no", "none")
+    return bool(value)
+
+
+def _handle_loop_while(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    body = config.get("body") or {"nodes": [], "edges": []}
+    condition_tpl = str(config.get("condition") or "")
+    output_tpl = config.get("output", "")
+    try:
+        max_iter = int(config.get("max_iterations") or 50)
+    except (TypeError, ValueError):
+        max_iter = 50
+    max_iter = max(1, min(max_iter, LOOP_WHILE_HARD_CAP))
+    results: list[Any] = []
+    index = 0
+    # Do-while: the condition references body outputs, so it can only be evaluated after a run.
+    while index < max_iter:
+        ctx = run_subgraph(body, {"loop": {"index": index}}, workflow_id=workflow.id)
+        if output_tpl:
+            results.append(interpolate(output_tpl, ctx))
+        else:
+            results.append({nid: out for nid, out in ctx.items() if nid != "loop"})
+        index += 1
+        if not condition_tpl:
+            break  # no condition → run exactly once
+        if not _truthy(interpolate(condition_tpl, ctx)):
+            break
+    return {"results": results, "count": len(results), "iterations": index}
+
+
 _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any]]] = {
     "start": lambda db, workflow, config: dict(config.get("params") or {}),
     "llm": _handle_llm,
@@ -759,4 +793,5 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "notify": _handle_notify,
     "translate": _handle_translate,
     "loop_foreach": _handle_loop_foreach,
+    "loop_while": _handle_loop_while,
 }

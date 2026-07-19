@@ -230,6 +230,20 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["results", "count"],
     },
+    "loop_while": {
+        "label": "循环·条件",
+        "description": "反复运行内嵌子流程,直到条件不再成立(带最大次数上限防死循环)。子流程内用 {{loop.index}} 拿当前轮次;子流程里放一个「条件」节点,把它的 {{节点id.result}} 填到 condition。",
+        "config": {
+            "body": {"type": "graph", "description": "循环体子流程(每轮跑一遍;通常含一个条件节点决定是否继续)"},
+            "condition": {
+                "type": "template",
+                "description": "每轮跑完后判断是否继续,引用子流程里条件节点的布尔输出(如 {{check.result}});留空则只跑一轮",
+            },
+            "max_iterations": {"type": "number", "description": "最大轮次(默认 50,硬上限 1000),防死循环"},
+            "output": {"type": "template", "description": "每轮的输出(如 {{step.text}});留空则输出整份子上下文"},
+        },
+        "outputs": ["results", "count", "iterations"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
