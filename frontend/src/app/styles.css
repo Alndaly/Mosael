@@ -2509,7 +2509,18 @@
   container-type: inline-size;
 }
 
-.monitor-video,
+/* All media layers (base <video>/<img> and the compositor <canvas>) overlap at the same
+   spot — absolute, not in normal flow, or a second .monitor-video (the canvas) would stack
+   below the first and fall past the frame's overflow:hidden edge. Positioned overlays after
+   them in the DOM (subtitle, vignette, transform handles) then paint on top. */
+.monitor-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  object-fit: contain;
+}
 .monitor-blank {
   width: 100%;
   height: 100%;
