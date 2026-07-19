@@ -1,7 +1,7 @@
 import React from "react";
 import { Activity, Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
-import { assetFileUrl, type Asset, type Sequence } from "@/api/client";
+import { assetFileUrl, type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -155,17 +155,25 @@ export function Monitor({
   // WebCodecs compositor (opt-in): composite every active video/image clip onto one canvas.
   // The base <video> stays mounted (hidden) for audio until WebAudio mixing lands in S3.
   const compositorOn = useCompositorEnabled() && compositorSupported();
-  // Every audio clip active at the playhead, across ALL audio tracks — each plays via its own
-  // <AudioElement> so multiple audio tracks (e.g. music + detached audio) sound together.
-  const activeAudioClips = React.useMemo(
-    () =>
-      audioTracks.flatMap((track) =>
-        (track.clips ?? [])
-          .filter((clip) => clip.asset_id && playhead >= clip.timeline_start && playhead < clipEnd(clip))
-          .map((clip) => ({ clip, trackMuted: Boolean(track.muted) })),
-      ),
-    [audioTracks, playhead],
-  );
+  // Active audio played via <AudioElement> (non-compositor path): every audio-track clip PLUS
+  // every overlay video-track clip's audio. The bottom "base" video track's audio is carried by
+  // the base <video> element, so a clip on ANY track sounds — not just the base track.
+  const activeAudioClips = React.useMemo(() => {
+    const list: { clip: Clip; trackMuted: boolean }[] = [];
+    for (const track of videoTracks.slice(0, -1)) {
+      for (const clip of track.clips ?? []) {
+        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue;
+        if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) list.push({ clip, trackMuted: Boolean(track.muted) });
+      }
+    }
+    for (const track of audioTracks) {
+      for (const clip of track.clips ?? []) {
+        if (!clip.asset_id) continue;
+        if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) list.push({ clip, trackMuted: Boolean(track.muted) });
+      }
+    }
+    return list;
+  }, [videoTracks, audioTracks, assetById, playhead]);
   // Every active clip on an overlay video track (V2+), z-ordered by track — each renders as a
   // free canvas element (MonitorElement self-syncs). The base V1 clip stays the audio/scopes/blur owner.
   const activeOverlayClips = React.useMemo(
@@ -223,15 +231,15 @@ export function Monitor({
   // already in the mixer's list, so it starts on time instead of one render late.
   const audioSources = React.useMemo<AudioSourceSpec[]>(() => {
     const list: AudioSourceSpec[] = [];
-    const baseTrack = videoTracks[videoTracks.length - 1];
-    const baseTrackMuted = Boolean(baseTrack?.muted);
-    for (const clip of baseTrack?.clips ?? []) {
-      if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue; // images have no audio
-      list.push({
-        key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
-        timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
-        muted: Boolean(clip.muted), trackMuted: baseTrackMuted,
-      });
+    for (const track of videoTracks) {
+      for (const clip of track.clips ?? []) {
+        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue; // images have no audio
+        list.push({
+          key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
+          timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
+          muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
+        });
+      }
     }
     for (const track of audioTracks) {
       for (const clip of track.clips ?? []) {
