@@ -21,6 +21,27 @@ class ClipSource:
 
 
 @dataclass(frozen=True)
+class Transform:
+    """A video clip's free-element placement, mirroring the preview compositor's CSS
+    ``translate(x·50%, y·50%) scale(s) rotate(r)`` + opacity over a cover-filled frame box.
+    x/y are center offsets in half-frame units (x=1 → center shifted right by half the frame);
+    scale multiplies the frame-sized element; rotation is degrees; opacity is 0..1."""
+
+    scale: float = 1.0
+    x: float = 0.0
+    y: float = 0.0
+    rotation: float = 0.0
+    opacity: float = 1.0
+
+    @property
+    def is_identity(self) -> bool:
+        return (self.scale, self.x, self.y, self.rotation, self.opacity) == (1.0, 0.0, 0.0, 0.0, 1.0)
+
+
+IDENTITY_TRANSFORM = Transform()
+
+
+@dataclass(frozen=True)
 class Segment:
     """One contiguous piece of the output timeline: a clip or a gap.
 
@@ -45,6 +66,9 @@ class Segment:
     # 3D LUT file_key (resolved to a path by the executor and burned in with
     # lut3d, after the slider/curve grade). Empty when no LUT is applied.
     lut: str = ""
+    # Free-element placement over the frame (Canvas Phase 1b). Identity → the clip fills
+    # the frame per fill_mode (fast path); otherwise it's composited over black.
+    transform: Transform = IDENTITY_TRANSFORM
 
 
 @dataclass(frozen=True)
@@ -57,14 +81,13 @@ class OutputSettings:
 
 @dataclass(frozen=True)
 class OverlayItem:
-    """A picture-in-picture layer from an upper video track."""
+    """An upper-video-track clip composited over the base, positioned by its transform
+    (Canvas Phase 1b — every video clip is a free element, same model as the base track)."""
 
     start: float
     duration: float
     source: ClipSource
-    x: float  # 0..1 of output width
-    y: float  # 0..1 of output height
-    scale: float  # 0..1 of output width
+    transform: Transform = IDENTITY_TRANSFORM
 
 
 @dataclass(frozen=True)
@@ -123,8 +146,6 @@ class RenderPlanError(ValueError):
 
 GAP_EPSILON = 1e-6
 
-
-DEFAULT_PIP = {"x": 0.62, "y": 0.06, "scale": 0.33}
 
 # Full manual-grade field set, ported from mibu-video's color panel. All values
 # are normalized to [-1, 1] in clip effects.color; the executor maps them onto
@@ -235,6 +256,7 @@ def build_render_plan(
                 ),
                 curves=_curve_specs(grade.get("curves")),
                 lut=lut_key,
+                transform=_read_transform(clip),
             )
         )
         cursor = start + duration
@@ -246,7 +268,6 @@ def build_render_plan(
     overlays: list[OverlayItem] = []
     for clip in sorted(overlay_clips or [], key=lambda c: float(c["timeline_start"])):
         source = _require_source(assets, clip)
-        pip = {**DEFAULT_PIP, **((clip.get("effects") or {}).get("pip") or {})}
         clip_duration = float(clip["src_out"]) - float(clip["src_in"])
         if clip_duration <= 0:
             raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
@@ -255,9 +276,7 @@ def build_render_plan(
                 start=float(clip["timeline_start"]),
                 duration=round(clip_duration, 6),
                 source=source,
-                x=float(pip["x"]),
-                y=float(pip["y"]),
-                scale=float(pip["scale"]),
+                transform=_read_transform(clip),
             )
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
@@ -308,6 +327,28 @@ def build_render_plan(
         subtitles=tuple(subtitles),
     )
     return plan.with_hash()
+
+
+def _read_transform(clip: dict) -> Transform:
+    """clip.transform → a clamped Transform. Mirrors the frontend readTransform defaults so
+    export matches preview; out-of-range/garbage values fall back to identity components."""
+    raw = clip.get("transform") or {}
+    if not isinstance(raw, dict):
+        return IDENTITY_TRANSFORM
+
+    def num(key: str, default: float) -> float:
+        try:
+            return float(raw.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    return Transform(
+        scale=max(0.01, min(10.0, num("scale", 1.0))),
+        x=max(-4.0, min(4.0, num("x", 0.0))),
+        y=max(-4.0, min(4.0, num("y", 0.0))),
+        rotation=num("rotation", 0.0) % 360.0,
+        opacity=max(0.0, min(1.0, num("opacity", 1.0))),
+    )
 
 
 def _grade_value(grade: dict, key: str) -> float:

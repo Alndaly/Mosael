@@ -31,7 +31,7 @@ def test_render_plan_includes_overlays_and_audio() -> None:
                 "timeline_start": 1,
                 "src_in": 0,
                 "src_out": 2,
-                "effects": {"pip": {"x": 0.1, "y": 0.1, "scale": 0.25}},
+                "transform": {"scale": 0.25, "x": -0.5, "y": 0.5, "rotation": 0, "opacity": 1},
             }
         ],
         audio_clips=[
@@ -41,7 +41,8 @@ def test_render_plan_includes_overlays_and_audio() -> None:
     )
     assert len(plan.overlays) == 1
     overlay = plan.overlays[0]
-    assert (overlay.start, overlay.duration, overlay.x, overlay.scale) == (1, 2, 0.1, 0.25)
+    assert (overlay.start, overlay.duration) == (1, 2)
+    assert (overlay.transform.scale, overlay.transform.x, overlay.transform.y) == (0.25, -0.5, 0.5)
     assert len(plan.audio_overlays) == 1  # muted clip dropped
     assert plan.audio_overlays[0].gain == 0.8
     assert plan.timeline_duration == 5.5  # extended by the audio tail
@@ -59,6 +60,40 @@ def test_overlay_changes_plan_hash() -> None:
         overlay_clips=[{"id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 1}],
     )
     assert p1.render_plan_hash != p2.render_plan_hash
+
+
+def test_transform_geometry_in_command() -> None:
+    """Lock the transform→overlay-offset math against the preview formula so export parity
+    can't silently drift. For a 320×180 frame, scale 0.5 → 160×90; centre (0.5+x·0.5)·W."""
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 2}],
+        assets={"a": {"file_key": "a"}, "b": {"file_key": "b"}},
+        overlay_clips=[{"id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 2,
+                        "transform": {"scale": 0.5, "x": 0, "y": 0}}],
+    )
+    fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
+    graph = fc[fc.index("-filter_complex") + 1]
+    assert "scale=160:90" in graph  # 0.5 · (320×180)
+    assert "overlay=x=80:y=45" in graph  # centred: 160−80, 90−45
+
+
+def test_offset_transform_geometry() -> None:
+    """x=1 shifts the element centre right by half the frame (translate(x·50%))."""
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 2}],
+        assets={"a": {"file_key": "a"}, "b": {"file_key": "b"}},
+        overlay_clips=[{"id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 2,
+                        "transform": {"scale": 0.5, "x": 1, "y": 0}}],
+    )
+    fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
+    graph = fc[fc.index("-filter_complex") + 1]
+    assert "overlay=x=240:y=45" in graph  # cx=(0.5+0.5)·320=320 → 320−80
 
 
 def setup_project(client: TestClient) -> tuple[dict, dict, dict]:
@@ -160,3 +195,32 @@ def test_export_with_pip_overlay_and_music(tmp_path: Path) -> None:
 
     exported = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["source"] == "exported")
     assert abs(exported["media_info"]["duration"] - 3.0) < 0.2
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_export_applies_clip_transform(tmp_path: Path) -> None:
+    """A non-identity transform on both the base clip (scale+offset+rotation+opacity) and an
+    overlay must produce a valid render — exercises the full transform filter graph in ffmpeg."""
+    from app.media.render_executor import execute_render
+
+    def make(name: str, args: list[str]) -> Path:
+        path = tmp_path / name
+        subprocess.run(["ffmpeg", "-y", "-v", "error", *args, str(path)], check=True, timeout=60)
+        return path
+
+    base = make("base.mp4", ["-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=2",
+                             "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"])
+    ov = make("ov.mp4", ["-f", "lavfi", "-i", "smptebars=size=320x180:rate=30:duration=2",
+                         "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 2,
+                "transform": {"scale": 0.6, "x": 0.2, "y": -0.1, "rotation": 15, "opacity": 0.8}}],
+        assets={"a": {"file_key": str(base)}, "b": {"file_key": str(ov)}},
+        overlay_clips=[{"id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 2,
+                        "transform": {"scale": 0.4, "x": -0.5, "y": 0.5, "rotation": 0, "opacity": 1}}],
+    )
+    out = tmp_path / "out.mp4"
+    execute_render(plan, lambda key: Path(key), out)
+    assert out.exists() and out.stat().st_size > 0

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import math
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 from app.media.probe import probe_has_audio
-from app.media.render_plan import FILTER_PRESETS, RenderPlan
+from app.media.render_plan import FILTER_PRESETS, RenderPlan, Transform
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -107,6 +108,51 @@ def _grade_filter(
     return ("," + ",".join(parts)) if parts else ""
 
 
+def _even(value: float) -> int:
+    """Round to the nearest even int — H.264 needs even dimensions."""
+    rounded = int(round(value))
+    return rounded if rounded % 2 == 0 else rounded + 1
+
+
+def _element_transform(
+    in_label: str, tf: Transform, width: int, height: int, prefix: str
+) -> tuple[list[str], str, int, int]:
+    """Turn a frame-sized (WxH, cover-filled) element [in_label] into a scaled/rotated/faded
+    element ready to overlay, matching the preview's ``translate(x·50%,y·50%) scale rotate`` +
+    opacity. Returns (filters, out_label, overlay_x, overlay_y). Geometry is precomputed here
+    (W/H/scale are known) so the overlay position is a plain integer, not an FFmpeg expression.
+
+    The rotated case pads the scaled element to a square of its diagonal before rotating so the
+    corners aren't clipped and the element's centre stays put — the overlay offset is then just
+    centre − box/2."""
+    filters: list[str] = []
+    scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
+    filters.append(f"[{in_label}]scale={scaled_w}:{scaled_h}[{prefix}s]")
+    label = f"{prefix}s"
+
+    needs_alpha = tf.opacity < 1.0 or tf.rotation != 0
+    if needs_alpha:
+        filters.append(f"[{label}]format=yuva420p[{prefix}a]")
+        label = f"{prefix}a"
+    if tf.opacity < 1.0:
+        filters.append(f"[{label}]colorchannelmixer=aa={tf.opacity:.4f}[{prefix}o]")
+        label = f"{prefix}o"
+
+    # Element centre in output pixels: frame centre + x·half-frame (matches transformCss).
+    cx = (0.5 + tf.x * 0.5) * width
+    cy = (0.5 + tf.y * 0.5) * height
+    if tf.rotation != 0:
+        box = max(2, _even(math.hypot(scaled_w, scaled_h)))
+        pad_x, pad_y = (box - scaled_w) // 2, (box - scaled_h) // 2
+        filters.append(f"[{label}]pad={box}:{box}:{pad_x}:{pad_y}:color=black@0[{prefix}p]")
+        filters.append(
+            f"[{prefix}p]rotate={math.radians(tf.rotation):.6f}:ow={box}:oh={box}:c=none[{prefix}r]"
+        )
+        label = f"{prefix}r"
+        return filters, label, int(round(cx - box / 2)), int(round(cy - box / 2))
+    return filters, label, int(round(cx - scaled_w / 2)), int(round(cy - scaled_h / 2))
+
+
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
     """Leading-comma filter suffix for edge fades in segment-local output time."""
     name = "afade" if audio else "fade"
@@ -174,12 +220,28 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
             lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
             preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
-            filters.append(
-                _base_video_chain(
-                    input_index, i, src.src_in, src.src_out, setpts, width, height, fps,
-                    f"{preset}{video_fades}", plan.output.fill_mode,
+            if segment.transform.is_identity:
+                filters.append(
+                    _base_video_chain(
+                        input_index, i, src.src_in, src.src_out, setpts, width, height, fps,
+                        f"{preset}{video_fades}", plan.output.fill_mode,
+                    )
                 )
-            )
+            else:
+                # Free-element clip: cover-fill to frame, grade/fade, then composite over black
+                # at its transform (matches the preview compositor; fill_mode is moot here since
+                # the element is cover-filled like the preview's objectFit:cover).
+                filters.append(
+                    f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
+                    f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+                    f"{preset}{video_fades},fps={fps},setsar=1[elt{i}]"
+                )
+                tfilters, tlabel, ox, oy = _element_transform(f"elt{i}", segment.transform, width, height, f"bt{i}")
+                filters += tfilters
+                filters.append(
+                    f"color=black:s={width}x{height}:r={fps}[bg{i}];"
+                    f"[bg{i}][{tlabel}]overlay={ox}:{oy},format=yuv420p,setsar=1[v{i}]"
+                )
             if probe_has_audio(path):
                 tempo = _atempo_chain(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
@@ -202,20 +264,23 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
     n = len(plan.video_segments)
     filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
 
-    # Picture-in-picture overlays from upper video tracks.
+    # Upper-video-track clips composited over the base, each a free element at its transform
+    # (cover-filled to the frame then scaled/rotated/faded — same model as the base track).
     video_label = "[vbase]"
     for i, overlay in enumerate(plan.overlays):
         path = resolve(overlay.source.file_key)
         args += ["-i", str(path)]
         src = overlay.source
-        overlay_width = max(2, int(width * overlay.scale) // 2 * 2)
         filters.append(
             f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},"
-            f"setpts=PTS-STARTPTS+{overlay.start}/TB,scale={overlay_width}:-2[ovv{i}]"
+            f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[oelt{i}]"
         )
+        tfilters, tlabel, ox, oy = _element_transform(f"oelt{i}", overlay.transform, width, height, f"ot{i}")
+        filters += tfilters
         out_label = f"[vov{i}]"
         filters.append(
-            f"{video_label}[ovv{i}]overlay=x={overlay.x}*W:y={overlay.y}*H:eof_action=pass:"
+            f"{video_label}[{tlabel}]overlay=x={ox}:y={oy}:eof_action=pass:"
             f"enable='between(t,{overlay.start},{overlay.start + overlay.duration})'{out_label}"
         )
         video_label = out_label

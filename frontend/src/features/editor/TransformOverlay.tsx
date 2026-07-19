@@ -2,14 +2,17 @@ import React from "react";
 
 export type Transform = { scale: number; x: number; y: number; rotation: number; opacity: number };
 
-export function readTransform(raw: Record<string, number> | undefined | null): Transform {
+export function readTransform(raw: Record<string, unknown> | undefined | null): Transform {
   const tf = raw ?? {};
+  // API dicts arrive untyped ({[key]: unknown}); coerce defensively while preserving a real 0
+  // (e.g. opacity: 0 is a legitimately hidden clip, so we can't use `Number(v) || fallback`).
+  const num = (key: string, fallback: number) => (typeof tf[key] === "number" ? (tf[key] as number) : fallback);
   return {
-    scale: tf.scale ?? 1,
-    x: tf.x ?? 0,
-    y: tf.y ?? 0,
-    rotation: tf.rotation ?? 0,
-    opacity: tf.opacity ?? 1,
+    scale: num("scale", 1),
+    x: num("x", 0),
+    y: num("y", 0),
+    rotation: num("rotation", 0),
+    opacity: num("opacity", 1),
   };
 }
 
