@@ -554,6 +554,9 @@ function WorkflowEditor({
   const [agentOpen, setAgentOpen] = React.useState(false);
   const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
   const [nodeSearch, setNodeSearch] = React.useState("");
+  // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
+  // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
+  const [dragging, setDragging] = React.useState(false);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
 
   /**
@@ -771,8 +774,15 @@ function WorkflowEditor({
 
   const save = useMutation({
     mutationFn: () => updateWorkflow(workflow.id, { graph }),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setDirty(false);
+      // Our own save bumps updated_at. Record it as "already synced" so the sync-from-server
+      // effect below treats the imminent refetch as our own change and does NOT rebuild the
+      // React Flow nodes array. A rebuild drops React Flow's measured dimensions, which re-hides
+      // nodes for a frame (visibility:hidden) — during that window a node grab lands on the pane
+      // and pans the canvas instead of dragging the node. With auto-save firing after every edit,
+      // that window recurred constantly and made nodes feel undraggable.
+      lastSyncedRef.current = saved.updated_at;
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
     },
     onError: (error: Error) => toast.error(t("wfSaveFailed"), { description: error.message }),
@@ -782,10 +792,10 @@ function WorkflowEditor({
   const saveRef = React.useRef(save);
   saveRef.current = save;
   React.useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || dragging) return;
     const id = window.setTimeout(() => saveRef.current.mutate(), 700);
     return () => window.clearTimeout(id);
-  }, [dirty, graph]);
+  }, [dirty, graph, dragging]);
   const rename = useMutation({
     mutationFn: (name: string) => updateWorkflow(workflow.id, { name }),
     onSuccess: () => {
@@ -1042,6 +1052,8 @@ function WorkflowEditor({
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onNodeDragStart={() => setDragging(true)}
+            onNodeDragStop={() => setDragging(false)}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             connectionRadius={36}
