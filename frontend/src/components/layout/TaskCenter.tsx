@@ -88,7 +88,12 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     }
     for (const job of jobs.data) {
       const prev = prevStatuses.current.get(job.id);
-      if (prev && ACTIVE.has(prev) && !ACTIVE.has(job.status)) {
+      const terminal = job.status === "succeeded" || job.status === "failed";
+      // Toast on active→terminal, AND when a job first appears already terminal (prev undefined).
+      // A fast job (e.g. a workflow with a notify node) can go queued→done between two polls, so
+      // it's never seen active — without this it would silently skip its completion toast.
+      const shouldToast = terminal && (prev === undefined || ACTIVE.has(prev));
+      if (shouldToast) {
         const label = t((KIND_META[job.kind]?.labelKey ?? "jobKindOther") as never);
         if (job.status === "succeeded") toast.success(`${label} · ${t("jobDone")}`);
         else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });

@@ -53,6 +53,7 @@ export function Monitor({
     useEditorStore.getState();
   const [showScopes, setShowScopes] = React.useState(false);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
+  const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
@@ -338,7 +339,10 @@ export function Monitor({
     }
   };
   const toggleFullscreen = () => {
-    const stage = stageRef.current;
+    // Fullscreen the stage (not the frame): it's a size container that centers the frame, so the
+    // frame's cq-based min(100cqw, 100cqh×ar) sizing now resolves against the SCREEN and stays
+    // 16:9 (letterboxed), instead of the frame filling the screen and object-fit cropping it.
+    const stage = monitorStageRef.current;
     if (!stage) return;
     if (document.fullscreenElement) void document.exitFullscreen();
     else void stage.requestFullscreen().catch(() => undefined);
@@ -387,7 +391,7 @@ export function Monitor({
           </filter>
         </svg>
       )}
-      <div className="monitor-stage">
+      <div className="monitor-stage" ref={monitorStageRef}>
         <div className="monitor-frame-wrap" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
           {fillMode === "blur" && activeClip && (
             <div className="monitor-blur-bg" aria-hidden>
