@@ -13,7 +13,7 @@ import { MonitorElement } from "@/features/editor/MonitorElement";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
 import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/WebAudioMixer";
 import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
-import { Scopes } from "@/features/editor/Scopes";
+import { ScopesFloat } from "@/features/editor/ScopesFloat";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
@@ -338,6 +338,8 @@ export function Monitor({
 
   return (
     <div className="monitor-stack">
+      {/* Scopes as a draggable floating window (position: fixed), never covering the picture. */}
+      {showScopes && <ScopesFloat videoRef={videoRef} filter={cssFilter} onClose={() => setShowScopes(false)} />}
       {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
           compositor is active; otherwise one <audio> per active audio-track clip. */}
       {compositorActive ? (
@@ -429,11 +431,6 @@ export function Monitor({
               style={subtitleCss(readSubtitleStyle(sequence.subtitle_style as Record<string, unknown>), sequence.width)}
             >
               {activeSubtitle.text_override}
-            </div>
-          )}
-          {showScopes && (
-            <div className="monitor-scopes" onClick={(event) => event.stopPropagation()}>
-              <Scopes videoRef={videoRef} filter={cssFilter} />
             </div>
           )}
           {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}

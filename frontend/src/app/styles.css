@@ -4299,17 +4299,56 @@
   pointer-events: none;
   white-space: pre-wrap;
 }
-.monitor-scopes {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
+.scopes-float {
+  position: fixed;
+  z-index: 80;
   width: 268px;
-  max-width: 60%;
+  border-radius: 8px;
+  background: rgba(8, 8, 10, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  user-select: none;
+}
+.scopes-float-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px 0 8px;
+  cursor: grab;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: none;
+}
+.scopes-float-head:active {
+  cursor: grabbing;
+}
+.scopes-float-grip {
+  color: var(--muted-foreground);
+}
+.scopes-float-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.scopes-float-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+}
+.scopes-float-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--foreground);
+}
+.scopes-float-body {
   padding: 6px;
-  border-radius: 6px;
-  background: rgba(8, 8, 10, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(6px);
 }
 .scopes {
   display: flex;
