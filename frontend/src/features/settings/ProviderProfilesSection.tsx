@@ -208,7 +208,7 @@ export function ProviderProfilesSection() {
               name="api_key"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>
+                  <FormLabel className="provider-key-label">
                     API Key
                     {docsUrl && (
                       <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">

@@ -7220,6 +7220,14 @@
 }
 
 /* "获取 API Key ↗":推到标签行右侧,点开走系统浏览器到供应商控制台。 */
+/* Label row: "API Key" left, the "获取 API Key" link pushed to the right (margin-left:auto
+   below only works if the label is a flex row — without this it jams against the text). */
+.provider-key-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .provider-hint-link {
   display: inline-flex;
   align-items: center;
