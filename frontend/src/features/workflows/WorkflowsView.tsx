@@ -39,6 +39,7 @@ import {
   Languages,
   Repeat,
   RefreshCw,
+  Filter,
   Link2,
   Loader2,
   Mic,
@@ -124,6 +125,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   translate: <Languages size={13} />,
   loop_foreach: <Repeat size={13} />,
   loop_while: <RefreshCw size={13} />,
+  asset_query: <Filter size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {

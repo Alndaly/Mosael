@@ -66,9 +66,10 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_assets(workspace_id: str = "") -> list[dict[str, Any]]:
+def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "") -> list[dict[str, Any]]:
     """List media assets in a workspace (id, name, kind, source, duration).
 
+    Filter with kind ("video"/"image"/"audio") and/or name_contains to batch-select.
     Leave workspace_id empty to use the first workspace.
     """
     if not workspace_id:
@@ -76,7 +77,12 @@ def list_assets(workspace_id: str = "") -> list[dict[str, Any]]:
         if not workspaces:
             return []
         workspace_id = workspaces[0]["id"]
-    assets = _get("/api/assets", {"workspace_id": workspace_id})
+    params: dict[str, Any] = {"workspace_id": workspace_id}
+    if kind:
+        params["kind"] = kind
+    if name_contains:
+        params["name_contains"] = name_contains
+    assets = _get("/api/assets", params)
     return [
         {
             "id": asset["id"],

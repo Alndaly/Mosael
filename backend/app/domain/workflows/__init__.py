@@ -244,6 +244,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["results", "count", "iterations"],
     },
+    "asset_query": {
+        "label": "素材筛选",
+        "description": "按条件批量选出工作区里的素材(类型/名称/标签),输出素材列表 —— 常接「循环·遍历」的 items 逐个处理。",
+        "config": {
+            "kind": {"type": "string", "description": "素材类型", "options": ["all", "video", "image", "audio"]},
+            "name_contains": {"type": "template", "description": "名称包含此关键词(留空不筛)"},
+            "tags": {"type": "template", "description": "标签(逗号分隔,命中任一即选;留空不筛)"},
+            "limit": {"type": "number", "description": "最多返回条数(默认 50,上限 500)"},
+        },
+        "outputs": ["assets", "ids", "count"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -366,9 +377,20 @@ def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
         return value
 
     def lookup(ref: str) -> Any:
-        node_id, _, key = ref.partition(".")
-        scope = context.get(node_id, {})
-        return scope.get(key, "") if key else scope
+        # Walk a dotted path: {{node.key}}, and nested {{loop.item.name}} / {{q.assets.0.id}}.
+        parts = ref.split(".")
+        current: Any = context.get(parts[0], {})
+        for part in parts[1:]:
+            if isinstance(current, dict):
+                current = current.get(part, "")
+            elif isinstance(current, list):
+                try:
+                    current = current[int(part)]
+                except (ValueError, IndexError):
+                    return ""
+            else:
+                return ""
+        return current
 
     whole = VARIABLE_RE.fullmatch(value.strip())
     if whole:

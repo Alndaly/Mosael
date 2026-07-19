@@ -52,11 +52,22 @@ def import_asset(
 
 
 @router.get("/assets", response_model=list[AssetOut])
-def list_assets(workspace_id: str, db: DbSession, user: CurrentUser, project_id: str | None = None) -> list[Asset]:
+def list_assets(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    project_id: str | None = None,
+    kind: str | None = None,
+    name_contains: str | None = None,
+) -> list[Asset]:
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(Asset).where(Asset.workspace_id == workspace_id)
     if project_id:
         stmt = stmt.where(Asset.project_id == project_id)
+    if kind and kind != "all":
+        stmt = stmt.where(Asset.kind == kind)
+    if name_contains:
+        stmt = stmt.where(Asset.name.contains(name_contains))
     stmt = stmt.order_by(Asset.created_at.desc())
     return list(db.scalars(stmt))
 

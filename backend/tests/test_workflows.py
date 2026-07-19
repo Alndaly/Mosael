@@ -324,6 +324,58 @@ def test_loop_foreach_rejects_start_in_body() -> None:
     assert job["status"] == "failed", job
 
 
+def test_asset_query_filters_and_feeds_loop() -> None:
+    """asset_query 按条件批量选素材,输出列表可直接喂给 foreach 逐个处理。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+
+    def mk(kind: str, name: str, tags: list[str] | None = None) -> dict:
+        asset = client.post(
+            "/api/assets",
+            json={"workspace_id": ws["id"], "project_id": proj["id"], "kind": kind, "name": name,
+                  "file_key": f"media/{name}", "media_info": {"duration": 3}},
+        ).json()
+        if tags:
+            client.patch(f"/api/assets/{asset['id']}", json={"tags": tags})
+        return asset
+
+    mk("video", "hero_a.mp4", ["hero"])
+    mk("video", "b.mp4")
+    mk("image", "c.png", ["hero"])
+
+    # asset_query(kind=video) → 2 videos; loop formats each item's name.
+    body = {"nodes": [{"id": "fmt", "type": "template", "config": {"template": "clip:{{loop.item.name}}"}}], "edges": []}
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "q", "type": "asset_query", "config": {"kind": "video"}},
+            {"id": "loop", "type": "loop_foreach", "config": {"items": "{{q.assets}}", "body": body, "output": "{{fmt.text}}"}},
+            {"id": "join", "type": "code", "config": {"code": "output = ' | '.join(inputs['r'])", "input": {"r": "{{loop.results}}"}}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "q"},
+            {"id": "e2", "source": "q", "target": "loop"},
+            {"id": "e3", "source": "loop", "target": "join"},
+        ],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "选素材", "graph": graph})
+    assert wf.status_code == 200, wf.text
+    run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    ctx = job["result"]["context"]
+    assert ctx["q"]["count"] == 2
+    # Newest-first: b.mp4 then hero_a.mp4; loop ran over each video's name.
+    assert set(ctx["join"]["output"].split(" | ")) == {"clip:b.mp4", "clip:hero_a.mp4"}
+
+
 def test_json_extract_node() -> None:
     from app.domain.workflows.engine import _handle_json_extract
 

@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import Job, ProviderProfile, TaskEvent, Transcript, Workflow
+from app.db.models import Asset, Job, ProviderProfile, TaskEvent, Transcript, Workflow
 from app.domain.jobs import create_job
 from app.domain.notifications import notify
 from app.domain.workflows import (
@@ -740,6 +740,42 @@ def _handle_loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]
     return {"results": results, "count": len(results)}
 
 
+def _handle_asset_query(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """Batch-select workspace assets by filters → {assets, ids, count}. Feeds loop_foreach.items."""
+    kind = str(config.get("kind") or "all").strip()
+    name_contains = str(config.get("name_contains") or "").strip()
+    tags_raw = str(config.get("tags") or "").strip().replace("，", ",")
+    wanted_tags = {tag.strip() for tag in tags_raw.split(",") if tag.strip()}
+    try:
+        limit = int(config.get("limit") or 50)
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 500))
+
+    stmt = select(Asset).where(Asset.workspace_id == workflow.workspace_id)
+    if kind and kind != "all":
+        stmt = stmt.where(Asset.kind == kind)
+    if name_contains:
+        stmt = stmt.where(Asset.name.contains(name_contains))
+    stmt = stmt.order_by(Asset.created_at.desc())
+    rows = list(db.scalars(stmt))
+    if wanted_tags:
+        rows = [asset for asset in rows if wanted_tags & set(asset.tags or [])]
+    rows = rows[:limit]
+
+    assets = [
+        {
+            "id": asset.id,
+            "name": asset.name,
+            "kind": asset.kind,
+            "duration": (asset.media_info or {}).get("duration"),
+            "tags": list(asset.tags or []),
+        }
+        for asset in rows
+    ]
+    return {"assets": assets, "ids": [asset["id"] for asset in assets], "count": len(assets)}
+
+
 def _truthy(value: Any) -> bool:
     """Loop-condition truthiness: real bools/None as-is; strings "false"/"0"/"" (any case) are False."""
     if isinstance(value, str):
@@ -794,4 +830,5 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "translate": _handle_translate,
     "loop_foreach": _handle_loop_foreach,
     "loop_while": _handle_loop_while,
+    "asset_query": _handle_asset_query,
 }
