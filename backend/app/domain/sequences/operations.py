@@ -514,6 +514,34 @@ def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
     return sequence
 
 
+@dataclass(frozen=True)
+class SetClipGain:
+    clip_id: str
+    gain: float
+    muted: bool
+    actor_id: str | None = None
+
+
+def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
+    """A clip's own audio level/mute (a video clip carries its audio, like PR/DaVinci)."""
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    gain = max(0.0, min(4.0, float(op.gain)))
+    previous = {"gain": clip.gain, "muted": clip.muted}
+    clip.gain = gain
+    clip.muted = bool(op.muted)
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_gain",
+        payload={"clip_id": clip.id, "gain": gain, "muted": bool(op.muted), "previous": previous},
+        summary={"operation": "set_clip_gain", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)

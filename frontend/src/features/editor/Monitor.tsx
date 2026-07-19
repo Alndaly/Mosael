@@ -223,7 +223,9 @@ export function Monitor({
       video.currentTime = desired;
     }
     video.playbackRate = playbackRate * clipSpeed;
-    video.volume = masterMuted ? 0 : volume;
+    // The clip carries its own audio (like PR/DaVinci): fold its gain/mute into the master volume.
+    const clipGain = activeClip.muted ? 0 : Math.min(1, Math.max(0, activeClip.gain ?? 1));
+    video.volume = (masterMuted ? 0 : volume) * clipGain;
     if (playing && video.paused) {
       video.play().catch(() => undefined);
     } else if (!playing && !video.paused) {

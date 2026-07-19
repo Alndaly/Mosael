@@ -16,6 +16,7 @@ from app.api.schemas import (
     SequenceCreate,
     SequenceOut,
     SetClipEffectsRequest,
+    SetClipGainRequest,
     SetClipSpeedRequest,
     SetClipTransformRequest,
     SetSequenceReframeRequest,
@@ -47,6 +48,7 @@ from app.domain.sequences.operations import (
     RippleDeleteClip,
     SequenceDomainError,
     SetClipEffects,
+    SetClipGain,
     SetClipSpeed,
     SetClipTransform,
     SetSequenceReframe,
@@ -63,6 +65,7 @@ from app.domain.sequences.operations import (
     remove_track as remove_track_operation,
     ripple_delete_clip as ripple_delete_clip_operation,
     set_clip_effects as set_clip_effects_operation,
+    set_clip_gain as set_clip_gain_operation,
     set_clip_speed as set_clip_speed_operation,
     set_clip_transform as set_clip_transform_operation,
     set_sequence_reframe as set_sequence_reframe_operation,
@@ -236,6 +239,19 @@ def set_clip_speed(
 ) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, speed=body.speed)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/{clip_id}/gain", response_model=SequenceOut)
+def set_clip_gain(
+    sequence_id: str, clip_id: str, body: SetClipGainRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(
+        lambda: set_clip_gain_operation(
+            db, sequence_id, SetClipGain(clip_id=clip_id, gain=body.gain, muted=body.muted)
+        )
+    )
     return _get_sequence(db, sequence_id)
 
 

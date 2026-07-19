@@ -3,7 +3,13 @@ from __future__ import annotations
 from app.core.db import SessionLocal
 from app.db.models import Clip, Project, Sequence, Track, Workspace
 from app.domain.sequences.history import undo
-from app.domain.sequences.operations import SetClipTransform, clean_transform, set_clip_transform
+from app.domain.sequences.operations import (
+    SetClipGain,
+    SetClipTransform,
+    clean_transform,
+    set_clip_gain,
+    set_clip_transform,
+)
 from tests.util import fresh_client
 
 
@@ -40,3 +46,19 @@ def test_set_clip_transform_and_undo() -> None:
         undo(db, seq.id)
         db.refresh(clip)
         assert clip.transform == {}  # 恢复到设置前(恒等)
+
+
+def test_set_clip_gain_mute_and_undo() -> None:
+    fresh_client()
+    with SessionLocal() as db:
+        seq, clip = _seq_with_clip(db)
+        assert clip.gain == 1.0 and clip.muted is False
+        set_clip_gain(db, seq.id, SetClipGain(clip_id=clip.id, gain=0.4, muted=True))
+        db.refresh(clip)
+        assert clip.gain == 0.4 and clip.muted is True
+        set_clip_gain(db, seq.id, SetClipGain(clip_id=clip.id, gain=99, muted=False))  # clamps to 4
+        db.refresh(clip)
+        assert clip.gain == 4.0 and clip.muted is False
+        undo(db, seq.id)
+        db.refresh(clip)
+        assert clip.gain == 0.4 and clip.muted is True  # back to the prior state

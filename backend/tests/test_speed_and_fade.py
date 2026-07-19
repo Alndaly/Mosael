@@ -33,6 +33,25 @@ def test_fades_clamped_to_clip_duration() -> None:
     assert segment.fade_in == segment.fade_out == 1.0
 
 
+def test_base_clip_gain_and_mute(monkeypatch) -> None:
+    """A video-track clip's own audio is mixable: gain → volume filter; muted → silence."""
+    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[base_clip(src_out=4, effects={}, gain=0.5)], assets=ASSETS,
+    )
+    assert plan.video_segments[0].gain == 0.5
+    cmd = " ".join(build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/o.mp4")))
+    assert "volume=0.5," in cmd
+
+    muted = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[base_clip(src_out=4, muted=True)], assets=ASSETS,
+    )
+    cmd2 = " ".join(build_ffmpeg_command(muted, lambda key: Path("/tmp") / key, Path("/tmp/o.mp4")))
+    assert "anullsrc" in cmd2  # muted video clip → silent base segment
+
+
 def test_video_and_audio_fades_are_independent() -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,

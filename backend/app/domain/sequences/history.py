@@ -30,6 +30,7 @@ UNDOABLE_KINDS = (
     "set_track_state",
     "ripple_delete_clip",
     "set_clip_speed",
+    "set_clip_gain",
     "set_clip_transform",
     "set_sequence_reframe",
     "set_clip_text",
@@ -192,6 +193,10 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["previous"]
+    elif operation.kind == "set_clip_gain":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.gain = payload["previous"]["gain"]
+        clip.muted = payload["previous"]["muted"]
     elif operation.kind == "set_clip_transform":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.transform = payload["previous"]
@@ -269,6 +274,10 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_speed":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.speed = payload["speed"]
+    elif operation.kind == "set_clip_gain":
+        clip = _require_clip_row(db, payload["clip_id"])
+        clip.gain = payload["gain"]
+        clip.muted = payload["muted"]
     elif operation.kind == "set_clip_transform":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.transform = payload["transform"]

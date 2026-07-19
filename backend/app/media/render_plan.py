@@ -59,6 +59,9 @@ class Segment:
     fade_out: float = 0.0
     video_fade_in: float = 0.0
     video_fade_out: float = 0.0
+    # A video-track clip carries its own audio (like PR/DaVinci) — gain/mute mix it.
+    gain: float = 1.0
+    muted: bool = False
     filter: str = ""  # one of FILTER_PRESETS or ""
     # Manual grade: sorted (name, value) pairs, names from GRADE_FIELDS, values
     # clamped to [-1, 1] (0 entries dropped). Mirrors mibu-video's color panel.
@@ -285,6 +288,8 @@ def build_render_plan(
                 fade_out=fade_out,
                 video_fade_in=video_fade_in,
                 video_fade_out=video_fade_out,
+                gain=float(clip.get("gain", 1.0)),
+                muted=bool(clip.get("muted")),
                 filter=preset,
                 grade=tuple(
                     (field, _grade_value(grade, field))

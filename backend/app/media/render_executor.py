@@ -287,12 +287,14 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                     f"color=black:s={width}x{height}:r={fps}[bg{i}];"
                     f"[bg{i}][{tlabel}]overlay={ox}:{oy},format=yuv420p,setsar=1[v{i}]"
                 )
-            if probe_has_audio(path) and not plan.mute_base_audio:
+            if probe_has_audio(path) and not plan.mute_base_audio and not segment.muted:
                 tempo = _atempo_chain(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
+                # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
+                gain = f"volume={segment.gain}," if abs(segment.gain - 1.0) > 0.001 else ""
                 filters.append(
                     f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,{tempo}"
-                    f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
+                    f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
                 # No source audio, or the base track is silenced by a solo elsewhere.

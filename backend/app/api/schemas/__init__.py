@@ -327,6 +327,11 @@ class SetClipSpeedRequest(BaseModel):
     speed: float = Field(ge=0.25, le=4.0)
 
 
+class SetClipGainRequest(BaseModel):
+    gain: float = Field(ge=0.0, le=4.0)
+    muted: bool = False
+
+
 class SetClipTransformRequest(BaseModel):
     transform: dict = Field(default_factory=dict)  # {scale,x,y,rotation,opacity};后端按范围钳制
 

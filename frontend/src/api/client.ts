@@ -256,6 +256,13 @@ export function setClipSpeed(sequenceId: string, clipId: string, speed: number):
   });
 }
 
+export function setClipGain(sequenceId: string, clipId: string, gain: number, muted: boolean): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/gain`, {
+    method: "PATCH",
+    body: JSON.stringify({ gain, muted }),
+  });
+}
+
 export function setClipTransform(
   sequenceId: string,
   clipId: string,

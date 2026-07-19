@@ -27,6 +27,7 @@ import {
   splitClip,
   splitClipAtPoints,
   setClipEffects,
+  setClipGain,
   setClipSpeed,
   setClipTransform,
   setSequenceReframe,
@@ -381,6 +382,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const setSpeedMutation = useMutation({
     mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!.id, clipId, speed),
     onSuccess: refreshSequences,
+  });
+  const setGainMutation = useMutation({
+    mutationFn: ({ clipId, gain, muted }: { clipId: string; gain: number; muted: boolean }) =>
+      setClipGain(sequence!.id, clipId, gain, muted),
+    onSuccess: (updated) => applySequence(updated),
   });
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
@@ -741,6 +747,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
               onReframe={(width, height, fillMode) => reframeMutation.mutate({ width, height, fillMode })}
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
+              onSetGain={(clipId, gain, muted) => setGainMutation.mutate({ clipId, gain, muted })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
               onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />

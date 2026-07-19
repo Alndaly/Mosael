@@ -44,6 +44,7 @@ export function Inspector({
   onSetTransform,
   onReframe,
   onSetSpeed,
+  onSetGain,
   onSetText,
   onClose,
 }: {
@@ -57,6 +58,7 @@ export function Inspector({
   onSetTransform?: (clipId: string, transform: Record<string, number>) => void;
   onReframe?: (width: number, height: number, fillMode: string) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
+  onSetGain?: (clipId: string, gain: number, muted: boolean) => void;
   onSetText?: (clipId: string, text: string) => void;
   /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
   onClose?: () => void;
@@ -193,8 +195,6 @@ export function Inspector({
               <dd className="timecode">{formatTimecode(selectedClip.src_out - selectedClip.src_in)}</dd>
               <dt>{t("speed")}</dt>
               <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
-              <dt>{t("gain")}</dt>
-              <dd className="timecode">{selectedClip.gain.toFixed(2)}</dd>
             </dl>
             {isTextClip && onSetText && (
               <div className="pip-controls">
@@ -225,6 +225,34 @@ export function Inspector({
                       {option}x
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+            {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. */}
+            {!isTextClip && onSetGain && (
+              <div className="pip-controls">
+                <div className="transform-head">
+                  <span className="pip-label">{t("clipAudio")}</span>
+                  <button
+                    type="button"
+                    className={selectedClip.muted ? "pip-btn active" : "pip-btn"}
+                    onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
+                  >
+                    {selectedClip.muted ? t("clipMuted") : t("clipMute")}
+                  </button>
+                </div>
+                <div className="transform-row">
+                  <span className="transform-row-label">{t("gain")}</span>
+                  <Slider
+                    key={`gain-${selectedClip.id}-${selectedClip.gain}`}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    defaultValue={[selectedClip.gain]}
+                    disabled={selectedClip.muted}
+                    onValueCommit={([value]) => onSetGain(selectedClip.id, value, selectedClip.muted)}
+                  />
+                  <span className="transform-row-value timecode">{Math.round(selectedClip.gain * 100)}%</span>
                 </div>
               </div>
             )}
