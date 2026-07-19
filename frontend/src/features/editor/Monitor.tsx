@@ -105,7 +105,10 @@ export function Monitor({
     | "contain"
     | "blur";
   const frameStyle = React.useMemo<React.CSSProperties>(
-    () => ({ aspectRatio: `${sequence.width} / ${sequence.height}` }),
+    () => ({
+      aspectRatio: `${sequence.width} / ${sequence.height}`,
+      ["--frame-ar" as string]: sequence.width / Math.max(1, sequence.height),
+    }),
     [sequence.width, sequence.height],
   );
   const fitStyle: React.CSSProperties = { objectFit: fillMode === "cover" ? "cover" : "contain" };

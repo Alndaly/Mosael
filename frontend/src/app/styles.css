@@ -2492,11 +2492,17 @@
   place-items: center;
   min-height: 0;
   padding: 12px;
+  /* A size container so the frame can fit itself to BOTH the pane's width and height. */
+  container-type: size;
 }
 
 .monitor-frame-wrap {
   position: relative;
-  width: 100%;
+  /* Fit the frame inside the pane at its true aspect ratio (letterbox on the limiting axis),
+     like object-fit: contain. width:100% + max-height clamps height WITHOUT shrinking width,
+     which breaks the aspect and crops the picture when the pane is short — so size explicitly
+     to min(full width, full height × aspect). --frame-ar is the sequence w/h, passed inline. */
+  width: min(100cqw, calc(100cqh * var(--frame-ar, 1.7778)));
   max-width: 100%;
   max-height: 100%;
   aspect-ratio: 16 / 9;
