@@ -28,6 +28,7 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     # 工作流:建/改是编辑权限;运行可能触发渲染与 AI 消耗,按最高档要求确认。
     "create_workflow": {"permission": "edit", "cost": "none"},
     "update_workflow": {"permission": "edit", "cost": "none"},
+    "edit_workflow": {"permission": "edit", "cost": "none"},
     "run_workflow": {"permission": "ai-cost", "cost": "ai"},
 }
 
@@ -125,7 +126,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
             errors = validate_graph(payload["graph"])
             if errors:
                 raise ConfirmationError("；".join(errors))
-    if tool in ("update_workflow", "run_workflow"):
+    if tool in ("update_workflow", "edit_workflow", "run_workflow"):
         from app.db.models import Workflow
         from app.domain.workflows import validate_graph
 
@@ -134,6 +135,25 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
             raise ConfirmationError("Workflow not found in this workspace")
         if tool == "update_workflow" and payload.get("graph") is not None:
             errors = validate_graph(payload["graph"])
+            if errors:
+                raise ConfirmationError("；".join(errors))
+        if tool == "edit_workflow":
+            from app.domain.workflows import WorkflowDomainError
+            from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
+
+            operations = payload.get("operations")
+            if not isinstance(operations, list) or not operations:
+                raise ConfirmationError("edit_workflow requires a non-empty operations list")
+            for operation in operations:
+                kind = operation.get("kind") if isinstance(operation, dict) else None
+                if kind not in GRAPH_OP_KINDS:
+                    raise ConfirmationError(f"Unsupported workflow op: {kind}")
+            # Dry-run the ops onto the current graph so malformed edits fail fast (before approval).
+            try:
+                preview = apply_graph_ops(workflow.graph or {}, operations)
+            except WorkflowDomainError as exc:
+                raise ConfirmationError(str(exc)) from exc
+            errors = validate_graph(preview)
             if errors:
                 raise ConfirmationError("；".join(errors))
 
@@ -150,6 +170,9 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
     if tool == "update_workflow":
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
         return f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
+    if tool == "edit_workflow":
+        kinds = [op.get("kind", "?") for op in payload.get("operations", []) if isinstance(op, dict)]
+        return f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     if tool == "run_workflow":
         return "运行工作流(可能产生 AI/渲染消耗)"
     prompt = str(payload.get("prompt", ""))[:80]
@@ -219,6 +242,17 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             {key: payload[key] for key in ("name", "description", "graph") if key in payload},
         )
         return {"workflow_id": workflow.id}
+    if confirmation.tool == "edit_workflow":
+        from app.db.models import Workflow
+        from app.domain.workflows import update_workflow
+        from app.domain.workflows.graph_ops import apply_graph_ops
+
+        workflow = db.get(Workflow, str(payload["workflow_id"]))
+        assert workflow is not None
+        # Re-apply onto the CURRENT graph at approval time (not the request-time snapshot).
+        new_graph = apply_graph_ops(workflow.graph or {}, payload["operations"])
+        update_workflow(db, workflow, {"graph": new_graph})
+        return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
     if confirmation.tool == "run_workflow":
         from app.db.models import Workflow
         from app.domain.workflows.engine import start_workflow_job

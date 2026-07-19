@@ -66,6 +66,63 @@ def test_edit_timeline_requires_approval_then_executes() -> None:
     assert state["can_undo"] is True
 
 
+def test_edit_workflow_applies_granular_ops() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "WF"}).json()
+    assert [n["type"] for n in workflow["graph"]["nodes"]] == ["start"]
+
+    confirmation = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "edit_workflow",
+            "requested_by": "pi",
+            "payload": {
+                "workflow_id": workflow["id"],
+                "operations": [
+                    {"kind": "add_node", "type": "llm", "node_id": "llm_1", "config": {"prompt": "hi {{start.q}}"}},
+                    {"kind": "connect", "source": "start", "target": "llm_1"},
+                ],
+            },
+        },
+    )
+    assert confirmation.status_code == 200, confirmation.text
+    data = confirmation.json()
+    assert data["status"] == "pending"
+    assert "2 个工作流编辑" in data["summary"]
+
+    # Nothing applied while pending.
+    current = client.get(f"/api/workflows/{workflow['id']}").json()
+    assert [n["type"] for n in current["graph"]["nodes"]] == ["start"]
+
+    approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+
+    after = client.get(f"/api/workflows/{workflow['id']}").json()
+    types = sorted(n["type"] for n in after["graph"]["nodes"])
+    assert types == ["llm", "start"]
+    assert any(e["source"] == "start" and e["target"] == "llm_1" for e in after["graph"]["edges"])
+
+
+def test_edit_workflow_rejects_bad_ops() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "WF"}).json()
+    # Connecting to a node that doesn't exist must fail fast at request time.
+    bad = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "edit_workflow",
+            "requested_by": "pi",
+            "payload": {"workflow_id": workflow["id"], "operations": [{"kind": "connect", "source": "start", "target": "ghost"}]},
+        },
+    )
+    assert bad.status_code == 422, bad.text
+    assert "ghost" in bad.text or "不存在" in bad.text
+
+
 def test_reject_leaves_timeline_untouched() -> None:
     client = fresh_client()
     ws, _, asset, sequence = setup_sequence(client)

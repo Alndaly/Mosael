@@ -406,11 +406,42 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
 
 
 @mcp.tool()
-def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name: str = "", description: str = "", workspace_id: str = "") -> dict[str, Any]:
-    """Rewrite a workflow's graph and/or rename it (permission: edit). Requires user confirmation.
+def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+    """Edit a workflow with granular ops — PREFER THIS over update_workflow (permission: edit,
+    requires user confirmation). You describe intent; the server applies it to the current graph,
+    so you never regenerate the whole graph. Ops apply in order, so add_node then connect in one
+    call works. Check list_workflow_node_types for available types and their config fields.
 
-    Read the current graph with get_workflow, modify it, and pass the FULL new
-    graph — the update replaces, it does not merge.
+    operations is a list of:
+      {"kind":"add_node","type":"llm","name":"改写","node_id":"llm_1","config":{"prompt":"..."}}
+          (node_id/name/position/config optional; server auto-ids and lays out)
+      {"kind":"connect","source":"start","target":"llm_1","source_handle":"true|false (condition only)"}
+      {"kind":"connect_data","source":"kb_1","source_output":"text","target":"llm_1","target_input":"prompt"}
+      {"kind":"set_node_config","node_id":"llm_1","config":{"prompt":"新提示词"}}   (merges)
+      {"kind":"set_node_name","node_id":"llm_1","name":"新名字"}
+      {"kind":"remove_node","node_id":"llm_1"}                                     (drops its edges too)
+      {"kind":"remove_edge","edge_id":"e-start-llm_1"}
+    Config string values may reference upstream outputs as {{node_id.output}}.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "edit_workflow",
+            "requested_by": "mcp-agent",
+            "payload": {"workflow_id": workflow_id, "operations": operations},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name: str = "", description: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Replace a workflow's ENTIRE graph and/or rename it (permission: edit, requires confirmation).
+
+    For editing nodes/edges prefer edit_workflow (granular ops) — it's far less error-prone.
+    Use this only to rename, or to replace the whole graph wholesale. When passing graph,
+    read the current one with get_workflow first; the update replaces, it does not merge.
     """
     payload: dict[str, Any] = {"workflow_id": workflow_id}
     if graph is not None:
