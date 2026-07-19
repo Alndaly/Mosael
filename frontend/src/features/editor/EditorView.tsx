@@ -490,7 +490,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     const videoTracks = (sequence.tracks ?? [])
       .filter((track) => track.kind === "video")
       .sort((a, b) => a.position - b.position);
-    return videoTracks.slice(1).some((track) => track.id === selectedClip.track_id);
+    // Base = bottom-most video track (see Monitor z-order); every track above it is an overlay.
+    return videoTracks.slice(0, -1).some((track) => track.id === selectedClip.track_id);
   }, [selectedClip, sequence]);
 
   const splitAtPlayhead = React.useCallback(

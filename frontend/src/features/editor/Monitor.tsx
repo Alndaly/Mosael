@@ -62,16 +62,19 @@ export function Monitor({
         .sort((a, b) => a.position - b.position),
     [sequence],
   );
+  // PR/DaVinci z-order: the topmost timeline video track renders on top. videoTracks is sorted by
+  // position ascending (top row first), so the base (bottom layer, full frame) is the LAST track;
+  // tracks above composite upward, rendered so the top row (index 0) is last in the DOM = on top.
   const videoClips = React.useMemo(
-    () => [...(videoTracks[0]?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
+    () => [...(videoTracks[videoTracks.length - 1]?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
     [videoTracks],
   );
   const overlayClips = React.useMemo(
     () =>
       videoTracks
-        .slice(1)
-        .flatMap((track) => track.clips ?? [])
-        .sort((a, b) => a.timeline_start - b.timeline_start),
+        .slice(0, -1)
+        .reverse()
+        .flatMap((track) => [...(track.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start)),
     [videoTracks],
   );
   const audioTracks = React.useMemo(

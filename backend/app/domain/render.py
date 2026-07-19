@@ -44,8 +44,14 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
     subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
-    base_clips = [clip_dict(clip) for clip in (video_tracks[0].clips if video_tracks else [])]
-    overlay_clips = [clip_dict(clip) for track in video_tracks[1:] if not track.muted for clip in track.clips]
+    # PR/DaVinci z-order: the topmost timeline video track renders on top. video_tracks is sorted
+    # by position ascending (top row first), so the base (bottom layer, full frame) is the LAST
+    # track, and tracks above composite upward — emitted so the top row (index 0) is last = on top.
+    base_track = video_tracks[-1] if video_tracks else None
+    base_clips = [clip_dict(clip) for clip in (base_track.clips if base_track else [])]
+    overlay_clips = [
+        clip_dict(clip) for track in reversed(video_tracks[:-1]) if not track.muted for clip in track.clips
+    ]
     # Attach each audio clip's track solo/duck so the plan can mix (solo silences non-soloed
     # tracks; duck lowers a ducked track under overlapping non-ducked audio).
     audio_clips = [
@@ -56,7 +62,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
 
     solo_active = any(track.solo for track in sequence.tracks)
-    base_video_soloed = bool(video_tracks and video_tracks[0].solo)
+    base_video_soloed = bool(base_track and base_track.solo)
     mute_base_audio = solo_active and not base_video_soloed
 
     asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips if clip["asset_id"]}
