@@ -13,6 +13,7 @@ from app.api.routes.asr import router as asr_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.voices import router as voices_router
 from app.api.routes.translate import router as translate_router
+from app.api.routes.websearch import router as websearch_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.confirmations import router as confirmations_router
 from app.api.routes.feishu import router as feishu_router
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(asr_router, prefix="/api", dependencies=protected)
     app.include_router(voices_router, prefix="/api", dependencies=protected)
     app.include_router(translate_router, prefix="/api", dependencies=protected)
+    app.include_router(websearch_router, prefix="/api", dependencies=protected)
     app.include_router(luts_router, prefix="/api", dependencies=protected)
     app.include_router(sequences_router, prefix="/api", dependencies=protected)
     app.include_router(jobs_router, prefix="/api", dependencies=protected)

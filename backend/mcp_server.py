@@ -359,6 +359,20 @@ def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
 
 
 @mcp.tool()
+def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
+    """Search the web for up-to-date info (read-only, runs directly). Returns up to `count`
+    results as {title, url, snippet}. Follow up with fetch_url to read a promising page."""
+    return _get("/api/websearch", {"q": query, "count": count}).get("results", [])
+
+
+@mcp.tool()
+def fetch_url(url: str) -> dict[str, Any]:
+    """Fetch a public web page and return its readable text as {title, url, text} (read-only).
+    Only http/https public pages; internal/localhost addresses are blocked."""
+    return _get("/api/webfetch", {"url": url})
+
+
+@mcp.tool()
 def list_workflows(workspace_id: str = "") -> list[dict[str, Any]]:
     """List visual workflows (id, name, description, node count). Read-only, runs directly."""
     workflows = _get("/api/workflows", {"workspace_id": workspace_id or _default_workspace_id()})
