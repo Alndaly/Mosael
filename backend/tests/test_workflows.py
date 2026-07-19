@@ -242,6 +242,14 @@ def test_delay_node_clamps(monkeypatch) -> None:
     assert slept == [0.0, 300.0, 1.0, 1.0]
 
 
+def test_translate_node_google(monkeypatch) -> None:
+    from app.domain.workflows import engine
+
+    monkeypatch.setattr("app.domain.translate.google_translate", lambda text, target, source="auto": f"[{target}]{text}")
+    assert engine._handle_translate(None, None, {"text": "hi", "target_lang": "zh-CN"}) == {"text": "[zh-CN]hi"}
+    assert engine._handle_translate(None, None, {"text": "  ", "target_lang": "en"}) == {"text": ""}  # empty short-circuit
+
+
 def test_new_nodes_registered_and_validate() -> None:
     from app.domain.workflows import NODE_TYPES, validate_graph
     from app.domain.workflows.engine import _HANDLERS

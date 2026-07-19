@@ -35,6 +35,7 @@ import {
   Flag,
   GitBranch,
   Globe,
+  Languages,
   Link2,
   Loader2,
   Mic,
@@ -116,6 +117,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   delay: <Timer size={13} />,
   synthesize_speech: <AudioLines size={13} />,
   notify: <Bell size={13} />,
+  translate: <Languages size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {

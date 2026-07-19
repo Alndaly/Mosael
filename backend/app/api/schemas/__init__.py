@@ -332,6 +332,17 @@ class SetClipGainRequest(BaseModel):
     muted: bool = False
 
 
+class TranslateRequest(BaseModel):
+    texts: list[str] = Field(min_length=1, max_length=500)
+    target_lang: str
+    engine: str = Field(default="google", pattern="^(google|ai)$")
+    profile_id: str | None = None
+
+
+class TranslateResponse(BaseModel):
+    translations: list[str]
+
+
 class SetClipTransformRequest(BaseModel):
     transform: dict = Field(default_factory=dict)  # {scale,x,y,rotation,opacity};后端按范围钳制
 

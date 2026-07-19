@@ -197,6 +197,22 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["sent"],
     },
+    "translate": {
+        "label": "翻译",
+        "description": "把文本翻译成目标语言:Google 免费接口(无需 key)或 AI 供应商。",
+        "config": {
+            "text": {"type": "template", "required": True},
+            "target_lang": {
+                "type": "string",
+                "required": True,
+                "description": "目标语言",
+                "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
+            },
+            "engine": {"type": "string", "description": "翻译引擎(默认 Google 免费)", "options": ["google", "ai"]},
+            "profile_id": {"type": "string", "description": "engine=ai 时的供应商配置,留空自动"},
+        },
+        "outputs": ["text"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")

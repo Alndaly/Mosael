@@ -564,6 +564,23 @@ def _handle_synthesize(db: Session, workflow: Workflow, config: dict[str, Any]) 
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
 
 
+def _handle_translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    from app.domain.translate import translate as translate_text
+
+    text = str(config.get("text", ""))
+    if not text.strip():
+        return {"text": ""}
+    return {
+        "text": translate_text(
+            db,
+            text,
+            str(config.get("target_lang") or "en"),
+            engine=str(config.get("engine") or "google").lower(),
+            profile_id=str(config.get("profile_id") or "") or None,
+        )
+    }
+
+
 def _handle_notify(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     title = str(config.get("title", "")).strip()
     if not title:
@@ -639,4 +656,5 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "delay": _handle_delay,
     "synthesize_speech": _handle_synthesize,
     "notify": _handle_notify,
+    "translate": _handle_translate,
 }
