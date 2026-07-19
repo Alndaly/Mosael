@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key
 from app.media.probe import guess_kind, probe_media
+from app.media.proxy import start_proxy_job
 from app.media.thumbnails import generate_thumbnail
 from app.media.waveform import generate_waveform
 
@@ -49,6 +50,7 @@ def register_file_asset(
     db.add(asset)
     db.commit()
     db.refresh(asset)
+    start_proxy_job(db, asset)  # 720p preview proxy for the compositor (no-op unless video)
     return asset
 
 
@@ -88,5 +90,6 @@ def import_uploaded_asset(
     db.add(asset)
     db.commit()
     db.refresh(asset)
+    start_proxy_job(db, asset)  # 720p preview proxy for the compositor (no-op unless video)
     return asset
 

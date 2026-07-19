@@ -15,6 +15,7 @@ from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
+from app.media.proxy import proxy_path, start_proxy_job
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
@@ -192,6 +193,27 @@ def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileR
     if not waveform.is_file():
         raise HTTPException(status_code=404, detail="Waveform not available")
     return FileResponse(waveform, media_type="application/json")
+
+
+@router.get("/assets/{asset_id}/proxy")
+def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """The 720p preview proxy the compositor decodes (see media/proxy.py)."""
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
+    proxy = proxy_path(resolve_key(asset.file_key).parent)
+    if not proxy.is_file():
+        raise HTTPException(status_code=404, detail="Proxy not available")
+    return FileResponse(proxy, media_type="video/mp4")
+
+
+@router.post("/assets/{asset_id}/proxy", response_model=JobOut)
+def regenerate_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser):
+    """Force a fresh proxy transcode (e.g. after a failed one)."""
+    asset = require_asset(db, user, asset_id)
+    job = start_proxy_job(db, asset, force=True)
+    if job is None:
+        raise HTTPException(status_code=422, detail="该素材不支持生成预览代理")
+    return job
 
 
 def _require_file_backed_asset(db: DbSession, asset_id: str) -> Asset:

@@ -38,6 +38,7 @@ from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.generation import ensure_builtin_generation_models
 from app.domain.jobs import reconcile_orphaned_jobs
+from app.media.proxy import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
 
@@ -49,6 +50,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # A restart kills every in-process worker thread — fail the jobs they
         # were running so they don't linger frozen in the task center.
         reconcile_orphaned_jobs(db)
+        # Backfill preview proxies for any videos missing one (best-effort).
+        reconcile_missing_proxies(db)
     if settings.scheduler_enabled:
         start_scheduler_loop()
     if settings.feishu_autostart:

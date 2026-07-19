@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
 
+    # Preview proxies: on video import, transcode a 720p H.264 short-GOP proxy the
+    # WebCodecs compositor decodes instead of the original (export still uses the
+    # original). Disable (MIBU_GENERATE_PROXIES=0) in tests to avoid spawning ffmpeg.
+    generate_proxies: bool = True
+
     # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
     # interpreter so this backend stays light; empty asr_python autodetects
     # (env → sibling mibu-video venv → this interpreter).

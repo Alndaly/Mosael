@@ -184,6 +184,12 @@ export function assetThumbnailUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
+/** The 720p preview proxy the WebCodecs compositor decodes (media_info.proxy_status === "ready"). */
+export function assetProxyUrl(assetId: string): string {
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/assets/${assetId}/proxy${suffix}`;
+}
+
 export interface WaveformData {
   version: number;
   duration: number;

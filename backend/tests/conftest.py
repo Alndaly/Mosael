@@ -14,6 +14,9 @@ os.environ["MIBU_DATA_DIR"] = tempfile.mkdtemp(prefix="mibu-test-")
 # Tests drive the scheduler tick() directly; the background loop stays off.
 os.environ["MIBU_SCHEDULER_ENABLED"] = "0"
 os.environ["MIBU_FEISHU_AUTOSTART"] = "0"
+# Don't spawn ffmpeg proxy threads on every video import during the suite;
+# test_proxy.py re-enables it explicitly to exercise the pipeline.
+os.environ["MIBU_GENERATE_PROXIES"] = "0"
 
 import pytest
 
