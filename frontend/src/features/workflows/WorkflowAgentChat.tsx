@@ -8,6 +8,7 @@ import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client"
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -60,6 +61,7 @@ export function WorkflowAgentChat({
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState("");
   const [streamText, setStreamText] = React.useState("");
+  const [streamTools, setStreamTools] = React.useState<ToolCall[]>([]);
   const [attachments, setAttachments] = React.useState<{ name: string; content: string }[]>([]);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -171,8 +173,11 @@ export function WorkflowAgentChat({
             const line = event.split("\n").find((item) => item.startsWith("data: "));
             if (!line) continue;
             try {
-              const payload = JSON.parse(line.slice(6)) as { text: string };
-              if (streamingRef.current === targetSessionId) setStreamText(payload.text);
+              const payload = JSON.parse(line.slice(6)) as { text: string; tools?: ToolCall[] };
+              if (streamingRef.current === targetSessionId) {
+                setStreamText(payload.text);
+                setStreamTools(payload.tools ?? []);
+              }
             } catch {
               // partial frame
             }
@@ -182,6 +187,7 @@ export function WorkflowAgentChat({
         if (streamingRef.current === targetSessionId) {
           streamingRef.current = null;
           setStreamText("");
+          setStreamTools([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
         }
@@ -251,23 +257,35 @@ export function WorkflowAgentChat({
             <span>{t("wfAgentEmpty")}</span>
           </div>
         )}
-        {(messages.data ?? []).map((message) => (
-          <div key={message.id} className={`wf-agent-msg ${message.role}`}>
-            {message.role === "assistant" ? (
-              <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
-            ) : (
-              message.content
-            )}
-          </div>
-        ))}
+        {(messages.data ?? []).map((message) => {
+          const payload = message.payload as { tools?: ToolCall[] } | null;
+          return (
+            <div key={message.id} className={`wf-agent-msg ${message.role}`}>
+              {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
+              {message.role === "assistant" ? (
+                message.error ? (
+                  <AgentErrorCard content={message.content} error={message.error} />
+                ) : (
+                  <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
+                )
+              ) : (
+                message.content
+              )}
+            </div>
+          );
+        })}
         {running && streamText && (
           <div className="wf-agent-msg assistant">
+            <ToolCalls tools={streamTools} />
             <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
           </div>
         )}
         {running && !streamText && (
           <div className="wf-agent-msg assistant thinking">
-            <Loader2 size={12} className="spin" /> {t("chatThinking")}
+            <ToolCalls tools={streamTools} />
+            <span className="wf-agent-thinking-row">
+              <Loader2 size={12} className="spin" /> {t("chatThinking")}
+            </span>
           </div>
         )}
       </div>
