@@ -21,6 +21,7 @@ from app.api.schemas import (
     SetSequenceReframeRequest,
     SetClipTextRequest,
     SetTrackStateRequest,
+    SplitClipPointsRequest,
     SplitClipRequest,
     TrimClipRequest,
 )
@@ -47,6 +48,7 @@ from app.domain.sequences.operations import (
     SetClipText,
     SetTrackState,
     SplitClip,
+    SplitClipPoints,
     TrimClip,
     add_track as add_track_operation,
     cut_clip_range as cut_clip_range_operation,
@@ -60,6 +62,7 @@ from app.domain.sequences.operations import (
     set_sequence_reframe as set_sequence_reframe_operation,
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
+    split_clip_at_points as split_clip_points_operation,
     insert_clip as insert_clip_operation,
     insert_text_clip as insert_text_clip_operation,
     set_clip_text as set_clip_text_operation,
@@ -150,6 +153,16 @@ def cut_clip_ranges(
 def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, src_time=body.src_time)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/split-points", response_model=SequenceOut)
+def split_clip_points(
+    sequence_id: str, clip_id: str, body: SplitClipPointsRequest, db: DbSession, user: CurrentUser
+) -> Sequence:
+    """Split one clip into pieces at several source-time cut points (transcript 按句切分)."""
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: split_clip_points_operation(db, sequence_id, SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times))))
     return _get_sequence(db, sequence_id)
 
 

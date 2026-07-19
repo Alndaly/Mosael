@@ -769,6 +769,74 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
     return sequence
 
 
+@dataclass
+class SplitClipPoints:
+    """Split one clip into pieces at several source-time cut points, in a single op.
+
+    Unlike cut_clip_ranges NOTHING is removed — the pieces stay at their original
+    timeline positions (transcript 「按句切分」 / 单句独立成片段). Recorded as split_clip
+    so the existing original+created undo/redo path applies unchanged.
+    """
+
+    clip_id: str
+    src_times: tuple[float, ...]
+    actor_id: str | None = None
+
+
+def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    speed = clip.speed or 1
+
+    # Interior points only, sorted; drop any too close to a neighbour or to the clip ends.
+    points: list[float] = []
+    cursor = clip.src_in
+    for value in sorted({float(p) for p in op.src_times}):
+        if value - cursor > MIN_CUT_REMAINDER and clip.src_out - value > MIN_CUT_REMAINDER:
+            points.append(value)
+            cursor = value
+    if not points:
+        raise SequenceDomainError("No valid split point inside the clip")
+
+    original = _clip_payload(clip)
+    original["gain"], original["speed"], original["effects"] = clip.gain, clip.speed, clip.effects
+    common = {
+        "workspace_id": sequence.workspace_id,
+        "sequence_id": sequence.id,
+        "track_id": clip.track_id,
+        "asset_id": clip.asset_id,
+        "gain": clip.gain,
+        "speed": clip.speed,
+        "effects": clip.effects,
+    }
+    boundaries = [clip.src_in, *points, clip.src_out]
+    db.delete(clip)
+    created: list[dict[str, Any]] = []
+    for src_start, src_end in zip(boundaries, boundaries[1:]):
+        piece = Clip(
+            **common,
+            # Keep each piece where it already sits on the timeline (speed-adjusted) — a split
+            # divides, it must not move anything.
+            timeline_start=original["timeline_start"] + (src_start - original["src_in"]) / speed,
+            src_in=src_start,
+            src_out=src_end,
+        )
+        db.add(piece)
+        db.flush()
+        created.append(_clip_payload(piece))
+
+    _record_operation(
+        db,
+        sequence,
+        kind="split_clip",
+        payload={"clip_id": original["clip_id"], "src_time": points[0], "original": original, "created": created},
+        summary={"operation": "split_clip", "clip_id": original["clip_id"], "created": len(created)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 MIN_CUT_REMAINDER = 0.05
 
 

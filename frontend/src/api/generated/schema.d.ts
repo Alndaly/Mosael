@@ -929,6 +929,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/split-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Split Clip Points
+         * @description Split one clip into pieces at several source-time cut points (transcript 按句切分).
+         */
+        post: operations["split_clip_points_api_sequences__sequence_id__clips__clip_id__split_points_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/tracks/{track_id}": {
         parameters: {
             query?: never;
@@ -1451,6 +1471,7 @@ export interface paths {
         /**
          * Retrieval Test
          * @description 召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。
+         *     只读操作(虽是 POST),用成员级校验而非写权限,viewer 也能跑。
          */
         post: operations["retrieval_test_api_kb_datasets__dataset_id__retrieval_test_post"];
         delete?: never;
@@ -4169,6 +4190,11 @@ export interface components {
             /** Duck */
             duck?: boolean | null;
         };
+        /** SplitClipPointsRequest */
+        SplitClipPointsRequest: {
+            /** Src Times */
+            src_times: number[];
+        };
         /** SplitClipRequest */
         SplitClipRequest: {
             /** Src Time */
@@ -6629,6 +6655,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SplitClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_clip_points_api_sequences__sequence_id__clips__clip_id__split_points_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitClipPointsRequest"];
             };
         };
         responses: {

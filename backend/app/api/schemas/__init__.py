@@ -284,6 +284,10 @@ class SplitClipRequest(BaseModel):
     src_time: float
 
 
+class SplitClipPointsRequest(BaseModel):
+    src_times: list[float] = Field(min_length=1)
+
+
 class SetTrackStateRequest(BaseModel):
     muted: bool | None = None
     locked: bool | None = None

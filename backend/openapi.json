@@ -2764,6 +2764,68 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/split-points": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Split Clip Points",
+        "description": "Split one clip into pieces at several source-time cut points (transcript 按句切分).",
+        "operationId": "split_clip_points_api_sequences__sequence_id__clips__clip_id__split_points_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitClipPointsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/tracks/{track_id}": {
       "patch": {
         "tags": [
@@ -4516,7 +4578,7 @@
           "kb"
         ],
         "summary": "Retrieval Test",
-        "description": "召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。",
+        "description": "召回测试:query → 命中分块 + 分数 + from_graph 标记。top_k/阈值缺省取库设置。\n只读操作(虽是 POST),用成员级校验而非写权限,viewer 也能跑。",
         "operationId": "retrieval_test_api_kb_datasets__dataset_id__retrieval_test_post",
         "parameters": [
           {
@@ -12573,6 +12635,23 @@
         },
         "type": "object",
         "title": "SetTrackStateRequest"
+      },
+      "SplitClipPointsRequest": {
+        "properties": {
+          "src_times": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Src Times"
+          }
+        },
+        "type": "object",
+        "required": [
+          "src_times"
+        ],
+        "title": "SplitClipPointsRequest"
       },
       "SplitClipRequest": {
         "properties": {

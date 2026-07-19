@@ -58,6 +58,40 @@ def test_split_outside_bounds_rejected() -> None:
         assert res.status_code == 422
 
 
+def test_split_points_divides_into_pieces_and_undo() -> None:
+    client = fresh_client()
+    sequence, clip = setup_clip(client)  # timeline [2,10), src [1,9)
+    state = client.post(
+        f"/api/sequences/{sequence['id']}/clips/{clip['id']}/split-points", json={"src_times": [3, 5, 7]}
+    ).json()
+    pieces = clips(state)
+    # Divided into 4 back-to-back pieces at their original timeline positions — nothing moved.
+    assert [(p["timeline_start"], p["src_in"], p["src_out"]) for p in pieces] == [(2, 1, 3), (4, 3, 5), (6, 5, 7), (8, 7, 9)]
+
+    assert len(clips(client.post(f"/api/sequences/{sequence['id']}/undo").json())) == 1
+    assert len(clips(client.post(f"/api/sequences/{sequence['id']}/redo").json())) == 4
+
+
+def test_split_points_ignores_out_of_range_and_too_close() -> None:
+    client = fresh_client()
+    sequence, clip = setup_clip(client)  # src [1,9)
+    # 0.5 & 20 out of range; 1 & 9 are the ends; 5.02 is <0.05 from 5 → only src=5 survives.
+    state = client.post(
+        f"/api/sequences/{sequence['id']}/clips/{clip['id']}/split-points",
+        json={"src_times": [0.5, 1, 5, 5.02, 9, 20]},
+    ).json()
+    assert len(clips(state)) == 2
+
+
+def test_split_points_no_valid_point_rejected() -> None:
+    client = fresh_client()
+    sequence, clip = setup_clip(client)
+    res = client.post(
+        f"/api/sequences/{sequence['id']}/clips/{clip['id']}/split-points", json={"src_times": [0.5, 20, 9]}
+    )
+    assert res.status_code == 422
+
+
 def test_track_mute_lock_with_undo() -> None:
     client = fresh_client()
     sequence, _clip = setup_clip(client)
