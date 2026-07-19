@@ -114,6 +114,26 @@ export function Timeline({
   // True while dragging a video clip above the top track — drop creates a new layer.
   const [newLayerDrag, setNewLayerDrag] = React.useState(false);
 
+  // Follow the playhead during playback: page-scroll the timeline so the cursor stays in view
+  // (like Premiere/DaVinci). Subscribes to the store directly so the Timeline doesn't re-render
+  // on the ~25×/s tick; only nudges scrollLeft when the playhead nears the edge or jumps.
+  React.useEffect(() => {
+    const follow = () => {
+      const { playhead, playing } = useEditorStore.getState();
+      if (!playing) return;
+      const el = hscrollRef.current;
+      if (!el) return;
+      const px = timeToPx(playhead, pxPerSecond);
+      const margin = el.clientWidth * 0.12;
+      // Past the right edge → page forward (playhead lands near the left); before the left edge
+      // (a loop or seek-back) → bring it into view.
+      if (px > el.scrollLeft + el.clientWidth - margin || px < el.scrollLeft) {
+        el.scrollLeft = Math.max(0, px - margin);
+      }
+    };
+    return useEditorStore.subscribe(follow);
+  }, [pxPerSecond]);
+
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
 
