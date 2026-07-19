@@ -1357,6 +1357,26 @@
   gap: 6px;
 }
 
+.feishu-bind-code {
+  display: block;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  font-variant-numeric: tabular-nums;
+}
+.feishu-binding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
 .feishu-bot {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto auto;

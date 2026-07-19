@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { KeyRound, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
+import { KeyRound, Link2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -16,6 +16,8 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
 type Onboarding = components["schemas"]["FeishuOnboardingOut"];
+type BindCode = components["schemas"]["FeishuBindCodeOut"];
+type Binding = components["schemas"]["FeishuBindingOut"];
 
 const CAPABILITIES = ["readonly", "editor", "full"] as const;
 
@@ -91,6 +93,27 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
   });
 
+  // Account binding: the bot acts with the bound member's permissions, so a Feishu user
+  // must bind first. Member issues a code, then DMs it to the bot.
+  const [bindBotId, setBindBotId] = React.useState<string | null>(null);
+  const [bindCode, setBindCode] = React.useState<BindCode | null>(null);
+  const issueCode = useMutation({
+    mutationFn: (botId: string) => api<BindCode>(`/api/feishu/bots/${botId}/bind-code`, { method: "POST" }),
+    onSuccess: (code, botId) => {
+      setBindBotId(botId);
+      setBindCode(code);
+    },
+  });
+  const bindings = useQuery({
+    queryKey: ["feishu-bindings", bindBotId],
+    enabled: Boolean(bindBotId),
+    queryFn: () => api<Binding[]>(`/api/feishu/bots/${bindBotId}/bindings`),
+  });
+  const removeBinding = useMutation({
+    mutationFn: (openId: string) => api(`/api/feishu/bots/${bindBotId}/bindings/${openId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bindings", bindBotId] }),
+  });
+
   const hasBots = (bots.data ?? []).length > 0;
 
   return (
@@ -160,6 +183,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Button variant="ghost" size="icon-sm" onClick={() => issueCode.mutate(bot.id)} aria-label={t("feishuBind")}>
+                    <Link2 size={13} />
+                  </Button>
                   <Button variant="ghost" size="icon-sm" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
                     <RefreshCcw size={13} />
                   </Button>
@@ -199,6 +225,42 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             >
               {t("feishuAdd")}
             </Button>
+          </div>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(bindCode)}
+        onOpenChange={(next) => {
+          if (!next) {
+            setBindCode(null);
+            setBindBotId(null);
+          }
+        }}
+        title={t("feishuBindTitle")}
+      >
+        <div className="grid gap-3">
+          <p className="text-[13px] text-muted-foreground">{t("feishuBindHint")}</p>
+          <code className="feishu-bind-code">{bindCode?.code}</code>
+          <div className="grid gap-1.5">
+            <small className="text-[12px] text-muted-foreground">{t("feishuBindMembers")}</small>
+            {(bindings.data ?? []).length === 0 ? (
+              <small className="text-[12px] text-muted-foreground">{t("feishuBindNobody")}</small>
+            ) : (
+              (bindings.data ?? []).map((binding) => (
+                <div className="feishu-binding-row" key={binding.open_id}>
+                  <span>{binding.username}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => removeBinding.mutate(binding.open_id)}
+                    aria-label={t("feishuRemove")}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </ModalShell>

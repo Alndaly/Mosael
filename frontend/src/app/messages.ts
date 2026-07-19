@@ -509,6 +509,11 @@ export const messages = {
     feishuStatusConnecting: "连接中",
     feishuStatusError: "错误",
     feishuRestart: "重连",
+    feishuBind: "绑定账号",
+    feishuBindTitle: "绑定飞书账号",
+    feishuBindHint: "机器人会以「绑定成员」的权限执行。把下面的绑定码在飞书里直接发给机器人即可完成绑定(10 分钟内有效)。未绑定的人无法使用。",
+    feishuBindMembers: "已绑定的飞书用户",
+    feishuBindNobody: "还没有人绑定",
     feishuRemove: "删除",
     feishuNoBots: "还没有绑定飞书机器人。",
 
@@ -1458,6 +1463,11 @@ export const messages = {
     feishuStatusConnecting: "Connecting",
     feishuStatusError: "Error",
     feishuRestart: "Reconnect",
+    feishuBind: "Bind account",
+    feishuBindTitle: "Bind a Feishu account",
+    feishuBindHint: "The bot acts with the bound member's permissions. Send this code to the bot from Feishu to bind (valid 10 min). Unbound users can't use it.",
+    feishuBindMembers: "Bound Feishu users",
+    feishuBindNobody: "Nobody bound yet",
     feishuRemove: "Remove",
     feishuNoBots: "No Feishu bot bound yet.",
 
