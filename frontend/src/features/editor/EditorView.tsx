@@ -644,7 +644,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         </section>
       )}
       <section className="panel monitor">
-        <Monitor sequence={sequence} assets={assets.data ?? []} />
+        <Monitor
+          sequence={sequence}
+          assets={assets.data ?? []}
+          onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
+        />
       </section>
       {showInspector &&
         (() => {

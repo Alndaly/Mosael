@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { Scopes } from "@/features/editor/Scopes";
+import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -25,9 +26,18 @@ const FILTER_CSS: Record<string, string> = {
   fade: "saturate(0.75) contrast(0.9) brightness(1.05)",
 };
 
-export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asset[] }) {
+export function Monitor({
+  sequence,
+  assets,
+  onSetTransform,
+}: {
+  sequence: Sequence;
+  assets: Asset[];
+  onSetTransform?: (clipId: string, transform: Transform) => void;
+}) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
+  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const playing = useEditorStore((state) => state.playing);
   const loop = useEditorStore((state) => state.loop);
   const playbackRate = useEditorStore((state) => state.playbackRate);
@@ -97,17 +107,14 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
   );
   const fitStyle: React.CSSProperties = { objectFit: fillMode === "cover" ? "cover" : "contain" };
   const bgVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  // On-canvas direct manipulation: while dragging a handle, `draft` overrides the clip's saved
+  // transform so the media tracks the box live; committed on release via onSetTransform.
+  const [draft, setDraft] = React.useState<Transform | null>(null);
+  React.useEffect(() => setDraft(null), [activeClip?.id]);
+  const activeSelected = Boolean(activeClip && selectedClipIds.includes(activeClip.id));
+  const liveTransform = draft ?? readTransform(activeClip?.transform);
   // 片段变换(缩放/位移/旋转/透明度)→ CSS,预览里实时呈现。
-  const clipTransformStyle = React.useMemo<React.CSSProperties>(() => {
-    const tf = (activeClip?.transform ?? {}) as Record<string, number>;
-    const scale = tf.scale ?? 1;
-    const rotation = tf.rotation ?? 0;
-    const opacity = tf.opacity ?? 1;
-    const x = (tf.x ?? 0) * 50;
-    const y = (tf.y ?? 0) * 50;
-    if (scale === 1 && rotation === 0 && opacity === 1 && x === 0 && y === 0) return {};
-    return { transform: `translate(${x}%, ${y}%) scale(${scale}) rotate(${rotation}deg)`, opacity };
-  }, [activeClip?.transform]);
+  const clipTransformStyle = React.useMemo<React.CSSProperties>(() => transformCss(liveTransform), [liveTransform]);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
@@ -366,6 +373,19 @@ export function Monitor({ sequence, assets }: { sequence: Sequence; assets: Asse
                 preload="auto"
               />
             )
+          )}
+          {activeSelected && onSetTransform && activeClip && (
+            <div className="monitor-tf-layer" onClick={(event) => event.stopPropagation()}>
+              <TransformOverlay
+                frameRef={stageRef}
+                transform={liveTransform}
+                onChange={setDraft}
+                onCommit={(next) => {
+                  setDraft(null);
+                  onSetTransform(activeClip.id, next);
+                }}
+              />
+            </div>
           )}
         </div>
       </div>

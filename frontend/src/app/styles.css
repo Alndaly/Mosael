@@ -2458,6 +2458,57 @@
   object-fit: contain;
 }
 
+/* 画布直接操作:选中片段的变换框(移动/缩放/旋转) */
+.monitor-tf-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tf-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--primary);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  cursor: move;
+  pointer-events: auto;
+  touch-action: none;
+}
+.tf-handle {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border: 1.5px solid var(--primary);
+  border-radius: 2px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.tf-corner {
+  transform: translate(-50%, -50%);
+  cursor: nwse-resize;
+}
+.tf-ne,
+.tf-sw {
+  cursor: nesw-resize;
+}
+.tf-rotate-stem {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1.5px;
+  height: 20px;
+  background: var(--primary);
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+.tf-rotate {
+  left: 50%;
+  top: -20px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  cursor: grab;
+}
+
 /* 改画幅「模糊背景」填充:一路缩放放大 + 高斯模糊的副本铺满画框 */
 .monitor-blur-bg {
   position: absolute;
