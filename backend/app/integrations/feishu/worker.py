@@ -54,6 +54,8 @@ def main(bot_id: str) -> None:
             sender = getattr(event, "sender", None)
             if ((getattr(sender, "sender_type", "") or "").lower()) == "bot":
                 return  # never answer bots (including ourselves) — loop protection
+            sender_id = getattr(sender, "sender_id", None)
+            open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to a Mibu member
             message = getattr(event, "message", None)
             if message is None or getattr(message, "message_type", None) != "text":
                 return
@@ -63,7 +65,7 @@ def main(bot_id: str) -> None:
             if not chat_id or not text:
                 return
             threading.Thread(
-                target=service.handle_incoming, args=(bot_id, chat_id, text, message_id), daemon=True
+                target=service.handle_incoming, args=(bot_id, chat_id, text, message_id, open_id), daemon=True
             ).start()
         except Exception:
             logger.exception("feishu event handling failed bot=%s", bot_id)

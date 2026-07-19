@@ -7240,6 +7240,139 @@
         }
       }
     },
+    "/api/feishu/bots/{bot_id}/bind-code": {
+      "post": {
+        "tags": [
+          "feishu"
+        ],
+        "summary": "Issue Bind Code",
+        "description": "Any member issues a one-time code, then sends it to the bot from Feishu to bind their\nown Feishu account. The bot then acts with THIS member's permissions.",
+        "operationId": "issue_bind_code_api_feishu_bots__bot_id__bind_code_post",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeishuBindCodeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feishu/bots/{bot_id}/bindings": {
+      "get": {
+        "tags": [
+          "feishu"
+        ],
+        "summary": "List Bindings",
+        "operationId": "list_bindings_api_feishu_bots__bot_id__bindings_get",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeishuBindingOut"
+                  },
+                  "title": "Response List Bindings Api Feishu Bots  Bot Id  Bindings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feishu/bots/{bot_id}/bindings/{open_id}": {
+      "delete": {
+        "tags": [
+          "feishu"
+        ],
+        "summary": "Remove Binding",
+        "operationId": "remove_binding_api_feishu_bots__bot_id__bindings__open_id__delete",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bot Id"
+            }
+          },
+          {
+            "name": "open_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Open Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/scan": {
       "post": {
         "tags": [
@@ -9498,6 +9631,48 @@
           "ranges"
         ],
         "title": "CutClipRangesRequest"
+      },
+      "FeishuBindCodeOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "title": "FeishuBindCodeOut"
+      },
+      "FeishuBindingOut": {
+        "properties": {
+          "open_id": {
+            "type": "string",
+            "title": "Open Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open_id",
+          "user_id",
+          "username"
+        ],
+        "title": "FeishuBindingOut"
       },
       "FeishuBotCreate": {
         "properties": {

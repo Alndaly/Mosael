@@ -51,11 +51,17 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     ).json()
     # stop_connection is a no-op in tests (start failed w/o real creds), status irrelevant here
 
+    # The sender must be bound to a member first — the bot acts with that member's perms.
+    me = client.get("/api/auth/me").json()
+    with SessionLocal() as db:
+        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
+        assert service._redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
+
     sent: list[tuple[str, str]] = []
     monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材", adapter_session_id="s1"))
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
 
-    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1")
+    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1", "ou_sender")
 
     assert sent == [("oc_chat_1", "已查看,共 2 个素材")]
     with SessionLocal() as db:
@@ -67,8 +73,25 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         assert roles == ["user", "assistant"]
 
     # duplicate message id is dropped
-    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1")
+    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1", "ou_sender")
     assert len(sent) == 1
+
+
+def test_handle_incoming_unbound_sender_refused(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    bot = client.post(
+        "/api/feishu/bots", json={"workspace_id": ws["id"], "app_id": "cli_a4", "app_secret": "s3cret"}
+    ).json()
+    ran: list[bool] = []
+    sent: list[str] = []
+    monkeypatch.setattr(service, "run_turn", lambda *a, **k: ran.append(True))
+    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
+
+    service.handle_incoming(bot["id"], "oc_chat_x", "偷偷改点东西", "msg-x", "ou_intruder")
+
+    assert ran == []  # the agent never ran for an unbound sender
+    assert sent and "绑定" in sent[0]
 
 
 def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
@@ -85,8 +108,13 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise AdapterError("cli exploded")
 
+    me = client.get("/api/auth/me").json()
+    with SessionLocal() as db:
+        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
+        service._redeem_bind_code(db, ws["id"], "ou_sender2", code)
+
     monkeypatch.setattr(service, "run_turn", boom)
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
 
-    service.handle_incoming(bot["id"], "oc_chat_2", "hi", "msg-2")
+    service.handle_incoming(bot["id"], "oc_chat_2", "hi", "msg-2", "ou_sender2")
     assert sent and "失败" in sent[0]

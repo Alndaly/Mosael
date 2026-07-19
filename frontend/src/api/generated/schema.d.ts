@@ -2235,6 +2235,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/feishu/bots/{bot_id}/bind-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Bind Code
+         * @description Any member issues a one-time code, then sends it to the bot from Feishu to bind their
+         *     own Feishu account. The bot then acts with THIS member's permissions.
+         */
+        post: operations["issue_bind_code_api_feishu_bots__bot_id__bind_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feishu/bots/{bot_id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bindings */
+        get: operations["list_bindings_api_feishu_bots__bot_id__bindings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/feishu/bots/{bot_id}/bindings/{open_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Binding */
+        delete: operations["remove_binding_api_feishu_bots__bot_id__bindings__open_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/scan": {
         parameters: {
             query?: never;
@@ -2995,6 +3050,25 @@ export interface components {
         CutClipRangesRequest: {
             /** Ranges */
             ranges: components["schemas"]["CutClipRangeRequest"][];
+        };
+        /** FeishuBindCodeOut */
+        FeishuBindCodeOut: {
+            /** Code */
+            code: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** FeishuBindingOut */
+        FeishuBindingOut: {
+            /** Open Id */
+            open_id: string;
+            /** User Id */
+            user_id: string;
+            /** Username */
+            username: string;
         };
         /** FeishuBotCreate */
         FeishuBotCreate: {
@@ -9836,6 +9910,98 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FeishuOnboardingOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_bind_code_api_feishu_bots__bot_id__bind_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBindCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bindings_api_feishu_bots__bot_id__bindings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuBindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_binding_api_feishu_bots__bot_id__bindings__open_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bot_id: string;
+                open_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -882,6 +882,17 @@ class FeishuOnboardingOut(BaseModel):
     app_id: str | None = None
 
 
+class FeishuBindCodeOut(BaseModel):
+    code: str
+    expires_at: datetime
+
+
+class FeishuBindingOut(BaseModel):
+    open_id: str
+    user_id: str
+    username: str
+
+
 class ConfirmationCreate(BaseModel):
     workspace_id: str
     tool: str = Field(min_length=1, max_length=80)

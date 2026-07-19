@@ -614,6 +614,29 @@ class FeishuBot(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class FeishuBinding(Base):
+    """Binds a Feishu sender (open_id) to a Mibu account within a workspace, so the bot
+    acts with THAT member's permissions instead of a blanket owner identity."""
+
+    __tablename__ = "feishu_bindings"
+
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
+    open_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class FeishuBindCode(Base):
+    """One-time code a member issues in-app and sends to the bot from Feishu to bind their open_id."""
+
+    __tablename__ = "feishu_bind_codes"
+
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ToolConfirmation(Base):
     __tablename__ = "tool_confirmations"
     __table_args__ = (Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),)

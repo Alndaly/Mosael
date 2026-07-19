@@ -4,8 +4,15 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import FeishuBotCreate, FeishuBotOut, FeishuBotUpdate, FeishuOnboardingOut
-from app.core.permissions import ensure_workspace_access
+from app.api.schemas import (
+    FeishuBindCodeOut,
+    FeishuBindingOut,
+    FeishuBotCreate,
+    FeishuBotOut,
+    FeishuBotUpdate,
+    FeishuOnboardingOut,
+)
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import FeishuBot
 from app.integrations.feishu import service
 
@@ -90,3 +97,31 @@ def _require_bot(db: DbSession, user: CurrentUser, bot_id: str) -> FeishuBot:
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_access(db, user, bot.workspace_id)
     return bot
+
+
+@router.post("/feishu/bots/{bot_id}/bind-code", response_model=FeishuBindCodeOut)
+def issue_bind_code(bot_id: str, db: DbSession, user: CurrentUser) -> FeishuBindCodeOut:
+    """Any member issues a one-time code, then sends it to the bot from Feishu to bind their
+    own Feishu account. The bot then acts with THIS member's permissions."""
+    bot = _require_bot(db, user, bot_id)
+    code, expires = service.issue_bind_code(db, bot.workspace_id, user.id)
+    return FeishuBindCodeOut(code=code, expires_at=expires)
+
+
+@router.get("/feishu/bots/{bot_id}/bindings", response_model=list[FeishuBindingOut])
+def list_bindings(bot_id: str, db: DbSession, user: CurrentUser) -> list[FeishuBindingOut]:
+    bot = _require_bot(db, user, bot_id)
+    return [
+        FeishuBindingOut(open_id=open_id, user_id=member.id, username=member.username)
+        for open_id, member in service.list_bindings(db, bot.workspace_id)
+    ]
+
+
+@router.delete("/feishu/bots/{bot_id}/bindings/{open_id}", status_code=204)
+def remove_binding(bot_id: str, open_id: str, db: DbSession, user: CurrentUser) -> Response:
+    bot = db.get(FeishuBot, bot_id)
+    if bot is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    ensure_workspace_perm(db, user, bot.workspace_id, "members")  # managing who can drive the bot = member mgmt
+    service.remove_binding(db, bot.workspace_id, open_id)
+    return Response(status_code=204)

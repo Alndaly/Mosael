@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import subprocess
 import sys
 import threading
 import time
 from collections import OrderedDict
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +23,17 @@ from app.domain.agent.prompt_skills import skills_index_for_prompt
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
-from app.db.models import AgentMessage, AgentSession, AuthSession, FeishuBot, User, WorkspaceMember, now
+from app.db.models import (
+    AgentMessage,
+    AgentSession,
+    AuthSession,
+    FeishuBindCode,
+    FeishuBinding,
+    FeishuBot,
+    User,
+    WorkspaceMember,
+    now,
+)
 
 """
 飞书(Lark)双向接入,移植自旧项目的长连接方案:lark_oapi.ws.Client 长连接收消息
@@ -121,17 +133,29 @@ CAPABILITY_NOTES = {
 }
 
 
-def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str) -> None:
-    """Runs inside the worker process: route one Feishu message through the agent host."""
+def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sender_open_id: str = "") -> None:
+    """Runs inside the worker process: route one Feishu message through the agent host,
+    acting as the SENDER's bound account (not a blanket owner). Unbound senders are refused."""
     if seen_recently(message_id):
         return
     with SessionLocal() as db:
         bot = db.get(FeishuBot, bot_id)
         if bot is None or not bot.enabled:
             return
-        user = _acting_user(db, bot.workspace_id)
+        # Identify the human behind the message. No open_id → can't attribute → refuse.
+        user = _resolve_sender(db, bot.workspace_id, sender_open_id) if sender_open_id else None
         if user is None:
-            send_text(bot, chat_id, "Mibu 工作区还没有成员账号,请先在 Mibu 桌面端登录一次。")
+            # An unbound sender may be redeeming a one-time bind code they got in-app.
+            redeemed = _redeem_bind_code(db, bot.workspace_id, sender_open_id, text) if sender_open_id else None
+            if redeemed is not None:
+                send_text(bot, chat_id, f"绑定成功,你好 {redeemed.username}!之后直接对我说话即可。")
+            else:
+                send_text(
+                    bot,
+                    chat_id,
+                    "你还没有绑定 Mibu 账号,无法使用本机器人。请在 Mibu『设置 → 飞书机器人』生成绑定码,"
+                    "然后把绑定码直接发给我完成绑定。",
+                )
             return
         session = get_or_create_external_session(
             db,
@@ -198,11 +222,55 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str) -> No
                 logger.exception("feishu reply failed bot=%s chat=%s", bot_id, chat_id)
 
 
-def _acting_user(db: Session, workspace_id: str) -> User | None:
-    member = db.scalar(
-        select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id).order_by(WorkspaceMember.created_at)
-    )
-    return db.get(User, member.user_id) if member else None
+def _is_member(db: Session, workspace_id: str, user_id: str) -> bool:
+    return db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id}) is not None
+
+
+def _resolve_sender(db: Session, workspace_id: str, open_id: str) -> User | None:
+    """The Mibu account bound to this Feishu sender — only if still a workspace member."""
+    binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "open_id": open_id})
+    if binding is None or not _is_member(db, workspace_id, binding.user_id):
+        return None
+    return db.get(User, binding.user_id)
+
+
+def _redeem_bind_code(db: Session, workspace_id: str, open_id: str, text: str) -> User | None:
+    """If `text` is a live bind code for this workspace, bind open_id → its issuer and consume it."""
+    code = (text or "").strip().upper()
+    if not (4 <= len(code) <= 16):
+        return None
+    row = db.get(FeishuBindCode, {"workspace_id": workspace_id, "code": code})
+    if row is None or row.expires_at < now() or not _is_member(db, workspace_id, row.user_id):
+        return None
+    db.merge(FeishuBinding(workspace_id=workspace_id, open_id=open_id, user_id=row.user_id))
+    db.delete(row)
+    db.commit()
+    return db.get(User, row.user_id)
+
+
+def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, datetime]:
+    """Member self-issues a one-time code (10-min TTL) to redeem from Feishu."""
+    code = secrets.token_hex(3).upper()  # 6 hex chars
+    expires = now() + timedelta(minutes=10)
+    db.merge(FeishuBindCode(workspace_id=workspace_id, code=code, user_id=user_id, expires_at=expires))
+    db.commit()
+    return code, expires
+
+
+def list_bindings(db: Session, workspace_id: str) -> list[tuple[str, User]]:
+    rows = db.execute(
+        select(FeishuBinding.open_id, User)
+        .join(User, User.id == FeishuBinding.user_id)
+        .where(FeishuBinding.workspace_id == workspace_id)
+    ).all()
+    return [(open_id, user) for open_id, user in rows]
+
+
+def remove_binding(db: Session, workspace_id: str, open_id: str) -> None:
+    binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "open_id": open_id})
+    if binding is not None:
+        db.delete(binding)
+        db.commit()
 
 
 # --- connection lifecycle (one child process per bot) ------------------------
