@@ -11,6 +11,7 @@ import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/feature
 import { AudioElement } from "@/features/editor/AudioElement";
 import { MonitorElement } from "@/features/editor/MonitorElement";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
+import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/WebAudioMixer";
 import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
 import { Scopes } from "@/features/editor/Scopes";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
@@ -216,11 +217,35 @@ export function Monitor({
         l.asset.kind === "image" ||
         (l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready",
     );
+  // All audio-bearing clips active now (base video-track clip + audio tracks), fed to the
+  // WebAudio mixer while the compositor owns playback. The mixer re-filters by playhead.
+  const audioSources = React.useMemo<AudioSourceSpec[]>(() => {
+    const list: AudioSourceSpec[] = [];
+    const baseTrackMuted = Boolean(videoTracks[videoTracks.length - 1]?.muted);
+    if (activeClip?.asset_id && !isImage && activeAsset?.kind === "video") {
+      list.push({
+        key: activeClip.id, assetId: activeClip.asset_id, srcIn: activeClip.src_in, srcOut: activeClip.src_out,
+        timelineStart: activeClip.timeline_start, speed: activeClip.speed || 1, gain: activeClip.gain ?? 1,
+        muted: Boolean(activeClip.muted), trackMuted: baseTrackMuted,
+      });
+    }
+    for (const { clip, trackMuted } of activeAudioClips) {
+      if (!clip.asset_id) continue;
+      list.push({
+        key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
+        timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
+        muted: Boolean(clip.muted), trackMuted,
+      });
+    }
+    return list;
+  }, [activeClip, activeAsset, isImage, activeAudioClips, videoTracks]);
 
   // Playback clock. Interval-based (not rAF) so it keeps running when the
   // window is occluded or backgrounded — audio keeps playing there too.
+  // While the compositor is active the WebAudio mixer's AudioContext is the master
+  // clock instead, so this one stands down to avoid two clocks fighting.
   React.useEffect(() => {
-    if (!playing) return;
+    if (!playing || compositorActive) return;
     let last = performance.now();
     const interval = window.setInterval(() => {
       const now = performance.now();
@@ -240,7 +265,7 @@ export function Monitor({
       state.setPlayhead(next);
     }, 40);
     return () => window.clearInterval(interval);
-  }, [playing, totalDuration]);
+  }, [playing, totalDuration, compositorActive]);
 
   // Keep the video element in lockstep with the clock.
   React.useEffect(() => {
@@ -313,19 +338,24 @@ export function Monitor({
 
   return (
     <div className="monitor-stack">
-      {/* One <audio> per active audio-track clip so all audio tracks play together. */}
-      {activeAudioClips.map(({ clip, trackMuted }) => (
-        <AudioElement
-          key={clip.id}
-          clip={clip}
-          playing={playing}
-          playhead={playhead}
-          playbackRate={playbackRate}
-          volume={volume}
-          masterMuted={masterMuted}
-          trackMuted={trackMuted}
-        />
-      ))}
+      {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
+          compositor is active; otherwise one <audio> per active audio-track clip. */}
+      {compositorActive ? (
+        <WebAudioMixer sources={audioSources} totalDuration={totalDuration} />
+      ) : (
+        activeAudioClips.map(({ clip, trackMuted }) => (
+          <AudioElement
+            key={clip.id}
+            clip={clip}
+            playing={playing}
+            playhead={playhead}
+            playbackRate={playbackRate}
+            volume={volume}
+            masterMuted={masterMuted}
+            trackMuted={trackMuted}
+          />
+        ))
+      )}
       {/* 曲线预览滤镜:逐通道 feComponentTransfer 查表,cssFilter 里以 url(#id) 引用。 */}
       {curveTables && (
         <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
@@ -361,7 +391,7 @@ export function Monitor({
               ...fitStyle,
               ...clipTransformStyle,
             }}
-            muted={false}
+            muted={compositorActive}
             playsInline
             preload="auto"
           />
