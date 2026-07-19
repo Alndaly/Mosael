@@ -206,6 +206,69 @@ def test_branching_code_and_template_nodes() -> None:
         assert skipped == ["no"]
 
 
+def test_loop_foreach_iterates_body_and_feeds_downstream() -> None:
+    """foreach 循环:对列表逐项跑内嵌子图(用 {{loop.item}}/{{loop.index}}),
+    结果汇总成列表并可被下游节点消费。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {
+        "nodes": [{"id": "fmt", "type": "template", "config": {"template": "第{{loop.index}}项:{{loop.item}}"}}],
+        "edges": [],
+    }
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"names": ["甲", "乙", "丙"]}}},
+            {"id": "loop", "type": "loop_foreach", "config": {"items": "{{start.names}}", "body": body, "output": "{{fmt.text}}"}},
+            {"id": "join", "type": "code", "config": {"code": "output = ' | '.join(inputs['items'])", "input": {"items": "{{loop.results}}"}}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "loop"},
+            {"id": "e2", "source": "loop", "target": "join"},
+        ],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "循环流", "graph": graph})
+    assert workflow.status_code == 200, workflow.text
+
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+
+    context = job["result"]["context"]
+    assert context["loop"]["count"] == 3
+    # The join node proves the actual per-iteration outputs were collected in order and consumable.
+    assert context["join"]["output"] == "第0项:甲 | 第1项:乙 | 第2项:丙"
+
+
+def test_loop_foreach_rejects_start_in_body() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {"nodes": [{"id": "s", "type": "start", "config": {}}], "edges": []}
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "loop", "type": "loop_foreach", "config": {"items": "{{start.x}}", "body": body}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "loop"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "坏循环", "graph": graph})
+    assert workflow.status_code == 200, workflow.text  # outer graph is valid; body checked at run time
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {"x": ["a"]}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "failed", job
+
+
 def test_json_extract_node() -> None:
     from app.domain.workflows.engine import _handle_json_extract
 

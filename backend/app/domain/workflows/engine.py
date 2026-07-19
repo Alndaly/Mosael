@@ -25,7 +25,28 @@ from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Transcript, Workflow
 from app.domain.jobs import create_job
 from app.domain.notifications import notify
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError, interpolate, topo_order, validate_graph
+from app.domain.workflows import (
+    NODE_TYPES,
+    WorkflowDomainError,
+    interpolate,
+    topo_order,
+    validate_body_graph,
+    validate_graph,
+)
+
+# Loop nodes carry config that references the loop scope / body nodes ({{loop.*}}, {{body_node.x}}),
+# which must NOT be resolved at the outer scope — they're interpolated per-iteration inside the
+# loop handler / run_subgraph. LOOP_RAW_KEYS are the config fields kept verbatim for that reason.
+LOOP_TYPES = frozenset({"loop_foreach"})
+LOOP_RAW_KEYS = ("body", "output")
+
+
+def _interpolate_loop_config(config: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    """Interpolate a loop node's config against `context` but leave its body/output raw."""
+    raw = {key: config.pop(key, None) for key in LOOP_RAW_KEYS if key in config}
+    config = interpolate(config, context)
+    config.update(raw)
+    return config
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +180,10 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         with lock:
             snapshot = dict(context)
         config = _apply_data_edges(nid, dict(node.get("config") or {}), edges, snapshot)
-        config = interpolate(config, snapshot)
+        if ntype in LOOP_TYPES:
+            config = _interpolate_loop_config(config, snapshot)
+        else:
+            config = interpolate(config, snapshot)
         if ntype == "start":
             merged = dict(config.get("params") or {})
             merged.update(params or {})
@@ -638,6 +662,83 @@ def _wait_for_job(job_id: str) -> Job:
     raise WorkflowDomainError("子任务超时")
 
 
+def run_subgraph(body: dict[str, Any], base_context: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
+    """Run a nested loop-body sub-graph synchronously (topo order) and return its context.
+
+    Reuses the same handlers, data-edge binding, {{var}} interpolation and condition-branch
+    semantics as the main engine, minus the job/TaskEvent/parallelism machinery. `base_context`
+    seeds the loop scope (e.g. {"loop": {"item": ..., "index": ...}}); body nodes reference it as
+    {{loop.item}} / {{loop.index}} and each other as {{node_id.output}}.
+    """
+    errors = validate_body_graph(body)
+    if errors:
+        raise WorkflowDomainError("；".join(errors))
+    nodes = list(body.get("nodes") or [])
+    edges = list(body.get("edges") or [])
+    nodes_by_id = {str(n["id"]): n for n in nodes}
+    node_types = {nid: str(n.get("type")) for nid, n in nodes_by_id.items()}
+    incoming: dict[str, list[dict[str, Any]]] = {nid: [] for nid in nodes_by_id}
+    for edge in edges:
+        source, target = str(edge.get("source")), str(edge.get("target"))
+        if source in nodes_by_id and target in nodes_by_id:
+            incoming[target].append(edge)
+
+    context: dict[str, Any] = dict(base_context)
+    executed: set[str] = set()
+
+    def incoming_active(nid: str) -> bool:
+        node_edges = incoming.get(nid, [])
+        if not node_edges:
+            return True  # a body root (no incoming) is an entry point → always runs
+        for edge in node_edges:
+            source = str(edge.get("source"))
+            if source not in executed:
+                continue
+            if node_types.get(source) == "condition":
+                wanted = str(edge.get("source_handle") or "true")
+                if wanted != ("true" if context.get(source, {}).get("result") else "false"):
+                    continue
+            return True
+        return False
+
+    for node in topo_order(body):
+        nid = str(node["id"])
+        ntype = node_types[nid]
+        if not incoming_active(nid):
+            continue  # unreached branch — skip (Dify semantics)
+        config = _apply_data_edges(nid, dict(node.get("config") or {}), edges, context)
+        if ntype in LOOP_TYPES:
+            config = _interpolate_loop_config(config, context)
+        else:
+            config = interpolate(config, context)
+        handler = _HANDLERS.get(ntype)
+        if handler is None:
+            raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
+        with SessionLocal() as sub_db:
+            wf = sub_db.get(Workflow, workflow_id)
+            context[nid] = handler(sub_db, wf, config)
+        executed.add(nid)
+    return context
+
+
+def _handle_loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    items = config.get("items")
+    if isinstance(items, str):
+        items = [line.strip() for line in items.splitlines() if line.strip()]
+    if not isinstance(items, list):
+        raise WorkflowDomainError("循环·遍历的 items 必须是列表(或多行文本)")
+    body = config.get("body") or {"nodes": [], "edges": []}
+    output_tpl = config.get("output", "")
+    results: list[Any] = []
+    for index, item in enumerate(items):
+        ctx = run_subgraph(body, {"loop": {"item": item, "index": index}}, workflow_id=workflow.id)
+        if output_tpl:
+            results.append(interpolate(output_tpl, ctx))
+        else:
+            results.append({nid: out for nid, out in ctx.items() if nid != "loop"})
+    return {"results": results, "count": len(results)}
+
+
 _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any]]] = {
     "start": lambda db, workflow, config: dict(config.get("params") or {}),
     "llm": _handle_llm,
@@ -657,4 +758,5 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "synthesize_speech": _handle_synthesize,
     "notify": _handle_notify,
     "translate": _handle_translate,
+    "loop_foreach": _handle_loop_foreach,
 }

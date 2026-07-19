@@ -37,6 +37,7 @@ import {
   Globe,
   History,
   Languages,
+  Repeat,
   Link2,
   Loader2,
   Mic,
@@ -120,6 +121,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   synthesize_speech: <AudioLines size={13} />,
   notify: <Bell size={13} />,
   translate: <Languages size={13} />,
+  loop_foreach: <Repeat size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {
@@ -1585,6 +1587,16 @@ function NodeInspector({
         {specs
           .filter(([key]) => !(node.type === "llm" && key === "preset"))
           .map(([key, spec]) => {
+          // 循环体是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
+          if (spec?.type === "graph") {
+            const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
+            return (
+              <div className="wf-field" key={key}>
+                <label>{t("wfLoopBody")}</label>
+                <div className="wf-body-summary">{t("wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
+              </div>
+            );
+          }
           const value = config[key];
           const isObject = spec?.type === "object";
           const options = spec?.options

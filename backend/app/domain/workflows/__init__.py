@@ -213,13 +213,34 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["text"],
     },
+    "loop_foreach": {
+        "label": "循环·遍历",
+        "description": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 引用当前元素与序号。",
+        "config": {
+            "items": {
+                "type": "template",
+                "required": True,
+                "description": "要遍历的列表,支持 {{变量}}(如 {{split_1.results}});也接受多行文本(按行拆分)",
+            },
+            "body": {"type": "graph", "description": "循环体子流程(在节点内编辑;子流程节点用 {{loop.item}}/{{loop.index}})"},
+            "output": {
+                "type": "template",
+                "description": "每次迭代的输出,引用子流程节点输出(如 {{translate_1.text}});留空则输出整份子上下文",
+            },
+        },
+        "outputs": ["results", "count"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
 
-def validate_graph(graph: dict[str, Any]) -> list[str]:
-    """结构校验:返回错误列表(空表 = 合法)。"""
+def validate_graph(graph: dict[str, Any], *, require_start: bool = True) -> list[str]:
+    """结构校验:返回错误列表(空表 = 合法)。
+
+    require_start=False 用于循环体子图:子图没有 start 节点(执行时由循环上下文喂入
+    {{loop.item}}),无入边的节点即为入口;若子图里出现 start 则报错。
+    """
     errors: list[str] = []
     nodes = graph.get("nodes")
     edges = graph.get("edges")
@@ -254,8 +275,11 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
                 value = (node.get("config") or {}).get(key)
                 if value in (None, "") and (node_id, key) not in data_bound:
                     errors.append(f"节点 {node_id} 缺少必填配置 {key}")
-    if start_count != 1:
-        errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
+    if require_start:
+        if start_count != 1:
+            errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
+    elif start_count > 0:
+        errors.append("循环体子图不能包含开始节点")
 
     node_types = {str(node.get("id", "")): str(node.get("type", "")) for node in nodes}
     adjacency: dict[str, list[str]] = {}
@@ -286,6 +310,14 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
     if seen_ids and visited != len(seen_ids):
         errors.append("工作流包含环路,必须是有向无环图")
     return errors
+
+
+def validate_body_graph(body: dict[str, Any]) -> list[str]:
+    """循环体子图校验:必须非空、无 start 节点、其余同 validate_graph。"""
+    nodes = body.get("nodes") if isinstance(body, dict) else None
+    if not isinstance(nodes, list) or not nodes:
+        return ["循环体不能为空,至少要有一个节点"]
+    return validate_graph(body, require_start=False)
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:

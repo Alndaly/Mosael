@@ -7228,6 +7228,17 @@
   gap: 4px;
 }
 
+/* Loop body (nested sub-graph) read-only summary — sub-canvas editor lands in a later slice. */
+.wf-body-summary {
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
 /* Dify 式字段标签:正常大小写、不喊叫(此前 uppercase 把 PROFILE_ID 喊得很技术)。 */
 .wf-field > span {
   display: flex;
