@@ -1,6 +1,8 @@
 import React from "react";
-import { Check, ChevronRight, CircleAlert, Loader2, Wrench } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Check, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "lucide-react";
 
+import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -29,6 +31,61 @@ function summarize(args: unknown): string | null {
   return null;
 }
 
+/** 递归收集 args/result 里的 asset_id(键名含 asset_id/assetId),给媒体预览卡用。 */
+function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectAssetIds(item, out);
+  } else if (value && typeof value === "object") {
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (/asset_?id/i.test(key) && typeof val === "string" && val.trim()) out.add(val.trim());
+      else collectAssetIds(val, out);
+    }
+  }
+  return out;
+}
+
+/** 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。 */
+function MediaPreview({ assetId }: { assetId: string }) {
+  const t = useI18n();
+  const asset = useQuery({
+    queryKey: ["agent-asset", assetId],
+    queryFn: () => api<Asset>(`/api/assets/${assetId}`),
+    staleTime: 60_000,
+    retry: false,
+  });
+  if (asset.isLoading) {
+    return (
+      <div className="agent-media loading">
+        <Loader2 size={13} className="spin" />
+      </div>
+    );
+  }
+  if (asset.isError || !asset.data) {
+    return (
+      <div className="agent-media missing">
+        <FileWarning size={13} /> {t("agentMediaMissing")}
+      </div>
+    );
+  }
+  const src = assetFileUrl(asset.data.id);
+  return (
+    <figure className="agent-media">
+      {asset.data.kind === "image" ? (
+        <img src={src} alt={asset.data.name} loading="lazy" />
+      ) : asset.data.kind === "video" ? (
+        <video src={src} controls preload="metadata" />
+      ) : asset.data.kind === "audio" ? (
+        <audio src={src} controls preload="metadata" />
+      ) : (
+        <div className="agent-media missing">
+          <FileWarning size={13} /> {asset.data.name}
+        </div>
+      )}
+      <figcaption>{asset.data.name}</figcaption>
+    </figure>
+  );
+}
+
 /** 把 args/result 渲染成可读文本:字符串原样,其余美化成 JSON。 */
 function format(value: unknown): string {
   if (value == null) return "";
@@ -48,6 +105,12 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   const argText = format(tool.args);
   const resultText = format(tool.result);
   const hasBody = Boolean(argText || resultText);
+  // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
+  // playable/viewable cards so the agent's media "returns" are visible in chat, not just text.
+  const assetIds = React.useMemo(
+    () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args, collectAssetIds(tool.result))]),
+    [tool.args, tool.result, tool.status],
+  );
 
   return (
     <div className={`agent-tool ${tool.status}`}>
@@ -89,6 +152,13 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               <pre>{resultText}</pre>
             </div>
           )}
+        </div>
+      )}
+      {assetIds.length > 0 && (
+        <div className="agent-media-grid">
+          {assetIds.map((id) => (
+            <MediaPreview key={id} assetId={id} />
+          ))}
         </div>
       )}
     </div>
