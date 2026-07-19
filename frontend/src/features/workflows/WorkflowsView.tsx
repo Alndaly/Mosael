@@ -1000,6 +1000,7 @@ function WorkflowEditor({
               )}
             </PopoverContent>
           </Popover>
+          <div className="wf-toolbar-sep" />
           <span className="wf-save-status" aria-live="polite">
             {save.isPending ? (
               <>
@@ -1021,6 +1022,7 @@ function WorkflowEditor({
           >
             <Play size={13} /> {t("wfRun")}
           </Button>
+          <div className="wf-toolbar-sep" />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -1031,7 +1033,6 @@ function WorkflowEditor({
           >
             <History size={14} />
           </Button>
-          <div className="wf-toolbar-sep" />
           <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>

@@ -6635,11 +6635,12 @@
   font-size: 12px;
 }
 
-/* 破坏性删除按钮与操作组之间的分隔,视觉上分清"操作"和"删除"。 */
+/* Group divider: separates the toolbar's logical clusters (edit · assist · run · meta)
+   so related controls read as a set. A touch of horizontal breathing room per group. */
 .wf-toolbar-sep {
   width: 1px;
   height: 18px;
-  margin: 0 2px;
+  margin: 0 4px;
   background: var(--border);
 }
 
