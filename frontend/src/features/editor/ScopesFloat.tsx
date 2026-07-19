@@ -39,10 +39,20 @@ export function ScopesFloat({
   const clamp = React.useCallback((x: number, y: number) => {
     const w = 268;
     return {
-      x: Math.min(Math.max(8, x), window.innerWidth - w - 8),
-      y: Math.min(Math.max(8, y), window.innerHeight - 80),
+      x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - w - 8)),
+      y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - 80)),
     };
   }, []);
+
+  // Keep the window on-screen: clamp the stored position on mount and whenever the viewport
+  // shrinks, so a position saved on a wider window can't leave the panel (and its drag handle)
+  // stranded off-screen.
+  React.useEffect(() => {
+    const reclamp = () => setPos((p) => clamp(p.x, p.y));
+    reclamp();
+    window.addEventListener("resize", reclamp);
+    return () => window.removeEventListener("resize", reclamp);
+  }, [clamp]);
 
   const onPointerDown = (event: React.PointerEvent) => {
     dragRef.current = { dx: event.clientX - pos.x, dy: event.clientY - pos.y };
