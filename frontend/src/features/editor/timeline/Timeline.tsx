@@ -96,6 +96,7 @@ export function Timeline({
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const hscrollRef = React.useRef<HTMLDivElement | null>(null);
+  const labelsRef = React.useRef<HTMLDivElement | null>(null);
   const peaksCache = React.useRef<Map<string, number[]>>(new Map());
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
   const tool = useEditorStore((state) => state.tool);
@@ -581,7 +582,7 @@ export function Timeline({
         </div>
       </div>
       <div className="tl-body">
-        <div className="tl-labels">
+        <div className="tl-labels" ref={labelsRef}>
           <div className="tl-labels-spacer" style={{ height: RULER_HEIGHT }} />
           {tracks.map((track) => (
             <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
@@ -638,7 +639,14 @@ export function Timeline({
             </div>
           ))}
         </div>
-        <div className="tl-hscroll" ref={hscrollRef}>
+        <div
+          className="tl-hscroll"
+          ref={hscrollRef}
+          onScroll={(event) => {
+            // Mirror vertical scroll to the labels column so track rows stay aligned.
+            if (labelsRef.current) labelsRef.current.scrollTop = event.currentTarget.scrollTop;
+          }}
+        >
           <div className="tl-canvas" ref={canvasRef} style={{ width: contentWidth }}>
             <div
               className="tl-ruler"

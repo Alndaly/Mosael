@@ -2781,16 +2781,23 @@
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   min-height: 0;
-  overflow-y: auto;
+  /* Vertical scroll lives in .tl-hscroll so the ruler can stay sticky at the top;
+     .tl-labels mirrors its scrollTop (JS) to keep the track rows aligned. */
+  overflow: hidden;
 }
 
 .tl-labels {
   border-right: 1px solid var(--border);
   background: var(--panel);
+  overflow: hidden;
 }
 
 .tl-labels-spacer {
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--panel);
 }
 
 .tl-label {
@@ -2954,8 +2961,7 @@
 
 .tl-hscroll {
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
 }
 
 .tl-canvas {
@@ -2964,7 +2970,9 @@
 }
 
 .tl-ruler {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   border-bottom: 1px solid var(--border);
   background: var(--ruler-bg);
   cursor: ew-resize;
