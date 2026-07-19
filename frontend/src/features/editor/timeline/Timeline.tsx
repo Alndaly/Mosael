@@ -90,7 +90,10 @@ export function Timeline({
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
-  const playhead = useEditorStore((state) => state.playhead);
+  // NOTE: Timeline deliberately does NOT subscribe to playhead — during playback it ticks
+  // ~25×/s and would re-render every clip + waveform (the "播放卡顿" on dense segments).
+  // The moving playhead line and the toolbar readout are isolated in tiny subscriber
+  // components below; handlers that need the current value read it via getState().
   const pxPerSecond = useEditorStore((state) => state.pxPerSecond);
   const dragDraft = useEditorStore((state) => state.dragDraft);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
@@ -162,7 +165,7 @@ export function Timeline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waveformAssetIds, ...waveformQueries.map((query) => query.data)]);
 
-  const duration = Math.max(sequenceDuration(allClips), playhead) + 10;
+  const duration = sequenceDuration(allClips) + 10;
   const contentWidth = timeToPx(duration, pxPerSecond) + 120;
 
   // Zoom out can't go below "the whole timeline fits the viewport" — past that is dead space.
@@ -259,7 +262,7 @@ export function Timeline({
     if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
     const startX = event.clientX;
     const origin = { ...clip };
-    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, playhead) : [];
+    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, useEditorStore.getState().playhead) : [];
 
     // Listen on window, NOT the clip element: a cross-track drag hides the clip in its
     // source lane (it unmounts), which would sever element-bound listeners mid-drag and
@@ -315,7 +318,7 @@ export function Timeline({
     const origin = { ...clip };
     const asset = clip.asset_id ? assetById.get(clip.asset_id) : undefined;
     const assetDuration = typeof asset?.media_info.duration === "number" ? asset.media_info.duration : null;
-    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, playhead) : [];
+    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, useEditorStore.getState().playhead) : [];
     const target = event.currentTarget as HTMLElement;
     capturePointer(target, event.pointerId);
 
@@ -353,7 +356,7 @@ export function Timeline({
       return;
     }
     let start = timeAtPointer(event);
-    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, playhead), pxPerSecond).time;
+    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
     setDropGhost({ trackId: track.id, start, duration: draggingAsset.duration });
   };
 
@@ -365,7 +368,7 @@ export function Timeline({
     if (!asset || !trackAcceptsAsset(track, asset) || track.locked) return;
     const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
     let start = timeAtPointer(event);
-    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, playhead), pxPerSecond).time;
+    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
     onInsertClip({
       trackId: track.id,
       assetId: asset.id,
@@ -426,10 +429,7 @@ export function Timeline({
               <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
             </button>
           </div>
-          <span className="timecode tl-readout">
-            {formatTimecode(playhead)}
-            <em> / {formatTimecode(sequenceDuration(allClips))}</em>
-          </span>
+          <PlayheadReadout total={sequenceDuration(allClips)} />
           <span className="tl-clip-count">
             {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
             {Math.round(sequence.fps)}fps
@@ -823,13 +823,34 @@ export function Timeline({
                 }}
               />
             )}
-            <div className="tl-playhead" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+            <TimelinePlayhead pxPerSecond={pxPerSecond}>
               <div className="tl-playhead-cap" />
-            </div>
+            </TimelinePlayhead>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Isolated playhead subscribers: only these re-render on the ~25×/s playhead tick,
+ *  not the whole Timeline (see the note at the top of Timeline). */
+function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; children: React.ReactNode }) {
+  const playhead = useEditorStore((state) => state.playhead);
+  return (
+    <div className="tl-playhead" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+      {children}
+    </div>
+  );
+}
+
+function PlayheadReadout({ total }: { total: number }) {
+  const playhead = useEditorStore((state) => state.playhead);
+  return (
+    <span className="timecode tl-readout">
+      {formatTimecode(playhead)}
+      <em> / {formatTimecode(total)}</em>
+    </span>
   );
 }
 
