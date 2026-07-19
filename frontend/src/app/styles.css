@@ -1811,14 +1811,15 @@
 .team-perms {
   display: grid;
   gap: 1px;
-  width: 258px;
+  width: 270px;
+  padding: 7px;
 }
 .team-perms-head {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 5px;
-  padding: 0 6px 7px;
+  padding: 1px 6px 8px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   font-weight: 600;
