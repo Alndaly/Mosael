@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { KeyRound, Link2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
+import { KeyRound, Link2, Loader2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -60,8 +60,10 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
   const beginScan = useMutation({
     mutationFn: () => api<Onboarding>(`/api/feishu/onboarding/${workspace.id}`, { method: "POST" }),
     onSuccess: (state) => {
-      setScanning(true);
       if (state.qr_url) void QRCode.toDataURL(state.qr_url, { width: 180, margin: 1 }).then(setQrDataUrl);
+    },
+    onError: () => {
+      setScanning(false); // request failed → close the just-opened dialog
     },
   });
 
@@ -123,7 +125,16 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       actions={
         <>
           {/* 两种绑定方式是平级选择,同一视觉重量,不做主次 */}
-          <Button size="sm" variant="outline" onClick={() => beginScan.mutate()} disabled={beginScan.isPending || scanning}>
+          {/* 先弹窗再发请求:点击即开弹层(展示加载态),二维码随请求返回再填,避免"卡一下才弹"。 */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setScanning(true);
+              beginScan.mutate();
+            }}
+            disabled={scanning}
+          >
             <QrCode size={13} /> {t("feishuScanCreate")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setManualOpen(true)}>
@@ -201,11 +212,23 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         title={t("feishuScanCreate")}
       >
         <div className="feishu-qr">
-          {qrDataUrl ? <img src={qrDataUrl} alt="Feishu QR" /> : null}
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="Feishu QR" />
+          ) : (
+            <div className="feishu-qr-loading" aria-hidden>
+              <Loader2 size={20} className="spin" />
+            </div>
+          )}
           <div>
             <p>{t("feishuScanHint")}</p>
             <p className="feishu-qr-status">
-              {onboarding.data?.phase === "error" ? onboarding.data.error : t("feishuWaitingScan")}
+              {beginScan.isError
+                ? String((beginScan.error as Error).message)
+                : onboarding.data?.phase === "error"
+                  ? onboarding.data.error
+                  : qrDataUrl
+                    ? t("feishuWaitingScan")
+                    : t("feishuQrLoading")}
               {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
             </p>
           </div>

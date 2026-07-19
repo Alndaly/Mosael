@@ -1328,6 +1328,20 @@
   padding: 4px;
 }
 
+/* Placeholder while the QR renders (dialog opens instantly, before the request returns) —
+   same footprint as the 180px QR so the layout doesn't jump when it swaps in. */
+.feishu-qr-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 188px;
+  height: 188px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--panel-inset);
+  color: var(--muted-foreground);
+}
+
 .feishu-qr p {
   margin: 0 0 4px;
   font-size: 12px;
@@ -2775,12 +2789,40 @@
 
 .inspector-body {
   display: grid;
+  /* Pin the column to the panel width — without minmax(0,1fr) the single grid column grows to
+     its widest child (e.g. a long LUT name in the select), blowing the whole panel out. */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 6px;
   padding: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+}
+
+.lut-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.lut-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lut-select {
+  flex: 1;
+  min-width: 0;
+}
+.lut-row .grade-icon-btn {
+  flex-shrink: 0;
+}
+.lut-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
 }
 
 .inspector dl {
