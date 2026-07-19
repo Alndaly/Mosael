@@ -4596,6 +4596,21 @@ export interface components {
              * @default
              */
             message: string;
+            /**
+             * Needs Source
+             * @default false
+             */
+            needs_source: boolean;
+            /**
+             * Source Ready
+             * @default false
+             */
+            source_ready: boolean;
+            /**
+             * Source Dir
+             * @default
+             */
+            source_dir: string;
         };
         /** UserOut */
         UserOut: {

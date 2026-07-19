@@ -1659,6 +1659,24 @@
   font-size: 11.5px;
 }
 
+.asr-model-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.asr-model-source.ok {
+  color: var(--success, #16a34a);
+}
+.asr-model-source code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
 .asr-model-action {
   flex-shrink: 0;
 }

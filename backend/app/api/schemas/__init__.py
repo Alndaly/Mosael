@@ -465,6 +465,11 @@ class TtsEngineOut(BaseModel):
     speed_bps: float = 0.0
     eta_seconds: float | None = None
     message: str = ""
+    # Fish Speech only: the source checkout is separate from the weights, so surface it
+    # on its own (weights can be "installed" while the source is still missing).
+    needs_source: bool = False
+    source_ready: bool = False
+    source_dir: str = ""
 
 
 class SynthesizeRequest(BaseModel):

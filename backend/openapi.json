@@ -13572,6 +13572,21 @@
             "type": "string",
             "title": "Message",
             "default": ""
+          },
+          "needs_source": {
+            "type": "boolean",
+            "title": "Needs Source",
+            "default": false
+          },
+          "source_ready": {
+            "type": "boolean",
+            "title": "Source Ready",
+            "default": false
+          },
+          "source_dir": {
+            "type": "string",
+            "title": "Source Dir",
+            "default": ""
           }
         },
         "type": "object",

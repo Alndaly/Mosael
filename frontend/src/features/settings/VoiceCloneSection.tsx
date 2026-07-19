@@ -225,6 +225,19 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             <span className="asr-model-size">{fmtBytes(model.expected_bytes)}</span>
           </div>
           <small className="asr-model-detail">{model.detail}</small>
+          {model.needs_source && (
+            <small className={model.source_ready ? "asr-model-source ok" : "asr-model-source"}>
+              {model.source_ready ? (
+                <>
+                  <CheckCircle2 size={11} /> {t("voiceCloneSourceReady")} <code>{model.source_dir}</code>
+                </>
+              ) : (
+                <>
+                  <CircleAlert size={11} /> {t("voiceCloneSourceMissing")}
+                </>
+              )}
+            </small>
+          )}
         </div>
         <div className="asr-model-action">
           {model.status === "installed" && (

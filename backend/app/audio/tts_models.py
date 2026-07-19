@@ -227,9 +227,21 @@ class _Store:
 _store = _Store()
 
 
+def _source_fields(engine: TtsEngine) -> dict[str, Any]:
+    """Fish Speech needs a source checkout separate from its weights — report that piece on
+    its own so the card can show it. f5-tts needs no source (pip package)."""
+    if engine.id != "fish-speech":
+        return {"needs_source": False, "source_ready": False, "source_dir": ""}
+    from app.domain import tts_config
+
+    repo = tts_config.get().resolved_fish_repo
+    return {"needs_source": True, "source_ready": bool(repo), "source_dir": repo}
+
+
 def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     live = _store.get(engine.id)
-    base = {"id": engine.id, "label": engine.label, "detail": engine.detail, "expected_bytes": engine.expected_bytes}
+    base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
+            "expected_bytes": engine.expected_bytes, **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         return {**base, "status": "downloading", "downloaded_bytes": live.downloaded,
                 "total_bytes": live.total or engine.expected_bytes, "speed_bps": live.speed,
