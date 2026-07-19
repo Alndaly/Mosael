@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
+import { MonitorElement } from "@/features/editor/MonitorElement";
 import { Scopes } from "@/features/editor/Scopes";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
@@ -107,14 +108,10 @@ export function Monitor({
   );
   const fitStyle: React.CSSProperties = { objectFit: fillMode === "cover" ? "cover" : "contain" };
   const bgVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  // On-canvas direct manipulation: while dragging a handle, `draft` overrides the clip's saved
-  // transform so the media tracks the box live; committed on release via onSetTransform.
+  // On-canvas direct manipulation: while dragging a handle, `draft` overrides the selected clip's
+  // saved transform so the media tracks the box live; committed on release via onSetTransform.
+  // (selectedActive + clipTransformStyle are derived below, after the overlay elements.)
   const [draft, setDraft] = React.useState<Transform | null>(null);
-  React.useEffect(() => setDraft(null), [activeClip?.id]);
-  const activeSelected = Boolean(activeClip && selectedClipIds.includes(activeClip.id));
-  const liveTransform = draft ?? readTransform(activeClip?.transform);
-  // 片段变换(缩放/位移/旋转/透明度)→ CSS,预览里实时呈现。
-  const clipTransformStyle = React.useMemo<React.CSSProperties>(() => transformCss(liveTransform), [liveTransform]);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
@@ -149,36 +146,24 @@ export function Monitor({
   const isImage = activeAsset?.kind === "image";
   const activeAudioClip =
     audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const activeOverlayClip =
-    overlayClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const overlayAsset = activeOverlayClip?.asset_id ? (assetById.get(activeOverlayClip.asset_id) ?? null) : null;
-  const pip = {
-    x: 0.62,
-    y: 0.06,
-    scale: 0.33,
-    ...(((activeOverlayClip?.effects as { pip?: { x?: number; y?: number; scale?: number } })?.pip) ?? {}),
-  };
-  const overlayRef = React.useRef<HTMLVideoElement | null>(null);
-  const loadedOverlayAssetRef = React.useRef<string | null>(null);
-
-  // Overlay video (PiP) kept in lockstep, muted — export mixes only base+audio tracks.
-  React.useEffect(() => {
-    const video = overlayRef.current;
-    if (!video) return;
-    if (!activeOverlayClip || !overlayAsset || overlayAsset.kind === "image") {
-      if (!video.paused) video.pause();
-      return;
-    }
-    if (loadedOverlayAssetRef.current !== overlayAsset.id) {
-      loadedOverlayAssetRef.current = overlayAsset.id;
-      video.src = assetFileUrl(overlayAsset.id);
-    }
-    const desired =
-      activeOverlayClip.src_in + (playhead - activeOverlayClip.timeline_start) * (activeOverlayClip.speed || 1);
-    if (Math.abs(video.currentTime - desired) > 0.18) video.currentTime = desired;
-    if (playing && video.paused) video.play().catch(() => undefined);
-    else if (!playing && !video.paused) video.pause();
-  }, [playhead, playing, activeOverlayClip, overlayAsset]);
+  // Every active clip on an overlay video track (V2+), z-ordered by track — each renders as a
+  // free canvas element (MonitorElement self-syncs). The base V1 clip stays the audio/scopes/blur owner.
+  const activeOverlayClips = React.useMemo(
+    () => overlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
+    [overlayClips, playhead],
+  );
+  // The selected on-screen element (base V1 or any active overlay) gets the transform handles.
+  const selectedActive = React.useMemo(
+    () => [activeClip, ...activeOverlayClips].find((clip) => clip && selectedClipIds.includes(clip.id)) ?? null,
+    [activeClip, activeOverlayClips, selectedClipIds],
+  );
+  React.useEffect(() => setDraft(null), [selectedActive?.id]);
+  const draftFor = (clipId: string | undefined) => (draft && selectedActive?.id === clipId ? draft : null);
+  const clipTransformStyle = React.useMemo<React.CSSProperties>(
+    () => transformCss(draftFor(activeClip?.id) ?? readTransform(activeClip?.transform)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft, selectedActive?.id, activeClip?.id, activeClip?.transform],
+  );
 
   // Playback clock. Interval-based (not rAF) so it keeps running when the
   // window is occluded or backgrounded — audio keeps playing there too.
@@ -355,34 +340,30 @@ export function Monitor({
               <Scopes videoRef={videoRef} filter={cssFilter} />
             </div>
           )}
-          {activeOverlayClip && overlayAsset && (
-            overlayAsset.kind === "image" ? (
-              <img
-                className="monitor-overlay"
-                src={assetFileUrl(overlayAsset.id)}
-                alt=""
-                style={{ left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.scale * 100}%` }}
+          {activeOverlayClips.map((clip) => {
+            const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
+            if (!asset) return null;
+            return (
+              <MonitorElement
+                key={clip.id}
+                clip={clip}
+                asset={asset}
+                playhead={playhead}
+                playing={playing}
+                playbackRate={playbackRate}
+                transformOverride={draftFor(clip.id)}
               />
-            ) : (
-              <video
-                ref={overlayRef}
-                className="monitor-overlay"
-                style={{ left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.scale * 100}%` }}
-                muted
-                playsInline
-                preload="auto"
-              />
-            )
-          )}
-          {activeSelected && onSetTransform && activeClip && (
+            );
+          })}
+          {selectedActive && onSetTransform && (
             <div className="monitor-tf-layer" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
                 frameRef={stageRef}
-                transform={liveTransform}
+                transform={draft ?? readTransform(selectedActive.transform)}
                 onChange={setDraft}
                 onCommit={(next) => {
                   setDraft(null);
-                  onSetTransform(activeClip.id, next);
+                  onSetTransform(selectedActive.id, next);
                 }}
               />
             </div>
