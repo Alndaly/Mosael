@@ -4398,6 +4398,25 @@
   color: var(--destructive) !important;
   background: color-mix(in oklab, var(--destructive) 10%, transparent);
 }
+.tsd-split {
+  position: absolute;
+  right: 22px;
+  top: 3px;
+  border: none;
+  background: none;
+  padding: 2px;
+  color: transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  line-height: 0;
+}
+.tsd-sentence:hover .tsd-split {
+  color: var(--muted-foreground);
+}
+.tsd-split:hover {
+  color: var(--primary) !important;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+}
 .tsd-text {
   margin: 0;
   line-height: 1.9;

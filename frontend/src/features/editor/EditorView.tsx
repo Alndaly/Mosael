@@ -18,6 +18,7 @@ import {
   removeTrack,
   setTrackState,
   splitClip,
+  splitClipAtPoints,
   setClipEffects,
   setClipSpeed,
   setClipTransform,
@@ -353,6 +354,27 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!.id, clipId, srcTime),
     onSuccess: refreshSequences,
   });
+  // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): divide each named clip at
+  // its source-time points. Per-clip try/catch so a clip with no interior cut just no-ops.
+  const splitPointsMutation = useMutation({
+    mutationFn: async (cuts: Array<{ clipId: string; srcTimes: number[] }>) => {
+      let latest: Sequence | null = null;
+      for (const cut of cuts) {
+        if (cut.srcTimes.length === 0) continue;
+        try {
+          latest = await splitClipAtPoints(sequence!.id, cut.clipId, cut.srcTimes);
+        } catch {
+          /* clip had no valid interior split point — skip it */
+        }
+      }
+      return latest;
+    },
+    onSuccess: (updated) => {
+      if (updated) applySequence(updated);
+      else void refreshSequences();
+    },
+    onError: () => void refreshSequences(),
+  });
   const trackStateMutation = useMutation({
     mutationFn: ({ trackId, body }: { trackId: string; body: { muted?: boolean; locked?: boolean } }) =>
       setTrackState(sequence!.id, trackId, body),
@@ -609,6 +631,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               sequence={sequence}
               onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
               onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
+              onSplitPoints={(cuts) => splitPointsMutation.mutate(cuts)}
             />
           ) : (
             <SubtitlePanel

@@ -288,6 +288,13 @@ export function splitClip(sequenceId: string, clipId: string, srcTime: number): 
   });
 }
 
+export function splitClipAtPoints(sequenceId: string, clipId: string, srcTimes: number[]): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split-points`, {
+    method: "POST",
+    body: JSON.stringify({ src_times: srcTimes }),
+  });
+}
+
 export function setTrackState(
   sequenceId: string,
   trackId: string,

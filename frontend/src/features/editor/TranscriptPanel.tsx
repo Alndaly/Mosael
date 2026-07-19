@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, MessageSquareText, Mic, Sparkles, Trash2, X } from "lucide-react";
+import { AudioLines, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
 import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -35,10 +35,13 @@ export function TranscriptPanel({
   sequence,
   onCutSegment,
   onCutRanges,
+  onSplitPoints,
 }: {
   sequence: Sequence;
   onCutSegment: (clipId: string, srcStart: number, srcEnd: number) => void;
   onCutRanges?: (cuts: Array<{ clipId: string; ranges: CutRange[] }>) => void;
+  // Split (not remove) the named clips at these source-time points → 按句切分 / 单句独立 / 切一刀.
+  onSplitPoints?: (cuts: Array<{ clipId: string; srcTimes: number[] }>) => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -322,6 +325,27 @@ export function TranscriptPanel({
     return () => window.removeEventListener("pointerup", onUp);
   }, []);
 
+  // 按句切分:每个片段在其句子起点处切开,每句(含其后停顿)成为独立片段。
+  const splitBySentence = () => {
+    if (!onSplitPoints) return;
+    const byClip = new Map<string, number[]>();
+    for (const sentence of projected) {
+      const list = byClip.get(sentence.clipId) ?? [];
+      list.push(sentence.srcStart);
+      byClip.set(sentence.clipId, list);
+    }
+    const cuts = [...byClip.entries()].map(([clipId, srcTimes]) => ({ clipId, srcTimes }));
+    if (cuts.length) onSplitPoints(cuts);
+  };
+  // 单句独立成片段:在句首、句尾各切一刀,把该句从原片段切出来。
+  const splitSentenceOut = (clipId: string, srcStart: number, srcEnd: number) => {
+    onSplitPoints?.([{ clipId, srcTimes: [srcStart, srcEnd] }]);
+  };
+  // 在播放头当前词处切一刀(单点)。
+  const splitAtPlayhead = () => {
+    if (onSplitPoints && activeSrc) onSplitPoints([{ clipId: activeSrc.clipId, srcTimes: [activeSrc.src] }]);
+  };
+
   if (projected.length === 0) {
     return (
       <div className="ts-empty">
@@ -351,6 +375,22 @@ export function TranscriptPanel({
           <Sparkles size={12} /> {t("fillers")}
           {fillerCount > 0 && <em>{fillerCount}</em>}
         </button>
+        {onSplitPoints && (
+          <>
+            <button type="button" className="ts-tool" title={t("splitBySentenceHint")} onClick={splitBySentence}>
+              <Split size={12} /> {t("splitBySentence")}
+            </button>
+            <button
+              type="button"
+              className="ts-tool"
+              title={t("splitAtWordHint")}
+              onClick={splitAtPlayhead}
+              disabled={!activeSrc}
+            >
+              <Scissors size={12} /> {t("splitAtWord")}
+            </button>
+          </>
+        )}
         {showSilences && silences.length > 0 && (
           <button type="button" className="ts-tool" title={t("removeAllSilences")} onClick={selectAllSilences}>
             {t("selectAllSilences")}
@@ -407,6 +447,17 @@ export function TranscriptPanel({
                   {formatTimecode(sentence.timelineStart)}
                 </button>
               </div>
+              {onSplitPoints && (
+                <button
+                  type="button"
+                  className="tsd-split"
+                  title={t("splitSentenceOutHint")}
+                  aria-label={t("splitSentenceOut")}
+                  onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                >
+                  <SplitSquareVertical size={11} />
+                </button>
+              )}
               <button
                 type="button"
                 className="tsd-drop"
