@@ -3,7 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { LogOut, Pencil, ShieldCheck, SlidersHorizontal, Trash2, UserPlus } from "lucide-react";
+import {
+  Clock,
+  Download,
+  KeyRound,
+  LogOut,
+  Pencil,
+  Send,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  Upload,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -28,6 +42,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+
+/** Per-permission icon for the member-permissions popover (scannability). */
+const PERM_ICONS: Record<string, React.ReactNode> = {
+  upload: <Upload size={13} />,
+  edit: <Pencil size={13} />,
+  delete: <Trash2 size={13} />,
+  export: <Download size={13} />,
+  ai: <Sparkles size={13} />,
+  credentials: <KeyRound size={13} />,
+  schedule: <Clock size={13} />,
+  members: <Users size={13} />,
+  publish: <Send size={13} />,
+};
 
 const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
 const atLeast = (role: string, min: string) => (ROLE_RANK[role] ?? -1) >= ROLE_RANK[min];
@@ -234,7 +261,10 @@ function MemberRow({
               </div>
               {permKeys.map((perm) => (
                 <label className="team-perm-row" key={perm}>
-                  <span>{t(`perm_${perm}` as never) as string}</span>
+                  <span className="team-perm-label">
+                    <span className="team-perm-icon">{PERM_ICONS[perm] ?? <ShieldCheck size={13} />}</span>
+                    {t(`perm_${perm}` as never) as string}
+                  </span>
                   <Switch
                     checked={member.perms[perm] ?? false}
                     onCheckedChange={(next) => {

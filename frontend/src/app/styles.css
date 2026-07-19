@@ -1810,31 +1810,55 @@
 }
 .team-perms {
   display: grid;
-  gap: 8px;
-  width: 236px;
+  gap: 1px;
+  width: 258px;
 }
 .team-perms-head {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 5px;
+  padding: 0 6px 7px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--foreground);
+}
+.team-perms-head svg {
+  color: var(--primary);
 }
 .team-perm-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 5px 6px;
+  border-radius: 6px;
   font-size: 12.5px;
   color: var(--foreground);
   cursor: pointer;
+  transition: background-color 100ms;
+}
+.team-perm-row:hover {
+  background: var(--secondary);
+}
+.team-perm-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.team-perm-icon {
+  display: inline-flex;
+  color: var(--muted-foreground);
 }
 .team-perms-hint {
-  margin: 2px 0 0;
+  margin: 6px 0 0;
+  padding: 7px 6px 0;
+  border-top: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .team-add-form {
   display: grid;
