@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.models import Clip, Project, Sequence, Track, Workspace
+from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
 from app.domain.sequences.history import undo
 from app.domain.sequences.operations import (
+    DetachClipAudio,
     SetClipGain,
     SetClipTransform,
     clean_transform,
+    detach_clip_audio,
     set_clip_gain,
     set_clip_transform,
 )
@@ -62,3 +64,30 @@ def test_set_clip_gain_mute_and_undo() -> None:
         undo(db, seq.id)
         db.refresh(clip)
         assert clip.gain == 0.4 and clip.muted is True  # back to the prior state
+
+
+def test_detach_clip_audio_and_undo() -> None:
+    fresh_client()
+    with SessionLocal() as db:
+        seq, clip = _seq_with_clip(db)
+        asset = Asset(workspace_id=seq.workspace_id, kind="video", name="v", file_key="media/v.mp4")
+        db.add(asset)
+        db.flush()
+        clip.asset_id = asset.id
+        clip.gain = 0.6
+        db.commit()
+
+        detach_clip_audio(db, seq.id, DetachClipAudio(clip_id=clip.id))
+        db.refresh(seq)
+        db.refresh(clip)
+        audio_tracks = [t for t in seq.tracks if t.kind == "audio"]
+        assert len(audio_tracks) == 1  # created since none existed
+        detached = audio_tracks[0].clips[0]
+        assert detached.asset_id == asset.id and detached.gain == 0.6  # inherits the clip's gain
+        assert clip.muted is True  # video clip muted so audio isn't doubled
+
+        undo(db, seq.id)
+        db.refresh(seq)
+        db.refresh(clip)
+        assert [t for t in seq.tracks if t.kind == "audio"] == []  # created track removed
+        assert clip.muted is False  # unmuted

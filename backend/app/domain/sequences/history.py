@@ -31,6 +31,7 @@ UNDOABLE_KINDS = (
     "ripple_delete_clip",
     "set_clip_speed",
     "set_clip_gain",
+    "detach_clip_audio",
     "set_clip_transform",
     "set_sequence_reframe",
     "set_clip_text",
@@ -197,6 +198,14 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         clip = _require_clip_row(db, payload["clip_id"])
         clip.gain = payload["previous"]["gain"]
         clip.muted = payload["previous"]["muted"]
+    elif operation.kind == "detach_clip_audio":
+        _delete_clip_row(db, payload["audio_clip"]["id"])
+        if payload.get("created_track"):
+            created = db.get(Track, payload["created_track"]["id"])
+            if created is not None:
+                db.delete(created)
+        video = _require_clip_row(db, payload["video_clip_id"])
+        video.muted = payload["video_muted_prev"]
     elif operation.kind == "set_clip_transform":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.transform = payload["previous"]
@@ -278,6 +287,17 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip = _require_clip_row(db, payload["clip_id"])
         clip.gain = payload["gain"]
         clip.muted = payload["muted"]
+    elif operation.kind == "detach_clip_audio":
+        created = payload.get("created_track")
+        if created and db.get(Track, created["id"]) is None:
+            db.add(Track(id=created["id"], sequence_id=sequence.id, kind="audio",
+                         name=created["name"], position=created["position"]))
+        ac = payload["audio_clip"]
+        db.add(Clip(id=ac["id"], workspace_id=sequence.workspace_id, sequence_id=sequence.id,
+                    track_id=ac["track_id"], asset_id=ac["asset_id"], timeline_start=ac["timeline_start"],
+                    src_in=ac["src_in"], src_out=ac["src_out"], speed=ac["speed"], gain=ac["gain"]))
+        video = _require_clip_row(db, payload["video_clip_id"])
+        video.muted = True
     elif operation.kind == "set_clip_transform":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.transform = payload["transform"]

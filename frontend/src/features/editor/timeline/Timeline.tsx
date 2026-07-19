@@ -69,6 +69,7 @@ export function Timeline({
   onSplitClip,
   onSplitClipAt,
   onDuplicateClip,
+  onDetachAudio,
   onSetTrackState,
   toolbarExtra,
 }: {
@@ -86,6 +87,7 @@ export function Timeline({
   onSplitClip?: (clipId: string) => void;
   onSplitClipAt?: (clipId: string, srcTime: number) => void;
   onDuplicateClip?: (clipId: string) => void;
+  onDetachAudio?: (clipId: string) => void;
   onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean }) => void;
   toolbarExtra?: React.ReactNode;
 }) {
@@ -788,6 +790,11 @@ export function Timeline({
                       onRippleDelete={onRippleDeleteClip ? () => onRippleDeleteClip(clip.id) : undefined}
                       onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
                       onDuplicate={onDuplicateClip ? () => onDuplicateClip(clip.id) : undefined}
+                      onDetachAudio={
+                        onDetachAudio && track.kind === "video" && clip.asset_id
+                          ? () => onDetachAudio(clip.id)
+                          : undefined
+                      }
                     />
                   );
                 })}

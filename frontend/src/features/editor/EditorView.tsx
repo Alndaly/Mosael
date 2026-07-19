@@ -27,6 +27,7 @@ import {
   splitClip,
   splitClipAtPoints,
   setClipEffects,
+  detachClipAudio,
   setClipGain,
   setClipSpeed,
   setClipTransform,
@@ -387,6 +388,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: ({ clipId, gain, muted }: { clipId: string; gain: number; muted: boolean }) =>
       setClipGain(sequence!.id, clipId, gain, muted),
     onSuccess: (updated) => applySequence(updated),
+  });
+  const detachAudioMutation = useMutation({
+    mutationFn: (clipId: string) => detachClipAudio(sequence!.id, clipId),
+    onSuccess: (updated) => {
+      applySequence(updated);
+      toast.success(t("detachAudioDone"));
+    },
+    onError: (error) => toast.error(String((error as Error).message)),
   });
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
@@ -774,6 +783,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
+          onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
           toolbarExtra={
             <>

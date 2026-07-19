@@ -263,6 +263,10 @@ export function setClipGain(sequenceId: string, clipId: string, gain: number, mu
   });
 }
 
+export function detachClipAudio(sequenceId: string, clipId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/detach-audio`, { method: "POST" });
+}
+
 export function setClipTransform(
   sequenceId: string,
   clipId: string,

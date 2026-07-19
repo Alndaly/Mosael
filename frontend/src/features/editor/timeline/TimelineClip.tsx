@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy, Scissors, Trash2, Waves } from "lucide-react";
+import { AudioLines, Copy, Scissors, Trash2, Waves } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -20,6 +20,7 @@ export function TimelineClip({
   onRippleDelete,
   onSplit,
   onDuplicate,
+  onDetachAudio,
 }: {
   trackKind: string;
   name: string;
@@ -35,6 +36,7 @@ export function TimelineClip({
   onRippleDelete?: () => void;
   onSplit?: () => void;
   onDuplicate?: () => void;
+  onDetachAudio?: () => void;
 }) {
   const t = useI18n();
   const className = [
@@ -94,6 +96,11 @@ export function TimelineClip({
         {onDuplicate && (
           <ContextMenuItem onSelect={onDuplicate}>
             <Copy /> {t("duplicateClip")}
+          </ContextMenuItem>
+        )}
+        {onDetachAudio && (
+          <ContextMenuItem onSelect={onDetachAudio}>
+            <AudioLines /> {t("detachAudio")}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />

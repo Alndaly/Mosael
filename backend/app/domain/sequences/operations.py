@@ -542,6 +542,90 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
     return sequence
 
 
+@dataclass(frozen=True)
+class DetachClipAudio:
+    clip_id: str
+    actor_id: str | None = None
+
+
+def _range_free(track: Track, start: float, end: float) -> bool:
+    for other in track.clips:
+        other_end = other.timeline_start + (other.src_out - other.src_in) / (other.speed or 1)
+        if start < other_end - 1e-6 and other.timeline_start < end - 1e-6:
+            return False
+    return True
+
+
+def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Sequence:
+    """Split a video clip's audio onto an audio track (PR/DaVinci 分离音频): copy the clip's
+    audio to the first free audio track (creating one if needed) and mute the video clip so the
+    audio isn't doubled. The detached audio inherits the clip's speed/gain."""
+    sequence = _require_sequence(db, sequence_id)
+    clip = _require_clip(db, sequence_id, op.clip_id)
+    track = db.get(Track, clip.track_id)
+    if track is None or track.kind != "video":
+        raise SequenceDomainError("只能从视频片段分离音频")
+    if not clip.asset_id:
+        raise SequenceDomainError("该片段没有音频源")
+    duration = (clip.src_out - clip.src_in) / (clip.speed or 1)
+    start, end = clip.timeline_start, clip.timeline_start + duration
+
+    audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio"), key=lambda t: t.position)
+    target = next((t for t in audio_tracks if _range_free(t, start, end)), None)
+    created_track = None
+    if target is None:
+        target = Track(
+            sequence_id=sequence.id,
+            kind="audio",
+            name=f"A{len(audio_tracks) + 1}",
+            position=max((t.position for t in sequence.tracks), default=-1) + 1,
+        )
+        db.add(target)
+        db.flush()
+        created_track = {"id": target.id, "name": target.name, "position": target.position}
+
+    audio_clip = Clip(
+        workspace_id=sequence.workspace_id,
+        sequence_id=sequence.id,
+        track_id=target.id,
+        asset_id=clip.asset_id,
+        timeline_start=clip.timeline_start,
+        src_in=clip.src_in,
+        src_out=clip.src_out,
+        speed=clip.speed,
+        gain=clip.gain,
+    )
+    db.add(audio_clip)
+    db.flush()
+    video_muted_prev = clip.muted
+    clip.muted = True
+
+    _record_operation(
+        db,
+        sequence,
+        kind="detach_clip_audio",
+        payload={
+            "video_clip_id": clip.id,
+            "video_muted_prev": video_muted_prev,
+            "created_track": created_track,
+            "audio_clip": {
+                "id": audio_clip.id,
+                "track_id": target.id,
+                "asset_id": clip.asset_id,
+                "timeline_start": clip.timeline_start,
+                "src_in": clip.src_in,
+                "src_out": clip.src_out,
+                "speed": clip.speed,
+                "gain": clip.gain,
+            },
+        },
+        summary={"operation": "detach_clip_audio", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)

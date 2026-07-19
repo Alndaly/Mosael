@@ -46,6 +46,7 @@ from app.domain.sequences.operations import (
     MoveTrack,
     RemoveTrack,
     RippleDeleteClip,
+    DetachClipAudio,
     SequenceDomainError,
     SetClipEffects,
     SetClipGain,
@@ -64,6 +65,7 @@ from app.domain.sequences.operations import (
     delete_clip as delete_clip_operation,
     remove_track as remove_track_operation,
     ripple_delete_clip as ripple_delete_clip_operation,
+    detach_clip_audio as detach_clip_audio_operation,
     set_clip_effects as set_clip_effects_operation,
     set_clip_gain as set_clip_gain_operation,
     set_clip_speed as set_clip_speed_operation,
@@ -252,6 +254,13 @@ def set_clip_gain(
             db, sequence_id, SetClipGain(clip_id=clip_id, gain=body.gain, muted=body.muted)
         )
     )
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/detach-audio", response_model=SequenceOut)
+def detach_clip_audio(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: detach_clip_audio_operation(db, sequence_id, DetachClipAudio(clip_id=clip_id)))
     return _get_sequence(db, sequence_id)
 
 
