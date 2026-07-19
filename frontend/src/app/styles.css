@@ -7773,6 +7773,36 @@
   color: var(--muted-foreground);
   opacity: 0.7;
 }
+.wf-agent-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 6px 0;
+}
+.wf-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  padding: 2px 4px 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--foreground);
+}
+.wf-agent-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-agent-chip button {
+  display: inline-flex;
+  color: var(--muted-foreground);
+}
+.wf-agent-chip button:hover {
+  color: var(--foreground);
+}
 
 /* Real-time save status (replaces the manual save button). */
 .wf-save-status {

@@ -1,7 +1,8 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, GripHorizontal, Loader2, Send, X } from "lucide-react";
+import { Bot, GripHorizontal, Loader2, Paperclip, Send, X } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -59,6 +60,26 @@ export function WorkflowAgentChat({
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState("");
   const [streamText, setStreamText] = React.useState("");
+  const [attachments, setAttachments] = React.useState<{ name: string; content: string }[]>([]);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
+
+  const MAX_FILE = 200 * 1024; // 200KB of text
+  const pickFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const added: { name: string; content: string }[] = [];
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_FILE) {
+        toast.error(t("wfAgentFileTooBig").replace("{name}", file.name));
+        continue;
+      }
+      try {
+        added.push({ name: file.name, content: await file.text() });
+      } catch {
+        toast.error(t("wfAgentFileUnreadable").replace("{name}", file.name));
+      }
+    }
+    if (added.length) setAttachments((cur) => [...cur, ...added]);
+  };
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -179,12 +200,15 @@ export function WorkflowAgentChat({
   }, [messages.data?.length, streamText]);
 
   const send = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ text, files }: { text: string; files: { name: string; content: string }[] }) => {
+      // Attached files are inlined as fenced context so the text-only agent can read them.
+      const fileBlock = files.map((f) => `[${t("wfAgentAttached")} ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n");
+      const body = fileBlock ? (text ? `${fileBlock}\n\n${text}` : fileBlock) : text;
       // 首条消息带上工作流上下文,智能体后续靠会话记忆 + MCP 工具工作。
       const isFirst = (messages.data ?? []).length === 0;
       const finalContent = isFirst
-        ? `${t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName)}\n\n${content}`
-        : content;
+        ? `${t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName)}\n\n${body}`
+        : body;
       return api<AgentMessage>(`/api/agent/sessions/${sessionId}/messages`, {
         method: "POST",
         body: JSON.stringify({ content: finalContent }),
@@ -192,14 +216,15 @@ export function WorkflowAgentChat({
     },
     onSuccess: () => {
       setDraft("");
+      setAttachments([]);
       void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
       if (sessionId) void attachStream(sessionId);
     },
   });
 
   const submit = () => {
-    if (!draft.trim() || !sessionId || running || send.isPending) return;
-    send.mutate(draft.trim());
+    if ((!draft.trim() && attachments.length === 0) || !sessionId || running || send.isPending) return;
+    send.mutate({ text: draft.trim(), files: attachments });
   };
 
   return (
@@ -246,7 +271,43 @@ export function WorkflowAgentChat({
           </div>
         )}
       </div>
+      {attachments.length > 0 && (
+        <div className="wf-agent-attachments">
+          {attachments.map((file, i) => (
+            <span key={`${file.name}-${i}`} className="wf-agent-chip" title={file.name}>
+              <Paperclip size={11} />
+              <span className="wf-agent-chip-name">{file.name}</span>
+              <button
+                type="button"
+                aria-label={t("close")}
+                onClick={() => setAttachments((cur) => cur.filter((_, j) => j !== i))}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="wf-agent-composer">
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            void pickFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("wfAgentAttach")}
+          title={t("wfAgentAttach")}
+          onClick={() => fileRef.current?.click()}
+        >
+          <Paperclip size={14} />
+        </Button>
         <textarea
           rows={2}
           value={draft}
@@ -262,7 +323,7 @@ export function WorkflowAgentChat({
         <Button
           size="icon-sm"
           aria-label={t("chatSend")}
-          disabled={!draft.trim() || running || send.isPending || !sessionId}
+          disabled={(!draft.trim() && attachments.length === 0) || running || send.isPending || !sessionId}
           onClick={submit}
         >
           <Send size={13} />
