@@ -116,13 +116,20 @@ export function Recorder({
             </button>
           ))}
         </div>
-        <div className="recorder-stage">
-          {source === "mic" ? (
+        <div className={recording ? "recorder-stage recording" : "recorder-stage"}>
+          {/* Video stays mounted for screen/camera so the ref is stable when start() attaches
+              the stream; the idle placeholder covers it until recording begins. */}
+          {source !== "mic" && <video ref={videoRef} className="recorder-preview" muted playsInline />}
+          {recording && source === "mic" && (
             <div className="recorder-mic">
               <Mic size={30} />
             </div>
-          ) : (
-            <video ref={videoRef} className="recorder-preview" muted playsInline />
+          )}
+          {!recording && (
+            <div className="recorder-idle">
+              {source === "screen" ? <ScreenIcon size={24} /> : source === "camera" ? <Video size={24} /> : <Mic size={24} />}
+              <span>{t(`record_${source}_placeholder` as never) as string}</span>
+            </div>
           )}
           {recording && <span className="recorder-dot" aria-hidden />}
           <span className="recorder-time timecode">{fmt(secs)}</span>

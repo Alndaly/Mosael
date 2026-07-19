@@ -2549,12 +2549,31 @@
 .recorder-stage {
   position: relative;
   aspect-ratio: 16 / 9;
+  max-height: 260px;
   border-radius: 8px;
   overflow: hidden;
-  background: #000;
+  border: 1px solid var(--border);
+  background: var(--panel-inset);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.recorder-stage.recording {
+  background: #000;
+}
+/* Neutral idle placeholder so the empty stage doesn't read as a broken black box —
+   screen has no pre-record preview at all, camera/mic only light up on start. */
+.recorder-idle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--panel-inset);
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 .recorder-preview {
   width: 100%;
