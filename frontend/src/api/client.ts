@@ -352,6 +352,17 @@ export function setSubtitleStyle(sequenceId: string, style: Record<string, unkno
   });
 }
 
+export function translateTexts(
+  texts: string[],
+  targetLang: string,
+  engine: "google" | "ai" = "google",
+): Promise<{ translations: string[] }> {
+  return api<{ translations: string[] }>("/api/translate", {
+    method: "POST",
+    body: JSON.stringify({ texts, target_lang: targetLang, engine }),
+  });
+}
+
 export function insertTextClip(
   sequenceId: string,
   body: { track_id: string; text: string; timeline_start: number; duration: number },

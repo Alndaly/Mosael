@@ -4722,7 +4722,29 @@
   border-top: 1px solid var(--border);
   padding: 6px 8px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 6px;
+}
+.sub-translate-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+}
+.sub-translate-pop > strong {
+  font-size: 12.5px;
+}
+.sub-translate-row {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.sub-translate-note {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
 }
 .ts-expand {
   transform: none;

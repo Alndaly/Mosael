@@ -1,15 +1,21 @@
 import React from "react";
-import { ChevronDown, ChevronRight, Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { readSubtitleStyle, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 
-import type { Sequence } from "@/api/client";
+import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
+
+const TRANSLATE_LANGS = ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"] as const;
 
 /**
  * Subtitle list editor (老版 mibu-video 的字幕可见入口): every text clip on
@@ -107,8 +113,79 @@ export function SubtitlePanel({
         <button type="button" className="ts-tool" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
+        {subtitles.length > 0 && <SubtitleTranslate subtitles={subtitles} onSetText={onSetText} />}
       </div>
     </div>
+  );
+}
+
+/** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),就地替换文本(可撤销)。 */
+function SubtitleTranslate({
+  subtitles,
+  onSetText,
+}: {
+  subtitles: { id: string; text_override?: string | null }[];
+  onSetText: (clipId: string, text: string) => void;
+}) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const [lang, setLang] = React.useState<string>("en");
+
+  const run = useMutation({
+    mutationFn: async () => {
+      const items = subtitles.filter((clip) => (clip.text_override ?? "").trim());
+      const { translations } = await translateTexts(
+        items.map((clip) => clip.text_override ?? ""),
+        lang,
+      );
+      let applied = 0;
+      translations.forEach((translated, i) => {
+        const original = items[i].text_override ?? "";
+        if (translated && translated !== original) {
+          onSetText(items[i].id, translated);
+          applied += 1;
+        }
+      });
+      return applied;
+    },
+    onSuccess: (applied) => {
+      setOpen(false);
+      toast.success(t("subtitleTranslateDone").replace("{n}", String(applied)));
+    },
+    onError: (error: Error) => toast.error(t("subtitleTranslateFailed"), { description: error.message }),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="ts-tool" title={t("subtitleTranslate")}>
+          <Languages size={12} /> {t("subtitleTranslate")}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="sub-translate-pop" align="end">
+        <strong>{t("subtitleTranslate")}</strong>
+        <label className="sub-translate-row">
+          <span>{t("subtitleTranslateTo")}</span>
+          <Select value={lang} onValueChange={setLang}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSLATE_LANGS.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {t(("lang_" + code.replace("-", "_")) as never)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
+          {run.isPending ? <Loader2 size={13} className="spin" /> : <Languages size={13} />}
+          {t("subtitleTranslateApply").replace("{n}", String(subtitles.length))}
+        </Button>
+        <small className="sub-translate-note">{t("subtitleTranslateNote")}</small>
+      </PopoverContent>
+    </Popover>
   );
 }
 
