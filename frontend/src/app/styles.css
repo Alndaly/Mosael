@@ -2515,6 +2515,24 @@
   container-type: inline-size;
 }
 
+/* Fullscreen: the frame's container-query units still resolve against the (small) stage, so
+   size against the VIEWPORT instead — fit the 16:9 frame into the screen and centre it
+   (position:fixed + inset:0 + margin:auto), letterboxing on the limiting axis. Otherwise the
+   frame keeps the pane's aspect and object-fit crops the picture. */
+.monitor-frame-wrap:fullscreen {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * var(--frame-ar, 1.7778)));
+  height: min(100vh, calc(100vw / var(--frame-ar, 1.7778)));
+  max-width: 100vw;
+  max-height: 100vh;
+  border-radius: 0;
+}
+.monitor-frame-wrap:fullscreen::backdrop {
+  background: #000000;
+}
+
 /* All media layers (base <video>/<img> and the compositor <canvas>) overlap at the same
    spot — absolute, not in normal flow, or a second .monitor-video (the canvas) would stack
    below the first and fall past the frame's overflow:hidden edge. Positioned overlays after
