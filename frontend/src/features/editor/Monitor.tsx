@@ -10,7 +10,7 @@ import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geo
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { AudioElement } from "@/features/editor/AudioElement";
 import { MonitorElement } from "@/features/editor/MonitorElement";
-import { CanvasStage } from "@/features/editor/playback/CanvasStage";
+import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
 import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
 import { Scopes } from "@/features/editor/Scopes";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
@@ -151,18 +151,9 @@ export function Monitor({
     return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
-  // WebCodecs compositor (opt-in): draw the base video frame on a canvas from its proxy.
-  // The base <video> stays mounted for audio (WebAudio mixing lands in S3); the canvas
-  // just overlays it. Falls back to the plain element on any decode error.
+  // WebCodecs compositor (opt-in): composite every active video/image clip onto one canvas.
+  // The base <video> stays mounted (hidden) for audio until WebAudio mixing lands in S3.
   const compositorOn = useCompositorEnabled() && compositorSupported();
-  const [canvasFailed, setCanvasFailed] = React.useState(false);
-  React.useEffect(() => setCanvasFailed(false), [activeAsset?.id]);
-  const baseProxyReady =
-    compositorOn &&
-    !canvasFailed &&
-    !isImage &&
-    activeAsset?.kind === "video" &&
-    (activeAsset?.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready";
   // Every audio clip active at the playhead, across ALL audio tracks — each plays via its own
   // <AudioElement> so multiple audio tracks (e.g. music + detached audio) sound together.
   const activeAudioClips = React.useMemo(
@@ -200,6 +191,31 @@ export function Monitor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draft, selectedActive?.id, activeClip?.id, activeClip?.transform],
   );
+
+  // Active video/image clips in z-order (base first = bottom, overlays bottom→top) as
+  // compositor layers, each carrying its live drag transform. Memoised so the compositor's
+  // decoder pool doesn't churn on every playhead tick.
+  const compositorLayers = React.useMemo<CompositorLayer[]>(() => {
+    const layers: CompositorLayer[] = [];
+    for (const clip of [activeClip, ...activeOverlayClips]) {
+      if (!clip?.asset_id) continue;
+      const asset = assetById.get(clip.asset_id);
+      if (!asset || (asset.kind !== "video" && asset.kind !== "image")) continue;
+      layers.push({ clip, asset, transformOverride: draft && selectedActive?.id === clip.id ? draft : null });
+    }
+    return layers;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClip, activeOverlayClips, assetById, draft, selectedActive?.id]);
+  // Only take the canvas path when every active clip can be drawn there (image, or a
+  // video whose proxy is ready); otherwise fall back wholesale to the element preview.
+  const compositorActive =
+    compositorOn &&
+    compositorLayers.length > 0 &&
+    compositorLayers.every(
+      (l) =>
+        l.asset.kind === "image" ||
+        (l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready",
+    );
 
   // Playback clock. Interval-based (not rAF) so it keeps running when the
   // window is occluded or backgrounded — audio keeps playing there too.
@@ -333,15 +349,23 @@ export function Monitor({
               )}
             </div>
           )}
+          {/* Base video: hidden while the compositor is drawing (canvas covers it) but kept
+              mounted so it still carries preview audio until WebAudio mixing lands in S3. */}
           <video
             ref={videoRef}
             className="monitor-video"
-            style={{ display: activeClip && !isImage ? "block" : "none", filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
+            style={{
+              display: activeClip && !isImage ? "block" : "none",
+              opacity: compositorActive ? 0 : undefined,
+              filter: cssFilter || undefined,
+              ...fitStyle,
+              ...clipTransformStyle,
+            }}
             muted={false}
             playsInline
             preload="auto"
           />
-          {activeClip && isImage && activeAsset && (
+          {activeClip && isImage && activeAsset && !compositorActive && (
             <img
               className="monitor-video"
               src={assetFileUrl(activeAsset.id)}
@@ -349,16 +373,13 @@ export function Monitor({
               style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
             />
           )}
-          {baseProxyReady && activeClip && activeAsset && (
-            <CanvasStage
-              key={activeAsset.id}
-              clip={activeClip}
-              asset={activeAsset}
+          {compositorActive && (
+            <CanvasCompositor
+              layers={compositorLayers}
               width={sequence.width}
               height={sequence.height}
               className="monitor-video"
-              style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
-              onError={() => setCanvasFailed(true)}
+              style={fitStyle}
             />
           )}
           {!activeClip && (
@@ -385,21 +406,23 @@ export function Monitor({
               <Scopes videoRef={videoRef} filter={cssFilter} />
             </div>
           )}
-          {activeOverlayClips.map((clip) => {
-            const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
-            if (!asset) return null;
-            return (
-              <MonitorElement
-                key={clip.id}
-                clip={clip}
-                asset={asset}
-                playhead={playhead}
-                playing={playing}
-                playbackRate={playbackRate}
-                transformOverride={draftFor(clip.id)}
-              />
-            );
-          })}
+          {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}
+          {!compositorActive &&
+            activeOverlayClips.map((clip) => {
+              const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
+              if (!asset) return null;
+              return (
+                <MonitorElement
+                  key={clip.id}
+                  clip={clip}
+                  asset={asset}
+                  playhead={playhead}
+                  playing={playing}
+                  playbackRate={playbackRate}
+                  transformOverride={draftFor(clip.id)}
+                />
+              );
+            })}
           {selectedActive && onSetTransform && (
             <div className="monitor-tf-layer" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
