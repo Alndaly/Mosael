@@ -21,7 +21,7 @@ import {
   timeToPx,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
-import { useEditorStore } from "@/stores/editorStore";
+import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
 
 const TRACK_HEIGHT = 48;
@@ -92,9 +92,10 @@ export function Timeline({
   const pxPerSecond = useEditorStore((state) => state.pxPerSecond);
   const dragDraft = useEditorStore((state) => state.dragDraft);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
-  const { setPlayhead, zoomBy, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
+  const { setPlayhead, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
+  const hscrollRef = React.useRef<HTMLDivElement | null>(null);
   const peaksCache = React.useRef<Map<string, number[]>>(new Map());
   const draggingAsset = useEditorStore((state) => state.draggingAsset);
   const tool = useEditorStore((state) => state.tool);
@@ -160,6 +161,13 @@ export function Timeline({
 
   const duration = Math.max(sequenceDuration(allClips), playhead) + 10;
   const contentWidth = timeToPx(duration, pxPerSecond) + 120;
+
+  // Zoom out can't go below "the whole timeline fits the viewport" — past that is dead space.
+  const applyZoom = (factor: number) => {
+    const viewport = hscrollRef.current?.clientWidth ?? 0;
+    const fitPx = viewport > 0 ? Math.max(MIN_PX_PER_SECOND, (viewport - 130) / Math.max(duration, 1)) : MIN_PX_PER_SECOND;
+    setPxPerSecond(Math.max(fitPx, pxPerSecond * factor));
+  };
   const ticks = rulerTicks(0, duration, pxPerSecond);
 
   const timeAtPointer = (event: { clientX: number }): number => {
@@ -367,7 +375,7 @@ export function Timeline({
   const handleWheel = (event: React.WheelEvent) => {
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
-      zoomBy(event.deltaY < 0 ? 1.15 : 1 / 1.15);
+      applyZoom(event.deltaY < 0 ? 1.15 : 1 / 1.15);
     }
   };
 
@@ -524,7 +532,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => zoomBy(1 / 1.3)} aria-label={t("zoomOut")}>
+              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
                 <Minus size={14} />
               </Button>
             </TooltipTrigger>
@@ -532,7 +540,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => zoomBy(1.3)} aria-label={t("zoomIn")}>
+              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
                 <Plus size={14} />
               </Button>
             </TooltipTrigger>
@@ -630,7 +638,7 @@ export function Timeline({
             </div>
           ))}
         </div>
-        <div className="tl-hscroll">
+        <div className="tl-hscroll" ref={hscrollRef}>
           <div className="tl-canvas" ref={canvasRef} style={{ width: contentWidth }}>
             <div
               className="tl-ruler"

@@ -27,9 +27,19 @@ type SectionId = "account" | "team" | "appearance" | "providers" | "transcribe" 
 
 const SECTION_IDS: SectionId[] = ["account", "team", "appearance", "providers", "transcribe", "voice", "feishu", "backend"];
 
+const SECTION_STORAGE_KEY = "mibu:settings-section";
+
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
-  const [section, setSection] = React.useState<SectionId>("account");
+  const [section, setSectionState] = React.useState<SectionId>(() => {
+    const saved = localStorage.getItem(SECTION_STORAGE_KEY);
+    return saved && SECTION_IDS.includes(saved as SectionId) ? (saved as SectionId) : "account";
+  });
+  // Persist the open section so a refresh returns to the same tab (mirrors the editor).
+  const setSection = (id: SectionId) => {
+    localStorage.setItem(SECTION_STORAGE_KEY, id);
+    setSectionState(id);
+  };
 
   // 深链:别处(如工作流「模型未配置」提示)→ mibu:open-settings 直达对应分区。
   React.useEffect(() => {
