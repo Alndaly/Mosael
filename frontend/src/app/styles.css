@@ -2540,7 +2540,7 @@
 .recorder {
   display: grid;
   gap: 10px;
-  width: min(520px, 78vw);
+  width: 100%; /* fill the modal (ModalShell sets its width) — never overflow it */
 }
 .recorder-sources {
   justify-self: start;
@@ -2548,8 +2548,8 @@
 }
 .recorder-stage {
   position: relative;
+  width: 100%; /* fill the modal width; height derives from aspect-ratio (no width-from-height) */
   aspect-ratio: 16 / 9;
-  max-height: 260px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);

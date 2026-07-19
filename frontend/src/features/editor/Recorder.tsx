@@ -100,7 +100,7 @@ export function Recorder({
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t("recordTitle")}>
+    <ModalShell open={open} onOpenChange={onOpenChange} title={t("recordTitle")} className="w-[520px]">
       <div className="recorder">
         <div className="seg recorder-sources" role="group" aria-label={t("recordTitle")}>
           {(["screen", "camera", "mic"] as Source[]).map((s) => (

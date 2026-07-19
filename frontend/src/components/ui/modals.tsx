@@ -16,11 +16,14 @@ export function ModalShell({
   onOpenChange,
   title,
   children,
+  className,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: React.ReactNode;
+  /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
+  className?: string;
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -28,8 +31,9 @@ export function ModalShell({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 animate-in fade-in-0" />
         <DialogPrimitive.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
+            "fixed left-1/2 top-1/2 z-50 w-[360px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
             "bg-popover p-3 shadow-[var(--shadow-raised)] animate-in fade-in-0 zoom-in-95",
+            className,
           )}
         >
           <DialogPrimitive.Title className="mb-3 text-[14px] font-semibold">{title}</DialogPrimitive.Title>
