@@ -206,6 +206,63 @@ def test_branching_code_and_template_nodes() -> None:
         assert skipped == ["no"]
 
 
+def test_json_extract_node() -> None:
+    from app.domain.workflows.engine import _handle_json_extract
+
+    src = '{"data": {"items": [{"title": "hello"}, {"title": "world"}]}}'
+    assert _handle_json_extract(None, None, {"source": src, "path": "data.items.0.title"}) == {
+        "value": "hello", "text": "hello",
+    }
+    # missing path → None/""; already-parsed dict source works too
+    assert _handle_json_extract(None, None, {"source": {"a": 1}, "path": "b"}) == {"value": None, "text": ""}
+    # whole object when path empty → JSON text
+    out = _handle_json_extract(None, None, {"source": {"a": 1}, "path": ""})
+    assert out["value"] == {"a": 1} and out["text"] == '{"a": 1}'
+
+
+def test_text_transform_node() -> None:
+    from app.domain.workflows.engine import _handle_text_transform
+
+    assert _handle_text_transform(None, None, {"text": "  Hi ", "op": "trim"})["text"] == "Hi"
+    assert _handle_text_transform(None, None, {"text": "abc", "op": "upper"})["text"] == "ABC"
+    assert _handle_text_transform(None, None, {"text": "a-b-c", "op": "replace", "find": "-", "replace": "_"})["text"] == "a_b_c"
+    assert _handle_text_transform(None, None, {"text": "id=42 x", "op": "regex_extract", "find": r"id=(\d+)"})["text"] == "42"
+    assert _handle_text_transform(None, None, {"text": "hello", "op": "length"}) == {"text": "5", "length": 1}
+
+
+def test_delay_node_clamps(monkeypatch) -> None:
+    from app.domain.workflows import engine
+
+    slept: list[float] = []
+    monkeypatch.setattr(engine.time, "sleep", lambda s: slept.append(s))  # never actually block
+    assert engine._handle_delay(None, None, {"seconds": 0})["waited"] == 0.0
+    assert engine._handle_delay(None, None, {"seconds": 99999})["waited"] == 300.0  # clamped to max
+    assert engine._handle_delay(None, None, {"seconds": "oops"})["waited"] == 1.0  # unparsable → default 1
+    assert engine._handle_delay(None, None, {})["waited"] == 1.0  # default
+    assert slept == [0.0, 300.0, 1.0, 1.0]
+
+
+def test_new_nodes_registered_and_validate() -> None:
+    from app.domain.workflows import NODE_TYPES, validate_graph
+    from app.domain.workflows.engine import _HANDLERS
+
+    for node_type in ("json_extract", "text_transform", "delay", "synthesize_speech", "notify"):
+        assert node_type in NODE_TYPES, node_type
+        assert node_type in _HANDLERS, node_type
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "d", "type": "delay", "config": {"seconds": 1}},
+            {"id": "n", "type": "notify", "config": {"title": "done"}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "d"},
+            {"id": "e2", "source": "d", "target": "n"},
+        ],
+    }
+    assert validate_graph(graph) == []
+
+
 def test_condition_operators_and_bad_branch_handle() -> None:
     from app.domain.workflows import validate_graph
     from app.domain.workflows.engine import _handle_condition

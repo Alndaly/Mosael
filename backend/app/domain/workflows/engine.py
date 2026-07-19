@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -487,6 +488,99 @@ def _handle_template(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     return {"text": str(config.get("template", ""))}
 
 
+def _handle_json_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """Walk a JSON string/object by a dot path (list indices as integers). Missing → None."""
+    source = config.get("source")
+    data: Any = source
+    if isinstance(source, str):
+        try:
+            data = json.loads(source)
+        except ValueError:
+            data = source  # not JSON — treat the raw string as the value
+    value: Any = data
+    for part in [p for p in str(config.get("path", "")).split(".") if p]:
+        if isinstance(value, dict):
+            value = value.get(part)
+        elif isinstance(value, list):
+            try:
+                value = value[int(part)]
+            except (ValueError, IndexError):
+                value = None
+        else:
+            value = None
+        if value is None:
+            break
+    if value is None:
+        text = ""
+    elif isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False)
+    return {"value": value, "text": text}
+
+
+def _handle_text_transform(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    text = str(config.get("text", ""))
+    op = str(config.get("op", "trim"))
+    find = str(config.get("find", ""))
+    if op == "trim":
+        out = text.strip()
+    elif op == "upper":
+        out = text.upper()
+    elif op == "lower":
+        out = text.lower()
+    elif op == "replace":
+        out = text.replace(find, str(config.get("replace", "")))
+    elif op == "regex_extract":
+        match = re.search(find, text) if find else None
+        out = "" if match is None else (match.group(1) if match.groups() else match.group(0))
+    elif op == "length":
+        out = str(len(text))
+    else:
+        raise WorkflowDomainError(f"未知文本处理方式: {op}")
+    return {"text": out, "length": len(out)}
+
+
+DELAY_MAX_SECONDS = 300
+
+
+def _handle_delay(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    try:
+        seconds = float(config.get("seconds") if config.get("seconds") not in (None, "") else 1)
+    except (TypeError, ValueError):
+        seconds = 1.0
+    seconds = max(0.0, min(DELAY_MAX_SECONDS, seconds))
+    time.sleep(seconds)
+    return {"waited": seconds}
+
+
+def _handle_synthesize(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    from app.audio.voices import start_synthesis
+
+    child = start_synthesis(
+        db, voice_id=str(config.get("voice_id", "")), text=str(config.get("text", "")), project_id=None
+    )
+    final = _wait_for_job(child.id)
+    return {"asset_id": str((final.result or {}).get("asset_id", ""))}
+
+
+def _handle_notify(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    title = str(config.get("title", "")).strip()
+    if not title:
+        raise WorkflowDomainError("通知标题不能为空")
+    notify(
+        db,
+        workflow.workspace_id,
+        type="workflow",
+        title=title,
+        body=str(config.get("body", "")),
+        link="#/workflows",
+        payload={"workflow_id": workflow.id},
+    )
+    db.commit()
+    return {"sent": True}
+
+
 def _handle_publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.db.models import Asset, PublishAccount
     from app.domain.publish import start_publish
@@ -540,4 +634,9 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "http_request": _handle_http,
     "code": _handle_code,
     "template": _handle_template,
+    "json_extract": _handle_json_extract,
+    "text_transform": _handle_text_transform,
+    "delay": _handle_delay,
+    "synthesize_speech": _handle_synthesize,
+    "notify": _handle_notify,
 }

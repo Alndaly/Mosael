@@ -23,8 +23,12 @@ import "@xyflow/react/dist/style.css";
 import {
   AlignLeft,
   AlertTriangle,
+  AudioLines,
+  Bell,
   BookOpen,
   Bot,
+  Braces,
+  CaseSensitive,
   CircleCheck,
   Code2,
   Download,
@@ -35,6 +39,7 @@ import {
   Loader2,
   Mic,
   Pencil,
+  Timer,
   PenLine,
   Play,
   Plus,
@@ -60,6 +65,7 @@ import {
   listAssets,
   listCredentials,
   listPublishAccounts,
+  listVoices,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
@@ -105,6 +111,11 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   code: <Code2 size={13} />,
   template: <AlignLeft size={13} />,
   publish: <Rocket size={13} />,
+  json_extract: <Braces size={13} />,
+  text_transform: <CaseSensitive size={13} />,
+  delay: <Timer size={13} />,
+  synthesize_speech: <AudioLines size={13} />,
+  notify: <Bell size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {
@@ -1242,6 +1253,11 @@ function NodeInspector({
     queryFn: listCredentials,
     enabled: node.type === "ai_generate",
   });
+  const voices = useQuery({
+    queryKey: ["workflow-voices", workspaceId],
+    queryFn: () => listVoices(workspaceId),
+    enabled: node.type === "synthesize_speech",
+  });
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
   const hasAssetField = specs.some(([key]) => inputType(node.type, key) === "asset");
   const assets = useQuery({
@@ -1383,6 +1399,9 @@ function NodeInspector({
     }
     if (node.type === "kb_search" && key === "dataset_id") {
       return (kbDatasets.data ?? []).map((ds) => ({ value: ds.id, label: ds.name }));
+    }
+    if (node.type === "synthesize_speech" && key === "voice_id") {
+      return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
     }
     // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。
     if (inputType(node.type, key) === "asset") {

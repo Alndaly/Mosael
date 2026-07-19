@@ -148,6 +148,55 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {"template": {"type": "template", "required": True}},
         "outputs": ["text"],
     },
+    "json_extract": {
+        "label": "JSON 提取",
+        "description": "从 JSON/对象里按点路径取值,常接在 HTTP 请求或插件工具后面。",
+        "config": {
+            "source": {"type": "template", "required": True, "description": "JSON 文本或 {{节点.json}}"},
+            "path": {"type": "string", "description": "点路径,如 data.items.0.title;留空返回整个对象"},
+        },
+        "outputs": ["value", "text"],
+    },
+    "text_transform": {
+        "label": "文本处理",
+        "description": "对文本做去空白/大小写/替换/正则提取/取长度等处理。",
+        "config": {
+            "text": {"type": "template", "required": True},
+            "op": {
+                "type": "string",
+                "required": True,
+                "description": "处理方式",
+                "options": ["trim", "upper", "lower", "replace", "regex_extract", "length"],
+            },
+            "find": {"type": "string", "description": "replace 的查找串 / regex_extract 的正则"},
+            "replace": {"type": "string", "description": "replace 的替换串"},
+        },
+        "outputs": ["text", "length"],
+    },
+    "delay": {
+        "label": "延时",
+        "description": "等待若干秒再继续(限流/节流用)。",
+        "config": {"seconds": {"type": "number", "description": "等待秒数,默认 1,上限 300"}},
+        "outputs": ["waited"],
+    },
+    "synthesize_speech": {
+        "label": "语音合成",
+        "description": "用指定音色把文本合成为配音,产出音频素材进素材库。",
+        "config": {
+            "voice_id": {"type": "string", "required": True, "description": "音色 id(配音库可查)"},
+            "text": {"type": "template", "required": True},
+        },
+        "outputs": ["asset_id"],
+    },
+    "notify": {
+        "label": "发送通知",
+        "description": "给工作区成员推送一条站内通知。",
+        "config": {
+            "title": {"type": "template", "required": True},
+            "body": {"type": "template", "description": "通知正文"},
+        },
+        "outputs": ["sent"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
