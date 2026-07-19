@@ -967,6 +967,23 @@ export interface paths {
         patch: operations["set_track_state_api_sequences__sequence_id__tracks__track_id__patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/tracks/{track_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Move Track */
+        patch: operations["move_track_api_sequences__sequence_id__tracks__track_id__move_patch"];
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
         parameters: {
             query?: never;
@@ -3589,6 +3606,11 @@ export interface components {
              * @default false
              */
             ripple: boolean;
+        };
+        /** MoveTrackRequest */
+        MoveTrackRequest: {
+            /** Direction */
+            direction: string;
         };
         /** NotificationListOut */
         NotificationListOut: {
@@ -6833,6 +6855,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetTrackStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_track_api_sequences__sequence_id__tracks__track_id__move_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveTrackRequest"];
             };
         };
         responses: {

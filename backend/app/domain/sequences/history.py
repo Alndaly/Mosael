@@ -23,6 +23,7 @@ UNDOABLE_KINDS = (
     "apply_transcript_edit",
     "add_track",
     "remove_track",
+    "move_track",
     "set_clip_effect",
     "split_clip",
     "set_track_state",
@@ -160,6 +161,11 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
             prev = payload["previous"]
             track.muted, track.locked = prev["muted"], prev["locked"]
             track.solo, track.duck = prev.get("solo", False), prev.get("duck", False)
+    elif operation.kind == "move_track":
+        track = db.get(Track, payload["track_id"])
+        other = db.get(Track, payload["other_id"])
+        if track is not None and other is not None:
+            track.position, other.position = payload["track_prev"], payload["other_prev"]
     elif operation.kind == "add_track":
         track = db.get(Track, payload["track_id"])
         if track is not None:
@@ -227,6 +233,11 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         if track is not None:
             track.muted, track.locked = payload["muted"], payload["locked"]
             track.solo, track.duck = payload.get("solo", False), payload.get("duck", False)
+    elif operation.kind == "move_track":
+        track = db.get(Track, payload["track_id"])
+        other = db.get(Track, payload["other_id"])
+        if track is not None and other is not None:  # redo the swap
+            track.position, other.position = payload["other_prev"], payload["track_prev"]
     elif operation.kind == "add_track":
         db.add(
             Track(

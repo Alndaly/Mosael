@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, BetweenHorizontalStart, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, BetweenHorizontalStart, ChevronDown, ChevronUp, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -62,6 +62,7 @@ export function Timeline({
   onMoveClipToNewLayer,
   onTrimClip,
   onAddTrack,
+  onMoveTrack,
   onRemoveTrack,
   onDeleteClip,
   onRippleDeleteClip,
@@ -78,6 +79,7 @@ export function Timeline({
   onMoveClipToNewLayer?: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
+  onMoveTrack?: (trackId: string, direction: "up" | "down") => void;
   onRemoveTrack?: (trackId: string) => void;
   onDeleteClip?: (clipId: string) => void;
   onRippleDeleteClip?: (clipId: string) => void;
@@ -584,10 +586,34 @@ export function Timeline({
       <div className="tl-body">
         <div className="tl-labels" ref={labelsRef}>
           <div className="tl-labels-spacer" style={{ height: RULER_HEIGHT }} />
-          {tracks.map((track) => (
+          {tracks.map((track, trackIndex) => (
             <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <span className={`tl-label-dot dot-${track.kind}`} />
               {track.name}
+              {onMoveTrack && (
+                <span className="tl-label-order">
+                  <button
+                    type="button"
+                    className="tl-label-tool"
+                    aria-label={t("trackMoveUp")}
+                    title={t("trackMoveUp")}
+                    disabled={trackIndex === 0}
+                    onClick={() => onMoveTrack(track.id, "up")}
+                  >
+                    <ChevronUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="tl-label-tool"
+                    aria-label={t("trackMoveDown")}
+                    title={t("trackMoveDown")}
+                    disabled={trackIndex === tracks.length - 1}
+                    onClick={() => onMoveTrack(track.id, "down")}
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                </span>
+              )}
               {onSetTrackState && (
                 <span className="tl-label-tools">
                   <button

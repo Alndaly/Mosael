@@ -288,6 +288,10 @@ class SplitClipPointsRequest(BaseModel):
     src_times: list[float] = Field(min_length=1)
 
 
+class MoveTrackRequest(BaseModel):
+    direction: str = Field(pattern="^(up|down)$")
+
+
 class SetTrackStateRequest(BaseModel):
     muted: bool | None = None
     locked: bool | None = None

@@ -2936,6 +2936,67 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/tracks/{track_id}/move": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Move Track",
+        "operationId": "move_track_api_sequences__sequence_id__tracks__track_id__move_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Track Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveTrackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
       "delete": {
         "tags": [
@@ -11027,6 +11088,20 @@
           "timeline_start"
         ],
         "title": "MoveClipRequest"
+      },
+      "MoveTrackRequest": {
+        "properties": {
+          "direction": {
+            "type": "string",
+            "pattern": "^(up|down)$",
+            "title": "Direction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "direction"
+        ],
+        "title": "MoveTrackRequest"
       },
       "NotificationListOut": {
         "properties": {

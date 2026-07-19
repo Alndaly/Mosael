@@ -310,6 +310,13 @@ export function addTrack(sequenceId: string, kind: "video" | "audio" | "subtitle
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks`, { method: "POST", body: JSON.stringify({ kind }) });
 }
 
+export function moveTrack(sequenceId: string, trackId: string, direction: "up" | "down"): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}/move`, {
+    method: "PATCH",
+    body: JSON.stringify({ direction }),
+  });
+}
+
 export function insertTextClip(
   sequenceId: string,
   body: { track_id: string; text: string; timeline_start: number; duration: number },

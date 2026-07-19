@@ -278,6 +278,13 @@ class RemoveTrack:
 
 
 @dataclass(frozen=True)
+class MoveTrack:
+    track_id: str
+    direction: str  # "up" | "down"
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
 class SetClipEffects:
     clip_id: str
     effects: dict[str, Any]
@@ -304,6 +311,33 @@ def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
         kind="add_track",
         payload={"track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position},
         summary={"operation": "add_track", "track_id": track.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def move_track(db: Session, sequence_id: str, op: MoveTrack) -> Sequence:
+    """Reorder a track by swapping its position with the neighbour above/below — changes the
+    timeline row order and (for video tracks) the compositing z-order (改视频层级)."""
+    sequence = _require_sequence(db, sequence_id)
+    track = db.get(Track, op.track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceDomainError("Track not found")
+    ordered = sorted(sequence.tracks, key=lambda item: item.position)
+    index = next(i for i, item in enumerate(ordered) if item.id == track.id)
+    swap = index - 1 if op.direction == "up" else index + 1
+    if swap < 0 or swap >= len(ordered):
+        return sequence  # already at the edge — no-op
+    other = ordered[swap]
+    track_prev, other_prev = track.position, other.position
+    track.position, other.position = other_prev, track_prev
+    _record_operation(
+        db,
+        sequence,
+        kind="move_track",
+        payload={"track_id": track.id, "track_prev": track_prev, "other_id": other.id, "other_prev": other_prev},
+        summary={"operation": "move_track", "track_id": track.id},
         actor_id=op.actor_id,
     )
     db.commit()

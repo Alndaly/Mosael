@@ -15,6 +15,7 @@ import {
   insertTextClip,
   moveClip,
   redoSequence,
+  moveTrack,
   removeTrack,
   setTrackState,
   splitClip,
@@ -270,6 +271,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const addTrackMutation = useMutation({
     mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!.id, kind),
     onSuccess: refreshSequences,
+  });
+  const moveTrackMutation = useMutation({
+    mutationFn: ({ trackId, direction }: { trackId: string; direction: "up" | "down" }) =>
+      moveTrack(sequence!.id, trackId, direction),
+    onSuccess: (updated) => applySequence(updated),
   });
   // Drag a clip above the top video track → create a new video layer and drop it there.
   const moveClipToNewLayerMutation = useMutation({
@@ -683,6 +689,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           }
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
+          onMoveTrack={(trackId, direction) => moveTrackMutation.mutate({ trackId, direction })}
           onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
           onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}

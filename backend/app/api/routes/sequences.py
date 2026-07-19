@@ -21,6 +21,7 @@ from app.api.schemas import (
     SetSequenceReframeRequest,
     SetClipTextRequest,
     SetTrackStateRequest,
+    MoveTrackRequest,
     SplitClipPointsRequest,
     SplitClipRequest,
     TrimClipRequest,
@@ -38,6 +39,7 @@ from app.domain.sequences.operations import (
     InsertClip,
     InsertTextClip,
     MoveClip,
+    MoveTrack,
     RemoveTrack,
     RippleDeleteClip,
     SequenceDomainError,
@@ -67,6 +69,7 @@ from app.domain.sequences.operations import (
     insert_text_clip as insert_text_clip_operation,
     set_clip_text as set_clip_text_operation,
     move_clip as move_clip_operation,
+    move_track as move_track_operation,
     trim_clip as trim_clip_operation,
 )
 
@@ -172,6 +175,13 @@ def set_track_state(
 ) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_track_state_operation(db, sequence_id, SetTrackState(track_id=track_id, **body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/tracks/{track_id}/move", response_model=SequenceOut)
+def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: move_track_operation(db, sequence_id, MoveTrack(track_id=track_id, direction=body.direction)))
     return _get_sequence(db, sequence_id)
 
 

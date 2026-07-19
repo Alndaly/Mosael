@@ -83,6 +83,29 @@ def test_split_points_ignores_out_of_range_and_too_close() -> None:
     assert len(clips(state)) == 2
 
 
+def test_move_track_reorders_and_undo() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    seq = client.post("/api/sequences", json={"workspace_id": ws["id"], "project_id": proj["id"], "name": "M"}).json()
+    client.post(f"/api/sequences/{seq['id']}/tracks", json={"kind": "video"})
+    state = client.post(f"/api/sequences/{seq['id']}/tracks", json={"kind": "video"}).json()
+
+    ordered = sorted(state["tracks"], key=lambda t: t["position"])
+    top, below = ordered[-1], ordered[-2]  # top has the highest position
+    moved = client.patch(f"/api/sequences/{seq['id']}/tracks/{top['id']}/move", json={"direction": "up"}).json()
+    pos = {t["id"]: t["position"] for t in moved["tracks"]}
+    assert pos[top["id"]] < pos[below["id"]]  # they swapped
+
+    undone = client.post(f"/api/sequences/{seq['id']}/undo").json()
+    upos = {t["id"]: t["position"] for t in undone["tracks"]}
+    assert upos[top["id"]] > upos[below["id"]]  # restored
+
+    # Moving the top-most track further up is a no-op (still 200).
+    first = sorted(moved["tracks"], key=lambda t: t["position"])[0]
+    assert client.patch(f"/api/sequences/{seq['id']}/tracks/{first['id']}/move", json={"direction": "up"}).status_code == 200
+
+
 def test_split_points_no_valid_point_rejected() -> None:
     client = fresh_client()
     sequence, clip = setup_clip(client)
