@@ -33,19 +33,36 @@ def test_fades_clamped_to_clip_duration() -> None:
     assert segment.fade_in == segment.fade_out == 1.0
 
 
-def test_ffmpeg_command_contains_speed_and_fades(monkeypatch) -> None:
-    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+def test_video_and_audio_fades_are_independent() -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,
-        clips=[base_clip(speed=3.0, effects={"fade_in": 0.5, "fade_out": 0.5})], assets=ASSETS,
+        clips=[base_clip(src_out=8, effects={
+            "video_fade_in": 1.5, "video_fade_out": 0.0, "fade_in": 0.0, "fade_out": 2.0,
+        })], assets=ASSETS,
+    )
+    segment = plan.video_segments[0]
+    assert (segment.video_fade_in, segment.video_fade_out) == (1.5, 0.0)  # picture fade
+    assert (segment.fade_in, segment.fade_out) == (0.0, 2.0)  # audio fade, unrelated
+
+
+def test_ffmpeg_command_contains_speed_and_fades(monkeypatch) -> None:
+    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    # Picture fade (video_fade_*) and audio fade (fade_*) are independent — use different
+    # lengths to prove the picture `fade` filter and `afade` don't share a value.
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[base_clip(speed=3.0, effects={
+            "video_fade_in": 0.5, "video_fade_out": 0.5, "fade_in": 0.3, "fade_out": 0.3,
+        })], assets=ASSETS,
     )
     command = " ".join(build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4")))
     assert "(PTS-STARTPTS)/3.0" in command
     assert "atempo=2.0,atempo=1.5" in command
-    assert "fade=t=in:st=0:d=0.5" in command
-    # 8s source at 3x → 2.666667s; fade out starts at duration - 0.5
+    assert "fade=t=in:st=0:d=0.5" in command  # picture fade uses video_fade_in
+    # 8s source at 3x → 2.666667s; picture fade out starts at duration - 0.5
     assert "fade=t=out:st=2.166667:d=0.5" in command
-    assert "afade=t=in:st=0:d=0.5" in command
+    assert "afade=t=in:st=0:d=0.3" in command  # audio fade uses the separate fade_in
+    assert "afade=t=out:st=2.366667:d=0.3" in command
 
 
 def test_set_clip_speed_api_with_undo() -> None:

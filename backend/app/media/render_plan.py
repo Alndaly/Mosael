@@ -47,7 +47,8 @@ class Segment:
     """One contiguous piece of the output timeline: a clip or a gap.
 
     duration is output-timeline time: source duration divided by speed.
-    fade_in/fade_out are output-time seconds applied at the segment edges.
+    fade_in/fade_out are the AUDIO fade lengths (afade); video_fade_in/out are the picture
+    fade lengths (fade to/from black) — they're independent per the inspector's 音频/画面 split.
     """
 
     kind: str  # "clip" | "gap"
@@ -56,6 +57,8 @@ class Segment:
     speed: float = 1.0
     fade_in: float = 0.0
     fade_out: float = 0.0
+    video_fade_in: float = 0.0
+    video_fade_out: float = 0.0
     filter: str = ""  # one of FILTER_PRESETS or ""
     # Manual grade: sorted (name, value) pairs, names from GRADE_FIELDS, values
     # clamped to [-1, 1] (0 entries dropped). Mirrors mibu-video's color panel.
@@ -255,6 +258,7 @@ def build_render_plan(
         if start > cursor + GAP_EPSILON:
             segments.append(Segment(kind="gap", duration=round(start - cursor, 6)))
         fade_in, fade_out = _clip_fades(clip, duration)
+        video_fade_in, video_fade_out = _video_fades(clip, duration)
         effects = clip.get("effects") or {}
         preset = str(effects.get("filter") or "")
         if preset and preset not in FILTER_PRESETS:
@@ -279,6 +283,8 @@ def build_render_plan(
                 speed=speed,
                 fade_in=fade_in,
                 fade_out=fade_out,
+                video_fade_in=video_fade_in,
+                video_fade_out=video_fade_out,
                 filter=preset,
                 grade=tuple(
                     (field, _grade_value(grade, field))
@@ -493,17 +499,27 @@ def _curve_specs(curves: object) -> tuple[tuple[str, str], ...]:
     return tuple(out)
 
 
-def _clip_fades(clip: dict, duration: float) -> tuple[float, float]:
-    """Fade lengths from clip effects, clamped so in+out never exceed the clip."""
+def _fades(clip: dict, duration: float, in_key: str, out_key: str) -> tuple[float, float]:
+    """Fade lengths from clip effects (in_key/out_key), clamped so in+out never exceed the clip."""
     effects = clip.get("effects") or {}
-    fade_in = max(0.0, float(effects.get("fade_in") or 0.0))
-    fade_out = max(0.0, float(effects.get("fade_out") or 0.0))
+    fade_in = max(0.0, float(effects.get(in_key) or 0.0))
+    fade_out = max(0.0, float(effects.get(out_key) or 0.0))
     total = fade_in + fade_out
     if total > duration and total > 0:
         ratio = duration / total
         fade_in *= ratio
         fade_out *= ratio
     return round(fade_in, 6), round(fade_out, 6)
+
+
+def _clip_fades(clip: dict, duration: float) -> tuple[float, float]:
+    """Audio fade lengths (afade) — the inspector's 音频淡变."""
+    return _fades(clip, duration, "fade_in", "fade_out")
+
+
+def _video_fades(clip: dict, duration: float) -> tuple[float, float]:
+    """Picture fade lengths (fade to/from black) — the inspector's 画面淡变, independent of audio."""
+    return _fades(clip, duration, "video_fade_in", "video_fade_out")
 
 
 def _require_source(assets: dict[str, dict], clip: dict) -> ClipSource:

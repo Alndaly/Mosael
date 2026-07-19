@@ -259,7 +259,8 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             args += ["-i", str(path)]
             src = segment.source
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
-            video_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=False)
+            # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
+            video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
             lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
             preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
