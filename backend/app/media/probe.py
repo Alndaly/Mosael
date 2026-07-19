@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from app.core.config import settings
+
 
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 
@@ -25,7 +27,7 @@ def probe_media(path: Path) -> dict[str, Any]:
     try:
         proc = subprocess.run(
             [
-                "ffprobe",
+                settings.ffprobe,
                 "-v",
                 "error",
                 "-show_entries",
@@ -64,7 +66,7 @@ def probe_media(path: Path) -> dict[str, Any]:
 def probe_has_audio(path: Path) -> bool:
     try:
         proc = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+            [settings.ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
             check=True,
             capture_output=True,
             text=True,

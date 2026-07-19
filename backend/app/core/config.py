@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     feishu_autostart: bool = True
 
+    # ffmpeg/ffprobe binaries. Default to PATH; override (MIBU_FFMPEG / MIBU_FFPROBE) to
+    # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
+    # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.
+    ffmpeg: str = "ffmpeg"
+    ffprobe: str = "ffprobe"
+
     # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
     # interpreter so this backend stays light; empty asr_python autodetects
     # (env → sibling mibu-video venv → this interpreter).

@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.config import settings
 from app.media.probe import probe_has_audio
 from app.media.render_plan import FILTER_PRESETS, RenderPlan, Transform
 
@@ -248,7 +249,7 @@ def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, s
 
 def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
-    args: list[str] = ["ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
+    args: list[str] = [settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
     filters: list[str] = []
     pair_labels: list[str] = []
     input_index = 0
