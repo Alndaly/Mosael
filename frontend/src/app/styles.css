@@ -2191,28 +2191,30 @@
   cursor: row-resize;
 }
 
+/* mibu-video 样式:间距里常驻一条居中的小分割线(不是悬停才现),悬停/拖动高亮。 */
 .panel-resizer::before {
   content: "";
   position: absolute;
   inset: 0;
   margin: auto;
-  background: transparent;
+  background: var(--border);
   border-radius: 2px;
   transition: background-color 100ms;
 }
 
 .panel-resizer.col::before {
   width: 2px;
+  height: 36px;
 }
 
 .panel-resizer.row::before {
   height: 2px;
+  width: 36px;
 }
 
 .panel-resizer:hover::before,
 .panel-resizer:active::before {
-  background: color-mix(in srgb, var(--primary) 65%, transparent);
-  transition-delay: 120ms;
+  background: color-mix(in srgb, var(--primary) 70%, transparent);
 }
 
 .media-panel {

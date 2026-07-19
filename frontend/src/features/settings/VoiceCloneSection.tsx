@@ -159,6 +159,7 @@ export function VoiceCloneSection() {
                       </SelectContent>
                     </Select>
                   </FormControl>
+                  {!isFish && <FormDescription>{t("voiceCloneF5NoPaths")}</FormDescription>}
                 </FormItem>
               )}
             />
