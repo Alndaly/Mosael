@@ -394,10 +394,18 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
     if track.kind != "subtitle":
         raise SequenceDomainError("Subtitles need a subtitle track")
     created: list[dict[str, Any]] = []
+    seen: set[tuple[float, str]] = set()
     for text, start, duration in op.cues:
         cleaned = (text or "").strip()
         if not cleaned or duration <= 0 or start < 0:
             continue
+        # Drop exact duplicate cues (same start + text) — projectTranscript emits a segment
+        # once per clip that references its asset, so a reused/overlapping clip would otherwise
+        # insert every subtitle twice.
+        key = (round(float(start), 3), cleaned)
+        if key in seen:
+            continue
+        seen.add(key)
         clip = Clip(
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,

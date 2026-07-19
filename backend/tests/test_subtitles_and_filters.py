@@ -50,6 +50,32 @@ def test_subtitle_track_and_text_clip_lifecycle() -> None:
     assert next(t for t in redone["tracks"] if t["kind"] == "subtitle")["clips"][0]["text_override"] == "大家好"
 
 
+def test_generate_subtitles_dedupes_identical_cues() -> None:
+    """Regression: projectTranscript emits a segment once per clip referencing its asset, so a
+    reused/overlapping clip doubles every cue. generate_subtitles must drop exact (start, text)
+    duplicates instead of inserting each subtitle twice."""
+    client = fresh_client()
+    sequence = setup_sequence(client)
+    seq_id = sequence["id"]
+    state = client.post(f"/api/sequences/{seq_id}/tracks", json={"kind": "subtitle"}).json()
+    track = next(t for t in state["tracks"] if t["kind"] == "subtitle")
+
+    res = client.post(
+        f"/api/sequences/{seq_id}/subtitles/generate",
+        json={
+            "track_id": track["id"],
+            "cues": [
+                {"text": "第一句", "timeline_start": 1.0, "duration": 2.0},
+                {"text": "第一句", "timeline_start": 1.0, "duration": 2.0},  # exact dup
+                {"text": "第二句", "timeline_start": 3.0, "duration": 2.0},
+            ],
+        },
+    )
+    assert res.status_code == 200
+    clips = next(t for t in res.json()["tracks"] if t["kind"] == "subtitle")["clips"]
+    assert [c["text_override"] for c in clips] == ["第一句", "第二句"]  # dup dropped
+
+
 def test_subtitle_style_is_undoable() -> None:
     """Regression: set_subtitle_style must be in UNDOABLE_KINDS — otherwise undo silently skips
     it and reverts an unrelated earlier edit (the clip its own op left untouched)."""
