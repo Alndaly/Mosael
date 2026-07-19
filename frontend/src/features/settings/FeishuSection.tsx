@@ -135,19 +135,6 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       <SettingsBlock>
         {beginScan.isError && <p className="login-error">{String((beginScan.error as Error).message)}</p>}
 
-        {scanning && (
-          <div className="feishu-qr">
-            {qrDataUrl ? <img src={qrDataUrl} alt="Feishu QR" /> : null}
-            <div>
-              <p>{t("feishuScanHint")}</p>
-              <p className="feishu-qr-status">
-                {onboarding.data?.phase === "error" ? onboarding.data.error : t("feishuWaitingScan")}
-                {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
-              </p>
-            </div>
-          </div>
-        )}
-
         {hasBots && (
           <div className="feishu-bots">
             {(bots.data ?? []).map((bot) => (
@@ -198,10 +185,32 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
           </div>
         )}
 
-        {!hasBots && !scanning && (
+        {!hasBots && (
           <EmptyState icon={<MessageSquare size={22} />} title={t("feishuNoBots")} body={t("feishuEmptyBody")} />
         )}
       </SettingsBlock>
+
+      <ModalShell
+        open={scanning}
+        onOpenChange={(next) => {
+          if (!next) {
+            setScanning(false);
+            setQrDataUrl(null);
+          }
+        }}
+        title={t("feishuScanCreate")}
+      >
+        <div className="feishu-qr">
+          {qrDataUrl ? <img src={qrDataUrl} alt="Feishu QR" /> : null}
+          <div>
+            <p>{t("feishuScanHint")}</p>
+            <p className="feishu-qr-status">
+              {onboarding.data?.phase === "error" ? onboarding.data.error : t("feishuWaitingScan")}
+              {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
+            </p>
+          </div>
+        </div>
+      </ModalShell>
 
       <ModalShell open={manualOpen} onOpenChange={(next) => !next && setManualOpen(false)} title={t("feishuManualToggle")}>
         <div className="grid gap-3">

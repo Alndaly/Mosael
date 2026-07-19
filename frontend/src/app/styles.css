@@ -1319,12 +1319,7 @@
 .feishu-qr {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  padding: 10px;
+  gap: 14px;
 }
 
 .feishu-qr img {
@@ -8540,10 +8535,17 @@
   }
 
   /* ---- 自定义外观(有背景层时)的整体磨玻璃 ---- */
-  /* 工作区主体:半透明 + 背景模糊,让背景层以毛玻璃质感透出。 */
+  /* 工作区主体:半透明 + 背景模糊,让背景层以毛玻璃质感透出。并从窗口边缘内收成
+     一块浮起的玻璃面板,让背景在四周透出、把内容框起来(边到边会显得局促)。
+     height 交给 grid 拉伸,好让 margin 干净地内收(原本钉死的 height:100% 会和
+     margin 打架、把面板顶出网格格)。 */
   :root[data-appearance="glass"] .shell-content {
     -webkit-backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.3);
     backdrop-filter: blur(var(--app-blur, 16px)) saturate(1.3);
+    height: auto;
+    margin: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
   }
 
   /* chrome 与常见内容面板改用用户设定的模糊强度,保持全局一致。 */
