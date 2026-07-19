@@ -62,6 +62,57 @@ def test_overlay_changes_plan_hash() -> None:
     assert p1.render_plan_hash != p2.render_plan_hash
 
 
+_AUDIO_ASSETS = {"a": {"file_key": "a"}, "m": {"file_key": "m"}, "v": {"file_key": "v"}}
+_BASE_CLIP = [{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 10}]
+
+
+def test_solo_silences_non_soloed_audio_and_base() -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            {"id": "m1", "asset_id": "m", "timeline_start": 0, "src_in": 0, "src_out": 5, "solo": True, "duck": False},
+            {"id": "m2", "asset_id": "m", "timeline_start": 0, "src_in": 0, "src_out": 5, "solo": False, "duck": False},
+        ],
+        solo_active=True, mute_base_audio=True,
+    )
+    assert len(plan.audio_overlays) == 1  # only the soloed clip survives
+    assert plan.mute_base_audio is True
+
+
+def test_duck_windows_from_overlapping_non_ducked_clip() -> None:
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            # music (ducked) spans 0..10; voice (not ducked) spans 2..5 → duck window (2,5).
+            {"id": "music", "asset_id": "m", "timeline_start": 0, "src_in": 0, "src_out": 10, "solo": False, "duck": True},
+            {"id": "voice", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 3, "solo": False, "duck": False},
+        ],
+    )
+    music = next(a for a in plan.audio_overlays if a.duration == 10)
+    voice = next(a for a in plan.audio_overlays if a.duration == 3)
+    assert music.duck_windows == ((2.0, 5.0),)
+    assert voice.duck_windows == ()  # the key clip itself isn't ducked
+
+
+def test_duck_and_solo_in_command() -> None:
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            {"id": "music", "asset_id": "m", "timeline_start": 0, "src_in": 0, "src_out": 10, "solo": False, "duck": True},
+            {"id": "voice", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 3, "solo": False, "duck": False},
+        ],
+        mute_base_audio=True,
+    )
+    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4")))
+    assert "volume=enable='between(t,2.0,5.0)':volume=0.3" in graph  # music ducked over voice
+    assert "anullsrc" in graph  # base audio silenced by solo
+
+
 def test_transform_geometry_in_command() -> None:
     """Lock the transform→overlay-offset math against the preview formula so export parity
     can't silently drift. For a 320×180 frame, scale 0.5 → 160×90; centre (0.5+x·0.5)·W."""
@@ -195,6 +246,39 @@ def test_export_with_pip_overlay_and_music(tmp_path: Path) -> None:
 
     exported = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["source"] == "exported")
     assert abs(exported["media_info"]["duration"] - 3.0) < 0.2
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_export_ducks_and_solos_audio(tmp_path: Path) -> None:
+    """A ducked music track under a voice clip, with the base audio silenced by solo, renders to
+    a valid file — exercises the volume-enable duck windows and the anullsrc base-mute path."""
+    from app.media.render_executor import execute_render
+
+    def make(name: str, args: list[str]) -> Path:
+        path = tmp_path / name
+        subprocess.run(["ffmpeg", "-y", "-v", "error", *args, str(path)], check=True, timeout=60)
+        return path
+
+    base = make("base.mp4", ["-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=6",
+                             "-f", "lavfi", "-i", "sine=frequency=200:duration=6",
+                             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"])
+    music = make("music.wav", ["-f", "lavfi", "-i", "sine=frequency=440:duration=6"])
+    voice = make("voice.wav", ["-f", "lavfi", "-i", "sine=frequency=880:duration=2"])
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 6}],
+        assets={"a": {"file_key": str(base)}, "m": {"file_key": str(music)}, "v": {"file_key": str(voice)}},
+        audio_clips=[
+            {"id": "music", "asset_id": "m", "timeline_start": 0, "src_in": 0, "src_out": 6, "duck": True, "solo": False},
+            {"id": "voice", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 2, "duck": False, "solo": False},
+        ],
+        mute_base_audio=True,
+    )
+    music_item = next(a for a in plan.audio_overlays if a.duration == 6)
+    assert music_item.duck_windows == ((2.0, 4.0),)
+    out = tmp_path / "out.mp4"
+    execute_render(plan, lambda key: Path(key), out)
+    assert out.exists() and out.stat().st_size > 0
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")

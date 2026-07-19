@@ -15,6 +15,7 @@ format, gaps as black + silence), concatenated and encoded to mp4.
 """
 
 AUDIO_RATE = 48000
+DUCK_GAIN = 0.3  # ≈ −10.5 dB: how far a ducked track drops under overlapping audio (闪避)
 
 
 class RenderExecutionError(RuntimeError):
@@ -284,7 +285,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                     f"color=black:s={width}x{height}:r={fps}[bg{i}];"
                     f"[bg{i}][{tlabel}]overlay={ox}:{oy},format=yuv420p,setsar=1[v{i}]"
                 )
-            if probe_has_audio(path):
+            if probe_has_audio(path) and not plan.mute_base_audio:
                 tempo = _atempo_chain(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 filters.append(
@@ -292,6 +293,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                     f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
+                # No source audio, or the base track is silenced by a solo elsewhere.
                 filters.append(
                     f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]"
                 )
@@ -348,10 +350,16 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             src = item.source
             delay_ms = int(item.start * 1000)
             audio_fades = _fade_filters(item.fade_in, item.fade_out, item.duration, audio=True)
+            # Ducking: after adelay the stream is on timeline time, so the enable windows are
+            # absolute — drop to DUCK_GAIN while a non-ducked clip overlaps, full gain elsewhere.
+            duck = ""
+            if item.duck_windows:
+                enable = "+".join(f"between(t,{a},{b})" for a, b in item.duck_windows)
+                duck = f",volume=enable='{enable}':volume={DUCK_GAIN}"
             filters.append(
                 f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
                 f"volume={item.gain},aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
-                f"adelay={delay_ms}:all=1[aov{i}]"
+                f"adelay={delay_ms}:all=1{duck}[aov{i}]"
             )
             mix_inputs.append(f"[aov{i}]")
             input_index += 1

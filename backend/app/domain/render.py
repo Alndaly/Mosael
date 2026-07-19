@@ -46,8 +46,18 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
     subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
     base_clips = [clip_dict(clip) for clip in (video_tracks[0].clips if video_tracks else [])]
     overlay_clips = [clip_dict(clip) for track in video_tracks[1:] if not track.muted for clip in track.clips]
-    audio_clips = [clip_dict(clip) for track in audio_tracks for clip in track.clips]
+    # Attach each audio clip's track solo/duck so the plan can mix (solo silences non-soloed
+    # tracks; duck lowers a ducked track under overlapping non-ducked audio).
+    audio_clips = [
+        {**clip_dict(clip), "solo": track.solo, "duck": track.duck}
+        for track in audio_tracks
+        for clip in track.clips
+    ]
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
+
+    solo_active = any(track.solo for track in sequence.tracks)
+    base_video_soloed = bool(video_tracks and video_tracks[0].solo)
+    mute_base_audio = solo_active and not base_video_soloed
 
     asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips if clip["asset_id"]}
     assets = {
@@ -77,6 +87,8 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         subtitle_clips=subtitle_clips,
         subtitle_style=sequence.subtitle_style,
         luts=luts,
+        solo_active=solo_active,
+        mute_base_audio=mute_base_audio,
     )
 
 

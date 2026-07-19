@@ -101,6 +101,9 @@ class AudioItem:
     gain: float
     fade_in: float = 0.0
     fade_out: float = 0.0
+    # Ducking (闪避): timeline-time windows where this clip's gain is lowered because a
+    # non-ducked audio source (e.g. a voiceover on another track) overlaps it.
+    duck_windows: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,8 @@ class RenderPlan:
     audio_overlays: tuple[AudioItem, ...] = ()
     subtitles: tuple[SubtitleItem, ...] = ()
     subtitle_style: SubtitleStyleSpec = DEFAULT_SUBTITLE_STYLE
+    # Solo: silence the base video track's audio (a soloed track elsewhere took over).
+    mute_base_audio: bool = False
     render_plan_hash: str = field(default="")
 
     def with_hash(self) -> "RenderPlan":
@@ -156,6 +161,7 @@ class RenderPlan:
             audio_overlays=self.audio_overlays,
             subtitles=self.subtitles,
             subtitle_style=self.subtitle_style,
+            mute_base_audio=self.mute_base_audio,
             render_plan_hash=digest,
         )
 
@@ -220,6 +226,8 @@ def build_render_plan(
     subtitle_style: dict | None = None,
     luts: dict[str, str] | None = None,
     fill_mode: str = "cover",
+    solo_active: bool = False,
+    mute_base_audio: bool = False,
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
@@ -304,26 +312,37 @@ def build_render_plan(
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
 
-    audio_overlays: list[AudioItem] = []
+    # Solo silences non-soloed clips; then a ducked clip's gain is lowered during windows
+    # where a non-ducked audible clip (e.g. a voiceover on another track) overlaps it.
+    audible: list[tuple[dict, ClipSource, float, float]] = []
     for clip in sorted(audio_clips or [], key=lambda c: float(c["timeline_start"])):
         if clip.get("muted"):
+            continue
+        if solo_active and not clip.get("solo"):
             continue
         source = _require_source(assets, clip)
         clip_duration = float(clip["src_out"]) - float(clip["src_in"])
         if clip_duration <= 0:
             raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        audible.append((clip, source, float(clip["timeline_start"]), clip_duration))
+
+    key_spans = [(start, start + dur) for clip, _, start, dur in audible if not clip.get("duck")]
+    audio_overlays: list[AudioItem] = []
+    for clip, source, start, clip_duration in audible:
         fade_in, fade_out = _clip_fades(clip, clip_duration)
+        windows = _duck_windows(start, start + clip_duration, key_spans) if clip.get("duck") else ()
         audio_overlays.append(
             AudioItem(
-                start=float(clip["timeline_start"]),
+                start=start,
                 duration=round(clip_duration, 6),
                 source=source,
                 gain=float(clip.get("gain", 1.0)),
                 fade_in=fade_in,
                 fade_out=fade_out,
+                duck_windows=windows,
             )
         )
-        duration = max(duration, float(clip["timeline_start"]) + clip_duration)
+        duration = max(duration, start + clip_duration)
 
     subtitles: list[SubtitleItem] = []
     for clip in sorted(subtitle_clips or [], key=lambda c: float(c["timeline_start"])):
@@ -349,8 +368,28 @@ def build_render_plan(
         audio_overlays=tuple(audio_overlays),
         subtitles=tuple(subtitles),
         subtitle_style=_read_subtitle_style(subtitle_style),
+        mute_base_audio=mute_base_audio,
     )
     return plan.with_hash()
+
+
+def _duck_windows(
+    start: float, end: float, key_spans: list[tuple[float, float]]
+) -> tuple[tuple[float, float], ...]:
+    """Merged timeline-time windows within [start, end] that overlap any key span (the spans of
+    non-ducked audible clips). These are where a ducked clip's gain gets lowered."""
+    raw = sorted(
+        (max(start, k0), min(end, k1)) for k0, k1 in key_spans if min(end, k1) - max(start, k0) > 0.01
+    )
+    if not raw:
+        return ()
+    merged: list[list[float]] = [list(raw[0])]
+    for lo, hi in raw[1:]:
+        if lo <= merged[-1][1] + 0.01:
+            merged[-1][1] = max(merged[-1][1], hi)
+        else:
+            merged.append([lo, hi])
+    return tuple((round(lo, 6), round(hi, 6)) for lo, hi in merged)
 
 
 def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
