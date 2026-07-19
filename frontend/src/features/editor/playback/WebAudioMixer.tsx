@@ -28,8 +28,9 @@ export interface AudioSourceSpec {
 }
 
 const TICK_MS = 40;
-// Re-anchor when the store playhead diverges from the audio clock by more than this (a scrub).
-const SEEK_EPSILON = 0.12;
+// The store playhead equals the value we last set unless someone else moved it; a divergence
+// past this (a scrub / frame-step / clip edit) means a seek → reschedule from the new position.
+const SEEK_EPSILON = 0.02;
 
 export function WebAudioMixer({
   sources,
@@ -53,9 +54,13 @@ export function WebAudioMixer({
     const buffers = new Map<string, AudioBuffer>(); // assetId → decoded
     const loading = new Set<string>();
     const active = new Map<string, { node: AudioBufferSourceNode; gain: GainNode }>();
-    // Master-clock anchor: playhead = anchorPlayhead + (ctx.currentTime - anchorCtx) * rate.
-    let anchorCtx = 0;
-    let anchorPlayhead = 0;
+    // Master clock, integrated incrementally: each tick advances the playhead by the real
+    // AudioContext time elapsed since the last tick × the CURRENT rate (so a rate change is
+    // absorbed per-interval, never mistaken for a seek, and a throttled background tick just
+    // integrates a bigger dt correctly). An external seek is detected by comparing the store
+    // playhead to the value we last set — anything else means someone else moved it.
+    let lastCtx = 0;
+    let lastSet = 0;
     let hasSession = false;
 
     const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
@@ -102,7 +107,12 @@ export function WebAudioMixer({
       const gain = ctx.createGain();
       gain.gain.value = gainValue(s, volume, masterMuted);
       node.connect(gain).connect(master);
-      node.start(0, offset);
+      // Pass the clip's remaining buffer span as duration so the node self-terminates at its
+      // trim-out (srcOut) even if the reconcile tick is throttled (backgrounded tab), instead
+      // of bleeding past the cut until the next tick stops it.
+      const remaining = Math.min(s.srcOut, buffer.duration) - offset;
+      if (remaining <= 0) return;
+      node.start(0, offset, remaining);
       active.set(s.key, { node, gain });
     };
 
@@ -146,29 +156,28 @@ export function WebAudioMixer({
       if (ctx.state === "suspended") void ctx.resume();
 
       if (!hasSession) {
-        anchorCtx = ctx.currentTime;
-        anchorPlayhead = state.playhead;
+        lastCtx = ctx.currentTime;
+        lastSet = state.playhead;
         hasSession = true;
         reconcile(state.playhead, rate, volume, masterMuted);
         return;
       }
 
-      const expected = anchorPlayhead + (ctx.currentTime - anchorCtx) * rate;
-      // A scrub (or clip edit) moved the playhead out from under us → re-anchor + reschedule.
-      if (Math.abs(state.playhead - expected) > SEEK_EPSILON) {
-        anchorCtx = ctx.currentTime;
-        anchorPlayhead = state.playhead;
+      // Someone else moved the playhead (scrub, clip edit) → adopt it and reschedule.
+      if (Math.abs(state.playhead - lastSet) > SEEK_EPSILON) {
+        lastCtx = ctx.currentTime;
+        lastSet = state.playhead;
         stopAll();
         reconcile(state.playhead, rate, volume, masterMuted);
         return;
       }
 
-      let next = expected;
+      const dt = ctx.currentTime - lastCtx;
+      lastCtx = ctx.currentTime;
+      let next = lastSet + dt * rate;
       const total = totalRef.current;
       if (total > 0 && next >= total) {
         if (loop) {
-          anchorCtx = ctx.currentTime;
-          anchorPlayhead = 0;
           next = 0;
           stopAll();
         } else {
@@ -180,6 +189,7 @@ export function WebAudioMixer({
         }
       }
       state.setPlayhead(next);
+      lastSet = next;
       reconcile(next, rate, volume, masterMuted);
     }, TICK_MS);
 

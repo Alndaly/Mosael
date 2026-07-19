@@ -226,23 +226,30 @@ export class ProxyVideoSource {
       this.feed(this.decodeCursor);
       this.decodeCursor++;
     }
-    // Pick the newest frame at or before the playhead; evict the stale ones behind it.
-    let best: VideoFrame | null = null;
-    const keep: Decoded[] = [];
-    for (const f of this.frames) {
-      if (f.t <= sec + 1e-3) {
-        if (best && f.t < sec - EVICT_BEHIND) {
-          f.frame.close(); // an older frame we've moved well past
-          continue;
-        }
-        best = f.frame;
-      }
-      keep.push(f);
+    // The frame to show = the NEWEST frame at or before the playhead. frames is ascending
+    // in t, so that's the last one with t ≤ sec (found in one pass). Then evict frames we've
+    // moved well past — everything before the chosen frame that is > EVICT_BEHIND behind it.
+    let bestIdx = -1;
+    for (let i = 0; i < this.frames.length; i++) {
+      if (this.frames[i].t <= sec + 1e-3) bestIdx = i;
+      else break; // ascending — no later frame can qualify
     }
-    this.frames = keep;
-    // If nothing is ≤ sec yet (just seeked, first frame still decoding), show the
-    // earliest available so the canvas isn't blank.
-    return best ?? this.frames[0]?.frame ?? null;
+    if (bestIdx >= 0) {
+      const bestT = this.frames[bestIdx].t;
+      const keep: Decoded[] = [];
+      for (let i = 0; i < this.frames.length; i++) {
+        if (i < bestIdx && this.frames[i].t < bestT - EVICT_BEHIND) {
+          this.frames[i].frame.close();
+        } else {
+          keep.push(this.frames[i]);
+        }
+      }
+      this.frames = keep;
+      return this.frames.find((f) => f.t === bestT)?.frame ?? null;
+    }
+    // Nothing ≤ sec yet (just seeked, first frame still decoding) — show the earliest
+    // available so the canvas isn't blank; don't evict.
+    return this.frames[0]?.frame ?? null;
   }
 
   close(): void {

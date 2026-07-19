@@ -217,28 +217,34 @@ export function Monitor({
         l.asset.kind === "image" ||
         (l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready",
     );
-  // All audio-bearing clips active now (base video-track clip + audio tracks), fed to the
-  // WebAudio mixer while the compositor owns playback. The mixer re-filters by playhead.
+  // EVERY audio-bearing clip (base video-track video clips + all audio-track clips) fed to the
+  // WebAudio mixer, which filters by the live playhead itself. Passing the full set — not just
+  // the currently-active clips — means a clip that comes up under the advancing playhead is
+  // already in the mixer's list, so it starts on time instead of one render late.
   const audioSources = React.useMemo<AudioSourceSpec[]>(() => {
     const list: AudioSourceSpec[] = [];
-    const baseTrackMuted = Boolean(videoTracks[videoTracks.length - 1]?.muted);
-    if (activeClip?.asset_id && !isImage && activeAsset?.kind === "video") {
-      list.push({
-        key: activeClip.id, assetId: activeClip.asset_id, srcIn: activeClip.src_in, srcOut: activeClip.src_out,
-        timelineStart: activeClip.timeline_start, speed: activeClip.speed || 1, gain: activeClip.gain ?? 1,
-        muted: Boolean(activeClip.muted), trackMuted: baseTrackMuted,
-      });
-    }
-    for (const { clip, trackMuted } of activeAudioClips) {
-      if (!clip.asset_id) continue;
+    const baseTrack = videoTracks[videoTracks.length - 1];
+    const baseTrackMuted = Boolean(baseTrack?.muted);
+    for (const clip of baseTrack?.clips ?? []) {
+      if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue; // images have no audio
       list.push({
         key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
         timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
-        muted: Boolean(clip.muted), trackMuted,
+        muted: Boolean(clip.muted), trackMuted: baseTrackMuted,
       });
     }
+    for (const track of audioTracks) {
+      for (const clip of track.clips ?? []) {
+        if (!clip.asset_id) continue;
+        list.push({
+          key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
+          timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
+          muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
+        });
+      }
+    }
     return list;
-  }, [activeClip, activeAsset, isImage, activeAudioClips, videoTracks]);
+  }, [videoTracks, audioTracks, assetById]);
 
   // Playback clock. Interval-based (not rAF) so it keeps running when the
   // window is occluded or backgrounded — audio keeps playing there too.
@@ -410,6 +416,7 @@ export function Monitor({
               layers={compositorLayers}
               width={sequence.width}
               height={sequence.height}
+              fillMode={fillMode}
               className="monitor-video"
               style={fitStyle}
             />

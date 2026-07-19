@@ -26,12 +26,15 @@ export function CanvasCompositor({
   layers,
   width,
   height,
+  fillMode = "cover",
   className,
   style,
 }: {
   layers: CompositorLayer[];
   width: number;
   height: number;
+  /** Base-layer fit, matching the sequence reframe (overlay layers always cover). */
+  fillMode?: "cover" | "contain" | "blur";
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -40,6 +43,8 @@ export function CanvasCompositor({
   const imagesRef = React.useRef<Map<string, HTMLImageElement>>(new Map());
   const layersRef = React.useRef(layers);
   layersRef.current = layers;
+  const fillModeRef = React.useRef(fillMode);
+  fillModeRef.current = fillMode;
 
   // Per-clip filter strings; curve LUTs need an SVG feComponentTransfer rendered in the DOM.
   const filters = React.useMemo(
@@ -75,6 +80,7 @@ export function CanvasCompositor({
     for (const id of wantImage) {
       if (!imagesRef.current.has(id)) {
         const img = new Image();
+        img.crossOrigin = "anonymous"; // keep the canvas readable (scopes/capture) — asset URLs are cross-origin
         img.src = assetFileUrl(id);
         imagesRef.current.set(id, img);
       }
@@ -107,6 +113,7 @@ export function CanvasCompositor({
       ctx.clearRect(0, 0, width, height);
 
       const currentLayers = layersRef.current;
+      const fill = fillModeRef.current;
       for (let i = 0; i < currentLayers.length; i++) {
         const layer = currentLayers[i];
         const media = mediaFor(layer, playhead, sourcesRef.current, imagesRef.current);
@@ -114,9 +121,19 @@ export function CanvasCompositor({
         const { source: img, w: mw, h: mh } = media;
 
         const tf = layer.transformOverride ?? readTransform(layer.clip.transform);
-        const cover = Math.max(width / mw, height / mh);
-        const dw = mw * cover;
-        const dh = mh * cover;
+        // Only the base layer (index 0) follows the sequence fill mode; overlays always cover.
+        // "blur" paints a full-frame blurred cover backdrop, then the sharp contain-fit picture.
+        const contain = i === 0 && fill !== "cover";
+        if (i === 0 && fill === "blur") {
+          const bs = Math.max(width / mw, height / mh);
+          ctx.save();
+          ctx.filter = "blur(24px)";
+          ctx.drawImage(img, (width - mw * bs) / 2, (height - mh * bs) / 2, mw * bs, mh * bs);
+          ctx.restore();
+        }
+        const fit = contain ? Math.min(width / mw, height / mh) : Math.max(width / mw, height / mh);
+        const dw = mw * fit;
+        const dh = mh * fit;
 
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, tf.opacity));
