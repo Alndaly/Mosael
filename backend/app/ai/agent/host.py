@@ -105,7 +105,18 @@ def on_turn_finished(callback: Callable[[str], None]) -> None:
 
 
 def default_adapter() -> str:
-    return os.environ.get("MIBU_AGENT_CLI", "pi")
+    """The CLI backing the agent. Honour MIBU_AGENT_CLI when set; otherwise pick the first
+    installed adapter CLI instead of blindly assuming `pi` — a machine without `pi` on PATH
+    would fail every turn with "智能体执行失败" even though `opencode`/`claude` are available."""
+    explicit = os.environ.get("MIBU_AGENT_CLI")
+    if explicit:
+        return explicit
+    import shutil
+
+    for cli in ("pi", "opencode", "claude", "codex"):
+        if shutil.which(cli):
+            return cli
+    return "pi"
 
 
 def create_session(
