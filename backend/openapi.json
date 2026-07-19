@@ -2997,6 +2997,59 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/subtitles/generate": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Generate Subtitles",
+        "description": "一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。",
+        "operationId": "generate_subtitles_api_sequences__sequence_id__subtitles_generate_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateSubtitlesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
       "delete": {
         "tags": [
@@ -9926,6 +9979,28 @@
         ],
         "title": "FeishuOnboardingOut"
       },
+      "GenerateSubtitlesRequest": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "title": "Track Id"
+          },
+          "cues": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleCueInput"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Cues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "cues"
+        ],
+        "title": "GenerateSubtitlesRequest"
+      },
       "GenerationCreate": {
         "properties": {
           "workspace_id": {
@@ -12915,6 +12990,29 @@
           "src_time"
         ],
         "title": "SplitClipRequest"
+      },
+      "SubtitleCueInput": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "timeline_start": {
+            "type": "number",
+            "title": "Timeline Start"
+          },
+          "duration": {
+            "type": "number",
+            "title": "Duration"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "timeline_start",
+          "duration"
+        ],
+        "title": "SubtitleCueInput"
       },
       "SynthesizeRequest": {
         "properties": {

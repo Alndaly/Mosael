@@ -984,6 +984,26 @@ export interface paths {
         patch: operations["move_track_api_sequences__sequence_id__tracks__track_id__move_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/subtitles/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Subtitles
+         * @description 一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。
+         */
+        post: operations["generate_subtitles_api_sequences__sequence_id__subtitles_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
         parameters: {
             query?: never;
@@ -3152,6 +3172,13 @@ export interface components {
             /** App Id */
             app_id?: string | null;
         };
+        /** GenerateSubtitlesRequest */
+        GenerateSubtitlesRequest: {
+            /** Track Id */
+            track_id: string;
+            /** Cues */
+            cues: components["schemas"]["SubtitleCueInput"][];
+        };
         /** GenerationCreate */
         GenerationCreate: {
             /** Workspace Id */
@@ -4295,6 +4322,15 @@ export interface components {
         SplitClipRequest: {
             /** Src Time */
             src_time: number;
+        };
+        /** SubtitleCueInput */
+        SubtitleCueInput: {
+            /** Text */
+            text: string;
+            /** Timeline Start */
+            timeline_start: number;
+            /** Duration */
+            duration: number;
         };
         /** SynthesizeRequest */
         SynthesizeRequest: {
@@ -6891,6 +6927,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveTrackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_subtitles_api_sequences__sequence_id__subtitles_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateSubtitlesRequest"];
             };
         };
         responses: {

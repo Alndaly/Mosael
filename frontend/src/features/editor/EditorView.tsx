@@ -2,9 +2,14 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Type, Undo2 } from "lucide-react";
 
+import { toast } from "sonner";
+
 import {
+  API_BASE,
   addTrack,
   api,
+  generateSubtitles,
+  getAuthToken,
   cutClipRange,
   cutClipRanges,
   deleteClip,
@@ -38,6 +43,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
+import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { useEditorStore } from "@/stores/editorStore";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
@@ -309,6 +315,59 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       });
     },
     onSuccess: refreshSequences,
+  });
+  // 一键从逐字稿生成字幕:拉齐所有视频/音频片段的转写,投影到时间线句子,批量插到字幕轨。
+  const generateSubtitlesMutation = useMutation({
+    mutationFn: async () => {
+      const seq = sequence!;
+      const tracks = seq.tracks ?? [];
+      const clips = [
+        ...(tracks.find((tk) => tk.kind === "video")?.clips ?? []),
+        ...tracks.filter((tk) => tk.kind === "audio").flatMap((tk) => tk.clips ?? []),
+      ];
+      const assetIds = [...new Set(clips.map((c) => c.asset_id).filter((id): id is string => Boolean(id)))];
+      const token = getAuthToken();
+      const fetched = await Promise.all(
+        assetIds.map(async (id) => {
+          const res = await fetch(`${API_BASE}/api/assets/${id}/transcript`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          return res.ok ? await res.json() : null;
+        }),
+      );
+      const segmentsByAsset = new Map<string, SegmentLike[]>();
+      fetched.forEach((tr, index) => {
+        if (tr) {
+          segmentsByAsset.set(
+            assetIds[index],
+            (tr.segments ?? []).map((s: { id: string; start_time: number; end_time: number; text: string; speaker?: string }) => ({
+              id: s.id,
+              start_time: s.start_time,
+              end_time: s.end_time,
+              text: s.text,
+              speaker: s.speaker,
+              tokens: [],
+            })),
+          );
+        }
+      });
+      const sentences = projectTranscript(clips, segmentsByAsset);
+      if (sentences.length === 0) throw new Error(t("subtitleNoTranscript"));
+      let track = tracks.find((tk) => tk.kind === "subtitle" && !tk.locked);
+      if (!track) track = (await addTrack(seq.id, "subtitle")).tracks?.find((tk) => tk.kind === "subtitle");
+      if (!track) throw new Error(t("subtitleNoTranscript"));
+      const cues = sentences.map((s) => ({
+        text: s.text,
+        timeline_start: s.timelineStart,
+        duration: Math.max(0.4, s.timelineEnd - s.timelineStart),
+      }));
+      return { updated: await generateSubtitles(seq.id, track.id, cues), count: cues.length };
+    },
+    onSuccess: ({ updated, count }) => {
+      applySequence(updated);
+      toast.success(t("subtitleGenerated").replace("{n}", String(count)));
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
@@ -644,6 +703,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               sequence={sequence}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
               onAddSubtitle={() => addSubtitleMutation.mutate()}
+              onGenerate={() => generateSubtitlesMutation.mutate()}
+              generating={generateSubtitlesMutation.isPending}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
             />
           )}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash2, Type } from "lucide-react";
+import { Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
 
 import type { Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -15,11 +15,15 @@ export function SubtitlePanel({
   sequence,
   onSetText,
   onAddSubtitle,
+  onGenerate,
+  generating,
   onDeleteClip,
 }: {
   sequence: Sequence;
   onSetText: (clipId: string, text: string) => void;
   onAddSubtitle: () => void;
+  onGenerate?: () => void;
+  generating?: boolean;
   onDeleteClip: (clipId: string) => void;
 }) {
   const t = useI18n();
@@ -85,6 +89,11 @@ export function SubtitlePanel({
         })}
       </div>
       <div className="sub-footer">
+        {onGenerate && (
+          <button type="button" className="ts-tool" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
+            {generating ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
+          </button>
+        )}
         <button type="button" className="ts-tool" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>

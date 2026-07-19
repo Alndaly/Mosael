@@ -83,6 +83,29 @@ def test_split_points_ignores_out_of_range_and_too_close() -> None:
     assert len(clips(state)) == 2
 
 
+def test_generate_subtitles_batch_and_undo() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    seq = client.post("/api/sequences", json={"workspace_id": ws["id"], "project_id": proj["id"], "name": "M"}).json()
+    sub = client.post(f"/api/sequences/{seq['id']}/tracks", json={"kind": "subtitle"}).json()
+    track = next(t for t in sub["tracks"] if t["kind"] == "subtitle")
+
+    cues = [
+        {"text": "第一句", "timeline_start": 0, "duration": 1},
+        {"text": "第二句", "timeline_start": 1.2, "duration": 1},
+        {"text": "   ", "timeline_start": 3, "duration": 1},  # blank → skipped
+    ]
+    state = client.post(f"/api/sequences/{seq['id']}/subtitles/generate", json={"track_id": track["id"], "cues": cues}).json()
+    clips = next(t for t in state["tracks"] if t["kind"] == "subtitle")["clips"]
+    assert len(clips) == 2 and {c["text_override"] for c in clips} == {"第一句", "第二句"}
+
+    undone = client.post(f"/api/sequences/{seq['id']}/undo").json()
+    assert next(t for t in undone["tracks"] if t["kind"] == "subtitle")["clips"] == []
+    redone = client.post(f"/api/sequences/{seq['id']}/redo").json()
+    assert len(next(t for t in redone["tracks"] if t["kind"] == "subtitle")["clips"]) == 2
+
+
 def test_move_track_reorders_and_undo() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

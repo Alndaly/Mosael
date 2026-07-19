@@ -24,6 +24,7 @@ UNDOABLE_KINDS = (
     "add_track",
     "remove_track",
     "move_track",
+    "insert_clips_batch",
     "set_clip_effect",
     "split_clip",
     "set_track_state",
@@ -150,6 +151,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         for created in payload["created"]:
             _delete_clip_row(db, created["clip_id"])
         _restore_clip_row(db, sequence, payload["original"])
+    elif operation.kind == "insert_clips_batch":
+        for created in payload["created"]:
+            _delete_clip_row(db, created["clip_id"])
     elif operation.kind == "ripple_delete_clip":
         for entry in payload["shifted"]:
             clip = _require_clip_row(db, entry["clip_id"])
@@ -221,6 +225,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.src_out = payload["src_out"]
     elif operation.kind in ("apply_transcript_edit", "split_clip"):
         _delete_clip_row(db, payload["original"]["clip_id"])
+        for created in payload["created"]:
+            _restore_clip_row(db, sequence, created)
+    elif operation.kind == "insert_clips_batch":
         for created in payload["created"]:
             _restore_clip_row(db, sequence, created)
     elif operation.kind == "ripple_delete_clip":

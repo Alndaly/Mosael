@@ -292,6 +292,17 @@ class MoveTrackRequest(BaseModel):
     direction: str = Field(pattern="^(up|down)$")
 
 
+class SubtitleCueInput(BaseModel):
+    text: str
+    timeline_start: float
+    duration: float
+
+
+class GenerateSubtitlesRequest(BaseModel):
+    track_id: str
+    cues: list[SubtitleCueInput] = Field(min_length=1)
+
+
 class SetTrackStateRequest(BaseModel):
     muted: bool | None = None
     locked: bool | None = None

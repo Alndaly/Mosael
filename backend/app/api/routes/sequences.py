@@ -21,6 +21,7 @@ from app.api.schemas import (
     SetSequenceReframeRequest,
     SetClipTextRequest,
     SetTrackStateRequest,
+    GenerateSubtitlesRequest,
     MoveTrackRequest,
     SplitClipPointsRequest,
     SplitClipRequest,
@@ -37,6 +38,7 @@ from app.domain.sequences.operations import (
     CutClipRanges,
     DeleteClip,
     InsertClip,
+    GenerateSubtitles,
     InsertTextClip,
     MoveClip,
     MoveTrack,
@@ -66,6 +68,7 @@ from app.domain.sequences.operations import (
     split_clip as split_clip_operation,
     split_clip_at_points as split_clip_points_operation,
     insert_clip as insert_clip_operation,
+    generate_subtitles as generate_subtitles_operation,
     insert_text_clip as insert_text_clip_operation,
     set_clip_text as set_clip_text_operation,
     move_clip as move_clip_operation,
@@ -182,6 +185,15 @@ def set_track_state(
 def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_track_operation(db, sequence_id, MoveTrack(track_id=track_id, direction=body.direction)))
+    return _get_sequence(db, sequence_id)
+
+
+@router.post("/sequences/{sequence_id}/subtitles/generate", response_model=SequenceOut)
+def generate_subtitles(sequence_id: str, body: GenerateSubtitlesRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    """一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。"""
+    require_sequence_access(db, user, sequence_id)
+    cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in body.cues)
+    _apply(lambda: generate_subtitles_operation(db, sequence_id, GenerateSubtitles(track_id=body.track_id, cues=cues)))
     return _get_sequence(db, sequence_id)
 
 

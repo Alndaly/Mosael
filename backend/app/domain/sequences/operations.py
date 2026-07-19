@@ -376,6 +376,55 @@ class InsertTextClip:
     actor_id: str | None = None
 
 
+@dataclass(frozen=True)
+class GenerateSubtitles:
+    """Batch-insert many subtitle cues onto one subtitle track in a single op (一键生成字幕
+    from the transcript). cues = tuple of (text, timeline_start, duration)."""
+
+    track_id: str
+    cues: tuple[tuple[str, float, float], ...]
+    actor_id: str | None = None
+
+
+def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    track = db.get(Track, op.track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceDomainError("Track not found")
+    if track.kind != "subtitle":
+        raise SequenceDomainError("Subtitles need a subtitle track")
+    created: list[dict[str, Any]] = []
+    for text, start, duration in op.cues:
+        cleaned = (text or "").strip()
+        if not cleaned or duration <= 0 or start < 0:
+            continue
+        clip = Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=track.id,
+            asset_id=None,
+            timeline_start=float(start),
+            src_in=0,
+            src_out=float(duration),
+            text_override=cleaned,
+        )
+        db.add(clip)
+        db.flush()
+        created.append(_clip_payload(clip))
+    if not created:
+        raise SequenceDomainError("No subtitle cues to insert")
+    _record_operation(
+        db,
+        sequence,
+        kind="insert_clips_batch",
+        payload={"created": created},
+        summary={"operation": "insert_clips_batch", "count": len(created)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
 def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)

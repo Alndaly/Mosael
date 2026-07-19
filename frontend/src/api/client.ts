@@ -317,6 +317,17 @@ export function moveTrack(sequenceId: string, trackId: string, direction: "up" |
   });
 }
 
+export function generateSubtitles(
+  sequenceId: string,
+  trackId: string,
+  cues: Array<{ text: string; timeline_start: number; duration: number }>,
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/subtitles/generate`, {
+    method: "POST",
+    body: JSON.stringify({ track_id: trackId, cues }),
+  });
+}
+
 export function insertTextClip(
   sequenceId: string,
   body: { track_id: string; text: string; timeline_start: number; duration: number },
