@@ -11,7 +11,7 @@ from app.api.schemas import (
     ScheduledTaskRunOut,
     ScheduledTaskUpdate,
 )
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ScheduledTask, ScheduledTaskRun
 from app.domain.scheduler import create_scheduled_task, run_scheduled_task, update_scheduled_task
 from app.domain.scheduler.operations import SchedulerDomainError
@@ -21,7 +21,7 @@ router = APIRouter(tags=["scheduler"])
 
 @router.post("/scheduled-tasks", response_model=ScheduledTaskOut)
 def create_task(body: ScheduledTaskCreate, db: DbSession, user: CurrentUser) -> ScheduledTask:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "schedule")
     try:
         return create_scheduled_task(db, **body.model_dump())
     except SchedulerDomainError as exc:
@@ -41,7 +41,7 @@ def list_tasks(workspace_id: str, db: DbSession, user: CurrentUser, project_id: 
 @router.patch("/scheduled-tasks/{task_id}", response_model=ScheduledTaskOut)
 def update_task(task_id: str, body: ScheduledTaskUpdate, db: DbSession, user: CurrentUser) -> ScheduledTask:
     task = _get_task(db, task_id)
-    ensure_workspace_access(db, user, task.workspace_id)
+    ensure_workspace_perm(db, user, task.workspace_id, "schedule")
     try:
         return update_scheduled_task(db, task, body.model_dump(exclude_unset=True))
     except SchedulerDomainError as exc:
@@ -51,7 +51,7 @@ def update_task(task_id: str, body: ScheduledTaskUpdate, db: DbSession, user: Cu
 @router.delete("/scheduled-tasks/{task_id}", status_code=204)
 def delete_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
     task = _get_task(db, task_id)
-    ensure_workspace_access(db, user, task.workspace_id)
+    ensure_workspace_perm(db, user, task.workspace_id, "schedule")
     db.delete(task)
     db.commit()
     return Response(status_code=204)
@@ -76,7 +76,7 @@ def list_task_runs(task_id: str, db: DbSession, user: CurrentUser) -> list[Sched
 @router.post("/scheduled-tasks/{task_id}/run", response_model=RunScheduledTaskResponse)
 def run_task(task_id: str, db: DbSession, user: CurrentUser) -> RunScheduledTaskResponse:
     task = _get_task(db, task_id)
-    ensure_workspace_access(db, user, task.workspace_id)
+    ensure_workspace_perm(db, user, task.workspace_id, "schedule")
     try:
         run, job = run_scheduled_task(db, task)
     except SchedulerDomainError as exc:

@@ -45,6 +45,19 @@ def test_perm_override_grants_edit_to_viewer() -> None:
     assert viewer.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 200
 
 
+def test_finer_perm_override_gates_a_single_capability() -> None:
+    owner, ws, editor = _setup("editor")
+    me = editor.get("/api/auth/me").json()
+    body = {"workspace_id": ws["id"], "name": "t", "kind": "noop", "trigger_type": "manual"}
+    # Editor has `schedule` by default → the perm gate lets it through (domain may 422, never 403).
+    assert editor.post("/api/scheduled-tasks", json=body).status_code != 403
+
+    # Revoke just `schedule` from this editor → blocked, but `edit` is untouched.
+    owner.patch(f"/api/workspaces/{ws['id']}/members/{me['id']}/perms", json={"perms": {"schedule": False}})
+    assert editor.post("/api/scheduled-tasks", json=body).status_code == 403
+    assert editor.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 200
+
+
 def test_viewer_can_run_retrieval_test() -> None:
     # A read-only POST (KB retrieval test) stays open to viewers.
     owner, ws, viewer = _setup("viewer")

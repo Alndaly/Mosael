@@ -19,7 +19,7 @@ from app.api.schemas import (
     AgentSkillOut,
     PromptSkillOut,
 )
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import AgentMessage, AgentSession
 from app.domain.agent import list_agent_skills
 from app.domain.agent.prompt_skills import list_prompt_skills, load_prompt_skill
@@ -29,7 +29,7 @@ router = APIRouter(tags=["agent"])
 
 @router.post("/agent/sessions", response_model=AgentSessionOut)
 def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentUser) -> AgentSession:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
     return host.create_session(
         db,
         workspace_id=body.workspace_id,
@@ -70,6 +70,7 @@ def post_agent_message(
     session_id: str, body: AgentMessageCreate, db: DbSession, user: CurrentUser
 ) -> AgentMessage:
     session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
     try:
         return host.post_user_message(db, session, body.content, user)
     except host.HostError as exc:

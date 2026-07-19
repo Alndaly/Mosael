@@ -26,7 +26,7 @@ from app.api.schemas import (
     TrimClipRequest,
 )
 from app.db.models import Job, Project, Sequence, Track
-from app.core.permissions import ensure_workspace_access, require_sequence_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.render import start_export
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
@@ -279,7 +279,8 @@ def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequenc
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
 def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Job:
-    require_sequence_access(db, user, sequence_id)
+    sequence = require_sequence_access(db, user, sequence_id)
+    ensure_workspace_perm(db, user, sequence.workspace_id, "export")
     try:
         return start_export(db, sequence_id)
     except LookupError as exc:

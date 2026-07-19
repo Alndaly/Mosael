@@ -14,7 +14,7 @@ from app.api.schemas import (
     PublishPlatformOut,
     PublishTaskOut,
 )
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Asset, PublishAccount, PublishTask
 from app.domain.publish import (
     PUBLISH_PLATFORMS,
@@ -58,7 +58,7 @@ def list_accounts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
 
 @router.post("/publish/accounts", response_model=PublishAccountOut)
 def create_account_route(body: PublishAccountCreate, db: DbSession, user: CurrentUser) -> PublishAccount:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "publish")
     try:
         return create_account(
             db,
@@ -77,7 +77,7 @@ def update_account(account_id: str, body: PublishAccountUpdate, db: DbSession, u
     account = db.get(PublishAccount, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    ensure_workspace_access(db, user, account.workspace_id)
+    ensure_workspace_perm(db, user, account.workspace_id, "publish")
     changes = body.model_dump(exclude_unset=True)
     if changes.get("name"):
         account.name = changes["name"]
@@ -99,7 +99,7 @@ def recheck_account(account_id: str, db: DbSession, user: CurrentUser) -> Publis
     account = db.get(PublishAccount, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    ensure_workspace_access(db, user, account.workspace_id)
+    ensure_workspace_perm(db, user, account.workspace_id, "publish")
     account.binding_status = "unknown"
     account.last_checked_at = None
     account.last_error = None
@@ -113,7 +113,7 @@ def delete_account(account_id: str, db: DbSession, user: CurrentUser) -> Respons
     account = db.get(PublishAccount, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    ensure_workspace_access(db, user, account.workspace_id)
+    ensure_workspace_perm(db, user, account.workspace_id, "publish")
     db.delete(account)
     db.commit()
     return Response(status_code=204)
@@ -127,7 +127,7 @@ def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> l
 
 @router.post("/publish/tasks", response_model=PublishTaskOut)
 def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "publish")
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail="Account not found in this workspace")
@@ -155,7 +155,7 @@ def delete_publish_task(task_id: str, db: DbSession, user: CurrentUser) -> Respo
     task = db.get(PublishTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Publish task not found")
-    ensure_workspace_access(db, user, task.workspace_id)
+    ensure_workspace_perm(db, user, task.workspace_id, "publish")
     db.delete(task)
     db.commit()
     return Response(status_code=204)
@@ -163,7 +163,7 @@ def delete_publish_task(task_id: str, db: DbSession, user: CurrentUser) -> Respo
 
 @router.post("/publish/copy", response_model=PublishCopyResponse)
 def generate_publish_copy(body: PublishCopyRequest, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "publish")
     from app.domain.publish.copy import generate_copy
 
     try:

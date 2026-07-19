@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import GenerationCreate, GenerationCreateResponse, GenerationJobOut, GenerationModelOut
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import GenerationJob, GenerationModel
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
@@ -26,7 +26,7 @@ def list_generation_models(db: DbSession, kind: str | None = None) -> list[Gener
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
     ensure_builtin_generation_models(db)
     try:
         generation, job = create_generation_job(db, **body.model_dump())
