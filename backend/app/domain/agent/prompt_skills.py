@@ -6,13 +6,13 @@ from typing import Any
 from app.core.config import settings
 
 """
-Prompt skills(opencode/Claude Code 同构的 skill 约定):每个技能是
+Prompt skills(Claude Code 同构的 skill 约定):每个技能是
 `~/.mibu-new/skills/<id>/SKILL.md`,YAML frontmatter 带 name/description,
 正文是给智能体的操作手册。内置技能首次访问时落盘(不覆盖用户改动),
 用户可以直接编辑文件或新建自己的技能目录。
 
 智能体侧按需加载:系统提示词只带 id+description 索引,命中任务时通过
-MCP 的 load_skill 拉取正文 —— 与 opencode 的 skill 惰性加载模型一致。
+MCP 的 load_skill 拉取正文 —— 与 Claude Code 的 skill 惰性加载模型一致。
 """
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)

@@ -850,7 +850,7 @@ class AgentSessionCreate(BaseModel):
     workspace_id: str
     project_id: str | None = None
     title: str = Field(default="新对话", max_length=200)
-    adapter: str | None = Field(default=None, pattern="^(claude|opencode|pi)$")
+    adapter: str | None = Field(default=None, pattern="^(claude|pi)$")
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
 

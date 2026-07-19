@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 """
-Agent CLI adapters: Mibu hosts a specialized external coding-agent
-(opencode-style) instead of a homegrown loop. The agent gets Mibu's MCP
-server (with a session token) as its tool surface; mutations still flow
-through the confirmation cards.
+Agent CLI adapters: Mibu hosts a specialized external coding-agent (pi — the
+`claude` adapter is an alternative) instead of a homegrown loop. The agent gets
+Mibu's MCP server (with a session token) as its tool surface; mutations still
+flow through the confirmation cards.
 """
 
 TURN_TIMEOUT_SECONDS = 600
@@ -61,8 +61,6 @@ def run_turn(
 ) -> TurnResult:
     if adapter == "claude":
         return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
-    if adapter == "opencode":
-        return _run_opencode(prompt, system_prompt, api_base, token, adapter_session_id)
     if adapter == "pi":
         return _run_pi(
             prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_state, on_delta, on_tool
@@ -238,42 +236,6 @@ def _run_claude_streaming(
         Path(config_path).unlink(missing_ok=True)
 
 
-def _run_opencode(
-    prompt: str, system_prompt: str, api_base: str, token: str, adapter_session_id: str | None
-) -> TurnResult:
-    """Best-effort opencode support: per-session home dir carries opencode.json MCP config."""
-    binary = os.environ.get("MIBU_AGENT_BIN_OPENCODE") or shutil.which("opencode") or "opencode"
-    home = Path(tempfile.gettempdir()) / "mibu-opencode" / (adapter_session_id or "default")
-    home.mkdir(parents=True, exist_ok=True)
-    backend_dir = Path(__file__).resolve().parents[3]
-    python = backend_dir / ".venv" / "bin" / "python"
-    (home / "opencode.json").write_text(
-        json.dumps(
-            {
-                "$schema": "https://opencode.ai/config.json",
-                "instructions": ["mibu-agent.md"],
-                "mcp": {
-                    "mibu": {
-                        "type": "local",
-                        "command": [str(python), str(backend_dir / "mcp_server.py")],
-                        "environment": {"MIBU_API": api_base, "MIBU_TOKEN": token},
-                    }
-                },
-            }
-        )
-    )
-    (home / "mibu-agent.md").write_text(system_prompt)
-    process = subprocess.run(
-        [binary, "run", prompt],
-        capture_output=True,
-        text=True,
-        timeout=TURN_TIMEOUT_SECONDS,
-        cwd=home,
-        env={**os.environ},
-    )
-    if process.returncode != 0:
-        raise AdapterError(_tail(process.stderr) or f"agent exited with code {process.returncode}")
-    return TurnResult(text=process.stdout.strip(), adapter_session_id=adapter_session_id)
 
 
 def _tail(text: str, limit: int = 500) -> str:

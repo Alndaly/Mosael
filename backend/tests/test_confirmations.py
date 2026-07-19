@@ -34,7 +34,7 @@ def test_edit_timeline_requires_approval_then_executes() -> None:
         json={
             "workspace_id": ws["id"],
             "tool": "edit_timeline",
-            "requested_by": "opencode",
+            "requested_by": "pi",
             "payload": {
                 "sequence_id": sequence["id"],
                 "operations": [
