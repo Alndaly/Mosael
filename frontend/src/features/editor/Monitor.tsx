@@ -113,6 +113,12 @@ export function Monitor({
   // saved transform so the media tracks the box live; committed on release via onSetTransform.
   // (selectedActive + clipTransformStyle are derived below, after the overlay elements.)
   const [draft, setDraft] = React.useState<Transform | null>(null);
+  // Time of the last transform-drag movement — the click that *ends* a drag would otherwise
+  // bubble to the frame's click-to-play; ignore clicks within a short window after a drag.
+  const tfInteractRef = React.useRef(0);
+  // Keep the draft until the fresh sequence lands (same anti-flicker pattern as timeline drags),
+  // otherwise clearing the draft on release snaps the box back to the stale saved transform.
+  const tfSettleRef = React.useRef(false);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
@@ -159,6 +165,14 @@ export function Monitor({
     [activeClip, activeOverlayClips, selectedClipIds],
   );
   React.useEffect(() => setDraft(null), [selectedActive?.id]);
+  // Drop the committed draft only once the fresh sequence has propagated (armed on commit), so the
+  // box never flashes back to the pre-drag transform between release and the server round-trip.
+  React.useEffect(() => {
+    if (tfSettleRef.current) {
+      tfSettleRef.current = false;
+      setDraft(null);
+    }
+  }, [sequence]);
   const draftFor = (clipId: string | undefined) => (draft && selectedActive?.id === clipId ? draft : null);
   const clipTransformStyle = React.useMemo<React.CSSProperties>(
     () => transformCss(draftFor(activeClip?.id) ?? readTransform(activeClip?.transform)),
@@ -279,6 +293,11 @@ export function Monitor({
     if (!playing && totalDuration > 0 && playhead >= totalDuration) setPlayhead(0);
     togglePlaying();
   };
+  // Frame click toggles play — but not the click that just ended a transform drag.
+  const onFrameClick = () => {
+    if (performance.now() - tfInteractRef.current < 300) return;
+    playToggle();
+  };
 
   return (
     <div className="monitor-stack">
@@ -296,7 +315,7 @@ export function Monitor({
         </svg>
       )}
       <div className="monitor-stage">
-        <div className="monitor-frame-wrap" ref={stageRef} onClick={playToggle} style={frameStyle}>
+        <div className="monitor-frame-wrap" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
           {fillMode === "blur" && activeClip && (
             <div className="monitor-blur-bg" aria-hidden>
               {isImage && activeAsset ? (
@@ -366,9 +385,13 @@ export function Monitor({
               <TransformOverlay
                 frameRef={stageRef}
                 transform={draft ?? readTransform(selectedActive.transform)}
-                onChange={setDraft}
+                onChange={(tf) => {
+                  tfInteractRef.current = performance.now();
+                  setDraft(tf);
+                }}
                 onCommit={(next) => {
-                  setDraft(null);
+                  tfInteractRef.current = performance.now();
+                  tfSettleRef.current = true; // hold the draft until the fresh sequence arrives
                   onSetTransform(selectedActive.id, next);
                 }}
               />

@@ -390,7 +390,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const setTransformMutation = useMutation({
     mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, number> }) =>
       setClipTransform(sequence!.id, clipId, transform),
-    onSuccess: refreshSequences,
+    // Apply the returned sequence straight to the cache (no refetch gap) so the resized clip
+    // lands at its final transform in the same tick the Monitor drops its drag draft.
+    onSuccess: (updated) => applySequence(updated),
+    onError: refreshSequences,
   });
   const reframeMutation = useMutation({
     mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: string }) =>
