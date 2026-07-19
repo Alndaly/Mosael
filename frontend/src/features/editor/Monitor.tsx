@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
+import { AudioElement } from "@/features/editor/AudioElement";
 import { MonitorElement } from "@/features/editor/MonitorElement";
 import { Scopes } from "@/features/editor/Scopes";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
@@ -52,8 +53,6 @@ export function Monitor({
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-  const loadedAudioAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
   const videoTracks = React.useMemo(
@@ -75,13 +74,9 @@ export function Monitor({
         .sort((a, b) => a.timeline_start - b.timeline_start),
     [videoTracks],
   );
-  const audioTrack = React.useMemo(
-    () => (sequence.tracks ?? []).find((item) => item.kind === "audio") ?? null,
+  const audioTracks = React.useMemo(
+    () => (sequence.tracks ?? []).filter((item) => item.kind === "audio"),
     [sequence],
-  );
-  const audioClips = React.useMemo(
-    () => [...(audioTrack?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
-    [audioTrack],
   );
   const subtitleClips = React.useMemo(
     () =>
@@ -151,8 +146,17 @@ export function Monitor({
     return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
-  const activeAudioClip =
-    audioClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  // Every audio clip active at the playhead, across ALL audio tracks — each plays via its own
+  // <AudioElement> so multiple audio tracks (e.g. music + detached audio) sound together.
+  const activeAudioClips = React.useMemo(
+    () =>
+      audioTracks.flatMap((track) =>
+        (track.clips ?? [])
+          .filter((clip) => clip.asset_id && playhead >= clip.timeline_start && playhead < clipEnd(clip))
+          .map((clip) => ({ clip, trackMuted: Boolean(track.muted) })),
+      ),
+    [audioTracks, playhead],
+  );
   // Every active clip on an overlay video track (V2+), z-ordered by track — each renders as a
   // free canvas element (MonitorElement self-syncs). The base V1 clip stays the audio/scopes/blur owner.
   const activeOverlayClips = React.useMemo(
@@ -243,33 +247,6 @@ export function Monitor({
     }
   }, [playhead, playing, activeClip, activeAsset, isImage, playbackRate, volume, masterMuted]);
 
-  // Keep the audio-track element in lockstep as well.
-  React.useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (!activeAudioClip) {
-      if (!audio.paused) audio.pause();
-      return;
-    }
-    if (activeAudioClip.asset_id && loadedAudioAssetRef.current !== activeAudioClip.asset_id) {
-      loadedAudioAssetRef.current = activeAudioClip.asset_id;
-      audio.src = assetFileUrl(activeAudioClip.asset_id);
-    }
-    const audioSpeed = activeAudioClip.speed || 1;
-    const desired = activeAudioClip.src_in + (playhead - activeAudioClip.timeline_start) * audioSpeed;
-    if (Math.abs(audio.currentTime - desired) > 0.18) {
-      audio.currentTime = desired;
-    }
-    audio.playbackRate = playbackRate * audioSpeed;
-    audio.volume = Math.min(1, Math.max(0, activeAudioClip.gain)) * (masterMuted ? 0 : volume);
-    audio.muted = activeAudioClip.muted || Boolean(audioTrack?.muted);
-    if (playing && audio.paused) {
-      audio.play().catch(() => undefined);
-    } else if (!playing && !audio.paused) {
-      audio.pause();
-    }
-  }, [playhead, playing, activeAudioClip, audioTrack, playbackRate, volume, masterMuted]);
-
   const frameStep = 1 / (sequence.fps || 30);
   const seekFromScrub = (clientX: number) => {
     const rect = scrubRef.current?.getBoundingClientRect();
@@ -303,7 +280,19 @@ export function Monitor({
 
   return (
     <div className="monitor-stack">
-      <audio ref={audioRef} preload="auto" />
+      {/* One <audio> per active audio-track clip so all audio tracks play together. */}
+      {activeAudioClips.map(({ clip, trackMuted }) => (
+        <AudioElement
+          key={clip.id}
+          clip={clip}
+          playing={playing}
+          playhead={playhead}
+          playbackRate={playbackRate}
+          volume={volume}
+          masterMuted={masterMuted}
+          trackMuted={trackMuted}
+        />
+      ))}
       {/* 曲线预览滤镜:逐通道 feComponentTransfer 查表,cssFilter 里以 url(#id) 引用。 */}
       {curveTables && (
         <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
