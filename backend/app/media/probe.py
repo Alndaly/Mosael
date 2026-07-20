@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import mimetypes
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from typing import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +65,10 @@ def probe_media(path: Path) -> dict[str, Any]:
     return {k: v for k, v in info.items() if v is not None}
 
 
+# ffprobe is cheap but not free; a long timeline should not fork one per source at once.
+_MAX_PARALLEL_PROBES = 8
+
+
 def probe_has_audio(path: Path) -> bool:
     try:
         proc = subprocess.run(
@@ -75,6 +81,24 @@ def probe_has_audio(path: Path) -> bool:
     except Exception:
         return False
     return bool(proc.stdout.strip())
+
+
+def probe_has_audio_many(paths: "Iterable[Path]") -> dict[Path, bool]:
+    """probe_has_audio over many files at once.
+
+    Building an ffmpeg command probes every optional source to find out whether it carries an
+    audio stream, and each probe spawns ffprobe and waits ~30-80ms. Done in series that is a
+    second or more of dead time before the render even starts, for work that is pure waiting on
+    child processes — so it runs concurrently, bounded so a long timeline cannot fork hundreds
+    of ffprobes at once. Deduped: the same source used by several clips is probed once.
+    """
+    unique = list(dict.fromkeys(paths))
+    if not unique:
+        return {}
+    if len(unique) == 1:
+        return {unique[0]: probe_has_audio(unique[0])}
+    with ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_PROBES, len(unique))) as pool:
+        return dict(zip(unique, pool.map(probe_has_audio, unique)))
 
 
 def _parse_rate(value: str | None) -> float | None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import re
 import threading
@@ -49,12 +50,32 @@ def _get_driver() -> Any:
         return _driver
 
 
+# Ingesting a long document means one extraction call per chunk; bounded so a big upload
+# does not fire hundreds of concurrent LLM requests at a local model.
+_MAX_PARALLEL_EXTRACT = 4
+
+
 def extract_entities(db: Session, text: str) -> list[dict[str, str]]:
     """LLM 实体抽取;没有可用模型或解析失败返回空。"""
+    profile = _entity_profile(db)
+    if profile is None:
+        return []
+    return _extract_with(profile, text)
+
+
+def _entity_profile(db: Session):
+    """The provider used for entity extraction, read on the CALLING thread.
+
+    Resolving it needs the Session, and a Session belongs to one thread — so it is looked up
+    once here rather than per chunk inside a worker. That also removes a redundant DB read per
+    chunk that the per-chunk version was doing."""
     vendor = settings.kb_embedding_vendor  # 复用同一供应商配置做轻量抽取
     profile = resolve_profile(db, vendor) if vendor else None
-    if profile is None or not profile.default_model:
-        return []
+    return profile if profile is not None and profile.default_model else None
+
+
+def _extract_with(profile, text: str) -> list[dict[str, str]]:
+    """The network half — no Session, so it is safe to run on a worker thread."""
     try:
         response = httpx.post(
             f"{profile.base_url.rstrip('/')}/chat/completions",
@@ -95,8 +116,19 @@ def upsert_document_graph(
             "MERGE (d:Document {id: $doc}) SET d.title = $title, d.workspace_id = $ws",
             doc=document_id, title=title, ws=workspace_id,
         )
-        for chunk_id, text in chunks:
-            entities = extract_entities(db, text)
+        # One LLM round-trip per chunk, and they do not depend on each other — so extract them
+        # all first, concurrently, then write the graph. The writes stay on this thread because
+        # a neo4j Session is no more thread-safe than a SQLAlchemy one.
+        profile = _entity_profile(db)
+        if profile is None:
+            per_chunk: list[list[dict[str, str]]] = [[] for _ in chunks]
+        elif len(chunks) == 1:
+            per_chunk = [_extract_with(profile, chunks[0][1])]
+        else:
+            with ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_EXTRACT, len(chunks))) as pool:
+                per_chunk = list(pool.map(lambda item: _extract_with(profile, item[1]), chunks))
+
+        for (chunk_id, text), entities in zip(chunks, per_chunk):
             session.run(
                 "MATCH (d:Document {id: $doc}) "
                 "MERGE (c:Chunk {id: $chunk}) SET c.document_id = $doc, c.workspace_id = $ws "

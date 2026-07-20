@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.core.config import settings
-from app.media.probe import probe_has_audio
+from app.media.probe import probe_has_audio_many
 from app.media.render_plan import FILTER_PRESETS, RenderPlan, Transform
 
 """
@@ -274,6 +274,14 @@ def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, s
 
 def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
+    # Probe every source we will ask about up front, concurrently, instead of once per clip as
+    # the command is assembled — the probes are independent and each one is just waiting on an
+    # ffprobe child. Repeated sources collapse to one probe.
+    has_audio = probe_has_audio_many(
+        [resolve(segment.source.file_key) for segment in plan.video_segments
+         if segment.kind == "clip" and segment.source is not None]
+        + [resolve(item.source.file_key) for item in plan.audio_overlays if item.optional]
+    )
     args: list[str] = [settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
     filters: list[str] = []
     pair_labels: list[str] = []
@@ -312,7 +320,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                     f"color=black:s={width}x{height}:r={fps}[bg{i}];"
                     f"[bg{i}][{tlabel}]overlay={ox}:{oy},format=yuv420p,setsar=1[v{i}]"
                 )
-            if probe_has_audio(path) and not plan.mute_base_audio and not segment.muted:
+            if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
                 tempo = _atempo_chain(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
@@ -383,7 +391,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         mix_inputs = ["[abase]"]
         for i, item in enumerate(plan.audio_overlays):
             path = resolve(item.source.file_key)
-            if item.optional and not probe_has_audio(path):
+            if item.optional and not has_audio.get(path, False):
                 continue  # overlay video-track source with no audio stream
             args += ["-i", str(path)]
             src = item.source

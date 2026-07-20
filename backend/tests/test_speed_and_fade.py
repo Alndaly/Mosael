@@ -35,7 +35,9 @@ def test_fades_clamped_to_clip_duration() -> None:
 
 def test_base_clip_gain_and_mute(monkeypatch) -> None:
     """A video-track clip's own audio is mixable: gain → volume filter; muted → silence."""
-    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    monkeypatch.setattr(
+        "app.media.render_executor.probe_has_audio_many", lambda paths: {p: True for p in paths}
+    )
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,
         clips=[base_clip(src_out=4, effects={}, gain=0.5)], assets=ASSETS,
@@ -65,7 +67,9 @@ def test_video_and_audio_fades_are_independent() -> None:
 
 
 def test_ffmpeg_command_contains_speed_and_fades(monkeypatch) -> None:
-    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    monkeypatch.setattr(
+        "app.media.render_executor.probe_has_audio_many", lambda paths: {p: True for p in paths}
+    )
     # Picture fade (video_fade_*) and audio fade (fade_*) are independent — use different
     # lengths to prove the picture `fade` filter and `afade` don't share a value.
     plan = build_render_plan(
@@ -116,7 +120,9 @@ def test_set_clip_speed_api_with_undo() -> None:
 
 
 def test_audio_overlay_fades_in_command(monkeypatch) -> None:
-    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    monkeypatch.setattr(
+        "app.media.render_executor.probe_has_audio_many", lambda paths: {p: True for p in paths}
+    )
     plan = build_render_plan(
         sequence_id="s", revision=1, width=640, height=360, fps=30,
         clips=[base_clip()], assets={**ASSETS, "a2": {"file_key": "media/b.m4a"}},
@@ -128,7 +134,9 @@ def test_audio_overlay_fades_in_command(monkeypatch) -> None:
 
 
 def _cmd_for_fill(fill_mode: str, monkeypatch) -> str:
-    monkeypatch.setattr("app.media.render_executor.probe_has_audio", lambda _: True)
+    monkeypatch.setattr(
+        "app.media.render_executor.probe_has_audio_many", lambda paths: {p: True for p in paths}
+    )
     from app.media.render_executor import build_ffmpeg_command
     from pathlib import Path as _P
     plan = build_render_plan(
