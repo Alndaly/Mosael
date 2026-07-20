@@ -54,6 +54,10 @@ export function Monitor({
   const [showScopes, setShowScopes] = React.useState(false);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
+  // TEMP: measure the rendered subtitle element — it IS in the DOM (diagnostic says active:YES)
+  // but isn't visible, so we need its computed style/geometry. Remove with the overlay.
+  const subtitleRef = React.useRef<HTMLDivElement | null>(null);
+  const [subMetrics, setSubMetrics] = React.useState("");
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
@@ -126,6 +130,26 @@ export function Monitor({
   const tfSettleRef = React.useRef(false);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  // TEMP diagnostic: why is the rendered subtitle invisible? Report its computed paint properties
+  // and geometry relative to the frame. Remove together with the overlay below.
+  React.useEffect(() => {
+    const element = subtitleRef.current;
+    if (!element) {
+      setSubMetrics(activeSubtitle ? "el:missing" : "");
+      return;
+    }
+    const style = window.getComputedStyle(element);
+    const box = element.getBoundingClientRect();
+    const frame = stageRef.current?.getBoundingClientRect();
+    setSubMetrics(
+      `font=${style.fontSize} color=${style.color} bg=${style.backgroundColor} op=${style.opacity} ` +
+        `vis=${style.visibility} disp=${style.display} z=${style.zIndex} ` +
+        `box=${Math.round(box.width)}x${Math.round(box.height)}` +
+        (frame
+          ? ` at=${Math.round(box.left - frame.left)},${Math.round(box.top - frame.top)} frame=${Math.round(frame.width)}x${Math.round(frame.height)}`
+          : ""),
+    );
+  }, [activeSubtitle, playhead, sequence.subtitle_style, sequence.width]);
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
@@ -449,6 +473,7 @@ export function Monitor({
           )}
           {activeSubtitle?.text_override && (
             <div
+              ref={subtitleRef}
               className="monitor-subtitle"
               style={subtitleCss(readSubtitleStyle(sequence.subtitle_style as Record<string, unknown>), sequence.width)}
             >
@@ -474,7 +499,9 @@ export function Monitor({
                 padding: "3px 6px",
                 borderRadius: 4,
                 pointerEvents: "none",
-                whiteSpace: "nowrap",
+                whiteSpace: "pre-wrap",
+                maxWidth: "92%",
+                lineHeight: 1.5,
               }}
             >
               {`subs:${subtitleClips.length} t:${playhead.toFixed(2)} active:${activeSubtitle?.text_override ? "YES" : "NULL"} comp:${String(compositorActive)}`}
@@ -484,6 +511,7 @@ export function Monitor({
                   .map((c) => `${c.timeline_start.toFixed(1)}-${clipEnd(c).toFixed(1)}`)
                   .slice(0, 4)
                   .join(",")}`}
+              {subMetrics && `\n${subMetrics}`}
             </div>
           )}
           {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}
