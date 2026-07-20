@@ -42,9 +42,12 @@ def me(user: CurrentUser) -> UserOut:
 
 @router.post("/auth/logout")
 def logout(request: Request, db: DbSession, user: CurrentUser) -> dict:
+    # Read the token the same way get_current_user does. Reading only the header meant logging
+    # out of a ?token= session reported success and revoked nothing — a false confirmation,
+    # which is worse than refusing.
     header = request.headers.get("authorization", "")
-    token = header.removeprefix("Bearer ").strip()
-    session = db.get(AuthSession, token)
+    token = header.removeprefix("Bearer ").strip() or (request.query_params.get("token") or "").strip()
+    session = db.get(AuthSession, token) if token else None
     if session is not None and session.user_id == user.id:
         db.delete(session)
         db.commit()

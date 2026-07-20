@@ -280,6 +280,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         finally:
             session.status = "idle"
             session.updated_at = now()
+            # Revoke the service token this turn was given. It is minted per turn so the MCP
+            # server can call back into the API, and nothing ever removed it — AuthSession has
+            # no expiry, so every chat turn left a permanent full-privilege credential in the
+            # database. A long-running install accumulated one per message, forever.
+            service_session = db.get(AuthSession, token)
+            if service_session is not None:
+                db.delete(service_session)
             db.commit()
             _stream_finish(session_id, final_text)
     for callback in list(_turn_callbacks):

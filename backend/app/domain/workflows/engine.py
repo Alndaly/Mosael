@@ -40,6 +40,11 @@ from app.domain.workflows import (
 LOOP_TYPES = frozenset({"loop_foreach", "loop_while"})
 LOOP_RAW_KEYS = ("body", "output", "condition")
 LOOP_WHILE_HARD_CAP = 1000
+# foreach had no cap at all, while `while` was clamped — an asymmetry that mattered because
+# `items` can come from a code, http_request or json_extract node, i.e. from remote data. Every
+# iteration also accumulates its result (the whole sub-context when `output` is blank), so an
+# unbounded list is a memory problem before it is a time problem, and nested loops multiply.
+LOOP_FOREACH_HARD_CAP = 1000
 
 
 def _interpolate_loop_config(config: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -734,6 +739,10 @@ def _handle_loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]
         raise WorkflowDomainError("循环·遍历的 items 必须是列表(或多行文本)")
     body = config.get("body") or {"nodes": [], "edges": []}
     output_tpl = config.get("output", "")
+    if len(items) > LOOP_FOREACH_HARD_CAP:
+        raise WorkflowDomainError(
+            f"循环·遍历的 items 有 {len(items)} 项,超过上限 {LOOP_FOREACH_HARD_CAP};请先筛选或分批"
+        )
     results: list[Any] = []
     for index, item in enumerate(items):
         ctx = run_subgraph(body, {"loop": {"item": item, "index": index}}, workflow_id=workflow.id)

@@ -64,7 +64,10 @@ def import_uploaded_lut(
     original = Path(upload.filename or "lut.cube").name
     if not original.lower().endswith(".cube"):
         raise LutError("只支持 .cube 3D LUT 文件")
-    raw = upload.file.read()
+    # Bounded read: reading the whole body and THEN checking the cap means an oversized
+    # upload exhausts memory before the limit meant to prevent that ever runs. One byte
+    # over is enough to know it is over.
+    raw = upload.file.read(MAX_LUT_BYTES + 1)
     if len(raw) > MAX_LUT_BYTES:
         raise LutError("LUT 文件过大(上限 32MB)")
     try:

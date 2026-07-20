@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -274,6 +275,12 @@ def validate_graph(graph: dict[str, Any], *, require_start: bool = True, require
     edges = graph.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
         return ["graph 必须包含 nodes 与 edges 两个数组"]
+    # Only the CONTAINERS were type-checked. Their elements were assumed to be dicts, so
+    # {"nodes": ["oops"]} reached .get() and raised AttributeError straight past the
+    # WorkflowDomainError handler — a 500 for what is plainly a bad request. This has to come
+    # before the first .get() below, not after.
+    if any(not isinstance(node, dict) for node in nodes) or any(not isinstance(e, dict) for e in edges):
+        return ["节点与连线必须是对象"]
 
     # 数据边(kind="data")把上游输出绑到目标输入 → 该输入即便字面量为空也算已满足。
     data_bound: set[tuple[str, str]] = {
@@ -346,7 +353,33 @@ def validate_body_graph(body: dict[str, Any]) -> list[str]:
     nodes = body.get("nodes") if isinstance(body, dict) else None
     if not isinstance(nodes, list) or not nodes:
         return ["循环体不能为空,至少要有一个节点"]
-    return validate_graph(body, require_start=False)
+    errors = validate_graph(body, require_start=False)
+    errors.extend(_unresolvable_body_refs(body, nodes))
+    return errors
+
+
+def _unresolvable_body_refs(body: dict[str, Any], nodes: list[Any]) -> list[str]:
+    """Reject a body template that references anything outside the loop's own scope.
+
+    run_subgraph seeds the body context with `loop` and the body's own nodes — nothing else. A
+    body node referencing an outer node like {{start.prefix}} therefore interpolated to the empty
+    string: no error, no warning, just silently missing text in whatever the loop produced. That
+    is the worst failure mode available, so name it at validation time instead.
+
+    (Making the body actually see the outer scope is not a matter of passing more context: body,
+    output and condition are deliberately left un-interpolated at the outer scope so that
+    {{loop.item}} survives to be resolved per iteration. Resolving outer references there too
+    means a second, guarded pass — a real change, not a tweak.)
+    """
+    known = {"loop"} | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    unknown: set[str] = set()
+    for match in VARIABLE_RE.finditer(json.dumps(body, ensure_ascii=False)):
+        root = match.group(1).strip().split(".")[0]
+        if root and root not in known:
+            unknown.add(root)
+    if not unknown:
+        return []
+    return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 loop 与体内节点"]
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
@@ -383,7 +416,13 @@ def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
     def lookup(ref: str) -> Any:
         # Walk a dotted path: {{node.key}}, and nested {{loop.item.name}} / {{q.assets.0.id}}.
         parts = ref.split(".")
-        current: Any = context.get(parts[0], {})
+        if parts[0] not in context:
+            # A miss must read as empty, not as the {} sentinel used to walk the path. Returning
+            # the dict meant a typo'd `condition` made _truthy({}) false — so a while loop ran
+            # exactly once and looked deliberate — while a typo'd `left` with op `not_empty`
+            # evaluated TRUE, because str({}) is non-empty. The branch silently inverted.
+            return ""
+        current: Any = context[parts[0]]
         for part in parts[1:]:
             if isinstance(current, dict):
                 current = current.get(part, "")

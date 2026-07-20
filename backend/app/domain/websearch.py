@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 
+_MAX_REDIRECTS = 5
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 _DDG = "https://html.duckduckgo.com/html/"
 
@@ -79,9 +80,23 @@ def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
     url = (url or "").strip()
     if not _is_public_http_url(url):
         raise WebSearchError("只能抓取公网 http/https 页面(已拦截内网/本机地址)")
+    # Follow redirects by hand, re-checking every hop. _is_public_http_url only ever saw the
+    # URL the caller supplied, so a public page answering 302 http://127.0.0.1:8800/... — or a
+    # cloud metadata address — walked straight through the guard that exists to stop exactly
+    # that. The check has to apply to wherever the request actually ends up.
     try:
-        with httpx.Client(timeout=20, headers={"User-Agent": _UA}, follow_redirects=True) as client:
-            response = client.get(url)
+        with httpx.Client(timeout=20, headers={"User-Agent": _UA}, follow_redirects=False) as client:
+            current = url
+            for _ in range(_MAX_REDIRECTS + 1):
+                response = client.get(current)
+                if not response.is_redirect:
+                    break
+                target = str(response.next_request.url) if response.next_request else ""
+                if not _is_public_http_url(target):
+                    raise WebSearchError("该页面跳转到了内网/本机地址,已拦截")
+                current = target
+            else:
+                raise WebSearchError("跳转次数过多")
             response.raise_for_status()
     except httpx.HTTPError as exc:
         raise WebSearchError(f"抓取失败: {exc}") from exc

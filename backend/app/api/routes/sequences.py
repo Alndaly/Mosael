@@ -93,12 +93,18 @@ router = APIRouter(tags=["sequences"])
 @router.post("/sequences", response_model=SequenceOut)
 def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> Response:
     ensure_workspace_access(db, user, body.workspace_id)
+    # workspace_id was authorised, project_id was not — and the listing route filters only on
+    # project_id, so pointing a sequence at someone else's project put attacker-controlled rows
+    # (names, track and clip structure) inside a project they cannot otherwise touch.
+    project = db.get(Project, body.project_id)
+    if project is None or project.workspace_id != body.workspace_id:
+        raise HTTPException(status_code=404, detail="Project not found in this workspace")
     sequence = Sequence(**body.model_dump())
     video = Track(sequence=sequence, kind="video", name="V1", position=0)
     audio = Track(sequence=sequence, kind="audio", name="A1", position=1)
     db.add_all([sequence, video, audio])
-    project = db.get(Project, body.project_id)
-    if project and project.active_sequence_id is None:
+    db.flush()  # the id is assigned on flush; assigning before it left active_sequence_id None
+    if project.active_sequence_id is None:
         project.active_sequence_id = sequence.id
     db.commit()
     return _get_sequence(db, sequence.id)

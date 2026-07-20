@@ -63,7 +63,10 @@ def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadFile) 
     original = Path(upload.filename or "font.ttf").name
     if not original.lower().endswith(ALLOWED_FONT_SUFFIXES):
         raise FontError("只支持 .ttf / .otf / .ttc 字体文件(woff 无法用于导出)")
-    raw = upload.file.read()
+    # Bounded read: reading the whole body and THEN checking the cap means an oversized
+    # upload exhausts memory before the limit meant to prevent that ever runs. One byte
+    # over is enough to know it is over.
+    raw = upload.file.read(MAX_FONT_BYTES + 1)
     if len(raw) > MAX_FONT_BYTES:
         raise FontError("字体文件过大(上限 32MB)")
     if not raw:
