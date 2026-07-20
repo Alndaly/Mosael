@@ -611,8 +611,11 @@ export function Timeline({
           <div className="tl-labels-spacer" style={{ height: RULER_HEIGHT }} />
           {tracks.map((track, trackIndex) => (
             <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
-              <span className={`tl-label-dot dot-${track.kind}`} />
-              {track.name}
+              <div className="tl-label-top">
+                <span className={`tl-label-dot dot-${track.kind}`} />
+                <span className="tl-label-name">{track.name}</span>
+              </div>
+              <div className="tl-label-actions">
               {onMoveTrack && (
                 <span className="tl-label-order">
                   <button
@@ -685,6 +688,7 @@ export function Timeline({
                   <X size={11} />
                 </button>
               )}
+              </div>
             </div>
           ))}
         </div>

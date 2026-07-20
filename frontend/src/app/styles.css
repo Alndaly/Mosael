@@ -2988,9 +2988,10 @@
   }
 }
 
+/* 112px, not 88: the controls row needs mute+solo+duck+lock+delete (5×16 + gaps) to fit. */
 .tl-body {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   min-height: 0;
   /* Vertical scroll lives in .tl-hscroll so the ruler can stay sticky at the top;
      .tl-labels mirrors its scrollTop (JS) to keep the track rows aligned. */
@@ -3011,20 +3012,39 @@
   background: var(--panel);
 }
 
+/* Two rows: name on top, controls below. One row cannot work — mute/solo/duck/lock/delete
+   plus the reorder arrows need ~170px, so in a rail this narrow the tail of the row (and with
+   it the ONLY delete affordance) was silently clipped by .tl-labels' overflow:hidden. */
 .tl-label {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
   border-bottom: 1px solid var(--track-lane-line);
   padding: 0 8px;
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
 }
+.tl-label-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tl-label-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-label-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .tl-label-order {
   display: inline-flex;
   gap: 1px;
-  margin-left: auto;
 }
 .tl-label:hover .tl-label-order .tl-label-tool {
   opacity: 1;
@@ -3037,10 +3057,10 @@
 .tl-label-tools {
   display: inline-flex;
   gap: 2px;
-  margin-left: auto;
 }
 
-.tl-label-tool {
+.tl-label-tool,
+.tl-label-remove {
   display: grid;
   place-items: center;
   width: 16px;
@@ -3054,7 +3074,10 @@
   transition: opacity 100ms, color 100ms;
 }
 
+/* Controls stay hidden until the row is hovered so the rail reads as track names at rest.
+   Engaged states (mute/solo/duck/lock) stay lit — those are status, not chrome. */
 .tl-label:hover .tl-label-tool,
+.tl-label:hover .tl-label-remove,
 .tl-label-tool.on {
   opacity: 1;
 }
@@ -3065,57 +3088,6 @@
 
 .tl-label-tool:hover {
   color: var(--foreground);
-}
-
-.tl-label-remove {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms;
-}
-
-.tl-label:hover .tl-label-tools {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.tl-label-tool {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms, color 100ms;
-}
-
-.tl-label:hover .tl-label-tool,
-.tl-label-tool.on {
-  opacity: 1;
-}
-
-.tl-label-tool.on {
-  color: var(--destructive);
-}
-
-.tl-label-tool:hover {
-  color: var(--foreground);
-}
-
-.tl-label-remove {
-  opacity: 1;
 }
 
 .tl-label-remove:hover {

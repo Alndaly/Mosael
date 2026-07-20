@@ -141,13 +141,38 @@ export function Monitor({
     const style = window.getComputedStyle(element);
     const box = element.getBoundingClientRect();
     const frame = stageRef.current?.getBoundingClientRect();
+    // Every paint property already checked out (opaque white on black, visible, correctly sized
+    // and centred in the frame) yet nothing shows — so ask the two questions computed style
+    // cannot answer: is anything stacked on top of it, and is an ancestor hiding it?
+    const name = (el: Element) =>
+      el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? `.${el.className.trim().split(/\s+/)[0]}` : "");
+    const stack = document
+      .elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      .slice(0, 4)
+      .map(name)
+      .join(" > ");
+    let ancestors = "";
+    for (let p = element.parentElement; p && p !== document.body; p = p.parentElement) {
+      const s = window.getComputedStyle(p);
+      const odd: string[] = [];
+      if (s.opacity !== "1") odd.push(`op=${s.opacity}`);
+      if (s.filter !== "none") odd.push("filter");
+      if (s.transform !== "none") odd.push("transform");
+      if (s.clipPath !== "none") odd.push("clip");
+      if (s.contain !== "none") odd.push(`contain=${s.contain}`);
+      if (s.overflow !== "visible") odd.push(`ovf=${s.overflow}`);
+      if (odd.length) ancestors += ` ${name(p)}[${odd.join(",")}]`;
+    }
     setSubMetrics(
       `font=${style.fontSize} color=${style.color} bg=${style.backgroundColor} op=${style.opacity} ` +
         `vis=${style.visibility} disp=${style.display} z=${style.zIndex} ` +
         `box=${Math.round(box.width)}x${Math.round(box.height)}` +
         (frame
           ? ` at=${Math.round(box.left - frame.left)},${Math.round(box.top - frame.top)} frame=${Math.round(frame.width)}x${Math.round(frame.height)}`
-          : ""),
+          : "") +
+        `\nvisible=${element.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true, contentVisibilityAuto: true }) ?? "n/a"}` +
+        `\nontop=${stack}` +
+        `\nanc=${ancestors.trim() || "clean"}`,
     );
   }, [activeSubtitle, playhead, sequence.subtitle_style, sequence.width]);
   const activeEffects = (activeClip?.effects ?? {}) as {
