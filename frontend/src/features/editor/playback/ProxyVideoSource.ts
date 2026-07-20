@@ -38,6 +38,7 @@ export class ProxyVideoSource {
   private configured = false;
   private closed = false;
   private failed = false;
+  private byteLength = 0;
 
   readonly ready: Promise<void>;
 
@@ -58,7 +59,10 @@ export class ProxyVideoSource {
         }
       };
       this.file.onSamples = (_id, _user, samples) => {
-        for (const s of samples) this.samples.push(s);
+        for (const s of samples) {
+          this.samples.push(s);
+          this.byteLength += s.data?.byteLength ?? 0;
+        }
       };
     });
     void this.load(url);
@@ -74,6 +78,11 @@ export class ProxyVideoSource {
     return !this.failed;
   }
 
+  /** Bytes of encoded samples still held. Used to bound the idle-source pool. */
+  get retainedBytes(): number {
+    return this.byteLength;
+  }
+
   private async load(url: string): Promise<void> {
     try {
       const res = await fetch(url);
@@ -81,9 +90,10 @@ export class ProxyVideoSource {
       const buf = MP4BoxBuffer.fromArrayBuffer(await res.arrayBuffer(), 0);
       this.file.appendBuffer(buf, true);
       this.file.flush();
-    } catch (err) {
+    } catch {
       this.failed = true;
-      // ready may already be settled by onError; this covers fetch failures.
+      // `ready` may already be settled by onError; this covers fetch/parse failures. The flag is
+      // what callers actually poll, so a rejected `ready` nobody awaited cannot go unnoticed.
     }
   }
 
@@ -125,16 +135,25 @@ export class ProxyVideoSource {
     const decoder = new VideoDecoder({
       output: (frame) => this.onFrame(frame),
       error: () => {
+        // Losing the decoder mid-playback used to leave frameAt returning null forever, which
+        // the compositor drew as nothing — a black frame with no explanation. Record it so the
+        // caller can fall back to element playback instead.
         this.failed = true;
       },
     });
-    decoder.configure({
-      codec: this.codec,
-      codedWidth: this.codedWidth,
-      codedHeight: this.codedHeight,
-      description: this.description,
-      optimizeForLatency: true,
-    });
+    try {
+      decoder.configure({
+        codec: this.codec,
+        codedWidth: this.codedWidth,
+        codedHeight: this.codedHeight,
+        description: this.description,
+        optimizeForLatency: true,
+      });
+    } catch {
+      // An unsupported codec throws here rather than going through the error callback.
+      this.failed = true;
+      return null;
+    }
     this.decoder = decoder;
     this.configured = true;
     return decoder;

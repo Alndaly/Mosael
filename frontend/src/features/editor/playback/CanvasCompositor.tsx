@@ -4,6 +4,7 @@ import { assetFileUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client
 import { CURVES_FILTER_ID } from "@/features/editor/colorCurves";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
 import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
+import { evictions } from "@/features/editor/playback/sourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -29,6 +30,7 @@ export function CanvasCompositor({
   fillMode = "cover",
   className,
   style,
+  onSourceFailed,
 }: {
   layers: CompositorLayer[];
   width: number;
@@ -37,14 +39,31 @@ export function CanvasCompositor({
   fillMode?: "cover" | "contain" | "blur";
   className?: string;
   style?: React.CSSProperties;
+  /** A proxy that cannot be decoded here. The caller should drop back to element playback —
+      otherwise the layer simply never paints and the viewer sees an unexplained black frame. */
+  onSourceFailed?: (assetId: string) => void;
 }) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const sourcesRef = React.useRef<Map<string, ProxyVideoSource>>(new Map());
+  // Sources whose clip is no longer under the playhead. Closing them immediately meant that
+  // scrubbing back across a cut re-fetched and re-parsed the whole proxy; keeping a few alive
+  // makes crossing a boundary free in both directions. Bounded by retained bytes, not count,
+  // because one long proxy costs far more than several short ones.
+  const idleRef = React.useRef<Map<string, ProxyVideoSource>>(new Map());
+  const onSourceFailedRef = React.useRef(onSourceFailed);
+  onSourceFailedRef.current = onSourceFailed;
+  const reportedFailures = React.useRef<Set<string>>(new Set());
+  // Set whenever anything that affects the picture changes; the draw loop clears it once the
+  // frame it produced has settled.
+  const dirtyRef = React.useRef(true);
   const imagesRef = React.useRef<Map<string, HTMLImageElement>>(new Map());
   const layersRef = React.useRef(layers);
   layersRef.current = layers;
   const fillModeRef = React.useRef(fillMode);
   fillModeRef.current = fillMode;
+  React.useEffect(() => {
+    dirtyRef.current = true;
+  }, [width, height, fillMode]);
 
   // Per-clip filter strings; curve LUTs need an SVG feComponentTransfer rendered in the DOM.
   const filters = React.useMemo(
@@ -70,13 +89,28 @@ export function CanvasCompositor({
     }
     for (const [id, source] of sourcesRef.current) {
       if (!wantVideo.has(id)) {
-        source.close();
+        idleRef.current.set(id, source);
         sourcesRef.current.delete(id);
       }
     }
     for (const id of wantVideo) {
-      if (!sourcesRef.current.has(id)) sourcesRef.current.set(id, new ProxyVideoSource(assetProxyUrl(id)));
+      if (sourcesRef.current.has(id)) continue;
+      const parked = idleRef.current.get(id);
+      if (parked) {
+        idleRef.current.delete(id);
+        sourcesRef.current.set(id, parked);
+      } else {
+        sourcesRef.current.set(id, new ProxyVideoSource(assetProxyUrl(id)));
+      }
     }
+    // Map preserves insertion order and re-parking re-inserts, so iterating it gives
+    // least-recently-parked first — which is exactly the order `evictions` expects.
+    const parked = [...idleRef.current].map(([id, source]) => ({ id, retainedBytes: source.retainedBytes }));
+    for (const id of evictions(parked, IDLE_SOURCE_BYTE_BUDGET)) {
+      idleRef.current.get(id)?.close();
+      idleRef.current.delete(id);
+    }
+    dirtyRef.current = true;
     for (const id of wantImage) {
       if (!imagesRef.current.has(id)) {
         const img = new Image();
@@ -94,12 +128,17 @@ export function CanvasCompositor({
     return () => {
       sourcesRef.current.forEach((source) => source.close());
       sourcesRef.current.clear();
+      idleRef.current.forEach((source) => source.close());
+      idleRef.current.clear();
       imagesRef.current.clear();
     };
   }, []);
 
   React.useEffect(() => {
     let raf = 0;
+    let lastPlayhead = Number.NaN;
+    let lastSignature = "";
+    let settled = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const canvas = canvasRef.current;
@@ -110,13 +149,44 @@ export function CanvasCompositor({
       if (canvas.height !== height) canvas.height = height;
 
       const { playhead } = useEditorStore.getState();
+      const currentLayers = layersRef.current;
+
+      // A paused monitor was repainting 60 times a second to produce the same pixels. Resolve
+      // what WOULD be drawn first; if it matches the last pass often enough to be settled, skip
+      // the clear/draw entirely. Note mediaFor is still called — it is what drives decoding, so
+      // skipping it would stall the frame we are waiting to settle on.
+      const resolved = currentLayers.map((layer) =>
+        mediaFor(layer, playhead, sourcesRef.current, imagesRef.current),
+      );
+      const signature = resolved
+        .map((m, i) => `${currentLayers[i].clip.id}:${m ? mediaKey(m.source) : "-"}`)
+        .join("|");
+      if (playhead === lastPlayhead && signature === lastSignature && !dirtyRef.current) {
+        if (settled >= SETTLE_FRAMES) return;
+        settled += 1;
+      } else {
+        settled = 0;
+      }
+      lastPlayhead = playhead;
+      lastSignature = signature;
+      dirtyRef.current = false;
+
+      // Report anything that will never produce a picture, once per asset, so the caller can
+      // switch back to element playback rather than showing black.
+      for (const layer of currentLayers) {
+        const source = sourcesRef.current.get(layer.asset.id);
+        if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
+          reportedFailures.current.add(layer.asset.id);
+          onSourceFailedRef.current?.(layer.asset.id);
+        }
+      }
+
       ctx.clearRect(0, 0, width, height);
 
-      const currentLayers = layersRef.current;
       const fill = fillModeRef.current;
       for (let i = 0; i < currentLayers.length; i++) {
         const layer = currentLayers[i];
-        const media = mediaFor(layer, playhead, sourcesRef.current, imagesRef.current);
+        const media = resolved[i];
         if (!media) continue;
         const { source: img, w: mw, h: mh } = media;
 
@@ -173,7 +243,24 @@ export function CanvasCompositor({
   );
 }
 
+/** How much encoded proxy to keep parked for sources that are off-screen. Two or three short
+    clips' worth — enough that scrubbing over a cut is instant, not so much that a long timeline
+    pins hundreds of megabytes. */
+const IDLE_SOURCE_BYTE_BUDGET = 96 * 1024 * 1024;
+/** Consecutive identical frames after which a paused canvas stops repainting. Frames keep
+    arriving for a moment after a seek, so one identical pass is not enough to call it settled. */
+const SETTLE_FRAMES = 3;
+
 type Media = { source: CanvasImageSource; w: number; h: number };
+
+/** Identifies WHICH picture a layer resolved to, so two passes can be compared without
+    re-drawing. A VideoFrame's timestamp is exact; an <img> only changes when it finishes
+    loading, which naturalWidth captures. */
+function mediaKey(source: CanvasImageSource): string {
+  if (typeof VideoFrame !== "undefined" && source instanceof VideoFrame) return `v${source.timestamp}`;
+  if (source instanceof HTMLImageElement) return `i${source.naturalWidth}x${source.naturalHeight}`;
+  return "?";
+}
 
 function mediaFor(
   layer: CompositorLayer,

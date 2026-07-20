@@ -224,13 +224,22 @@ export function Monitor({
   }, [activeClip, activeOverlayClips, assetById, draft, selectedActive?.id]);
   // Only take the canvas path when every active clip can be drawn there (image, or a
   // video whose proxy is ready); otherwise fall back wholesale to the element preview.
+  // Assets whose proxy turned out to be undecodable HERE — a codec this browser lacks, a
+  // truncated file. proxy_status says the file exists, not that this machine can play it, so
+  // that check alone let a decode failure show as a black frame. Falling back is per-asset and
+  // sticky for the session — retrying every frame would flicker between black and the element.
+  const [undecodable, setUndecodable] = React.useState<ReadonlySet<string>>(() => new Set());
+  const markUndecodable = React.useCallback((assetId: string) => {
+    setUndecodable((current) => (current.has(assetId) ? current : new Set(current).add(assetId)));
+  }, []);
   const compositorActive =
     compositorOn &&
     compositorLayers.length > 0 &&
     compositorLayers.every(
       (l) =>
         l.asset.kind === "image" ||
-        (l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready",
+        ((l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready" &&
+          !undecodable.has(l.asset.id)),
     );
   // EVERY audio-bearing clip (base video-track video clips + all audio-track clips) fed to the
   // WebAudio mixer, which filters by the live playhead itself. Passing the full set — not just
@@ -431,6 +440,7 @@ export function Monitor({
           )}
           {compositorActive && (
             <CanvasCompositor
+              onSourceFailed={markUndecodable}
               layers={compositorLayers}
               width={sequence.width}
               height={sequence.height}
