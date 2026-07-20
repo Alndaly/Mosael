@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.agent_tools import router as agent_tools_router
 from app.api.routes.asr import router as asr_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.voices import router as voices_router
@@ -149,6 +150,7 @@ def create_app() -> FastAPI:
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
+    app.include_router(agent_tools_router, prefix="/api", dependencies=protected)
     return app
 
 

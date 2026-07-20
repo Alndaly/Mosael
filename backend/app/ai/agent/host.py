@@ -169,6 +169,11 @@ def post_user_message(db: Session, session: AgentSession, content: str, user: Us
     return message
 
 
+def mint_tool_token(db: Session, user: User) -> str:
+    """Public alias — the agent-tools endpoint needs the same short-lived credential a turn gets."""
+    return _mint_service_token(db, user)
+
+
 def _mint_service_token(db: Session, user: User) -> str:
     token = new_session_token()
     db.add(AuthSession(token=token, user_id=user.id))

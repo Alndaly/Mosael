@@ -12,6 +12,7 @@ Env:  MIBU_API   (default http://127.0.0.1:8800)
 
 from __future__ import annotations
 
+import contextvars
 import os
 from typing import Any
 
@@ -19,13 +20,31 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 API_BASE = os.environ.get("MIBU_API", "http://127.0.0.1:8800")
-API_TOKEN = os.environ.get("MIBU_TOKEN", "")
+
+# The token is a ContextVar rather than a module constant because this module has two callers.
+# As a stdio MCP server it is one process per turn and the environment is enough; but the
+# backend also imports it to serve the same tools to the pi sidecar, where a single process
+# handles many users' turns concurrently and each needs its own credential. A global would leak
+# one caller's token into another's request.
+_API_TOKEN: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "mibu_api_token", default=os.environ.get("MIBU_TOKEN", "")
+)
+
+
+def set_api_token(token: str):
+    """Bind the token for the current context. Returns the reset token."""
+    return _API_TOKEN.set(token)
+
+
+def _auth_headers() -> dict[str, str]:
+    token = _API_TOKEN.get()
+    return {"Authorization": f"Bearer {token}"} if token else {}
 
 mcp = FastMCP("mibu")
 
 
 def _get(path: str, params: dict[str, Any] | None = None) -> Any:
-    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    headers = _auth_headers()
     with httpx.Client(base_url=API_BASE, timeout=15, headers=headers) as client:
         response = client.get(path, params=params)
         response.raise_for_status()
@@ -33,7 +52,7 @@ def _get(path: str, params: dict[str, Any] | None = None) -> Any:
 
 
 def _post(path: str, payload: dict[str, Any]) -> Any:
-    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    headers = _auth_headers()
     with httpx.Client(base_url=API_BASE, timeout=30, headers=headers) as client:
         response = client.post(path, json=payload)
         response.raise_for_status()
@@ -41,7 +60,7 @@ def _post(path: str, payload: dict[str, Any]) -> Any:
 
 
 def _patch(path: str, payload: dict[str, Any]) -> Any:
-    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    headers = _auth_headers()
     with httpx.Client(base_url=API_BASE, timeout=30, headers=headers) as client:
         response = client.patch(path, json=payload)
         response.raise_for_status()
