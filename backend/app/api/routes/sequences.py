@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -111,7 +111,7 @@ def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response
 
 
 @router.get("/projects/{project_id}/sequences", response_model=list[SequenceOut])
-def list_sequences(project_id: str, db: DbSession, user: CurrentUser) -> Response:
+def list_sequences(project_id: str, request: Request, db: DbSession, user: CurrentUser) -> Response:
     project = db.get(Project, project_id)
     if project is not None:
         ensure_workspace_access(db, user, project.workspace_id)
@@ -137,7 +137,21 @@ def list_sequences(project_id: str, db: DbSession, user: CurrentUser) -> Respons
             sequence.can_redo = can_redo(db, sequence.id)
             _sequence_json(sequence)  # populates the cache
     bodies = [_SEQUENCE_JSON[sid][1] for sid, _ in ids_and_revisions if sid in _SEQUENCE_JSON]
-    return Response(f"[{','.join(bodies)}]", media_type="application/json")
+
+    # The cache above stops us REBUILDING an unchanged body; this stops us SENDING one. The
+    # editor polls this endpoint continuously, and a 200-clip sequence is ~72KB — pushing that
+    # through on every tick was the single biggest thing the poll cost, and the thing that made
+    # concurrent polls collapse while a small endpoint at the same concurrency did not.
+    # `revision` is already exactly the validator an ETag needs: it changes iff the body does.
+    etag = 'W/"' + ".".join(f"{sid}-{revision}" for sid, revision in ids_and_revisions) + '"'
+    # no-cache means "store it, but revalidate every time" — which is what a polled endpoint
+    # wants, and it makes the browser's revalidation deterministic instead of heuristic. The
+    # 304 path is what the browser does with this automatically; JS still sees a 200 and the
+    # cached body, so no caller has to change.
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(f"[{','.join(bodies)}]", media_type="application/json", headers=headers)
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
