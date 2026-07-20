@@ -10,6 +10,8 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
+import { log } from "./protocol.js";
+
 async function mibuGet(
   apiBase: string,
   token: string,
@@ -208,6 +210,63 @@ export function buildMutationTools(apiBase: string, token: string, workspaceId: 
 }
 
 /** All Mibu tools available to a turn: read-only + mutation (confirmation-gated). */
-export function buildAllTools(apiBase: string, token: string, workspaceId: string): AgentTool[] {
-  return [...buildReadonlyTools(apiBase, token, workspaceId), ...buildMutationTools(apiBase, token, workspaceId)];
+interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/**
+ * Everything else the backend registry offers, built from its manifest.
+ *
+ * The seven tools above are hand-written because they wait for the user's confirmation card
+ * before returning. The other nineteen — tagging assets, searching the knowledge base, web
+ * search, workflow editing — existed, were tested, and were simply invisible to this runtime,
+ * because the list lived here in source instead of coming from the registry. The model's only
+ * symptom was reporting that a tool "was not found".
+ *
+ * Names already registered win: they are the ones with the confirmation gate, and shadowing
+ * them with a manifest twin would silently drop that gate.
+ */
+async function buildManifestTools(
+  apiBase: string,
+  token: string,
+  workspaceId: string,
+  taken: Set<string>,
+): Promise<AgentTool[]> {
+  let specs: ToolSpec[];
+  try {
+    specs = (await mibuGet(apiBase, token, "/api/agent/tools")) as ToolSpec[];
+  } catch (err) {
+    // A turn with seven tools is degraded but usable; a turn that fails to start is not.
+    log("could not load the tool manifest, falling back to the built-in set:", String(err));
+    return [];
+  }
+
+  return specs
+    .filter((spec) => spec?.name && !taken.has(spec.name))
+    .map((spec) => ({
+      name: spec.name,
+      label: spec.name,
+      description: spec.description || spec.name,
+      // The manifest's parameters are already JSON Schema, which is what pi wants.
+      parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
+      execute: async (_id: string, rawParams: unknown) => {
+        const args = (rawParams ?? {}) as Record<string, unknown>;
+        // Workspace-scoped tools all take the same optional argument, and the model has no
+        // reason to know which workspace this turn belongs to.
+        if (workspaceId && !args.workspace_id) args.workspace_id = workspaceId;
+        const response = (await mibuPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
+          arguments: args,
+        })) as { result?: unknown; error?: string };
+        if (response?.error) throw new Error(response.error);
+        return jsonResult(response?.result ?? null);
+      },
+    }));
+}
+
+export async function buildAllTools(apiBase: string, token: string, workspaceId: string): Promise<AgentTool[]> {
+  const local = [...buildReadonlyTools(apiBase, token, workspaceId), ...buildMutationTools(apiBase, token, workspaceId)];
+  const manifest = await buildManifestTools(apiBase, token, workspaceId, new Set(local.map((tool) => tool.name)));
+  return [...local, ...manifest];
 }

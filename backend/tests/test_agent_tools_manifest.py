@@ -95,3 +95,26 @@ def test_the_token_is_context_bound_not_global() -> None:
     assert ctx_b.run(read_in_context, "token-b") == "Bearer token-b"
     # Neither leaked into the ambient context.
     assert "Authorization" not in mcp_server._auth_headers() or mcp_server._API_TOKEN.get() == ""
+
+
+def test_the_manifest_is_enough_to_build_a_tool_from() -> None:
+    """The sidecar constructs its tools from this at startup, so each entry has to be
+    self-sufficient: a name to call, a description the model chooses on, and a schema it can
+    fill in. A missing piece is worse than a missing tool — the model calls it wrongly instead
+    of not at all."""
+    client = fresh_client()
+    for tool in _manifest(client):
+        assert tool["name"] and not tool["name"].startswith("_")
+        assert tool["description"].strip()
+        schema = tool["parameters"]
+        assert schema.get("type") == "object"
+        assert isinstance(schema.get("properties", {}), dict)
+
+
+def test_asset_tagging_is_reachable_by_the_agent() -> None:
+    """It was implemented and registered, and the runtime could not see it — the whole reason
+    the manifest exists."""
+    client = fresh_client()
+    names = {tool["name"] for tool in _manifest(client)}
+    for expected in ("update_asset_tags", "list_workflows", "search_kb", "web_search"):
+        assert expected in names, f"{expected} is not offered to the agent"
