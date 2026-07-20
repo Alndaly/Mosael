@@ -2534,6 +2534,11 @@
    spot — absolute, not in normal flow, or a second .monitor-video (the canvas) would stack
    below the first and fall past the frame's overflow:hidden edge. Positioned overlays after
    them in the DOM (subtitle, vignette, transform handles) then paint on top. */
+/* Explicit layer order. Every layer used to be z-index:auto, so what sat on top came purely
+   from DOM order — which does NOT hold once Chromium promotes the <video> to its own
+   compositing layer (hardware decode, or the CSS filter/transform we put on it). The video
+   then paints over later siblings and the subtitle disappears while every computed style
+   still reads perfectly visible. Overlaying HTML on video needs a stated z-index. */
 .monitor-video {
   position: absolute;
   inset: 0;
@@ -2541,6 +2546,7 @@
   height: 100%;
   background: #000000;
   object-fit: contain;
+  z-index: 1;
 }
 .monitor-blank {
   width: 100%;
@@ -2561,6 +2567,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 4;
 }
 .tf-box {
   position: absolute;
@@ -2697,6 +2704,7 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  z-index: 0;
 }
 .monitor-blur-media {
   width: 100%;
@@ -4289,6 +4297,7 @@
 }
 .monitor-subtitle {
   position: absolute;
+  z-index: 3;
   left: 50%;
   bottom: 7%;
   transform: translateX(-50%);
@@ -5142,6 +5151,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 2;
 }
 
 /* Plugin tool cards: expandable try-run form + result */

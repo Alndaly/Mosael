@@ -146,11 +146,16 @@ export function Monitor({
     // cannot answer: is anything stacked on top of it, and is an ancestor hiding it?
     const name = (el: Element) =>
       el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? `.${el.className.trim().split(/\s+/)[0]}` : "");
+    // The subtitle is pointer-events:none, which would exclude it from its own hit test and make
+    // the stack useless for the one question that matters — where it sits relative to the video.
+    const priorPE = element.style.pointerEvents;
+    element.style.pointerEvents = "auto";
     const stack = document
       .elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2)
       .slice(0, 4)
       .map(name)
       .join(" > ");
+    element.style.pointerEvents = priorPE;
     let ancestors = "";
     for (let p = element.parentElement; p && p !== document.body; p = p.parentElement) {
       const s = window.getComputedStyle(p);
