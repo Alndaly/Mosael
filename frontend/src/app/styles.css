@@ -3045,6 +3045,7 @@
 .tl-label-order {
   display: inline-flex;
   gap: 1px;
+  margin-left: auto;
 }
 .tl-label:hover .tl-label-order .tl-label-tool {
   opacity: 1;

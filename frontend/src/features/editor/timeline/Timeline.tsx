@@ -614,9 +614,9 @@ export function Timeline({
               <div className="tl-label-top">
                 <span className={`tl-label-dot dot-${track.kind}`} />
                 <span className="tl-label-name">{track.name}</span>
-              </div>
-              <div className="tl-label-actions">
-              {onMoveTrack && (
+                {/* Reorder sits with the name: it answers "which layer is this", not "what does
+                    this track do". That also leaves the row below wide enough for the controls. */}
+                {onMoveTrack && (
                 <span className="tl-label-order">
                   <button
                     type="button"
@@ -639,7 +639,9 @@ export function Timeline({
                     <ChevronDown size={12} />
                   </button>
                 </span>
-              )}
+                )}
+              </div>
+              <div className="tl-label-actions">
               {onSetTrackState && (
                 <span className="tl-label-tools">
                   <button
