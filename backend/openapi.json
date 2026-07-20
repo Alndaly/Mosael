@@ -2123,6 +2123,53 @@
         }
       }
     },
+    "/api/tts/voices": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "List Tts Voices",
+        "description": "The voices an engine can speak in, live where the account allows it.\n\n火山's catalogue depends on the account, and a voice used with the wrong resource family\nfails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the\naccount and each voice carries its family. Without them, the built-in list still works;\nit is smaller and can go stale, which is a far better failure than an empty dropdown.",
+        "operationId": "list_tts_voices_api_tts_voices_get",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TtsVoiceOut"
+                  },
+                  "title": "Response List Tts Voices Api Tts Voices Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tts/synthesize": {
       "post": {
         "tags": [
@@ -10715,6 +10762,12 @@
             "title": "Engine Voice",
             "default": ""
           },
+          "engine_voice_resource": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Engine Voice Resource",
+            "default": ""
+          },
           "speed": {
             "type": "number",
             "maximum": 3.0,
@@ -12776,6 +12829,13 @@
             "maxLength": 120,
             "title": "Default Model",
             "default": ""
+          },
+          "extra": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Extra"
           }
         },
         "type": "object",
@@ -12821,6 +12881,13 @@
             "type": "string",
             "title": "Key Hint",
             "default": ""
+          },
+          "extra": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Extra"
           }
         },
         "type": "object",
@@ -12897,6 +12964,20 @@
               }
             ],
             "title": "Enabled"
+          },
+          "extra": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra"
           }
         },
         "type": "object",
@@ -14789,6 +14870,30 @@
         ],
         "title": "TtsEngineOut"
       },
+      "TtsVoiceOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "resource_id": {
+            "type": "string",
+            "title": "Resource Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "TtsVoiceOut",
+        "description": "One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the\nvoice's family, and only the listing knows it — inferring it from the id is guesswork that\nfails with an opaque 55000000."
+      },
       "UserOut": {
         "properties": {
           "id": {
@@ -14847,6 +14952,35 @@
         ],
         "title": "ValidationError"
       },
+      "VendorFieldOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "secret": {
+            "type": "boolean",
+            "title": "Secret",
+            "default": false
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "VendorFieldOut",
+        "description": "One vendor-specific credential the form should collect."
+      },
       "VendorPresetOut": {
         "properties": {
           "vendor": {
@@ -14871,6 +15005,13 @@
             "type": "string",
             "title": "Capabilities",
             "default": ""
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/VendorFieldOut"
+            },
+            "type": "array",
+            "title": "Fields"
           }
         },
         "type": "object",

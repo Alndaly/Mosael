@@ -131,8 +131,10 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
 
     assert engines["clone"]["needs_key"] is False
     assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
-    # 火山's catalogue is account-specific, so there is no list to offer — the id is typed in.
-    assert engines["volcano"]["needs_voice_id"] is True and engines["volcano"]["voices"] == []
+    # 火山's catalogue is account-specific, but /api/tts/voices always answers with a list —
+    # live when AK/SK are configured, built-in otherwise — so the panel offers a dropdown
+    # rather than asking the user to type an opaque id.
+    assert engines["volcano"]["needs_voice_id"] is False and engines["volcano"]["voices"]
 
 
 def test_a_profile_base_url_reaches_the_engine() -> None:
@@ -173,3 +175,49 @@ def test_a_profile_base_url_reaches_the_engine() -> None:
 
     assert seen.get("base_url") == "https://proxy.test/v1", seen
     assert seen.get("api_key") == "k"
+
+
+def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
+    """火山 needs the voice's family in a synthesis header, and it travels from the request
+    through three functions that pass their arguments positionally. Adding a parameter to one
+    of them is silent until synthesis fails with an opaque 55000000 — so pin the whole path."""
+    import time
+
+    import app.audio.tts_providers as providers
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        db.add(ProviderProfile(name="v", vendor="volcano", api_key="k"))
+        db.commit()
+
+    seen: dict = {}
+
+    def spy(engine, api_key, voice="", model="", base_url=""):
+        seen.update(voice=voice, model=model)
+        raise RuntimeError("no network in tests")
+
+    saved = providers.build_remote_provider
+    providers.build_remote_provider = spy
+    try:
+        res = client.post(
+            "/api/tts/synthesize",
+            json={
+                "workspace_id": workspace_id,
+                "text": "你好",
+                "engine": "volcano",
+                "engine_voice": "zh_male_custom_bigtts",
+                "engine_voice_resource": "seed-icl-2.0",
+            },
+        )
+        assert res.status_code == 200, res.text
+        deadline = time.time() + 5
+        while not seen and time.time() < deadline:
+            time.sleep(0.02)
+    finally:
+        providers.build_remote_provider = saved
+
+    assert seen.get("voice") == "zh_male_custom_bigtts", seen
+    assert seen.get("model") == "seed-icl-2.0", seen

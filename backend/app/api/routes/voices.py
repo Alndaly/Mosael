@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -11,6 +12,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     EngineSynthesizeRequest,
     TtsEngineChoiceOut,
+    TtsVoiceOut,
     JobOut,
     SynthesizeRequest,
     TtsConfigOut,
@@ -23,6 +25,7 @@ from app.audio import tts_models, voices
 from app.core.permissions import ensure_workspace_perm, ensure_instance_admin, ensure_workspace_access
 from app.domain import tts_config
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["voices"])
 
 
@@ -127,6 +130,49 @@ def list_tts_engines(user: CurrentUser) -> list[dict]:
     return describe_engines()
 
 
+@router.get("/tts/voices", response_model=list[TtsVoiceOut])
+def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """The voices an engine can speak in, live where the account allows it.
+
+    火山's catalogue depends on the account, and a voice used with the wrong resource family
+    fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
+    account and each voice carries its family. Without them, the built-in list still works;
+    it is smaller and can go stale, which is a far better failure than an empty dropdown.
+    """
+    from app.audio.tts_providers import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, OpenAITTS
+    from app.domain.providers import profile_extra
+
+    if engine == "openai":
+        return [{"value": voice, "label": voice} for voice in OpenAITTS.VOICES]
+    if engine == "volcano-podcast":
+        return [{"value": voice, "label": label} for voice, label in PODCAST_SPEAKERS]
+    if engine != "volcano":
+        return []
+
+    ak, sk = profile_extra(db, "volcano", "ak"), profile_extra(db, "volcano", "sk")
+    if ak and sk:
+        from app.integrations.volc_openapi import VolcOpenAPIError, list_all_speakers
+
+        try:
+            live = list_all_speakers(ak, sk)
+        except VolcOpenAPIError as exc:
+            # Falling back beats failing: the user can still synthesise, and the reason the
+            # live list is missing belongs in the log rather than in a broken dropdown.
+            logger.info("volcano live voice list unavailable: %s", exc)
+        else:
+            if live:
+                return [
+                    {
+                        "value": speaker.get("VoiceType", ""),
+                        "label": speaker.get("Name") or speaker.get("VoiceType", ""),
+                        "resource_id": speaker.get("ResourceID", ""),
+                    }
+                    for speaker in live
+                    if speaker.get("VoiceType")
+                ]
+    return [{"value": voice, "label": label} for voice, label in VOLCANO_BUILTIN_VOICES]
+
+
 @router.post("/tts/synthesize", response_model=JobOut)
 def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: CurrentUser):
     """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
@@ -140,6 +186,7 @@ def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: C
             workspace_id=body.workspace_id,
             engine=body.engine,
             engine_voice=body.engine_voice,
+        engine_voice_resource=body.engine_voice_resource,
             speed=body.speed,
         )
     except voices.VoiceError as exc:

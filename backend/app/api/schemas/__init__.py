@@ -434,6 +434,7 @@ class ProviderProfileCreate(BaseModel):
     api_key: str = Field(min_length=1, max_length=500)
     base_url: str = Field(default="", max_length=300)
     default_model: str = Field(default="", max_length=120)
+    extra: dict[str, str] = Field(default_factory=dict)
 
 
 class ProviderProfileUpdate(BaseModel):
@@ -442,6 +443,17 @@ class ProviderProfileUpdate(BaseModel):
     base_url: str | None = Field(default=None, max_length=300)
     default_model: str | None = Field(default=None, max_length=120)
     enabled: bool | None = None
+    #: Merged, not replaced — see merge_profile_extra for what a blank value means.
+    extra: dict[str, str] | None = None
+
+
+class VendorFieldOut(BaseModel):
+    """One vendor-specific credential the form should collect."""
+
+    key: str
+    label: str
+    secret: bool = False
+    hint: str = ""
 
 
 class ProviderProfileOut(OrmModel):
@@ -453,6 +465,9 @@ class ProviderProfileOut(OrmModel):
     enabled: bool
     created_at: datetime
     key_hint: str = ""
+    #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
+    #: same rule as api_key/key_hint.
+    extra: dict[str, str] = Field(default_factory=dict)
 
 
 class ProviderDefaultOut(BaseModel):
@@ -519,8 +534,22 @@ class EngineSynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     engine: str = Field(min_length=1, max_length=40)
     engine_voice: str = Field(default="", max_length=120)
+    #: 火山 only: the voice's resource family. Only the account's voice list knows it, and the
+    #: synthesis header must agree with it or the call fails with an opaque 55000000. Blank
+    #: falls back to inferring it from the voice id, which works for the built-in voices.
+    engine_voice_resource: str = Field(default="", max_length=60)
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
     project_id: str | None = None
+
+
+class TtsVoiceOut(BaseModel):
+    """One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
+    voice's family, and only the listing knows it — inferring it from the id is guesswork that
+    fails with an opaque 55000000."""
+
+    value: str
+    label: str
+    resource_id: str = ""
 
 
 class TtsEngineChoiceOut(BaseModel):
@@ -580,6 +609,9 @@ class VendorPresetOut(BaseModel):
     base_url: str = ""
     default_model: str = ""
     capabilities: str = ""
+    #: Extra credential inputs this vendor needs beyond api_key. The form renders these, so
+    #: adding a vendor stays a one-dict-entry change.
+    fields: list[VendorFieldOut] = Field(default_factory=list)
 
 
 class CredentialSetRequest(BaseModel):

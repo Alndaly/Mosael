@@ -488,6 +488,11 @@ class ProviderProfile(Base):
     base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     api_key: Mapped[str] = mapped_column(String(500), nullable=False)
     default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
+    #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for
+    #: listing voices are three unrelated credentials from three different consoles. Which keys
+    #: a vendor uses is declared by its VENDOR_PRESETS entry, which is also what renders the form.
+    extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

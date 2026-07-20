@@ -131,6 +131,19 @@ export interface TtsEngineChoice {
   note: string;
 }
 
+export interface TtsVoice {
+  value: string;
+  label: string;
+  /** 火山 only: the voice's resource family, which synthesis must echo in a header. */
+  resource_id: string;
+}
+
+/** The voices an engine can speak in. Separate from the engine list because for 火山 this is a
+    live, account-dependent lookup — the engine list is static. */
+export function listTtsVoices(engine: string): Promise<TtsVoice[]> {
+  return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}`);
+}
+
 export function listTtsEngines(): Promise<TtsEngineChoice[]> {
   return api<TtsEngineChoice[]>("/api/tts/engines");
 }
@@ -142,6 +155,7 @@ export function synthesizeWithEngine(body: {
   text: string;
   engine: string;
   engine_voice?: string;
+  engine_voice_resource?: string;
   speed?: number;
   project_id?: string | null;
 }): Promise<Job> {

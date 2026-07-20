@@ -66,6 +66,7 @@ def init_db() -> None:
     _migrate_agent_sessions()
     _migrate_clip_transform()
     _migrate_tts_config()
+    _migrate_provider_extra()
     Base.metadata.create_all(bind=engine)
 
 
@@ -80,6 +81,20 @@ def _migrate_tts_config() -> None:
             conn.execute(text("ALTER TABLE tts_config ADD COLUMN fish_repo_dir VARCHAR(500) NOT NULL DEFAULT ''"))
         if "fish_model_dir" not in cols:
             conn.execute(text("ALTER TABLE tts_config ADD COLUMN fish_model_dir VARCHAR(500) NOT NULL DEFAULT ''"))
+
+
+def _migrate_provider_extra() -> None:
+    """加列迁移(保留已配置的供应商):provider_profiles 增加 extra。
+    ADD COLUMN 会把老行留成 NULL,而读取端按 dict 用 → 必须回填 '{}'。"""
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    cols = {c["name"] for c in inspector.get_columns("provider_profiles")}
+    if "extra" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN extra JSON"))
+        conn.execute(text("UPDATE provider_profiles SET extra = '{}' WHERE extra IS NULL"))
 
 
 def _migrate_clip_transform() -> None:

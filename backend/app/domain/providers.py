@@ -46,6 +46,23 @@ VENDOR_PRESETS: dict[str, dict[str, str]] = {
         # Deliberately separate from "bytedance": ARK and the speech service issue different
         # keys from different consoles, so one profile cannot serve both.
         "capabilities": "语音合成(大模型 TTS,需语音技术控制台的 API Key)",
+        # AK/SK are the account-level keys, and they only buy one thing here: pulling the live
+        # voice list. Synthesis works without them — the built-in list is the fallback — so they
+        # are optional and say so.
+        "fields": [
+            {"key": "ak", "label": "Access Key (AK)", "secret": True, "hint": "选填,用于拉取账号可用音色"},
+            {"key": "sk", "label": "Secret Key (SK)", "secret": True, "hint": "选填,与 AK 配对"},
+        ],
+    },
+    "volcano-podcast": {
+        "label": "火山引擎播客(双人对话)",
+        "base_url": "wss://openspeech.bytedance.com",
+        # A third 火山 credential, again not interchangeable: the podcast WebSocket authenticates
+        # with appid + access token, and rejects the v3 API Key outright.
+        "capabilities": "播客式双人对话音频(WebSocket,凭据是 appid + Access Token,不是 API Key)",
+        "fields": [
+            {"key": "appid", "label": "App ID", "secret": False, "hint": "语音技术控制台的 App ID"},
+        ],
     },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
@@ -82,6 +99,20 @@ def first_enabled_profile(db: Session) -> ProviderProfile | None:
     return db.scalar(
         select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at).limit(1)
     )
+
+
+def profile_extra(db: Session, vendor: str, key: str) -> str:
+    """One vendor-specific credential, or "" when unset.
+
+    Callers treat "" as absent rather than raising: every extra field is either optional
+    (火山 AK/SK) or checked by the feature that needs it, which can say what is missing far
+    more usefully than a KeyError here.
+    """
+    profile = resolve_profile(db, vendor)
+    if profile is None:
+        return ""
+    value = (profile.extra or {}).get(key)
+    return str(value) if value else ""
 
 
 def resolve_secret(db: Session, vendor: str) -> str | None:

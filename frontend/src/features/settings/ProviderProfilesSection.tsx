@@ -18,7 +18,16 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
-type ProfileForm = { vendor: string; name: string; api_key: string; base_url: string; default_model: string };
+type ProfileForm = {
+  vendor: string;
+  name: string;
+  api_key: string;
+  base_url: string;
+  default_model: string;
+  /** Vendor-specific credentials, keyed by the preset's field spec. 火山 needs three of these
+      across its two vendors, and they are not interchangeable. */
+  extra: Record<string, string>;
+};
 
 /** 各供应商创建密钥的官方控制台入口(告知用户"去哪拿 key")。外链走系统浏览器。 */
 const VENDOR_DOCS: Record<string, string> = {
@@ -36,7 +45,7 @@ export function ProviderProfilesSection() {
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
-  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", api_key: "", base_url: "", default_model: "" };
+  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", api_key: "", base_url: "", default_model: "", extra: {} };
 
   const profiles = useQuery({
     queryKey: ["provider-profiles"],
@@ -55,6 +64,7 @@ export function ProviderProfilesSection() {
       api_key: z.string(),
       base_url: z.string(),
       default_model: z.string(),
+      extra: z.record(z.string(), z.string()),
     });
     // API key required when creating; on edit a blank key means "keep existing".
     return editing
@@ -84,6 +94,14 @@ export function ProviderProfilesSection() {
       api_key: "",
       base_url: profile.base_url,
       default_model: profile.default_model,
+      // Secret extras come back only as "…abcd", so prefilling one would submit the mask as
+      // the new value. Blank means "keep", exactly like api_key above.
+      extra: Object.fromEntries(
+        (vendors.data?.find((item) => item.vendor === profile.vendor)?.fields ?? []).map((spec) => [
+          spec.key,
+          spec.secret ? "" : (profile.extra ?? {})[spec.key] ?? "",
+        ]),
+      ),
     });
   };
 
@@ -97,6 +115,7 @@ export function ProviderProfilesSection() {
           api_key: values.api_key.trim(),
           base_url: values.base_url.trim(),
           default_model: values.default_model.trim(),
+          extra: values.extra,
         }),
       }),
     onSuccess: () => {
@@ -114,6 +133,8 @@ export function ProviderProfilesSection() {
           default_model: values.default_model.trim(),
           // 只有真正输入了新 key 才提交,否则后端保持原值
           ...(values.api_key.trim() ? { api_key: values.api_key.trim() } : {}),
+          // extra 由后端按字段是否 secret 合并:密钥留空=保持,可见标识留空=清除
+          extra: values.extra,
         }),
       }),
     onSuccess: () => {
@@ -228,6 +249,27 @@ export function ProviderProfilesSection() {
                 </FormItem>
               )}
             />
+            {(preset?.fields ?? []).map((spec) => (
+              <FormField
+                key={spec.key}
+                control={form.control}
+                name={`extra.${spec.key}` as const}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{spec.label}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type={spec.secret ? "password" : "text"}
+                        placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : ""}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    {spec.hint && <FormDescription>{spec.hint}</FormDescription>}
+                  </FormItem>
+                )}
+              />
+            ))}
             <FormField
               control={form.control}
               name="base_url"

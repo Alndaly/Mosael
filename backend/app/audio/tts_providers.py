@@ -225,6 +225,38 @@ class VolcanoTTS:
         out_path.write_bytes(b"".join(chunks))
 
 
+#: The voices to offer when the account's AK/SK are not configured, so synthesis is usable
+#: without them. Deliberately excludes the emo_v2 multi-emotion voices: their resource family
+#: cannot be inferred from the id, and guessing produces an opaque 55000000 at synthesis time.
+VOLCANO_BUILTIN_VOICES: tuple[tuple[str, str], ...] = (
+    ("zh_female_cancan_mars_bigtts", "灿灿(女·活泼)"),
+    ("zh_female_shuangkuaisisi_moon_bigtts", "爽快思思(女)"),
+    ("zh_female_vv_uranus_bigtts", "Vivi 薇薇(女·2.0)"),
+    ("zh_female_wanwanxiaohe_moon_bigtts", "湾湾小何(女·台腔)"),
+    ("zh_female_xiaomei_mars_bigtts", "小美(女)"),
+    ("zh_female_qingxinnvsheng_mars_bigtts", "清新女声(女)"),
+    ("zh_female_zhixingnvsheng_mars_bigtts", "知性女声(女)"),
+    ("zh_male_liufei_uranus_bigtts", "刘飞(男·2.0)"),
+    ("zh_male_m191_uranus_bigtts", "云舟(男·2.0)"),
+    ("zh_male_wennuanahu_moon_bigtts", "温暖阿虎(男)"),
+    ("zh_male_shaonianzixin_moon_bigtts", "少年梓辛(男)"),
+    ("zh_male_jingqiangkanye_moon_bigtts", "京腔侃爷(男·北京)"),
+    ("zh_male_yangguangqingnian_moon_bigtts", "阳光青年(男)"),
+    ("zh_male_sunwukong_mars_bigtts", "孙悟空(角色)"),
+    ("en_female_anna_mars_bigtts", "Anna(英·女)"),
+    ("en_male_adam_mars_bigtts", "Adam(英·男)"),
+)
+
+#: 播客 voices. These only work on the podcast WebSocket, not the v3 single-voice endpoint,
+#: and read best paired within a series (大义+咪仔 / 刘飞+潇磊).
+PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
+    ("zh_male_dayixiansheng_v2_saturn_bigtts", "大义(男)"),
+    ("zh_female_mizaitongxue_v2_saturn_bigtts", "咪仔(女)"),
+    ("zh_male_liufei_v2_saturn_bigtts", "刘飞(男)"),
+    ("zh_male_xiaolei_v2_saturn_bigtts", "潇磊(男)"),
+)
+
+
 #: Engines a user can pick, in the order the UI offers them. "clone" is handled separately —
 #: it is the local reference-driven path and needs a Voice row, not an engine voice id.
 REMOTE_ENGINES = {
@@ -256,11 +288,12 @@ def describe_engines() -> list[dict[str, object]]:
             "id": VolcanoTTS.id,
             "label": VolcanoTTS.label,
             "needs_key": True,
-            # No fixed list: the catalogue is large and account-dependent, so the voice id is
-            # typed in. Guessing a list here would go stale and mislead.
-            "needs_voice_id": True,
-            "voices": [],
-            "note": "中文音色最好;需填音色 id(如 zh_male_..._bigtts)。",
+            # The catalogue is account-dependent, so the real list comes from /api/tts/voices —
+            # live when AK/SK are set, the built-in list otherwise. Either way it is a list, so
+            # the panel offers a dropdown rather than asking the user to type an opaque id.
+            "needs_voice_id": False,
+            "voices": [voice for voice, _ in VOLCANO_BUILTIN_VOICES],
+            "note": "中文音色最好。配置账号 AK/SK 后可拉取账号内全部音色。",
         },
     ]
 

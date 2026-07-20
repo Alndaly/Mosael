@@ -732,6 +732,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tts Voices
+         * @description The voices an engine can speak in, live where the account allows it.
+         *
+         *     火山's catalogue depends on the account, and a voice used with the wrong resource family
+         *     fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
+         *     account and each voice carries its family. Without them, the built-in list still works;
+         *     it is smaller and can go stale, which is a far better failure than an empty dropdown.
+         */
+        get: operations["list_tts_voices_api_tts_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/synthesize": {
         parameters: {
             query?: never;
@@ -3450,6 +3475,11 @@ export interface components {
              */
             engine_voice: string;
             /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /**
              * Speed
              * @default 1
              */
@@ -4280,6 +4310,10 @@ export interface components {
              * @default
              */
             default_model: string;
+            /** Extra */
+            extra?: {
+                [key: string]: string;
+            };
         };
         /** ProviderProfileOut */
         ProviderProfileOut: {
@@ -4305,6 +4339,10 @@ export interface components {
              * @default
              */
             key_hint: string;
+            /** Extra */
+            extra?: {
+                [key: string]: string;
+            };
         };
         /** ProviderProfileUpdate */
         ProviderProfileUpdate: {
@@ -4318,6 +4356,10 @@ export interface components {
             default_model?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Extra */
+            extra?: {
+                [key: string]: string;
+            } | null;
         };
         /** PublishAccountCreate */
         PublishAccountCreate: {
@@ -5118,6 +5160,23 @@ export interface components {
              */
             source_dir: string;
         };
+        /**
+         * TtsVoiceOut
+         * @description One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
+         *     voice's family, and only the listing knows it — inferring it from the id is guesswork that
+         *     fails with an opaque 55000000.
+         */
+        TtsVoiceOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+            /**
+             * Resource Id
+             * @default
+             */
+            resource_id: string;
+        };
         /** UserOut */
         UserOut: {
             /** Id */
@@ -5137,6 +5196,26 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VendorFieldOut
+         * @description One vendor-specific credential the form should collect.
+         */
+        VendorFieldOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Secret
+             * @default false
+             */
+            secret: boolean;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
         };
         /** VendorPresetOut */
         VendorPresetOut: {
@@ -5159,6 +5238,8 @@ export interface components {
              * @default
              */
             capabilities: string;
+            /** Fields */
+            fields?: components["schemas"]["VendorFieldOut"][];
         };
         /** VoiceFromSpeakerRequest */
         VoiceFromSpeakerRequest: {
@@ -6913,6 +6994,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TtsEngineChoiceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tts_voices_api_tts_voices_get: {
+        parameters: {
+            query: {
+                engine: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsVoiceOut"][];
                 };
             };
             /** @description Validation Error */

@@ -18,6 +18,7 @@ from app.api.schemas import (
     ProviderProfileCreate,
     ProviderProfileOut,
     ProviderProfileUpdate,
+    VendorFieldOut,
     VendorPresetOut,
 )
 from app.core.db import SessionLocal
@@ -35,7 +36,48 @@ KNOWN_PROVIDERS = ["alibaba", "bytedance", "openai", "google", "kuaishou"]
 def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out = ProviderProfileOut.model_validate(profile)
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
+    out.extra = _masked_extra(profile)
     return out
+
+
+def _field_specs(vendor: str) -> list[dict]:
+    return list(VENDOR_PRESETS.get(vendor, {}).get("fields", []))  # type: ignore[arg-type]
+
+
+def _masked_extra(profile: ProviderProfile) -> dict[str, str]:
+    """Secret extras leave the server only as a hint; identifiers come back in full.
+
+    An App ID is not a secret and the form needs to show it back, but an AK/SK is — sending
+    those to the browser would undo the reason api_key is never serialised either.
+    """
+    stored = profile.extra or {}
+    secret_keys = {spec["key"] for spec in _field_specs(profile.vendor) if spec.get("secret")}
+    out: dict[str, str] = {}
+    for key, value in stored.items():
+        text_value = str(value or "")
+        if not text_value:
+            continue
+        out[key] = f"…{text_value[-4:]}" if key in secret_keys else text_value
+    return out
+
+
+def merge_profile_extra(profile: ProviderProfile, incoming: dict[str, str]) -> dict[str, str]:
+    """Fold a form submission into the stored extras.
+
+    A blank value means different things depending on whether the user could see the field:
+    a secret is never sent back to the browser, so a blank one means "unchanged" — clearing it
+    on every save would silently destroy a working credential. A visible identifier that comes
+    back blank was blanked on purpose, so it clears.
+    """
+    merged = dict(profile.extra or {})
+    secret_keys = {spec["key"] for spec in _field_specs(profile.vendor) if spec.get("secret")}
+    for key, value in incoming.items():
+        text_value = (value or "").strip()
+        if text_value:
+            merged[key] = text_value
+        elif key not in secret_keys:
+            merged.pop(key, None)
+    return merged
 
 
 @router.get("/settings/provider-vendors", response_model=list[VendorPresetOut])
@@ -47,6 +89,7 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
             base_url=preset.get("base_url", ""),
             default_model=preset.get("default_model", ""),
             capabilities=preset.get("capabilities", ""),
+            fields=[VendorFieldOut(**spec) for spec in preset.get("fields", [])],  # type: ignore[arg-type]
         )
         for vendor, preset in VENDOR_PRESETS.items()
     ]
@@ -69,6 +112,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
         base_url=body.base_url or preset.get("base_url", ""),
         default_model=body.default_model or preset.get("default_model", ""),
     )
+    profile.extra = merge_profile_extra(profile, body.extra)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -83,9 +127,16 @@ def update_provider_profile(
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Not found")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    patch = body.model_dump(exclude_unset=True)
+    # extra is merged, never assigned: the generic loop below would overwrite the whole dict
+    # with whatever the form sent, deleting every credential the browser was not allowed to
+    # read back in the first place.
+    incoming_extra = patch.pop("extra", None)
+    for key, value in patch.items():
         if value is not None:
             setattr(profile, key, value)
+    if incoming_extra is not None:
+        profile.extra = merge_profile_extra(profile, incoming_extra)
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)

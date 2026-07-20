@@ -160,6 +160,7 @@ def start_synthesis(
     workspace_id: str = "",
     engine: str = "clone",
     engine_voice: str = "",
+    engine_voice_resource: str = "",
     speed: float = 1.0,
 ) -> Job:
     """Queue a synthesis job.
@@ -197,7 +198,7 @@ def start_synthesis(
     db.commit()
     thread = threading.Thread(
         target=_run_synthesis,
-        args=(job.id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id),
+        args=(job.id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource),
         daemon=True,
     )
     thread.start()
@@ -213,6 +214,7 @@ def _run_synthesis(
     engine_voice: str = "",
     speed: float = 1.0,
     workspace_id: str = "",
+    engine_voice_resource: str = "",
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded.
 
@@ -220,7 +222,7 @@ def _run_synthesis(
     model in memory, so queueing it behind the single local slot would serialise work that has
     no reason to be serial.
     """
-    args = (job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id)
+    args = (job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource)
     if engine == "clone":
         with TTS_SLOTS:
             run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
@@ -237,6 +239,7 @@ def _run_synthesis_body(
     engine_voice: str = "",
     speed: float = 1.0,
     workspace_id: str = "",
+    engine_voice_resource: str = "",
 ) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -256,6 +259,7 @@ def _run_synthesis_body(
                 _synthesize_remote(
                     db, job, engine, engine_voice, text, speed,
                     workspace_id=workspace_id or job.workspace_id, project_id=project_id,
+                    voice_resource=engine_voice_resource,
                 )
                 return
 
@@ -329,7 +333,16 @@ __all__ = [
 
 
 def _synthesize_remote(
-    db, job, engine: str, engine_voice: str, text: str, speed: float, *, workspace_id: str, project_id: str | None
+    db,
+    job,
+    engine: str,
+    engine_voice: str,
+    text: str,
+    speed: float,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    voice_resource: str = "",
 ) -> None:
     """Synthesise through a remote engine and register the result, mirroring the clone path.
 
@@ -347,6 +360,7 @@ def _synthesize_remote(
         engine,
         api_key=api_key,
         voice=engine_voice,
+        model=voice_resource,
         base_url=(profile.base_url if profile else "") or "",
     )
     with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
