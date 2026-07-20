@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.test_publish import make_video_asset
+from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key
 from tests.util import fresh_client
 
 
@@ -28,6 +29,8 @@ def setup_browser_task(client) -> tuple[dict, dict, dict]:
 
 def test_browser_platform_waits_for_worker_and_reports() -> None:
     client = fresh_client()
+    # These tests drive the worker channel, which now needs its shared key.
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
     ws, account, task = setup_browser_task(client)
 
     # 浏览器平台不在进程内执行:任务保持 pending,job 等待认领
@@ -62,6 +65,8 @@ def test_browser_platform_waits_for_worker_and_reports() -> None:
 
 def test_title_limit_and_binding_check_flow() -> None:
     client = fresh_client()
+    # These tests drive the worker channel, which now needs its shared key.
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset = make_video_asset(client, ws["id"])
     account = client.post(
@@ -103,6 +108,8 @@ def test_title_limit_and_binding_check_flow() -> None:
 
 def test_account_recheck_and_profile() -> None:
     client = fresh_client()
+    # These tests drive the worker channel, which now needs its shared key.
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     account = client.post(
         "/api/publish/accounts",

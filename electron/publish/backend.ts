@@ -1,5 +1,9 @@
 // 发布执行器 ↔ mibu-video 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
 // 认领待办、回报状态、更新账号登录态,都走这里。本地默认 owner,后端 publish 权限门放行本地。
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { plog } from "./log";
 
 const BASE =
@@ -20,10 +24,28 @@ interface BackendTask {
   status: string;
 }
 
+// 共享密钥:后端每次启动写入数据目录(0600),worker 读取后随每个请求发送。这条通道没有用户
+// 会话,而"后端只听 127.0.0.1"挡不住浏览器 —— 用户随便打开一个网页就能 POST 到本机。真正把
+// worker 和网页区分开的,是 worker 读得到本地文件。后端重启会换密钥,所以每次都重读:缓存下来
+// 会在重启后静默失效,而失败是 401 不是超时,很难查。
+function readWorkerKey(): string {
+  const dir =
+    process.env.MIBU_DATA_DIR ||
+    join(homedir(), ".mibu-new");
+  try {
+    return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
+  } catch {
+    plog("worker key unreadable — the backend may not have started yet");
+    return "";
+  }
+}
+
 async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { "X-Mibu-Worker-Key": readWorkerKey() };
+  if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}/api/publish${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

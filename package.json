@@ -4,7 +4,7 @@
   "private": true,
   "description": "Mibu — AI video creative studio",
   "main": "electron/main.cjs",
-  "packageManager": "pnpm@11.6.0",
+  "packageManager": "pnpm@11.15.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",

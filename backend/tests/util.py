@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.core.db import Base, engine, init_db
+from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key, issue_worker_key
 from app.main import app
 
 PASSWORD = "pass1234"
@@ -33,12 +34,26 @@ def _assert_disposable_data_dir() -> None:
 
 
 def fresh_client(username: str = "tester") -> TestClient:
-    """Drop/recreate the isolated test DB and return a logged-in client."""
+    """Drop/recreate the isolated test DB and return a logged-in client.
+
+    Also mints the publish-worker key. TestClient(app) does not run the lifespan (only the
+    context-manager form does), so without this the worker channel has no key issued and every
+    worker route answers 401 — correct behaviour for an unstarted backend, but not what a test
+    exercising those routes means to assert.
+    """
     _assert_disposable_data_dir()
     Base.metadata.drop_all(bind=engine)
     init_db()
+    issue_worker_key()
     client = TestClient(app)
     login_as(client, username)
+    return client
+
+
+def worker_client() -> TestClient:
+    """A client authenticated as the local publish worker rather than as a user."""
+    client = TestClient(app)
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or issue_worker_key()
     return client
 
 

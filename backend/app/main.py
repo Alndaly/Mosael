@@ -36,6 +36,8 @@ from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
+from app.api.deps import require_worker_key
+from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.generation import ensure_builtin_generation_models
@@ -47,6 +49,9 @@ from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
+    # Mint the publish worker's shared secret before any request can arrive. See
+    # app/core/worker_key.py for why that channel needs one.
+    issue_worker_key()
     with SessionLocal() as db:
         ensure_builtin_generation_models(db)
         # A restart kills every in-process worker thread — fail the jobs they
@@ -118,8 +123,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     # Webhook 触发按任务密钥鉴权,不挂登录依赖。
     app.include_router(hooks_router, prefix="/api")
-    # 桌面发布器 worker:本机进程,免登录(后端只听 127.0.0.1)。
-    app.include_router(publish_worker_router, prefix="/api")
+    # 桌面发布器 worker:本机进程,不走用户会话,改用启动时下发的共享密钥(见 worker_key.py)。
+    app.include_router(publish_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(workspaces_router, prefix="/api", dependencies=protected)

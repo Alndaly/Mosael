@@ -46,7 +46,7 @@ module.exports = __toCommonJS(index_exports);
 // electron/publish/worker.ts
 var import_electron3 = require("electron");
 var import_promises2 = require("node:fs/promises");
-var import_node_path3 = __toESM(require("node:path"));
+var import_node_path4 = __toESM(require("node:path"));
 
 // electron/publish/i18n.ts
 function tr(text, params) {
@@ -2280,11 +2280,25 @@ var createAdapter = (platform, driver, task) => {
 };
 
 // electron/publish/backend.ts
+var import_node_fs2 = require("node:fs");
+var import_node_os = require("node:os");
+var import_node_path3 = require("node:path");
 var BASE = process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
+function readWorkerKey() {
+  const dir = process.env.MIBU_DATA_DIR || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".mibu-new");
+  try {
+    return (0, import_node_fs2.readFileSync)((0, import_node_path3.join)(dir, "publish-worker.key"), "utf8").trim();
+  } catch {
+    plog("worker key unreadable \u2014 the backend may not have started yet");
+    return "";
+  }
+}
 async function req(path4, method = "GET", body) {
+  const headers = { "X-Mibu-Worker-Key": readWorkerKey() };
+  if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}/api/publish${path4}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : void 0,
+    headers,
     body: body ? JSON.stringify(body) : void 0
   });
   if (!res.ok) {
@@ -2381,9 +2395,9 @@ function toAdapterTask(t) {
 }
 async function captureFailure(taskId, driver) {
   try {
-    const dir = import_node_path3.default.join(import_electron3.app.getPath("userData"), "publish-screenshots");
+    const dir = import_node_path4.default.join(import_electron3.app.getPath("userData"), "publish-screenshots");
     await (0, import_promises2.mkdir)(dir, { recursive: true });
-    const file = import_node_path3.default.join(dir, `${taskId}-${Date.now()}.png`);
+    const file = import_node_path4.default.join(dir, `${taskId}-${Date.now()}.png`);
     await driver.screenshot(file);
     return file;
   } catch {
