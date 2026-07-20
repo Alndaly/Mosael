@@ -34,7 +34,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     queryKey: ["feishu-bots", workspace.id],
     queryFn: () => api<FeishuBot[]>(`/api/feishu/bots?workspace_id=${workspace.id}`),
     refetchInterval: 4000,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   const onboarding = useQuery({
@@ -42,7 +42,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     enabled: scanning,
     queryFn: () => api<Onboarding>(`/api/feishu/onboarding/${workspace.id}`),
     refetchInterval: 2000,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   React.useEffect(() => {

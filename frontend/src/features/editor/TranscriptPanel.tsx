@@ -139,7 +139,7 @@ export function TranscriptPanel({
       const status = query.state.data?.status;
       return status === "succeeded" || status === "failed" ? false : 1500;
     },
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   React.useEffect(() => {
     if (asrJob.data?.status === "succeeded") {

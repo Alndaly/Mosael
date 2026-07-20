@@ -34,7 +34,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
     queryKey: ["notifications", workspaceId],
     queryFn: () => listNotifications(workspaceId),
     refetchInterval: 30000,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["notifications", workspaceId] });
   const readOne = useMutation({ mutationFn: readNotification, onSuccess: invalidate });

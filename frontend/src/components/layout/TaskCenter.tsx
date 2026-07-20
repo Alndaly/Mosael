@@ -42,7 +42,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}`),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const clearFinished = useMutation({
     mutationFn: () => api(`/api/jobs/finished?workspace_id=${workspaceId}`, { method: "DELETE" }),

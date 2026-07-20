@@ -20,7 +20,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     queryKey: ["confirmations", workspaceId, "pending"],
     queryFn: () => api<Confirmation[]>(`/api/confirmations?workspace_id=${workspaceId}&status=pending`),
     refetchInterval: 2500,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   const settle = useMutation({

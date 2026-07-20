@@ -970,7 +970,7 @@ function ExportControl({
       const status = query.state.data?.status;
       return status === "succeeded" || status === "failed" ? false : 700;
     },
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   const status = jobId ? (job.data?.status ?? "queued") : null;

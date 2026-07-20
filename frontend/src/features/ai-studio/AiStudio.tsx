@@ -99,7 +99,7 @@ function GenerateWorkspace({
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   const selectedModel =

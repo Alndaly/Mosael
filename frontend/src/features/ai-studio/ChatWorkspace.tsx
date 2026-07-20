@@ -111,14 +111,14 @@ export function ChatWorkspace({
     enabled: Boolean(activeSession),
     queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${activeSession!.id}/messages`),
     refetchInterval: 1200,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const session = useQuery({
     queryKey: ["agent-session", activeSession?.id],
     enabled: Boolean(activeSession),
     queryFn: () => api<AgentSession>(`/api/agent/sessions/${activeSession!.id}`),
     refetchInterval: 1200,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
 

@@ -344,7 +344,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     queryFn: () => api<ScheduledTaskRun[]>(`/api/scheduled-tasks/${task.id}/runs`),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : false,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],

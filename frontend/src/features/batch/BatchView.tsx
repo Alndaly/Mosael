@@ -48,7 +48,7 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
     queryFn: () => listBatches(workspace.id),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((batch) => ACTIVE.has(batch.status)) ? 2000 : false,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["batches", workspace.id] });
 

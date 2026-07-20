@@ -67,7 +67,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     queryFn: () => listPublishTasks(workspace.id),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((task) => ACTIVE.has(task.status)) ? 2000 : false,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-tasks", workspace.id] });
 
@@ -252,7 +252,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
       const transitioning = data.some((a) => a.binding_status === "checking" || a.binding_status === "unknown");
       return transitioning ? 3000 : 20000;
     },
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
 

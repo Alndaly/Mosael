@@ -139,14 +139,14 @@ export function WorkflowAgentChat({
     enabled: Boolean(sessionId),
     queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/messages`),
     refetchInterval: 1500,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
     enabled: Boolean(sessionId),
     queryFn: () => api<AgentSession>(`/api/agent/sessions/${sessionId}`),
     refetchInterval: 1500,
-    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
 
