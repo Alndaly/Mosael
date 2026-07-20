@@ -72,8 +72,15 @@ async function createAndAwaitConfirmation(
   throw new Error("等待用户确认超时");
 }
 
-function jsonResult(data: unknown): AgentToolResult<Record<string, never>> {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: {} };
+/**
+ * A tool result the model can read AND the UI can render.
+ *
+ * `content` is what the model sees, so it stays text. `details` carries the same value with
+ * its structure intact — without it the UI receives a JSON string and has nothing to render
+ * but the string, which is why every tool result used to appear as a wall of escaped JSON.
+ */
+function jsonResult(data: unknown): AgentToolResult<{ data: unknown }> {
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], details: { data } };
 }
 
 /** Read-only tools bound to a single turn's workspace + credentials. */

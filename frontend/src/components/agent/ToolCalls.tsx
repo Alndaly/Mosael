@@ -4,6 +4,7 @@ import { Check, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { ToolResultCard, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -103,13 +104,17 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   const [open, setOpen] = React.useState(tool.status === "error");
   const preview = summarize(tool.args);
   const argText = format(tool.args);
-  const resultText = format(tool.result);
+  // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
+  // there is nothing to render but the string.
+  const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
+  const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
+  const resultText = format(data ?? tool.result);
   const hasBody = Boolean(argText || resultText);
   // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
   // playable/viewable cards so the agent's media "returns" are visible in chat, not just text.
   const assetIds = React.useMemo(
-    () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args, collectAssetIds(tool.result))]),
-    [tool.args, tool.result, tool.status],
+    () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args, collectAssetIds(data))]),
+    [tool.args, data, tool.status],
   );
 
   return (
@@ -138,6 +143,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         </span>
         {hasBody && <ChevronRight size={13} className={`agent-tool-chevron ${open ? "open" : ""}`} aria-hidden />}
       </button>
+      {card && <div className="agent-tool-card">{card}</div>}
       {open && hasBody && (
         <div className="agent-tool-body">
           {argText && (
