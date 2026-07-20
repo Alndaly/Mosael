@@ -136,6 +136,8 @@ class SubtitleStyleSpec:
     bold: bool = True
     position: str = "bottom"  # bottom | center | top
     offset: float = 8.0
+    # The frontend stores a CSS font stack; ASS wants one family. Resolved at burn time.
+    font_family: str = ""
 
 
 DEFAULT_SUBTITLE_STYLE = SubtitleStyleSpec()
@@ -432,6 +434,7 @@ def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
         bold=bool(raw.get("bold", d.bold)),
         position=position if position in ("bottom", "center", "top") else d.position,
         offset=num("offset", d.offset, 0.0, 100.0),
+        font_family=str(raw.get("font_family", d.font_family) or "")[:200],
     )
 
 

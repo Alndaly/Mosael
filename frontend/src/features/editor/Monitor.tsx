@@ -34,10 +34,13 @@ const FILTER_CSS: Record<string, string> = {
 
 export function Monitor({
   sequence,
+  subtitleStyleOverride,
   assets,
   onSetTransform,
 }: {
   sequence: Sequence;
+  /** In-progress style from the subtitle panel, so dragging a slider previews live. */
+  subtitleStyleOverride?: Record<string, unknown> | null;
   assets: Asset[];
   onSetTransform?: (clipId: string, transform: Transform) => void;
 }) {
@@ -54,10 +57,6 @@ export function Monitor({
   const [showScopes, setShowScopes] = React.useState(false);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
-  // TEMP: measure the rendered subtitle element — it IS in the DOM (diagnostic says active:YES)
-  // but isn't visible, so we need its computed style/geometry. Remove with the overlay.
-  const subtitleRef = React.useRef<HTMLDivElement | null>(null);
-  const [subMetrics, setSubMetrics] = React.useState("");
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
@@ -130,56 +129,6 @@ export function Monitor({
   const tfSettleRef = React.useRef(false);
   const activeSubtitle =
     subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  // TEMP diagnostic: why is the rendered subtitle invisible? Report its computed paint properties
-  // and geometry relative to the frame. Remove together with the overlay below.
-  React.useEffect(() => {
-    const element = subtitleRef.current;
-    if (!element) {
-      setSubMetrics(activeSubtitle ? "el:missing" : "");
-      return;
-    }
-    const style = window.getComputedStyle(element);
-    const box = element.getBoundingClientRect();
-    const frame = stageRef.current?.getBoundingClientRect();
-    // Every paint property already checked out (opaque white on black, visible, correctly sized
-    // and centred in the frame) yet nothing shows — so ask the two questions computed style
-    // cannot answer: is anything stacked on top of it, and is an ancestor hiding it?
-    const name = (el: Element) =>
-      el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? `.${el.className.trim().split(/\s+/)[0]}` : "");
-    // The subtitle is pointer-events:none, which would exclude it from its own hit test and make
-    // the stack useless for the one question that matters — where it sits relative to the video.
-    const priorPE = element.style.pointerEvents;
-    element.style.pointerEvents = "auto";
-    const stack = document
-      .elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-      .slice(0, 4)
-      .map(name)
-      .join(" > ");
-    element.style.pointerEvents = priorPE;
-    let ancestors = "";
-    for (let p = element.parentElement; p && p !== document.body; p = p.parentElement) {
-      const s = window.getComputedStyle(p);
-      const odd: string[] = [];
-      if (s.opacity !== "1") odd.push(`op=${s.opacity}`);
-      if (s.filter !== "none") odd.push("filter");
-      if (s.transform !== "none") odd.push("transform");
-      if (s.clipPath !== "none") odd.push("clip");
-      if (s.contain !== "none") odd.push(`contain=${s.contain}`);
-      if (s.overflow !== "visible") odd.push(`ovf=${s.overflow}`);
-      if (odd.length) ancestors += ` ${name(p)}[${odd.join(",")}]`;
-    }
-    setSubMetrics(
-      `font=${style.fontSize} color=${style.color} bg=${style.backgroundColor} op=${style.opacity} ` +
-        `vis=${style.visibility} disp=${style.display} z=${style.zIndex} ` +
-        `box=${Math.round(box.width)}x${Math.round(box.height)}` +
-        (frame
-          ? ` at=${Math.round(box.left - frame.left)},${Math.round(box.top - frame.top)} frame=${Math.round(frame.width)}x${Math.round(frame.height)}`
-          : "") +
-        `\nvisible=${element.checkVisibility?.({ checkOpacity: true, checkVisibilityCSS: true, contentVisibilityAuto: true }) ?? "n/a"}` +
-        `\nontop=${stack}` +
-        `\nanc=${ancestors.trim() || "clean"}`,
-    );
-  }, [activeSubtitle, playhead, sequence.subtitle_style, sequence.width]);
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
@@ -503,45 +452,15 @@ export function Monitor({
           )}
           {activeSubtitle?.text_override && (
             <div
-              ref={subtitleRef}
               className="monitor-subtitle"
-              style={subtitleCss(readSubtitleStyle(sequence.subtitle_style as Record<string, unknown>), sequence.width)}
+              style={subtitleCss(
+                readSubtitleStyle(
+                  (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,
+                ),
+                sequence.width,
+              )}
             >
               {activeSubtitle.text_override}
-            </div>
-          )}
-          {/* TEMP diagnostic — subtitles don't render for some sequences and every static check
-              (data, serialisation, range math, CSS) says they should, so we need the runtime
-              decision. Shown automatically in dev (never in a production build); set
-              localStorage['mibu.subdebug']='0' to silence it. Remove once diagnosed. */}
-          {typeof window !== "undefined" &&
-            window.localStorage.getItem("mibu.subdebug") !== "0" &&
-            (import.meta.env.DEV || window.localStorage.getItem("mibu.subdebug") === "1") && (
-            <div
-              style={{
-                position: "absolute",
-                top: 4,
-                left: 4,
-                zIndex: 50,
-                background: "rgba(0,0,0,0.85)",
-                color: "#4ade80",
-                font: "11px ui-monospace, monospace",
-                padding: "3px 6px",
-                borderRadius: 4,
-                pointerEvents: "none",
-                whiteSpace: "pre-wrap",
-                maxWidth: "92%",
-                lineHeight: 1.5,
-              }}
-            >
-              {`subs:${subtitleClips.length} t:${playhead.toFixed(2)} active:${activeSubtitle?.text_override ? "YES" : "NULL"} comp:${String(compositorActive)}`}
-              {activeSubtitle == null &&
-                subtitleClips.length > 0 &&
-                ` near:${subtitleClips
-                  .map((c) => `${c.timeline_start.toFixed(1)}-${clipEnd(c).toFixed(1)}`)
-                  .slice(0, 4)
-                  .join(",")}`}
-              {subMetrics && `\n${subMetrics}`}
             </div>
           )}
           {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}

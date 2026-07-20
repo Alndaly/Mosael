@@ -186,6 +186,30 @@ def _ass_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
+_CSS_GENERIC_FONTS = frozenset(
+    {"system-ui", "-apple-system", "ui-sans-serif", "ui-serif", "ui-monospace", "ui-rounded",
+     "sans-serif", "serif", "monospace", "cursive", "fantasy"}
+)
+
+
+def _resolve_font_stack(font_family: str | None) -> str:
+    """A CSS font stack → the one family name ASS can use.
+
+    `Fontname:` takes a single name with no fallback chain, while the preview hands the whole
+    stack to the browser. Taking the first entry loses the only resolvable family when the stack
+    leads with a generic (`system-ui, ..., "PingFang SC"` → system-ui → a Latin-only default with
+    no CJK glyphs), so skip generics and take the first concrete family.
+
+    Newlines are stripped, not escaped: this value goes straight into the ASS `Style:` line, where
+    a name carrying \n could inject further Style:/Dialogue: directives.
+    """
+    for raw in (font_family or "").split(","):
+        name = raw.replace("\n", " ").replace("\r", " ").strip().strip("\"'").strip()
+        if name and name.lower() not in _CSS_GENERIC_FONTS:
+            return name
+    return "Sans"
+
+
 def _build_ass(plan: RenderPlan) -> str:
     """A styled ASS subtitle file matching the preview's subtitle_style (font size in native
     frame pixels, text/box colour + box opacity, bold, position, vertical offset)."""
@@ -200,6 +224,7 @@ def _build_ass(plan: RenderPlan) -> str:
     primary = _ass_color(style.color)
     back = _ass_color(style.bg_color, box_alpha)
     bold = -1 if style.bold else 0
+    fontname = _resolve_font_stack(style.font_family)
 
     header = (
         "[Script Info]\n"
@@ -212,7 +237,7 @@ def _build_ass(plan: RenderPlan) -> str:
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Default,Sans,{style.font_size:g},{primary},&H000000FF,{back},{back},{bold},"
+        f"Style: Default,{fontname},{style.font_size:g},{primary},&H000000FF,{back},{back},{bold},"
         f"0,0,0,100,100,0,0,{border_style},{outline},0,{align},40,40,{margin_v},1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"

@@ -189,6 +189,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // deferred notification, so the clip flashes back to its old slot. Instead, arm this flag on
   // settle and let the effect below drop the draft on the render that actually shows the new
   // data. The draft pins the clip at its dropped spot the whole time → no flicker.
+  // Live subtitle-style preview. The sliders used to persist only on release, so the monitor
+  // showed nothing until the round-trip landed and you were styling blind. Hold the in-progress
+  // style here, render the monitor from it, and let the committed value clear it.
+  const [styleDraft, setStyleDraft] = React.useState<Record<string, unknown> | null>(null);
   const draftSettleRef = React.useRef(false);
   const settleWith = (updated: Sequence) => {
     applySequence(updated);
@@ -302,7 +306,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const setTextMutation = useMutation({
     mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
-    onSuccess: refreshSequences,
+    onSuccess: (updated) => applySequence(updated),
   });
   const addSubtitleMutation = useMutation({
     mutationFn: async () => {
@@ -376,7 +380,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const subtitleStyleMutation = useMutation({
     mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(sequence!.id, style),
-    onSuccess: (updated) => applySequence(updated),
+    onSuccess: (updated) => {
+      applySequence(updated);
+      setStyleDraft(null);
+    },
+    onError: (error: Error) => {
+      setStyleDraft(null); // drop the preview so the monitor snaps back to the saved style
+      toast.error(error.message);
+    },
   });
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
@@ -741,8 +752,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onAddSubtitle={() => addSubtitleMutation.mutate()}
               onGenerate={() => generateSubtitlesMutation.mutate()}
               generating={generateSubtitlesMutation.isPending}
-              style={(sequence.subtitle_style ?? {}) as Record<string, unknown>}
-              onSetStyle={(style) => subtitleStyleMutation.mutate(style)}
+              style={styleDraft ?? ((sequence.subtitle_style ?? {}) as Record<string, unknown>)}
+              onPreviewStyle={setStyleDraft}
+              onSetStyle={(style) => {
+                setStyleDraft(style);
+                subtitleStyleMutation.mutate(style);
+              }}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
             />
           )}
@@ -751,6 +766,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <section className="panel monitor">
         <Monitor
           sequence={sequence}
+          subtitleStyleOverride={styleDraft}
           assets={assets.data ?? []}
           onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
         />

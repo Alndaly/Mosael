@@ -1,5 +1,8 @@
 import type React from "react";
 
+const SYSTEM_FONT_STACK =
+  'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif';
+
 export type SubtitleStyle = {
   font_size: number;
   color: string;
@@ -8,7 +11,24 @@ export type SubtitleStyle = {
   bold: boolean;
   position: "bottom" | "center" | "top";
   offset: number;
+  font_family: string;
 };
+
+/** Curated families rather than a free-text box. Two rules carried over from mibu-video:
+    always end in a generic fallback, and put the FAMILY name before any PostScript alias —
+    the export side's fontconfig only resolves family names, so an alias-first stack silently
+    falls through the whole list to a Latin-only default with no CJK glyphs. */
+export const SUBTITLE_FONTS: { labelKey: string; value: string }[] = [
+  { labelKey: "subFontSystem", value: SYSTEM_FONT_STACK },
+  { labelKey: "subFontHei", value: '"PingFang SC", "Microsoft YaHei", sans-serif' },
+  { labelKey: "subFontSong", value: '"Songti SC", "SimSun", serif' },
+  { labelKey: "subFontKai", value: '"Kaiti SC", "KaiTi", serif' },
+  { labelKey: "subFontXingkai", value: '"Xingkai SC", "STXingkai", "KaiTi", cursive' },
+  { labelKey: "subFontLishu", value: '"Baoli SC", "LiSu", "STLiti", serif' },
+  { labelKey: "subFontYuan", value: '"Yuanti SC", "YouYuan", "Hiragino Maru Gothic ProN", sans-serif' },
+  { labelKey: "subFontSerifLatin", value: 'Georgia, "Times New Roman", serif' },
+  { labelKey: "subFontMono", value: 'ui-monospace, "SFMono-Regular", Menlo, monospace' },
+];
 
 export const SUBTITLE_DEFAULTS: SubtitleStyle = {
   font_size: 32,
@@ -18,6 +38,7 @@ export const SUBTITLE_DEFAULTS: SubtitleStyle = {
   bold: true,
   position: "bottom",
   offset: 8,
+  font_family: SYSTEM_FONT_STACK,
 };
 
 export function readSubtitleStyle(raw: Record<string, unknown> | undefined | null): SubtitleStyle {
@@ -30,6 +51,7 @@ export function readSubtitleStyle(raw: Record<string, unknown> | undefined | nul
     bold: typeof s.bold === "boolean" ? s.bold : SUBTITLE_DEFAULTS.bold,
     position: s.position ?? SUBTITLE_DEFAULTS.position,
     offset: typeof s.offset === "number" ? s.offset : SUBTITLE_DEFAULTS.offset,
+    font_family: s.font_family || SUBTITLE_DEFAULTS.font_family,
   };
 }
 
@@ -48,6 +70,7 @@ export function subtitleCss(style: SubtitleStyle, frameWidth: number): React.CSS
   const css: React.CSSProperties = {
     fontSize: `${(style.font_size / Math.max(frameWidth, 1)) * 100}cqw`,
     color: style.color,
+    fontFamily: style.font_family,
     fontWeight: style.bold ? 700 : 400,
     background: style.bg_opacity > 0 ? hexToRgba(style.bg_color, style.bg_opacity) : "transparent",
     left: "50%",

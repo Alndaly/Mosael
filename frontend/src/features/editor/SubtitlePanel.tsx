@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { readSubtitleStyle, type SubtitleStyle } from "@/features/editor/subtitleStyle";
+import { readSubtitleStyle, SUBTITLE_FONTS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 
 import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -29,6 +29,7 @@ export function SubtitlePanel({
   onGenerate,
   generating,
   style,
+  onPreviewStyle,
   onSetStyle,
   onDeleteClip,
 }: {
@@ -38,6 +39,8 @@ export function SubtitlePanel({
   onGenerate?: () => void;
   generating?: boolean;
   style?: Record<string, unknown>;
+  /** Fires continuously while a control is being dragged — preview only, never persisted. */
+  onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle?: (style: Record<string, unknown>) => void;
   onDeleteClip: (clipId: string) => void;
 }) {
@@ -56,7 +59,9 @@ export function SubtitlePanel({
 
   return (
     <div className="sub-panel">
-      {onSetStyle && <SubtitleStyleControls style={style} onSetStyle={onSetStyle} />}
+      {onSetStyle && (
+        <SubtitleStyleControls style={style} onPreviewStyle={onPreviewStyle} onSetStyle={onSetStyle} />
+      )}
       <div className="sub-list">
         {subtitles.length === 0 && (
           <div className="empty-inline">
@@ -191,15 +196,20 @@ function SubtitleTranslate({
 
 function SubtitleStyleControls({
   style,
+  onPreviewStyle,
   onSetStyle,
 }: {
   style?: Record<string, unknown>;
+  onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle: (style: Record<string, unknown>) => void;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const s = readSubtitleStyle(style);
   const patch = (next: Partial<SubtitleStyle>) => onSetStyle({ ...s, ...next });
+  // Sliders are controlled off `s` (which is the draft while one is in flight) so the value
+  // readout and the monitor both track the drag; only the release writes to the server.
+  const preview = (next: Partial<SubtitleStyle>) => onPreviewStyle?.({ ...s, ...next });
 
   return (
     <div className="sub-style">
@@ -209,8 +219,30 @@ function SubtitleStyleControls({
       {open && (
         <div className="sub-style-body">
           <label className="sub-style-row">
+            <span>{t("subFont")}</span>
+            <Select value={s.font_family} onValueChange={(v) => patch({ font_family: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUBTITLE_FONTS.map((font) => (
+                  <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                    {t(font.labelKey as Parameters<typeof t>[0])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="sub-style-row">
             <span>{t("subFontSize")}</span>
-            <Slider min={10} max={120} step={1} defaultValue={[s.font_size]} onValueCommit={([v]) => patch({ font_size: v })} />
+            <Slider
+              min={10}
+              max={120}
+              step={1}
+              value={[s.font_size]}
+              onValueChange={([v]) => preview({ font_size: v })}
+              onValueCommit={([v]) => patch({ font_size: v })}
+            />
             <em>{Math.round(s.font_size)}</em>
           </label>
           <label className="sub-style-row">
@@ -220,7 +252,14 @@ function SubtitleStyleControls({
           <label className="sub-style-row">
             <span>{t("subBg")}</span>
             <input type="color" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
-            <Slider min={0} max={1} step={0.05} defaultValue={[s.bg_opacity]} onValueCommit={([v]) => patch({ bg_opacity: v })} />
+            <Slider
+              min={0}
+              max={1}
+              step={0.05}
+              value={[s.bg_opacity]}
+              onValueChange={([v]) => preview({ bg_opacity: v })}
+              onValueCommit={([v]) => patch({ bg_opacity: v })}
+            />
           </label>
           <label className="sub-style-row">
             <span>{t("subBold")}</span>
@@ -241,7 +280,14 @@ function SubtitleStyleControls({
           </label>
           <label className="sub-style-row">
             <span>{t("subOffset")}</span>
-            <Slider min={0} max={45} step={1} defaultValue={[s.offset]} onValueCommit={([v]) => patch({ offset: v })} />
+            <Slider
+              min={0}
+              max={45}
+              step={1}
+              value={[s.offset]}
+              onValueChange={([v]) => preview({ offset: v })}
+              onValueCommit={([v]) => patch({ offset: v })}
+            />
             <em>{Math.round(s.offset)}%</em>
           </label>
         </div>
