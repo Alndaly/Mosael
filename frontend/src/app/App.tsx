@@ -331,7 +331,7 @@ function Studio({
       projectName={project?.name ?? null}
     >
       {view === "home" && <HomeView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
-      {view === "media" && <MediaLibraryView workspace={workspace} project={project} />}
+      {view === "media" && <MediaLibraryView workspace={workspace} />}
       {view === "editor" && <EditorView workspace={workspace} project={project} />}
       {view === "ai" && <AiStudio workspace={workspace} project={project} />}
       {view === "batch" && <BatchView workspace={workspace} />}

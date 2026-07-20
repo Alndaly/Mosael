@@ -63,8 +63,10 @@ const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: 
 ];
 
 /** 只有这些页面工作在"当前项目"语境;其余页面的面包屑显示页面名,
-    否则设置/插件页也挂着项目名,既不合理也容易误解。 */
-const PROJECT_SCOPED_VIEWS: StudioView[] = ["media", "editor", "ai"];
+    否则设置/插件页也挂着项目名,既不合理也容易误解。
+    「素材」是**工作区级**资源池(素材属于工作区,project_id 可空且删项目只置空),
+    所以它不在此列 —— 挂项目名会让人以为素材是项目私有的。 */
+const PROJECT_SCOPED_VIEWS: StudioView[] = ["editor", "ai"];
 
 export function AppShell({
   view,

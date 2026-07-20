@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Project, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,12 @@ function compareAssets(a: Asset, b: Asset, key: SortKey): number {
   }
 }
 
-export function MediaLibraryView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+/**
+ * 素材库 —— **工作区级**资源池。素材归属工作区(Asset.workspace_id 必填;project_id 可空,
+ * 删项目只置空),所以这一页不带项目语境:列出整个工作区的素材,导入也不挂项目。
+ * 需要"属于某个项目"的素材,从剪辑页导入。
+ */
+export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
@@ -70,7 +75,8 @@ export function MediaLibraryView({ workspace, project }: { workspace: Workspace;
   }, [assets.data]);
 
   const uploadAsset = useMutation({
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
+    // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。
+    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: "", file }),
     onSuccess: refresh,
   });
   const rename = useMutation({
