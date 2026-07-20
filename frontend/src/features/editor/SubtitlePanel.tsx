@@ -158,10 +158,20 @@ function SubtitleTranslate({
   const [open, setOpen] = React.useState(false);
   const [lang, setLang] = React.useState<string>("en");
   const [bilingual, setBilingual] = React.useState(false);
+  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
+  // Only cues that are actually selected count — selecting a video clip should not silently
+  // narrow a translation down to nothing.
+  const selectedSubtitles = React.useMemo(
+    () => subtitles.filter((clip) => selectedClipIds.includes(clip.id)),
+    [subtitles, selectedClipIds],
+  );
+  const [selectedOnly, setSelectedOnly] = React.useState(true);
+  const scoped = selectedOnly && selectedSubtitles.length > 0;
+  const targets = scoped ? selectedSubtitles : subtitles;
 
   const run = useMutation({
     mutationFn: async () => {
-      const items = subtitles.filter((clip) => (clip.text_override ?? "").trim());
+      const items = targets.filter((clip) => (clip.text_override ?? "").trim());
       const { translations } = await translateTexts(
         items.map((clip) => clip.text_override ?? ""),
         lang,
@@ -212,13 +222,22 @@ function SubtitleTranslate({
             </SelectContent>
           </Select>
         </label>
+        {selectedSubtitles.length > 0 && (
+          <label className="sub-translate-toggle">
+            <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
+            <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />
+          </label>
+        )}
         <label className="sub-translate-toggle">
           <span>{t("subtitleTranslateBilingual")}</span>
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
         <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
           {run.isPending ? <Loader2 size={13} className="spin" /> : <Languages size={13} />}
-          {t("subtitleTranslateApply").replace("{n}", String(subtitles.length))}
+          {(scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
+            "{n}",
+            String(targets.length),
+          )}
         </Button>
         <small className="sub-translate-note">
           {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}

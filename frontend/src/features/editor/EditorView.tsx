@@ -166,7 +166,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
+    // Hold the resize cursor and suppress selection for the whole drag — otherwise moving off
+    // the 7px strip reverts the cursor and starts selecting whatever is underneath.
+    document.body.style.cursor = which === "timeline" ? "row-resize" : "col-resize";
+    document.body.style.userSelect = "none";
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
@@ -726,6 +732,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 检查器只在选中片段时占用右栏 — 空的「未选中片段」面板不该
   // 一直吃掉宽度;紧凑模式(≤1000px)下改为浮动抽屉,不占列。
   const showInspector = selectedClip !== null;
+  // Where the panels row ends, measured from the grid's bottom edge: padding (10) + the
+  // timeline's height + the row gap (6). Keeps the column resizers out of the timeline.
+  const panelsRowBottom = panels.timeline + 16;
   const inspectorInGrid = showInspector && !compact;
 
   return (
@@ -742,11 +751,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
       {/* Resizers sit on the 8px gap centers; grid pads 12px (Global rhythm). */}
-      <div className="panel-resizer col" style={{ left: leftWidth + 12 + 4 - 3 }} onPointerDown={startPanelDrag("left")} />
+      {/* A column resizer must not extend past the row whose columns it separates. These are
+          absolutely positioned over the whole grid, so without an explicit bottom they run down
+          through the timeline — and a drag started in the timeline, merely aligned with the
+          monitor's left edge, resized the panel instead. Stop them at the panels row: grid
+          padding + timeline height + row gap. */}
+      <div
+        className="panel-resizer col"
+        style={{ left: leftWidth + 12 + 4 - 3, bottom: panelsRowBottom }}
+        onPointerDown={startPanelDrag("left")}
+      />
       {inspectorInGrid && (
         <div
           className="panel-resizer col right"
-          style={{ right: panels.right + 12 + 4 - 3 }}
+          style={{ right: panels.right + 12 + 4 - 3, bottom: panelsRowBottom }}
           onPointerDown={startPanelDrag("right")}
         />
       )}
