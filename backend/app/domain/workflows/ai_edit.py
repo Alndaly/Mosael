@@ -56,7 +56,7 @@ def ai_edit_graph(
         except (KeyError, ValueError) as exc:
             last_error = f"JSON 解析失败: {exc}"
             continue
-        errors = validate_graph(new_graph)
+        errors = validate_graph(new_graph, require_config=False)
         if errors:
             last_error = "；".join(errors)
             continue

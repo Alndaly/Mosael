@@ -594,9 +594,16 @@ function WorkflowEditor({
 
   // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
   const lastSyncedRef = React.useRef(workflow.updated_at);
+  // 自己保存引发的那次 refetch 不能重建画布(重建会丢掉 React Flow 的实测尺寸、造成闪烁与
+  // 拖拽中断)。不靠比对 updated_at 字符串——两端序列化只要差一点就会误判。
+  const selfSaveRef = React.useRef(false);
   React.useEffect(() => {
     if (workflow.updated_at === lastSyncedRef.current) return;
     lastSyncedRef.current = workflow.updated_at;
+    if (selfSaveRef.current) {
+      selfSaveRef.current = false;
+      return;
+    }
     if (!dirty) {
       const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
       setGraph(next);
@@ -765,7 +772,8 @@ function WorkflowEditor({
     const maxX = Math.max(0, ...graph.nodes.map((node) => node.position?.x ?? 0));
     const config: Record<string, unknown> = {};
     for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
-      config[key] = spec?.type === "object" ? {} : "";
+      // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
+      config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
     }
     const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
     const next: WorkflowGraph = {
@@ -792,6 +800,7 @@ function WorkflowEditor({
       // and pans the canvas instead of dragging the node. With auto-save firing after every edit,
       // that window recurred constantly and made nodes feel undraggable.
       lastSyncedRef.current = saved.updated_at;
+      selfSaveRef.current = true; // 兜底:即便两端 updated_at 序列化不一致也不重建画布
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
     },
     onError: (error: Error) => toast.error(t("wfSaveFailed"), { description: error.message }),
@@ -868,8 +877,8 @@ function WorkflowEditor({
           </span>
           <span className="wf-title-text">
             <strong>{workflow.name}</strong>
-            {/* 节点数已在左栏列表显示,这里只留未保存状态,避免重复。 */}
-            {dirty && <small>{t("wfUnsaved")}</small>}
+            {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
+                拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
           </span>
         </button>
         <div className="wf-toolbar-actions">
@@ -1284,7 +1293,16 @@ function LoopBodyEditor({
   onClose: () => void;
 }) {
   const t = useI18n();
-  const initialBody = ((loopNode.config?.body as WorkflowGraph | undefined) ?? { nodes: [], edges: [] });
+  // config.body may be missing, or "" (addNode seeds unknown field types with an empty string) —
+  // anything not shaped like a graph must become an empty one, or body.nodes.length blows up the
+  // whole app on open.
+  const initialBody = React.useMemo<WorkflowGraph>(() => {
+    const raw = loopNode.config?.body as unknown;
+    return raw && typeof raw === "object" && Array.isArray((raw as WorkflowGraph).nodes)
+      ? (raw as WorkflowGraph)
+      : { nodes: [], edges: [] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once; body state owns it after
+  }, []);
   const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody));
@@ -1386,7 +1404,8 @@ function LoopBodyEditor({
     const maxX = Math.max(0, ...body.nodes.map((node) => node.position?.x ?? 0));
     const config: Record<string, unknown> = {};
     for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
-      config[key] = spec?.type === "object" ? {} : "";
+      // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
+      config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
     }
     commit({
       ...body,

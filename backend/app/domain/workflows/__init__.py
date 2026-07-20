@@ -260,8 +260,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
 
-def validate_graph(graph: dict[str, Any], *, require_start: bool = True) -> list[str]:
+def validate_graph(graph: dict[str, Any], *, require_start: bool = True, require_config: bool = True) -> list[str]:
     """结构校验:返回错误列表(空表 = 合法)。
+
+    require_config=False 用于**保存**:必填字段缺失属于「还没配完」,不该拦住存盘 —— 否则配合
+    实时保存,新加一个带必填项的节点就永远存不下来。缺必填由「就绪检查」提示、由运行时拦截。
 
     require_start=False 用于循环体子图:子图没有 start 节点(执行时由循环上下文喂入
     {{loop.item}}),无入边的节点即为入口;若子图里出现 start 则报错。
@@ -295,11 +298,12 @@ def validate_graph(graph: dict[str, Any], *, require_start: bool = True) -> list
             continue
         if node_type == "start":
             start_count += 1
-        for key, spec in NODE_TYPES[node_type]["config"].items():
-            if isinstance(spec, dict) and spec.get("required"):
-                value = (node.get("config") or {}).get(key)
-                if value in (None, "") and (node_id, key) not in data_bound:
-                    errors.append(f"节点 {node_id} 缺少必填配置 {key}")
+        if require_config:
+            for key, spec in NODE_TYPES[node_type]["config"].items():
+                if isinstance(spec, dict) and spec.get("required"):
+                    value = (node.get("config") or {}).get(key)
+                    if value in (None, "") and (node_id, key) not in data_bound:
+                        errors.append(f"节点 {node_id} 缺少必填配置 {key}")
     if require_start:
         if start_count != 1:
             errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
@@ -408,7 +412,8 @@ def create_workflow(
     db: Session, *, workspace_id: str, name: str, description: str = "", graph: dict[str, Any] | None = None
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
-    errors = validate_graph(graph)
+    # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。
+    errors = validate_graph(graph, require_config=False)
     if errors:
         raise WorkflowDomainError("；".join(errors))
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
@@ -420,7 +425,7 @@ def create_workflow(
 
 def update_workflow(db: Session, workflow: Workflow, changes: dict[str, Any]) -> Workflow:
     if "graph" in changes and changes["graph"] is not None:
-        errors = validate_graph(changes["graph"])
+        errors = validate_graph(changes["graph"], require_config=False)
         if errors:
             raise WorkflowDomainError("；".join(errors))
         workflow.graph = changes["graph"]
