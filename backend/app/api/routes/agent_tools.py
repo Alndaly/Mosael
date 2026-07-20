@@ -85,6 +85,12 @@ def invoke_agent_tool(
 
     token = mint_tool_token(db, user)
     reset = registry.set_api_token(token)
+    # The tool bodies call back over loopback, and this process knows its own address. Left to
+    # its import-time default the base URL is 127.0.0.1:8800, which is right only by
+    # coincidence — any other port and every tool answers 401 or reaches the wrong instance.
+    from app.core.config import settings
+
+    base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
     try:
         result = fn(**body.arguments)
     except TypeError as exc:  # wrong/missing arguments from the model, not a server fault
@@ -94,4 +100,5 @@ def invoke_agent_tool(
         return {"error": str(exc)[:500]}
     finally:
         registry._API_TOKEN.reset(reset)
+        registry._API_BASE.reset(base_reset)
     return {"result": result}

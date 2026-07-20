@@ -245,24 +245,31 @@ async function buildManifestTools(
 
   return specs
     .filter((spec) => spec?.name && !taken.has(spec.name))
-    .map((spec) => ({
+    .map((spec) => {
+      const properties = (spec.parameters?.properties ?? {}) as Record<string, unknown>;
+      const takesWorkspace = "workspace_id" in properties;
+      return {
       name: spec.name,
       label: spec.name,
       description: spec.description || spec.name,
       // The manifest's parameters are already JSON Schema, which is what pi wants.
       parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
       execute: async (_id: string, rawParams: unknown) => {
-        const args = (rawParams ?? {}) as Record<string, unknown>;
-        // Workspace-scoped tools all take the same optional argument, and the model has no
-        // reason to know which workspace this turn belongs to.
-        if (workspaceId && !args.workspace_id) args.workspace_id = workspaceId;
+        const args = { ...((rawParams ?? {}) as Record<string, unknown>) };
+        // Fill in the workspace only for tools that declare it: the model has no reason to
+        // know which workspace this turn belongs to, but the tools are plain Python functions
+        // and an argument they do not accept is a TypeError, not an ignored extra. Injecting
+        // it blindly broke every tool without the parameter — web_search, analyze_asset,
+        // list_skills — on the first call.
+        if (workspaceId && !args.workspace_id && takesWorkspace) args.workspace_id = workspaceId;
         const response = (await mibuPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
           arguments: args,
         })) as { result?: unknown; error?: string };
         if (response?.error) throw new Error(response.error);
         return jsonResult(response?.result ?? null);
       },
-    }));
+      };
+    });
 }
 
 export async function buildAllTools(apiBase: string, token: string, workspaceId: string): Promise<AgentTool[]> {

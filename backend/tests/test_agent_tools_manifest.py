@@ -118,3 +118,47 @@ def test_asset_tagging_is_reachable_by_the_agent() -> None:
     names = {tool["name"] for tool in _manifest(client)}
     for expected in ("update_asset_tags", "list_workflows", "search_kb", "web_search"):
         assert expected in names, f"{expected} is not offered to the agent"
+
+
+def test_the_declared_schema_matches_what_the_function_accepts() -> None:
+    """The manifest is a contract a runtime builds calls from, so it has to be exact.
+
+    The sidecar reads `properties` to decide which arguments to fill in — it supplies
+    workspace_id only to tools that declare it. It first supplied it to every tool, and the
+    tools are plain Python functions, so an argument they do not accept is a TypeError rather
+    than an ignored extra: web_search, analyze_asset and list_skills failed on their first
+    call. Drift in either direction breaks a caller that trusted the schema.
+    """
+    import inspect
+
+    client = fresh_client()
+    for tool in _manifest(client):
+        fn = getattr(mcp_server, tool["name"])
+        accepted = set(inspect.signature(fn).parameters)
+        declared = set(tool["parameters"].get("properties", {}))
+        assert declared <= accepted, (
+            f"{tool['name']} declares {sorted(declared - accepted)} which it does not accept"
+        )
+        # Required arguments must be declared, or a caller cannot know to send them.
+        required = {
+            name
+            for name, param in inspect.signature(fn).parameters.items()
+            if param.default is inspect.Parameter.empty
+        }
+        assert required <= declared, (
+            f"{tool['name']} requires {sorted(required - declared)} but does not declare it"
+        )
+
+
+def test_workspace_scoped_tools_declare_workspace_id() -> None:
+    """This is the flag the sidecar branches on when filling in the turn's workspace."""
+    client = fresh_client()
+    declared = {
+        tool["name"]: set(tool["parameters"].get("properties", {})) for tool in _manifest(client)
+    }
+    for scoped in ("list_assets", "list_projects", "search_kb", "list_workflows"):
+        assert "workspace_id" in declared[scoped], f"{scoped} lost its workspace_id parameter"
+    for unscoped in ("web_search", "fetch_url", "list_skills", "analyze_asset"):
+        assert "workspace_id" not in declared[unscoped], (
+            f"{unscoped} now declares workspace_id; the sidecar will start sending it"
+        )
