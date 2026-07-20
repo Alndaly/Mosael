@@ -73,18 +73,30 @@ export function KbGraphCanvas({ nodes, edges }: { nodes: GraphNode[]; edges: Gra
   // 视图变换:滚轮缩放 + 拖拽平移
   const [view, setView] = React.useState({ k: 1, x: 0, y: 0 });
   const dragRef = React.useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  const svgRef = React.useRef<SVGSVGElement | null>(null);
+
+  // Wheel-zoom has to be bound by hand with { passive: false }. React attaches wheel listeners
+  // passively at the root, so preventDefault() from an onWheel prop is ignored — the graph
+  // zoomed AND the KB page scrolled underneath it at the same time.
+  React.useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setView((v) => ({ ...v, k: Math.min(3, Math.max(0.3, v.k * (event.deltaY < 0 ? 1.1 : 0.9))) }));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
 
   const isDim = (id: string) =>
     hover !== null && id !== hover && !(layout.neighbors.get(hover)?.has(id) ?? false);
 
   return (
     <svg
+      ref={svgRef}
       className="kb-graph-svg"
       viewBox={`0 0 ${W} ${H}`}
-      onWheel={(event) => {
-        event.preventDefault();
-        setView((v) => ({ ...v, k: Math.min(3, Math.max(0.3, v.k * (event.deltaY < 0 ? 1.1 : 0.9))) }));
-      }}
       onPointerDown={(event) => {
         (event.target as Element).setPointerCapture?.(event.pointerId);
         dragRef.current = { x: event.clientX, y: event.clientY, vx: view.x, vy: view.y };

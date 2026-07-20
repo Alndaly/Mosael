@@ -270,6 +270,16 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
   const t = useI18n();
   const qc = useQueryClient();
   const [openDocId, setOpenDocId] = React.useState<string | null>(null);
+
+  // Cmd+K → KB result → open that document. The palette has dispatched this event all along
+  // and nothing listened, so picking a search result navigated to the KB page and showed
+  // whatever dataset happened to be selected — the chosen document never opened. The other four
+  // mibu:open-* events all have listeners; this one was simply missed.
+  React.useEffect(() => {
+    const onOpenDoc = (event: Event) => setOpenDocId((event as CustomEvent<string>).detail);
+    window.addEventListener("mibu:open-kb-doc", onOpenDoc);
+    return () => window.removeEventListener("mibu:open-kb-doc", onOpenDoc);
+  }, []);
   const [urlOpen, setUrlOpen] = React.useState(false);
 
   const documents = useQuery({

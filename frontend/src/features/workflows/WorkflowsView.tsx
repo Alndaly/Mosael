@@ -605,12 +605,17 @@ function WorkflowEditor({
   const selfSaveRef = React.useRef(false);
   React.useEffect(() => {
     if (workflow.updated_at === lastSyncedRef.current) return;
-    lastSyncedRef.current = workflow.updated_at;
     if (selfSaveRef.current) {
       selfSaveRef.current = false;
+      lastSyncedRef.current = workflow.updated_at;
       return;
     }
+    // Only mark a revision as synced once it has actually been applied. Marking first meant an
+    // agent edit arriving while the canvas was dirty was recorded as seen, never applied, and
+    // then overwritten by the pending autosave — the agent's change vanished with nothing said.
+    // Left unmarked, it is applied as soon as the local edit saves and `dirty` clears.
     if (!dirty) {
+      lastSyncedRef.current = workflow.updated_at;
       const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
       setGraph(next);
       setNodes(toFlowNodes(next, registry));
