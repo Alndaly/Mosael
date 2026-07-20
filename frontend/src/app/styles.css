@@ -3649,8 +3649,9 @@
 }
 
 .chat-bubble.thinking {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 7px;
   color: var(--muted-foreground);
 }
@@ -7888,8 +7889,9 @@
 }
 
 .wf-agent-msg.thinking {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
   color: var(--muted-foreground);
 }
@@ -8764,7 +8766,9 @@
 .agent-tools {
   display: flex;
   flex-direction: column;
+  align-self: stretch;
   gap: 4px;
+  width: 100%;
   margin-bottom: 8px;
 }
 .agent-tool {
@@ -8949,6 +8953,7 @@
 .chat-thinking-row {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
   gap: 6px;
 }
 
