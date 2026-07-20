@@ -32,6 +32,11 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         onToolEnd: (toolCallId, result, isError) => send({ type: "tool_end", turnId, toolCallId, result, isError }),
       },
     );
+    // 模型调用失败但没产出任何文本 → 报错,别把它当成一轮"成功但空"的回答。
+    if (result.errorMessage && !result.text.trim()) {
+      send({ type: "error", turnId, message: result.errorMessage });
+      return;
+    }
     send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState });
     return;
   }

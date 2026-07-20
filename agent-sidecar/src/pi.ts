@@ -41,8 +41,14 @@ function buildModels(baseUrl: string, apiKey: string, modelId: string): { models
     id: PROVIDER_ID,
     name: "Mibu provider",
     baseUrl,
-    // keyless 本地服务返回空 auth;有 key 的走 apiKey
-    auth: { apiKey: { name: "Mibu provider key", resolve: async () => (apiKey ? { auth: { apiKey } } : { auth: {} }) } },
+    // 本地服务(Ollama/LM Studio 等)通常不需要 key,但 pi 缺少 apiKey 时会直接报
+    // "No API key for provider" —— 所以补一个占位值,这类端点会忽略它。
+    auth: {
+      apiKey: {
+        name: "Mibu provider key",
+        resolve: async () => ({ auth: { apiKey: apiKey || "not-required" } }),
+      },
+    },
     models: [model],
     api: openAICompletionsApi(),
   });
@@ -65,6 +71,12 @@ export interface PiTurnResult {
   text: string;
   /** 本轮结束后的完整消息数组,回存给下一轮。 */
   sessionState: AgentMessage[];
+  /**
+   * 模型调用失败时 pi **不抛异常** —— 它把失败记在最后一条 assistant 消息上
+   * (stopReason:"error" + errorMessage),照常结束这一轮。不主动挖出来的话,
+   * 上游只会看到一个空的 turn_done,配置错误就变成了"什么都没发生"。
+   */
+  errorMessage?: string;
 }
 
 export interface PiTurnHandlers {
@@ -96,5 +108,13 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     }
   });
   await agent.prompt(input.prompt);
-  return { text: full, sessionState: agent.state.messages };
+  const messages = agent.state.messages;
+  // 最近一条标记为 error 的消息即本轮的失败原因(如 base_url 不是 OpenAI 兼容端点、
+  // 模型不存在、鉴权失败)。
+  const failed = [...messages]
+    .reverse()
+    .find((message) => (message as { stopReason?: string }).stopReason === "error") as
+    | { errorMessage?: string }
+    | undefined;
+  return { text: full, sessionState: messages, errorMessage: failed?.errorMessage };
 }

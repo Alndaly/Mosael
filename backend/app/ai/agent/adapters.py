@@ -18,6 +18,11 @@ flow through the confirmation cards.
 
 TURN_TIMEOUT_SECONDS = 600
 
+_PROVIDER_HINT = (
+    "请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点"
+    "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
+)
+
 
 class AdapterError(RuntimeError):
     pass
@@ -148,7 +153,12 @@ def _run_pi(
             result_text = str(event.get("text", ""))
             result_state = event.get("sessionState")
         elif kind == "error":
-            raise AdapterError(_tail(str(event.get("message", "pi sidecar error"))))
+            detail = _tail(str(event.get("message", "pi sidecar error")))
+            # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、
+            # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
+            if not saw_tool:
+                raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
+            raise AdapterError(detail)
     process.wait(timeout=TURN_TIMEOUT_SECONDS)
     stderr_tail = _tail(process.stderr.read() if process.stderr else "")
     if result_text is None:
@@ -157,11 +167,7 @@ def _run_pi(
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
-        raise AdapterError(
-            stderr_tail
-            or "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
-            "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
-        )
+        raise AdapterError(stderr_tail or f"模型没有返回任何内容。{_PROVIDER_HINT}")
     return TurnResult(text=result_text.strip(), adapter_state=result_state)
 
 
