@@ -546,6 +546,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Proxy
+         * @description The 720p preview proxy the compositor decodes (see media/proxy.py).
+         */
+        get: operations["get_asset_proxy_api_assets__asset_id__proxy_get"];
+        put?: never;
+        /**
+         * Regenerate Asset Proxy
+         * @description Force a fresh proxy transcode (e.g. after a failed one).
+         */
+        post: operations["regenerate_asset_proxy_api_assets__asset_id__proxy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/asr/models": {
         parameters: {
             query?: never;
@@ -688,6 +712,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tts Engines
+         * @description Engines the配音 UI can offer, and what each one needs from the user.
+         */
+        get: operations["list_tts_engines_api_tts_engines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/synthesize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Synthesize With Engine
+         * @description Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
+         *     no Voice row to hang it off — the engine supplies the voice.
+         */
+        post: operations["synthesize_with_engine_api_tts_synthesize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/tts": {
         parameters: {
             query?: never;
@@ -740,6 +805,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/translate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Translate Texts
+         * @description Translate a batch of strings (Google free or an AI provider). Empty strings pass through.
+         */
+        post: operations["translate_texts_api_translate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/websearch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web Search
+         * @description Search the web (DuckDuckGo) → {results: [{title, url, snippet}]}. Read-only.
+         */
+        get: operations["web_search_api_websearch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webfetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web Fetch
+         * @description Fetch a public web page's readable text → {title, url, text}. Read-only.
+         */
+        get: operations["web_fetch_api_webfetch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/luts": {
         parameters: {
             query?: never;
@@ -774,6 +899,62 @@ export interface paths {
         head?: never;
         /** Rename Lut */
         patch: operations["rename_lut_api_luts__lut_id__patch"];
+        trace?: never;
+    };
+    "/api/fonts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Fonts */
+        get: operations["list_fonts_api_fonts_get"];
+        put?: never;
+        /** Upload Font */
+        post: operations["upload_font_api_fonts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fonts/{font_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Font File
+         * @description Serves the font to the preview's @font-face. Auth still applies — like the other media
+         *     routes this is reached with the token as a query param, since a CSS url() sends no headers.
+         */
+        get: operations["get_font_file_api_fonts__font_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fonts/{font_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Font */
+        delete: operations["delete_font_api_fonts__font_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/sequences": {
@@ -959,7 +1140,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Track */
+        /**
+         * Remove Track
+         * @description Remove a track. A track that still holds clips is refused unless with_clips says
+         *     otherwise — the UI asks first and names how many clips would go with it.
+         */
         delete: operations["remove_track_api_sequences__sequence_id__tracks__track_id__delete"];
         options?: never;
         head?: never;
@@ -1055,6 +1240,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Clip Texts
+         * @description Retext many clips in one revision — used by translate-whole-track. Registered BEFORE the
+         *     single-clip route below so "texts" is not captured as a {clip_id}.
+         */
+        patch: operations["set_clip_texts_api_sequences__sequence_id__clips_texts_patch"];
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}/text": {
         parameters: {
             query?: never;
@@ -1087,6 +1293,40 @@ export interface paths {
         head?: never;
         /** Set Clip Speed */
         patch: operations["set_clip_speed_api_sequences__sequence_id__clips__clip_id__speed_patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/gain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Clip Gain */
+        patch: operations["set_clip_gain_api_sequences__sequence_id__clips__clip_id__gain_patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/detach-audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Detach Clip Audio */
+        post: operations["detach_clip_audio_api_sequences__sequence_id__clips__clip_id__detach_audio_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/sequences/{sequence_id}/clips/{clip_id}/transform": {
@@ -1784,6 +2024,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description Execution history: the workflow's run jobs, newest first. Per-run node steps come from
+         *     the existing GET /jobs/{job_id}/events (workflow.node.* events).
+         */
+        get: operations["list_runs_api_workflows__workflow_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/ai-edit": {
         parameters: {
             query?: never;
@@ -2079,11 +2340,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Provider Models
-         * @description 列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
-         *     取不到时回退到该供应商的默认模型,保证选择器至少有一项。
-         */
+        /** List Provider Models */
         get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
         put?: never;
         post?: never;
@@ -2118,10 +2375,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Credentials
-         * @description Secrets never leave the backend — only configured-status and a hint.
-         */
+        /** List Credentials */
         get: operations["list_credentials_api_settings_credentials_get"];
         /** Set Credential */
         put: operations["set_credential_api_settings_credentials_put"];
@@ -2458,10 +2712,7 @@ export interface paths {
         get: operations["list_invocations_api_plugins_invocations_get"];
         put?: never;
         post?: never;
-        /**
-         * Clear Invocations
-         * @description 清空调用记录;带 plugin_id 只清该插件的。
-         */
+        /** Clear Invocations */
         delete: operations["clear_invocations_api_plugins_invocations_delete"];
         options?: never;
         head?: never;
@@ -2622,6 +2873,49 @@ export interface paths {
         get: operations["get_agent_manifest_api_agent_manifest_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Tools
+         * @description The tools an agent runtime may offer. Derived from the MCP registry, never a second list.
+         */
+        get: operations["list_agent_tools_api_agent_tools_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/tools/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invoke Agent Tool
+         * @description Run one registered tool as the calling user.
+         *
+         *     The runtime does not need to know how a tool is implemented — that knowledge living in two
+         *     places is what caused the drift this module exists to end.
+         */
+        post: operations["invoke_agent_tool_api_agent_tools__name__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2979,6 +3273,13 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_font_api_fonts_post */
+        Body_upload_font_api_fonts_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** File */
+            file: string;
+        };
         /** Body_upload_lut_api_luts_post */
         Body_upload_lut_api_luts_post: {
             /** Workspace Id */
@@ -3043,6 +3344,13 @@ export interface components {
             transform?: {
                 [key: string]: unknown;
             };
+        };
+        /** ClipTextEntry */
+        ClipTextEntry: {
+            /** Clip Id */
+            clip_id: string;
+            /** Text */
+            text: string;
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -3124,6 +3432,30 @@ export interface components {
         CutClipRangesRequest: {
             /** Ranges */
             ranges: components["schemas"]["CutClipRangeRequest"][];
+        };
+        /**
+         * EngineSynthesizeRequest
+         * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
+         */
+        EngineSynthesizeRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Text */
+            text: string;
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Voice
+             * @default
+             */
+            engine_voice: string;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /** Project Id */
+            project_id?: string | null;
         };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
@@ -3208,6 +3540,21 @@ export interface components {
             error?: string | null;
             /** App Id */
             app_id?: string | null;
+        };
+        /** FontOut */
+        FontOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Family */
+            family: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Size */
+            size: number;
+            /** Created At */
+            created_at?: string | null;
         };
         /** GenerateSubtitlesRequest */
         GenerateSubtitlesRequest: {
@@ -4354,6 +4701,16 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** SetClipGainRequest */
+        SetClipGainRequest: {
+            /** Gain */
+            gain: number;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+        };
         /** SetClipSpeedRequest */
         SetClipSpeedRequest: {
             /** Speed */
@@ -4363,6 +4720,11 @@ export interface components {
         SetClipTextRequest: {
             /** Text */
             text: string;
+        };
+        /** SetClipTextsRequest */
+        SetClipTextsRequest: {
+            /** Texts */
+            texts: components["schemas"]["ClipTextEntry"][];
         };
         /** SetClipTransformRequest */
         SetClipTransformRequest: {
@@ -4456,6 +4818,27 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ToolInvocation */
+        ToolInvocation: {
+            /**
+             * Arguments
+             * @default {}
+             */
+            arguments: {
+                [key: string]: unknown;
+            };
+        };
+        /** ToolSpec */
+        ToolSpec: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Parameters */
+            parameters: {
+                [key: string]: unknown;
+            };
         };
         /** TrackOut */
         TrackOut: {
@@ -4568,6 +4951,25 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** TranslateRequest */
+        TranslateRequest: {
+            /** Texts */
+            texts: string[];
+            /** Target Lang */
+            target_lang: string;
+            /**
+             * Engine
+             * @default google
+             */
+            engine: string;
+            /** Profile Id */
+            profile_id?: string | null;
+        };
+        /** TranslateResponse */
+        TranslateResponse: {
+            /** Translations */
+            translations: string[];
+        };
         /** TrimClipRequest */
         TrimClipRequest: {
             /** Timeline Start */
@@ -4636,6 +5038,32 @@ export interface components {
              * @default
              */
             fish_model_dir: string;
+        };
+        /**
+         * TtsEngineChoiceOut
+         * @description An engine the配音 UI can offer. Distinct from TtsEngineOut, which describes a downloadable
+         *     LOCAL model — same word, different thing, and defining both as TtsEngineOut silently
+         *     shadowed the older one and broke /tts/models' response validation.
+         */
+        TtsEngineChoiceOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Needs Key */
+            needs_key: boolean;
+            /** Needs Voice Id */
+            needs_voice_id: boolean;
+            /**
+             * Voices
+             * @default []
+             */
+            voices: string[];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
         };
         /** TtsEngineOut */
         TtsEngineOut: {
@@ -5771,6 +6199,8 @@ export interface operations {
             query: {
                 workspace_id: string;
                 project_id?: string | null;
+                kind?: string | null;
+                name_contains?: string | null;
             };
             header?: never;
             path?: never;
@@ -6153,6 +6583,68 @@ export interface operations {
             };
         };
     };
+    get_asset_proxy_api_assets__asset_id__proxy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_asset_proxy_api_assets__asset_id__proxy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_asr_models_api_asr_models_get: {
         parameters: {
             query?: never;
@@ -6405,6 +6897,68 @@ export interface operations {
             };
         };
     };
+    list_tts_engines_api_tts_engines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsEngineChoiceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    synthesize_with_engine_api_tts_synthesize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EngineSynthesizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_tts_config_api_settings_tts_get: {
         parameters: {
             query?: never;
@@ -6514,6 +7068,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TtsEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    translate_texts_api_translate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranslateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranslateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_search_api_websearch_get: {
+        parameters: {
+            query: {
+                q: string;
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    web_fetch_api_webfetch_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6643,6 +7297,130 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LutOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fonts_api_fonts_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FontOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_font_api_fonts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_font_api_fonts_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FontOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_font_file_api_fonts__font_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                font_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_font_api_fonts__font_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                font_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -7003,7 +7781,9 @@ export interface operations {
     };
     remove_track_api_sequences__sequence_id__tracks__track_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                with_clips?: boolean;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -7242,6 +8022,41 @@ export interface operations {
             };
         };
     };
+    set_clip_texts_api_sequences__sequence_id__clips_texts_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClipTextsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_clip_text_api_sequences__sequence_id__clips__clip_id__text_patch: {
         parameters: {
             query?: never;
@@ -7293,6 +8108,74 @@ export interface operations {
                 "application/json": components["schemas"]["SetClipSpeedRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_clip_gain_api_sequences__sequence_id__clips__clip_id__gain_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetClipGainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_clip_audio_api_sequences__sequence_id__clips__clip_id__detach_audio_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -8945,6 +9828,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_api_workflows__workflow_id__runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"][];
                 };
             };
             /** @description Validation Error */
@@ -11011,6 +11927,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_tools_api_agent_tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolSpec"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invoke_agent_tool_api_agent_tools__name__post: {
+        parameters: {
+            query?: {
+                workspace_id?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolInvocation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

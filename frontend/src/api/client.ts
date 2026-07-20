@@ -118,6 +118,36 @@ export function voiceFromSpeaker(body: { asset_id: string; speaker?: string | nu
 export function synthesizeVoice(id: string, body: { text: string; project_id?: string | null }): Promise<Job> {
   return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
 }
+/** An engine the 配音 panel can offer. Distinct from TtsEngine, which is a downloadable LOCAL
+    model — same word, two meanings, and naming both TtsEngine shadows one of them. */
+export interface TtsEngineChoice {
+  id: string;
+  label: string;
+  needs_key: boolean;
+  /** True when the engine's catalogue is too large or account-specific to enumerate, so the
+      voice is typed in rather than picked. */
+  needs_voice_id: boolean;
+  voices: string[];
+  note: string;
+}
+
+export function listTtsEngines(): Promise<TtsEngineChoice[]> {
+  return api<TtsEngineChoice[]>("/api/tts/engines");
+}
+
+/** Synthesis through a remote engine. Separate from synthesizeVoice because there is no Voice
+    row — the engine supplies the voice, so the request carries a workspace instead. */
+export function synthesizeWithEngine(body: {
+  workspace_id: string;
+  text: string;
+  engine: string;
+  engine_voice?: string;
+  speed?: number;
+  project_id?: string | null;
+}): Promise<Job> {
+  return api<Job>("/api/tts/synthesize", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function voiceSampleUrl(id: string): string {
   const suffix = authToken ? `?token=${authToken}` : "";
   return `${API_BASE}/api/voices/${id}/sample${suffix}`;

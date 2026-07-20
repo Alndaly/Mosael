@@ -7,8 +7,10 @@ import {
   api,
   deleteVoice,
   listAssets,
+  listTtsEngines,
   listVoices,
   synthesizeVoice,
+  synthesizeWithEngine,
   uploadVoice,
   voiceFromSpeaker,
   voiceSampleUrl,
@@ -39,6 +41,13 @@ export function VoicePanel({
   const voices = useQuery({ queryKey: ["voices", workspace.id], queryFn: () => listVoices(workspace.id) });
   const [selected, setSelected] = React.useState<string | null>(null);
   const [text, setText] = React.useState("");
+  // Which engine synthesises. "clone" is the local reference-driven path and needs a Voice row;
+  // every other engine is remote and supplies its own voice, so the two submit to different
+  // endpoints — see the synth mutation below.
+  const [engine, setEngine] = React.useState("clone");
+  const [engineVoice, setEngineVoice] = React.useState("");
+  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: Infinity });
+  const activeEngine = engines.data?.find((item) => item.id === engine);
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [refText, setRefText] = React.useState("");
@@ -106,7 +115,16 @@ export function VoicePanel({
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["voices", workspace.id] }),
   });
   const synth = useMutation({
-    mutationFn: () => synthesizeVoice(activeVoice as string, { text, project_id: project.id }),
+    mutationFn: () =>
+      engine === "clone"
+        ? synthesizeVoice(activeVoice as string, { text, project_id: project.id })
+        : synthesizeWithEngine({
+            workspace_id: workspace.id,
+            text,
+            engine,
+            engine_voice: engineVoice,
+            project_id: project.id,
+          }),
     onSuccess: (job) => {
       toast.message(t("voiceSynthStarted"));
       setText("");
@@ -114,6 +132,11 @@ export function VoicePanel({
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  // Clone needs a voice from the library; a remote engine needs a voice id only when its
+  // catalogue is too account-specific to enumerate.
+  const engineReady =
+    engine === "clone" ? Boolean(activeVoice) : !activeEngine?.needs_voice_id || Boolean(engineVoice.trim());
 
   // The synth Job runs off-thread; when it finishes, refresh the media pool so
   // the generated audio asset shows up (draggable to the timeline).
@@ -188,6 +211,51 @@ export function VoicePanel({
           <label className="voice-synth-label">
             <Wand2 size={13} /> {t("voiceSynthTitle")}
           </label>
+          <div className="voice-synth-engine">
+            <Select
+              value={engine}
+              onValueChange={(value) => {
+                setEngine(value);
+                // Voice ids do not carry across engines — "alloy" means nothing to 火山.
+                const next = engines.data?.find((item) => item.id === value);
+                setEngineVoice(next?.voices[0] ?? "");
+              }}
+            >
+              <SelectTrigger className="voice-synth-select" aria-label={t("voiceEngine")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(engines.data ?? []).map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {activeEngine && activeEngine.voices.length > 0 && (
+              <Select value={engineVoice || activeEngine.voices[0]} onValueChange={setEngineVoice}>
+                <SelectTrigger className="voice-synth-select" aria-label={t("voiceEngineVoice")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeEngine.voices.map((voice) => (
+                    <SelectItem key={voice} value={voice}>
+                      {voice}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {activeEngine?.needs_voice_id && (
+              <Input
+                className="voice-synth-select"
+                value={engineVoice}
+                placeholder={t("voiceEngineVoiceIdHint")}
+                aria-label={t("voiceEngineVoiceId")}
+                onChange={(event) => setEngineVoice(event.target.value)}
+              />
+            )}
+          </div>
           <Textarea
             className="voice-synth-text"
             placeholder={t("voiceSynthPlaceholder")}
@@ -197,12 +265,16 @@ export function VoicePanel({
           />
           <Button
             className="voice-synth-go"
-            disabled={!activeVoice || !text.trim() || synth.isPending}
+            disabled={!text.trim() || synth.isPending || !engineReady}
             onClick={() => synth.mutate()}
           >
             {synth.isPending ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} {t("voiceGenerate")}
           </Button>
-          {!activeVoice && <p className="voice-hint">{t("voiceNeedVoice")}</p>}
+          {engine === "clone" && !activeVoice && <p className="voice-hint">{t("voiceNeedVoice")}</p>}
+          {engine !== "clone" && activeEngine?.needs_voice_id && !engineVoice.trim() && (
+            <p className="voice-hint">{t("voiceNeedEngineVoice")}</p>
+          )}
+          {engine !== "clone" && activeEngine?.note && <p className="voice-hint">{activeEngine.note}</p>}
         </div>
 
         <div className="voice-list-head">

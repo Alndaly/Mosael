@@ -122,3 +122,54 @@ def test_tts_config_get_and_update() -> None:
     assert tts_config.get().fish_repo_dir == "/tmp/fish-speech"
     # invalid engine rejected
     assert client.put("/api/settings/tts", json={"engine": "nope", "source": "hf"}).status_code == 422
+
+
+def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
+    """The panel renders a dropdown or a text field off these two flags, so they are contract."""
+    client = fresh_client()
+    engines = {item["id"]: item for item in client.get("/api/tts/engines").json()}
+
+    assert engines["clone"]["needs_key"] is False
+    assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
+    # 火山's catalogue is account-specific, so there is no list to offer — the id is typed in.
+    assert engines["volcano"]["needs_voice_id"] is True and engines["volcano"]["voices"] == []
+
+
+def test_a_profile_base_url_reaches_the_engine() -> None:
+    """A user pointing "openai" at a proxy must not have the request sent to api.openai.com
+    with a key that is not valid there — a 401 whose cause is invisible."""
+    import time
+
+    import app.audio.tts_providers as providers
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        db.add(ProviderProfile(name="proxy", vendor="openai", api_key="k", base_url="https://proxy.test/v1"))
+        db.commit()
+
+    seen: dict = {}
+
+    def spy(engine, api_key, voice="", model="", base_url=""):
+        seen.update(engine=engine, api_key=api_key, base_url=base_url)
+        raise RuntimeError("no network in tests — the constructor arguments are what this asserts")
+
+    saved = providers.build_remote_provider
+    providers.build_remote_provider = spy
+    try:
+        res = client.post(
+            "/api/tts/synthesize",
+            json={"workspace_id": workspace_id, "text": "hello", "engine": "openai", "engine_voice": "alloy"},
+        )
+        assert res.status_code == 200, res.text
+        # Synthesis runs on a job thread; wait for it rather than racing it.
+        deadline = time.time() + 5
+        while not seen and time.time() < deadline:
+            time.sleep(0.02)
+    finally:
+        providers.build_remote_provider = saved
+
+    assert seen.get("base_url") == "https://proxy.test/v1", seen
+    assert seen.get("api_key") == "k"

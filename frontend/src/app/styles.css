@@ -1922,6 +1922,18 @@
   color: var(--foreground);
 }
 
+/* 引擎 + 音色。并排,窄面板下自动换行 —— 音色 id 输入框放不下时换行比压扁好读。 */
+.voice-synth-engine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.voice-synth-select {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
 .voice-synth-go {
   width: 100%;
 }

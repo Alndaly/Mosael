@@ -40,6 +40,13 @@ VENDOR_PRESETS: dict[str, dict[str, str]] = {
         "default_model": "gpt-image-2",
         "capabilities": "对话、图像生成(gpt-image)、向量嵌入",
     },
+    "volcano": {
+        "label": "火山引擎语音合成(豆包 TTS)",
+        "base_url": "https://openspeech.bytedance.com",
+        # Deliberately separate from "bytedance": ARK and the speech service issue different
+        # keys from different consoles, so one profile cannot serve both.
+        "capabilities": "语音合成(大模型 TTS,需语音技术控制台的 API Key)",
+    },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",

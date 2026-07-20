@@ -1177,6 +1177,38 @@
               ],
               "title": "Project Id"
             }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "name_contains",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name Contains"
+            }
           }
         ],
         "responses": {
@@ -1639,6 +1671,88 @@
         }
       }
     },
+    "/api/assets/{asset_id}/proxy": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Proxy",
+        "description": "The 720p preview proxy the compositor decodes (see media/proxy.py).",
+        "operationId": "get_asset_proxy_api_assets__asset_id__proxy_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Regenerate Asset Proxy",
+        "description": "Force a fresh proxy transcode (e.g. after a failed one).",
+        "operationId": "regenerate_asset_proxy_api_assets__asset_id__proxy_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/asr/models": {
       "get": {
         "tags": [
@@ -1973,6 +2087,84 @@
         }
       }
     },
+    "/api/tts/engines": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "List Tts Engines",
+        "description": "Engines the配音 UI can offer, and what each one needs from the user.",
+        "operationId": "list_tts_engines_api_tts_engines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TtsEngineChoiceOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Tts Engines Api Tts Engines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tts/synthesize": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Synthesize With Engine",
+        "description": "Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is\nno Voice row to hang it off — the engine supplies the voice.",
+        "operationId": "synthesize_with_engine_api_tts_synthesize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EngineSynthesizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/tts": {
       "get": {
         "tags": [
@@ -2103,6 +2295,152 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TtsEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/translate": {
+      "post": {
+        "tags": [
+          "translate"
+        ],
+        "summary": "Translate Texts",
+        "description": "Translate a batch of strings (Google free or an AI provider). Empty strings pass through.",
+        "operationId": "translate_texts_api_translate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/websearch": {
+      "get": {
+        "tags": [
+          "websearch"
+        ],
+        "summary": "Web Search",
+        "description": "Search the web (DuckDuckGo) → {results: [{title, url, snippet}]}. Read-only.",
+        "operationId": "web_search_api_websearch_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "default": 5,
+              "title": "Count"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Web Search Api Websearch Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webfetch": {
+      "get": {
+        "tags": [
+          "websearch"
+        ],
+        "summary": "Web Fetch",
+        "description": "Fetch a public web page's readable text → {title, url, text}. Read-only.",
+        "operationId": "web_fetch_api_webfetch_get",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Web Fetch Api Webfetch Get"
                 }
               }
             }
@@ -2270,6 +2608,167 @@
             "schema": {
               "type": "string",
               "title": "Lut Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fonts": {
+      "get": {
+        "tags": [
+          "fonts"
+        ],
+        "summary": "List Fonts",
+        "operationId": "list_fonts_api_fonts_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FontOut"
+                  },
+                  "title": "Response List Fonts Api Fonts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "fonts"
+        ],
+        "summary": "Upload Font",
+        "operationId": "upload_font_api_fonts_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_font_api_fonts_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FontOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fonts/{font_id}/file": {
+      "get": {
+        "tags": [
+          "fonts"
+        ],
+        "summary": "Get Font File",
+        "description": "Serves the font to the preview's @font-face. Auth still applies — like the other media\nroutes this is reached with the token as a query param, since a CSS url() sends no headers.",
+        "operationId": "get_font_file_api_fonts__font_id__file_get",
+        "parameters": [
+          {
+            "name": "font_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Font Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fonts/{font_id}": {
+      "delete": {
+        "tags": [
+          "fonts"
+        ],
+        "summary": "Delete Font",
+        "operationId": "delete_font_api_fonts__font_id__delete",
+        "parameters": [
+          {
+            "name": "font_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Font Id"
             }
           }
         ],
@@ -2903,6 +3402,7 @@
           "sequences"
         ],
         "summary": "Remove Track",
+        "description": "Remove a track. A track that still holds clips is refused unless with_clips says\notherwise — the UI asks first and names how many clips would go with it.",
         "operationId": "remove_track_api_sequences__sequence_id__tracks__track_id__delete",
         "parameters": [
           {
@@ -2921,6 +3421,16 @@
             "schema": {
               "type": "string",
               "title": "Track Id"
+            }
+          },
+          {
+            "name": "with_clips",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Clips"
             }
           }
         ],
@@ -3217,6 +3727,59 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/texts": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Set Clip Texts",
+        "description": "Retext many clips in one revision — used by translate-whole-track. Registered BEFORE the\nsingle-clip route below so \"texts\" is not captured as a {clip_id}.",
+        "operationId": "set_clip_texts_api_sequences__sequence_id__clips_texts_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetClipTextsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}/text": {
       "patch": {
         "tags": [
@@ -3315,6 +3878,118 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/gain": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Set Clip Gain",
+        "operationId": "set_clip_gain_api_sequences__sequence_id__clips__clip_id__gain_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetClipGainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/detach-audio": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Detach Clip Audio",
+        "operationId": "detach_clip_audio_api_sequences__sequence_id__clips__clip_id__detach_audio_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5716,6 +6391,63 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/runs": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "List Runs",
+        "description": "Execution history: the workflow's run jobs, newest first. Per-run node steps come from\nthe existing GET /jobs/{job_id}/events (workflow.node.* events).",
+        "operationId": "list_runs_api_workflows__workflow_id__runs_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response List Runs Api Workflows  Workflow Id  Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/ai-edit": {
       "post": {
         "tags": [
@@ -6668,7 +7400,6 @@
           "settings"
         ],
         "summary": "List Provider Models",
-        "description": "列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。\n取不到时回退到该供应商的默认模型,保证选择器至少有一项。",
         "operationId": "list_provider_models_api_settings_providers__profile_id__models_get",
         "parameters": [
           {
@@ -6785,7 +7516,6 @@
           "settings"
         ],
         "summary": "List Credentials",
-        "description": "Secrets never leave the backend — only configured-status and a hint.",
         "operationId": "list_credentials_api_settings_credentials_get",
         "responses": {
           "200": {
@@ -7928,7 +8658,6 @@
           "plugins"
         ],
         "summary": "Clear Invocations",
-        "description": "清空调用记录;带 plugin_id 只清该插件的。",
         "operationId": "clear_invocations_api_plugins_invocations_delete",
         "parameters": [
           {
@@ -8489,6 +9218,107 @@
           }
         }
       }
+    },
+    "/api/agent/tools": {
+      "get": {
+        "tags": [
+          "agent-tools"
+        ],
+        "summary": "List Agent Tools",
+        "description": "The tools an agent runtime may offer. Derived from the MCP registry, never a second list.",
+        "operationId": "list_agent_tools_api_agent_tools_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ToolSpec"
+                  },
+                  "type": "array",
+                  "title": "Response List Agent Tools Api Agent Tools Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/tools/{name}": {
+      "post": {
+        "tags": [
+          "agent-tools"
+        ],
+        "summary": "Invoke Agent Tool",
+        "description": "Run one registered tool as the calling user.\n\nThe runtime does not need to know how a tool is implemented — that knowledge living in two\nplaces is what caused the drift this module exists to end.",
+        "operationId": "invoke_agent_tool_api_agent_tools__name__post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolInvocation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Invoke Agent Tool Api Agent Tools  Name  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8705,7 +9535,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^(claude|opencode|pi)$"
+                "pattern": "^(claude|pi)$"
               },
               {
                 "type": "null"
@@ -9448,6 +10278,25 @@
         ],
         "title": "Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post"
       },
+      "Body_upload_font_api_fonts_post": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "file"
+        ],
+        "title": "Body_upload_font_api_fonts_post"
+      },
       "Body_upload_lut_api_luts_post": {
         "properties": {
           "workspace_id": {
@@ -9624,6 +10473,26 @@
           "effects"
         ],
         "title": "ClipOut"
+      },
+      "ClipTextEntry": {
+        "properties": {
+          "clip_id": {
+            "type": "string",
+            "title": "Clip Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_id",
+          "text"
+        ],
+        "title": "ClipTextEntry"
       },
       "ConfirmationCreate": {
         "properties": {
@@ -9821,6 +10690,58 @@
           "ranges"
         ],
         "title": "CutClipRangesRequest"
+      },
+      "EngineSynthesizeRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "engine": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Engine"
+          },
+          "engine_voice": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Voice",
+            "default": ""
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.25,
+            "title": "Speed",
+            "default": 1.0
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "text",
+          "engine"
+        ],
+        "title": "EngineSynthesizeRequest",
+        "description": "Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."
       },
       "FeishuBindCodeOut": {
         "properties": {
@@ -10054,6 +10975,51 @@
           "phase"
         ],
         "title": "FeishuOnboardingOut"
+      },
+      "FontOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "family",
+          "original_filename",
+          "size"
+        ],
+        "title": "FontOut"
       },
       "GenerateSubtitlesRequest": {
         "properties": {
@@ -12919,6 +13885,26 @@
         "type": "object",
         "title": "SetClipEffectsRequest"
       },
+      "SetClipGainRequest": {
+        "properties": {
+          "gain": {
+            "type": "number",
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Gain"
+          },
+          "muted": {
+            "type": "boolean",
+            "title": "Muted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "gain"
+        ],
+        "title": "SetClipGainRequest"
+      },
       "SetClipSpeedRequest": {
         "properties": {
           "speed": {
@@ -12948,6 +13934,24 @@
           "text"
         ],
         "title": "SetClipTextRequest"
+      },
+      "SetClipTextsRequest": {
+        "properties": {
+          "texts": {
+            "items": {
+              "$ref": "#/components/schemas/ClipTextEntry"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Texts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "texts"
+        ],
+        "title": "SetClipTextsRequest"
       },
       "SetClipTransformRequest": {
         "properties": {
@@ -13195,6 +14199,42 @@
           "created_at"
         ],
         "title": "TaskEventOut"
+      },
+      "ToolInvocation": {
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Arguments",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "ToolInvocation"
+      },
+      "ToolSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "parameters"
+        ],
+        "title": "ToolSpec"
       },
       "TrackOut": {
         "properties": {
@@ -13471,6 +14511,62 @@
         ],
         "title": "TranscriptTokenOut"
       },
+      "TranslateRequest": {
+        "properties": {
+          "texts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Texts"
+          },
+          "target_lang": {
+            "type": "string",
+            "title": "Target Lang"
+          },
+          "engine": {
+            "type": "string",
+            "pattern": "^(google|ai)$",
+            "title": "Engine",
+            "default": "google"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "texts",
+          "target_lang"
+        ],
+        "title": "TranslateRequest"
+      },
+      "TranslateResponse": {
+        "properties": {
+          "translations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "translations"
+        ],
+        "title": "TranslateResponse"
+      },
       "TrimClipRequest": {
         "properties": {
           "timeline_start": {
@@ -13571,6 +14667,48 @@
           "engine"
         ],
         "title": "TtsConfigUpdate"
+      },
+      "TtsEngineChoiceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key"
+          },
+          "needs_voice_id": {
+            "type": "boolean",
+            "title": "Needs Voice Id"
+          },
+          "voices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Voices",
+            "default": []
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "needs_key",
+          "needs_voice_id"
+        ],
+        "title": "TtsEngineChoiceOut",
+        "description": "An engine the配音 UI can offer. Distinct from TtsEngineOut, which describes a downloadable\nLOCAL model — same word, different thing, and defining both as TtsEngineOut silently\nshadowed the older one and broke /tts/models' response validation."
       },
       "TtsEngineOut": {
         "properties": {
