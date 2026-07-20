@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent
+from app.db.models import now as models_now
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ def cancel_job(db: Session, job: Job) -> Job:
 
 def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
     """Apply the retention rules to task_events. Returns rows deleted."""
-    reference = now or datetime.utcnow()
+    reference = now or models_now()  # utcnow() is deprecated; models_now is the same naive UTC
     cutoff = reference - timedelta(days=EVENT_RETENTION_DAYS)
     removed = 0
 
