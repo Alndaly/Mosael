@@ -1,15 +1,40 @@
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.core.db import Base, engine, init_db
 from app.main import app
 
 PASSWORD = "pass1234"
 
 
+def _assert_disposable_data_dir() -> None:
+    """Refuse to drop_all unless the DB lives in a throwaway temp dir.
+
+    conftest.py points MIBU_DATA_DIR at a mkdtemp() before anything imports settings — but
+    conftest only loads under pytest. Calling these helpers directly (e.g. `python -c "from
+    tests.util import fresh_client"`) would otherwise resolve to the REAL ~/.mibu-new and
+    drop every table in the user's live database. Fail loudly instead of silently wiping it.
+    """
+    data_dir = Path(settings.data_dir).resolve()
+    tmp_root = Path(tempfile.gettempdir()).resolve()
+    in_tmp = data_dir == tmp_root or tmp_root in data_dir.parents
+    if not os.environ.get("MIBU_DATA_DIR") or not in_tmp:
+        raise RuntimeError(
+            f"refusing to drop_all: data_dir={data_dir} is not a temp dir. "
+            "Run tests through pytest (conftest.py sets MIBU_DATA_DIR); never call "
+            "fresh_client() from an ad-hoc `python -c` against the real database."
+        )
+
+
 def fresh_client(username: str = "tester") -> TestClient:
     """Drop/recreate the isolated test DB and return a logged-in client."""
+    _assert_disposable_data_dir()
     Base.metadata.drop_all(bind=engine)
     init_db()
     client = TestClient(app)
