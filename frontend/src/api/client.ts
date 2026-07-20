@@ -389,8 +389,11 @@ export function setClipTexts(
   });
 }
 
-export function removeTrack(sequenceId: string, trackId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, { method: "DELETE" });
+/** Removing a track that still holds clips destroys them, so the backend refuses unless
+    withClips is set — the caller is expected to have asked the user first. */
+export function removeTrack(sequenceId: string, trackId: string, withClips = false): Promise<Sequence> {
+  const suffix = withClips ? "?with_clips=true" : "";
+  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}${suffix}`, { method: "DELETE" });
 }
 
 export function setClipEffects(sequenceId: string, clipId: string, effects: Record<string, unknown>): Promise<Sequence> {

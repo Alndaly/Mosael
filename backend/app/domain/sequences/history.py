@@ -188,8 +188,15 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
                 kind=payload["kind"],
                 name=payload["name"],
                 position=payload["position"],
+                muted=payload.get("muted", False),
+                solo=payload.get("solo", False),
+                locked=payload.get("locked", False),
+                duck=payload.get("duck", False),
             )
         )
+        db.flush()  # the track row must exist before its clips reference it
+        for clip in payload.get("clips", []):
+            _restore_clip_row(db, sequence, clip)
     elif operation.kind == "set_clip_effect":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.effects = payload["previous"]
@@ -279,8 +286,10 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "remove_track":
         track = db.get(Track, payload["track_id"])
         if track is not None:
-            if track.clips:
-                raise SequenceDomainError("Cannot redo remove_track while the track has clips")
+            # Redo removes whatever the undo put back, clips included — refusing here would
+            # strand the user between two states after undoing a with-clips removal.
+            for clip in list(track.clips):
+                db.delete(clip)
             db.delete(track)
     elif operation.kind == "set_clip_effect":
         clip = _require_clip_row(db, payload["clip_id"])

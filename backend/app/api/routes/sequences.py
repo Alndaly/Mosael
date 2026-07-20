@@ -330,9 +330,15 @@ def add_track(sequence_id: str, body: AddTrackRequest, db: DbSession, user: Curr
 
 
 @router.delete("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
-def remove_track(sequence_id: str, track_id: str, db: DbSession, user: CurrentUser) -> Response:
+def remove_track(
+    sequence_id: str, track_id: str, db: DbSession, user: CurrentUser, with_clips: bool = False
+) -> Response:
+    """Remove a track. A track that still holds clips is refused unless with_clips says
+    otherwise — the UI asks first and names how many clips would go with it."""
     require_sequence_access(db, user, sequence_id)
-    _apply(lambda: remove_track_operation(db, sequence_id, RemoveTrack(track_id=track_id)))
+    _apply(
+        lambda: remove_track_operation(db, sequence_id, RemoveTrack(track_id=track_id, with_clips=with_clips))
+    )
     return _sequence_response(_get_sequence(db, sequence_id))
 
 

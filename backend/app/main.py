@@ -86,12 +86,29 @@ class _MethodBindingMiddleware:
 def create_app() -> FastAPI:
     app = FastAPI(title="Mibu New API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(_MethodBindingMiddleware)
-    # Auth is bearer-token (no cookies), and the packaged Electron shell loads
-    # the frontend from file://, whose fetches carry Origin: null — so CORS is
-    # open while authentication still gates every request (plan §20).
+    # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
+    # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
+    # than a same-origin policy.
+    #
+    # NOT "*": that reasoning ("authentication gates every request") holds only for the
+    # authenticated routers below. The publish-worker channel is deliberately unauthenticated,
+    # so with a wildcard any page the user happened to be browsing could call it AND READ THE
+    # REPLY — which includes publish tasks across every workspace and account proxy strings
+    # with credentials in them. Naming the origins we actually ship from means such a page
+    # fails the CORS check and cannot read the response.
+    #
+    # This bounds disclosure, not side effects: a simple cross-origin POST still reaches the
+    # handler even when the browser refuses to hand back the body. Authenticating the worker
+    # channel is the actual fix and needs a change on the Electron side too.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[
+            "null",                    # Electron shell (file://)
+            "http://localhost:5173",   # Vite dev server
+            "http://127.0.0.1:5173",
+            "http://localhost:8800",   # backend serving the built frontend
+            "http://127.0.0.1:8800",
+        ],
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

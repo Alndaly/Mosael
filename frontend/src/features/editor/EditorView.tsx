@@ -53,6 +53,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { useEditorStore } from "@/stores/editorStore";
+import { ConfirmDialog } from "@/components/ui/modals";
 import { FontFaces } from "@/features/editor/FontFaces";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
@@ -424,10 +425,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       toast.error(error.message);
     },
   });
+  // A populated track is only removed after the user confirms, and the prompt says how many
+  // clips go with it — the backend refuses the unconfirmed call as a second line of defence.
+  const [trackPendingRemoval, setTrackPendingRemoval] = React.useState<{ id: string; name: string; clips: number } | null>(
+    null,
+  );
   const removeTrackMutation = useMutation({
-    mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
-    onSuccess: (updated) => applySequence(updated),
-    onError: (error: Error) => toast.error(error.message),
+    mutationFn: ({ trackId, withClips }: { trackId: string; withClips: boolean }) =>
+      removeTrack(sequence!.id, trackId, withClips),
+    onSuccess: (updated) => {
+      applySequence(updated);
+      setTrackPendingRemoval(null);
+    },
+    onError: (error: Error) => {
+      setTrackPendingRemoval(null); // never leave the dialog hanging on a failure
+      toast.error(error.message);
+    },
   });
   const setSpeedMutation = useMutation({
     mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!.id, clipId, speed),
@@ -750,6 +763,18 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
+      <ConfirmDialog
+        open={trackPendingRemoval !== null}
+        title={t("removeTrackConfirmTitle")}
+        body={t("removeTrackConfirmBody")
+          .replace("{name}", trackPendingRemoval?.name ?? "")
+          .replace("{n}", String(trackPendingRemoval?.clips ?? 0))}
+        onCancel={() => setTrackPendingRemoval(null)}
+        onConfirm={() =>
+          trackPendingRemoval &&
+          removeTrackMutation.mutate({ trackId: trackPendingRemoval.id, withClips: true })
+        }
+      />
       {/* Resizers sit on the 8px gap centers; grid pads 12px (Global rhythm). */}
       {/* A column resizer must not extend past the row whose columns it separates. These are
           absolutely positioned over the whole grid, so without an explicit bottom they run down
@@ -861,7 +886,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onTrimClip={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
           onAddTrack={(kind) => addTrackMutation.mutate(kind)}
           onMoveTrack={(trackId, direction) => moveTrackMutation.mutate({ trackId, direction })}
-          onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
+          onRemoveTrack={(trackId, clipCount) => {
+            if (clipCount === 0) {
+              removeTrackMutation.mutate({ trackId, withClips: false });
+              return;
+            }
+            const track = (sequence.tracks ?? []).find((item) => item.id === trackId);
+            setTrackPendingRemoval({ id: trackId, name: track?.name ?? "", clips: clipCount });
+          }}
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
           onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}

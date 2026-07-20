@@ -267,6 +267,9 @@ class AddTrack:
 @dataclass(frozen=True)
 class RemoveTrack:
     track_id: str
+    #: Deleting a track that still holds clips destroys them, so it is refused unless the
+    #: caller says so explicitly — the UI asks first and names the count.
+    with_clips: bool = False
     actor_id: str | None = None
 
 
@@ -342,16 +345,34 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
         raise SequenceDomainError("Track not found")
-    if track.clips:
+    if track.clips and not op.with_clips:
         raise SequenceDomainError("Track must be empty before it can be removed")
-    payload = {"track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position}
+    # Record the clips as well as the track: without them undo would hand back an empty track
+    # and the footage on it would be gone for good.
+    payload = {
+        "track_id": track.id,
+        "kind": track.kind,
+        "name": track.name,
+        "position": track.position,
+        "muted": track.muted,
+        "solo": track.solo,
+        "locked": track.locked,
+        "duck": track.duck,
+        "clips": [_clip_payload(clip) for clip in track.clips],
+    }
+    for clip in list(track.clips):
+        db.delete(clip)
     db.delete(track)
     _record_operation(
         db,
         sequence,
         kind="remove_track",
         payload=payload,
-        summary={"operation": "remove_track", "track_id": payload["track_id"]},
+        summary={
+            "operation": "remove_track",
+            "track_id": payload["track_id"],
+            "clips": len(payload["clips"]),
+        },
         actor_id=op.actor_id,
     )
     db.commit()

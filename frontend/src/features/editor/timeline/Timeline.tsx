@@ -81,7 +81,8 @@ export function Timeline({
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
   onMoveTrack?: (trackId: string, direction: "up" | "down") => void;
-  onRemoveTrack?: (trackId: string) => void;
+  /** Second argument is how many clips are on the track, so the caller can confirm first. */
+  onRemoveTrack?: (trackId: string, clipCount: number) => void;
   onDeleteClip?: (clipId: string) => void;
   onRippleDeleteClip?: (clipId: string) => void;
   onSplitClip?: (clipId: string) => void;
@@ -680,12 +681,13 @@ export function Timeline({
                   </button>
                 </span>
               )}
-              {onRemoveTrack && (track.clips ?? []).length === 0 && (
+              {onRemoveTrack && (
                 <button
                   type="button"
                   className="tl-label-remove"
-                  aria-label={t("removeTrack")}
-                  onClick={() => onRemoveTrack(track.id)}
+                  aria-label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
+                  title={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
+                  onClick={() => onRemoveTrack(track.id, (track.clips ?? []).length)}
                 >
                   <X size={11} />
                 </button>
