@@ -4717,6 +4717,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 10px per the container scale — without it the heading and the apply button sit against
+     the popover's own border. Every other popover class sets its own padding; this one didn't. */
+  padding: 10px;
   width: 220px;
 }
 .sub-translate-pop > strong {
