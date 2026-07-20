@@ -31,6 +31,7 @@ export function SubtitlePanel({
   onGenerate,
   generating,
   style,
+  onApplyTexts,
   fonts,
   onUploadFont,
   onDeleteFont,
@@ -45,6 +46,7 @@ export function SubtitlePanel({
   onGenerate?: () => void;
   generating?: boolean;
   style?: Record<string, unknown>;
+  onApplyTexts?: (texts: { clip_id: string; text: string }[]) => Promise<unknown>;
   fonts?: Font[];
   onUploadFont?: (file: File) => void;
   onDeleteFont?: (fontId: string) => void;
@@ -136,23 +138,26 @@ export function SubtitlePanel({
         <button type="button" className="ts-tool" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
-        {subtitles.length > 0 && <SubtitleTranslate subtitles={subtitles} onSetText={onSetText} />}
+        {subtitles.length > 0 && onApplyTexts && (
+          <SubtitleTranslate subtitles={subtitles} onApplyTexts={onApplyTexts} />
+        )}
       </div>
     </div>
   );
 }
 
-/** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),就地替换文本(可撤销)。 */
+/** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),一次提交、一步撤销。 */
 function SubtitleTranslate({
   subtitles,
-  onSetText,
+  onApplyTexts,
 }: {
   subtitles: { id: string; text_override?: string | null }[];
-  onSetText: (clipId: string, text: string) => void;
+  onApplyTexts: (texts: { clip_id: string; text: string }[]) => Promise<unknown>;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const [lang, setLang] = React.useState<string>("en");
+  const [bilingual, setBilingual] = React.useState(false);
 
   const run = useMutation({
     mutationFn: async () => {
@@ -161,15 +166,20 @@ function SubtitleTranslate({
         items.map((clip) => clip.text_override ?? ""),
         lang,
       );
-      let applied = 0;
-      translations.forEach((translated, i) => {
-        const original = items[i].text_override ?? "";
-        if (translated && translated !== original) {
-          onSetText(items[i].id, translated);
-          applied += 1;
-        }
+      const texts = items.flatMap((clip, i) => {
+        const original = clip.text_override ?? "";
+        const translated = translations[i];
+        if (!translated || translated === original) return [];
+        // Bilingual keeps the source line above the translation. The subtitle renders with
+        // white-space: pre-wrap, so the newline is a real second line in the preview and,
+        // via the ASS \N we emit at export, in the burned-in output too.
+        return [{ clip_id: clip.id, text: bilingual ? `${original}\n${translated}` : translated }];
       });
-      return applied;
+      if (texts.length === 0) return 0;
+      // One request, one revision, one undo — and nothing is written unless every cue resolves,
+      // so a failure can no longer leave the track half in each language.
+      await onApplyTexts(texts);
+      return texts.length;
     },
     onSuccess: (applied) => {
       setOpen(false);
@@ -202,11 +212,17 @@ function SubtitleTranslate({
             </SelectContent>
           </Select>
         </label>
+        <label className="sub-translate-toggle">
+          <span>{t("subtitleTranslateBilingual")}</span>
+          <Switch checked={bilingual} onCheckedChange={setBilingual} />
+        </label>
         <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
           {run.isPending ? <Loader2 size={13} className="spin" /> : <Languages size={13} />}
           {t("subtitleTranslateApply").replace("{n}", String(subtitles.length))}
         </Button>
-        <small className="sub-translate-note">{t("subtitleTranslateNote")}</small>
+        <small className="sub-translate-note">
+          {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}
+        </small>
       </PopoverContent>
     </Popover>
   );

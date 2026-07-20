@@ -367,6 +367,16 @@ class SetClipTextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 
+class ClipTextEntry(BaseModel):
+    clip_id: str
+    text: str = Field(min_length=1, max_length=500)
+
+
+class SetClipTextsRequest(BaseModel):
+    # Bounded so one request cannot rewrite an unbounded number of clips in a single revision.
+    texts: list[ClipTextEntry] = Field(min_length=1, max_length=2000)
+
+
 class TaskEventOut(OrmModel):
     id: str
     job_id: str

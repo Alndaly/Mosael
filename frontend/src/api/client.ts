@@ -377,6 +377,18 @@ export function setClipText(sequenceId: string, clipId: string, text: string): P
   });
 }
 
+/** Retext many clips in ONE revision. Per-clip calls left a half-translated track behind on a
+    mid-way failure, and made undoing a translation an N-step chore. */
+export function setClipTexts(
+  sequenceId: string,
+  texts: { clip_id: string; text: string }[],
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/texts`, {
+    method: "PATCH",
+    body: JSON.stringify({ texts }),
+  });
+}
+
 export function removeTrack(sequenceId: string, trackId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, { method: "DELETE" });
 }

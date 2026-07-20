@@ -35,6 +35,7 @@ UNDOABLE_KINDS = (
     "set_clip_transform",
     "set_sequence_reframe",
     "set_clip_text",
+    "set_clip_texts_batch",
     "set_subtitle_style",
 )
 
@@ -218,6 +219,9 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_text":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.text_override = payload["previous"]
+    elif operation.kind == "set_clip_texts_batch":
+        for entry in payload["entries"]:
+            _require_clip_row(db, entry["clip_id"]).text_override = entry["previous"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be undone")
 
@@ -309,6 +313,9 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     elif operation.kind == "set_clip_text":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.text_override = payload["text"]
+    elif operation.kind == "set_clip_texts_batch":
+        for entry in payload["entries"]:
+            _require_clip_row(db, entry["clip_id"]).text_override = entry["text"]
     else:
         raise SequenceDomainError(f"Operation {operation.kind} cannot be redone")
 

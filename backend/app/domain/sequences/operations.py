@@ -497,6 +497,42 @@ def set_clip_text(db: Session, sequence_id: str, op: SetClipText) -> Sequence:
 
 
 @dataclass(frozen=True)
+class SetClipTextsBatch:
+    """Retext many clips as ONE operation. Translating a track clip-by-clip produced N requests,
+    N revisions and N undo steps, and a failure partway through left the track half-translated
+    with no single point to revert to."""
+
+    texts: tuple[tuple[str, str], ...]  # (clip_id, text)
+    actor_id: str | None = None
+
+
+def set_clip_texts_batch(db: Session, sequence_id: str, op: SetClipTextsBatch) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    if not op.texts:
+        raise SequenceDomainError("No texts to apply")
+    entries = []
+    for clip_id, text in op.texts:
+        clip = _require_clip(db, sequence_id, clip_id)
+        if not text.strip():
+            raise SequenceDomainError("Text must not be empty")
+        entries.append({"clip_id": clip.id, "text": text, "previous": clip.text_override})
+    # Validate every clip BEFORE mutating any: a bad id halfway through would otherwise leave
+    # the track partly rewritten, which is the exact failure this operation exists to remove.
+    for entry in entries:
+        _require_clip(db, sequence_id, entry["clip_id"]).text_override = entry["text"]
+    _record_operation(
+        db,
+        sequence,
+        kind="set_clip_texts_batch",
+        payload={"entries": entries},
+        summary={"operation": "set_clip_texts_batch", "count": len(entries)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+@dataclass(frozen=True)
 class SetClipSpeed:
     clip_id: str
     speed: float

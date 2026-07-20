@@ -21,6 +21,7 @@ from app.api.schemas import (
     SetClipTransformRequest,
     SetSequenceReframeRequest,
     SetClipTextRequest,
+    SetClipTextsRequest,
     SetSubtitleStyleRequest,
     SetTrackStateRequest,
     GenerateSubtitlesRequest,
@@ -54,6 +55,7 @@ from app.domain.sequences.operations import (
     SetClipTransform,
     SetSequenceReframe,
     SetClipText,
+    SetClipTextsBatch,
     SetSubtitleStyle,
     SetTrackState,
     SplitClip,
@@ -79,6 +81,7 @@ from app.domain.sequences.operations import (
     generate_subtitles as generate_subtitles_operation,
     insert_text_clip as insert_text_clip_operation,
     set_clip_text as set_clip_text_operation,
+    set_clip_texts_batch as set_clip_texts_batch_operation,
     move_clip as move_clip_operation,
     move_track as move_track_operation,
     trim_clip as trim_clip_operation,
@@ -223,6 +226,16 @@ def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser
 def insert_text_clip(sequence_id: str, body: InsertTextClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: insert_text_clip_operation(db, sequence_id, InsertTextClip(**body.model_dump())))
+    return _get_sequence(db, sequence_id)
+
+
+@router.patch("/sequences/{sequence_id}/clips/texts", response_model=SequenceOut)
+def set_clip_texts(sequence_id: str, body: SetClipTextsRequest, db: DbSession, user: CurrentUser) -> Sequence:
+    """Retext many clips in one revision — used by translate-whole-track. Registered BEFORE the
+    single-clip route below so "texts" is not captured as a {clip_id}."""
+    require_sequence_access(db, user, sequence_id)
+    texts = tuple((entry.clip_id, entry.text) for entry in body.texts)
+    _apply(lambda: set_clip_texts_batch_operation(db, sequence_id, SetClipTextsBatch(texts=texts)))
     return _get_sequence(db, sequence_id)
 
 

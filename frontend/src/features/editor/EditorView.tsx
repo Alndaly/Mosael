@@ -36,6 +36,7 @@ import {
   setClipTransform,
   setSequenceReframe,
   setClipText,
+  setClipTexts,
   trimClip,
   undoSequence,
   type Asset,
@@ -330,6 +331,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const setTextMutation = useMutation({
     mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
     onSuccess: (updated) => applySequence(updated),
+  });
+  const setTextsMutation = useMutation({
+    mutationFn: (texts: { clip_id: string; text: string }[]) => setClipTexts(sequence!.id, texts),
+    onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   const addSubtitleMutation = useMutation({
     mutationFn: async () => {
@@ -775,6 +781,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             <SubtitlePanel
               sequence={sequence}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+              onApplyTexts={(texts) => setTextsMutation.mutateAsync(texts)}
               onAddSubtitle={() => addSubtitleMutation.mutate()}
               onGenerate={() => generateSubtitlesMutation.mutate()}
               generating={generateSubtitlesMutation.isPending}
