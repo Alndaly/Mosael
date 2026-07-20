@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient
 import { ArrowLeft, ChevronLeft, ChevronRight, Film, FolderPlus, Loader2, RotateCw, X } from "lucide-react";
 
 import { api, type ProjectWithStats, type Workspace } from "@/api/client";
+import { createMutationCache } from "@/app/mutationErrors";
 import { AuthProvider, useAuth } from "@/app/auth";
 import { AppearanceProvider } from "@/app/appearance";
 import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -29,7 +30,9 @@ import { SettingsView } from "@/features/settings/SettingsView";
 // 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
 // 给个合理缓存窗口:短时间切回同页直接用缓存,不重拉不闪;需要实时的 query 各自设了 refetchInterval,
 // 不受影响。获焦不全量重拉(Electron 频繁获焦会加剧闪烁)。
+
 const queryClient = new QueryClient({
+  mutationCache: createMutationCache((message) => toast.error(message)),
   defaultOptions: {
     queries: {
       staleTime: 60_000,
