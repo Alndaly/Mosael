@@ -235,6 +235,11 @@ def _run_pi(
         elif kind == "turn_done":
             result_text = str(event.get("text", ""))
             result_state = event.get("sessionState")
+            # Stop reading here rather than waiting for the process to exit. stdin now stays
+            # open for the whole turn so steering has somewhere to go, which means the sidecar's
+            # readline loop no longer ends on its own — waiting for EOF left every turn
+            # "running" until the timeout, long after the answer had finished streaming.
+            break
         elif kind == "error":
             detail = _tail(str(event.get("message", "pi sidecar error")))
             # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、

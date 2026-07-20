@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, GripHorizontal, Loader2, Paperclip, Send, X } from "lucide-react";
+import { Bot, Clock, GripHorizontal, Loader2, Paperclip, Send, Square, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
@@ -149,6 +149,17 @@ export function WorkflowAgentChat({
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
+  // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
+  // injects it into the running turn, and one button covers stop-vs-send.
+  const [queued, setQueued] = React.useState(0);
+  React.useEffect(() => {
+    if (!running) setQueued(0);
+  }, [running]);
+  const showStop = running && !draft.trim() && attachments.length === 0;
+  const stopTurn = useMutation({
+    mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
+    meta: { silentError: true },
+  });
 
   // Same leak as the AI-studio chat: an unstoppable reader pins an HTTP/1.1 connection, and
   // this panel is conditionally mounted ({agentOpen && <WorkflowAgentChat/>}), so closing it
@@ -242,13 +253,15 @@ export function WorkflowAgentChat({
     onSuccess: () => {
       setDraft("");
       setAttachments([]);
+      if (running) setQueued((count) => count + 1);
       void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
       if (sessionId) void attachStream(sessionId);
     },
   });
 
   const submit = () => {
-    if ((!draft.trim() && attachments.length === 0) || !sessionId || running || send.isPending) return;
+    // `running` is deliberately not a guard: the backend steers a mid-turn message.
+    if ((!draft.trim() && attachments.length === 0) || !sessionId || send.isPending) return;
     send.mutate({ text: draft.trim(), files: attachments });
   };
 
@@ -308,6 +321,12 @@ export function WorkflowAgentChat({
           </div>
         )}
       </div>
+      {running && queued > 0 && (
+        <div className="chat-queued">
+          <Clock size={11} />
+          {t("chatQueued").replace("{n}", String(queued))}
+        </div>
+      )}
       {attachments.length > 0 && (
         <div className="wf-agent-attachments">
           {attachments.map((file, i) => (
@@ -359,15 +378,26 @@ export function WorkflowAgentChat({
           >
             <Paperclip size={15} />
           </Button>
-          <Button
-            size="icon-sm"
-            className="wf-agent-send"
-            aria-label={t("chatSend")}
-            disabled={(!draft.trim() && attachments.length === 0) || running || send.isPending || !sessionId}
-            onClick={submit}
-          >
-            <Send size={14} />
-          </Button>
+          {showStop ? (
+            <Button
+              size="icon-sm"
+              className="wf-agent-send"
+              aria-label={t("chatStop")}
+              onClick={() => stopTurn.mutate()}
+            >
+              <Square size={12} fill="currentColor" />
+            </Button>
+          ) : (
+            <Button
+              size="icon-sm"
+              className="wf-agent-send"
+              aria-label={running ? t("chatSteer") : t("chatSend")}
+              disabled={(!draft.trim() && attachments.length === 0) || send.isPending || !sessionId}
+              onClick={submit}
+            >
+              <Send size={14} />
+            </Button>
+          )}
         </div>
       </div>
     </aside>
