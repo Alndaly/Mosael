@@ -9314,34 +9314,53 @@
   flex: 0 0 auto;
 }
 
-/* 排队中的消息:仍然留在对话流里(和 ChatGPT / Codex 一致),压暗表示还没被处理,
-   并且可以撤回——只能看不能撤的队列不算队列。 */
-.chat-bubble.queued,
-.wf-agent-msg.queued {
-  opacity: 0.62;
-}
-
-.chat-queued-meta {
+/* 待发送队列(Codex 同款):贴在输入框上方,而不是混进对话流——它们还没被发出去,
+   放进流里会让人以为智能体已经看到了。每条可以 Steer(插进当前这轮)或移除。 */
+.chat-pending {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  color: var(--muted-foreground);
-  font-size: 10px;
+  gap: 8px;
+  margin: 0 auto 6px;
+  width: 100%;
+  max-width: 780px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
 }
 
-.chat-queued-cancel {
-  background: none;
+.chat-pending-icon {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+.chat-pending-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.chat-pending-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
   border: 0;
-  padding: 0;
+  border-radius: 5px;
+  background: none;
   color: var(--muted-foreground);
   font: inherit;
+  font-size: 11px;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
-.chat-queued-cancel:hover {
+.chat-pending-action:hover {
+  background: var(--muted);
   color: var(--foreground);
 }
 

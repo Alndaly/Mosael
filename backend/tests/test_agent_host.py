@@ -140,20 +140,21 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
     assert called["ran"] is False, "不该真的去跑 sidecar"
 
 
-def test_a_message_sent_mid_turn_steers_instead_of_being_refused(monkeypatch) -> None:
-    """Typing while the agent works is a correction, not a mistake.
+def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
+    """It used to answer 409, which made the user wait out work they were already correcting.
 
-    This used to answer 409, which made the user watch out work they already knew was wrong.
-    pi holds a steering queue for exactly this, so the message is accepted and injected.
+    It is queued rather than steered: it waits for the running reason-act loop to finish and
+    then gets a turn of its own. Steering — cutting into the loop — is a separate, opt-in
+    action on the queued item. See test_agent_queue.py for both halves.
     """
-    steered: list[tuple[str, str]] = []
+    steers: list[str] = []
 
     def slow_run_turn(*args, **kwargs):
         time.sleep(1.5)
         return TurnResult(text="ok")
 
     monkeypatch.setattr(host, "run_turn", slow_run_turn)
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steered.append((sid, text)) or True)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -163,35 +164,8 @@ def test_a_message_sent_mid_turn_steers_instead_of_being_refused(monkeypatch) ->
     second = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "two"})
 
     assert second.status_code == 200, second.text
-    assert steered == [(session["id"], "two")]
-    # And it is stored, so the transcript shows what the user actually said.
-    messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-    assert [m["content"] for m in messages if m["role"] == "user"] == ["one", "two"]
-
-
-def test_a_mid_turn_message_still_runs_when_the_turn_just_ended(monkeypatch) -> None:
-    """The turn can finish between the status check and the write. Dropping the message there
-    would lose what the user typed with no sign that anything happened."""
-    started: list[str] = []
-
-    def slow_run_turn(*args, **kwargs):
-        time.sleep(1.5)
-        return TurnResult(text="ok")
-
-    monkeypatch.setattr(host, "run_turn", slow_run_turn)
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": False)
-    original = host._run_turn_thread
-    monkeypatch.setattr(host, "_run_turn_thread", lambda sid, prompt, token: started.append(prompt))
-
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
-    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "one"})
-    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "two"})
-
-    time.sleep(0.2)
-    assert "two" in started, started
-    assert original is not None
+    assert steers == [], "a plain follow-up must not cut into the running turn"
+    assert [m["content"] for m in client.get(f"/api/agent/sessions/{session['id']}/queue").json()] == ["two"]
 
 
 def test_stop_is_not_an_error_when_nothing_is_running() -> None:

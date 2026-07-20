@@ -84,6 +84,21 @@ def list_queued_messages(session_id: str, db: DbSession, user: CurrentUser) -> l
     return host.queued_messages(db, session)
 
 
+@router.post("/agent/sessions/{session_id}/queue/{message_id}/steer")
+def steer_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """Cut a queued message into the running turn instead of letting it wait.
+
+    The opt-in half of the pair: queuing is what happens by default, steering is a deliberate
+    "change what you are doing now".
+    """
+    session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    try:
+        return {"steered": host.steer_queued_message(db, session, message_id, user)}
+    except host.HostError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.delete("/agent/sessions/{session_id}/queue/{message_id}")
 def cancel_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
     """Withdraw a queued message. Deleting the row alone is not enough — the model already

@@ -1,6 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, Clock, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Bot, Check, Copy, CornerDownRight, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -143,12 +144,25 @@ export function ChatWorkspace({
     refetchInterval: 1500,
   });
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const refreshQueue = () => {
+    void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
+    void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
+  };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
       api(`/api/agent/sessions/${activeSession?.id}/queue/${messageId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
+    onSuccess: refreshQueue,
+  });
+  const steerQueued = useMutation({
+    mutationFn: (messageId: string) =>
+      api<{ steered: boolean }>(`/api/agent/sessions/${activeSession?.id}/queue/${messageId}/steer`, {
+        method: "POST",
+      }),
+    onSuccess: (result) => {
+      // A turn that ended first leaves the message queued; it will run on its own, and saying
+      // "steered" would be a lie about what the agent is doing.
+      if (!result.steered) toast.message(t("chatSteerTooLate"));
+      refreshQueue();
     },
   });
   const showStop = running && !draft.trim() && attachments.length === 0;
@@ -342,14 +356,11 @@ export function ChatWorkspace({
         {
           <>
             <div className="chat-thread" ref={threadRef}>
-              {(messages.data ?? []).map((message) => (
-                <ChatBubble
-                  key={message.id}
-                  message={message}
-                  queued={queuedIds.has(message.id)}
-                  onCancel={queuedIds.has(message.id) ? () => cancelQueued.mutate(message.id) : undefined}
-                />
-              ))}
+              {(messages.data ?? [])
+                .filter((message) => !queuedIds.has(message.id))
+                .map((message) => (
+                  <ChatBubble key={message.id} message={message} />
+                ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
                   <ToolCalls tools={streamTools} />
@@ -373,6 +384,33 @@ export function ChatWorkspace({
                 <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
               )}
             </div>
+            {/* Pending strip, above the composer: these have not been sent yet, so they do not
+                belong in the transcript. Each one can be steered into the running turn or
+                dropped — the Codex arrangement. */}
+            {(queue.data ?? []).map((message) => (
+              <div className="chat-pending" key={message.id}>
+                <CornerDownRight size={12} className="chat-pending-icon" />
+                <span className="chat-pending-text" title={message.content}>
+                  {message.content}
+                </span>
+                <button
+                  type="button"
+                  className="chat-pending-action"
+                  onClick={() => steerQueued.mutate(message.id)}
+                  title={t("chatSteerHint")}
+                >
+                  <CornerDownRight size={11} /> {t("chatSteerAction")}
+                </button>
+                <button
+                  type="button"
+                  className="chat-pending-action"
+                  onClick={() => cancelQueued.mutate(message.id)}
+                  aria-label={t("chatQueuedCancel")}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
             {attachments.length > 0 && (
               <div className="chat-attachments">
                 {attachments.map((asset) => (
@@ -495,15 +533,7 @@ export function ChatWorkspace({
   );
 }
 
-function ChatBubble({
-  message,
-  queued,
-  onCancel,
-}: {
-  message: AgentMessage;
-  queued?: boolean;
-  onCancel?: () => void;
-}) {
+function ChatBubble({ message }: { message: AgentMessage }) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
   const payload = message.payload as { duration_seconds?: number; tools?: ToolCall[] } | null;
@@ -517,7 +547,7 @@ function ChatBubble({
   };
 
   return (
-    <div className={`chat-bubble ${message.role}${queued ? " queued" : ""}`}>
+    <div className={`chat-bubble ${message.role}`}>
       {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
       {message.role === "assistant" ? (
         message.error ? (
@@ -527,17 +557,6 @@ function ChatBubble({
         )
       ) : (
         <div className="chat-bubble-content">{message.content}</div>
-      )}
-      {queued && (
-        <div className="chat-queued-meta">
-          <Clock size={10} />
-          {t("chatQueuedOne")}
-          {onCancel && (
-            <button type="button" className="chat-queued-cancel" onClick={onCancel}>
-              {t("chatQueuedCancel")}
-            </button>
-          )}
-        </div>
       )}
       {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
       {message.role === "assistant" && (

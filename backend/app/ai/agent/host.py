@@ -155,20 +155,23 @@ class HostError(RuntimeError):
 def post_user_message(db: Session, session: AgentSession, content: str, user: User) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
     if session.status == "running":
-        # A message typed while the agent is working is a correction, not an error. pi holds a
-        # steering queue for exactly this: the message lands after the current assistant
-        # message, so the model sees it before choosing its next step. Refusing it — which is
-        # what this used to do — forces the user to wait out work they already know is wrong.
-        message = AgentMessage(session_id=session.id, role="user", content=content)
+        # Queued, not steered. These are two different things and only one of them should be
+        # the default: queuing waits for the whole reason-act loop to finish and then runs as
+        # its own turn, which is what someone typing a follow-up almost always means. Steering
+        # cuts into the running loop, changing what the agent does next — powerful, and wrong
+        # to apply to every message someone happens to send early. It is opt-in per message
+        # (steer_queued_message) the way Codex offers it as an action on the pending item.
+        # The sender rides along: a queued turn is run later by a background thread, which has
+        # no request and therefore no user to mint a service token for. The session does not
+        # record an owner, so the message has to.
+        message = AgentMessage(
+            session_id=session.id,
+            role="user",
+            content=content,
+            payload={"queued": True, "queued_by": user.id},
+        )
         db.add(message)
         db.commit()
-        if not steer_turn(session.id, content):
-            # The turn ended in the gap between the check and the write. Fall through and run
-            # it as an ordinary turn rather than dropping what the user typed.
-            session.status = "running"
-            db.commit()
-            token = _mint_service_token(db, user)
-            threading.Thread(target=_run_turn_thread, args=(session.id, content, token), daemon=True).start()
         db.refresh(message)
         return message
     message = AgentMessage(session_id=session.id, role="user", content=content)
@@ -308,57 +311,113 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             service_session = db.get(AuthSession, token)
             if service_session is not None:
                 db.delete(service_session)
-            db.commit()
+            try:
+                db.commit()
+            except Exception:  # noqa: BLE001
+                # The session can be deleted while its turn is still running. There is then no
+                # row to mark idle, and letting this propagate kills the thread before
+                # _stream_finish — leaving the UI spinning on a conversation that is gone.
+                logger.warning("Could not finalise session %s; it may have been deleted", session_id)
+                db.rollback()
             _stream_finish(session_id, final_text)
     for callback in list(_turn_callbacks):
         try:
             callback(session_id)
         except Exception:
             logger.exception("Turn callback failed")
+    # Outside the session block on purpose: the drain opens its own session and starts the
+    # next turn, and doing that while this one still held the connection would nest them.
+    _drain_queue(session_id)
+
+
+def _drain_queue(session_id: str) -> None:
+    """Run the next queued message, if any, as its own turn.
+
+    This is what makes the default behaviour a queue rather than a hint: the message waits for
+    the whole reason-act loop to finish and then gets a turn of its own, answered on its own
+    terms instead of merged into someone else's answer.
+    """
+    try:
+        _drain_queue_locked(session_id)
+    except Exception:  # noqa: BLE001 — a background drain must not take the process with it
+        # The session can be deleted while its turn is still finishing, and the queue is then
+        # meaningless. Anything else here is a real fault worth a traceback in the log.
+        logger.exception("Draining the queue for session %s failed", session_id)
+
+
+def _drain_queue_locked(session_id: str) -> None:
+    with SessionLocal() as db:
+        session = db.get(AgentSession, session_id)
+        if session is None or session.status == "running":
+            return
+        pending = _queued_messages(db, session)
+        if not pending:
+            return
+        message = pending[0]
+        owner_id = (message.payload or {}).get("queued_by")
+        owner = db.get(User, owner_id) if owner_id else None
+        _unqueue(db, message)
+        if owner is None:
+            # Without a sender there is no credential to run as. Clearing the flag anyway so it
+            # is not retried on every subsequent turn — a message that silently reappears
+            # forever is worse than one that visibly did not run.
+            logger.warning("queued message %s has no sender; not running it", message.id)
+            db.commit()
+            return
+        session.status = "running"
+        db.commit()
+        token = _mint_service_token(db, owner)
+        content = message.content
+    threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True).start()
 
 
 def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -> list[str]:
-    """Drop one message the user queued into the running turn, and resend what remains.
-
-    The message was already handed to pi, so removing the row is not enough — the model would
-    still act on it. Returns the texts still pending, which is what the caller renders.
-    """
+    """Drop a message that has not run yet."""
     message = db.get(AgentMessage, message_id)
-    if message is None or message.session_id != session.id or message.role != "user":
-        raise HostError("找不到这条排队消息")
-
-    queued = _queued_messages(db, session)
-    if message.id not in {item.id for item in queued}:
+    if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
         raise HostError("这条消息已经开始处理,无法撤回")
-
     db.delete(message)
     db.commit()
-    remaining = [item.content for item in _queued_messages(db, session)]
-    set_turn_queue(session.id, remaining)
-    return remaining
+    return [item.content for item in _queued_messages(db, session)]
 
 
 def _queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:
-    """User messages that arrived after the turn's own prompt and are still waiting.
+    """Messages waiting to be run, oldest first.
 
-    A turn begins with exactly one user message, so anything the user sent after the newest
-    assistant message — beyond that first one — is still queued behind the current answer.
+    Marked explicitly rather than inferred from position: once a message is steered into the
+    running turn it is no longer queued, and no amount of looking at where it sits in the
+    transcript can tell you that.
     """
-    if session.status != "running":
-        return []
-    messages = list(
-        db.scalars(
-            select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)
-        )
+    messages = db.scalars(
+        select(AgentMessage)
+        .where(AgentMessage.session_id == session.id, AgentMessage.role == "user")
+        .order_by(AgentMessage.created_at)
     )
-    trailing: list[AgentMessage] = []
-    for message in reversed(messages):
-        if message.role != "user":
-            break
-        trailing.append(message)
-    trailing.reverse()
-    # The first of the trailing user messages is the one this turn is answering.
-    return trailing[1:]
+    return [message for message in messages if (message.payload or {}).get("queued")]
+
+
+def _unqueue(db: Session, message: AgentMessage) -> None:
+    """Clear the flag. Assigning a new dict matters — mutating the JSON column in place leaves
+    SQLAlchemy seeing no change and the write silently does nothing."""
+    payload = dict(message.payload or {})
+    payload.pop("queued", None)
+    message.payload = payload
+
+
+def steer_queued_message(db: Session, session: AgentSession, message_id: str, user: User) -> bool:
+    """Cut a queued message into the running turn instead of waiting for it.
+
+    Returns False when there was no live turn to cut into — the message stays queued and will
+    run on its own, which is a better outcome than reporting a failure the user cannot act on.
+    """
+    message = db.get(AgentMessage, message_id)
+    if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
+        raise HostError("找不到这条排队消息")
+    if not steer_turn(session.id, message.content):
+        return False
+    _unqueue(db, message)
+    db.commit()
+    return True
 
 
 def queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:

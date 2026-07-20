@@ -2856,6 +2856,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/queue/{message_id}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Steer Queued Message
+         * @description Cut a queued message into the running turn instead of letting it wait.
+         *
+         *     The opt-in half of the pair: queuing is what happens by default, steering is a deliberate
+         *     "change what you are doing now".
+         */
+        post: operations["steer_queued_message_api_agent_sessions__session_id__queue__message_id__steer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}/queue/{message_id}": {
         parameters: {
             query?: never;
@@ -12070,6 +12093,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    steer_queued_message_api_agent_sessions__session_id__queue__message_id__steer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

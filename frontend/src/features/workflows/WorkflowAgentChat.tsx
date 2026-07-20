@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Clock, GripHorizontal, Loader2, Paperclip, Send, Square, X } from "lucide-react";
+import { Bot, CornerDownRight, GripHorizontal, Loader2, Paperclip, Send, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
@@ -159,13 +159,19 @@ export function WorkflowAgentChat({
     refetchInterval: 1500,
   });
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const refreshQueue = () => {
+    void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
+    void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
+  };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
       api(`/api/agent/sessions/${sessionId}/queue/${messageId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
-    },
+    onSuccess: refreshQueue,
+  });
+  const steerQueued = useMutation({
+    mutationFn: (messageId: string) =>
+      api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
+    onSuccess: refreshQueue,
   });
   const showStop = running && !draft.trim() && attachments.length === 0;
   const stopTurn = useMutation({
@@ -303,9 +309,9 @@ export function WorkflowAgentChat({
         )}
         {(messages.data ?? []).map((message) => {
           const payload = message.payload as { tools?: ToolCall[] } | null;
-          const isQueued = queuedIds.has(message.id);
+          if (queuedIds.has(message.id)) return null;
           return (
-            <div key={message.id} className={`wf-agent-msg ${message.role}${isQueued ? " queued" : ""}`}>
+            <div key={message.id} className={`wf-agent-msg ${message.role}`}>
               {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
               {message.role === "assistant" ? (
                 message.error ? (
@@ -315,15 +321,6 @@ export function WorkflowAgentChat({
                 )
               ) : (
                 message.content
-              )}
-              {isQueued && (
-                <div className="chat-queued-meta">
-                  <Clock size={10} />
-                  {t("chatQueuedOne")}
-                  <button type="button" className="chat-queued-cancel" onClick={() => cancelQueued.mutate(message.id)}>
-                    {t("chatQueuedCancel")}
-                  </button>
-                </div>
               )}
             </div>
           );
@@ -343,6 +340,30 @@ export function WorkflowAgentChat({
           </div>
         )}
       </div>
+      {(queue.data ?? []).map((message) => (
+        <div className="chat-pending" key={message.id}>
+          <CornerDownRight size={12} className="chat-pending-icon" />
+          <span className="chat-pending-text" title={message.content}>
+            {message.content}
+          </span>
+          <button
+            type="button"
+            className="chat-pending-action"
+            onClick={() => steerQueued.mutate(message.id)}
+            title={t("chatSteerHint")}
+          >
+            <CornerDownRight size={11} /> {t("chatSteerAction")}
+          </button>
+          <button
+            type="button"
+            className="chat-pending-action"
+            onClick={() => cancelQueued.mutate(message.id)}
+            aria-label={t("chatQueuedCancel")}
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      ))}
       {attachments.length > 0 && (
         <div className="wf-agent-attachments">
           {attachments.map((file, i) => (

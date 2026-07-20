@@ -9171,6 +9171,60 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/queue/{message_id}/steer": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Steer Queued Message",
+        "description": "Cut a queued message into the running turn instead of letting it wait.\n\nThe opt-in half of the pair: queuing is what happens by default, steering is a deliberate\n\"change what you are doing now\".",
+        "operationId": "steer_queued_message_api_agent_sessions__session_id__queue__message_id__steer_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Steer Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Steer Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/queue/{message_id}": {
       "delete": {
         "tags": [
