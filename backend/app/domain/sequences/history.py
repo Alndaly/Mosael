@@ -334,6 +334,13 @@ def _delete_clip_row(db: Session, clip_id: str) -> None:
 
 
 def _restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
+    """Rebuild a clip from a recorded payload.
+
+    Restoring only position used to mean every undo that resurrects a clip — delete, ripple
+    delete, transcript edit, split — silently handed back a clip at 1x, unity gain, unmuted,
+    ungraded and, for a subtitle, blank. Defaults are applied per field so payloads recorded
+    before RESTORABLE_CLIP_FIELDS existed still replay instead of raising.
+    """
     db.add(
         Clip(
             id=payload["clip_id"],
@@ -344,6 +351,12 @@ def _restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
             timeline_start=payload["timeline_start"],
             src_in=payload["src_in"],
             src_out=payload["src_out"],
+            speed=payload.get("speed", 1.0),
+            gain=payload.get("gain", 1.0),
+            muted=payload.get("muted", False),
+            linked_clip_id=payload.get("linked_clip_id"),
+            effects=payload.get("effects") or {},
+            transform=payload.get("transform") or {},
             text_override=payload.get("text_override"),
         )
     )

@@ -130,7 +130,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
         # downstream clips right — but only by the actual OVERLAP, and only when
         # there is a real collision. Shifting everyone by the full clip duration
         # (regardless of overlap) exploded the timeline on any nudge.
-        duration = (clip.src_out - clip.src_in) / (clip.speed or 1)
+        duration = timeline_span(clip)
         moved_end = op.timeline_start + duration
         downstream = list(
             db.scalars(
@@ -204,14 +204,7 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
 
-    payload = {
-        "clip_id": clip.id,
-        "track_id": clip.track_id,
-        "asset_id": clip.asset_id,
-        "timeline_start": clip.timeline_start,
-        "src_in": clip.src_in,
-        "src_out": clip.src_out,
-    }
+    payload = _clip_payload(clip)
     db.delete(clip)
     _record_operation(
         db,
@@ -236,7 +229,7 @@ class RippleDeleteClip:
 def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    gap = clip.src_out - clip.src_in
+    gap = timeline_span(clip)
     anchor = clip.timeline_start
 
     original = _clip_payload(clip)
@@ -594,7 +587,7 @@ class DetachClipAudio:
 
 def _range_free(track: Track, start: float, end: float) -> bool:
     for other in track.clips:
-        other_end = other.timeline_start + (other.src_out - other.src_in) / (other.speed or 1)
+        other_end = other.timeline_start + timeline_span(other)
         if start < other_end - 1e-6 and other.timeline_start < end - 1e-6:
             return False
     return True
@@ -611,7 +604,7 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
         raise SequenceDomainError("只能从视频片段分离音频")
     if not clip.asset_id:
         raise SequenceDomainError("该片段没有音频源")
-    duration = (clip.src_out - clip.src_in) / (clip.speed or 1)
+    duration = timeline_span(clip)
     start, end = clip.timeline_start, clip.timeline_start + duration
 
     audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio"), key=lambda t: t.position)
@@ -859,21 +852,19 @@ def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
         raise SequenceDomainError("Split point must fall inside the clip")
 
     original = _clip_payload(clip)
-    original["gain"], original["speed"], original["effects"] = clip.gain, clip.speed, clip.effects
+    speed = clip.speed or 1.0
     common = {
         "workspace_id": sequence.workspace_id,
         "sequence_id": sequence.id,
         "track_id": clip.track_id,
         "asset_id": clip.asset_id,
-        "gain": clip.gain,
-        "speed": clip.speed,
-        "effects": clip.effects,
+        **_inherited(clip),
     }
     db.delete(clip)
     left = Clip(**common, timeline_start=original["timeline_start"], src_in=original["src_in"], src_out=op.src_time)
     right = Clip(
         **common,
-        timeline_start=original["timeline_start"] + (op.src_time - original["src_in"]),
+        timeline_start=original["timeline_start"] + (op.src_time - original["src_in"]) / speed,
         src_in=op.src_time,
         src_out=original["src_out"],
     )
@@ -947,9 +938,11 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     }
     created: list[dict[str, Any]] = []
 
+    speed = clip.speed or 1.0
+    inherited = _inherited(clip)
     keep_left = start - clip.src_in > MIN_CUT_REMAINDER
     keep_right = clip.src_out - end > MIN_CUT_REMAINDER
-    right_start = clip.timeline_start + (start - clip.src_in) if keep_left else clip.timeline_start
+    right_start = clip.timeline_start + (start - clip.src_in) / speed if keep_left else clip.timeline_start
 
     db.delete(clip)
     if keep_left:
@@ -961,6 +954,7 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
             timeline_start=original["timeline_start"],
             src_in=original["src_in"],
             src_out=start,
+            **inherited,
         )
         db.add(left)
         db.flush()
@@ -974,6 +968,7 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
             timeline_start=right_start,
             src_in=end,
             src_out=original["src_out"],
+            **inherited,
         )
         db.add(right)
         db.flush()
@@ -1040,6 +1035,8 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
 
     original = _clip_payload(clip)
     created: list[dict[str, Any]] = []
+    speed = clip.speed or 1.0
+    inherited = _inherited(clip)
     db.delete(clip)
     timeline_cursor = original["timeline_start"]
     for src_start, src_end in kept:
@@ -1051,11 +1048,12 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
             timeline_start=timeline_cursor,
             src_in=src_start,
             src_out=src_end,
+            **inherited,
         )
         db.add(piece)
         db.flush()
         created.append(_clip_payload(piece))
-        timeline_cursor += src_end - src_start
+        timeline_cursor += (src_end - src_start) / speed
 
     _record_operation(
         db,
@@ -1104,7 +1102,6 @@ def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> 
         raise SequenceDomainError("No valid split point inside the clip")
 
     original = _clip_payload(clip)
-    original["gain"], original["speed"], original["effects"] = clip.gain, clip.speed, clip.effects
     common = {
         "workspace_id": sequence.workspace_id,
         "sequence_id": sequence.id,
@@ -1154,9 +1151,34 @@ def _clip_payload(clip: Clip) -> dict[str, Any]:
         "src_in": clip.src_in,
         "src_out": clip.src_out,
     }
-    if clip.text_override is not None:
-        payload["text_override"] = clip.text_override
+    for field in RESTORABLE_CLIP_FIELDS:
+        payload[field] = getattr(clip, field)
     return payload
+
+
+#: Everything about a clip beyond where it sits. Recorded on every operation that may have to
+#: rebuild the clip later, because none of it can be recovered from anywhere else — undoing a
+#: delete used to hand back a clip at 1x, unity gain, unmuted and ungraded, and a subtitle with
+#: no text at all. Read back with .get() and a default so operations recorded before this
+#: existed still replay.
+RESTORABLE_CLIP_FIELDS = ("speed", "gain", "muted", "linked_clip_id", "effects", "transform", "text_override")
+
+#: What a piece carved out of a clip inherits. A half is still the same footage at the same
+#: speed with the same grade, and half a caption still says what the caption said — rebuilding a
+#: piece from position alone reset all of it. linked_clip_id is excluded: that pairs two specific
+#: rows, and the pieces are new rows.
+INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
+
+
+def _inherited(clip: Clip) -> dict[str, Any]:
+    return {field: getattr(clip, field) for field in INHERITED_CLIP_FIELDS}
+
+
+def timeline_span(clip: Clip) -> float:
+    """How long the clip occupies the TIMELINE. src_out - src_in is a duration in SOURCE time;
+    at 2x that footage takes half as long to play. Confusing the two put split/cut pieces and
+    ripple-shifted followers at the wrong times and let them overwrite their neighbours."""
+    return (clip.src_out - clip.src_in) / (clip.speed or 1.0)
 
 
 def _require_sequence(db: Session, sequence_id: str) -> Sequence:
