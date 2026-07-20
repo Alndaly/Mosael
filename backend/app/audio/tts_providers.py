@@ -285,6 +285,14 @@ def describe_engines() -> list[dict[str, object]]:
             "note": "预置音色,不需要参考音频。",
         },
         {
+            "id": "volcano-podcast",
+            "label": "火山播客(双人对话)",
+            "needs_key": True,
+            "needs_voice_id": False,
+            "voices": [voice for voice, _ in PODCAST_SPEAKERS],
+            "note": "两个发音人对谈;凭据是 App ID + Access Token,不是 API Key。",
+        },
+        {
             "id": VolcanoTTS.id,
             "label": VolcanoTTS.label,
             "needs_key": True,

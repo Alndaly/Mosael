@@ -144,6 +144,20 @@ export function listTtsVoices(engine: string): Promise<TtsVoice[]> {
   return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}`);
 }
 
+/** 火山 podcast: one call produces a whole two-voice dialogue, so it has its own endpoint
+    rather than being a voice on the synthesis one. */
+export function generatePodcast(body: {
+  workspace_id: string;
+  project_id?: string | null;
+  text?: string;
+  topic?: string;
+  mode: "summarize" | "read" | "research";
+  speakers: string[];
+  speed?: number;
+}): Promise<Job> {
+  return api<Job>("/api/tts/podcast", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function listTtsEngines(): Promise<TtsEngineChoice[]> {
   return api<TtsEngineChoice[]>("/api/tts/engines");
 }

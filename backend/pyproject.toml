@@ -18,6 +18,9 @@ dependencies = [
   "pymilvus[milvus_lite]>=2.4.4",  # milvus-lite:内嵌单文件向量库
   "neo4j>=5.23",               # 可选图谱层;未配置连接时不启用
   "fonttools>=4.50",           # 读取上传字体的 name 表,取真实族名供 libass 匹配
+  # 火山播客 TTS 走 WebSocket。uvicorn[standard] 也会装它,但依赖别人的传递依赖
+  # 意味着对方换实现时这里会静默失效,所以显式声明。
+  "websockets>=13.0",
 ]
 
 [dependency-groups]

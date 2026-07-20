@@ -7,6 +7,7 @@ import {
   api,
   deleteVoice,
   listAssets,
+  generatePodcast,
   listTtsEngines,
   listTtsVoices,
   listVoices,
@@ -57,6 +58,11 @@ export function VoicePanel({
     enabled: engine !== "clone",
   });
   const voiceChoices = engineVoices.data ?? [];
+  // The podcast engine is a different shape of request, not another voice: one call produces
+  // a whole dialogue, so it needs two speakers and a mode rather than one voice.
+  const isPodcast = engine === "volcano-podcast";
+  const [podcastMode, setPodcastMode] = React.useState<"summarize" | "read" | "research">("summarize");
+  const [speakerB, setSpeakerB] = React.useState("");
   const chosenVoice = voiceChoices.find((item) => item.value === engineVoice);
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [name, setName] = React.useState("");
@@ -126,7 +132,17 @@ export function VoicePanel({
   });
   const synth = useMutation({
     mutationFn: () =>
-      engine === "clone"
+      isPodcast
+        ? generatePodcast({
+            workspace_id: workspace.id,
+            project_id: project.id,
+            mode: podcastMode,
+            // research discusses a topic; the other two work from the text itself.
+            text: podcastMode === "research" ? "" : text,
+            topic: podcastMode === "research" ? text : "",
+            speakers: [engineVoice || voiceChoices[0]?.value || "", speakerB].filter(Boolean),
+          })
+        : engine === "clone"
         ? synthesizeVoice(activeVoice as string, { text, project_id: project.id })
         : synthesizeWithEngine({
             workspace_id: workspace.id,
@@ -147,10 +163,15 @@ export function VoicePanel({
 
   // Clone needs a voice from the library; a remote engine needs a voice id only when its
   // catalogue is too account-specific to enumerate.
+  const podcastSpeakers = [engineVoice || voiceChoices[0]?.value || "", speakerB || voiceChoices[1]?.value || ""];
   const engineReady =
     engine === "clone"
       ? Boolean(activeVoice)
-      : voiceChoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoice.trim());
+      : isPodcast
+        ? podcastMode === "read"
+          ? Boolean(podcastSpeakers[0])
+          : podcastSpeakers.every(Boolean) && podcastSpeakers[0] !== podcastSpeakers[1]
+        : voiceChoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoice.trim());
 
   // The synth Job runs off-thread; when it finishes, refresh the media pool so
   // the generated audio asset shows up (draggable to the timeline).
@@ -233,6 +254,7 @@ export function VoicePanel({
                 // Voice ids do not carry across engines — "alloy" means nothing to 火山 — and
                 // the new engine's list arrives asynchronously, so clear rather than guess.
                 setEngineVoice("");
+                setSpeakerB("");
               }}
             >
               <SelectTrigger className="voice-synth-select" aria-label={t("voiceEngine")}>
@@ -260,6 +282,32 @@ export function VoicePanel({
                 </SelectContent>
               </Select>
             )}
+            {isPodcast && voiceChoices.length > 0 && (
+              <>
+                <Select value={speakerB || voiceChoices[1]?.value || ""} onValueChange={setSpeakerB}>
+                  <SelectTrigger className="voice-synth-select" aria-label={t("voicePodcastSpeakerB")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {voiceChoices.map((voice) => (
+                      <SelectItem key={voice.value} value={voice.value}>
+                        {voice.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={podcastMode} onValueChange={(value) => setPodcastMode(value as typeof podcastMode)}>
+                  <SelectTrigger className="voice-synth-select" aria-label={t("voicePodcastMode")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="summarize">{t("voicePodcastSummarize")}</SelectItem>
+                    <SelectItem value="read">{t("voicePodcastRead")}</SelectItem>
+                    <SelectItem value="research">{t("voicePodcastResearch")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
             {activeEngine?.needs_voice_id && voiceChoices.length === 0 && (
               <Input
                 className="voice-synth-select"
@@ -272,7 +320,7 @@ export function VoicePanel({
           </div>
           <Textarea
             className="voice-synth-text"
-            placeholder={t("voiceSynthPlaceholder")}
+            placeholder={isPodcast ? t("voicePodcastPlaceholder") : t("voiceSynthPlaceholder")}
             value={text}
             rows={3}
             onChange={(event) => setText(event.target.value)}
@@ -288,6 +336,7 @@ export function VoicePanel({
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
             <p className="voice-hint">{t("voiceNeedEngineVoice")}</p>
           )}
+          {isPodcast && !engineReady && <p className="voice-hint">{t("voicePodcastNeedTwo")}</p>}
           {engine !== "clone" && activeEngine?.note && <p className="voice-hint">{activeEngine.note}</p>}
         </div>
 

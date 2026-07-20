@@ -383,3 +383,120 @@ def _synthesize_remote(
     job.result = {"asset_id": asset.id, "engine": engine}
     db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
     db.commit()
+
+
+def start_podcast(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    text: str = "",
+    topic: str = "",
+    mode: str = "summarize",
+    speakers: list[str] | None = None,
+    speed: float = 1.0,
+) -> Job:
+    """Queue a 火山 podcast job: two voices reading or discussing the given material.
+
+    Separate from start_synthesis because it is a different product with a different
+    credential and a different shape of request — one call produces a whole dialogue, not one
+    utterance in a chosen voice.
+    """
+    from app.audio.podcast import Action
+
+    actions = {"summarize": Action.SUMMARIZE, "read": Action.READ, "research": Action.RESEARCH}
+    if mode not in actions:
+        raise VoiceError(f"未知的播客模式:{mode}")
+    if not workspace_id:
+        raise VoiceError("播客需要指定工作区")
+
+    job = create_job(
+        db,
+        workspace_id=workspace_id,
+        kind="podcast",
+        payload={
+            "project_id": project_id,
+            "mode": mode,
+            "speakers": speakers or [],
+            "text": text[:500],
+            "topic": topic,
+        },
+        message="生成播客中",
+    )
+    db.commit()
+    thread = threading.Thread(
+        target=lambda: run_job_guarded(
+            job.id,
+            lambda: _run_podcast_body(
+                job.id, workspace_id, project_id, text, topic, actions[mode], speakers or [], speed
+            ),
+            what="播客",
+        ),
+        daemon=True,
+    )
+    thread.start()
+    return job
+
+
+def _run_podcast_body(
+    job_id: str,
+    workspace_id: str,
+    project_id: str | None,
+    text: str,
+    topic: str,
+    action: int,
+    speakers: list[str],
+    speed: float,
+) -> None:
+    from app.audio.podcast import synthesize_podcast
+    from app.domain.providers import profile_extra, resolve_profile, resolve_secret
+
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if job is None:
+            return
+        job.status = "running"
+        job.progress = 0.2
+        db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
+        db.commit()
+
+        profile = resolve_profile(db, "volcano-podcast")
+        # The token lives in api_key and the appid in extra — the podcast socket takes both,
+        # and neither is the v3 speech API Key.
+        token = (profile.api_key if profile else None) or resolve_secret(db, "volcano-podcast") or ""
+        appid = profile_extra(db, "volcano-podcast", "appid")
+
+        with tempfile.TemporaryDirectory(prefix="mibu-podcast-") as tmp:
+            out = Path(tmp) / "podcast.mp3"
+            result = synthesize_podcast(
+                appid,
+                token,
+                action=action,
+                input_text=text,
+                prompt_text=topic,
+                speakers=speakers,
+                speed=speed,
+                out_path=out,
+            )
+            job = db.get(Job, job_id)
+            job.progress = 0.85
+            db.commit()
+            asset = register_file_asset(
+                db,
+                workspace_id=workspace_id,
+                project_id=project_id,
+                source_path=out,
+                name="播客对话",
+                source="podcast",
+            )
+
+        job = db.get(Job, job_id)
+        job.status = "succeeded"
+        job.progress = 1.0
+        job.message = "播客已生成"
+        # The dialogue text is returned without timings, and inventing them from character
+        # counts would produce subtitles that drift audibly. Callers that need a timed
+        # transcript can run the normal 转写 over the generated audio, which measures them.
+        job.result = {"asset_id": asset.id, "texts": result.texts}
+        db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+        db.commit()

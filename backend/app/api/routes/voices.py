@@ -12,6 +12,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     EngineSynthesizeRequest,
     TtsEngineChoiceOut,
+    PodcastRequest,
     TtsVoiceOut,
     JobOut,
     SynthesizeRequest,
@@ -128,6 +129,25 @@ def list_tts_engines(user: CurrentUser) -> list[dict]:
     from app.audio.tts_providers import describe_engines
 
     return describe_engines()
+
+
+@router.post("/tts/podcast", response_model=JobOut)
+def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> Job:
+    """Queue a podcast. Same permission as any other AI spend in the workspace."""
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        return voices.start_podcast(
+            db,
+            workspace_id=body.workspace_id,
+            project_id=body.project_id,
+            text=body.text,
+            topic=body.topic,
+            mode=body.mode,
+            speakers=body.speakers,
+            speed=body.speed,
+        )
+    except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/tts/voices", response_model=list[TtsVoiceOut])

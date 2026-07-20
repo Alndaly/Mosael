@@ -542,6 +542,19 @@ class EngineSynthesizeRequest(BaseModel):
     project_id: str | None = None
 
 
+class PodcastRequest(BaseModel):
+    """A 火山 podcast: two voices reading or discussing the given material."""
+
+    workspace_id: str
+    project_id: str | None = None
+    #: The material. summarize/read use this; research uses `topic` instead.
+    text: str = Field(default="", max_length=20000)
+    topic: str = Field(default="", max_length=2000)
+    mode: str = Field(default="summarize", pattern="^(summarize|read|research)$")
+    speakers: list[str] = Field(default_factory=list, max_length=2)
+    speed: float = Field(default=1.0, ge=0.25, le=3.0)
+
+
 class TtsVoiceOut(BaseModel):
     """One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
     voice's family, and only the listing knows it — inferring it from the id is guesswork that

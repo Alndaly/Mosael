@@ -732,6 +732,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/podcast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Podcast
+         * @description Queue a podcast. Same permission as any other AI spend in the workspace.
+         */
+        post: operations["generate_podcast_api_tts_podcast_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/voices": {
         parameters: {
             query?: never;
@@ -4197,6 +4217,38 @@ export interface components {
             /** Skills */
             skills?: unknown[];
         };
+        /**
+         * PodcastRequest
+         * @description A 火山 podcast: two voices reading or discussing the given material.
+         */
+        PodcastRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * Topic
+             * @default
+             */
+            topic: string;
+            /**
+             * Mode
+             * @default summarize
+             */
+            mode: string;
+            /** Speakers */
+            speakers?: string[];
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Workspace Id */
@@ -6994,6 +7046,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TtsEngineChoiceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_podcast_api_tts_podcast_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PodcastRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

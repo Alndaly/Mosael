@@ -2123,6 +2123,48 @@
         }
       }
     },
+    "/api/tts/podcast": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Generate Podcast",
+        "description": "Queue a podcast. Same permission as any other AI spend in the workspace.",
+        "operationId": "generate_podcast_api_tts_podcast_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PodcastRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tts/voices": {
       "get": {
         "tags": [
@@ -12575,6 +12617,64 @@
           "tool_name"
         ],
         "title": "PluginToolOut"
+      },
+      "PodcastRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Text",
+            "default": ""
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Topic",
+            "default": ""
+          },
+          "mode": {
+            "type": "string",
+            "pattern": "^(summarize|read|research)$",
+            "title": "Mode",
+            "default": "summarize"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Speakers"
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.25,
+            "title": "Speed",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "PodcastRequest",
+        "description": "A 火山 podcast: two voices reading or discussing the given material."
       },
       "ProjectCreate": {
         "properties": {
