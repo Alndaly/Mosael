@@ -151,45 +151,113 @@ def reference_path(voice: Voice) -> Path:
     return resolve_key(voice.reference_key)
 
 
-def start_synthesis(db: Session, *, voice_id: str, text: str, project_id: str | None) -> Job:
-    voice = db.get(Voice, voice_id)
-    if voice is None:
-        raise VoiceError("音色不存在")
+def start_synthesis(
+    db: Session,
+    *,
+    text: str,
+    project_id: str | None,
+    voice_id: str | None = None,
+    workspace_id: str = "",
+    engine: str = "clone",
+    engine_voice: str = "",
+    speed: float = 1.0,
+) -> Job:
+    """Queue a synthesis job.
+
+    The clone engine needs a Voice row — it works from that reference clip. A remote engine does
+    not: it speaks in a stock voice, so it needs a workspace to own the result and an engine
+    voice id, and requiring a Voice there would mean inventing rows for voices we do not host.
+    """
     if not text.strip():
         raise VoiceError("合成文本不能为空")
+    voice = None
+    if engine == "clone":
+        voice = db.get(Voice, voice_id or "")
+        if voice is None:
+            raise VoiceError("音色不存在")
+        workspace_id = voice.workspace_id
+        label = voice.name
+    else:
+        if not workspace_id:
+            raise VoiceError("需要指定工作区")
+        label = engine_voice or engine
     job = create_job(
         db,
-        workspace_id=voice.workspace_id,
+        workspace_id=workspace_id,
         kind="tts",
-        payload={"voice_id": voice_id, "project_id": project_id, "text": text[:200]},
-        message=f"合成《{voice.name}》配音中",
+        payload={
+            "voice_id": voice_id,
+            "project_id": project_id,
+            "text": text[:200],
+            "engine": engine,
+            "engine_voice": engine_voice,
+        },
+        message=f"合成《{label}》配音中",
     )
     db.commit()
-    thread = threading.Thread(target=_run_synthesis, args=(job.id, voice_id, text, project_id), daemon=True)
+    thread = threading.Thread(
+        target=_run_synthesis,
+        args=(job.id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id),
+        daemon=True,
+    )
     thread.start()
     return job
 
 
-def _run_synthesis(job_id: str, voice_id: str, text: str, project_id: str | None) -> None:
-    """Take an admission slot before touching the database — see run_job_guarded."""
-    with TTS_SLOTS:
-        run_job_guarded(job_id, lambda: _run_synthesis_body(job_id, voice_id, text, project_id), what="配音")
+def _run_synthesis(
+    job_id: str,
+    voice_id: str | None,
+    text: str,
+    project_id: str | None,
+    engine: str = "clone",
+    engine_voice: str = "",
+    speed: float = 1.0,
+    workspace_id: str = "",
+) -> None:
+    """Take an admission slot before touching the database — see run_job_guarded.
+
+    Only the local clone engine takes the slot. A remote engine is an HTTP request that holds no
+    model in memory, so queueing it behind the single local slot would serialise work that has
+    no reason to be serial.
+    """
+    args = (job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id)
+    if engine == "clone":
+        with TTS_SLOTS:
+            run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
+    else:
+        run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
 
 
-def _run_synthesis_body(job_id: str, voice_id: str, text: str, project_id: str | None) -> None:
+def _run_synthesis_body(
+    job_id: str,
+    voice_id: str | None,
+    text: str,
+    project_id: str | None,
+    engine: str = "clone",
+    engine_voice: str = "",
+    speed: float = 1.0,
+    workspace_id: str = "",
+) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
         try:
-            voice = db.get(Voice, voice_id)
-            if voice is None:
+            voice = db.get(Voice, voice_id) if engine == "clone" else None
+            if engine == "clone" and voice is None:
                 raise VoiceError("音色不存在")
             job.status = "running"
             job.progress = 0.2
-            job.message = f"合成《{voice.name}》配音中"
+            job.message = f"合成《{voice.name if voice else (engine_voice or engine)}》配音中"
             db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
             db.commit()
+
+            if engine != "clone":
+                _synthesize_remote(
+                    db, job, engine, engine_voice, text, speed,
+                    workspace_id=workspace_id or job.workspace_id, project_id=project_id,
+                )
+                return
 
             ref = reference_path(voice)
             if not ref.is_file():
@@ -258,3 +326,38 @@ __all__ = [
     "reference_path",
     "start_synthesis",
 ]
+
+
+def _synthesize_remote(
+    db, job, engine: str, engine_voice: str, text: str, speed: float, *, workspace_id: str, project_id: str | None
+) -> None:
+    """Synthesise through a remote engine and register the result, mirroring the clone path.
+
+    No reference clip and no local model, so none of the worker-subprocess machinery applies —
+    but the outcome has to look identical to the caller: an audio asset on the job's result.
+    """
+    from app.audio.tts_providers import SpeechRequest, build_remote_provider
+    from app.domain.providers import resolve_secret
+
+    api_key = resolve_secret(db, engine) or ""
+    provider = build_remote_provider(engine, api_key=api_key, voice=engine_voice)
+    with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
+        out = Path(tmp) / ("speech.mp3" if engine == "volcano" else "speech.wav")
+        provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
+        job.progress = 0.85
+        db.commit()
+        asset = register_file_asset(
+            db,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            source_path=out,
+            name=f"{engine_voice or provider.label} · 配音",
+            source="tts",
+        )
+    job = db.get(Job, job.id)
+    job.status = "succeeded"
+    job.progress = 1.0
+    job.message = "配音已生成"
+    job.result = {"asset_id": asset.id, "engine": engine}
+    db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+    db.commit()

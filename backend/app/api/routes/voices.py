@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    EngineSynthesizeRequest,
+    TtsEngineChoiceOut,
     JobOut,
     SynthesizeRequest,
     TtsConfigOut,
@@ -18,7 +20,7 @@ from app.api.schemas import (
     VoiceOut,
 )
 from app.audio import tts_models, voices
-from app.core.permissions import ensure_instance_admin, ensure_workspace_access
+from app.core.permissions import ensure_workspace_perm, ensure_instance_admin, ensure_workspace_access
 from app.domain import tts_config
 
 router = APIRouter(tags=["voices"])
@@ -113,6 +115,33 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
     ensure_workspace_access(db, user, voice.workspace_id)
     try:
         return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id)
+    except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
+def list_tts_engines(user: CurrentUser) -> list[dict]:
+    """Engines the配音 UI can offer, and what each one needs from the user."""
+    from app.audio.tts_providers import describe_engines
+
+    return describe_engines()
+
+
+@router.post("/tts/synthesize", response_model=JobOut)
+def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: CurrentUser):
+    """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
+    no Voice row to hang it off — the engine supplies the voice."""
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        return voices.start_synthesis(
+            db,
+            text=body.text,
+            project_id=body.project_id,
+            workspace_id=body.workspace_id,
+            engine=body.engine,
+            engine_voice=body.engine_voice,
+            speed=body.speed,
+        )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

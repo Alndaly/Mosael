@@ -512,6 +512,30 @@ class SynthesizeRequest(BaseModel):
     project_id: str | None = None
 
 
+class EngineSynthesizeRequest(BaseModel):
+    """Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."""
+
+    workspace_id: str
+    text: str = Field(min_length=1, max_length=2000)
+    engine: str = Field(min_length=1, max_length=40)
+    engine_voice: str = Field(default="", max_length=120)
+    speed: float = Field(default=1.0, ge=0.25, le=3.0)
+    project_id: str | None = None
+
+
+class TtsEngineChoiceOut(BaseModel):
+    """An engine the配音 UI can offer. Distinct from TtsEngineOut, which describes a downloadable
+    LOCAL model — same word, different thing, and defining both as TtsEngineOut silently
+    shadowed the older one and broke /tts/models' response validation."""
+
+    id: str
+    label: str
+    needs_key: bool
+    needs_voice_id: bool
+    voices: list[str] = []
+    note: str = ""
+
+
 class VoiceFromSpeakerRequest(BaseModel):
     asset_id: str
     speaker: str | None = None
