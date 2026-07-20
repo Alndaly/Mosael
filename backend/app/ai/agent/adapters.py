@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import os
 import shutil
 import subprocess
@@ -56,6 +57,7 @@ def mibu_mcp_config(api_base: str, token: str) -> dict:
 def run_turn(
     adapter: str,
     *,
+    session_key: str = "",
     prompt: str,
     system_prompt: str,
     api_base: str,
@@ -72,9 +74,81 @@ def run_turn(
         return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
     if adapter == "pi":
         return _run_pi(
-            prompt, system_prompt, api_base, token, workspace_id, provider, model, adapter_state, on_delta, on_tool
+            prompt,
+            system_prompt,
+            api_base,
+            token,
+            workspace_id,
+            provider,
+            model,
+            adapter_state,
+            on_delta,
+            on_tool,
+            session_id=session_key,
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
+
+
+class _LiveTurn:
+    """The stdin of a sidecar whose turn is still running.
+
+    Steering only exists if a running turn can still be written to. The sidecar used to have
+    its stdin closed the moment the request was sent, which made the channel one-way for the
+    entire turn — the only window in which a correction is worth anything.
+    """
+
+    def __init__(self, stdin, turn_id: str) -> None:
+        self._stdin = stdin
+        self._lock = threading.Lock()
+        self.turn_id = turn_id
+        self.closed = False
+
+    def send(self, frame: dict) -> bool:
+        """Write one frame. False when the turn already ended, so callers can fall back."""
+        with self._lock:
+            if self.closed:
+                return False
+            try:
+                self._stdin.write(json.dumps(frame) + "\n")
+                self._stdin.flush()
+                return True
+            except (BrokenPipeError, ValueError):
+                # The turn finished between the lookup and this write. Not an error: the
+                # caller sends the message as an ordinary next turn instead.
+                self.closed = True
+                return False
+
+    def close(self) -> None:
+        with self._lock:
+            self.closed = True
+            try:
+                self._stdin.close()
+            except Exception:  # noqa: BLE001 — the process may already be gone
+                pass
+
+
+#: Running turns by session id. An API request arrives on a different thread from the one
+#: awaiting the turn, so this is how the two meet.
+_LIVE: dict[str, _LiveTurn] = {}
+_LIVE_LOCK = threading.Lock()
+
+
+def steer_turn(session_id: str, prompt: str, mode: str = "steer") -> bool:
+    """Inject a message into the running turn. False when there is no turn to inject into."""
+    with _LIVE_LOCK:
+        live = _LIVE.get(session_id)
+    if live is None:
+        return False
+    return live.send({"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode})
+
+
+def abort_turn(session_id: str) -> bool:
+    """Stop the running turn, keeping whatever it produced. False when nothing is running."""
+    with _LIVE_LOCK:
+        live = _LIVE.get(session_id)
+    if live is None:
+        return False
+    return live.send({"type": "abort", "turnId": live.turn_id})
 
 
 def _pi_sidecar_command() -> tuple[str, str]:
@@ -95,6 +169,7 @@ def _run_pi(
     adapter_state: object | None,
     on_delta: Callable[[str], None] | None,
     on_tool: Callable[[dict], None] | None = None,
+    session_id: str = "",
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Mibu's REST with the
@@ -133,12 +208,18 @@ def _run_pi(
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")
     process.stdin.flush()
-    process.stdin.close()
+    # stdin deliberately stays open for the life of the turn — see _LiveTurn. Closing it here
+    # is what made steering impossible before.
+    live = _LiveTurn(process.stdin, frame["turnId"])
+    if session_id:
+        with _LIVE_LOCK:
+            _LIVE[session_id] = live
 
     child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
     result_text: str | None = None
     result_state: object | None = None
     saw_tool = False
+    aborted = False
     for line in child.lines():
         try:
             event = json.loads(line)
@@ -161,6 +242,13 @@ def _run_pi(
             if not saw_tool:
                 raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
             raise AdapterError(detail)
+        elif kind == "aborted":
+            aborted = True
+    live.close()
+    if session_id:
+        with _LIVE_LOCK:
+            if _LIVE.get(session_id) is live:
+                del _LIVE[session_id]
     stderr_tail = _tail(child.finish())
     if child.timed_out:
         raise AdapterError(
@@ -168,6 +256,10 @@ def _run_pi(
         )
     if result_text is None:
         raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
+    if aborted:
+        # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
+        # partial text is real output they watched arrive.
+        return TurnResult(text=result_text, adapter_session_id=None, adapter_state=result_state)
     if not result_text.strip() and not saw_tool:
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that

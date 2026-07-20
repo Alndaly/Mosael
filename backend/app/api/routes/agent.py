@@ -77,6 +77,18 @@ def post_agent_message(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.post("/agent/sessions/{session_id}/stop")
+def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """Stop the running turn, keeping the partial answer.
+
+    Not an error when nothing is running: the user pressing stop just as a turn finishes is
+    a race they cannot see, and an error toast for it would be noise.
+    """
+    session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    return {"stopped": host.stop_turn(db, session)}
+
+
 @router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
 def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
     session = _require_session(db, user, session_id)

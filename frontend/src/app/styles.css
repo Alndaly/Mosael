@@ -9303,3 +9303,8 @@
 .code-editor .cm-scroller {
   font-family: var(--font-mono);
 }
+
+/* 停止按钮:与发送并排,弱化处理——它是逃生口,不是主操作。 */
+.chat-stop {
+  flex: 0 0 auto;
+}

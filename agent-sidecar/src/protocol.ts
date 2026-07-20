@@ -26,7 +26,28 @@ export interface RunTurnRequest {
   sessionState?: unknown;
 }
 
-export type Request = RunTurnRequest;
+/**
+ * Inject a message into a turn that is already running.
+ *
+ * "steer" lands after the current assistant message completes, which is what makes it a
+ * correction rather than a second conversation: the model sees it before deciding its next
+ * step. "follow_up" waits until the agent would otherwise stop, which is a queued next task.
+ * Both are pi's own queues — see Agent.steer / Agent.followUp.
+ */
+export interface SteerRequest {
+  type: "steer";
+  turnId: string;
+  prompt: string;
+  mode?: "steer" | "follow_up";
+}
+
+/** Stop a running turn. Whatever it produced so far is kept. */
+export interface AbortRequest {
+  type: "abort";
+  turnId: string;
+}
+
+export type Request = RunTurnRequest | SteerRequest | AbortRequest;
 
 /** Sidecar -> backend events. */
 export type Event =
@@ -35,6 +56,8 @@ export type Event =
   | { type: "tool_start"; turnId: string; toolCallId: string; name: string; args: unknown }
   | { type: "tool_end"; turnId: string; toolCallId: string; result: unknown; isError: boolean }
   | { type: "turn_done"; turnId: string; text: string; sessionState: unknown }
+  | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
+  | { type: "aborted"; turnId: string }
   | { type: "error"; turnId: string | null; message: string };
 
 export function send(event: Event): void {

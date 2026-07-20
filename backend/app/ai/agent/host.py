@@ -9,7 +9,7 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.agent.adapters import AdapterError, TurnResult, run_turn
+from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, steer_turn
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
@@ -155,7 +155,22 @@ class HostError(RuntimeError):
 def post_user_message(db: Session, session: AgentSession, content: str, user: User) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
     if session.status == "running":
-        raise HostError("Session already has a turn in flight")
+        # A message typed while the agent is working is a correction, not an error. pi holds a
+        # steering queue for exactly this: the message lands after the current assistant
+        # message, so the model sees it before choosing its next step. Refusing it — which is
+        # what this used to do — forces the user to wait out work they already know is wrong.
+        message = AgentMessage(session_id=session.id, role="user", content=content)
+        db.add(message)
+        db.commit()
+        if not steer_turn(session.id, content):
+            # The turn ended in the gap between the check and the write. Fall through and run
+            # it as an ordinary turn rather than dropping what the user typed.
+            session.status = "running"
+            db.commit()
+            token = _mint_service_token(db, user)
+            threading.Thread(target=_run_turn_thread, args=(session.id, content, token), daemon=True).start()
+        db.refresh(message)
+        return message
     message = AgentMessage(session_id=session.id, role="user", content=content)
     session.status = "running"
     if session.title == "新对话" and content.strip():
@@ -240,6 +255,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 model=agent_model,
                 workspace_id=session.workspace_id,
                 adapter_state=session.adapter_state,
+                session_key=session.id,
             )
             final_text = result.text
             if result.adapter_state is not None:
@@ -299,3 +315,14 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             callback(session_id)
         except Exception:
             logger.exception("Turn callback failed")
+
+
+def stop_turn(db: Session, session: AgentSession) -> bool:
+    """Stop the running turn. Whatever it already produced is kept and persisted.
+
+    Returns False when nothing was running — a stop button the user pressed a moment too late
+    is not an error, and reporting one would be noise.
+    """
+    if session.status != "running":
+        return False
+    return abort_turn(session.id)

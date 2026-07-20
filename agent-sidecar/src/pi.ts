@@ -65,6 +65,8 @@ export interface PiTurnInput {
   tools: AgentTool[];
   /** pi 上轮序列化的消息数组(多轮记忆);首轮为空。 */
   sessionState?: unknown;
+  /** Called with the Agent once built, so the caller can steer or abort the running turn. */
+  onAgentReady?: (agent: Agent) => void;
 }
 
 export interface PiTurnResult {
@@ -77,6 +79,8 @@ export interface PiTurnResult {
    * 上游只会看到一个空的 turn_done,配置错误就变成了"什么都没发生"。
    */
   errorMessage?: string;
+  /** True when the run was stopped by abort() rather than finishing on its own. */
+  aborted?: boolean;
 }
 
 export interface PiTurnHandlers {
@@ -95,6 +99,13 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     // 每次 LLM 调用前压缩上下文;state.messages 保留全量(多轮记忆不受影响)
     transformContext: async (messages) => compactContext(messages),
   });
+  // A steer lands after the current assistant message rather than interrupting it, so
+  // draining the whole queue at once is right: two corrections typed in quick succession are
+  // one intent, not two turns.
+  agent.steeringMode = "all";
+  agent.followUpMode = "one-at-a-time";
+  input.onAgentReady?.(agent);
+
   let full = "";
   agent.subscribe((event) => {
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
@@ -107,7 +118,15 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
       handlers.onToolEnd(event.toolCallId, event.result, event.isError);
     }
   });
-  await agent.prompt(input.prompt);
+  let aborted = false;
+  try {
+    await agent.prompt(input.prompt);
+  } catch (err) {
+    // An aborted run rejects. The text streamed so far is real output the user watched
+    // arrive, so it is returned rather than discarded.
+    if (agent.signal?.aborted || String(err).includes("abort")) aborted = true;
+    else throw err;
+  }
   const messages = agent.state.messages;
   // 最近一条标记为 error 的消息即本轮的失败原因(如 base_url 不是 OpenAI 兼容端点、
   // 模型不存在、鉴权失败)。
@@ -116,5 +135,5 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     .find((message) => (message as { stopReason?: string }).stopReason === "error") as
     | { errorMessage?: string }
     | undefined;
-  return { text: full, sessionState: messages, errorMessage: failed?.errorMessage };
+  return { text: full, sessionState: messages, errorMessage: aborted ? undefined : failed?.errorMessage, aborted };
 }

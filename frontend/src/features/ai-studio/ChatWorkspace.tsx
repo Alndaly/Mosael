@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -134,6 +134,12 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  const stopTurn = useMutation({
+    mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
+    // Nothing to report either way: a successful stop is visible as the turn ending, and
+    // stopping a turn that just finished is a race the user cannot see.
+    meta: { silentError: true },
+  });
 
   // 运行中的实时耗时:running 置真时记起点,每秒走字。
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
@@ -244,7 +250,9 @@ export function ChatWorkspace({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if ((!draft.trim() && attachments.length === 0) || running || sendMessage.isPending) return;
+    // `running` is deliberately NOT a guard any more: a message typed while the agent works
+    // is a correction, and the backend injects it into the running turn (pi steering queue).
+    if ((!draft.trim() && attachments.length === 0) || sendMessage.isPending) return;
     let content = draft.trim();
     for (const asset of attachments) {
       content += `\n[附件 asset_id=${asset.id} 名称=${asset.name} 类型=${asset.kind}]`;
@@ -430,12 +438,24 @@ export function ChatWorkspace({
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                 </div>
+                {running && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="chat-stop"
+                    aria-label={t("chatStop")}
+                    onClick={() => stopTurn.mutate()}
+                  >
+                    <Square size={13} />
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   size="icon"
                   className="chat-send"
-                  aria-label={t("chatSend")}
-                  disabled={(!draft.trim() && attachments.length === 0) || running || sendMessage.isPending}
+                  aria-label={running ? t("chatSteer") : t("chatSend")}
+                  disabled={(!draft.trim() && attachments.length === 0) || sendMessage.isPending}
                 >
                   <Send size={15} />
                 </Button>
