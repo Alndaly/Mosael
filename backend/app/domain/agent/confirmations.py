@@ -171,10 +171,18 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
         return f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
     if tool == "edit_workflow":
-        kinds = [op.get("kind", "?") for op in payload.get("operations", []) if isinstance(op, dict)]
-        return f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+        ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
+        kinds = [op.get("kind", "?") for op in ops]
+        # A `code` node runs arbitrary local Python when the workflow is later run, so say so
+        # here rather than leaving it to be noticed in the payload.
+        adds_code = any(
+            op.get("kind") == "add_node" and str(op.get("node_type") or op.get("type")) == "code" for op in ops
+        )
+        head = f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
+        return head + ("  ⚠️ 含代码节点(运行时执行本地 Python)" if adds_code else "")
     if tool == "run_workflow":
-        return "运行工作流(可能产生 AI/渲染消耗)"
+        name = str(payload.get("name") or payload.get("workflow_id") or "")
+        return f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
     prompt = str(payload.get("prompt", ""))[:80]
     return f"生成{'图片' if tool == 'generate_image' else '视频'}: {prompt}"
 

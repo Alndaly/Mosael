@@ -3957,6 +3957,27 @@
   gap: 2px;
 }
 
+/* The agent's full request. Bounded so a large workflow graph scrolls inside the card rather
+   than pushing the approve/reject buttons out of view — the decision must stay reachable. */
+.confirm-payload > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.confirm-payload > pre {
+  margin-top: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .confirm-actions {
   display: flex;
   gap: 6px;

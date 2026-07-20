@@ -49,16 +49,16 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
             <PermissionBadge permission={item.permission} />
           </div>
           <p className="confirm-summary">{item.summary}</p>
-          {item.tool === "edit_timeline" && (
-            <ul className="confirm-ops">
-              {((item.payload.operations as Array<Record<string, unknown>>) ?? []).slice(0, 5).map((operation, index) => (
-                <li key={index} className="timecode">
-                  {String(operation.kind)}
-                  {operation.timeline_start != null ? ` @ ${Number(operation.timeline_start).toFixed(2)}s` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* The whole payload, expanded. This card is the only thing standing between an
+              agent-proposed mutation and it happening, and the summary alone was not enough to
+              consent to: "1 个工作流编辑: add_node" hides a code node whose body is arbitrary
+              local Python, which a later run executes unsandboxed. Collapsed-by-default would
+              keep the same problem, since nobody expands. Bounded height so a large graph
+              scrolls instead of pushing the buttons off screen. */}
+          <details className="confirm-payload" open>
+            <summary>{t("confirmPayload")}</summary>
+            <pre>{JSON.stringify(item.payload, null, 2)}</pre>
+          </details>
           <div className="confirm-actions">
             <Button
               size="sm"
