@@ -279,12 +279,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const addTrackMutation = useMutation({
     mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!.id, kind),
-    onSuccess: refreshSequences,
+    onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   const moveTrackMutation = useMutation({
     mutationFn: ({ trackId, direction }: { trackId: string; direction: "up" | "down" }) =>
       moveTrack(sequence!.id, trackId, direction),
     onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   // Drag a clip above the top video track → create a new video layer and drop it there.
   const moveClipToNewLayerMutation = useMutation({
@@ -378,7 +380,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const removeTrackMutation = useMutation({
     mutationFn: (trackId: string) => removeTrack(sequence!.id, trackId),
-    onSuccess: refreshSequences,
+    onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   const setSpeedMutation = useMutation({
     mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!.id, clipId, speed),
@@ -464,9 +467,18 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: () => void refreshSequences(),
   });
   const trackStateMutation = useMutation({
-    mutationFn: ({ trackId, body }: { trackId: string; body: { muted?: boolean; locked?: boolean } }) =>
-      setTrackState(sequence!.id, trackId, body),
-    onSuccess: refreshSequences,
+    mutationFn: ({
+      trackId,
+      body,
+    }: {
+      trackId: string;
+      body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean };
+    }) => setTrackState(sequence!.id, trackId, body),
+    // Write the returned sequence straight into the cache. An invalidate/refetch leaves a window
+    // where the rail still shows the pre-change track, and a click landing in that window targets
+    // a track the server has already changed or removed — which then fails as "Track not found".
+    onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   const undoMutation = useMutation({
     mutationFn: () => undoSequence(sequence!.id),
