@@ -4952,6 +4952,25 @@
   color: var(--destructive);
   background: color-mix(in oklab, var(--destructive) 10%, transparent);
 }
+
+/* 收起检查器:和删除同样式尺寸,但 hover 是中性色 —— 关闭不是破坏性操作。 */
+.inspector-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 100ms, background 100ms;
+}
+
+.inspector-close:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
 .inspector-close:hover {
   /* 抽屉的关闭按钮不是危险操作,悬停用中性色 */
   color: var(--foreground);

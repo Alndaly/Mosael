@@ -56,6 +56,7 @@ import {
   Undo2,
   Sparkles,
   Trash2,
+  X,
   Type,
   Wand2,
   Workflow as WorkflowIcon,
@@ -1148,6 +1149,7 @@ function WorkflowEditor({
                     setSelectedNodeId(null);
                   }
             }
+            onClose={() => setSelectedNodeId(null)}
           />
         )}
       </div>
@@ -1482,6 +1484,7 @@ function LoopBodyEditor({
               });
               setSelectedId(null);
             }}
+            onClose={() => setSelectedId(null)}
           />
         )}
       </div>
@@ -1498,6 +1501,7 @@ function NodeInspector({
   onChange,
   onApplyGraph,
   onDelete,
+  onClose,
 }: {
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
@@ -1507,6 +1511,7 @@ function NodeInspector({
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
   onApplyGraph: (next: WorkflowGraph) => void;
   onDelete?: () => void;
+  onClose?: () => void;
 }) {
   const t = useI18n();
   const config = (node.config ?? {}) as Record<string, unknown>;
@@ -1599,6 +1604,19 @@ function NodeInspector({
     }
     return null;
   })();
+
+  // Esc 收起检查器 —— 输入框/代码编辑器里不劫持(那里 Esc 另有用途)。
+  React.useEffect(() => {
+    if (!onClose) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
 
@@ -1739,6 +1757,11 @@ function NodeInspector({
         {onDelete && (
           <button type="button" className="inspector-delete" aria-label={t("delete")} onClick={onDelete}>
             <Trash2 size={13} />
+          </button>
+        )}
+        {onClose && (
+          <button type="button" className="inspector-close" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
+            <X size={14} />
           </button>
         )}
       </div>
