@@ -5,6 +5,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.child_process import ChildProcess
+
 from app.core.config import settings
 from app.media.probe import probe_has_audio_many
 from app.media.render_plan import FILTER_PRESETS, RenderPlan, Transform
@@ -456,16 +458,19 @@ def execute_render(
         text=True,
     )
     total_us = max(plan.timeline_duration, 0.001) * 1_000_000
-    assert process.stdout is not None
-    for line in process.stdout:
+    # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
+    # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
+    # blocks writing it, stops emitting progress, and both sides wait forever with the job
+    # stuck in `running` and no way out but killing the backend.
+    child = ChildProcess(process)
+    for line in child.raw_lines():
         if on_progress and line.startswith("out_time_us="):
             try:
                 on_progress(min(1.0, int(line.split("=", 1)[1]) / total_us))
             except ValueError:
                 pass
-    process.wait()
+    stderr_tail = child.finish()
     if process.returncode != 0:
-        stderr_tail = (process.stderr.read() if process.stderr else "")[-2000:]
         raise RenderExecutionError(
             f"FFmpeg exited with code {process.returncode}",
             stderr_tail=stderr_tail,

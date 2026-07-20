@@ -8,6 +8,8 @@ separate Python resolved from MIBU_TTS_PYTHON.
 """
 from __future__ import annotations
 
+import logging
+
 import json
 import os
 import subprocess
@@ -17,7 +19,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.core.child_process import ChildProcess
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 WORKER_PATH = Path(__file__).with_name("tts_worker.py")
 _POLL_SECONDS = 1.5
@@ -337,6 +342,21 @@ def _download_python() -> str:
 
 
 def _run_download(engine_id: str) -> None:
+    """Wrapped so the "downloading" flag can never outlive the thread that set it.
+
+    start_download refuses while _store.downloading() is true. Anything escaping the body
+    below — a worker that cannot be spawned, a disk error, a bug — used to leave that flag
+    set for the life of the process, so EVERY later download was rejected with
+    「已有模型正在下载」 and only a restart cleared it.
+    """
+    try:
+        _download_body(engine_id)
+    except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
+        logger.exception("model download failed")
+        _store.set(engine_id, _Live(status="failed", message=str(exc)[:400]))
+
+
+def _download_body(engine_id: str) -> None:
     engine = _BY_ID[engine_id]
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     output_path = settings.data_dir / f"tts-warmup-{engine_id}.wav"
@@ -372,6 +392,10 @@ def _run_download(engine_id: str) -> None:
     assert proc.stdin is not None
     proc.stdin.write(json.dumps({"action": "warmup", "engine": engine.id}))
     proc.stdin.close()
+    # Drain both pipes while polling — an undrained one fills, the child blocks writing it,
+    # poll() never returns, and the download appears frozen forever. See ChildProcess.
+    child = ChildProcess(proc)
+    threading.Thread(target=lambda: [None for _ in child.raw_lines()], daemon=True).start()
 
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
@@ -387,7 +411,7 @@ def _run_download(engine_id: str) -> None:
                                     speed=speed, eta=eta, message=message))
         last_bytes, last_time = current, now
 
-    stderr = (proc.stderr.read() if proc.stderr else "")[-600:]
+    stderr = child.finish(600)
     if engine_id == "fish-speech":
         # Managed dirs just changed on disk — drop the cached resolution so probe/synthesis
         # pick them up without a restart.

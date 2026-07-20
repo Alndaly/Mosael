@@ -5,8 +5,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-import threading
-from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,61 +16,11 @@ Mibu's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
 
+from app.core.child_process import ChildProcess
+
 TURN_TIMEOUT_SECONDS = 600
 
 
-class _ChildProcess:
-    """Reads a child's stdout while its stderr is drained and a deadline is enforced.
-
-    Both adapters used to hand the child stderr=PIPE and then read that pipe only *after* the
-    stdout loop finished. A child that writes more than one pipe buffer (~64KB) of logging
-    blocks in write(2) while we block in read(2) on stdout, and neither side ever moves. The
-    timeout did not help: it was an argument to process.wait(), which sits after the loop and
-    is therefore unreachable. A wedged turn left the session marked running forever, and every
-    later message was refused with "a turn is already in flight" — with nothing said about why.
-
-    So: drain stderr on its own thread from the start, and give the deadline teeth by killing
-    the child, which closes stdout and ends the loop.
-    """
-
-    def __init__(self, process: subprocess.Popen, timeout: float = TURN_TIMEOUT_SECONDS) -> None:
-        self._process = process
-        self.timed_out = False
-        # Bounded: a chatty child should not be able to grow this without limit either.
-        self._stderr_lines: deque[str] = deque(maxlen=200)
-        self._drain = threading.Thread(target=self._read_stderr, daemon=True)
-        self._drain.start()
-        self._killer = threading.Timer(timeout, self._kill)
-        self._killer.daemon = True
-        self._killer.start()
-
-    def _read_stderr(self) -> None:
-        if self._process.stderr is None:
-            return
-        for line in self._process.stderr:
-            self._stderr_lines.append(line)
-
-    def _kill(self) -> None:
-        self.timed_out = True
-        try:
-            self._process.kill()
-        except Exception:  # noqa: BLE001 — already gone
-            pass
-
-    def lines(self):
-        """Yield stripped, non-empty stdout lines."""
-        assert self._process.stdout is not None
-        for line in self._process.stdout:
-            line = line.strip()
-            if line:
-                yield line
-
-    def finish(self) -> str:
-        """Stop the watchdog, reap the child, and return the tail of its stderr."""
-        self._killer.cancel()
-        self._process.wait()
-        self._drain.join(timeout=1.0)
-        return _tail("".join(self._stderr_lines))
 
 _PROVIDER_HINT = (
     "请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点"
@@ -187,7 +135,7 @@ def _run_pi(
     process.stdin.flush()
     process.stdin.close()
 
-    child = _ChildProcess(process)
+    child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
     result_text: str | None = None
     result_state: object | None = None
     saw_tool = False
@@ -213,7 +161,7 @@ def _run_pi(
             if not saw_tool:
                 raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
             raise AdapterError(detail)
-    stderr_tail = child.finish()
+    stderr_tail = _tail(child.finish())
     if child.timed_out:
         raise AdapterError(
             f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。" + (f"\n{stderr_tail}" if stderr_tail else "")
@@ -275,7 +223,7 @@ def _run_claude_streaming(
         session_id: str | None = None
         is_error = False
         assert process.stdout is not None
-        child = _ChildProcess(process)
+        child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
         for line in child.lines():
             try:
                 event = json.loads(line)
@@ -292,7 +240,7 @@ def _run_claude_streaming(
                 result_text = str(event.get("result", ""))
                 session_id = event.get("session_id")
                 is_error = bool(event.get("is_error"))
-        stderr_tail = child.finish()
+        stderr_tail = _tail(child.finish())
         if child.timed_out:
             raise AdapterError(
                 f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。"

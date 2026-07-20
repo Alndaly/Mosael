@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from app.ai.agent.adapters import _ChildProcess
+from app.core.child_process import ChildProcess
 
 
 def _child(script: str) -> subprocess.Popen:
@@ -38,7 +38,7 @@ def test_a_child_that_floods_stderr_still_completes() -> None:
         "print('{\"type\": \"turn_done\"}')\n"
     )
     started = time.perf_counter()
-    child = _ChildProcess(_child(script), timeout=20)
+    child = ChildProcess(_child(script), timeout=20)
     lines = list(child.lines())
     child.finish()
 
@@ -49,7 +49,7 @@ def test_a_child_that_floods_stderr_still_completes() -> None:
 
 def test_stderr_is_reported_back_and_bounded() -> None:
     script = "import sys; sys.stderr.write('boom\\n' * 5000); print('done')"
-    child = _ChildProcess(_child(script), timeout=20)
+    child = ChildProcess(_child(script), timeout=20)
     list(child.lines())
     tail = child.finish()
 
@@ -60,7 +60,7 @@ def test_stderr_is_reported_back_and_bounded() -> None:
 
 def test_a_silent_hang_is_killed_and_reported() -> None:
     """The deadline has to have teeth: nothing on stdout, nothing on stderr, never exits."""
-    child = _ChildProcess(_child("import time; time.sleep(300)"), timeout=1.0)
+    child = ChildProcess(_child("import time; time.sleep(300)"), timeout=1.0)
     started = time.perf_counter()
     lines = list(child.lines())  # returns once the kill closes stdout
     child.finish()
@@ -71,7 +71,7 @@ def test_a_silent_hang_is_killed_and_reported() -> None:
 
 
 def test_a_prompt_child_is_not_killed() -> None:
-    child = _ChildProcess(_child("print('hello')"), timeout=30)
+    child = ChildProcess(_child("print('hello')"), timeout=30)
     lines = list(child.lines())
     child.finish()
     assert lines == ["hello"]
@@ -80,6 +80,6 @@ def test_a_prompt_child_is_not_killed() -> None:
 
 @pytest.mark.parametrize("payload", ["", "   ", "\n\n"])
 def test_blank_stdout_lines_are_skipped(payload) -> None:
-    child = _ChildProcess(_child(f"print({payload!r}); print('real')"), timeout=20)
+    child = ChildProcess(_child(f"print({payload!r}); print('real')"), timeout=20)
     assert list(child.lines()) == ["real"]
     child.finish()
