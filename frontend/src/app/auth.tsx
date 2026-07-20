@@ -1,4 +1,5 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { api, getAuthToken, setAuthToken, setUnauthorizedHandler, type AuthOut, type User } from "@/api/client";
 
@@ -18,9 +19,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [hasUsers, setHasUsers] = React.useState(true);
 
+  const qc = useQueryClient();
+
   const becomeAnonymous = React.useCallback(async () => {
     setAuthToken(null);
     setUser(null);
+    // Drop every cached response with the identity that fetched it. Nothing used to clear the
+    // cache on logout or on a 401, and the global staleTime is 60s, so a query remounting with
+    // cached data does not refetch: log out, log in as someone else on the same machine, and
+    // the new session renders the previous user's workspaces, projects, assets and jobs until
+    // those entries go stale.
+    qc.clear();
     try {
       const bootstrap = await api<{ has_users: boolean }>("/api/auth/bootstrap");
       setHasUsers(bootstrap.has_users);
@@ -28,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHasUsers(true);
     }
     setStatus("anonymous");
-  }, []);
+  }, [qc]);
 
   React.useEffect(() => {
     setUnauthorizedHandler(() => void becomeAnonymous());

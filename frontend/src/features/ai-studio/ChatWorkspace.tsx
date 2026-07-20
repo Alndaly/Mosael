@@ -51,9 +51,18 @@ export function ChatWorkspace({
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Aborts whatever stream is open. The reader used to run `for(;;) await reader.read()` with
+  // no way to stop it: unmounting the view or switching session left it reading forever, each
+  // leak pinning an HTTP/1.1 connection. Past the browser's ~6-per-host cap, EVERY other
+  // request in the app queues behind them and the whole UI appears to freeze.
+  const abortRef = React.useRef<AbortController | null>(null);
+
   const attachStream = React.useCallback(
     async (targetSessionId: string) => {
       if (streamingRef.current === targetSessionId) return;
+      abortRef.current?.abort(); // switching sessions must close the previous stream
+      const controller = new AbortController();
+      abortRef.current = controller;
       streamingRef.current = targetSessionId;
       setStreamText("");
       setStreamTools([]);
@@ -61,6 +70,7 @@ export function ChatWorkspace({
         const token = getAuthToken();
         const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: controller.signal,
         });
         if (!response.ok || !response.body) return;
         const reader = response.body.getReader();
@@ -87,7 +97,10 @@ export function ChatWorkspace({
           }
         }
       } finally {
-        if (streamingRef.current === targetSessionId) {
+        if (abortRef.current === controller) abortRef.current = null;
+        // An aborted stream was replaced or unmounted — the successor owns the state now, and
+        // invalidating on the way out would refetch for a view that may be gone.
+        if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
           streamingRef.current = null;
           setStreamText("");
           setStreamTools([]);
@@ -197,6 +210,15 @@ export function ChatWorkspace({
       void attachStream(activeSession.id);
     }
   }, [running, activeSession, attachStream]);
+
+  // Close the stream on unmount. Views are conditionally mounted, so this is routine, not rare.
+  React.useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      streamingRef.current = null;
+    };
+  }, []);
 
   // 贴底跟随:初次加载与流式输出都钉在底部;用户往上翻阅历史时不打断,
   // 翻回底部附近后恢复跟随。用 MutationObserver 是因为 markdown 渲染是

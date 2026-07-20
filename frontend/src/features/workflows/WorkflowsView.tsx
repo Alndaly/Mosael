@@ -810,11 +810,32 @@ function WorkflowEditor({
   // manual "save" step. A save clears `dirty`; a rapid edit reschedules the pending save.
   const saveRef = React.useRef(save);
   saveRef.current = save;
+  // Whether a save is still owed, read by the unmount flush below. A ref, not state, because
+  // the cleanup that reads it runs after the last render.
+  const pendingSaveRef = React.useRef(false);
+  pendingSaveRef.current = dirty;
+
   React.useEffect(() => {
     if (!dirty || dragging) return;
     const id = window.setTimeout(() => saveRef.current.mutate(), 700);
     return () => window.clearTimeout(id);
   }, [dirty, graph, dragging]);
+
+  // Flush on the way out. The debounce timer is cleared by its own cleanup, so editing a node
+  // and then switching workflow, leaving the view, or closing the window inside 700ms threw the
+  // edit away — and the 5s poll then repainted the canvas from the server's older graph, so it
+  // looked as though the change had undone itself. This editor is keyed by workflow id, so
+  // switching workflows unmounts it and is the common way to hit that.
+  React.useEffect(() => {
+    const flush = () => {
+      if (pendingSaveRef.current) saveRef.current.mutate();
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, []);
   const rename = useMutation({
     mutationFn: (name: string) => updateWorkflow(workflow.id, { name }),
     onSuccess: () => {

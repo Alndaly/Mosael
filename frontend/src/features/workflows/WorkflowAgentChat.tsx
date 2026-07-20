@@ -150,14 +150,23 @@ export function WorkflowAgentChat({
   });
   const running = live.data?.status === "running";
 
+  // Same leak as the AI-studio chat: an unstoppable reader pins an HTTP/1.1 connection, and
+  // this panel is conditionally mounted ({agentOpen && <WorkflowAgentChat/>}), so closing it
+  // mid-stream is the normal case rather than an edge one.
+  const abortRef = React.useRef<AbortController | null>(null);
+
   const attachStream = React.useCallback(
     async (targetSessionId: string) => {
       if (streamingRef.current === targetSessionId) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       streamingRef.current = targetSessionId;
       try {
         const token = getAuthToken();
         const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: controller.signal,
         });
         if (!response.ok || !response.body) return;
         const reader = response.body.getReader();
@@ -184,7 +193,8 @@ export function WorkflowAgentChat({
           }
         }
       } finally {
-        if (streamingRef.current === targetSessionId) {
+        if (abortRef.current === controller) abortRef.current = null;
+        if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
           streamingRef.current = null;
           setStreamText("");
           setStreamTools([]);
@@ -199,6 +209,15 @@ export function WorkflowAgentChat({
   React.useEffect(() => {
     if (running && sessionId && streamingRef.current !== sessionId) void attachStream(sessionId);
   }, [running, sessionId, attachStream]);
+
+  // Close the stream on unmount — the panel is toggled open and shut routinely.
+  React.useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      streamingRef.current = null;
+    };
+  }, []);
 
   React.useEffect(() => {
     const el = threadRef.current;
