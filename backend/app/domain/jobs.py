@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -9,6 +10,50 @@ from sqlalchemy.orm import Session
 from app.db.models import Job, TaskEvent
 
 TERMINAL_STATUSES = ("succeeded", "failed")
+
+# Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
+# stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
+# burning CPU the user had asked to stop, and then the worker overwrote the cancellation with
+# "succeeded" — the cancelled export reappeared in the library as if nothing had happened.
+_CHILDREN: dict[str, Any] = {}
+_CHILDREN_LOCK = threading.Lock()
+
+
+def register_job_child(job_id: str, child: Any) -> None:
+    """Associate a killable child (anything with .kill()) with a job for its lifetime."""
+    with _CHILDREN_LOCK:
+        _CHILDREN[job_id] = child
+
+
+def unregister_job_child(job_id: str) -> None:
+    with _CHILDREN_LOCK:
+        _CHILDREN.pop(job_id, None)
+
+
+def kill_job_child(job_id: str) -> bool:
+    """Stop the child of a running job, if one is registered. True if something was killed."""
+    with _CHILDREN_LOCK:
+        child = _CHILDREN.get(job_id)
+    if child is None:
+        return False
+    child.kill()
+    return True
+
+
+def finish_job(db: Session, job: Job, **fields: Any) -> bool:
+    """Write a terminal state unless the job already reached one.
+
+    Workers held a Job loaded at the start of the run and assigned to it at the end, so a
+    cancellation landing in between was silently clobbered. Re-read first and skip the write if
+    the job is already settled; the caller uses the return value to skip the rest of its
+    success path too (registering an export as an asset, emitting job.succeeded).
+    """
+    db.refresh(job)
+    if job.status in TERMINAL_STATUSES:
+        return False
+    for key, value in fields.items():
+        setattr(job, key, value)
+    return True
 # Retention (plan §12.3): active jobs keep every event; terminal jobs keep the
 # most recent few; terminal jobs older than the window lose all detail events.
 TERMINAL_KEEP_EVENTS = 5
@@ -71,6 +116,10 @@ def cancel_job(db: Session, job: Job) -> Job:
     job.error = "已取消"
     job.message = "已取消"
     db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
+    # Stop the actual work, not just the row describing it.
+    killed = kill_job_child(job.id)
+    if killed:
+        db.add(TaskEvent(job_id=job.id, type="job.child_killed", payload={}))
 
     if job.kind == "publish":
         from app.db.models import PublishTask

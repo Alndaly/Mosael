@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Font, Job, Lut, Sequence, TaskEvent, Track
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import create_job
+from app.domain.jobs import create_job, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
 from app.media.render_executor import RenderExecutionError, execute_render
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
@@ -175,7 +175,19 @@ def _run_export(job_id: str, plan: RenderPlan) -> None:
                     progress_db.commit()
 
         try:
-            execute_render(plan, resolve_key, output_path, on_progress)
+            execute_render(
+                plan,
+                resolve_key,
+                output_path,
+                on_progress,
+                on_child=lambda child: register_job_child(job_id, child),
+            )
+            # Cancelling kills ffmpeg, which makes it exit non-zero and raise below — but a
+            # cancellation landing just as it finished would otherwise be overwritten here, and
+            # the export the user stopped would appear in their library as a succeeded job.
+            if not finish_job(db, job, status="running"):
+                db.commit()
+                return
             sequence = db.get(Sequence, plan.sequence_id)
             asset = register_file_asset(
                 db,
@@ -184,15 +196,22 @@ def _run_export(job_id: str, plan: RenderPlan) -> None:
                 source_path=output_path,
                 name=f"{sequence.name if sequence else 'Sequence'} · Export r{plan.sequence_revision}",
             )
-            job.status = "succeeded"
-            job.progress = 1.0
-            job.message = "Export complete"
-            job.result = {"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"}
-            db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+            if finish_job(
+                db,
+                job,
+                status="succeeded",
+                progress=1.0,
+                message="Export complete",
+                result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
+            ):
+                db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
         except RenderExecutionError as exc:
-            job.status = "failed"
-            job.message = "Export failed"
-            job.error = str(exc)
+            # A cancelled render fails because we killed ffmpeg; finish_job keeps the
+            # cancellation's own message rather than relabelling it "Export failed".
+            if not finish_job(db, job, status="failed", message="Export failed", error=str(exc)):
+                db.commit()
+                unregister_job_child(job_id)
+                return
             db.add(
                 TaskEvent(
                     job_id=job.id,
@@ -201,10 +220,12 @@ def _run_export(job_id: str, plan: RenderPlan) -> None:
                 )
             )
         except Exception as exc:  # defensive: a worker thread must never die silently
-            job.status = "failed"
-            job.message = "Export failed"
-            job.error = str(exc)[:500]
-            db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+            if finish_job(db, job, status="failed", message="Export failed", error=str(exc)[:500]):
+                db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+        finally:
+            # The registry must not outlive the run, or a later cancel would kill a dead
+            # process handle — or worse, a recycled one.
+            unregister_job_child(job_id)
         db.commit()
 
 

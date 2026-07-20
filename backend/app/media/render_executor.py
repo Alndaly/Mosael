@@ -447,8 +447,13 @@ def execute_render(
     resolve: Callable[[str], Path],
     output_path: Path,
     on_progress: Callable[[float], None] | None = None,
+    on_child: Callable[[ChildProcess], None] | None = None,
 ) -> None:
-    """Run FFmpeg, reporting progress in [0, 1] from -progress output."""
+    """Run FFmpeg, reporting progress in [0, 1] from -progress output.
+
+    `on_child` hands the caller the running child so a cancellation can kill it. Without that,
+    cancelling only flipped a database row while ffmpeg ran to completion.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     command = build_ffmpeg_command(plan, resolve, output_path)
     process = subprocess.Popen(
@@ -463,6 +468,8 @@ def execute_render(
     # blocks writing it, stops emitting progress, and both sides wait forever with the job
     # stuck in `running` and no way out but killing the backend.
     child = ChildProcess(process)
+    if on_child is not None:
+        on_child(child)
     for line in child.raw_lines():
         if on_progress and line.startswith("out_time_us="):
             try:
