@@ -105,12 +105,10 @@
 
   /* 字体回退是逐字形的,所以栈的顺序本身就完成了分工:拉丁字符命中 Inter(界面里大量数字、
      时间码用它更整齐),中文字符落到霞鹜文楷 —— 楷体,比黑体更耐读。
-     霞鹜文楷走系统安装,不打进包:全字符集 20MB+,内嵌会显著拖慢首屏,而它对界面是锦上添花
-     而非必需。没装的机器自动落到自带的思源黑体(Noto Sans SC),观感变化但不会掉到系统字体。
-     代码字体自带 JetBrains Mono。见 main.tsx 的 @fontsource 引入。 */
-  --font-sans: "Inter Variable", "LXGW WenKai Screen", "LXGW WenKai", "Noto Sans SC",
-    -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui,
-    sans-serif;
+     霞鹜文楷已打进包(见 main.tsx),所以不再需要思源黑体兜底 —— 两者字集基本重合,
+     同时带着只是让安装包多 11MB。缺字时才落到系统字体。代码字体自带 JetBrains Mono。 */
+  --font-sans: "Inter Variable", "LXGW WenKai Screen", "LXGW WenKai", -apple-system,
+    BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
   font-family: var(--font-sans);
 }

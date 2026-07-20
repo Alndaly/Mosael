@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -91,7 +91,7 @@ router = APIRouter(tags=["sequences"])
 
 
 @router.post("/sequences", response_model=SequenceOut)
-def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> Sequence:
+def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> Response:
     ensure_workspace_access(db, user, body.workspace_id)
     sequence = Sequence(**body.model_dump())
     video = Track(sequence=sequence, kind="video", name="V1", position=0)
@@ -105,246 +105,258 @@ def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> S
 
 
 @router.get("/sequences/{sequence_id}", response_model=SequenceOut)
-def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.get("/projects/{project_id}/sequences", response_model=list[SequenceOut])
-def list_sequences(project_id: str, db: DbSession, user: CurrentUser) -> list[Sequence]:
+def list_sequences(project_id: str, db: DbSession, user: CurrentUser) -> Response:
     project = db.get(Project, project_id)
     if project is not None:
         ensure_workspace_access(db, user, project.workspace_id)
-    stmt = (
-        select(Sequence)
-        .where(Sequence.project_id == project_id)
-        .options(selectinload(Sequence.tracks).selectinload(Track.clips))
-        .order_by(Sequence.updated_at.desc())
+    # The editor polls this. Read the revisions first — a tiny scalar query — and only load the
+    # full track/clip graph for sequences whose serialised form we do not already hold. Between
+    # edits that turns a poll from "materialise 200 clips and encode them" into two dict lookups.
+    ids_and_revisions = list(
+        db.execute(
+            select(Sequence.id, Sequence.revision)
+            .where(Sequence.project_id == project_id)
+            .order_by(Sequence.updated_at.desc())
+        )
     )
-    sequences = list(db.scalars(stmt))
-    for sequence in sequences:
-        sequence.can_undo = can_undo(db, sequence.id)
-        sequence.can_redo = can_redo(db, sequence.id)
-    return sequences
+    stale = [sid for sid, revision in ids_and_revisions if _SEQUENCE_JSON.get(sid, (None,))[0] != revision]
+    if stale:
+        stmt = (
+            select(Sequence)
+            .where(Sequence.id.in_(stale))
+            .options(selectinload(Sequence.tracks).selectinload(Track.clips))
+        )
+        for sequence in db.scalars(stmt):
+            sequence.can_undo = can_undo(db, sequence.id)
+            sequence.can_redo = can_redo(db, sequence.id)
+            _sequence_json(sequence)  # populates the cache
+    bodies = [_SEQUENCE_JSON[sid][1] for sid, _ in ids_and_revisions if sid in _SEQUENCE_JSON]
+    return Response(f"[{','.join(bodies)}]", media_type="application/json")
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
-def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: insert_clip_operation(db, sequence_id, InsertClip(**body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/move", response_model=SequenceOut)
-def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/trim", response_model=SequenceOut)
-def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: trim_clip_operation(db, sequence_id, TrimClip(clip_id=clip_id, **body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-range", response_model=SequenceOut)
-def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, **body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-ranges", response_model=SequenceOut)
 def cut_clip_ranges(
     sequence_id: str, clip_id: str, body: CutClipRangesRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     ranges = tuple((item.src_start, item.src_end) for item in body.ranges)
     _apply(lambda: cut_clip_ranges_operation(db, sequence_id, CutClipRanges(clip_id=clip_id, ranges=ranges)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/split", response_model=SequenceOut)
-def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, src_time=body.src_time)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/split-points", response_model=SequenceOut)
 def split_clip_points(
     sequence_id: str, clip_id: str, body: SplitClipPointsRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     """Split one clip into pieces at several source-time cut points (transcript 按句切分)."""
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: split_clip_points_operation(db, sequence_id, SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times))))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
 def set_track_state(
     sequence_id: str, track_id: str, body: SetTrackStateRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_track_state_operation(db, sequence_id, SetTrackState(track_id=track_id, **body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/tracks/{track_id}/move", response_model=SequenceOut)
-def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_track_operation(db, sequence_id, MoveTrack(track_id=track_id, direction=body.direction)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.put("/sequences/{sequence_id}/subtitle-style", response_model=SequenceOut)
-def set_subtitle_style(sequence_id: str, body: SetSubtitleStyleRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def set_subtitle_style(sequence_id: str, body: SetSubtitleStyleRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_subtitle_style_operation(db, sequence_id, SetSubtitleStyle(style=body.style)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/subtitles/generate", response_model=SequenceOut)
-def generate_subtitles(sequence_id: str, body: GenerateSubtitlesRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def generate_subtitles(sequence_id: str, body: GenerateSubtitlesRequest, db: DbSession, user: CurrentUser) -> Response:
     """一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。"""
     require_sequence_access(db, user, sequence_id)
     cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in body.cues)
     _apply(lambda: generate_subtitles_operation(db, sequence_id, GenerateSubtitles(track_id=body.track_id, cues=cues)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
-def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/text-clips", response_model=SequenceOut)
-def insert_text_clip(sequence_id: str, body: InsertTextClipRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def insert_text_clip(sequence_id: str, body: InsertTextClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: insert_text_clip_operation(db, sequence_id, InsertTextClip(**body.model_dump())))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/texts", response_model=SequenceOut)
-def set_clip_texts(sequence_id: str, body: SetClipTextsRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def set_clip_texts(sequence_id: str, body: SetClipTextsRequest, db: DbSession, user: CurrentUser) -> Response:
     """Retext many clips in one revision — used by translate-whole-track. Registered BEFORE the
     single-clip route below so "texts" is not captured as a {clip_id}."""
     require_sequence_access(db, user, sequence_id)
     texts = tuple((entry.clip_id, entry.text) for entry in body.texts)
     _apply(lambda: set_clip_texts_batch_operation(db, sequence_id, SetClipTextsBatch(texts=texts)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/text", response_model=SequenceOut)
 def set_clip_text(
     sequence_id: str, clip_id: str, body: SetClipTextRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_clip_text_operation(db, sequence_id, SetClipText(clip_id=clip_id, text=body.text)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/speed", response_model=SequenceOut)
 def set_clip_speed(
     sequence_id: str, clip_id: str, body: SetClipSpeedRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, speed=body.speed)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/gain", response_model=SequenceOut)
 def set_clip_gain(
     sequence_id: str, clip_id: str, body: SetClipGainRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(
         lambda: set_clip_gain_operation(
             db, sequence_id, SetClipGain(clip_id=clip_id, gain=body.gain, muted=body.muted)
         )
     )
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/detach-audio", response_model=SequenceOut)
-def detach_clip_audio(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def detach_clip_audio(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: detach_clip_audio_operation(db, sequence_id, DetachClipAudio(clip_id=clip_id)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/transform", response_model=SequenceOut)
 def set_clip_transform(
     sequence_id: str, clip_id: str, body: SetClipTransformRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(
         lambda: set_clip_transform_operation(
             db, sequence_id, SetClipTransform(clip_id=clip_id, transform=body.transform)
         )
     )
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/reframe", response_model=SequenceOut)
 def set_sequence_reframe(
     sequence_id: str, body: SetSequenceReframeRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(
         lambda: set_sequence_reframe_operation(
             db, sequence_id, SetSequenceReframe(width=body.width, height=body.height, fill_mode=body.fill_mode)
         )
     )
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}/ripple", response_model=SequenceOut)
-def ripple_delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def ripple_delete_clip(sequence_id: str, clip_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: ripple_delete_clip_operation(db, sequence_id, RippleDeleteClip(clip_id=clip_id)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/tracks", response_model=SequenceOut)
-def add_track(sequence_id: str, body: AddTrackRequest, db: DbSession, user: CurrentUser) -> Sequence:
+def add_track(sequence_id: str, body: AddTrackRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: add_track_operation(db, sequence_id, AddTrack(kind=body.kind)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.delete("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
-def remove_track(sequence_id: str, track_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def remove_track(sequence_id: str, track_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: remove_track_operation(db, sequence_id, RemoveTrack(track_id=track_id)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/effects", response_model=SequenceOut)
 def set_clip_effects(
     sequence_id: str, clip_id: str, body: SetClipEffectsRequest, db: DbSession, user: CurrentUser
-) -> Sequence:
+) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: set_clip_effects_operation(db, sequence_id, SetClipEffects(clip_id=clip_id, effects=body.effects)))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
-def undo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def undo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: undo_operation(db, sequence_id))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
-def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Sequence:
+def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: redo_operation(db, sequence_id))
-    return _get_sequence(db, sequence_id)
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
@@ -367,6 +379,45 @@ def _apply(operation) -> None:
         if "not found" in message.lower():
             raise HTTPException(status_code=404, detail=message) from exc
         raise HTTPException(status_code=422, detail=message) from exc
+
+
+# sequence_id -> (revision, serialised JSON). One entry per sequence, so it cannot grow with
+# traffic. `revision` is a sound key: every mutation goes through _record_operation, which bumps
+# it — and undo/redo record operations of their own, so even can_undo/can_redo cannot change
+# without the revision changing with them.
+_SEQUENCE_JSON: dict[str, tuple[int, str]] = {}
+
+
+def _sequence_json(sequence: Sequence) -> str:
+    cached = _SEQUENCE_JSON.get(sequence.id)
+    if cached is not None and cached[0] == sequence.revision:
+        return cached[1]
+    body = SequenceOut.model_validate(sequence).model_dump_json()
+    # A plain dict assignment is atomic under the GIL; two threads racing here just compute the
+    # same bytes twice, which is cheaper than holding a lock on the hot path.
+    _SEQUENCE_JSON[sequence.id] = (sequence.revision, body)
+    return body
+
+
+def _sequence_response(sequence: Sequence) -> Response:
+    """Serialise a sequence ONCE, with Pydantic's own JSON writer.
+
+    Returning the ORM object and letting `response_model` handle it costs the payload twice:
+    Pydantic validates it into a model, then FastAPI's jsonable_encoder walks that whole model
+    tree again turning it into JSON-compatible primitives. On a 200-clip sequence the encoder
+    alone was ~48% of the request — 2.01ms of the 4.17ms — and being pure Python it is exactly
+    the GIL-bound work that made throughput FALL as concurrency rose.
+
+    Returning a Response makes FastAPI hand it straight to the transport, skipping both the
+    re-validation and the encoder; model_dump_json does the encoding in Rust instead.
+    `response_model` stays on the decorator, so the OpenAPI schema (and the generated TS
+    client) is byte-for-byte unchanged.
+    """
+    return Response(_sequence_json(sequence), media_type="application/json")
+
+
+def _sequences_response(sequences: list[Sequence]) -> Response:
+    return Response(f"[{','.join(_sequence_json(item) for item in sequences)}]", media_type="application/json")
 
 
 def _get_sequence(db, sequence_id: str) -> Sequence:
