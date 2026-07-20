@@ -62,11 +62,12 @@ const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: 
   { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
 ];
 
-/** 只有这些页面工作在"当前项目"语境;其余页面的面包屑显示页面名,
-    否则设置/插件页也挂着项目名,既不合理也容易误解。
-    「素材」是**工作区级**资源池(素材属于工作区,project_id 可空且删项目只置空),
-    所以它不在此列 —— 挂项目名会让人以为素材是项目私有的。 */
-const PROJECT_SCOPED_VIEWS: StudioView[] = ["editor", "ai"];
+/** 只有「剪辑」工作在"当前项目"语境 —— 它编辑的就是某个项目的时间线。
+    其余页面的面包屑显示页面名,否则设置/插件页也挂着项目名,既不合理也容易误解。
+    「素材」是**工作区级**资源池(素材属于工作区,project_id 可空且删项目只置空)。
+    「AI 助手」同理是工作区级:智能体本身就能跨项目管理(列项目、改时间线都是它的工具),
+    把会话锁在"当前项目"是把关系搞反了 —— 它是项目的操作者,不是项目的附属物。 */
+const PROJECT_SCOPED_VIEWS: StudioView[] = ["editor"];
 
 export function AppShell({
   view,

@@ -10,7 +10,6 @@ import {
   type GenerationJob,
   type GenerationModel,
   type Job,
-  type Project,
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -20,7 +19,7 @@ import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
-export function AiStudio({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
@@ -50,9 +49,9 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
   return (
     <div className="feature-view ai-studio-view">
       {tab === "chat" ? (
-        <ChatWorkspace workspace={workspace} project={project} switcher={switcher} />
+        <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
-        <GenerateWorkspace workspace={workspace} project={project} switcher={switcher} />
+        <GenerateWorkspace workspace={workspace} switcher={switcher} />
       )}
     </div>
   );
@@ -66,11 +65,9 @@ export function AiStudio({ workspace, project }: { workspace: Workspace; project
  */
 function GenerateWorkspace({
   workspace,
-  project,
   switcher,
 }: {
   workspace: Workspace;
-  project: Project | null;
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -114,7 +111,8 @@ function GenerateWorkspace({
         method: "POST",
         body: JSON.stringify({
           workspace_id: workspace.id,
-          project_id: project?.id ?? null,
+          // 生成的产物是工作区级素材,不挂项目 —— 与素材页、AI 助手附件一致。
+          project_id: null,
           provider: selectedModel!.provider,
           model: selectedModel!.model,
           kind: selectedModel!.kind,

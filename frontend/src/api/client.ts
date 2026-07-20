@@ -624,7 +624,8 @@ export function exportSequence(sequenceId: string): Promise<Job> {
 
 export async function importAsset(params: {
   workspaceId: string;
-  projectId: string;
+  /** 省略 = 工作区级素材(素材页、AI 助手附件都走这条);只有剪辑页导入才挂项目。 */
+  projectId?: string;
   file: File;
   name?: string;
 }): Promise<Asset> {

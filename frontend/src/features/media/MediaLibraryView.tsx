@@ -76,7 +76,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
   const uploadAsset = useMutation({
     // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, projectId: "", file }),
+    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file }),
     onSuccess: refresh,
   });
   const rename = useMutation({

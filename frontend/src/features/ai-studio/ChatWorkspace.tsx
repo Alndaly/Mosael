@@ -20,11 +20,9 @@ type PromptSkill = components["schemas"]["PromptSkillOut"];
 
 export function ChatWorkspace({
   workspace,
-  project,
   switcher,
 }: {
   workspace: Workspace;
-  project?: Project | null;
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -42,7 +40,7 @@ export function ChatWorkspace({
   });
   const uploadAttachment = useMutation({
     mutationFn: (file: File) =>
-      importAsset({ workspaceId: workspace.id, projectId: project?.id ?? "", file }),
+      importAsset({ workspaceId: workspace.id, file }),
     onSuccess: (asset) => {
       setAttachments((current) => [...current, asset]);
       void qc.invalidateQueries({ queryKey: ["assets"] });
