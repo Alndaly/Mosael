@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, ToolConfirmation, now
@@ -72,17 +73,14 @@ def request_confirmation(
 
 
 def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
-    _require_pending(confirmation)
-    confirmation.status = "rejected"
+    _claim(db, confirmation, "rejected")
     confirmation.resolved_at = now()
     db.commit()
     return confirmation
 
 
 def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
-    _require_pending(confirmation)
-    confirmation.status = "approved"
-    db.commit()
+    _claim(db, confirmation, "approved")
     try:
         result = _execute(db, confirmation)
         confirmation.status = "executed"
@@ -96,8 +94,23 @@ def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolCon
     return confirmation
 
 
-def _require_pending(confirmation: ToolConfirmation) -> None:
-    if confirmation.status != "pending":
+def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
+    """Take exclusive ownership of a pending confirmation, or refuse.
+
+    Reading `confirmation.status` off the in-memory object and then assigning it is a
+    check-then-act: two requests that both load the pending row both pass the check and both
+    run the executor. That is a second track added, a second render queued, a second image
+    billed. One conditional UPDATE lets the database pick a winner instead — the loser changes
+    no rows and is told the confirmation is already settled.
+    """
+    result = db.execute(
+        update(ToolConfirmation)
+        .where(ToolConfirmation.id == confirmation.id, ToolConfirmation.status == "pending")
+        .values(status=to_status)
+    )
+    db.commit()
+    db.refresh(confirmation)
+    if result.rowcount != 1:
         raise ConfirmationError(f"Confirmation is already {confirmation.status}")
 
 

@@ -217,7 +217,11 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                 if not all(str(edge.get("source")) in done for edge in incoming.get(nid, [])):
                     continue
                 scheduled.add(nid)
-                if nid != "start" and not incoming_active(nid):
+                # By TYPE, not by the literal id "start". A start node named anything else has
+                # no incoming edges, so it failed this check and was skipped — and with it
+                # everything downstream, while the run still reported success with an empty
+                # context. run_node already dispatches on type, so the two halves disagreed.
+                if node_types.get(nid) != "start" and not incoming_active(nid):
                     with lock:
                         done.add(nid)
                     db.add(TaskEvent(job_id=job.id, type="workflow.node.skipped", payload={"node_id": nid, "name": node_label(nid)}))
