@@ -4,7 +4,7 @@ import mimetypes
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, TranscriptAttachRequest, TranscriptOut
@@ -63,7 +63,9 @@ def list_assets(
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(Asset).where(Asset.workspace_id == workspace_id)
     if project_id:
-        stmt = stmt.where(Asset.project_id == project_id)
+        # 工作区级素材(project_id IS NULL)属于整个工作区,任何项目都该能用它 —— 否则从
+        # 「素材」页导入的素材在剪辑页看不到(素材页按工作区列,剪辑页按项目过滤)。
+        stmt = stmt.where(or_(Asset.project_id == project_id, Asset.project_id.is_(None)))
     if kind and kind != "all":
         stmt = stmt.where(Asset.kind == kind)
     if name_contains:

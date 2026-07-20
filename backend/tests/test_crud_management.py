@@ -15,6 +15,28 @@ def test_project_rename_and_delete() -> None:
     assert client.get(f"/api/projects?workspace_id={ws['id']}").json() == []
 
 
+def test_project_asset_list_includes_workspace_level_assets() -> None:
+    """工作区级素材(project_id 为空)在项目内也要能看到 —— 否则「素材」页导入的东西
+    在剪辑页的素材面板里不显示。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    other = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Other"}).json()
+
+    def mk(name: str, project_id: str | None) -> None:
+        body = {"workspace_id": ws["id"], "kind": "video", "name": name, "file_key": f"m/{name}"}
+        if project_id:
+            body["project_id"] = project_id
+        client.post("/api/assets", json=body)
+
+    mk("workspace-level", None)  # 从「素材」页导入的那种
+    mk("mine", proj["id"])
+    mk("theirs", other["id"])
+
+    names = {a["name"] for a in client.get(f"/api/assets?workspace_id={ws['id']}&project_id={proj['id']}").json()}
+    assert names == {"workspace-level", "mine"}, names  # 别的项目的素材仍然不串场
+
+
 def test_asset_rename_and_delete_blocked_when_in_use() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
