@@ -227,6 +227,16 @@ function BackgroundSection() {
               {kind === "none" ? t("appearanceBgNone") : kind === "preset" ? t("appearanceBgPreset") : t("appearanceBgImage")}
             </button>
           ))}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden-input"
+            onChange={(event) => {
+              void pickImage(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
         </div>
       </SettingsRow>
 
@@ -271,17 +281,6 @@ function BackgroundSection() {
           </div>
         </SettingsBlock>
       )}
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden-input"
-        onChange={(event) => {
-          void pickImage(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
 
       {active && (
         <>

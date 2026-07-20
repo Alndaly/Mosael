@@ -5,6 +5,11 @@ import React from "react";
  * description + optional header actions) containing Rows (label +
  * description on the left, control on the right). Keeps all five sections
  * on one consistent grid instead of ad-hoc card layouts.
+ *
+ * Row dividers come from `.sg-row + .sg-row` in styles.css, so a Group's children must be
+ * only Rows and Blocks. Any other element between two of them — including a display:none
+ * one, which adjacent-sibling selectors do not skip — silently removes that divider.
+ * Hidden file inputs belong inside the Row whose control opens them.
  */
 
 export function SettingsGroup({
