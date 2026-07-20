@@ -88,7 +88,10 @@ export function PluginsView() {
         </aside>
         <div className="plugins-detail">
           {selected ? (
-            <PluginDetail plugin={selected} />
+            // Keyed so switching plugin remounts: ToolCard is keyed by tool NAME, so without
+            // this the next plugin's identically-named tool inherited the previous one's
+            // typed arguments and output.
+            <PluginDetail key={selected.id} plugin={selected} />
           ) : (
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}

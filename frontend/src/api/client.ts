@@ -79,6 +79,10 @@ export type Clip = components["schemas"]["ClipOut"];
 export type Job = components["schemas"]["JobOut"];
 export type TaskEvent = components["schemas"]["TaskEventOut"];
 
+export function getJob(jobId: string): Promise<Job> {
+  return api<Job>(`/api/jobs/${jobId}`);
+}
+
 export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
   return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
 }

@@ -74,8 +74,13 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const remove = useMutation({
     mutationFn: (id: string) => deletePublishTask(id),
     onSuccess: () => {
-      setDeleting(null);
       refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setDeleting(null);
     },
   });
 
@@ -260,8 +265,13 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
     mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean; proxy?: string | null } }) =>
       patchPublishAccount(id, body),
     onSuccess: () => {
-      setRenaming(null);
       refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setRenaming(null);
     },
   });
   const recheck = useMutation({

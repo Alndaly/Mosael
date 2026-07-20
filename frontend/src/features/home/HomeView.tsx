@@ -51,15 +51,25 @@ export function HomeView({
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameProject(id, name),
     onSuccess: () => {
-      setRenaming(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setRenaming(null);
     },
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteProject(id),
     onSuccess: () => {
-      setDeleting(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setDeleting(null);
     },
   });
 

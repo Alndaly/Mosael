@@ -82,16 +82,26 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
-      setRenaming(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setRenaming(null);
     },
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteAsset(id),
     onSuccess: () => {
-      setDeleting(null);
       setDeleteError(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setDeleting(null);
     },
     onError: (error) => setDeleteError(String((error as Error).message)),
   });

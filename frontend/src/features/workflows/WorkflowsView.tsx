@@ -311,7 +311,12 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   });
   const menuRun = useMutation({
     mutationFn: (id: string) => runWorkflow(id),
-    onSuccess: () => toast.success(t("wfRunQueued")),
+    onSuccess: (_data, id) => {
+      toast.success(t("wfRunQueued"));
+      // Without this the history panel, if already open with nothing in flight, never polls
+      // and never refetches — the run appears only after navigating away and back.
+      void qc.invalidateQueries({ queryKey: ["workflow-runs", id] });
+    },
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
 
@@ -849,7 +854,10 @@ function WorkflowEditor({
   });
   const run = useMutation({
     mutationFn: () => runWorkflow(workflow.id),
-    onSuccess: () => toast.success(t("wfRunQueued")),
+    onSuccess: () => {
+      toast.success(t("wfRunQueued"));
+      void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
+    },
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;

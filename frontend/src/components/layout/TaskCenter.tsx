@@ -80,6 +80,14 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
   // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
   const prevStatuses = React.useRef<Map<string, string> | null>(null);
+  // Reset the baseline when the workspace changes. Neither TaskCenter nor Studio is keyed, so
+  // this ref survived the switch; the new workspace's jobs then all hit `prev === undefined`
+  // and the "first seen already terminal" branch below toasted every one of them — a wall of
+  // notifications for jobs that finished days ago, which is precisely what the baseline exists
+  // to prevent.
+  React.useEffect(() => {
+    prevStatuses.current = null;
+  }, [workspaceId]);
   React.useEffect(() => {
     if (!jobs.data) return;
     if (prevStatuses.current === null) {

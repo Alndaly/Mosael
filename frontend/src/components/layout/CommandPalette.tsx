@@ -108,7 +108,9 @@ export function CommandPalette({
   }, [open]);
 
   const assets = useQuery({
-    queryKey: ["assets", workspace.id, "all"],
+    // Same key as the media library — same request. Two keys meant the palette warmed one
+    // cache entry and the page read the other, so a deep link landed on an empty list.
+    queryKey: ["assets", workspace.id],
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
     enabled: open && query.length > 0,
     staleTime: 30_000,

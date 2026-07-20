@@ -78,25 +78,40 @@ export function KbView({ workspace }: { workspace: Workspace }) {
         body: JSON.stringify({ workspace_id: workspace.id, ...body }),
       }),
     onSuccess: (ds) => {
-      setCreating(false);
       setDatasetId(ds.id);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setCreating(false);
     },
   });
   const renameDataset = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       api<KbDataset>(`/api/kb/datasets/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
     onSuccess: () => {
-      setRenaming(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setRenaming(null);
     },
   });
   const removeDataset = useMutation({
     mutationFn: (id: string) => api(`/api/kb/datasets/${id}`, { method: "DELETE" }),
     onSuccess: (_data, id) => {
-      setDeleting(null);
       if (datasetId === id) setDatasetId(null);
       void refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setDeleting(null);
     },
   });
 
@@ -576,7 +591,12 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
   });
   const save = useMutation({
     mutationFn: () => api<KbDataset>(`/api/kb/datasets/${dataset.id}`, { method: "PATCH", body: JSON.stringify(form) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["kb-datasets", dataset.workspace_id] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["kb-datasets", dataset.workspace_id] });
+      // The graph toggle lives in these settings, and nothing anywhere invalidated its query —
+      // so turning it on then opening the tab kept serving the cached "off" response.
+      void qc.invalidateQueries({ queryKey: ["kb-graph", dataset.id] });
+    },
   });
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((current) => ({ ...current, [key]: value }));

@@ -55,8 +55,13 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
   const remove = useMutation({
     mutationFn: (id: string) => deleteBatch(id),
     onSuccess: () => {
-      setDeleting(null);
       refresh();
+    },
+    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
+    // open with its confirm button re-enabled, so repeated clicks fired repeated
+    // requests. The global fallback still reports the error.
+    onSettled: () => {
+      setDeleting(null);
     },
   });
 

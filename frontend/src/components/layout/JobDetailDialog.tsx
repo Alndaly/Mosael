@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Loader2, ExternalLink } from "lucide-react";
 
-import { listJobEvents, type Job } from "@/api/client";
+import { getJob, listJobEvents, type Job } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/ui/modals";
@@ -26,7 +26,18 @@ export function JobDetailDialog({
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const active = job ? ACTIVE.has(job.status) : false;
+  // `job` is a snapshot copied out of the list when the row was clicked and never re-synced,
+  // so deriving "is it still running" from it left the dialog spinning on a stale progress bar
+  // — and polling every 1.5s — for as long as it stayed open. Track the live row instead.
+  const live = useQuery({
+    queryKey: ["job", job?.id],
+    queryFn: () => getJob(job!.id),
+    enabled: !!job,
+    refetchInterval: (query) => (ACTIVE.has(query.state.data?.status ?? "") ? 1500 : false),
+    initialData: job ?? undefined,
+  });
+  const current = live.data ?? job;
+  const active = current ? ACTIVE.has(current.status) : false;
 
   const events = useQuery({
     queryKey: ["job-events", job?.id],
@@ -37,25 +48,25 @@ export function JobDetailDialog({
 
   return (
     <ModalShell open={!!job} onOpenChange={(next) => !next && onClose()} title={t("jobDetailTitle")}>
-      {job && (
+      {current && (
         <div className="job-detail">
           <div className="job-detail-head">
-            <span className={`job-detail-status s-${active ? "running" : job.status}`}>
+            <span className={`job-detail-status s-${active ? "running" : current.status}`}>
               {active ? (
                 <Loader2 size={13} className="spin" />
-              ) : job.status === "succeeded" ? (
+              ) : current.status === "succeeded" ? (
                 <CheckCircle2 size={13} />
               ) : (
                 <CircleAlert size={13} />
               )}
-              {t(`runStatus_${active ? "running" : job.status}` as never)}
+              {t(`runStatus_${active ? "running" : current.status}` as never)}
             </span>
-            <span className="job-detail-kind">{t(`jobKind${kindKey(job.kind)}` as never)}</span>
+            <span className="job-detail-kind">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
           </div>
 
-          {active && <Progress className="job-detail-progress" value={Math.round(job.progress * 100)} />}
-          <p className="job-detail-msg">{job.message}</p>
-          {job.error && <p className="job-detail-error">{job.error}</p>}
+          {active && <Progress className="job-detail-progress" value={Math.round(current.progress * 100)} />}
+          <p className="job-detail-msg">{current.message}</p>
+          {current.error && <p className="job-detail-error">{current.error}</p>}
 
           <div className="job-detail-events">
             <span className="job-detail-events-label">{t("jobDetailEvents")}</span>
