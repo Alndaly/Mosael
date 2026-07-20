@@ -51,6 +51,7 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
     client = TestClient(app)
     from tests.util import login_as
     login_as(client, "tester")
+    client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     enabled = client.patch("/api/plugins/dev.caption-helper", json={"enabled": True}).json()
     assert enabled["enabled"] is True
 

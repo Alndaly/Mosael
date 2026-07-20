@@ -121,6 +121,29 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
         raise HTTPException(status_code=403, detail=f"Permission denied: {perm}")
 
 
+def ensure_instance_admin(db: Session, user: User, perm: str = "credentials") -> None:
+    """Gate for configuration that belongs to the INSTANCE, not to a workspace.
+
+    Provider profiles and their keys, the TTS interpreter path, and plugin enablement are
+    shared by every workspace, so there is no workspace id to scope them by — which is why
+    these routes had no gate at all and "logged in" was the only bar. That is far too weak
+    for settings that reach the local filesystem and make outbound requests carrying stored
+    credentials: any viewer, in any workspace, could repoint a provider at a host they own
+    or set the interpreter path that later gets executed.
+
+    Require the caller to be owner/admin somewhere AND to hold `perm` there. A single-user
+    install is unaffected — that user owns their default workspace.
+    """
+    memberships = list(db.scalars(select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)))
+    for member in memberships:
+        if not role_at_least(member.role, "admin"):
+            continue
+        overrides = {} if member.role == "owner" else member_overrides(db, member.workspace_id, user.id)
+        if has_perm(member.role, overrides, perm):
+            return
+    raise HTTPException(status_code=403, detail=f"Instance settings require admin with '{perm}'")
+
+
 def effective_member_perms(db: Session, workspace_id: str, user_id: str, role: str) -> dict[str, bool]:
     return effective_perms(role, member_overrides(db, workspace_id, user_id))
 

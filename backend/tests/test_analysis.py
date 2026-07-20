@@ -23,6 +23,7 @@ def add_profile(client, vendor: str, name: str = "P") -> dict:
 
 def test_profile_picking_prefers_vision_vendors() -> None:
     client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})  # instance settings need an admin
     with SessionLocal() as db:
         with pytest.raises(service.AnalysisError):
             service.pick_analysis_profile(db)

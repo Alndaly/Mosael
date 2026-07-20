@@ -18,7 +18,7 @@ from app.api.schemas import (
     VoiceOut,
 )
 from app.audio import tts_models, voices
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_instance_admin, ensure_workspace_access
 from app.domain import tts_config
 
 router = APIRouter(tags=["voices"])
@@ -136,6 +136,9 @@ def get_tts_config(db: DbSession, user: CurrentUser) -> dict:
 
 @router.put("/settings/tts", response_model=TtsConfigOut)
 def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> dict:
+    # python_path lands in subprocess argv, so this route is remote code execution for
+    # whoever can reach it.
+    ensure_instance_admin(db, user, "credentials")
     from app.db.models import TtsConfig
 
     row = db.get(TtsConfig, "default")

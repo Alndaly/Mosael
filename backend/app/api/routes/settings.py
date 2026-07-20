@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.permissions import ensure_instance_admin
 from app.api.schemas import (
     CredentialSetRequest,
     CredentialStatusOut,
@@ -59,6 +60,7 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
 
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
+    ensure_instance_admin(db, user, "credentials")
     preset = VENDOR_PRESETS.get(body.vendor, {})
     profile = ProviderProfile(
         name=body.name,
@@ -77,6 +79,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
 def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
+    ensure_instance_admin(db, user, "credentials")
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -109,6 +112,7 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
 def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderDefaultOut:
+    ensure_instance_admin(db, user, "credentials")
     if capability not in CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
@@ -126,6 +130,7 @@ def set_provider_default(
 
 @router.get("/settings/providers/{profile_id}/models", response_model=list[str])
 def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[str]:
+    ensure_instance_admin(db, user, "credentials")
     """列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
     取不到时回退到该供应商的默认模型,保证选择器至少有一项。"""
     profile = db.get(ProviderProfile, profile_id)
@@ -150,6 +155,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
 def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
+    ensure_instance_admin(db, user, "credentials")
     profile = db.get(ProviderProfile, profile_id)
     if profile is not None:
         db.delete(profile)
@@ -174,6 +180,7 @@ def get_kb_embedding(db: DbSession, user: CurrentUser) -> KbEmbeddingConfigOut:
 def set_kb_embedding(
     body: KbEmbeddingConfigUpdate, db: DbSession, user: CurrentUser
 ) -> KbEmbeddingConfigOut:
+    ensure_instance_admin(db, user, "credentials")
     if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
     old = kb_config.get()
@@ -206,6 +213,7 @@ def set_kb_embedding(
 
 @router.get("/settings/credentials", response_model=list[CredentialStatusOut])
 def list_credentials(db: DbSession, user: CurrentUser) -> list[CredentialStatusOut]:
+    ensure_instance_admin(db, user, "credentials")
     """Secrets never leave the backend — only configured-status and a hint."""
     stored = {credential.provider: credential for credential in db.scalars(select(Credential))}
     providers = sorted(set(KNOWN_PROVIDERS) | set(stored))
@@ -221,6 +229,7 @@ def list_credentials(db: DbSession, user: CurrentUser) -> list[CredentialStatusO
 
 @router.put("/settings/credentials", response_model=CredentialStatusOut)
 def set_credential(body: CredentialSetRequest, db: DbSession, user: CurrentUser) -> CredentialStatusOut:
+    ensure_instance_admin(db, user, "credentials")
     credential = db.get(Credential, body.provider)
     if credential is None:
         credential = Credential(provider=body.provider, secret=body.secret)
@@ -233,6 +242,7 @@ def set_credential(body: CredentialSetRequest, db: DbSession, user: CurrentUser)
 
 @router.delete("/settings/credentials/{provider}", status_code=204)
 def delete_credential(provider: str, db: DbSession, user: CurrentUser) -> Response:
+    ensure_instance_admin(db, user, "credentials")
     credential = db.get(Credential, provider)
     if credential is not None:
         db.delete(credential)

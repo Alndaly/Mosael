@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     PluginEnableRequest,
     PluginInvocationOut,
@@ -14,6 +14,7 @@ from app.api.schemas import (
     PluginToolOut,
 )
 from app.core.config import settings
+from app.core.permissions import ensure_instance_admin
 from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
 from app.domain.plugins import (
     PluginDomainError,
@@ -29,7 +30,8 @@ router = APIRouter(tags=["plugins"])
 
 
 @router.post("/plugins/scan", response_model=list[PluginOut])
-def scan_plugin_manifests(db: DbSession) -> list[Plugin]:
+def scan_plugin_manifests(db: DbSession, user: CurrentUser) -> list[Plugin]:
+    ensure_instance_admin(db, user, "edit")
     try:
         return scan_plugins(db, settings.plugins_dir)
     except PluginDomainError as exc:
@@ -43,7 +45,8 @@ def list_plugins(db: DbSession) -> list[Plugin]:
 
 
 @router.patch("/plugins/{plugin_id}", response_model=PluginOut)
-def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession) -> Plugin:
+def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession, user: CurrentUser) -> Plugin:
+    ensure_instance_admin(db, user, "edit")
     try:
         return set_plugin_enabled(db, plugin_id, body.enabled)
     except PluginDomainError as exc:
@@ -63,7 +66,11 @@ def update_plugin_permissions(
     plugin_id: str,
     body: PluginPermissionGrantUpdate,
     db: DbSession,
+    user: CurrentUser,
 ) -> list[PluginPermissionGrant]:
+    # Granting a plugin its permissions is the escalation path: an ungated caller could grant
+    # and then invoke in two requests.
+    ensure_instance_admin(db, user, "edit")
     try:
         return set_plugin_permission_grants(db, plugin_id, body.grants)
     except PluginDomainError as exc:
@@ -76,7 +83,10 @@ def list_plugin_tools(db: DbSession) -> list[dict]:
 
 
 @router.post("/plugins/{plugin_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
-def invoke_tool(plugin_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession) -> PluginInvocation:
+def invoke_tool(
+    plugin_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
+) -> PluginInvocation:
+    ensure_instance_admin(db, user, "edit")
     try:
         return invoke_plugin_tool(db, plugin_id, tool_name, body.input)
     except PluginDomainError as exc:
@@ -84,7 +94,8 @@ def invoke_tool(plugin_id: str, tool_name: str, body: PluginInvokeRequest, db: D
 
 
 @router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
-def list_invocations(db: DbSession, plugin_id: str | None = None) -> list[PluginInvocation]:
+def list_invocations(db: DbSession, user: CurrentUser, plugin_id: str | None = None) -> list[PluginInvocation]:
+    ensure_instance_admin(db, user, "edit")
     stmt = select(PluginInvocation)
     if plugin_id:
         stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
@@ -93,7 +104,8 @@ def list_invocations(db: DbSession, plugin_id: str | None = None) -> list[Plugin
 
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
-def delete_invocation(invocation_id: str, db: DbSession) -> None:
+def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> None:
+    ensure_instance_admin(db, user, "edit")
     obj = db.get(PluginInvocation, invocation_id)
     if obj is not None:
         db.delete(obj)
@@ -101,7 +113,8 @@ def delete_invocation(invocation_id: str, db: DbSession) -> None:
 
 
 @router.delete("/plugins/invocations", status_code=204)
-def clear_invocations(db: DbSession, plugin_id: str | None = None) -> None:
+def clear_invocations(db: DbSession, user: CurrentUser, plugin_id: str | None = None) -> None:
+    ensure_instance_admin(db, user, "edit")
     """清空调用记录;带 plugin_id 只清该插件的。"""
     stmt = select(PluginInvocation)
     if plugin_id:

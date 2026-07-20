@@ -74,6 +74,7 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(type(app_settings), "plugins_dir", property(lambda self: plugins_dir))
 
     client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     plugins = client.post("/api/plugins/scan").json()
     assert plugins[0]["id"] == "dev.mibu.text-toolkit"
     client.patch(f"/api/plugins/{plugins[0]['id']}", json={"enabled": True})
