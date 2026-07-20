@@ -256,6 +256,42 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["assets", "ids", "count"],
     },
+    "asset_tag": {
+        "label": "素材打标签",
+        "description": "给素材增删标签 —— 常接「素材筛选」或「循环·遍历」,把整理归档做成一步。",
+        "config": {
+            "asset_ids": {
+                "type": "template",
+                "required": True,
+                "description": "素材 id(逗号分隔,或直接接「素材筛选」的 ids)",
+            },
+            "tags": {"type": "template", "required": True, "description": "标签(逗号分隔)"},
+            "mode": {
+                "type": "string",
+                "description": "add=追加,remove=移除,replace=整组替换",
+                "options": ["add", "remove", "replace"],
+            },
+        },
+        "outputs": ["updated", "count"],
+    },
+    "asset_update": {
+        "label": "素材整理",
+        "description": "重命名素材、或把素材归入某个项目。",
+        "config": {
+            "asset_ids": {"type": "template", "required": True, "description": "素材 id(逗号分隔)"},
+            "name": {"type": "template", "description": "新名称;多个素材时会自动加序号。留空则不改名"},
+            "project_id": {"type": "template", "description": "归入的项目 id;留空则不改动归属"},
+        },
+        "outputs": ["updated", "count"],
+    },
+    "project_create": {
+        "label": "新建项目",
+        "description": "在当前工作区建一个项目,输出它的 id —— 可接「素材整理」把素材归进去。",
+        "config": {
+            "name": {"type": "template", "required": True, "description": "项目名"},
+        },
+        "outputs": ["project_id", "name"],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")

@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job, ProviderProfile, TaskEvent, Transcript, Workflow
+from app.db.models import Asset, Job, Project, ProviderProfile, TaskEvent, Transcript, Workflow
 from app.domain.jobs import create_job
 from app.domain.notifications import notify
 from app.domain.workflows import (
@@ -789,6 +789,94 @@ def _handle_asset_query(db: Session, workflow: Workflow, config: dict[str, Any])
     return {"assets": assets, "ids": [asset["id"] for asset in assets], "count": len(assets)}
 
 
+def _id_list(value: Any) -> list[str]:
+    """Accept either a comma-separated string or a real list.
+
+    Both reach here legitimately: a hand-typed config gives a string, while `{{查询.ids}}`
+    resolves to the list asset_query produced. Treating the list case as a string would
+    stringify it and match nothing, with no error to show for it.
+    """
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").replace("，", ",")
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _handle_asset_tag(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """Add / remove / replace tags on a batch of assets → {updated, count}."""
+    asset_ids = _id_list(config.get("asset_ids"))
+    tags = _id_list(config.get("tags"))
+    mode = str(config.get("mode") or "add").strip() or "add"
+    if mode not in ("add", "remove", "replace"):
+        raise WorkflowDomainError(f"素材打标签:未知的模式 {mode}")
+    if not asset_ids:
+        raise WorkflowDomainError("素材打标签:没有可处理的素材 id")
+    if not tags and mode != "replace":
+        raise WorkflowDomainError("素材打标签:标签不能为空")
+
+    updated: list[dict[str, Any]] = []
+    for asset_id in asset_ids:
+        asset = db.get(Asset, asset_id)
+        # Cross-workspace ids are skipped rather than fatal: a workflow fed by a query cannot
+        # produce them, and one fed by hand should not be able to reach another workspace.
+        if asset is None or asset.workspace_id != workflow.workspace_id:
+            continue
+        current = list(asset.tags or [])
+        if mode == "add":
+            merged = current + [tag for tag in tags if tag not in current]
+        elif mode == "remove":
+            merged = [tag for tag in current if tag not in tags]
+        else:
+            merged = list(tags)
+        # Assigning a new list matters: mutating asset.tags in place leaves the JSON column
+        # unchanged as far as SQLAlchemy is concerned, and the write silently does nothing.
+        asset.tags = merged
+        updated.append({"id": asset.id, "name": asset.name, "tags": merged})
+    db.commit()
+    return {"updated": updated, "count": len(updated)}
+
+
+def _handle_asset_update(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """Rename assets and/or file them under a project → {updated, count}."""
+    asset_ids = _id_list(config.get("asset_ids"))
+    name = str(config.get("name") or "").strip()
+    project_id = str(config.get("project_id") or "").strip()
+    if not asset_ids:
+        raise WorkflowDomainError("素材整理:没有可处理的素材 id")
+    if not name and not project_id:
+        raise WorkflowDomainError("素材整理:至少要设置新名称或目标项目")
+    if project_id:
+        project = db.get(Project, project_id)
+        if project is None or project.workspace_id != workflow.workspace_id:
+            raise WorkflowDomainError("素材整理:目标项目不存在,或不属于当前工作区")
+
+    updated: list[dict[str, Any]] = []
+    for index, asset_id in enumerate(asset_ids):
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != workflow.workspace_id:
+            continue
+        if name:
+            # One name across many assets would produce N identical names, which is unusable
+            # in a picker — number them instead.
+            asset.name = name if len(asset_ids) == 1 else f"{name} {index + 1}"
+        if project_id:
+            asset.project_id = project_id
+        updated.append({"id": asset.id, "name": asset.name, "project_id": asset.project_id})
+    db.commit()
+    return {"updated": updated, "count": len(updated)}
+
+
+def _handle_project_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    name = str(config.get("name") or "").strip()
+    if not name:
+        raise WorkflowDomainError("新建项目:项目名不能为空")
+    project = Project(workspace_id=workflow.workspace_id, name=name)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return {"project_id": project.id, "name": project.name}
+
+
 def _truthy(value: Any) -> bool:
     """Loop-condition truthiness: real bools/None as-is; strings "false"/"0"/"" (any case) are False."""
     if isinstance(value, str):
@@ -844,4 +932,7 @@ _HANDLERS: dict[str, Callable[[Session, Workflow, dict[str, Any]], dict[str, Any
     "loop_foreach": _handle_loop_foreach,
     "loop_while": _handle_loop_while,
     "asset_query": _handle_asset_query,
+    "asset_tag": _handle_asset_tag,
+    "asset_update": _handle_asset_update,
+    "project_create": _handle_project_create,
 }

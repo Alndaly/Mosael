@@ -61,6 +61,9 @@ import {
   Wand2,
   Workflow as WorkflowIcon,
   Wrench,
+  Tags,
+  FolderInput,
+  FolderPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -128,6 +131,9 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   loop_foreach: <Repeat size={13} />,
   loop_while: <RefreshCw size={13} />,
   asset_query: <Filter size={13} />,
+  asset_tag: <Tags size={13} />,
+  asset_update: <FolderInput size={13} />,
+  project_create: <FolderPlus size={13} />,
 };
 
 interface WfNodeData extends Record<string, unknown> {
