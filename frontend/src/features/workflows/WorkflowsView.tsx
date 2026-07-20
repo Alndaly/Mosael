@@ -1118,7 +1118,9 @@ function WorkflowEditor({
               />
             );
           })()}
-        {selectedNode && (
+        {/* 钻进循环体时不渲染外层检查器:它和覆盖层同为 z-index:30 且在 DOM 里更靠后,会盖住
+            子画布头部(返回/面包屑/添加节点)。子画布有自己的检查器;外层节点回主流程再编辑。 */}
+        {selectedNode && !editingLoopId && (
           <NodeInspector
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
