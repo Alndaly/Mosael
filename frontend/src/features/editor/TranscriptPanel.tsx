@@ -404,6 +404,45 @@ export function TranscriptPanel({
             </button>
           </>
         )}
+        {onTranslateToSubtitles && (
+          <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
+            <PopoverTrigger asChild>
+              <button type="button" className="ts-tool" disabled={translating} title={t("transcriptTranslateNote")}>
+                {translating ? <Loader2 size={12} className="spin" /> : <Languages size={12} />}
+                {t("transcriptTranslateToSubtitles")}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="sub-translate-pop" align="start">
+              <strong>{t("transcriptTranslateToSubtitles")}</strong>
+              <label className="sub-translate-row">
+                <span>{t("subtitleTranslateTo")}</span>
+                <Select value={lang} onValueChange={setLang}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSLATE_LANGS.map((code) => (
+                      <SelectItem key={code} value={code}>
+                        {t(("lang_" + code.replace("-", "_")) as never)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <Button
+                size="sm"
+                disabled={translating}
+                onClick={() => {
+                  setTranslateOpen(false);
+                  onTranslateToSubtitles(lang);
+                }}
+              >
+                <Languages size={13} /> {t("transcriptTranslateGo")}
+              </Button>
+              <small className="sub-translate-note">{t("transcriptTranslateNote")}</small>
+            </PopoverContent>
+          </Popover>
+        )}
         {showSilences && silences.length > 0 && (
           <button type="button" className="ts-tool" title={t("removeAllSilences")} onClick={selectAllSilences}>
             {t("selectAllSilences")}
@@ -539,48 +578,6 @@ export function TranscriptPanel({
           );
         })}
       </div>
-
-      {onTranslateToSubtitles && (
-        <div className="ts-footer">
-          <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
-            <PopoverTrigger asChild>
-              <button type="button" className="ts-tool" disabled={translating}>
-                {translating ? <Loader2 size={12} className="spin" /> : <Languages size={12} />}
-                {t("transcriptTranslateToSubtitles")}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="sub-translate-pop" align="start">
-              <strong>{t("transcriptTranslateToSubtitles")}</strong>
-              <label className="sub-translate-row">
-                <span>{t("subtitleTranslateTo")}</span>
-                <Select value={lang} onValueChange={setLang}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSLATE_LANGS.map((code) => (
-                      <SelectItem key={code} value={code}>
-                        {t(("lang_" + code.replace("-", "_")) as never)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <Button
-                size="sm"
-                disabled={translating}
-                onClick={() => {
-                  setTranslateOpen(false);
-                  onTranslateToSubtitles(lang);
-                }}
-              >
-                <Languages size={13} /> {t("transcriptTranslateGo")}
-              </Button>
-              <small className="sub-translate-note">{t("transcriptTranslateNote")}</small>
-            </PopoverContent>
-          </Popover>
-        </div>
-      )}
 
       {selected.size > 0 && (
         <div className="tsd-bar">
