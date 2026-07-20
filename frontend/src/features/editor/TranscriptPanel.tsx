@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
+import { AudioLines, Languages, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
 import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -12,6 +12,10 @@ import {
   projectTranscript,
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TRANSLATE_LANGS } from "@/features/editor/subtitleStyle";
 import { useEditorStore } from "@/stores/editorStore";
 
 type TranscriptOut = components["schemas"]["TranscriptOut"];
@@ -36,9 +40,16 @@ export function TranscriptPanel({
   onCutSegment,
   onCutRanges,
   onSplitPoints,
+  onTranslateToSubtitles,
+  translating,
 }: {
   sequence: Sequence;
   onCutSegment: (clipId: string, srcStart: number, srcEnd: number) => void;
+  /** Generate the subtitle track from this transcript, translated into `lang` on the way.
+      The transcript is a read-only projection of the clips, so a translation has no home
+      here — the subtitle track is where it belongs, and this produces it in one step. */
+  onTranslateToSubtitles?: (lang: string) => void;
+  translating?: boolean;
   onCutRanges?: (cuts: Array<{ clipId: string; ranges: CutRange[] }>) => void;
   // Split (not remove) the named clips at these source-time points → 按句切分 / 单句独立 / 切一刀.
   onSplitPoints?: (cuts: Array<{ clipId: string; srcTimes: number[] }>) => void;
@@ -48,6 +59,8 @@ export function TranscriptPanel({
   const playhead = useEditorStore((state) => state.playhead);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
   const [showSilences, setShowSilences] = React.useState(false);
+  const [translateOpen, setTranslateOpen] = React.useState(false);
+  const [lang, setLang] = React.useState("zh-CN");
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
   const [asrError, setAsrError] = React.useState<string | null>(null);
 
@@ -526,6 +539,48 @@ export function TranscriptPanel({
           );
         })}
       </div>
+
+      {onTranslateToSubtitles && (
+        <div className="ts-footer">
+          <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
+            <PopoverTrigger asChild>
+              <button type="button" className="ts-tool" disabled={translating}>
+                {translating ? <Loader2 size={12} className="spin" /> : <Languages size={12} />}
+                {t("transcriptTranslateToSubtitles")}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="sub-translate-pop" align="start">
+              <strong>{t("transcriptTranslateToSubtitles")}</strong>
+              <label className="sub-translate-row">
+                <span>{t("subtitleTranslateTo")}</span>
+                <Select value={lang} onValueChange={setLang}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSLATE_LANGS.map((code) => (
+                      <SelectItem key={code} value={code}>
+                        {t(("lang_" + code.replace("-", "_")) as never)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <Button
+                size="sm"
+                disabled={translating}
+                onClick={() => {
+                  setTranslateOpen(false);
+                  onTranslateToSubtitles(lang);
+                }}
+              >
+                <Languages size={13} /> {t("transcriptTranslateGo")}
+              </Button>
+              <small className="sub-translate-note">{t("transcriptTranslateNote")}</small>
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
 
       {selected.size > 0 && (
         <div className="tsd-bar">

@@ -37,6 +37,7 @@ import {
   setSequenceReframe,
   setClipText,
   setClipTexts,
+  translateTexts,
   trimClip,
   undoSequence,
   type Asset,
@@ -362,8 +363,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: refreshSequences,
   });
   // 一键从逐字稿生成字幕:拉齐所有视频/音频片段的转写,投影到时间线句子,批量插到字幕轨。
+  // One pipeline, two entry points. Passing a target language inserts a translation step
+  // between projecting the transcript and writing the cues — "翻译成字幕" is the same job as
+  // "从逐字稿生成", not a parallel implementation of it.
   const generateSubtitlesMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (targetLang?: string) => {
       const seq = sequence!;
       const tracks = seq.tracks ?? [];
       const clips = [
@@ -401,8 +405,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       let track = tracks.find((tk) => tk.kind === "subtitle" && !tk.locked);
       if (!track) track = (await addTrack(seq.id, "subtitle")).tracks?.find((tk) => tk.kind === "subtitle");
       if (!track) throw new Error(t("subtitleNoTranscript"));
-      const cues = sentences.map((s) => ({
-        text: s.text,
+      // Translated in one batched, concurrent request — the same path the subtitle panel uses,
+      // so a 200-cue transcript costs one round-trip's latency rather than 200.
+      const texts = targetLang
+        ? (await translateTexts(sentences.map((s) => s.text), targetLang)).translations
+        : sentences.map((s) => s.text);
+      const cues = sentences.map((s, i) => ({
+        text: (texts[i] || s.text).trim() || s.text,
         timeline_start: s.timelineStart,
         duration: Math.max(0.4, s.timelineEnd - s.timelineStart),
       }));
@@ -819,6 +828,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
               onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
               onSplitPoints={(cuts) => splitPointsMutation.mutate(cuts)}
+              onTranslateToSubtitles={(lang) => generateSubtitlesMutation.mutate(lang)}
+              translating={generateSubtitlesMutation.isPending}
             />
           ) : (
             <SubtitlePanel
@@ -826,7 +837,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
               onApplyTexts={(texts) => setTextsMutation.mutateAsync(texts)}
               onAddSubtitle={() => addSubtitleMutation.mutate()}
-              onGenerate={() => generateSubtitlesMutation.mutate()}
+              onGenerate={() => generateSubtitlesMutation.mutate(undefined)}
               generating={generateSubtitlesMutation.isPending}
               style={styleDraft ?? ((sequence.subtitle_style ?? {}) as Record<string, unknown>)}
               fonts={fonts.data ?? []}

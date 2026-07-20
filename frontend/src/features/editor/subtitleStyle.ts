@@ -96,3 +96,8 @@ export function subtitleCss(style: SubtitleStyle, frameWidth: number): React.CSS
   }
   return css;
 }
+
+
+/** Target languages offered wherever translation appears (Google codes; the AI path takes the
+    same codes as hints). Shared so the transcript and subtitle panels cannot drift apart. */
+export const TRANSLATE_LANGS = ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"] as const;
