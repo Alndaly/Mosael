@@ -9124,6 +9124,152 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/queue": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List Queued Messages",
+        "description": "Messages waiting behind the current answer. Empty when nothing is running.",
+        "operationId": "list_queued_messages_api_agent_sessions__session_id__queue_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentMessageOut"
+                  },
+                  "title": "Response List Queued Messages Api Agent Sessions  Session Id  Queue Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/queue/{message_id}": {
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Cancel Queued Message",
+        "description": "Withdraw a queued message. Deleting the row alone is not enough — the model already\nholds it, so the turn's queue is resent without it.",
+        "operationId": "cancel_queued_message_api_agent_sessions__session_id__queue__message_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancel Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/stop": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Stop Agent Turn",
+        "description": "Stop the running turn, keeping the partial answer.\n\nNot an error when nothing is running: the user pressing stop just as a turn finishes is\na race they cannot see, and an error toast for it would be noise.",
+        "operationId": "stop_agent_turn_api_agent_sessions__session_id__stop_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Stop Agent Turn Api Agent Sessions  Session Id  Stop Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/stream": {
       "get": {
         "tags": [

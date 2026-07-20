@@ -9,7 +9,7 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, steer_turn
+from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, set_turn_queue, steer_turn
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
@@ -315,6 +315,55 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             callback(session_id)
         except Exception:
             logger.exception("Turn callback failed")
+
+
+def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -> list[str]:
+    """Drop one message the user queued into the running turn, and resend what remains.
+
+    The message was already handed to pi, so removing the row is not enough — the model would
+    still act on it. Returns the texts still pending, which is what the caller renders.
+    """
+    message = db.get(AgentMessage, message_id)
+    if message is None or message.session_id != session.id or message.role != "user":
+        raise HostError("找不到这条排队消息")
+
+    queued = _queued_messages(db, session)
+    if message.id not in {item.id for item in queued}:
+        raise HostError("这条消息已经开始处理,无法撤回")
+
+    db.delete(message)
+    db.commit()
+    remaining = [item.content for item in _queued_messages(db, session)]
+    set_turn_queue(session.id, remaining)
+    return remaining
+
+
+def _queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:
+    """User messages that arrived after the turn's own prompt and are still waiting.
+
+    A turn begins with exactly one user message, so anything the user sent after the newest
+    assistant message — beyond that first one — is still queued behind the current answer.
+    """
+    if session.status != "running":
+        return []
+    messages = list(
+        db.scalars(
+            select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)
+        )
+    )
+    trailing: list[AgentMessage] = []
+    for message in reversed(messages):
+        if message.role != "user":
+            break
+        trailing.append(message)
+    trailing.reverse()
+    # The first of the trailing user messages is the one this turn is answering.
+    return trailing[1:]
+
+
+def queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:
+    """Public view of what is still waiting behind the current answer."""
+    return _queued_messages(db, session)
 
 
 def stop_turn(db: Session, session: AgentSession) -> bool:

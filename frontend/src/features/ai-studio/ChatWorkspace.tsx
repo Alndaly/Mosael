@@ -134,15 +134,23 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
-  // Messages sent into a running turn. They are already stored and shown as user bubbles, but
-  // they will not be answered until the current assistant message finishes, and saying so is
-  // the difference between "queued" and "ignored".
-  const [queued, setQueued] = React.useState(0);
-  // The count describes one run. Leaving it up after the turn ends would claim messages are
-  // still waiting when they have already been answered.
-  React.useEffect(() => {
-    if (!running) setQueued(0);
-  }, [running]);
+  // What is still waiting behind the current answer. Read from the server rather than counted
+  // locally so it survives a reload and stays right when a turn ends mid-flight.
+  const queue = useQuery({
+    queryKey: ["agent-queue", activeSession?.id],
+    enabled: Boolean(activeSession) && running,
+    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${activeSession!.id}/queue`),
+    refetchInterval: 1500,
+  });
+  const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const cancelQueued = useMutation({
+    mutationFn: (messageId: string) =>
+      api(`/api/agent/sessions/${activeSession?.id}/queue/${messageId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
+    },
+  });
   const showStop = running && !draft.trim() && attachments.length === 0;
   const stopTurn = useMutation({
     mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
@@ -197,7 +205,7 @@ export function ChatWorkspace({
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
       setDraft("");
-      if (running) setQueued((count) => count + 1);
+      void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
       void attachStream(targetId);
@@ -335,7 +343,12 @@ export function ChatWorkspace({
           <>
             <div className="chat-thread" ref={threadRef}>
               {(messages.data ?? []).map((message) => (
-                <ChatBubble key={message.id} message={message} />
+                <ChatBubble
+                  key={message.id}
+                  message={message}
+                  queued={queuedIds.has(message.id)}
+                  onCancel={queuedIds.has(message.id) ? () => cancelQueued.mutate(message.id) : undefined}
+                />
               ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
@@ -360,12 +373,6 @@ export function ChatWorkspace({
                 <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
               )}
             </div>
-            {running && queued > 0 && (
-              <div className="chat-queued">
-                <Clock size={11} />
-                {t("chatQueued").replace("{n}", String(queued))}
-              </div>
-            )}
             {attachments.length > 0 && (
               <div className="chat-attachments">
                 {attachments.map((asset) => (
@@ -488,7 +495,15 @@ export function ChatWorkspace({
   );
 }
 
-function ChatBubble({ message }: { message: AgentMessage }) {
+function ChatBubble({
+  message,
+  queued,
+  onCancel,
+}: {
+  message: AgentMessage;
+  queued?: boolean;
+  onCancel?: () => void;
+}) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
   const payload = message.payload as { duration_seconds?: number; tools?: ToolCall[] } | null;
@@ -502,7 +517,7 @@ function ChatBubble({ message }: { message: AgentMessage }) {
   };
 
   return (
-    <div className={`chat-bubble ${message.role}`}>
+    <div className={`chat-bubble ${message.role}${queued ? " queued" : ""}`}>
       {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
       {message.role === "assistant" ? (
         message.error ? (
@@ -512,6 +527,17 @@ function ChatBubble({ message }: { message: AgentMessage }) {
         )
       ) : (
         <div className="chat-bubble-content">{message.content}</div>
+      )}
+      {queued && (
+        <div className="chat-queued-meta">
+          <Clock size={10} />
+          {t("chatQueuedOne")}
+          {onCancel && (
+            <button type="button" className="chat-queued-cancel" onClick={onCancel}>
+              {t("chatQueuedCancel")}
+            </button>
+          )}
+        </div>
       )}
       {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
       {message.role === "assistant" && (

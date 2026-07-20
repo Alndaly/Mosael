@@ -142,6 +142,19 @@ def steer_turn(session_id: str, prompt: str, mode: str = "steer") -> bool:
     return live.send({"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode})
 
 
+def set_turn_queue(session_id: str, prompts: list[str]) -> bool:
+    """Replace the running turn's steering queue. False when there is no turn to talk to.
+
+    Declaring the whole queue rather than deleting one entry is what makes per-message cancel
+    possible at all: pi can clear its queue but cannot remove a single item from it.
+    """
+    with _LIVE_LOCK:
+        live = _LIVE.get(session_id)
+    if live is None:
+        return False
+    return live.send({"type": "queue", "turnId": live.turn_id, "prompts": prompts})
+
+
 def abort_turn(session_id: str) -> bool:
     """Stop the running turn, keeping whatever it produced. False when nothing is running."""
     with _LIVE_LOCK:

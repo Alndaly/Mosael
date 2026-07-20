@@ -92,6 +92,15 @@ async function main(): Promise<void> {
           else agent.steer(message);
           send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: true });
         }
+      } else if (msg.type === "queue") {
+        const agent = active.get(msg.turnId);
+        if (agent) {
+          agent.clearSteeringQueue();
+          for (const prompt of msg.prompts) {
+            agent.steer({ role: "user" as const, content: prompt, timestamp: Date.now() });
+          }
+        }
+        send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
       } else if (msg.type === "abort") {
         active.get(msg.turnId)?.abort();
       } else {

@@ -151,10 +151,22 @@ export function WorkflowAgentChat({
   const running = live.data?.status === "running";
   // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
   // injects it into the running turn, and one button covers stop-vs-send.
-  const [queued, setQueued] = React.useState(0);
-  React.useEffect(() => {
-    if (!running) setQueued(0);
-  }, [running]);
+  // Same source of truth as the studio chat: the server knows what is still waiting.
+  const queue = useQuery({
+    queryKey: ["agent-queue", sessionId],
+    enabled: Boolean(sessionId) && running,
+    queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/queue`),
+    refetchInterval: 1500,
+  });
+  const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const cancelQueued = useMutation({
+    mutationFn: (messageId: string) =>
+      api(`/api/agent/sessions/${sessionId}/queue/${messageId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
+      void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
+    },
+  });
   const showStop = running && !draft.trim() && attachments.length === 0;
   const stopTurn = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
@@ -253,7 +265,7 @@ export function WorkflowAgentChat({
     onSuccess: () => {
       setDraft("");
       setAttachments([]);
-      if (running) setQueued((count) => count + 1);
+      void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
       if (sessionId) void attachStream(sessionId);
     },
@@ -291,8 +303,9 @@ export function WorkflowAgentChat({
         )}
         {(messages.data ?? []).map((message) => {
           const payload = message.payload as { tools?: ToolCall[] } | null;
+          const isQueued = queuedIds.has(message.id);
           return (
-            <div key={message.id} className={`wf-agent-msg ${message.role}`}>
+            <div key={message.id} className={`wf-agent-msg ${message.role}${isQueued ? " queued" : ""}`}>
               {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
               {message.role === "assistant" ? (
                 message.error ? (
@@ -302,6 +315,15 @@ export function WorkflowAgentChat({
                 )
               ) : (
                 message.content
+              )}
+              {isQueued && (
+                <div className="chat-queued-meta">
+                  <Clock size={10} />
+                  {t("chatQueuedOne")}
+                  <button type="button" className="chat-queued-cancel" onClick={() => cancelQueued.mutate(message.id)}>
+                    {t("chatQueuedCancel")}
+                  </button>
+                </div>
               )}
             </div>
           );
@@ -321,12 +343,6 @@ export function WorkflowAgentChat({
           </div>
         )}
       </div>
-      {running && queued > 0 && (
-        <div className="chat-queued">
-          <Clock size={11} />
-          {t("chatQueued").replace("{n}", String(queued))}
-        </div>
-      )}
       {attachments.length > 0 && (
         <div className="wf-agent-attachments">
           {attachments.map((file, i) => (

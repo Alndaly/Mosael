@@ -9309,13 +9309,35 @@
   flex: 0 0 auto;
 }
 
-.chat-queued {
+/* 排队中的消息:仍然留在对话流里(和 ChatGPT / Codex 一致),压暗表示还没被处理,
+   并且可以撤回——只能看不能撤的队列不算队列。 */
+.chat-bubble.queued,
+.wf-agent-msg.queued {
+  opacity: 0.62;
+}
+
+.chat-queued-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px 6px;
+  gap: 5px;
+  margin-top: 4px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 10px;
+}
+
+.chat-queued-cancel {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-queued-cancel:hover {
+  color: var(--foreground);
 }
 
 /* ---------- 工具结果卡 ----------

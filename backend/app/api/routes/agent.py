@@ -77,6 +77,26 @@ def post_agent_message(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.get("/agent/sessions/{session_id}/queue", response_model=list[AgentMessageOut])
+def list_queued_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
+    """Messages waiting behind the current answer. Empty when nothing is running."""
+    session = _require_session(db, user, session_id)
+    return host.queued_messages(db, session)
+
+
+@router.delete("/agent/sessions/{session_id}/queue/{message_id}")
+def cancel_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """Withdraw a queued message. Deleting the row alone is not enough — the model already
+    holds it, so the turn's queue is resent without it."""
+    session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    try:
+        remaining = host.cancel_queued_message(db, session, message_id)
+    except host.HostError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"remaining": len(remaining)}
+
+
 @router.post("/agent/sessions/{session_id}/stop")
 def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
     """Stop the running turn, keeping the partial answer.

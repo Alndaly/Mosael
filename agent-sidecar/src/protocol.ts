@@ -41,13 +41,26 @@ export interface SteerRequest {
   mode?: "steer" | "follow_up";
 }
 
+/**
+ * Declare the whole steering queue, replacing whatever is pending.
+ *
+ * pi can clear the queue but not remove one entry from it, and the UI needs per-message
+ * cancel. Sending the desired queue rather than a delete makes that possible and is
+ * idempotent: the client says what should be pending, not what changed.
+ */
+export interface QueueRequest {
+  type: "queue";
+  turnId: string;
+  prompts: string[];
+}
+
 /** Stop a running turn. Whatever it produced so far is kept. */
 export interface AbortRequest {
   type: "abort";
   turnId: string;
 }
 
-export type Request = RunTurnRequest | SteerRequest | AbortRequest;
+export type Request = RunTurnRequest | SteerRequest | QueueRequest | AbortRequest;
 
 /** Sidecar -> backend events. */
 export type Event =
