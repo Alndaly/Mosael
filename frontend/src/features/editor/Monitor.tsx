@@ -455,9 +455,13 @@ export function Monitor({
               {activeSubtitle.text_override}
             </div>
           )}
-          {/* TEMP diagnostic (enable via localStorage['mibu.subdebug']='1') — remove after we find why
-              app subtitles don't render for some sequences. Reports the runtime decision on-screen. */}
-          {typeof window !== "undefined" && window.localStorage.getItem("mibu.subdebug") === "1" && (
+          {/* TEMP diagnostic — subtitles don't render for some sequences and every static check
+              (data, serialisation, range math, CSS) says they should, so we need the runtime
+              decision. Shown automatically in dev (never in a production build); set
+              localStorage['mibu.subdebug']='0' to silence it. Remove once diagnosed. */}
+          {typeof window !== "undefined" &&
+            window.localStorage.getItem("mibu.subdebug") !== "0" &&
+            (import.meta.env.DEV || window.localStorage.getItem("mibu.subdebug") === "1") && (
             <div
               style={{
                 position: "absolute",
