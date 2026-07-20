@@ -143,3 +143,52 @@ def test_nothing_is_queued_when_idle() -> None:
     client = fresh_client()
     sid = _session(client)
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+
+
+def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
+    """A queued message must land in the transcript where it was SENT, not where it was typed.
+
+    Messages are ordered by created_at, and a queued one is stamped the moment the user hits
+    enter — long before the agent gets to it. Left at that timestamp it sorts ahead of the
+    previous turn's answer, and the conversation reads as every question in a row followed by
+    every answer in a row, which is exactly what it looked like.
+    """
+    monkeypatch.setattr(
+        host,
+        "run_turn",
+        lambda *a, **kw: (time.sleep(0.2), TurnResult(text=f"答:{kw['prompt']}"))[-1],
+    )
+
+    client = fresh_client()
+    sid = _session(client)
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "一"})
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "二"})
+    assert _wait_idle(sid) == "idle"
+
+    transcript = [(m["role"], m["content"]) for m in client.get(f"/api/agent/sessions/{sid}/messages").json()]
+
+    assert transcript == [
+        ("user", "一"),
+        ("assistant", "答:一"),
+        ("user", "二"),
+        ("assistant", "答:二"),
+    ], transcript
+
+
+def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch) -> None:
+    """Same rule for the other path: it joins the conversation when it is cut in."""
+    monkeypatch.setattr(host, "run_turn", _slow_turn)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": True)
+
+    client = fresh_client()
+    sid = _session(client)
+    first = client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "一"}).json()
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "改一下"})
+    queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
+    client.post(f"/api/agent/sessions/{sid}/queue/{queued[0]['id']}/steer")
+
+    with SessionLocal() as db:
+        steered = db.get(AgentMessage, queued[0]["id"])
+        original = db.get(AgentMessage, first["id"])
+        assert steered.created_at >= original.created_at
+        assert not (steered.payload or {}).get("queued")

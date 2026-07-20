@@ -397,11 +397,22 @@ def _queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:
 
 
 def _unqueue(db: Session, message: AgentMessage) -> None:
-    """Clear the flag. Assigning a new dict matters — mutating the JSON column in place leaves
-    SQLAlchemy seeing no change and the write silently does nothing."""
+    """Take a message out of the queue, as of now.
+
+    The timestamp is restamped on purpose. The transcript is ordered by created_at, and a
+    queued message was stamped when it was typed — long before it was sent. Left alone it
+    sorts ahead of the answer to the previous turn, so a conversation reads as every question
+    in a row followed by every answer in a row. It enters the conversation when it is
+    dequeued, and that is the time the transcript should show.
+
+    Assigning a new dict matters too — mutating the JSON column in place leaves SQLAlchemy
+    seeing no change and the write silently does nothing.
+    """
     payload = dict(message.payload or {})
     payload.pop("queued", None)
+    payload.pop("queued_by", None)
     message.payload = payload
+    message.created_at = now()
 
 
 def steer_queued_message(db: Session, session: AgentSession, message_id: str, user: User) -> bool:
