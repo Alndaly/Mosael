@@ -271,6 +271,34 @@ export class ProxyVideoSource {
     return this.frames[0]?.frame ?? null;
   }
 
+  /**
+   * Release GPU-side resources but KEEP the parsed samples.
+   *
+   * Parking used to mean "leave the source completely alone", which quietly pinned up to
+   * MAX_FRAMES open VideoFrames (~1.4MB each at 720p) plus a configured VideoDecoder per
+   * off-screen clip — invisible to the pool's budget, which only counts encoded bytes, and
+   * enough to exhaust the browser's limit on concurrent hardware decoders. After this, encoded
+   * samples are genuinely all a parked source retains, so `retainedBytes` tells the truth.
+   *
+   * frameAt() revives it: ensureDecoder reconfigures, and a decodeCursor of 0 with no buffered
+   * frames makes the next call take the seek path to the right keyframe.
+   */
+  park(): void {
+    if (this.closed) return;
+    for (const f of this.frames) f.frame.close();
+    this.frames = [];
+    if (this.decoder && this.decoder.state !== "closed") {
+      try {
+        this.decoder.close();
+      } catch {
+        /* already closing */
+      }
+    }
+    this.decoder = null;
+    this.configured = false;
+    this.decodeCursor = 0;
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;

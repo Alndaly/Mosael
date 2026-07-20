@@ -89,6 +89,7 @@ export function CanvasCompositor({
     }
     for (const [id, source] of sourcesRef.current) {
       if (!wantVideo.has(id)) {
+        source.park(); // drop decoded frames + the decoder; keep the parsed samples
         idleRef.current.set(id, source);
         sourcesRef.current.delete(id);
       }
@@ -161,6 +162,20 @@ export function CanvasCompositor({
       const signature = resolved
         .map((m, i) => `${currentLayers[i].clip.id}:${m ? mediaKey(m.source) : "-"}`)
         .join("|");
+
+      // Report anything that will never produce a picture, once per asset, so the caller can
+      // switch back to element playback rather than showing black. This MUST stay above the
+      // settle check below: a proxy fails asynchronously, typically long after a paused canvas
+      // has settled, and a settled canvas never re-enters the code past that early return — so
+      // putting this after it meant the fallback silently never fired on a paused editor.
+      for (const layer of currentLayers) {
+        const source = sourcesRef.current.get(layer.asset.id);
+        if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
+          reportedFailures.current.add(layer.asset.id);
+          onSourceFailedRef.current?.(layer.asset.id);
+        }
+      }
+
       if (playhead === lastPlayhead && signature === lastSignature && !dirtyRef.current) {
         if (settled >= SETTLE_FRAMES) return;
         settled += 1;
@@ -170,16 +185,6 @@ export function CanvasCompositor({
       lastPlayhead = playhead;
       lastSignature = signature;
       dirtyRef.current = false;
-
-      // Report anything that will never produce a picture, once per asset, so the caller can
-      // switch back to element playback rather than showing black.
-      for (const layer of currentLayers) {
-        const source = sourcesRef.current.get(layer.asset.id);
-        if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
-          reportedFailures.current.add(layer.asset.id);
-          onSourceFailedRef.current?.(layer.asset.id);
-        }
-      }
 
       ctx.clearRect(0, 0, width, height);
 
