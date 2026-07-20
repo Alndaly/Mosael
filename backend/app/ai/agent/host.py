@@ -185,33 +185,43 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         session = db.get(AgentSession, session_id)
         if session is None:
             return
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            workspace_id=session.workspace_id,
-            skills_index=skills_index_for_prompt() or "(暂无技能)",
-        )
-        # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
-        provider_dict: dict | None = None
-        agent_model: str | None = None
-        if session.adapter == "pi":
-            from app.domain.provider_defaults import resolve_default
-            from app.domain.providers import first_enabled_profile, resolve_profile
-
-            # 解析顺序:会话选定 → 「对话」能力的默认供应商 → 第一个启用供应商
-            profile = None
-            model = session.model or ""
-            if session.provider_profile_id:
-                profile = resolve_profile(db, "", session.provider_profile_id)
-            if profile is None:
-                default_profile, default_model = resolve_default(db, "chat")
-                if default_profile is not None:
-                    profile = default_profile
-                    model = model or default_model
-            if profile is None:
-                profile = first_enabled_profile(db)
-            if profile is not None:
-                provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
-                agent_model = model or profile.default_model
+        # Everything below runs inside the try: a failure while resolving the provider (or
+        # building the prompt) must still write an error message and reset session.status —
+        # otherwise the worker dies silently and the session hangs in "running" forever.
         try:
+            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+                workspace_id=session.workspace_id,
+                skills_index=skills_index_for_prompt() or "(暂无技能)",
+            )
+            # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
+            provider_dict: dict | None = None
+            agent_model: str | None = None
+            if session.adapter == "pi":
+                from app.domain.provider_defaults import resolve_default
+                from app.domain.providers import first_enabled_profile, resolve_profile
+
+                # 解析顺序:会话选定 → 「对话」能力的默认供应商 → 第一个启用供应商
+                profile = None
+                model = session.model or ""
+                if session.provider_profile_id:
+                    profile = resolve_profile(db, "", session.provider_profile_id)
+                if profile is None:
+                    default_profile, default_model = resolve_default(db, "chat")
+                    if default_profile is not None:
+                        profile = default_profile
+                        model = model or default_model
+                if profile is None:
+                    profile = first_enabled_profile(db)
+                if profile is not None:
+                    provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
+                    agent_model = (model or profile.default_model or "").strip()
+                    # A profile with no usable model would otherwise reach the sidecar as model=""
+                    # and come back as a silent empty turn.
+                    if not agent_model:
+                        raise AdapterError(
+                            f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
+                            "或在对话框的模型选择器里选一个。"
+                        )
             result: TurnResult = run_turn(
                 session.adapter,
                 prompt=prompt,
@@ -230,6 +240,14 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             if result.adapter_state is not None:
                 session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
             tool_cards = get_stream_state(session_id)["tools"]  # 持久化工具卡到消息,turn 结束后仍可见
+            # Never persist a blank assistant turn: an empty reply with no tool calls means the
+            # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
+            # provider misconfiguration look like "nothing happened".
+            if not final_text.strip() and not tool_cards:
+                raise AdapterError(
+                    "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
+                    "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
+                )
             db.add(
                 AgentMessage(
                     session_id=session.id,

@@ -78,6 +78,68 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     assert client.get(f"/api/agent/sessions/{session['id']}").json()["status"] == "idle"
 
 
+def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
+    """供应商配错时模型返回空 —— 必须报错,不能写一条空消息(界面上看着像什么都没发生)。"""
+
+    def empty_run_turn(*args, **kwargs):
+        return TurnResult(text="")
+
+    monkeypatch.setattr(host, "run_turn", empty_run_turn)
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+
+    deadline = time.time() + 10
+    messages = []
+    while time.time() < deadline:
+        messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+        if len(messages) >= 2:
+            break
+        time.sleep(0.1)
+    assert len(messages) >= 2, messages
+    reply = messages[1]
+    assert reply["content"].strip(), "空回复不能落成空气泡"
+    assert reply["error"], "必须带上错误详情"
+    assert "供应商" in reply["error"] or "base_url" in reply["error"]
+    assert client.get(f"/api/agent/sessions/{session['id']}").json()["status"] == "idle"
+
+
+def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
+    """供应商存在但没有可用模型 —— 开跑前就要报错,而不是把 model="" 丢给 sidecar。"""
+    called = {"ran": False}
+
+    def should_not_run(*args, **kwargs):
+        called["ran"] = True
+        return TurnResult(text="should not get here")
+
+    monkeypatch.setattr(host, "run_turn", should_not_run)
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    # 启用一个没有 default_model 的供应商
+    client.post(
+        "/api/settings/providers",
+        json={"name": "P", "vendor": "openai-compatible", "base_url": "http://localhost:1/v1", "api_key": "k", "default_model": "", "enabled": True},
+    )
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+
+    deadline = time.time() + 10
+    messages = []
+    while time.time() < deadline:
+        messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+        if len(messages) >= 2:
+            break
+        time.sleep(0.1)
+    assert len(messages) >= 2, messages
+    # 必须是「没有可用的模型」,而不是「未配置可用的 AI 供应商」——否则说明供应商压根没建成,
+    # 这条用例就没真正覆盖到新加的模型预检。
+    assert "模型" in messages[1]["error"], messages[1]["error"]
+    assert called["ran"] is False, "不该真的去跑 sidecar"
+
+
 def test_second_message_while_running_rejected(monkeypatch) -> None:
     def slow_run_turn(*args, **kwargs):
         time.sleep(1.5)

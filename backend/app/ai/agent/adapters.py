@@ -128,6 +128,7 @@ def _run_pi(
 
     result_text: str | None = None
     result_state: object | None = None
+    saw_tool = False
     for line in process.stdout:
         line = line.strip()
         if not line:
@@ -139,17 +140,28 @@ def _run_pi(
         kind = event.get("type")
         if kind == "text_delta" and on_delta is not None:
             on_delta(str(event.get("delta", "")))
-        elif kind in ("tool_start", "tool_end") and on_tool is not None:
-            on_tool(event)
+        elif kind in ("tool_start", "tool_end"):
+            saw_tool = True
+            if on_tool is not None:
+                on_tool(event)
         elif kind == "turn_done":
             result_text = str(event.get("text", ""))
             result_state = event.get("sessionState")
         elif kind == "error":
             raise AdapterError(_tail(str(event.get("message", "pi sidecar error"))))
     process.wait(timeout=TURN_TIMEOUT_SECONDS)
+    stderr_tail = _tail(process.stderr.read() if process.stderr else "")
     if result_text is None:
-        stderr_tail = _tail(process.stderr.read() if process.stderr else "")
         raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
+    if not result_text.strip() and not saw_tool:
+        # A turn that finished with neither text nor tool calls means the model call itself failed
+        # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
+        # surface as an empty chat bubble — the user has to be told why nothing came back.
+        raise AdapterError(
+            stderr_tail
+            or "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
+            "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
+        )
     return TurnResult(text=result_text.strip(), adapter_state=result_state)
 
 
