@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.audio.tts_models import WORKER_PATH, resolve_tts_python
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.domain.jobs import TTS_SLOTS, run_job_guarded
 from app.db.models import Asset, Job, TaskEvent, Voice
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job
@@ -170,6 +171,12 @@ def start_synthesis(db: Session, *, voice_id: str, text: str, project_id: str | 
 
 
 def _run_synthesis(job_id: str, voice_id: str, text: str, project_id: str | None) -> None:
+    """Take an admission slot before touching the database — see run_job_guarded."""
+    with TTS_SLOTS:
+        run_job_guarded(job_id, lambda: _run_synthesis_body(job_id, voice_id, text, project_id), what="配音")
+
+
+def _run_synthesis_body(job_id: str, voice_id: str, text: str, project_id: str | None) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         if job is None:

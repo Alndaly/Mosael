@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.domain.jobs import RENDER_SLOTS, run_job_guarded
 from app.db.models import Asset, Font, Job, Lut, Sequence, TaskEvent, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, finish_job, register_job_child, unregister_job_child
@@ -151,6 +152,12 @@ def start_export(db: Session, sequence_id: str) -> Job:
 
 
 def _run_export(job_id: str, plan: RenderPlan) -> None:
+    """Take an admission slot before touching the database — see run_job_guarded."""
+    with RENDER_SLOTS:
+        run_job_guarded(job_id, lambda: _run_export_body(job_id, plan), what="导出")
+
+
+def _run_export_body(job_id: str, plan: RenderPlan) -> None:
     output_path = settings.data_dir / "exports" / f"{job_id}.mp4"
     with SessionLocal() as db:
         job = db.get(Job, job_id)

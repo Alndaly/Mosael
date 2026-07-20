@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 import threading
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent
+
+logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("succeeded", "failed")
 
@@ -38,6 +43,44 @@ def kill_job_child(job_id: str) -> bool:
         return False
     child.kill()
     return True
+
+
+# Admission control for work that is heavy in CPU, GPU or memory. There was none: ten
+# simultaneous exports meant ten x264 encoders plus up to eighty concurrent ffprobes, and ten
+# transcribes meant ten torch interpreters — near-certain OOM on a laptop. Acquire a slot
+# BEFORE opening a database session, never while holding one; see _run_proxy for what the other
+# order costs. A sleeping thread is cheap, a pinned connection is not.
+RENDER_SLOTS = threading.Semaphore(2)
+ASR_SLOTS = threading.Semaphore(1)      # torch/funasr: one model in memory at a time
+TTS_SLOTS = threading.Semaphore(1)
+GENERATION_SLOTS = threading.Semaphore(4)  # mostly waiting on a remote API
+
+
+def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job") -> None:
+    """Run a worker body so that no failure can leave the job silently queued.
+
+    Every worker began with `db.get(Job, job_id)` OUTSIDE its try. That is the call that checks
+    a connection out of the pool, so when the pool was exhausted it raised, the daemon thread
+    died, and the row stayed `queued` with no error — forever, since reconcile only runs at
+    startup. A backfill of 60 videos produced 45 such jobs.
+
+    Anything the body does not handle is recorded on the job here instead.
+    """
+    try:
+        body()
+    except Exception as exc:  # noqa: BLE001 — a worker thread must never die silently
+        logger.exception("%s worker failed", what)
+        try:
+            with SessionLocal() as db:
+                job = db.get(Job, job_id)
+                if job is not None and job.status not in TERMINAL_STATUSES:
+                    job.status = "failed"
+                    job.error = str(exc)[:500]
+                    job.message = f"{what} 失败"
+                    db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
+                    db.commit()
+        except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
+            logger.exception("could not record the failure of %s %s", what, job_id)
 
 
 def finish_job(db: Session, job: Job, **fields: Any) -> bool:

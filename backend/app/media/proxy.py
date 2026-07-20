@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, TaskEvent
-from app.domain.jobs import create_job
+from app.domain.jobs import run_job_guarded, create_job
 from app.media.paths import resolve_key
 
 PROXY_NAME = "proxy.mp4"
@@ -112,6 +112,19 @@ def start_proxy_job(db: Session, asset: Asset, *, force: bool = False) -> Job | 
 
 
 def _run_proxy(job_id: str, asset_id: str) -> None:
+    """Wait for a transcode slot BEFORE opening a database session.
+
+    The slot used to be taken inside the session, so every queued worker sat in the semaphore
+    while holding a pooled connection. The pool is 5 + 10 overflow with a 30s checkout timeout,
+    so a startup backfill of 60 videos put 45 threads into that timeout — each dying with its
+    job still `queued` and nothing to reconcile it. Queueing on the semaphore costs a sleeping
+    thread; queueing on the connection pool costs the job.
+    """
+    with _TRANSCODE_SLOTS:
+        run_job_guarded(job_id, lambda: _proxy_body(job_id, asset_id), what="代理生成")
+
+
+def _proxy_body(job_id: str, asset_id: str) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -129,10 +142,7 @@ def _run_proxy(job_id: str, asset_id: str) -> None:
                 return
             source = resolve_key(asset.file_key)
             target = proxy_path(source.parent)
-            # Cap concurrent transcodes so a startup backfill of a big library doesn't spawn a
-            # ffmpeg per video at once and thrash the machine.
-            with _TRANSCODE_SLOTS:
-                ok = build_proxy(source, target)
+            ok = build_proxy(source, target)  # slot already held by _run_proxy
             if ok:
                 key = proxy_key_for(asset)
                 _set_proxy_meta(db, asset_id, "ready", key=key)

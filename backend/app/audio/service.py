@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.domain.jobs import ASR_SLOTS, run_job_guarded
 from app.db.models import Asset, Job, TaskEvent
 from app.domain.jobs import create_job
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -173,6 +174,12 @@ def start_transcription(db: Session, asset_id: str) -> Job:
 
 
 def _run_transcription(job_id: str, asset_id: str) -> None:
+    """Take an admission slot before touching the database — see run_job_guarded."""
+    with ASR_SLOTS:
+        run_job_guarded(job_id, lambda: _run_transcription_body(job_id, asset_id), what="转写")
+
+
+def _run_transcription_body(job_id: str, asset_id: str) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         if job is None:
