@@ -32,7 +32,14 @@ function summarize(args: unknown): string | null {
   return null;
 }
 
-/** 递归收集 args/result 里的 asset_id(键名含 asset_id/assetId),给媒体预览卡用。 */
+/**
+ * Asset ids mentioned anywhere in args/result, for the media preview cards.
+ *
+ * Only `asset_id`-shaped keys count. A bare `id` is deliberately NOT collected: a list of
+ * assets already renders as a card with its own inline players, and treating every `id` as an
+ * asset would also drag in workflow, project and confirmation ids, each costing a failed
+ * request and a "missing media" tile.
+ */
 function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<string> {
   if (Array.isArray(value)) {
     for (const item of value) collectAssetIds(item, out);

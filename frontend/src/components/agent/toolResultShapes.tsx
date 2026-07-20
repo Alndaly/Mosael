@@ -1,6 +1,8 @@
 import React from "react";
 
-import { assetThumbnailUrl } from "@/api/client";
+import { Play } from "lucide-react";
+
+import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -67,33 +69,73 @@ function seconds(value: unknown): string {
 
 /* ---------- cards ---------- */
 
+/** Inline player for one asset. Mounted only once its row is opened — a list of twenty
+    assets would otherwise create twenty decoders for media nobody asked to see. */
+function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: string }) {
+  const src = assetFileUrl(id);
+  if (kind === "image") return <img className="tool-card-player" src={src} alt={name} loading="lazy" />;
+  if (kind === "video") return <video className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
+  if (kind === "audio") return <audio className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
+  return null;
+}
+
+const PLAYABLE = new Set(["video", "audio", "image"]);
+
+function AssetRow({ row }: { row: Record<string, unknown> }) {
+  const [open, setOpen] = React.useState(false);
+  const id = String(row.id ?? "");
+  const kind = String(row.kind ?? "");
+  const name = String(row.name ?? id);
+  // media_info is present on the full record and absent from the projection; the thumbnail
+  // is a bonus, never a requirement for the row to render.
+  const info = isRecord(row.media_info) ? row.media_info : undefined;
+  const duration = row.duration_seconds ?? info?.duration;
+  const playable = Boolean(id) && PLAYABLE.has(kind);
+
+  const body = (
+    <>
+      <span className="tool-card-thumb-wrap">
+        {info?.has_thumbnail ? (
+          <img className="tool-card-thumb" src={assetThumbnailUrl(id)} alt="" loading="lazy" />
+        ) : (
+          <span className="tool-card-thumb tool-card-thumb-empty" data-kind={kind} />
+        )}
+        {playable && (
+          <span className="tool-card-play" aria-hidden>
+            <Play size={10} />
+          </span>
+        )}
+      </span>
+      <span className="tool-card-name" title={name}>
+        {name}
+      </span>
+      <span className="tool-card-meta">
+        {kind}
+        {duration != null && seconds(duration) ? ` · ${seconds(duration)}` : ""}
+      </span>
+    </>
+  );
+
+  return (
+    <li className="tool-card-item">
+      {playable ? (
+        <button type="button" className="tool-card-row is-playable" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {body}
+        </button>
+      ) : (
+        <div className="tool-card-row">{body}</div>
+      )}
+      {open && playable && <AssetPlayer id={id} kind={kind} name={name} />}
+    </li>
+  );
+}
+
 function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
     <ul className="tool-card-list">
-      {rows.map((row) => {
-        const id = String(row.id ?? "");
-        const kind = String(row.kind ?? "");
-        // media_info is present on the full record and absent from the projection; the
-        // thumbnail is a bonus, never a requirement for the row to render.
-        const info = isRecord(row.media_info) ? row.media_info : undefined;
-        const duration = row.duration_seconds ?? info?.duration;
-        return (
-          <li className="tool-card-row" key={id || String(row.name)}>
-            {info?.has_thumbnail ? (
-              <img className="tool-card-thumb" src={assetThumbnailUrl(id)} alt="" loading="lazy" />
-            ) : (
-              <span className="tool-card-thumb tool-card-thumb-empty" data-kind={kind} />
-            )}
-            <span className="tool-card-name" title={String(row.name ?? "")}>
-              {String(row.name ?? id)}
-            </span>
-            <span className="tool-card-meta">
-              {kind}
-              {duration != null && seconds(duration) ? ` · ${seconds(duration)}` : ""}
-            </span>
-          </li>
-        );
-      })}
+      {rows.map((row, index) => (
+        <AssetRow key={String(row.id ?? row.name ?? index)} row={row} />
+      ))}
     </ul>
   );
 }
@@ -207,25 +249,72 @@ function LongText({ text }: { text: string }) {
  * Order matters: the more specific tests come first, because several shapes are arrays of
  * objects and the first match wins.
  */
-export function ToolResultCard({ value }: { value: unknown }): React.ReactElement | null {
+export type ResultShape =
+  | "assets"
+  | "kb"
+  | "search"
+  | "projects"
+  | "named"
+  | "sequence"
+  | "confirmation"
+  | "text"
+  | null;
+
+/**
+ * Which card fits this value, or null when JSON is the honest answer.
+ *
+ * Separated from the rendering so the decision itself is testable: it is the part that can
+ * quietly regress into showing a KB search as a broken asset list. Order matters — several
+ * shapes are arrays of objects, and the first match wins, so the specific tests come first.
+ */
+export function detectShape(value: unknown): ResultShape {
   if (value == null) return null;
 
-  if (everyRecordHas(value, "id", "name", "kind")) return <AssetList rows={value} />;
-  if (everyRecordHas(value, "document_id", "snippet")) return <KbResults rows={value} />;
-  if (everyRecordHas(value, "url", "title")) return <SearchResults rows={value} />;
-  if (everyRecordHas(value, "id", "name", "active_sequence_id")) return <ProjectList rows={value} />;
-  if (everyRecordHas(value, "id", "name") || everyRecordHas(value, "type", "label")) {
-    return <NamedList rows={value} />;
-  }
+  if (everyRecordHas(value, "id", "name", "kind")) return "assets";
+  if (everyRecordHas(value, "document_id", "snippet")) return "kb";
+  if (everyRecordHas(value, "url", "title")) return "search";
+  if (everyRecordHas(value, "id", "name", "active_sequence_id")) return "projects";
+  if (everyRecordHas(value, "id", "name") || everyRecordHas(value, "type", "label")) return "named";
 
   if (isRecord(value)) {
-    if ("tracks" in value && Array.isArray(value.tracks)) return <SequenceTree value={value} />;
-    if ("confirmation_id" in value && "status" in value) return <ConfirmationCard value={value} />;
+    if ("tracks" in value && Array.isArray(value.tracks)) return "sequence";
+    if ("confirmation_id" in value && "status" in value) return "confirmation";
     // analyze_asset / fetch_url / read_kb_document: one long body is prose, not data.
     for (const key of ["answer", "text", "content", "body"]) {
       const text = value[key];
-      if (typeof text === "string" && text.trim().length > 80) return <LongText text={text} />;
+      if (typeof text === "string" && text.trim().length > 80) return "text";
     }
   }
   return null;
+}
+
+function longTextOf(value: Record<string, unknown>): string {
+  for (const key of ["answer", "text", "content", "body"]) {
+    const text = value[key];
+    if (typeof text === "string" && text.trim().length > 80) return text;
+  }
+  return "";
+}
+
+export function ToolResultCard({ value }: { value: unknown }): React.ReactElement | null {
+  switch (detectShape(value)) {
+    case "assets":
+      return <AssetList rows={value as Record<string, unknown>[]} />;
+    case "kb":
+      return <KbResults rows={value as Record<string, unknown>[]} />;
+    case "search":
+      return <SearchResults rows={value as Record<string, unknown>[]} />;
+    case "projects":
+      return <ProjectList rows={value as Record<string, unknown>[]} />;
+    case "named":
+      return <NamedList rows={value as Record<string, unknown>[]} />;
+    case "sequence":
+      return <SequenceTree value={value as Record<string, unknown>} />;
+    case "confirmation":
+      return <ConfirmationCard value={value as Record<string, unknown>} />;
+    case "text":
+      return <LongText text={longTextOf(value as Record<string, unknown>)} />;
+    default:
+      return null;
+  }
 }

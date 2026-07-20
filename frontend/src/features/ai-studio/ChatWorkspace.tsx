@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Bot, Check, Clock, Copy, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -134,6 +134,16 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  // Messages sent into a running turn. They are already stored and shown as user bubbles, but
+  // they will not be answered until the current assistant message finishes, and saying so is
+  // the difference between "queued" and "ignored".
+  const [queued, setQueued] = React.useState(0);
+  // The count describes one run. Leaving it up after the turn ends would claim messages are
+  // still waiting when they have already been answered.
+  React.useEffect(() => {
+    if (!running) setQueued(0);
+  }, [running]);
+  const showStop = running && !draft.trim() && attachments.length === 0;
   const stopTurn = useMutation({
     mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
@@ -185,8 +195,9 @@ export function ChatWorkspace({
       });
       return { message, targetId };
     },
-    onSuccess: ({ targetId }) => {
+    onSuccess: ({ targetId }, _content, _ctx) => {
       setDraft("");
+      if (running) setQueued((count) => count + 1);
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
       void attachStream(targetId);
@@ -349,6 +360,12 @@ export function ChatWorkspace({
                 <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
               )}
             </div>
+            {running && queued > 0 && (
+              <div className="chat-queued">
+                <Clock size={11} />
+                {t("chatQueued").replace("{n}", String(queued))}
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="chat-attachments">
                 {attachments.map((asset) => (
@@ -438,27 +455,30 @@ export function ChatWorkspace({
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                 </div>
-                {running && (
+                {/* One button that changes meaning, the way ChatGPT does it: while the agent
+                    works it stops the turn, and the moment you type something it becomes send
+                    again — because then the obvious intent is to say that, not to stop. */}
+                {showStop ? (
                   <Button
                     type="button"
                     size="icon"
-                    variant="outline"
-                    className="chat-stop"
+                    className="chat-send chat-stop"
                     aria-label={t("chatStop")}
                     onClick={() => stopTurn.mutate()}
                   >
-                    <Square size={13} />
+                    <Square size={13} fill="currentColor" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="chat-send"
+                    aria-label={running ? t("chatSteer") : t("chatSend")}
+                    disabled={(!draft.trim() && attachments.length === 0) || sendMessage.isPending}
+                  >
+                    <Send size={15} />
                   </Button>
                 )}
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="chat-send"
-                  aria-label={running ? t("chatSteer") : t("chatSend")}
-                  disabled={(!draft.trim() && attachments.length === 0) || sendMessage.isPending}
-                >
-                  <Send size={15} />
-                </Button>
               </div>
             </form>
           </>
