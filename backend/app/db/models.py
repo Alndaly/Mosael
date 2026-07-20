@@ -136,6 +136,25 @@ class Lut(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class Font(Base):
+    """A subtitle font file uploaded per workspace. Referenced from sequence.subtitle_style
+    by id; the preview loads it over HTTP as an @font-face and export points libass at its
+    directory, so preview and burn-in resolve the same family."""
+
+    __tablename__ = "fonts"
+    __table_args__ = (Index("idx_fonts_workspace_created", "workspace_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    # Read out of the font's own name table, so it matches what libass will look up by family.
+    family: Mapped[str] = mapped_column(String(200), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(260), nullable=False, default="")
+    file_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class GeneratedAsset(Base):
     __tablename__ = "generated_assets"
 

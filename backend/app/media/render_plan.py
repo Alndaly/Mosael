@@ -138,6 +138,9 @@ class SubtitleStyleSpec:
     offset: float = 8.0
     # The frontend stores a CSS font stack; ASS wants one family. Resolved at burn time.
     font_family: str = ""
+    # Directory holding an uploaded font file, handed to libass as fontsdir. Empty means the
+    # family must already be installed on the machine doing the render.
+    font_dir: str = ""
 
 
 DEFAULT_SUBTITLE_STYLE = SubtitleStyleSpec()
@@ -435,6 +438,7 @@ def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
         position=position if position in ("bottom", "center", "top") else d.position,
         offset=num("offset", d.offset, 0.0, 100.0),
         font_family=str(raw.get("font_family", d.font_family) or "")[:200],
+        font_dir=str(raw.get("font_dir", d.font_dir) or "")[:500],
     )
 
 

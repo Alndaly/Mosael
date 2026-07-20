@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job, Lut, Sequence, TaskEvent, Track
+from app.db.models import Asset, Font, Job, Lut, Sequence, TaskEvent, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job
 from app.media.paths import resolve_key
@@ -99,11 +99,33 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
-        subtitle_style=sequence.subtitle_style,
+        subtitle_style=_resolve_subtitle_font(db, sequence),
         luts=luts,
         solo_active=solo_active,
         mute_base_audio=mute_base_audio,
     )
+
+
+def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
+    """Turn a subtitle_style referencing an uploaded font into one the renderer can use.
+
+    The preview picks the font by id and loads it over HTTP; libass instead matches a family
+    name inside a directory. Resolve the id here — where we still have a session — into the
+    font's real family plus its directory, so the burn-in uses the same file you previewed.
+    A font from another workspace is ignored rather than honoured."""
+    style = dict(sequence.subtitle_style or {})
+    font_id = str(style.get("font_id") or "").strip()
+    if not font_id:
+        return style
+    font = db.get(Font, font_id)
+    if font is None or font.workspace_id != sequence.workspace_id:
+        return style
+    path = resolve_key(font.file_key)
+    if not path.is_file():
+        return style
+    style["font_family"] = font.family
+    style["font_dir"] = str(path.parent)
+    return style
 
 
 def start_export(db: Session, sequence_id: str) -> Job:

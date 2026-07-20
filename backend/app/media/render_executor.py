@@ -366,7 +366,13 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")
         out_label = "[vsub]"
-        filters.append(f"{video_label}subtitles=filename='{_escape_filter_path(ass_path)}'{out_label}")
+        # fontsdir lets libass find a font that is uploaded rather than installed; without it the
+        # family in the Style: line resolves to nothing and the burn silently uses a default face.
+        fonts_dir = plan.subtitle_style.font_dir
+        fonts_arg = f":fontsdir='{_escape_filter_path(Path(fonts_dir))}'" if fonts_dir else ""
+        filters.append(
+            f"{video_label}subtitles=filename='{_escape_filter_path(ass_path)}'{fonts_arg}{out_label}"
+        )
         video_label = out_label
 
     # Audio-track clips + overlay video-track clips' audio, mixed over the base audio. An

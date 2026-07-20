@@ -661,3 +661,34 @@ export async function uploadLut(params: { workspaceId: string; file: File; name?
 export function deleteLut(lutId: string): Promise<void> {
   return api<void>(`/api/luts/${lutId}`, { method: "DELETE" });
 }
+
+export interface Font {
+  id: string;
+  workspace_id: string;
+  /** Read from the font file's own name table — what libass matches on at export. */
+  family: string;
+  original_filename: string;
+  size: number;
+  created_at?: string | null;
+}
+
+export function listFonts(workspaceId: string): Promise<Font[]> {
+  return api<Font[]>(`/api/fonts?workspace_id=${workspaceId}`);
+}
+
+export async function uploadFont(params: { workspaceId: string; file: File }): Promise<Font> {
+  const form = new FormData();
+  form.set("workspace_id", params.workspaceId);
+  form.set("file", params.file);
+  return api<Font>("/api/fonts", { method: "POST", body: form });
+}
+
+export function deleteFont(fontId: string): Promise<void> {
+  return api<void>(`/api/fonts/${fontId}`, { method: "DELETE" });
+}
+
+export function fontFileUrl(fontId: string): string {
+  // An @font-face url() sends no headers, so the token rides along like the other media URLs.
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/fonts/${fontId}/file${suffix}`;
+}

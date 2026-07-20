@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type } from "lucide-react";
+import { ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { readSubtitleStyle, SUBTITLE_FONTS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
+import { uploadedFontStack } from "@/features/editor/FontFaces";
+import type { Font } from "@/api/client";
 
 import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -29,6 +31,10 @@ export function SubtitlePanel({
   onGenerate,
   generating,
   style,
+  fonts,
+  onUploadFont,
+  onDeleteFont,
+  uploadingFont,
   onPreviewStyle,
   onSetStyle,
   onDeleteClip,
@@ -39,6 +45,10 @@ export function SubtitlePanel({
   onGenerate?: () => void;
   generating?: boolean;
   style?: Record<string, unknown>;
+  fonts?: Font[];
+  onUploadFont?: (file: File) => void;
+  onDeleteFont?: (fontId: string) => void;
+  uploadingFont?: boolean;
   /** Fires continuously while a control is being dragged — preview only, never persisted. */
   onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle?: (style: Record<string, unknown>) => void;
@@ -60,7 +70,15 @@ export function SubtitlePanel({
   return (
     <div className="sub-panel">
       {onSetStyle && (
-        <SubtitleStyleControls style={style} onPreviewStyle={onPreviewStyle} onSetStyle={onSetStyle} />
+        <SubtitleStyleControls
+          style={style}
+          fonts={fonts ?? []}
+          onUploadFont={onUploadFont}
+          onDeleteFont={onDeleteFont}
+          uploadingFont={uploadingFont}
+          onPreviewStyle={onPreviewStyle}
+          onSetStyle={onSetStyle}
+        />
       )}
       <div className="sub-list">
         {subtitles.length === 0 && (
@@ -194,12 +212,23 @@ function SubtitleTranslate({
   );
 }
 
+/** Distinguishes an uploaded font from a built-in stack in the one Select. */
+const UPLOAD_PREFIX = "upload:";
+
 function SubtitleStyleControls({
   style,
+  fonts,
+  onUploadFont,
+  onDeleteFont,
+  uploadingFont,
   onPreviewStyle,
   onSetStyle,
 }: {
   style?: Record<string, unknown>;
+  fonts: Font[];
+  onUploadFont?: (file: File) => void;
+  onDeleteFont?: (fontId: string) => void;
+  uploadingFont?: boolean;
   onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle: (style: Record<string, unknown>) => void;
 }) {
@@ -210,6 +239,7 @@ function SubtitleStyleControls({
   // Sliders are controlled off `s` (which is the draft while one is in flight) so the value
   // readout and the monitor both track the drag; only the release writes to the server.
   const preview = (next: Partial<SubtitleStyle>) => onPreviewStyle?.({ ...s, ...next });
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   return (
     <div className="sub-style">
@@ -220,7 +250,18 @@ function SubtitleStyleControls({
         <div className="sub-style-body">
           <label className="sub-style-row">
             <span>{t("subFont")}</span>
-            <Select value={s.font_family} onValueChange={(v) => patch({ font_family: v })}>
+            <Select
+              value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
+              onValueChange={(v) => {
+                if (!v.startsWith(UPLOAD_PREFIX)) {
+                  patch({ font_family: v, font_id: "" });
+                  return;
+                }
+                const id = v.slice(UPLOAD_PREFIX.length);
+                const picked = fonts.find((font) => font.id === id);
+                if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -230,9 +271,52 @@ function SubtitleStyleControls({
                     {t(font.labelKey as Parameters<typeof t>[0])}
                   </SelectItem>
                 ))}
+                {fonts.map((font) => (
+                  <SelectItem
+                    key={font.id}
+                    value={`${UPLOAD_PREFIX}${font.id}`}
+                    style={{ fontFamily: uploadedFontStack(font.family) }}
+                  >
+                    {font.family}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </label>
+          {onUploadFont && (
+            <div className="sub-style-row sub-font-actions">
+              <span />
+              <Button variant="ghost" size="sm" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
+                {uploadingFont ? <Loader2 size={12} className="spin" /> : <Upload size={12} />} {t("subFontUpload")}
+              </Button>
+              {s.font_id && onDeleteFont && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    // Point the style back at a built-in BEFORE the font goes away, so the
+                    // sequence never references a font id that no longer resolves.
+                    const removing = s.font_id;
+                    patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
+                    onDeleteFont(removing);
+                  }}
+                >
+                  <Trash2 size={12} /> {t("subFontRemove")}
+                </Button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".ttf,.otf,.ttc,.otc"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onUploadFont(file);
+                  event.target.value = ""; // re-selecting the same file must fire change again
+                }}
+              />
+            </div>
+          )}
           <label className="sub-style-row">
             <span>{t("subFontSize")}</span>
             <Slider

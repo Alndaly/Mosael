@@ -4645,6 +4645,11 @@
   font-size: 12px;
   color: var(--foreground);
 }
+/* Upload/remove sit in the value column, left-aligned under the font picker. */
+.sub-font-actions {
+  grid-template-columns: 42px auto auto minmax(0, 1fr);
+  gap: 4px;
+}
 .sub-style-row > span:first-child {
   color: var(--muted-foreground);
 }

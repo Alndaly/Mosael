@@ -12,6 +12,10 @@ export type SubtitleStyle = {
   position: "bottom" | "center" | "top";
   offset: number;
   font_family: string;
+  /** Set when the family comes from an uploaded workspace font; "" for the built-in stacks.
+      Export uses this to locate the file — the family name alone is not enough, since an
+      uploaded font is not installed on the machine doing the render. */
+  font_id: string;
 };
 
 /** Curated families rather than a free-text box. Two rules carried over from mibu-video:
@@ -39,6 +43,7 @@ export const SUBTITLE_DEFAULTS: SubtitleStyle = {
   position: "bottom",
   offset: 8,
   font_family: SYSTEM_FONT_STACK,
+  font_id: "",
 };
 
 export function readSubtitleStyle(raw: Record<string, unknown> | undefined | null): SubtitleStyle {
@@ -52,6 +57,7 @@ export function readSubtitleStyle(raw: Record<string, unknown> | undefined | nul
     position: s.position ?? SUBTITLE_DEFAULTS.position,
     offset: typeof s.offset === "number" ? s.offset : SUBTITLE_DEFAULTS.offset,
     font_family: s.font_family || SUBTITLE_DEFAULTS.font_family,
+    font_id: s.font_id || "",
   };
 }
 

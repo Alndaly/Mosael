@@ -741,6 +741,8 @@ _SUBTITLE_DEFAULTS: dict[str, Any] = {
     "position": "bottom",
     "offset": 8.0,  # % of frame height from the edge (or from center for position=center)
     "show_speaker": False,
+    "font_family": "",
+    "font_id": "",
 }
 
 
@@ -764,6 +766,11 @@ def clean_subtitle_style(raw: dict[str, Any]) -> dict[str, Any]:
         "position": position if position in _SUBTITLE_POSITIONS else "bottom",
         "offset": num("offset", 0, 45),
         "show_speaker": bool(raw.get("show_speaker", False)),
+        # A CSS stack for the preview; export narrows it to the one family libass accepts.
+        "font_family": str(raw.get("font_family", "") or "")[:200],
+        # Set only when the family comes from an uploaded font — export needs the id to find
+        # the file, since an uploaded face is not installed on the rendering machine.
+        "font_id": str(raw.get("font_id", "") or "")[:64],
     }
 
 

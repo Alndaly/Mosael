@@ -129,6 +129,15 @@ class LutOut(OrmModel):
     created_at: datetime | None = None
 
 
+class FontOut(OrmModel):
+    id: str
+    workspace_id: str
+    family: str
+    original_filename: str
+    size: int
+    created_at: datetime | None = None
+
+
 class LutUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 

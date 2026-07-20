@@ -11,6 +11,9 @@ import {
   generateSubtitles,
   getAuthToken,
   setSubtitleStyle,
+  listFonts,
+  uploadFont,
+  deleteFont,
   cutClipRange,
   cutClipRanges,
   deleteClip,
@@ -36,6 +39,7 @@ import {
   trimClip,
   undoSequence,
   type Asset,
+  type Font,
   type Job,
   type Project,
   type Sequence,
@@ -48,6 +52,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { useEditorStore } from "@/stores/editorStore";
+import { FontFaces } from "@/features/editor/FontFaces";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
@@ -174,6 +179,24 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     queryFn: () => api<Sequence[]>(`/api/projects/${project.id}/sequences`),
   });
   const sequence = sequences.data?.[0] ?? null;
+
+  // Uploaded subtitle fonts are workspace-level, like assets and LUTs.
+  const fonts = useQuery({
+    queryKey: ["fonts", workspace.id],
+    queryFn: () => listFonts(workspace.id),
+    staleTime: 5 * 60_000,
+  });
+  const refreshFonts = () => qc.invalidateQueries({ queryKey: ["fonts", workspace.id] });
+  const uploadFontMutation = useMutation({
+    mutationFn: (file: File) => uploadFont({ workspaceId: workspace.id, file }),
+    onSuccess: () => void refreshFonts(),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const deleteFontMutation = useMutation({
+    mutationFn: (fontId: string) => deleteFont(fontId),
+    onSuccess: () => void refreshFonts(),
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const refreshSequences = () => qc.invalidateQueries({ queryKey: ["sequences", project.id] });
   // Drag ops return the updated sequence — write it straight into the cache (no refetch
@@ -709,6 +732,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
       }}
     >
+      {/* Uploaded fonts must be registered before the monitor or the style panel can paint
+          text in them. */}
+      <FontFaces fonts={fonts.data ?? []} />
       {/* Resizers sit on the 8px gap centers; grid pads 12px (Global rhythm). */}
       <div className="panel-resizer col" style={{ left: leftWidth + 12 + 4 - 3 }} onPointerDown={startPanelDrag("left")} />
       {inspectorInGrid && (
@@ -753,6 +779,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onGenerate={() => generateSubtitlesMutation.mutate()}
               generating={generateSubtitlesMutation.isPending}
               style={styleDraft ?? ((sequence.subtitle_style ?? {}) as Record<string, unknown>)}
+              fonts={fonts.data ?? []}
+              onUploadFont={(file) => uploadFontMutation.mutate(file)}
+              onDeleteFont={(fontId) => deleteFontMutation.mutate(fontId)}
+              uploadingFont={uploadFontMutation.isPending}
               onPreviewStyle={setStyleDraft}
               onSetStyle={(style) => {
                 setStyleDraft(style);
