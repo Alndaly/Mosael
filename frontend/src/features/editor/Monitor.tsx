@@ -232,14 +232,36 @@ export function Monitor({
   const markUndecodable = React.useCallback((assetId: string) => {
     setUndecodable((current) => (current.has(assetId) ? current : new Set(current).add(assetId)));
   }, []);
+  // Which engine plays this SEQUENCE — deliberately not "what is under the playhead right now".
+  //
+  // Judging it per-frame meant every gap (no active layer) and every not-yet-proxied clip
+  // switched engines mid-playback. WebAudioMixer is mounted only on the compositor path and
+  // owns its AudioContext, so each switch closed the context and re-fetched and re-decoded
+  // every clip's audio from scratch — an audible dropout at every gap, a fresh AudioContext
+  // each time, and the master clock handed back and forth. It also defeated the idle decoder
+  // pool: unmounting the compositor closes every parked source, so scrubbing over a gap threw
+  // away exactly the cache that pool exists to keep.
+  //
+  // Audio cannot simply be decoupled from video here: the element path unmutes its <video>
+  // whenever the compositor is off, so a mixer running alongside it would play everything
+  // twice. The engine choice has to be one decision, and a stable one.
+  const compositorAssets = React.useMemo(() => {
+    const seen = new Map<string, Asset>();
+    for (const track of videoTracks) {
+      for (const clip of track.clips ?? []) {
+        const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
+        if (asset && (asset.kind === "video" || asset.kind === "image")) seen.set(asset.id, asset);
+      }
+    }
+    return [...seen.values()];
+  }, [videoTracks, assetById]);
   const compositorActive =
     compositorOn &&
-    compositorLayers.length > 0 &&
-    compositorLayers.every(
-      (l) =>
-        l.asset.kind === "image" ||
-        ((l.asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready" &&
-          !undecodable.has(l.asset.id)),
+    compositorAssets.every(
+      (asset) =>
+        asset.kind === "image" ||
+        ((asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready" &&
+          !undecodable.has(asset.id)),
     );
   // EVERY audio-bearing clip (base video-track video clips + all audio-track clips) fed to the
   // WebAudio mixer, which filters by the live playhead itself. Passing the full set — not just

@@ -81,11 +81,18 @@ export function CanvasCompositor({
 
   // Keep the decoder/image pools in step with the active asset set.
   React.useEffect(() => {
-    const wantVideo = new Set<string>();
+    // Keyed by CLIP, not by asset. A source owns a playback position, and that belongs to the
+    // clip: put the same asset on two layers at different times — a picture-in-picture of its
+    // own source, a duplicated clip used as a backdrop — and one shared decoder was asked for
+    // two positions per frame. Each call saw the cursor parked at the other's time, took the
+    // seek path, flushed and closed every buffered frame, and returned null. Neither layer ever
+    // accumulated a frame: both stayed black forever while the decoder thrashed at 60Hz.
+    // Images stay keyed by asset — an <img> has no position, so sharing one is correct.
+    const wantVideo = new Map<string, string>(); // clip id -> asset id
     const wantImage = new Set<string>();
     for (const layer of layers) {
       if (layer.asset.kind === "image") wantImage.add(layer.asset.id);
-      else wantVideo.add(layer.asset.id);
+      else wantVideo.set(layer.clip.id, layer.asset.id);
     }
     for (const [id, source] of sourcesRef.current) {
       if (!wantVideo.has(id)) {
@@ -94,14 +101,14 @@ export function CanvasCompositor({
         sourcesRef.current.delete(id);
       }
     }
-    for (const id of wantVideo) {
-      if (sourcesRef.current.has(id)) continue;
-      const parked = idleRef.current.get(id);
+    for (const [clipId, assetId] of wantVideo) {
+      if (sourcesRef.current.has(clipId)) continue;
+      const parked = idleRef.current.get(clipId);
       if (parked) {
-        idleRef.current.delete(id);
-        sourcesRef.current.set(id, parked);
+        idleRef.current.delete(clipId);
+        sourcesRef.current.set(clipId, parked);
       } else {
-        sourcesRef.current.set(id, new ProxyVideoSource(assetProxyUrl(id)));
+        sourcesRef.current.set(clipId, new ProxyVideoSource(assetProxyUrl(assetId)));
       }
     }
     // Map preserves insertion order and re-parking re-inserts, so iterating it gives
@@ -169,7 +176,10 @@ export function CanvasCompositor({
       // has settled, and a settled canvas never re-enters the code past that early return — so
       // putting this after it meant the fallback silently never fired on a paused editor.
       for (const layer of currentLayers) {
-        const source = sourcesRef.current.get(layer.asset.id);
+        // Looked up per clip, reported per asset: the source is the clip's, but "this machine
+        // cannot decode that proxy" is a property of the asset, and that is what the fallback
+        // decision keys on.
+        const source = sourcesRef.current.get(layer.clip.id);
         if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
           reportedFailures.current.add(layer.asset.id);
           onSourceFailedRef.current?.(layer.asset.id);
@@ -278,7 +288,7 @@ function mediaFor(
     if (!img || !img.complete || img.naturalWidth === 0) return null;
     return { source: img, w: img.naturalWidth, h: img.naturalHeight };
   }
-  const source = sources.get(layer.asset.id);
+  const source = sources.get(layer.clip.id);
   if (!source) return null;
   const speed = layer.clip.speed || 1;
   const mediaSec = layer.clip.src_in + (playhead - layer.clip.timeline_start) * speed;
