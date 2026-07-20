@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Play } from "lucide-react";
+import { Maximize2, Play } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
 
@@ -73,7 +73,16 @@ function seconds(value: unknown): string {
     assets would otherwise create twenty decoders for media nobody asked to see. */
 function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: string }) {
   const src = assetFileUrl(id);
-  if (kind === "image") return <img className="tool-card-player" src={src} alt={name} loading="lazy" />;
+  // Bounded, not full-bleed: an inline preview sits inside a conversation, and a portrait
+  // photo at full width pushes the rest of the answer off the screen. Click through to the
+  // original for a real look at it.
+  if (kind === "image") {
+    return (
+      <a className="tool-card-player-image" href={src} target="_blank" rel="noreferrer noopener">
+        <img src={src} alt={name} loading="lazy" />
+      </a>
+    );
+  }
   if (kind === "video") return <video className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
   if (kind === "audio") return <audio className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
   return null;
@@ -89,8 +98,10 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
   // media_info is present on the full record and absent from the projection; the thumbnail
   // is a bonus, never a requirement for the row to render.
   const info = isRecord(row.media_info) ? row.media_info : undefined;
-  const duration = row.duration_seconds ?? info?.duration;
+  // An image has no duration; showing "0:00" for one is noise that reads like a broken value.
+  const duration = kind === "image" ? null : row.duration_seconds ?? info?.duration;
   const playable = Boolean(id) && PLAYABLE.has(kind);
+  const isImage = kind === "image";
 
   const body = (
     <>
@@ -102,7 +113,8 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
         )}
         {playable && (
           <span className="tool-card-play" aria-hidden>
-            <Play size={10} />
+            {/* An image is opened, not played. */}
+            {isImage ? <Maximize2 size={10} /> : <Play size={10} />}
           </span>
         )}
       </span>

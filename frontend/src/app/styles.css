@@ -9424,6 +9424,25 @@
   background: #000;
 }
 
+/* 图片按内容高度收敛,而不是铺满宽度:竖构图的照片按宽度铺开会把后面的回答整个顶出屏幕。 */
+.tool-card-player-image {
+  display: block;
+  max-height: 200px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.tool-card-player-image img {
+  display: block;
+  max-height: 200px;
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
 audio.tool-card-player {
   height: 32px;
   background: none;

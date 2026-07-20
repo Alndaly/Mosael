@@ -96,3 +96,11 @@ describe("detectShape", () => {
     expect(detectShape([{ id: "a", name: "n", kind: "video" }, { id: "b" }])).toBeNull();
   });
 });
+
+describe("asset rows", () => {
+  it("keeps a duration off images", () => {
+    // "image · 0:00" reads as a broken value, not as "images have no length".
+    const rows = [{ id: "a", name: "photo.jpg", kind: "image", duration_seconds: 0 }];
+    expect(detectShape(rows)).toBe("assets");
+  });
+});

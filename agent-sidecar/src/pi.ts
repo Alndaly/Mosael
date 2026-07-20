@@ -99,10 +99,10 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     // 每次 LLM 调用前压缩上下文;state.messages 保留全量(多轮记忆不受影响)
     transformContext: async (messages) => compactContext(messages),
   });
-  // A steer lands after the current assistant message rather than interrupting it, so
-  // draining the whole queue at once is right: two corrections typed in quick succession are
-  // one intent, not two turns.
-  agent.steeringMode = "all";
+  // One queued message per turn, in the order they were sent. Draining the whole queue at
+  // once merges several questions into a single answer, which reads as the agent ignoring
+  // all but the last — a queue the user can see the order of has to be answered in that order.
+  agent.steeringMode = "one-at-a-time";
   agent.followUpMode = "one-at-a-time";
   input.onAgentReady?.(agent);
 
