@@ -1,16 +1,18 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, CircleDot, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
 import { api, assetFileUrl, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Input } from "@/components/ui/input";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { useImagePreview } from "@/components/ui/image-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Recorder } from "@/features/editor/Recorder";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
 
@@ -58,6 +60,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
+  const [recorderOpen, setRecorderOpen] = React.useState(false);
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -216,6 +219,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <ImagePlus size={13} /> {t("import")}
             </label>
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
+            <CircleDot size={13} /> {t("record")}
+          </Button>
           <div className="seg" role="group" aria-label={t("mediaKindGroup")}>
             {KIND_FILTERS.map((kind) => (
               <button
@@ -228,7 +234,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               </button>
             ))}
           </div>
-          <input
+          <Input
             className="toolbar-search"
             value={search}
             placeholder={t("searchAssets")}
@@ -293,6 +299,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       </div>
+      <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
 
       {(assets.data ?? []).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />

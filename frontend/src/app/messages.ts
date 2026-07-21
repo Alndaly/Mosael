@@ -173,6 +173,7 @@ export const messages = {
     mediaSourceGenerated: "AI 生成",
     mediaSourceExported: "导出",
     mediaKindGroup: "素材类型",
+    mediaNoMatchingAssets: "没有匹配的素材",
     // 面板标题用内容名词(不复用侧栏/标签词),避免"对话/发布/批量"同名歧义。
     chatSessionsTitle: "对话记录",
     generationSessionsTitle: "生成会话",
@@ -1442,6 +1443,7 @@ export const messages = {
     mediaSourceGenerated: "AI generated",
     mediaSourceExported: "Exported",
     mediaKindGroup: "Media type",
+    mediaNoMatchingAssets: "No matching assets",
     chatSessionsTitle: "Conversations",
     generationSessionsTitle: "Generation sessions",
     agentInspectorTitle: "Agent environment",

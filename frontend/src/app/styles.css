@@ -2847,6 +2847,46 @@
   overflow: auto;
 }
 
+.pool-filterbar {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pool-search {
+  position: relative;
+  display: grid;
+}
+
+.pool-search svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.pool-search input {
+  height: 28px;
+  padding-left: 28px;
+  font-size: 12px;
+}
+
+.pool-kind-filter {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+}
+
+.pool-kind-filter .seg-btn {
+  justify-content: center;
+  min-width: 0;
+  padding-inline: 0;
+}
+
 .pool-item {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);

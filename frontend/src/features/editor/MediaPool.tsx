@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CircleDot, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { CircleDot, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,9 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { useImagePreview } from "@/components/ui/image-preview";
+import { Input } from "@/components/ui/input";
 import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
+
+const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
+type KindFilter = (typeof KIND_FILTERS)[number];
 
 export function MediaPool({
   assets,
@@ -31,6 +35,27 @@ export function MediaPool({
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
+  const [search, setSearch] = React.useState("");
+  const visibleAssets = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return assets.filter((asset) => {
+      const tags = asset.tags ?? [];
+      return (
+        (kindFilter === "all" || asset.kind === kindFilter) &&
+        (query === "" ||
+          asset.name.toLowerCase().includes(query) ||
+          tags.some((tag) => tag.toLowerCase().includes(query)) ||
+          asset.kind.toLowerCase().includes(query))
+      );
+    });
+  }, [assets, kindFilter, search]);
+  const kindLabel: Record<KindFilter, string> = {
+    all: t("kindAll"),
+    video: t("kindVideo"),
+    audio: t("kindAudio"),
+    image: t("kindImage"),
+  };
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
@@ -80,8 +105,31 @@ export function MediaPool({
         </div>
       </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={onImportFile} />
+      <div className="pool-filterbar">
+        <div className="pool-search">
+          <Search size={13} />
+          <Input
+            value={search}
+            placeholder={t("searchAssets")}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label={t("searchAssets")}
+          />
+        </div>
+        <div className="seg pool-kind-filter" role="group" aria-label={t("mediaKindGroup")}>
+          {KIND_FILTERS.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={kindFilter === kind ? "seg-btn active" : "seg-btn"}
+              onClick={() => setKindFilter(kind)}
+            >
+              {kindLabel[kind]}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="pool-list">
-        {assets.map((asset) => (
+        {visibleAssets.map((asset) => (
           <ContextMenu key={asset.id}>
             <ContextMenuTrigger asChild>
               <div>
@@ -103,6 +151,7 @@ export function MediaPool({
           </ContextMenu>
         ))}
         {assets.length === 0 && <div className="empty-inline">{t("mediaEmptyBody")}</div>}
+        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
       <RenameDialog
