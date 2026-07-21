@@ -9805,6 +9805,12 @@
   align-self: center;
   color: var(--muted-foreground);
 }
+.kb-embed-save-state {
+  align-self: center;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
 
 /* 供应商能力文案:选中供应商后展示其支持的能力 */
 .provider-caps {

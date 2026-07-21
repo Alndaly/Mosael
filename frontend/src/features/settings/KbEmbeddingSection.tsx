@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AlertTriangle } from "lucide-react";
@@ -8,7 +8,6 @@ import { AlertTriangle } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,10 +17,23 @@ type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type EmbeddingConfig = components["schemas"]["KbEmbeddingConfigOut"];
 type EmbForm = { provider_profile_id: string; model: string; dim: number };
 
+function normalize(values: EmbForm): EmbForm {
+  return {
+    provider_profile_id: values.provider_profile_id || "",
+    model: values.model.trim(),
+    dim: Number(values.dim) || 0,
+  };
+}
+
+function sameConfig(a: EmbForm | null, b: EmbForm): boolean {
+  return Boolean(a && a.provider_profile_id === b.provider_profile_id && a.model === b.model && a.dim === b.dim);
+}
+
 export function KbEmbeddingSection() {
   const t = useI18n();
   const qc = useQueryClient();
   const [initialDim, setInitialDim] = React.useState(768);
+  const lastSavedRef = React.useRef<EmbForm | null>(null);
 
   const profiles = useQuery({
     queryKey: ["provider-profiles"],
@@ -46,11 +58,13 @@ export function KbEmbeddingSection() {
   // 配置载入后回填一次表单
   React.useEffect(() => {
     if (!config.data) return;
-    form.reset({
+    const next = {
       provider_profile_id: config.data.provider_profile_id ?? "",
       model: config.data.model,
       dim: config.data.dim || 768,
-    });
+    };
+    lastSavedRef.current = normalize(next);
+    form.reset(next);
     setInitialDim(config.data.dim || 768);
   }, [config.data]);
 
@@ -65,17 +79,31 @@ export function KbEmbeddingSection() {
         }),
       }),
     onSuccess: (_data, values) => {
-      setInitialDim(values.dim);
+      const saved = normalize(values);
+      lastSavedRef.current = saved;
+      setInitialDim(saved.dim);
       void qc.invalidateQueries({ queryKey: ["kb-embedding"] });
       void qc.invalidateQueries({ queryKey: ["kb-status"] });
     },
   });
-  const submit = form.handleSubmit((values) => save.mutate(values));
 
   const enabledProfiles = (profiles.data ?? []).filter((profile) => profile.enabled);
-  const dimChanged = form.watch("dim") !== initialDim;
+  const watched = useWatch({ control: form.control });
+  const dimChanged = (watched.dim ?? 0) !== initialDim;
   // 两个查询都就绪再挂表单:否则 Radix Select 会在选项挂载前拿到 value,显示空占位。
   const ready = profiles.data !== undefined && config.data !== undefined;
+
+  React.useEffect(() => {
+    if (!ready || enabledProfiles.length === 0) return;
+    const next = normalize({
+      provider_profile_id: watched.provider_profile_id ?? "",
+      model: watched.model ?? "",
+      dim: watched.dim ?? 0,
+    });
+    if (!next.model || next.dim < 1 || sameConfig(lastSavedRef.current, next)) return;
+    const timer = window.setTimeout(() => save.mutate(next), 600);
+    return () => window.clearTimeout(timer);
+  }, [ready, enabledProfiles.length, watched.provider_profile_id, watched.model, watched.dim]);
 
   return (
     <SettingsGroup title={t("kbEmbedTitle")} description={t("kbEmbedDesc")}>
@@ -84,7 +112,7 @@ export function KbEmbeddingSection() {
           <p className="feishu-empty">{t("kbEmbedNoProvider")}</p>
         ) : (
           <Form {...form}>
-            <form className="task-create-form" onSubmit={submit} noValidate>
+            <div className="task-create-form">
               <FormField
                 control={form.control}
                 name="provider_profile_id"
@@ -148,11 +176,9 @@ export function KbEmbeddingSection() {
               />
               <div className="task-create-actions">
                 <small className="kb-embed-note">{t("kbEmbedRebuildNote")}</small>
-                <Button type="submit" size="sm" disabled={save.isPending}>
-                  {t("save")}
-                </Button>
+                <small className="kb-embed-save-state">{save.isPending ? t("wfSaving") : t("wfSavedShort")}</small>
               </div>
-            </form>
+            </div>
           </Form>
         )}
       </SettingsBlock>
