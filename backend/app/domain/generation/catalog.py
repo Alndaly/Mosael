@@ -1,26 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import GenerationModel
 
 
 BUILTIN_MODELS = [
-    {
-        "id": "mock:mock-image:image",
-        "provider": "mock",
-        "kind": "image",
-        "model": "mock-image",
-        "capabilities": {"modes": ["text-to-image"], "local": True},
-    },
-    {
-        "id": "mock:mock-video:video",
-        "provider": "mock",
-        "kind": "video",
-        "model": "mock-video",
-        "capabilities": {"modes": ["text-to-video"], "local": True, "max_duration_seconds": 10},
-    },
     {
         "id": "openai:gpt-image-2:image",
         "provider": "openai",
@@ -60,6 +46,7 @@ BUILTIN_MODELS = [
 
 
 def ensure_builtin_generation_models(db: Session) -> None:
+    db.execute(delete(GenerationModel).where(GenerationModel.provider == "mock"))
     existing = set(db.scalars(select(GenerationModel.id)))
     for item in BUILTIN_MODELS:
         if item["id"] in existing:

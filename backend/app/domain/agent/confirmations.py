@@ -218,23 +218,22 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         kind = "image" if confirmation.tool == "generate_image" else "video"
         provider = str(payload.get("provider", "")).strip()
         model = str(payload.get("model", "")).strip()
-        # 未显式指定(或仍是 mock)时,取该能力配置的默认供应商;都没有再回退 mock
-        if not provider or provider == "mock":
+        if not provider or not model:
             default_profile, default_model = resolve_default(db, kind)
             if default_profile is not None and default_model:
                 provider, model = default_profile.vendor, default_model
-        if not provider:
-            provider = "mock"
-        if not model:
-            model = f"mock-{kind}"
+        if not provider or not model:
+            raise RuntimeError("没有配置可用于生成的真实供应商和模型")
         generation, job = create_generation_job(
             db,
             workspace_id=confirmation.workspace_id,
+            session_id=None,
             project_id=payload.get("project_id"),
             provider=provider,
             model=model,
             kind=kind,
             prompt=str(payload["prompt"]),
+            negative_prompt=str(payload.get("negative_prompt", "")),
             parameters=dict(payload.get("parameters") or {}),
             source_asset_ids=[],
         )

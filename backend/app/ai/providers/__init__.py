@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderError
-from app.ai.providers.mock import MockImageProvider, MockVideoProvider
 from app.ai.providers.qwen_image import QwenImageProvider
 from app.ai.providers.seedance import SeedanceProvider
 
@@ -14,8 +13,6 @@ def _register(provider: GenerationProvider) -> None:
     _PROVIDERS[(provider.name, provider.kind)] = provider
 
 
-_register(MockImageProvider())
-_register(MockVideoProvider())
 _register(QwenImageProvider())
 _register(SeedanceProvider())
 

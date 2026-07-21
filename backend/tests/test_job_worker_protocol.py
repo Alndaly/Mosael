@@ -239,11 +239,13 @@ class TestDispatchWiring:
             generation, job = create_generation_job(
                 db,
                 workspace_id=workspace_id,
+                session_id=None,
                 project_id=None,
-                provider="mock",
-                model="mock-image",
+                provider="alibaba",
+                model="qwen-image",
                 kind="image",
                 prompt="p",
+                negative_prompt="",
                 parameters={},
                 source_asset_ids=[],
             )

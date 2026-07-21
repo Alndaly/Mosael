@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import shutil
-import time
-
 import pytest
 
 from app.ai.providers import get_provider
 from app.ai.providers.base import GenerationRequest, ProviderError, sanitize_provider_error
 from app.ai.providers.qwen_image import build_submit_payload as qwen_payload, extract_result_url
 from app.ai.providers.seedance import build_submit_payload as seedance_payload, extract_video_url
-from tests.util import fresh_client
-
-HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
 
 def make_request(kind: str, **params) -> GenerationRequest:
@@ -19,18 +13,18 @@ def make_request(kind: str, **params) -> GenerationRequest:
 
 
 def test_registry_resolves_providers() -> None:
-    assert get_provider("mock", "image") is not None
-    assert get_provider("mock", "video") is not None
     assert get_provider("alibaba", "image") is not None
     assert get_provider("bytedance", "video") is not None
+    assert get_provider("mock", "image") is None
+    assert get_provider("mock", "video") is None
     assert get_provider("nope", "image") is None
 
 
 def test_guardrails_reject_out_of_bounds() -> None:
-    provider = get_provider("mock", "image")
+    provider = get_provider("alibaba", "image")
     with pytest.raises(ProviderError, match="num_images"):
         provider.validate_request(make_request("image", num_images=9))
-    video = get_provider("mock", "video")
+    video = get_provider("bytedance", "video")
     with pytest.raises(ProviderError, match="duration_seconds"):
         video.validate_request(make_request("video", duration_seconds=60))
     with pytest.raises(ProviderError, match="resolution"):
@@ -79,38 +73,3 @@ def test_error_sanitization_strips_secrets() -> None:
     message = "401 for url?api_key=sk-abc123 Bearer sk-abc123 body"
     cleaned = sanitize_provider_error(message, "sk-abc123")
     assert "sk-abc123" not in cleaned
-
-
-@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
-def test_mock_generation_end_to_end_creates_asset() -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    res = client.post(
-        "/api/generation/jobs",
-        json={
-            "workspace_id": ws["id"],
-            "provider": "mock",
-            "model": "mock-image",
-            "kind": "image",
-            "prompt": "sunset over the sea",
-            "parameters": {"size": "320x180"},
-        },
-    ).json()
-    job_id = res["job"]["id"]
-
-    deadline = time.time() + 60
-    job = res["job"]
-    while time.time() < deadline:
-        job = client.get(f"/api/jobs/{job_id}").json()
-        if job["status"] in ("succeeded", "failed"):
-            break
-        time.sleep(0.3)
-    assert job["status"] == "succeeded", job.get("error")
-
-    asset = client.get(f"/api/assets?workspace_id={ws['id']}").json()[0]
-    assert asset["source"] == "generated"
-    assert asset["kind"] == "image"
-    assert asset["media_info"]["has_thumbnail"] is True
-
-    generations = client.get(f"/api/generation/jobs?workspace_id={ws['id']}").json()
-    assert generations[0]["result_asset_id"] == asset["id"]

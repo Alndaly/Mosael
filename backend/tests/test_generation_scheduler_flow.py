@@ -56,8 +56,8 @@ def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monke
         json={
             "workspace_id": ws["id"],
             "session_id": session["id"],
-            "provider": "mock",
-            "model": "mock-image",
+            "provider": "alibaba",
+            "model": "qwen-image",
             "kind": "image",
             "prompt": "海边女孩",
             "parameters": {"size": "320x180"},

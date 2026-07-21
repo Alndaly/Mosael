@@ -335,15 +335,16 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
-def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
+def generate_image(prompt: str, model: str = "", provider: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: generate a NEW image asset from a text prompt.
 
     Use when the user asks to create a new still image/illustration/visual asset.
     This creates a confirmation card because it may spend AI budget; after
     approval get_confirmation returns the job_id and the finished image appears
-    in the media pool. Do NOT use to analyze an existing asset (analyze_asset),
-    tag an asset (update_asset_tags), search the KB (search_kb), or edit a
-    workflow/timeline.
+    in the media pool. Leave provider/model empty only when the user wants the
+    configured image-generation default. Do NOT use to analyze an existing asset
+    (analyze_asset), tag an asset (update_asset_tags), search the KB (search_kb),
+    or edit a workflow/timeline.
     """
     confirmation = _post(
         "/api/confirmations",
@@ -358,14 +359,16 @@ def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock
 
 
 @mcp.tool()
-def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
+def generate_video(prompt: str, model: str = "", provider: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
 
     Use when the user asks to create new footage/animation/B-roll as a media
     asset. This does not place the video onto a timeline; after approval the
     generated asset lands in the media pool and can later be inserted with
-    edit_timeline. Do NOT use for exporting an existing sequence (render_sequence),
-    running a workflow (run_workflow), or editing workflow nodes (edit_workflow).
+    edit_timeline. Leave provider/model empty only when the configured
+    video-generation default should be used. Do NOT use for exporting an existing
+    sequence (render_sequence), running a workflow (run_workflow), or editing
+    workflow nodes (edit_workflow).
     """
     confirmation = _post(
         "/api/confirmations",

@@ -49,14 +49,21 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     from app.domain.generation import create_generation_job
     from app.domain.generation.runner import start_generation_thread
 
+    provider = str(config.get("provider", "")).strip()
+    model = str(config.get("model", "")).strip()
+    kind = str(config.get("kind", "image")).strip() or "image"
+    if not provider or not model:
+        raise WorkflowDomainError("AI 生成节点缺少真实供应商或模型")
     generation, child = create_generation_job(
         db,
         workspace_id=workflow.workspace_id,
+        session_id=None,
         project_id=None,
-        provider=str(config.get("provider", "mock")),
-        model=str(config.get("model", "mock-image")),
-        kind=str(config.get("kind", "image")),
+        provider=provider,
+        model=model,
+        kind=kind,
         prompt=str(config.get("prompt", "")),
+        negative_prompt=str(config.get("negative_prompt", "")),
         parameters=dict(config.get("parameters") or {}),
         source_asset_ids=[],
     )

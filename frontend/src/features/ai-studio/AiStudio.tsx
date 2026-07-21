@@ -29,7 +29,7 @@ type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
-const IMPLEMENTED_GENERATION_ADAPTERS = new Set(["mock:image", "mock:video", "alibaba:image", "bytedance:video"]);
+const IMPLEMENTED_GENERATION_ADAPTERS = new Set(["alibaba:image", "bytedance:video"]);
 const IMAGE_SIZES = ["1024x576", "1024x1024", "576x1024", "768x768", "1280x720"];
 const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
 const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];

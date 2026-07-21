@@ -240,7 +240,8 @@ def test_reject_leaves_timeline_untouched() -> None:
     assert client.post(f"/api/confirmations/{data['id']}/approve").status_code == 409
 
 
-def test_generate_image_confirmation_carries_ai_cost_permission() -> None:
+def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> None:
+    monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     data = client.post(
@@ -248,7 +249,7 @@ def test_generate_image_confirmation_carries_ai_cost_permission() -> None:
         json={
             "workspace_id": ws["id"],
             "tool": "generate_image",
-            "payload": {"prompt": "a lighthouse at dawn", "provider": "mock", "model": "mock-image",
+            "payload": {"prompt": "a lighthouse at dawn", "provider": "alibaba", "model": "qwen-image",
                         "parameters": {"size": "320x180"}},
         },
     ).json()
@@ -256,8 +257,8 @@ def test_generate_image_confirmation_carries_ai_cost_permission() -> None:
     approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["job_id"]
-    job = wait_job(client, approved["result"]["job_id"])
-    assert job["status"] == "succeeded", job.get("error")
+    job = client.get(f"/api/jobs/{approved['result']['job_id']}").json()
+    assert job["status"] == "queued"
 
 
 def test_invalid_payloads_rejected() -> None:
