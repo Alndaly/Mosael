@@ -597,6 +597,8 @@ class GenerationJob(Base):
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     request: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
     session: Mapped[GenerationSession | None] = relationship(back_populates="generations")
 

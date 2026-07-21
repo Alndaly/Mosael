@@ -685,6 +685,8 @@ class GenerationJobOut(OrmModel):
     kind: str
     request: dict
     result_asset_id: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class GenerationCreateResponse(BaseModel):

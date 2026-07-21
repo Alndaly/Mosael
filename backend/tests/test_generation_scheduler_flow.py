@@ -47,6 +47,8 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
     assert payload["generation"]["request"]["prompt"].startswith("A clean")
     assert payload["generation"]["request"]["negative_prompt"] == "blurry"
     assert payload["generation"]["session_id"] is not None
+    assert payload["generation"]["created_at"]
+    assert payload["generation"]["updated_at"]
 
 
 def test_generation_models_expose_provider_specific_parameters() -> None:

@@ -11968,6 +11968,16 @@
               }
             ],
             "title": "Result Asset Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -11979,7 +11989,9 @@
           "model",
           "kind",
           "request",
-          "result_asset_id"
+          "result_asset_id",
+          "created_at",
+          "updated_at"
         ],
         "title": "GenerationJobOut"
       },

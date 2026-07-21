@@ -135,6 +135,35 @@ def _migrate_generation_sessions() -> None:
                 conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN session_id VARCHAR(64)"))
             if "provider_profile_id" not in cols:
                 conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN provider_profile_id VARCHAR(64)"))
+            if "created_at" not in cols:
+                conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN created_at DATETIME"))
+                conn.execute(
+                    text(
+                        """
+                        UPDATE generation_jobs
+                        SET created_at = COALESCE(
+                            (SELECT jobs.created_at FROM jobs WHERE jobs.id = generation_jobs.job_id),
+                            CURRENT_TIMESTAMP
+                        )
+                        WHERE created_at IS NULL
+                        """
+                    )
+                )
+            if "updated_at" not in cols:
+                conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN updated_at DATETIME"))
+                conn.execute(
+                    text(
+                        """
+                        UPDATE generation_jobs
+                        SET updated_at = COALESCE(
+                            (SELECT jobs.updated_at FROM jobs WHERE jobs.id = generation_jobs.job_id),
+                            created_at,
+                            CURRENT_TIMESTAMP
+                        )
+                        WHERE updated_at IS NULL
+                        """
+                    )
+                )
 
 
 def _migrate_tts_config() -> None:

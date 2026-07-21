@@ -28,7 +28,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -39,6 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useImagePreview } from "@/components/ui/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
+import { relativeTime } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -988,11 +989,21 @@ function GenerateWorkspace({
 
 function GenerationTurn({ generation, job }: { generation: GenerationJob; job: Job | null }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
   const status = job?.status ?? "queued";
+  const timestamp = generation.created_at ?? job?.created_at ?? null;
+  const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
   return (
     <article className="generation-turn-card">
-      <div className="generation-turn-prompt">{String(generation.request.prompt ?? "")}</div>
+      <div className="generation-turn-prompt-stack">
+        <div className="generation-turn-prompt">{String(generation.request.prompt ?? "")}</div>
+        {timestamp ? (
+          <time className="generation-turn-time" dateTime={timestamp}>
+            {timestampLabel}
+          </time>
+        ) : null}
+      </div>
       <div className="gen-turn">
         {generation.result_asset_id && generation.kind === "video" ? (
           <video

@@ -5446,6 +5446,12 @@
   flex-shrink: 0;
 }
 
+.generation-turn-prompt-stack {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
 .generation-turn-prompt {
   justify-self: end;
   width: fit-content;
@@ -5459,6 +5465,12 @@
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.generation-turn-time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .gen-turn {
