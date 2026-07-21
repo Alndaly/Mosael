@@ -19,9 +19,14 @@ const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const t = useI18n();
   const [image, setImage] = React.useState<ImagePreviewState | null>(null);
+  const [visible, setVisible] = React.useState(false);
 
-  const openImagePreview = React.useCallback((next: ImagePreviewState) => setImage(next), []);
-  const close = React.useCallback(() => setImage(null), []);
+  const openImagePreview = React.useCallback((next: ImagePreviewState) => {
+    setImage(next);
+    setVisible(true);
+  }, []);
+  const close = React.useCallback(() => setVisible(false), []);
+  const reset = React.useCallback(() => setImage(null), []);
 
   const value = React.useMemo<ImagePreviewContextValue>(() => ({ openImagePreview }), [openImagePreview]);
 
@@ -40,8 +45,9 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
               ]
             : []
         }
-        visible={image !== null}
+        visible={visible && image !== null}
         onClose={close}
+        afterClose={reset}
         className="mibu-photo-preview"
         maskClassName="mibu-photo-preview-mask"
         photoClassName="mibu-photo-preview-photo"

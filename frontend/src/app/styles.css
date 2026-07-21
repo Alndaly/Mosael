@@ -4132,7 +4132,7 @@
 }
 
 .mibu-photo-preview-mask {
-  backdrop-filter: blur(2px);
+  will-change: opacity;
 }
 
 .mibu-photo-preview .PhotoView-Slider__BannerWrap {
@@ -4159,7 +4159,8 @@
 
 .mibu-photo-preview-photo {
   border-radius: 10px;
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.45);
+  outline: 1px solid rgb(255 255 255 / 0.12);
+  will-change: transform, opacity;
 }
 
 .mibu-photo-preview-open {
