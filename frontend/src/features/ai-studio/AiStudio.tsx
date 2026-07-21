@@ -306,7 +306,7 @@ function GenerateWorkspace({
   };
 
   return (
-    <div className="chat-grid">
+    <div className="gen-workspace">
       <aside className="chat-sessions panel">
         <div className="panel-head">
           <h2>{t("generationSessionsTitle")}</h2>
@@ -363,8 +363,8 @@ function GenerateWorkspace({
         />
       </aside>
 
-      <section className="chat-main panel">
-        <div className="chat-thread" ref={threadRef}>
+      <section className="gen-main panel">
+        <div className="gen-thread" ref={threadRef}>
           {ordered.length === 0 && (
             <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
           )}
@@ -376,126 +376,7 @@ function GenerateWorkspace({
             />
           ))}
         </div>
-        <form className="chat-composer" onSubmit={submit}>
-          {selectedModel && selectedCapabilityMissing && (
-            <ConfigNotice
-              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
-              actionLabel={t("wfGoConfigure")}
-              section={`providers:${selectedModel.kind}`}
-            />
-          )}
-          {selectedModel && !selectedAdapterAvailable && (
-            <div className="generation-engine-warning">
-              <CircleAlert size={13} />
-              {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
-            </div>
-          )}
-          {selectedModel && (
-            <div className="generation-config">
-              <span className="generation-config-title">{t("generationEngineSettings")}</span>
-              {selectedModel.kind === "image" ? (
-                <>
-                  <label>
-                    {t("genSize")}
-                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="generation-config-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {IMAGE_SIZES.map((size) => (
-                          <SelectItem key={size} value={size}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label>
-                    {t("genNumImages")}
-                    <input
-                      className="generation-config-input"
-                      type="number"
-                      min={1}
-                      max={4}
-                      value={generationConfig.numImages}
-                      onChange={(event) => setConfigValue("numImages", event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {t("genSeed")}
-                    <input
-                      className="generation-config-input"
-                      type="number"
-                      placeholder="auto"
-                      value={generationConfig.seed}
-                      onChange={(event) => setConfigValue("seed", event.target.value)}
-                    />
-                  </label>
-                  <label className="generation-config-wide">
-                    {t("genNegativePrompt")}
-                    <input
-                      className="generation-config-input"
-                      value={generationConfig.negativePrompt}
-                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label>
-                    {t("genDuration")}
-                    <input
-                      className="generation-config-input"
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={generationConfig.durationSeconds}
-                      onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {t("genResolution")}
-                    <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                      <SelectTrigger className="generation-config-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VIDEO_RESOLUTIONS.map((resolution) => (
-                          <SelectItem key={resolution} value={resolution}>
-                            {resolution}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label>
-                    {t("genAspectRatio")}
-                    <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="generation-config-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ASPECT_RATIOS.map((ratio) => (
-                          <SelectItem key={ratio} value={ratio}>
-                            {ratio}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="generation-config-wide">
-                    {t("genFirstFrameUrl")}
-                    <input
-                      className="generation-config-input"
-                      placeholder="https://..."
-                      value={generationConfig.firstFrameUrl}
-                      onChange={(event) => setConfigValue("firstFrameUrl", event.target.value)}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-          )}
+        <form className="gen-composer" onSubmit={submit}>
           <textarea
             rows={2}
             value={prompt}
@@ -515,26 +396,7 @@ function GenerateWorkspace({
           <div className="chat-composer-bar">
             <div className="chat-composer-left">
               {switcher}
-              {selectedModel && (
-                <Select value={selectedModel.id} onValueChange={setModelId}>
-                  <SelectTrigger className="composer-model-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelGroups.map((group) => (
-                      <React.Fragment key={group.kind}>
-                        <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
-                        {group.models.map((model) => (
-                          <SelectItem key={model.id} value={model.id}>
-                            {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
-                            {model.model} · {model.provider}
-                          </SelectItem>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {selectedModel && <span className="composer-model">{selectedModel.model} · {selectedModel.provider}</span>}
             </div>
             <Button
               type="submit"
@@ -548,6 +410,151 @@ function GenerateWorkspace({
           </div>
         </form>
       </section>
+
+      <aside className="gen-settings panel">
+        <div className="panel-head">
+          <h2>{t("generationEngineSettings")}</h2>
+        </div>
+        {selectedModel && selectedCapabilityMissing && (
+          <ConfigNotice
+            message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
+            actionLabel={t("wfGoConfigure")}
+            section={`providers:${selectedModel.kind}`}
+          />
+        )}
+        {selectedModel && !selectedAdapterAvailable && (
+          <div className="generation-engine-warning">
+            <CircleAlert size={13} />
+            {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
+          </div>
+        )}
+        {selectedModel && (
+          <>
+            <label className="generation-setting">
+              <span>{t("wfModelPreset")}</span>
+              <Select value={selectedModel.id} onValueChange={setModelId}>
+                <SelectTrigger className="generation-config-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelGroups.map((group) => (
+                    <React.Fragment key={group.kind}>
+                      <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
+                      {group.models.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
+                          {model.model} · {model.provider}
+                        </SelectItem>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            {selectedModel.kind === "image" ? (
+              <>
+                <label className="generation-setting">
+                  <span>{t("genSize")}</span>
+                  <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+                    <SelectTrigger className="generation-config-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {IMAGE_SIZES.map((size) => (
+                        <SelectItem key={size} value={size}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genNumImages")}</span>
+                  <input
+                    className="generation-config-input"
+                    type="number"
+                    min={1}
+                    max={4}
+                    value={generationConfig.numImages}
+                    onChange={(event) => setConfigValue("numImages", event.target.value)}
+                  />
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genSeed")}</span>
+                  <input
+                    className="generation-config-input"
+                    type="number"
+                    placeholder="auto"
+                    value={generationConfig.seed}
+                    onChange={(event) => setConfigValue("seed", event.target.value)}
+                  />
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genNegativePrompt")}</span>
+                  <input
+                    className="generation-config-input"
+                    value={generationConfig.negativePrompt}
+                    onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="generation-setting">
+                  <span>{t("genDuration")}</span>
+                  <input
+                    className="generation-config-input"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={generationConfig.durationSeconds}
+                    onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
+                  />
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genResolution")}</span>
+                  <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
+                    <SelectTrigger className="generation-config-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VIDEO_RESOLUTIONS.map((resolution) => (
+                        <SelectItem key={resolution} value={resolution}>
+                          {resolution}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genAspectRatio")}</span>
+                  <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
+                    <SelectTrigger className="generation-config-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ASPECT_RATIOS.map((ratio) => (
+                        <SelectItem key={ratio} value={ratio}>
+                          {ratio}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genFirstFrameUrl")}</span>
+                  <input
+                    className="generation-config-input"
+                    placeholder="https://..."
+                    value={generationConfig.firstFrameUrl}
+                    onChange={(event) => setConfigValue("firstFrameUrl", event.target.value)}
+                  />
+                </label>
+              </>
+            )}
+          </>
+        )}
+      </aside>
     </div>
   );
 }
@@ -557,38 +564,36 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
   const { openImagePreview } = useImagePreview();
   const status = job?.status ?? "queued";
   return (
-    <>
-      <div className="chat-bubble user">{String(generation.request.prompt ?? "")}</div>
-      <div className="chat-bubble assistant">
-        <div className="gen-turn">
-          {generation.result_asset_id ? (
-            <button
-              type="button"
-              className="gen-turn-image-button"
-              onClick={() =>
-                openImagePreview({
-                  src: assetFileUrl(generation.result_asset_id!),
-                  title: String(generation.request.prompt ?? generation.model),
-                })
-              }
-            >
-              <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
-            </button>
-          ) : status === "failed" ? (
-            <span className="gen-turn-status failed">
-              <CircleAlert size={13} /> {t("genFailed")}
-              {job?.error ? ` · ${job.error}` : ""}
-            </span>
-          ) : (
-            <span className="gen-turn-status">
-              <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
-            </span>
-          )}
-          <small>
-            {generation.provider} · {generation.model}
-          </small>
-        </div>
+    <article className="generation-turn-card">
+      <div className="generation-turn-prompt">{String(generation.request.prompt ?? "")}</div>
+      <div className="gen-turn">
+        {generation.result_asset_id ? (
+          <button
+            type="button"
+            className="gen-turn-image-button"
+            onClick={() =>
+              openImagePreview({
+                src: assetFileUrl(generation.result_asset_id!),
+                title: String(generation.request.prompt ?? generation.model),
+              })
+            }
+          >
+            <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
+          </button>
+        ) : status === "failed" ? (
+          <span className="gen-turn-status failed">
+            <CircleAlert size={13} /> {t("genFailed")}
+            {job?.error ? ` · ${job.error}` : ""}
+          </span>
+        ) : (
+          <span className="gen-turn-status">
+            <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
+          </span>
+        )}
+        <small>
+          {generation.provider} · {generation.model}
+        </small>
       </div>
-    </>
+    </article>
   );
 }
