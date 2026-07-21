@@ -1,8 +1,8 @@
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const Command = CommandPrimitive;
@@ -23,22 +23,19 @@ function CommandDialog({
   children: React.ReactNode;
 }) {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 animate-in fade-in-0" />
-        <DialogPrimitive.Content
-          className={cn(
-            "fixed left-1/2 top-[18%] z-50 w-[min(620px,calc(100vw-48px))] -translate-x-1/2 overflow-hidden",
-            "rounded-xl border border-border-strong bg-popover animate-in fade-in-0 zoom-in-95",
-          )}
-        >
-          <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
-          <Command label={label} shouldFilter={shouldFilter}>
-            {children}
-          </Command>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showClose={false}
+        className={cn(
+          "top-[18%] z-50 w-[min(620px,calc(100vw-48px))] overflow-hidden rounded-xl border-border-strong p-0",
+        )}
+      >
+        <DialogTitle className="sr-only">{label}</DialogTitle>
+        <Command label={label} shouldFilter={shouldFilter}>
+          {children}
+        </Command>
+      </DialogContent>
+    </Dialog>
   );
 }
 

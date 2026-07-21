@@ -1,14 +1,23 @@
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { useI18n } from "@/app/preferences";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 
 /** Shared modal shell (no native dialogs per frontend rules). */
 export function ModalShell({
@@ -33,22 +42,14 @@ export function ModalShell({
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/30 animate-in fade-in-0" />
-        <DialogPrimitive.Content
-          onInteractOutside={ignoreSelectOutsideInteraction}
-          className={cn(
-            "fixed left-1/2 top-1/2 z-[110] w-[360px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
-            "bg-popover p-3 shadow-[var(--shadow-raised)] animate-in fade-in-0 zoom-in-95",
-            className,
-          )}
-        >
-          <DialogPrimitive.Title className="mb-3 text-[14px] font-semibold">{title}</DialogPrimitive.Title>
-          {children}
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent onInteractOutside={ignoreSelectOutsideInteraction} className={className}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -120,16 +121,27 @@ export function ConfirmDialog({
 }) {
   const t = useI18n();
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={title}>
-      {body && <p className="mb-3 text-[13px] text-muted-foreground">{body}</p>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onCancel}>
-          {t("cancel")}
-        </Button>
-        <Button variant="destructive" size="sm" onClick={onConfirm}>
-          {t("confirm")}
-        </Button>
-      </div>
-    </ModalShell>
+    <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="h-7 rounded-md px-2 text-xs">
+            {t("cancel")}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            className="h-7 rounded-md bg-destructive px-2 text-xs text-white hover:bg-destructive/90"
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+          >
+            {t("confirm")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
