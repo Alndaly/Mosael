@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
@@ -121,8 +122,8 @@ function DefaultRow({
       </Select>
       {isGenerationCapability ? (
         <>
-          <input
-            className="provider-default-model-input"
+          <Input
+            className="h-10 min-w-0"
             list={datalistId}
             value={draftModel}
             placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}

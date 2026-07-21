@@ -10197,31 +10197,6 @@
   width: 100%;
   min-width: 0;
 }
-.provider-default-model-input {
-  height: 40px;
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
-  padding: 0 12px;
-  color: var(--foreground);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 120ms, box-shadow 120ms, background 120ms;
-}
-.provider-default-model-input::placeholder {
-  color: var(--muted-foreground);
-}
-.provider-default-model-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
-}
-.provider-default-model-input:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  background: var(--muted);
-}
 /* 禁用态(未选供应商/无可用模型)要一眼看出不可点,别让人以为点击没反应 */
 .provider-default-select:disabled,
 .provider-default-select[data-disabled] {
