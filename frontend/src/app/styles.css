@@ -5366,14 +5366,16 @@
 }
 
 .generation-model-option {
-  display: inline-flex;
+  display: flex;
   min-width: 0;
+  width: 100%;
   align-items: center;
   gap: 7px;
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .generation-model-option svg {
+  display: block;
   flex: none;
   color: var(--muted-foreground);
 }

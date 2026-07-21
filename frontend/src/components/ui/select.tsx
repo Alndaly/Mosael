@@ -19,7 +19,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
       className={cn(
         "inline-flex h-8 max-w-full min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-panel px-2.5 text-[13px]",
         "text-foreground outline-none transition-colors hover:border-border-strong",
-        "focus-visible:border-primary data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:truncate",
+        "focus-visible:border-primary data-[placeholder]:text-muted-foreground [&>span]:inline-flex [&>span]:min-w-0 [&>span]:items-center [&>span]:truncate",
         className,
       )}
       {...props}
@@ -70,7 +70,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText className="min-w-0 flex-1">{children}</SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator className="ml-auto">
         <Check size={12} className="text-primary" />
       </SelectPrimitive.ItemIndicator>
