@@ -84,6 +84,7 @@ import {
   type WorkflowNodeType,
   type Workspace,
 } from "@/api/client";
+import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,9 @@ import {
   type DataType,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+
+type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
+type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -1585,8 +1589,8 @@ function NodeInspector({
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
     queryKey: ["provider-profiles"],
-    queryFn: () => api<Array<{ id: string; name: string; vendor: string }>>("/api/settings/providers"),
-    enabled: node.type === "llm",
+    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    enabled: node.type === "llm" || node.type === "ai_generate",
   });
   const pluginTools = useQuery({
     queryKey: ["plugin-tools"],
@@ -1603,9 +1607,9 @@ function NodeInspector({
     queryFn: () => api<Array<{ id: string; provider: string; model: string; kind: string }>>("/api/generation/models"),
     enabled: node.type === "ai_generate",
   });
-  const credentials = useQuery({
-    queryKey: ["credentials"],
-    queryFn: listCredentials,
+  const providerDefaults = useQuery({
+    queryKey: ["provider-defaults"],
+    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
     enabled: node.type === "ai_generate",
   });
   const voices = useQuery({
@@ -1637,15 +1641,35 @@ function NodeInspector({
         return { message: t("wfProviderMissing"), section: "providers", error: true };
     }
     if (node.type === "ai_generate") {
-      // 生成模型目录始终有内置项;是否可用取决于该服务商的密钥是否配好(credentials)。
-      const configured = new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider));
       const chosenProvider = config.provider as string | undefined;
-      if (chosenProvider && credentials.isSuccess && !configured.has(chosenProvider))
-        return { message: t("wfGenModelMissing"), section: "providers", error: true };
+      const chosenModel = config.model as string | undefined;
       const models = generationModels.data ?? [];
-      const anyUsable = models.some((g) => configured.has(g.provider));
-      if (credentials.isSuccess && generationModels.isSuccess && !anyUsable)
-        return { message: t("wfNoGenModels"), section: "providers" };
+      const matchedModel = models.find(
+        (model) =>
+          model.provider === chosenProvider &&
+          model.model === chosenModel &&
+          (!config.kind || model.kind === config.kind),
+      );
+      const capability = String(config.kind || matchedModel?.kind || "image");
+      const capabilityLabel = capability === "image" ? t("capImage") : capability === "video" ? t("capVideo") : capability;
+      const section = `providers:${capability}`;
+      if (chosenProvider && chosenModel && generationModels.isSuccess && !matchedModel) {
+        return { message: t("wfGenModelMissing"), section, error: true };
+      }
+      const defaultForCapability = (providerDefaults.data ?? []).find((item) => item.capability === capability);
+      const defaultProfile = defaultForCapability?.provider_profile_id
+        ? (providers.data ?? []).find((profile) => profile.id === defaultForCapability.provider_profile_id)
+        : null;
+      if (
+        providerDefaults.isSuccess &&
+        providers.isSuccess &&
+        (!defaultForCapability?.provider_profile_id || !defaultForCapability.model || !defaultProfile?.enabled)
+      ) {
+        return {
+          message: t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel),
+          section,
+        };
+      }
     }
     return null;
   })();

@@ -5,19 +5,22 @@ import { CircleAlert, ImagePlus, Loader2, Send, Sparkles, Video } from "lucide-r
 import {
   api,
   assetThumbnailUrl,
-  listCredentials,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationModel,
   type Job,
   type Workspace,
 } from "@/api/client";
+import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+
+type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
+type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
 export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -80,16 +83,14 @@ function GenerateWorkspace({
     queryKey: ["generation-models"],
     queryFn: () => api<GenerationModel[]>("/api/generation/models"),
   });
-  const credentials = useQuery({ queryKey: ["credentials"], queryFn: listCredentials });
-  // 模型目录始终有内置项;能不能真跑取决于服务商密钥是否配好。
-  const configuredProviders = React.useMemo(
-    () => new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider)),
-    [credentials.data],
-  );
-  const noUsableModel =
-    models.isSuccess &&
-    credentials.isSuccess &&
-    !(models.data ?? []).some((m) => configuredProviders.has(m.provider));
+  const providers = useQuery({
+    queryKey: ["provider-profiles"],
+    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+  });
+  const defaults = useQuery({
+    queryKey: ["provider-defaults"],
+    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+  });
   const generations = useQuery({
     queryKey: ["generation-jobs", workspace.id],
     queryFn: () => api<GenerationJob[]>(`/api/generation/jobs?workspace_id=${workspace.id}`),
@@ -104,6 +105,23 @@ function GenerateWorkspace({
 
   const selectedModel =
     (models.data ?? []).find((model) => model.id === modelId) ?? (models.data ?? [])[0] ?? null;
+  const modelGroups = React.useMemo(() => {
+    const grouped = new Map<string, GenerationModel[]>();
+    for (const model of models.data ?? []) {
+      grouped.set(model.kind, [...(grouped.get(model.kind) ?? []), model]);
+    }
+    return ["image", "video", ...[...grouped.keys()].filter((kind) => kind !== "image" && kind !== "video")]
+      .filter((kind) => (grouped.get(kind) ?? []).length > 0)
+      .map((kind) => ({ kind, models: grouped.get(kind) ?? [] }));
+  }, [models.data]);
+  const capabilityLabel = (kind: string) => (kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind);
+  const capabilityMissing = (kind: string) => {
+    const row = (defaults.data ?? []).find((item) => item.capability === kind);
+    const profile = row?.provider_profile_id
+      ? (providers.data ?? []).find((item) => item.id === row.provider_profile_id)
+      : null;
+    return defaults.isSuccess && providers.isSuccess && (!row?.provider_profile_id || !row.model || !profile?.enabled);
+  };
 
   const createGeneration = useMutation({
     mutationFn: () =>
@@ -176,21 +194,30 @@ function GenerateWorkspace({
           <h2>{t("generationModels")}</h2>
         </div>
         <div className="chat-session-list">
-          {noUsableModel && (
-            <ConfigNotice message={t("aiNoModels")} actionLabel={t("wfGoConfigure")} section="providers" />
-          )}
-          {(models.data ?? []).map((model) => (
-            <button
-              key={model.id}
-              type="button"
-              className={selectedModel?.id === model.id ? "chat-session active" : "chat-session"}
-              onClick={() => setModelId(model.id)}
-            >
-              <strong>
-                {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />} {model.model}
-              </strong>
-              <small>{model.provider}</small>
-            </button>
+          {modelGroups.map((group) => (
+            <div key={group.kind} className="generation-model-group">
+              <div className="generation-model-group-title">{capabilityLabel(group.kind)}</div>
+              {capabilityMissing(group.kind) && (
+                <ConfigNotice
+                  message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(group.kind))}
+                  actionLabel={t("wfGoConfigure")}
+                  section={`providers:${group.kind}`}
+                />
+              )}
+              {group.models.map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  className={selectedModel?.id === model.id ? "chat-session active" : "chat-session"}
+                  onClick={() => setModelId(model.id)}
+                >
+                  <strong>
+                    {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />} {model.model}
+                  </strong>
+                  <small>{model.provider}</small>
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </aside>

@@ -20,12 +20,14 @@ function DefaultRow({
   providers,
   current,
   genModels,
+  highlighted,
 }: {
   capability: string;
   label: string;
   providers: ProviderProfile[];
   current: ProviderDefault | undefined;
   genModels: GenerationModel[] | null;
+  highlighted?: boolean;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -52,7 +54,10 @@ function DefaultRow({
   });
 
   return (
-    <div className="provider-default-row">
+    <div
+      className={highlighted ? "provider-default-row is-highlighted" : "provider-default-row"}
+      id={`provider-default-${capability}`}
+    >
       <span className="provider-default-cap">{label}</span>
       <Select
         key={`p-${providerId || "none"}`}
@@ -100,7 +105,7 @@ function DefaultRow({
   );
 }
 
-export function ProviderDefaultsSection() {
+export function ProviderDefaultsSection({ focusCapability }: { focusCapability?: string | null }) {
   const t = useI18n();
   const providers = useQuery({
     queryKey: ["provider-profiles"],
@@ -127,6 +132,16 @@ export function ProviderDefaultsSection() {
     { capability: "video", label: t("capVideo"), genModels: genVideo.data ?? null },
   ];
 
+  React.useEffect(() => {
+    if (!focusCapability) return;
+    window.setTimeout(() => {
+      document.getElementById(`provider-default-${focusCapability}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 80);
+  }, [focusCapability]);
+
   return (
     <SettingsGroup title={t("providerDefaultsTitle")} description={t("providerDefaultsDesc")}>
       <SettingsBlock>
@@ -142,6 +157,7 @@ export function ProviderDefaultsSection() {
                 providers={enabled}
                 current={byCapability.get(row.capability)}
                 genModels={row.genModels}
+                highlighted={focusCapability === row.capability}
               />
             ))}
           </div>

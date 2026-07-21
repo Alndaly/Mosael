@@ -33,6 +33,7 @@ const SECTION_STORAGE_KEY = "mibu:settings-section";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const [focusProviderCapability, setFocusProviderCapability] = React.useState<string | null>(null);
   const [section, setSectionState] = React.useState<SectionId>(() => {
     const saved = localStorage.getItem(SECTION_STORAGE_KEY);
     return saved && SECTION_IDS.includes(saved as SectionId) ? (saved as SectionId) : "account";
@@ -46,8 +47,12 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   // 深链:别处(如工作流「模型未配置」提示)→ mibu:open-settings 直达对应分区。
   React.useEffect(() => {
     const onOpen = (event: Event) => {
-      const id = (event as CustomEvent<string>).detail;
-      if (SECTION_IDS.includes(id as SectionId)) setSection(id as SectionId);
+      const detail = (event as CustomEvent<string>).detail;
+      const [id, focus] = String(detail || "").split(":");
+      if (SECTION_IDS.includes(id as SectionId)) {
+        setSection(id as SectionId);
+        setFocusProviderCapability(id === "providers" && focus ? focus : null);
+      }
     };
     window.addEventListener("mibu:open-settings", onOpen);
     return () => window.removeEventListener("mibu:open-settings", onOpen);
@@ -91,7 +96,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           {section === "providers" && (
             <>
               <ProviderProfilesSection />
-              <ProviderDefaultsSection />
+              <ProviderDefaultsSection focusCapability={focusProviderCapability} />
               <KbEmbeddingSection />
             </>
           )}

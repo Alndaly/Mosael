@@ -3748,6 +3748,24 @@
   overflow: auto;
 }
 
+.generation-model-group {
+  display: grid;
+  gap: 4px;
+}
+
+.generation-model-group + .generation-model-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.generation-model-group-title {
+  padding: 2px 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .chat-session {
   display: grid;
   gap: 1px;
@@ -9446,6 +9464,14 @@
   grid-template-columns: 96px 1fr 1fr;
   align-items: center;
   gap: 10px;
+  border-radius: 8px;
+  margin: -4px;
+  padding: 4px;
+  transition: background 160ms, box-shadow 160ms;
+}
+.provider-default-row.is-highlighted {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent);
 }
 .provider-default-cap {
   font-weight: 500;
