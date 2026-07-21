@@ -44,6 +44,8 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
     assert summary["week_jobs_failed"] == 0
     assert summary["publish_accounts"] == 1
     assert summary["week_published"] == 1
+    assert summary["publish_daily"][-1]["succeeded"] == 1
+    assert summary["publish_platforms"] == {"mock": 1}
     assert summary["kb_document_count"] == 0
 
 
@@ -72,3 +74,63 @@ def test_summary_charts_daily_and_asset_kinds() -> None:
     assert today["succeeded"] == 1 and today["failed"] == 1
     assert all(day["succeeded"] == 0 for day in summary["daily"][:-1])
     assert summary["asset_kinds"] == {"video": 1, "audio": 1}
+
+
+def test_summary_publish_charts_group_statuses_and_platforms() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    other = client.post("/api/workspaces", json={"name": "W2"}).json()["id"]
+    with SessionLocal() as db:
+        asset = Asset(workspace_id=ws, name="v", kind="video")
+        other_asset = Asset(workspace_id=other, name="ov", kind="video")
+        db.add_all([asset, other_asset])
+        acc_a = PublishAccount(workspace_id=ws, platform="douyin", name="dy", config={})
+        acc_b = PublishAccount(workspace_id=ws, platform="bilibili", name="b", config={})
+        acc_other = PublishAccount(workspace_id=other, platform="douyin", name="other", config={})
+        db.add_all([acc_a, acc_b, acc_other])
+        db.flush()
+        for status, account in (
+            ("success", acc_a),
+            ("failed", acc_a),
+            ("running", acc_b),
+            ("login_required", acc_b),
+        ):
+            db.add(
+                PublishTask(
+                    workspace_id=ws,
+                    account_id=account.id,
+                    asset_id=asset.id,
+                    title=status,
+                    description="",
+                    tags=[],
+                    status=status,
+                )
+            )
+        db.add(
+            PublishTask(
+                workspace_id=other,
+                account_id=acc_other.id,
+                asset_id=other_asset.id,
+                title="foreign",
+                description="",
+                tags=[],
+                status="success",
+            )
+        )
+        db.commit()
+
+    summary = client.get(f"/api/workspaces/{ws}/summary").json()
+    assert len(summary["publish_daily"]) == 14
+    today = summary["publish_daily"][-1]
+    assert today == {
+        "date": today["date"],
+        "succeeded": 1,
+        "failed": 1,
+        "active": 1,
+        "blocked": 1,
+    }
+    assert all(
+        day["succeeded"] == day["failed"] == day["active"] == day["blocked"] == 0
+        for day in summary["publish_daily"][:-1]
+    )
+    assert summary["publish_platforms"] == {"bilibili": 2, "douyin": 2}

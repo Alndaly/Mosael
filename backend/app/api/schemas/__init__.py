@@ -1201,6 +1201,16 @@ class DailyActivityOut(BaseModel):
     failed: int
 
 
+class DailyPublishOut(BaseModel):
+    """一天的发布活动(首页发布图的一根柱)。date 为 YYYY-MM-DD(UTC)。"""
+
+    date: str
+    succeeded: int
+    failed: int
+    active: int
+    blocked: int
+
+
 class WorkspaceSummaryOut(BaseModel):
     """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
 
@@ -1217,3 +1227,6 @@ class WorkspaceSummaryOut(BaseModel):
     # 图表数据:近 14 天逐日任务活动(旧→新,缺日补零)与素材类型构成
     daily: list[DailyActivityOut]
     asset_kinds: dict[str, int]
+    # 发布图表:近 14 天发布任务状态(旧→新,缺日补零)与按平台聚合的发布任务数
+    publish_daily: list[DailyPublishOut]
+    publish_platforms: dict[str, int]

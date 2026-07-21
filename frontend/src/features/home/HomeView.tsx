@@ -20,7 +20,7 @@ import {
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
-import { ActivityChart, AssetKindsChart } from "@/features/home/HomeCharts";
+import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart } from "@/features/home/HomeCharts";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -212,6 +212,14 @@ export function HomeView({
             <h2 className="home-chart-title">{t("homeChartAssets")}</h2>
             <AssetKindsChart assetKinds={stats.asset_kinds} />
           </div>
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartPublishActivity")}</h2>
+            <PublishActivityChart daily={stats.publish_daily} />
+          </div>
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartPublishPlatforms")}</h2>
+            <PublishPlatformsChart platforms={stats.publish_platforms} />
+          </div>
         </section>
       )}
 
@@ -324,4 +332,3 @@ export function HomeView({
     </div>
   );
 }
-

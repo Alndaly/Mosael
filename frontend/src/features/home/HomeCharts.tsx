@@ -2,7 +2,7 @@ import React from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "recharts";
 
 import type { WorkspaceSummary } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import {
   ChartContainer,
   ChartLegend,
@@ -21,6 +21,13 @@ import {
 const activityConfig = {
   succeeded: { label: "", color: "var(--chart-ok)" },
   failed: { label: "", color: "var(--chart-fail)" },
+} satisfies ChartConfig;
+
+const publishConfigBase = {
+  succeeded: { label: "", color: "var(--chart-ok)" },
+  failed: { label: "", color: "var(--chart-fail)" },
+  active: { label: "", color: "var(--chart-audio)" },
+  blocked: { label: "", color: "var(--chart-image)" },
 } satisfies ChartConfig;
 
 export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
@@ -114,6 +121,127 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
         <div className="home-chart-legend home-chart-donut-legend">
           {segments.map((segment) => (
             <span key={segment.kind}>
+              <i className="home-chart-dot" style={{ background: segment.color }} /> {segment.name}{" "}
+              <em className="home-chart-count">{segment.count}</em>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publish_daily"] }) {
+  const t = useI18n();
+  const max = Math.max(...daily.map((day) => day.succeeded + day.failed + day.active + day.blocked));
+  if (max === 0) {
+    return <p className="home-chart-empty">{t("homeChartEmptyPublishActivity")}</p>;
+  }
+  const config: ChartConfig = {
+    succeeded: { ...publishConfigBase.succeeded, label: t("homeLegendSucceeded") },
+    failed: { ...publishConfigBase.failed, label: t("homeLegendFailed") },
+    active: { ...publishConfigBase.active, label: t("homeLegendActive") },
+    blocked: { ...publishConfigBase.blocked, label: t("homeLegendBlocked") },
+  };
+  const data = daily.map((day) => ({ ...day, day: day.date.slice(5) }));
+
+  return (
+    <ChartContainer config={config} className="home-chart-plot">
+      <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
+        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <XAxis
+          dataKey="day"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={6}
+          interval="preserveStartEnd"
+          minTickGap={48}
+        />
+        <ChartTooltip cursor={{ fillOpacity: 0.06 }} content={<ChartTooltipContent />} />
+        <Bar dataKey="succeeded" stackId="publish" fill="var(--color-succeeded)" maxBarSize={14} />
+        <Bar dataKey="active" stackId="publish" fill="var(--color-active)" maxBarSize={14} />
+        <Bar dataKey="blocked" stackId="publish" fill="var(--color-blocked)" maxBarSize={14} />
+        <Bar dataKey="failed" stackId="publish" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {max}</span>} />} />
+      </BarChart>
+    </ChartContainer>
+  );
+}
+
+const PLATFORM_COLORS = [
+  "var(--chart-video)",
+  "var(--chart-image)",
+  "var(--chart-audio)",
+  "var(--chart-ok)",
+  "var(--chart-fail)",
+] as const;
+
+const PLATFORM_LABELS: Record<string, { zh: string; en: string }> = {
+  folder: { zh: "本地目录", en: "Folder" },
+  webhook: { zh: "Webhook", en: "Webhook" },
+  mock: { zh: "演示平台", en: "Demo" },
+  douyin: { zh: "抖音", en: "Douyin" },
+  bilibili: { zh: "B站", en: "Bilibili" },
+  xiaohongshu: { zh: "小红书", en: "Xiaohongshu" },
+  "weixin-channels": { zh: "视频号", en: "Channels" },
+};
+
+function platformLabel(platform: string, locale: string): string {
+  const known = PLATFORM_LABELS[platform];
+  if (!known) return platform;
+  return locale.startsWith("zh") ? known.zh : known.en;
+}
+
+export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSummary["publish_platforms"] }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const entries = Object.entries(platforms)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((sum, [, count]) => sum + count, 0);
+  if (total === 0) {
+    return <p className="home-chart-empty">{t("homeChartEmptyPublishPlatforms")}</p>;
+  }
+
+  const segments = entries.map(([platform, count], index) => ({
+    platform,
+    count,
+    name: platformLabel(platform, locale),
+    color: PLATFORM_COLORS[index % PLATFORM_COLORS.length],
+  }));
+  const config: ChartConfig = Object.fromEntries(
+    segments.map((segment) => [segment.platform, { label: segment.name, color: segment.color }]),
+  );
+
+  return (
+    <div className="home-chart-donut-row">
+      <ChartContainer config={config} className="home-chart-donut">
+        <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+          <Pie
+            data={segments}
+            dataKey="count"
+            nameKey="platform"
+            innerRadius="62%"
+            outerRadius="92%"
+            paddingAngle={2}
+            strokeWidth={0}
+            isAnimationActive={false}
+          >
+            {segments.map((segment) => (
+              <Cell key={segment.platform} fill={segment.color} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      <div className="home-chart-donut-side">
+        <div className="home-chart-donut-total">
+          <strong>{total}</strong>
+          <span>{t("publishTabRecords")}</span>
+        </div>
+        <div className="home-chart-legend home-chart-donut-legend">
+          {segments.map((segment) => (
+            <span key={segment.platform}>
               <i className="home-chart-dot" style={{ background: segment.color }} /> {segment.name}{" "}
               <em className="home-chart-count">{segment.count}</em>
             </span>

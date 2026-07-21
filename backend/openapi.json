@@ -11251,6 +11251,40 @@
         "title": "DailyActivityOut",
         "description": "一天的任务活动(首页活动图的一根柱)。date 为 YYYY-MM-DD(UTC)。"
       },
+      "DailyPublishOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "succeeded": {
+            "type": "integer",
+            "title": "Succeeded"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "active": {
+            "type": "integer",
+            "title": "Active"
+          },
+          "blocked": {
+            "type": "integer",
+            "title": "Blocked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "succeeded",
+          "failed",
+          "active",
+          "blocked"
+        ],
+        "title": "DailyPublishOut",
+        "description": "一天的发布活动(首页发布图的一根柱)。date 为 YYYY-MM-DD(UTC)。"
+      },
       "EngineSynthesizeRequest": {
         "properties": {
           "workspace_id": {
@@ -16028,6 +16062,20 @@
             },
             "type": "object",
             "title": "Asset Kinds"
+          },
+          "publish_daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyPublishOut"
+            },
+            "type": "array",
+            "title": "Publish Daily"
+          },
+          "publish_platforms": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Publish Platforms"
           }
         },
         "type": "object",
@@ -16043,7 +16091,9 @@
           "publish_accounts",
           "week_published",
           "daily",
-          "asset_kinds"
+          "asset_kinds",
+          "publish_daily",
+          "publish_platforms"
         ],
         "title": "WorkspaceSummaryOut",
         "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"

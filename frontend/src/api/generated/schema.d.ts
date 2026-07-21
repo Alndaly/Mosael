@@ -3671,6 +3671,22 @@ export interface components {
             failed: number;
         };
         /**
+         * DailyPublishOut
+         * @description 一天的发布活动(首页发布图的一根柱)。date 为 YYYY-MM-DD(UTC)。
+         */
+        DailyPublishOut: {
+            /** Date */
+            date: string;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+            /** Active */
+            active: number;
+            /** Blocked */
+            blocked: number;
+        };
+        /**
          * EngineSynthesizeRequest
          * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
          */
@@ -5690,6 +5706,12 @@ export interface components {
             daily: components["schemas"]["DailyActivityOut"][];
             /** Asset Kinds */
             asset_kinds: {
+                [key: string]: number;
+            };
+            /** Publish Daily */
+            publish_daily: components["schemas"]["DailyPublishOut"][];
+            /** Publish Platforms */
+            publish_platforms: {
                 [key: string]: number;
             };
         };

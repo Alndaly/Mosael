@@ -7,6 +7,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AddMemberRequest,
     DailyActivityOut,
+    DailyPublishOut,
     MembersOut,
     RenameRequest,
     SetMemberPermsRequest,
@@ -38,6 +39,21 @@ from app.db.models import (
 from app.domain import members as members_svc
 
 router = APIRouter(tags=["workspaces"])
+
+PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "queued", "running", "prepared"})
+PUBLISH_BLOCKED_STATUSES = frozenset({"login_required", "waiting_manual", "permission_required", "blocked"})
+
+
+def _publish_summary_bucket(status: str) -> str:
+    if status == "success":
+        return "succeeded"
+    if status in ("failed", "cancelled"):
+        return "failed"
+    if status in PUBLISH_BLOCKED_STATUSES:
+        return "blocked"
+    if status in PUBLISH_ACTIVE_STATUSES:
+        return "active"
+    return "active"
 
 
 @router.patch("/workspaces/{workspace_id}")
@@ -203,14 +219,48 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
         for offset in range(14)
     ]
 
+    publish_day_rows = db.execute(
+        select(func.date(PublishTask.updated_at), PublishTask.status, func.count())
+        .where(
+            PublishTask.workspace_id == workspace_id,
+            PublishTask.updated_at >= datetime.combine(span_start, datetime.min.time()),
+        )
+        .group_by(func.date(PublishTask.updated_at), PublishTask.status)
+    ).all()
+    publish_by_day: dict[str, dict[str, int]] = {}
+    for day, status, count_ in publish_day_rows:
+        bucket = _publish_summary_bucket(str(status))
+        publish_by_day.setdefault(str(day), {}).setdefault(bucket, 0)
+        publish_by_day[str(day)][bucket] += int(count_)
+    publish_daily = [
+        DailyPublishOut(
+            date=str(span_start + timedelta(days=offset)),
+            succeeded=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
+            failed=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
+            active=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("active", 0),
+            blocked=publish_by_day.get(str(span_start + timedelta(days=offset)), {}).get("blocked", 0),
+        )
+        for offset in range(14)
+    ]
+
     kind_rows = db.execute(
         select(Asset.kind, func.count()).where(Asset.workspace_id == workspace_id).group_by(Asset.kind)
     ).all()
     asset_kinds = {str(kind): int(count_) for kind, count_ in kind_rows}
+    publish_platform_rows = db.execute(
+        select(PublishAccount.platform, func.count())
+        .select_from(PublishTask)
+        .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
+        .where(PublishTask.workspace_id == workspace_id)
+        .group_by(PublishAccount.platform)
+    ).all()
+    publish_platforms = {str(platform): int(count_) for platform, count_ in publish_platform_rows}
 
     return WorkspaceSummaryOut(
         daily=daily,
         asset_kinds=asset_kinds,
+        publish_daily=publish_daily,
+        publish_platforms=publish_platforms,
         project_count=count(scoped(Project)),
         asset_count=count(scoped(Asset)),
         sequence_count=count(scoped(Sequence)),
