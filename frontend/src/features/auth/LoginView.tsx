@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import type { MessageKey } from "@/app/messages";
 
-type LoginValues = { username: string; password: string; confirm: string };
+type LoginValues = { username: string; displayName: string; password: string; confirm: string };
 
 /** Map a raw API error body to a friendly, accurate message — instead of always
  * blaming the credentials (a server/network error is not a wrong password). */
@@ -39,17 +39,20 @@ export function LoginView() {
   const schema = React.useMemo(() => {
     const base = z.object({
       username: z.string().min(1, t("fieldRequired")),
+      displayName: z.string(),
       password: z.string().min(4, t("passwordTooShort")),
       confirm: z.string(),
     });
     return mode === "register"
-      ? base.refine((data) => data.password === data.confirm, { message: t("passwordMismatch"), path: ["confirm"] })
+      ? base
+          .refine((data) => data.displayName.trim().length > 0, { message: t("fieldRequired"), path: ["displayName"] })
+          .refine((data) => data.password === data.confirm, { message: t("passwordMismatch"), path: ["confirm"] })
       : base;
   }, [mode, t]);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "", password: "", confirm: "" },
+    defaultValues: { username: "", displayName: "", password: "", confirm: "" },
     mode: "onSubmit",
   });
 
@@ -65,7 +68,7 @@ export function LoginView() {
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       if (mode === "login") await login(values.username, values.password);
-      else await register(values.username, values.password);
+      else await register(values.username, values.password, values.displayName);
     } catch (err) {
       form.setError("root", { message: friendlyAuthError((err as Error).message, mode, t) });
     }
@@ -102,6 +105,20 @@ export function LoginView() {
                   </FormItem>
                 )}
               />
+              {mode === "register" && (
+                <FormField
+                  control={form.control}
+                  name="displayName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input placeholder={t("displayName")} autoComplete="name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="password"

@@ -1,14 +1,25 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { api, getAuthToken, setAuthToken, setUnauthorizedHandler, type AuthOut, type User } from "@/api/client";
+import {
+  api,
+  getAuthToken,
+  setAuthToken,
+  setUnauthorizedHandler,
+  updateMe,
+  updatePassword,
+  type AuthOut,
+  type User,
+} from "@/api/client";
 
 type AuthState = {
   status: "loading" | "anonymous" | "authenticated";
   user: User | null;
   hasUsers: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, displayName?: string) => Promise<void>;
+  updateProfile: (profile: { username: string; display_name: string; signature: string }) => Promise<User>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -67,6 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("authenticated");
   };
 
+  const updateProfile = React.useCallback(async (profile: { username: string; display_name: string; signature: string }) => {
+    const next = await updateMe(profile);
+    setUser(next);
+    return next;
+  }, []);
+
+  const changePassword = React.useCallback(async (currentPassword: string, newPassword: string) => {
+    await updatePassword({ current_password: currentPassword, new_password: newPassword });
+  }, []);
+
   const value: AuthState = {
     status,
     user,
@@ -74,11 +95,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login: async (username, password) => {
       applyAuth(await api<AuthOut>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }));
     },
-    register: async (username, password) => {
+    register: async (username, password, displayName) => {
       applyAuth(
-        await api<AuthOut>("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
+        await api<AuthOut>("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ username, password, display_name: displayName || username }),
+        }),
       );
     },
+    updateProfile,
+    changePassword,
     logout: async () => {
       try {
         await api("/api/auth/logout", { method: "POST" });

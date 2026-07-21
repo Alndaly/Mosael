@@ -257,12 +257,13 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   const t = useI18n();
   const { user, logout } = useAuth();
   const [open, setOpen] = React.useState(false);
-  const initial = (user?.username ?? "?").slice(0, 1).toUpperCase();
+  const displayName = user?.display_name || user?.username || "user";
+  const initial = displayName.slice(0, 1).toUpperCase();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="rail-user" aria-label={user?.username ?? "user"}>
+        <button type="button" className="rail-user" aria-label={displayName}>
           {initial}
         </button>
       </PopoverTrigger>
@@ -270,8 +271,8 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="rail-user-head">
           <span className="rail-user-avatar">{initial}</span>
           <div className="rail-user-names">
-            <strong>{user?.username}</strong>
-            <small>{t("railLocalAccount")}</small>
+            <strong>{displayName}</strong>
+            <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>
           </div>
         </div>
         <div className="rail-user-actions">

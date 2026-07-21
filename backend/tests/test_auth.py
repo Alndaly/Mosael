@@ -10,6 +10,8 @@ def test_register_login_me_logout_flow() -> None:
     client = fresh_client("kinda")
     me = client.get("/api/auth/me").json()
     assert me["username"] == "kinda"
+    assert me["display_name"] == "kinda"
+    assert me["signature"] == ""
 
     # fresh unauthenticated client is rejected
     anonymous = TestClient(app)
@@ -25,9 +27,39 @@ def test_register_login_me_logout_flow() -> None:
     assert client.get("/api/auth/me").status_code == 401
 
 
+def test_update_profile_and_password() -> None:
+    client = fresh_client("kinda")
+    profile = client.patch(
+        "/api/auth/me",
+        json={"username": "KindaHall", "display_name": "Kinda Hall", "signature": "剪完再睡"},
+    )
+    assert profile.status_code == 200
+    assert profile.json()["username"] == "kindahall"
+    assert profile.json()["display_name"] == "Kinda Hall"
+    assert profile.json()["signature"] == "剪完再睡"
+
+    assert (
+        client.post("/api/auth/me/password", json={"current_password": "wrong-pass", "new_password": "new-pass"})
+        .status_code
+        == 401
+    )
+    assert (
+        client.post("/api/auth/me/password", json={"current_password": PASSWORD, "new_password": "new-pass"}).status_code
+        == 200
+    )
+    client.post("/api/auth/logout")
+
+    anonymous = TestClient(app)
+    assert anonymous.post("/api/auth/login", json={"username": "kindahall", "password": PASSWORD}).status_code == 401
+    assert anonymous.post("/api/auth/login", json={"username": "kindahall", "password": "new-pass"}).status_code == 200
+
+
 def test_duplicate_username_rejected() -> None:
     client = fresh_client("kinda")
+    second_client("taken")
     res = client.post("/api/auth/register", json={"username": "kinda", "password": "whatever1"})
+    assert res.status_code == 409
+    res = client.patch("/api/auth/me", json={"username": "taken", "display_name": "Kinda", "signature": ""})
     assert res.status_code == 409
 
 

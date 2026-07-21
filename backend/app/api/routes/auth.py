@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AuthCredentials, AuthOut, UserOut
+from app.api.schemas import AuthCredentials, AuthOut, PasswordUpdate, RegisterCredentials, UserOut, UserProfileUpdate
 from app.core.security import hash_password, new_session_token, verify_password
 from app.db.models import AuthSession, User, Workspace, WorkspaceMember
 
@@ -12,11 +12,17 @@ router = APIRouter(tags=["auth"])
 
 
 @router.post("/auth/register", response_model=AuthOut)
-def register(body: AuthCredentials, db: DbSession) -> AuthOut:
-    existing = db.scalar(select(User).where(User.username == body.username))
+def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
+    username = _normalize_username(body.username)
+    existing = db.scalar(select(User).where(User.username == username))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Username already exists")
-    user = User(username=body.username, password_hash=hash_password(body.password))
+    user = User(
+        username=username,
+        display_name=_clean_display_name(body.display_name, username),
+        signature="",
+        password_hash=hash_password(body.password),
+    )
     db.add(user)
     db.flush()
     _adopt_orphan_workspaces(db, user)
@@ -27,7 +33,7 @@ def register(body: AuthCredentials, db: DbSession) -> AuthOut:
 
 @router.post("/auth/login", response_model=AuthOut)
 def login(body: AuthCredentials, db: DbSession) -> AuthOut:
-    user = db.scalar(select(User).where(User.username == body.username))
+    user = db.scalar(select(User).where(User.username == _normalize_username(body.username)))
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _create_session(db, user)
@@ -38,6 +44,30 @@ def login(body: AuthCredentials, db: DbSession) -> AuthOut:
 @router.get("/auth/me", response_model=UserOut)
 def me(user: CurrentUser) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.patch("/auth/me", response_model=UserOut)
+def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> UserOut:
+    username = _normalize_username(body.username)
+    if username != user.username:
+        existing = db.scalar(select(User).where(User.username == username, User.id != user.id))
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Username already exists")
+    user.username = username
+    user.display_name = _clean_display_name(body.display_name, username)
+    user.signature = body.signature.strip()
+    db.commit()
+    db.refresh(user)
+    return UserOut.model_validate(user)
+
+
+@router.post("/auth/me/password")
+def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser) -> dict:
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/auth/logout")
@@ -65,6 +95,14 @@ def _create_session(db: DbSession, user: User) -> str:
     token = new_session_token()
     db.add(AuthSession(token=token, user_id=user.id))
     return token
+
+
+def _normalize_username(value: str) -> str:
+    return value.strip().lower()
+
+
+def _clean_display_name(value: str, username: str) -> str:
+    return value.strip() or username
 
 
 def _adopt_orphan_workspaces(db: DbSession, user: User) -> None:

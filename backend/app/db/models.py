@@ -32,6 +32,8 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    signature: Mapped[str] = mapped_column(Text, nullable=False, default="")
     password_hash: Mapped[str] = mapped_column(String(240), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 

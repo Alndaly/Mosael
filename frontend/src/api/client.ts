@@ -41,12 +41,23 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
-export type User = components["schemas"]["UserOut"];
-export type AuthOut = components["schemas"]["AuthOut"];
+export type User = components["schemas"]["UserOut"] & {
+  display_name: string;
+  signature: string;
+};
+export type AuthOut = Omit<components["schemas"]["AuthOut"], "user"> & { user: User };
+
+export function updateMe(body: { username: string; display_name: string; signature: string }): Promise<User> {
+  return api<User>("/api/auth/me", { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function updatePassword(body: { current_password: string; new_password: string }): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>("/api/auth/me/password", { method: "POST", body: JSON.stringify(body) });
+}
 
 export type Workspace = components["schemas"]["WorkspaceOut"];
-export type WorkspaceMember = components["schemas"]["WorkspaceMemberOut"];
-export type MembersInfo = components["schemas"]["MembersOut"];
+export type WorkspaceMember = components["schemas"]["WorkspaceMemberOut"] & { display_name: string };
+export type MembersInfo = Omit<components["schemas"]["MembersOut"], "members"> & { members: WorkspaceMember[] };
 
 export function listMembers(workspaceId: string): Promise<MembersInfo> {
   return api<MembersInfo>(`/api/workspaces/${workspaceId}/members`);

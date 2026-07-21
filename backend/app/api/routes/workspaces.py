@@ -86,6 +86,7 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
         WorkspaceMemberOut(
             user_id=member_user.id,
             username=member_user.username,
+            display_name=member_user.display_name,
             role=member.role,
             perms=effective_member_perms(db, workspace_id, member_user.id, member.role),
             is_self=member_user.id == user.id,
@@ -110,6 +111,7 @@ def add_member(workspace_id: str, body: AddMemberRequest, db: DbSession, user: C
     return WorkspaceMemberOut(
         user_id=member_user.id,
         username=member_user.username,
+        display_name=member_user.display_name,
         role=member.role,
         perms=effective_member_perms(db, workspace_id, member_user.id, member.role),
     )
@@ -135,6 +137,7 @@ def set_member_role(
     return WorkspaceMemberOut(
         user_id=user_id,
         username=member_user.username if member_user else user_id,
+        display_name=member_user.display_name if member_user else user_id,
         role=member.role,
         perms=effective_member_perms(db, workspace_id, user_id, member.role),
     )
@@ -174,6 +177,7 @@ def set_member_perms(
     return WorkspaceMemberOut(
         user_id=user_id,
         username=member_user.username if member_user else user_id,
+        display_name=member_user.display_name if member_user else user_id,
         role=target.role,
         perms=effective_member_perms(db, workspace_id, user_id, target.role),
     )

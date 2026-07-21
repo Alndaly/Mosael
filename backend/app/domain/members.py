@@ -53,7 +53,7 @@ def add_member(db: Session, workspace_id: str, username: str, password: str, rol
         if user is None:
             if not password or len(password) < 4:
                 raise MemberError("New accounts need a password of at least 4 characters")
-            user = User(username=username, password_hash=hash_password(password))
+            user = User(username=username, display_name=username, signature="", password_hash=hash_password(password))
             db.add(user)
             db.flush()
         existing = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user.id})

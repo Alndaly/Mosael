@@ -14,14 +14,31 @@ class AuthCredentials(BaseModel):
     password: str = Field(min_length=4, max_length=200)
 
 
+class RegisterCredentials(AuthCredentials):
+    display_name: str = Field(default="", max_length=120)
+
+
 class UserOut(OrmModel):
     id: str
     username: str
+    display_name: str
+    signature: str
 
 
 class AuthOut(BaseModel):
     token: str
     user: UserOut
+
+
+class UserProfileUpdate(BaseModel):
+    username: str = Field(min_length=2, max_length=80)
+    display_name: str = Field(min_length=1, max_length=120)
+    signature: str = Field(default="", max_length=500)
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=4, max_length=200)
+    new_password: str = Field(min_length=4, max_length=200)
 
 
 class RenameRequest(BaseModel):
@@ -41,6 +58,7 @@ class WorkspaceOut(OrmModel):
 class WorkspaceMemberOut(BaseModel):
     user_id: str
     username: str
+    display_name: str
     role: str
     perms: dict[str, bool]  # effective perms (role defaults + overrides)
     is_self: bool = False

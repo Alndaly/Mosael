@@ -216,6 +216,7 @@ function MemberRow({
   const t = useI18n();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const isSelf = member.is_self || member.user_id === selfId;
+  const memberName = member.display_name || member.username;
   // Only an owner may re-role an owner row; managing others needs admin+.
   const canEditRole = canManage && (member.role !== "owner" || isOwner) && !(isSelf && member.role === "owner");
   const canOverride = canManage && member.role !== "owner";
@@ -225,9 +226,10 @@ function MemberRow({
     <div className="team-member">
       <div className="team-member-id">
         <span className="team-avatar" aria-hidden>
-          {member.username.slice(0, 1).toUpperCase()}
+          {memberName.slice(0, 1).toUpperCase()}
         </span>
-        <span className="team-member-name">{member.username}</span>
+        <span className="team-member-name">{memberName}</span>
+        {memberName !== member.username && <span className="team-member-account">@{member.username}</span>}
         {isSelf && <Badge variant="secondary">{t("teamYou")}</Badge>}
       </div>
       <div className="team-member-actions">

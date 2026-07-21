@@ -1886,6 +1886,94 @@
   gap: 8px;
 }
 
+.account-profile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-avatar {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 700;
+  box-shadow: var(--shadow-panel);
+}
+
+.account-profile-head strong,
+.account-password-head strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.account-profile-head small,
+.account-password-head small,
+.account-field small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.account-save-state.saved {
+  color: var(--success);
+}
+
+.account-save-state.error {
+  color: var(--destructive);
+}
+
+.account-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-field > span {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.account-field-wide {
+  grid-column: 1 / -1;
+}
+
+.account-field textarea {
+  resize: vertical;
+}
+
+.account-password-card {
+  display: grid;
+  gap: 12px;
+}
+
+.account-password-actions {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+}
+
 /* 转写模型下载卡片 */
 .asr-model-list {
   display: grid;
@@ -2077,6 +2165,13 @@
 }
 .team-member-name {
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-member-account {
+  color: var(--muted-foreground);
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
