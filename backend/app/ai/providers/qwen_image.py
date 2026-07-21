@@ -119,6 +119,16 @@ def extract_result_url(task_payload: dict[str, Any]) -> str | None:
     return None
 
 
+def download_result_asset(url: str, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # DashScope returns a pre-signed OSS URL. Do not reuse the DashScope client here:
+    # carrying Authorization or DashScope headers into OSS changes signature validation.
+    with httpx.Client(timeout=120) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        target.write_bytes(response.content)
+
+
 class QwenImageProvider(GenerationProvider):
     name = "alibaba"
     kind = "image"
@@ -136,11 +146,8 @@ class QwenImageProvider(GenerationProvider):
                     url = extract_result_url(submit.json())
                     if not url:
                         raise ProviderError("Provider returned success without a result URL")
-                    output_dir.mkdir(parents=True, exist_ok=True)
                     target = output_dir / "generated.png"
-                    download = client.get(url)
-                    download.raise_for_status()
-                    target.write_bytes(download.content)
+                    download_result_asset(url, target)
                     return target
 
             headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
@@ -163,11 +170,8 @@ class QwenImageProvider(GenerationProvider):
                 if not url:
                     raise ProviderError("Generation timed out")
 
-                output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.png"
-                download = client.get(url)
-                download.raise_for_status()
-                target.write_bytes(download.content)
+                download_result_asset(url, target)
                 return target
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc

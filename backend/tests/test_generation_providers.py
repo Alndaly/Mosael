@@ -12,6 +12,7 @@ from app.ai.providers.qwen_image import (
     DASHSCOPE_BASE,
     build_edit_payload as qwen_edit_payload,
     build_submit_payload as qwen_payload,
+    download_result_asset,
     extract_result_url,
     resolve_dashscope_base,
     resolve_qwen_edit_base,
@@ -117,6 +118,40 @@ def test_qwen_poll_parsing() -> None:
     )
     with pytest.raises(ProviderError):
         extract_result_url({"output": {"task_status": "FAILED"}})
+
+
+def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        content = b"png-bytes"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            captured["kwargs"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def get(self, url: str) -> FakeResponse:
+            captured["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr("app.ai.providers.qwen_image.httpx.Client", FakeClient)
+    target = tmp_path / "generated.png"
+    signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
+
+    download_result_asset(signed_url, target)
+
+    assert captured["url"] == signed_url
+    assert "headers" not in captured["kwargs"]
+    assert target.read_bytes() == b"png-bytes"
 
 
 def test_seedance_payload_shape() -> None:
