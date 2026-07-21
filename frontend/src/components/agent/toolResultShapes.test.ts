@@ -104,3 +104,27 @@ describe("asset rows", () => {
     expect(detectShape(rows)).toBe("assets");
   });
 });
+
+describe("single-object shapes (get_workflow / update_asset_tags / create_kb_note)", () => {
+  it("recognises a workflow by its graph, not its tool name", () => {
+    expect(
+      detectShape({ id: "w1", name: "发布流", graph: { nodes: [{ id: "start", type: "start" }], edges: [] } }),
+    ).toBe("workflow");
+  });
+
+  it("does not mistake an object with a non-graph `graph` key", () => {
+    expect(detectShape({ graph: "not-a-graph" })).toBeNull();
+  });
+
+  it("recognises a tagging result: asset + new tag set", () => {
+    expect(detectShape({ asset_id: "a1", name: "素材.mp4", tags: ["旅行", "vlog"] })).toBe("tagged");
+  });
+
+  it("recognises a single document reference (created note)", () => {
+    expect(detectShape({ document_id: "d1", title: "口播稿" })).toBe("docref");
+  });
+
+  it("keeps kb SEARCH results (array with snippets) on the kb card", () => {
+    expect(detectShape([{ document_id: "d1", snippet: "…", title: "t" }])).toBe("kb");
+  });
+});

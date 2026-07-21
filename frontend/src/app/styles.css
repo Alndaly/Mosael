@@ -7795,15 +7795,46 @@
   z-index: 55;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  min-width: 280px;
-  min-height: 320px;
+  /* min/max 与 WorkflowAgentChat 的 clampRect(MIN_W/MIN_H)是刻意对齐的一对,改一处要同步另一处 */
+  min-width: 320px;
+  min-height: 380px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: var(--panel);
   overflow: hidden;
-  resize: both;
+  /* 缩放走八向自定义手柄(.wf-agent-rs),不用原生 resize——原生只有右下角且无法向上/向左扩 */
+}
+
+/* 八向缩放手柄:6px 隐形命中区骑在边框上;绝对定位脱离 grid 行流 */
+.wf-agent-rs {
+  position: absolute;
+  z-index: 2;
+}
+.wf-agent-rs-n, .wf-agent-rs-s { left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.wf-agent-rs-e, .wf-agent-rs-w { top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.wf-agent-rs-n { top: -3px; }
+.wf-agent-rs-s { bottom: -3px; }
+.wf-agent-rs-e { right: -3px; }
+.wf-agent-rs-w { left: -3px; }
+.wf-agent-rs-ne, .wf-agent-rs-nw, .wf-agent-rs-se, .wf-agent-rs-sw { width: 12px; height: 12px; }
+.wf-agent-rs-ne { top: -3px; right: -3px; cursor: nesw-resize; }
+.wf-agent-rs-sw { bottom: -3px; left: -3px; cursor: nesw-resize; }
+.wf-agent-rs-nw { top: -3px; left: -3px; cursor: nwse-resize; }
+.wf-agent-rs-se { bottom: -3px; right: -3px; cursor: nwse-resize; }
+/* 右下角给一个可见的缩放暗示(两道弧线),其余手柄保持隐形 */
+.wf-agent-rs-se::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-strong);
+  border-radius: 0 0 3px 0;
+  opacity: 0.7;
 }
 
 .wf-agent-head {
@@ -9497,6 +9528,35 @@ audio.tool-card-player {
   color: var(--muted-foreground);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* workflow 图摘要 / 打标签结果:名称 + 计数 + 节点/标签 chips */
+.tool-card-workflow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tool-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tool-card-chip {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  padding: 1px 6px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-card-result {

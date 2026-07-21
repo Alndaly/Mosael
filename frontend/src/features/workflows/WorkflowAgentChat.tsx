@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, CornerDownRight, GripHorizontal, Loader2, Paperclip, Send, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { decodeByteFallback } from "../../lib/byteFallback";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client";
@@ -13,7 +14,8 @@ import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/Too
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
 
-const RECT_KEY = "mibu.wf.agent.rect";
+// v2:默认尺寸加大 + 八向缩放手柄。升键让老用户存下的 320×460 小窗让位给新默认(仅一次)。
+const RECT_KEY = "mibu.wf.agent.rect.v2";
 
 interface FloatRect {
   x: number;
@@ -22,9 +24,12 @@ interface FloatRect {
   h: number;
 }
 
+const MIN_W = 320;
+const MIN_H = 380;
+
 function clampRect(rect: FloatRect): FloatRect {
-  const w = Math.min(Math.max(rect.w, 280), window.innerWidth - 24);
-  const h = Math.min(Math.max(rect.h, 320), window.innerHeight - 24);
+  const w = Math.min(Math.max(rect.w, MIN_W), window.innerWidth - 24);
+  const h = Math.min(Math.max(rect.h, MIN_H), window.innerHeight - 24);
   return {
     w,
     h,
@@ -33,14 +38,25 @@ function clampRect(rect: FloatRect): FloatRect {
   };
 }
 
+function defaultRect(): FloatRect {
+  // 随视口取,小屏不顶满、大屏不寒酸;落位右下角。
+  const w = Math.min(480, window.innerWidth - 48);
+  const h = Math.min(640, window.innerHeight - 96);
+  return { x: window.innerWidth - w - 20, y: window.innerHeight - h - 44, w, h };
+}
+
 function loadRect(): FloatRect {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(RECT_KEY) ?? "");
     return clampRect({ x: Number(parsed.x), y: Number(parsed.y), w: Number(parsed.w), h: Number(parsed.h) });
   } catch {
-    return clampRect({ x: window.innerWidth - 356, y: window.innerHeight - 520, w: 320, h: 460 });
+    return clampRect(defaultRect());
   }
 }
+
+/** 八向缩放:每个手柄声明它拉动哪几条边。 */
+const RESIZE_EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
+type ResizeEdge = (typeof RESIZE_EDGES)[number];
 
 /**
  * 工作流常驻智能体面板:每个工作流绑定一个 agent 会话(external_key),
@@ -110,22 +126,40 @@ export function WorkflowAgentChat({
     window.addEventListener("pointerup", onUp);
   };
 
-  // 原生 resize 改变的是元素盒子,观察后同步回状态并持久化。
-  React.useEffect(() => {
-    const el = panelRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[0]?.borderBoxSize?.[0];
-      if (!box) return;
-      setRect((current) => {
-        const next = clampRect({ ...current, w: Math.round(box.inlineSize), h: Math.round(box.blockSize) });
-        persistRect(next);
-        return next;
-      });
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [persistRect]);
+  // 八向缩放:拖 n/w 边时同步移动 x/y(锚定对边),clampRect 统一夹取。
+  // 用自定义手柄而不是原生 resize: both——原生只有右下一个不显眼的小角,
+  // 且在 position: fixed + 手动定位下无法向上/向左扩展。
+  const startResize = (edge: ResizeEdge) => (event: React.PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const origin = { ...rect };
+    const apply = (clientX: number, clientY: number): FloatRect => {
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+      let { x, y, w, h } = origin;
+      if (edge.includes("e")) w = origin.w + dx;
+      if (edge.includes("s")) h = origin.h + dy;
+      if (edge.includes("w")) {
+        w = Math.min(Math.max(origin.w - dx, MIN_W), origin.x + origin.w - 8);
+        x = origin.x + origin.w - w;
+      }
+      if (edge.includes("n")) {
+        h = Math.min(Math.max(origin.h - dy, MIN_H), origin.y + origin.h - 8);
+        y = origin.y + origin.h - h;
+      }
+      return clampRect({ x, y, w, h });
+    };
+    const onMove = (moveEvent: PointerEvent) => setRect(apply(moveEvent.clientX, moveEvent.clientY));
+    const onUp = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      persistRect(apply(upEvent.clientX, upEvent.clientY));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   const session = useQuery({
     queryKey: ["workflow-agent-session", workflowId],
@@ -291,6 +325,9 @@ export function WorkflowAgentChat({
       role="dialog"
       aria-label={t("wfAgentTitle")}
     >
+      {RESIZE_EDGES.map((edge) => (
+        <div key={edge} className={`wf-agent-rs wf-agent-rs-${edge}`} onPointerDown={startResize(edge)} />
+      ))}
       <div className="wf-agent-head" onPointerDown={startDrag}>
         <h2 className="wf-agent-title">
           <Bot size={14} /> {t("wfAgentTitle")}
@@ -317,7 +354,7 @@ export function WorkflowAgentChat({
                 message.error ? (
                   <AgentErrorCard content={message.content} error={message.error} />
                 ) : (
-                  <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
+                  <Streamdown controls={{ table: false }}>{decodeByteFallback(message.content)}</Streamdown>
                 )
               ) : (
                 message.content
@@ -328,7 +365,7 @@ export function WorkflowAgentChat({
         {running && streamText && (
           <div className="wf-agent-msg assistant">
             <ToolCalls tools={streamTools} />
-            <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
+            <Streamdown controls={{ table: false }}>{decodeByteFallback(streamText)}</Streamdown>
           </div>
         )}
         {running && !streamText && (

@@ -251,6 +251,52 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
+function WorkflowCard({ value }: { value: Record<string, unknown> }) {
+  const graph = value.graph as { nodes: Record<string, unknown>[]; edges: unknown[] };
+  const nodes = graph.nodes ?? [];
+  const chips = nodes.slice(0, 8).map((node, index) => String(node.name ?? node.type ?? index));
+  return (
+    <div className="tool-card-workflow">
+      <span className="tool-card-name">{String(value.name ?? "工作流")}</span>
+      <span className="tool-card-meta">
+        {nodes.length} 节点 · {(graph.edges ?? []).length} 连线
+      </span>
+      {chips.length > 0 && (
+        <span className="tool-card-chips">
+          {chips.map((chip, index) => (
+            <span className="tool-card-chip" key={`${chip}-${index}`}>{chip}</span>
+          ))}
+          {nodes.length > 8 && <span className="tool-card-chip">+{nodes.length - 8}</span>}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TaggedAsset({ value }: { value: Record<string, unknown> }) {
+  const tags = (value.tags as unknown[]).map(String);
+  return (
+    <div className="tool-card-workflow">
+      <span className="tool-card-name">{String(value.name ?? value.asset_id)}</span>
+      <span className="tool-card-chips">
+        {tags.length === 0 && <span className="tool-card-meta">已清空标签</span>}
+        {tags.map((tag) => (
+          <span className="tool-card-chip" key={tag}>{tag}</span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function DocRef({ value }: { value: Record<string, unknown> }) {
+  return (
+    <div className="tool-card-row">
+      <span className="tool-card-name">{String(value.title ?? value.document_id)}</span>
+      <span className="tool-card-meta">知识库笔记</span>
+    </div>
+  );
+}
+
 function LongText({ text }: { text: string }) {
   return <div className="tool-card-text">{text}</div>;
 }
@@ -269,6 +315,9 @@ export type ResultShape =
   | "named"
   | "sequence"
   | "confirmation"
+  | "workflow"
+  | "tagged"
+  | "docref"
   | "text"
   | null;
 
@@ -291,6 +340,14 @@ export function detectShape(value: unknown): ResultShape {
   if (isRecord(value)) {
     if ("tracks" in value && Array.isArray(value.tracks)) return "sequence";
     if ("confirmation_id" in value && "status" in value) return "confirmation";
+    // get_workflow(以及确认卡执行后的 workflow 结果):graph 里有 nodes/edges 就是一张图。
+    if (isRecord(value.graph) && Array.isArray(value.graph.nodes) && Array.isArray(value.graph.edges)) {
+      return "workflow";
+    }
+    // update_asset_tags:单素材 + 新标签集。
+    if ("asset_id" in value && Array.isArray(value.tags) && "name" in value) return "tagged";
+    // create_kb_note:单条文档引用(数组版是 kb 搜索,已在上面命中)。
+    if ("document_id" in value && "title" in value && !("snippet" in value)) return "docref";
     // analyze_asset / fetch_url / read_kb_document: one long body is prose, not data.
     for (const key of ["answer", "text", "content", "body"]) {
       const text = value[key];
@@ -324,6 +381,12 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
       return <SequenceTree value={value as Record<string, unknown>} />;
     case "confirmation":
       return <ConfirmationCard value={value as Record<string, unknown>} />;
+    case "workflow":
+      return <WorkflowCard value={value as Record<string, unknown>} />;
+    case "tagged":
+      return <TaggedAsset value={value as Record<string, unknown>} />;
+    case "docref":
+      return <DocRef value={value as Record<string, unknown>} />;
     case "text":
       return <LongText text={longTextOf(value as Record<string, unknown>)} />;
     default:
