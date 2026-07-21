@@ -44,6 +44,9 @@ PRICING_BILLING_UNITS = frozenset(
         "token",
         "input_token",
         "output_token",
+        "million_token",
+        "million_input_token",
+        "million_output_token",
     }
 )
 
@@ -146,9 +149,9 @@ def record_usage(
         return existing
 
     normalized_units = dict(units or {})
-    rule = None
+    applied_rules: list[ProviderPricingRule] = []
     if cost_micros is None:
-        rule = _best_price_rule(
+        rules = _best_price_rules(
             db,
             workspace_id=workspace_id,
             provider_profile_id=provider_profile_id,
@@ -156,12 +159,21 @@ def record_usage(
             capability=capability,
             model=model,
         )
-        if rule is not None:
+        estimated_cost = 0
+        estimated_currency: str | None = None
+        for rule in rules:
             quantity = _quantity_for_unit(normalized_units, rule.billing_unit)
             if quantity is not None:
-                cost_micros = round(quantity * rule.unit_amount_micros)
-                currency = rule.currency
-                cost_confidence = "estimated"
+                if estimated_currency is None:
+                    estimated_currency = rule.currency
+                if rule.currency != estimated_currency:
+                    continue
+                estimated_cost += round(quantity * rule.unit_amount_micros)
+                applied_rules.append(rule)
+        if applied_rules:
+            cost_micros = estimated_cost
+            currency = estimated_currency or currency
+            cost_confidence = "estimated"
 
     event = ProviderUsageEvent(
         workspace_id=workspace_id,
@@ -181,7 +193,7 @@ def record_usage(
         cost_micros=cost_micros,
         currency=currency,
         cost_confidence=cost_confidence,
-        pricing_rule_id=rule.id if rule is not None and cost_confidence == "estimated" else None,
+        pricing_rule_id=applied_rules[0].id if len(applied_rules) == 1 and cost_confidence == "estimated" else None,
         idempotency_key=idempotency_key,
     )
     db.add(event)
@@ -316,6 +328,26 @@ def _best_price_rule(
     capability: str,
     model: str,
 ) -> ProviderPricingRule | None:
+    rules = _best_price_rules(
+        db,
+        workspace_id=workspace_id,
+        provider_profile_id=provider_profile_id,
+        provider=provider,
+        capability=capability,
+        model=model,
+    )
+    return rules[0] if rules else None
+
+
+def _best_price_rules(
+    db: Session,
+    *,
+    workspace_id: str,
+    provider_profile_id: str | None,
+    provider: str,
+    capability: str,
+    model: str,
+) -> list[ProviderPricingRule]:
     moment = now()
     candidates = list(
         db.scalars(
@@ -334,7 +366,7 @@ def _best_price_rule(
         )
     )
     if not candidates:
-        return None
+        return []
 
     def score(rule: ProviderPricingRule) -> tuple[int, datetime]:
         specificity = 0
@@ -344,10 +376,20 @@ def _best_price_rule(
         specificity += 1 if rule.model else 0
         return specificity, rule.effective_from or datetime.min
 
-    return max(candidates, key=score)
+    by_unit: dict[str, ProviderPricingRule] = {}
+    for rule in candidates:
+        current = by_unit.get(rule.billing_unit)
+        if current is None or score(rule) > score(current):
+            by_unit[rule.billing_unit] = rule
+    return list(by_unit.values())
 
 
 def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None:
+    if billing_unit.startswith("million_"):
+        base = billing_unit.removeprefix("million_")
+        quantity = _quantity_for_unit(units, base)
+        return quantity / 1_000_000 if quantity is not None else None
+
     aliases = {
         "request": ("request", "requests", "request_count"),
         "image": ("image", "images", "image_count", "num_images"),
@@ -369,6 +411,32 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
                 return float(value)
             except ValueError:
                 continue
+    if billing_unit == "input_token":
+        value = _numeric_unit(units.get("input_characters"))
+        if value is not None:
+            return value
+    if billing_unit == "output_token":
+        value = _numeric_unit(units.get("output_characters"))
+        if value is not None:
+            return value
+    if billing_unit == "token":
+        input_tokens = _quantity_for_unit(units, "input_token")
+        output_tokens = _quantity_for_unit(units, "output_token")
+        if input_tokens is not None or output_tokens is not None:
+            return (input_tokens or 0) + (output_tokens or 0)
+    return None
+
+
+def _numeric_unit(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
     return None
 
 

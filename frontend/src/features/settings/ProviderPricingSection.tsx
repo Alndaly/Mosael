@@ -38,7 +38,19 @@ const DEFAULT_FORM: PricingForm = {
 };
 
 const CAPABILITY_KEYS = ["chat", "image", "video", "tts", "podcast", "embedding"] as const;
-const BILLING_UNITS = ["request", "image", "video_second", "audio_second", "character", "token", "input_token", "output_token"] as const;
+const BILLING_UNITS = [
+  "request",
+  "image",
+  "video_second",
+  "audio_second",
+  "character",
+  "token",
+  "input_token",
+  "output_token",
+  "million_token",
+  "million_input_token",
+  "million_output_token",
+] as const;
 const CAPABILITY_LABELS: Record<string, MessageKey> = {
   chat: "capChat",
   image: "capImage",
@@ -56,6 +68,9 @@ const UNIT_LABELS: Record<string, MessageKey> = {
   token: "pricingUnit_token",
   input_token: "pricingUnit_input_token",
   output_token: "pricingUnit_output_token",
+  million_token: "pricingUnit_million_token",
+  million_input_token: "pricingUnit_million_input_token",
+  million_output_token: "pricingUnit_million_output_token",
 };
 
 function microsToAmount(value: number): string {

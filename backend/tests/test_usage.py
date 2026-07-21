@@ -42,6 +42,77 @@ def test_record_usage_estimates_cost_from_pricing_rule() -> None:
     assert event.cost_confidence == "estimated"
 
 
+def test_record_usage_sums_input_and_output_token_pricing_rules() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            ProviderPricingRule(
+                workspace_id=ws,
+                provider="openai-compatible",
+                capability="chat",
+                model="deepseek-v4-pro",
+                billing_unit="million_input_token",
+                unit_amount_micros=435_000,
+                currency="USD",
+            )
+        )
+        db.add(
+            ProviderPricingRule(
+                workspace_id=ws,
+                provider="openai-compatible",
+                capability="chat",
+                model="deepseek-v4-pro",
+                billing_unit="million_output_token",
+                unit_amount_micros=870_000,
+                currency="USD",
+            )
+        )
+        db.flush()
+        event = record_usage(
+            db,
+            workspace_id=ws,
+            provider="openai-compatible",
+            model="deepseek-v4-pro",
+            capability="chat",
+            operation="agent_chat",
+            idempotency_key="deepseek-token-event",
+            units={"input_tokens": 1_000_000, "output_tokens": 2_000_000},
+        )
+        db.commit()
+
+    assert event.cost_micros == 2_175_000
+    assert event.currency == "USD"
+    assert event.cost_confidence == "estimated"
+    assert event.pricing_rule_id is None
+
+
+def test_summarize_usage_estimates_token_count_from_character_units() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            ProviderUsageEvent(
+                workspace_id=ws,
+                provider="openai-compatible",
+                model="deepseek-v4-pro",
+                capability="chat",
+                operation="agent_chat",
+                idempotency_key="character-token-estimate",
+                units={"input_characters": 4, "output_characters": 12},
+            )
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        summary = summarize_usage(db, workspace_id=ws)
+    assert summary.token_count == 16
+    assert summary.token_daily[-1]["input_tokens"] == 4
+    assert summary.token_daily[-1]["output_tokens"] == 12
+
+
 def test_workspace_summary_includes_usage_rollup() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
