@@ -72,6 +72,24 @@ def _require_document(db: DbSession, user: CurrentUser, document_id: str) -> KbD
     return document
 
 
+def _create_note_document(db: DbSession, dataset: KbDataset, body: KbDocumentCreate) -> KbDocumentOut:
+    document = KbDocument(
+        workspace_id=dataset.workspace_id,
+        dataset_id=dataset.id,
+        title=body.title.strip(),
+        content=body.content,
+        source_type=body.source_type,
+        source_ref=body.source_ref,
+        tags=_clean_tags(body.tags),
+        status="queued",
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    _enqueue_ingest(document.id)
+    return _doc_out(document, with_content=True)
+
+
 # ---------- 知识库(dataset) ----------
 
 
@@ -228,21 +246,7 @@ def list_documents(dataset_id: str, db: DbSession, user: CurrentUser) -> list[Kb
 def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
     """建笔记文档:立即返回 queued,后台分块/索引。"""
     dataset = _require_dataset(db, user, dataset_id)
-    document = KbDocument(
-        workspace_id=dataset.workspace_id,
-        dataset_id=dataset.id,
-        title=body.title.strip(),
-        content=body.content,
-        source_type=body.source_type,
-        source_ref=body.source_ref,
-        tags=_clean_tags(body.tags),
-        status="queued",
-    )
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-    _enqueue_ingest(document.id)
-    return _doc_out(document, with_content=True)
+    return _create_note_document(db, dataset, body)
 
 
 @router.post("/kb/datasets/{dataset_id}/documents/import-url", response_model=KbDocumentOut)

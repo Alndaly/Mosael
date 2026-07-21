@@ -470,21 +470,38 @@ def read_kb_document(document_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def create_kb_note(title: str, content: str, workspace_id: str = "", tags: list[str] | None = None) -> dict[str, Any]:
+def create_kb_note(
+    title: str,
+    content: str,
+    workspace_id: str = "",
+    dataset_id: str = "",
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
     """Runs directly: save a NEW polished note into the knowledge base.
 
     Use to persist reusable creative output the user asks you to keep:
     finalized scripts, shot lists, title/description drafts, research digests.
+    If dataset_id is omitted, the note is saved to the workspace's most recent
+    knowledge base; if none exists, Mibu creates an "AI 笔记" knowledge base.
     Do NOT dump raw chat replies; save polished reusable material with a clear
     title. Do NOT use for media asset tags (update_asset_tags), timeline edits
     (edit_timeline), or workflow graph edits (edit_workflow/update_workflow).
     """
     ws = workspace_id or _default_workspace_id()
+    if not dataset_id:
+        datasets = _get("/api/kb/datasets", {"workspace_id": ws})
+        if datasets:
+            dataset_id = datasets[0]["id"]
+        else:
+            dataset_id = _post(
+                "/api/kb/datasets",
+                {"workspace_id": ws, "name": "AI 笔记", "description": "AI 助手自动保存的笔记"},
+            )["id"]
     doc = _post(
-        "/api/kb/documents",
-        {"workspace_id": ws, "title": title, "content": content, "source_type": "note", "tags": tags or []},
+        f"/api/kb/datasets/{dataset_id}/documents",
+        {"title": title, "content": content, "source_type": "note", "tags": tags or []},
     )
-    return {"document_id": doc["id"], "title": doc["title"]}
+    return {"document_id": doc["id"], "dataset_id": doc["dataset_id"], "title": doc["title"]}
 
 
 @mcp.tool()
