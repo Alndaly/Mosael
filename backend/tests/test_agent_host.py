@@ -63,6 +63,7 @@ def test_stream_timeline_preserves_text_tool_text_order() -> None:
     assert state["timeline"][0]["text"] == "先说明。"
     assert state["timeline"][1]["tool"]["name"] == "list_workflows"
     assert state["timeline"][1]["tool"]["status"] == "done"
+    assert state["timeline"][1]["tool"]["usage"]["duration_seconds"] >= 0
     assert state["timeline"][2]["text"] == "再总结。"
 
 
@@ -94,6 +95,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
         time.sleep(0.1)
     assert [m["role"] for m in messages] == ["user", "assistant"]
     assert messages[1]["content"] == "echo: 帮我看看时间线"
+    assert messages[1]["payload"]["usage"]["duration_seconds"] >= 0
 
     refreshed = client.get(f"/api/agent/sessions/{session['id']}").json()
     assert refreshed["status"] == "idle"

@@ -27,6 +27,7 @@ import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { ConfirmDialog } from "@/components/ui/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
+import { formatElapsedSeconds } from "@/lib/time";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -301,6 +302,19 @@ export function WorkflowAgentChat({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
     meta: { silentError: true },
   });
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  React.useEffect(() => {
+    if (!running) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [running, sessionId]);
 
   // Same leak as the AI-studio chat: an unstoppable reader pins an HTTP/1.1 connection, and
   // this panel is conditionally mounted ({agentOpen && <WorkflowAgentChat/>}), so closing it
@@ -524,7 +538,8 @@ export function WorkflowAgentChat({
           </div>
         )}
         {(messages.data ?? []).map((message) => {
-          const payload = message.payload as { timeline?: AgentTimelineItem[] } | null;
+          const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
+          const duration = payload?.usage?.duration_seconds;
           if (queuedIds.has(message.id)) return null;
           return (
             <div key={message.id} className={`wf-agent-msg chat-bubble ${message.role}`}>
@@ -537,12 +552,25 @@ export function WorkflowAgentChat({
               ) : (
                 <div className="chat-bubble-content">{message.content}</div>
               )}
+              {message.role === "assistant" && typeof duration === "number" && (
+                <div className="chat-msg-meta live">
+                  <span className="chat-msg-duration timecode">
+                    {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
         {running && streamText && (
           <div className="wf-agent-msg chat-bubble assistant streaming">
             <AgentTurnContent timeline={streamTimeline} />
+            <div className="chat-msg-meta live">
+              <Loader2 size={11} className="spin" />
+              <span className="chat-msg-duration timecode">
+                {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+              </span>
+            </div>
           </div>
         )}
         {running && !streamText && (
@@ -550,6 +578,9 @@ export function WorkflowAgentChat({
             <AgentTurnContent timeline={streamTimeline} />
             <span className="wf-agent-thinking-row">
               <Loader2 size={12} className="spin" /> {t("chatThinking")}
+              <span className="chat-msg-duration timecode">
+                {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+              </span>
             </span>
           </div>
         )}

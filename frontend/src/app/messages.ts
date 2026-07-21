@@ -229,6 +229,8 @@ export const messages = {
     skillUsePrefix: "请使用技能「{name}」:",
     copyMessage: "复制",
     copied: "已复制",
+    usageDuration: "耗时 {t}",
+    usageRunning: "已用 {t}",
 
     // Batch
     batchTitle: "批量",
@@ -1429,6 +1431,8 @@ export const messages = {
     skillUsePrefix: "Use the \"{name}\" skill:",
     copyMessage: "Copy",
     copied: "Copied",
+    usageDuration: "Took {t}",
+    usageRunning: "{t} elapsed",
 
     // Batch
     batchTitle: "Batch",

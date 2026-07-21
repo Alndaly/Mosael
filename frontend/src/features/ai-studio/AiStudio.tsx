@@ -39,7 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useImagePreview } from "@/components/ui/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { relativeTime } from "@/lib/time";
+import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -994,6 +994,17 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
   const status = job?.status ?? "queued";
   const timestamp = generation.created_at ?? job?.created_at ?? null;
   const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
+  const isRunning = status === "running";
+  const isFinished = status === "succeeded" || status === "failed";
+  const durationSeconds = isRunning
+    ? elapsedSecondsBetween(timestamp, new Date())
+    : isFinished
+      ? elapsedSecondsBetween(timestamp, job?.updated_at ?? generation.updated_at)
+      : null;
+  const durationLabel =
+    typeof durationSeconds === "number"
+      ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
+      : "";
   return (
     <article className="generation-turn-card">
       <div className="generation-turn-prompt-stack">
@@ -1036,8 +1047,11 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
             <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
           </span>
         )}
-        <small>
-          {generation.provider} · {generation.model}
+        <small className="gen-turn-meta">
+          <span>
+            {generation.provider} · {generation.model}
+          </span>
+          {durationLabel ? <span>{durationLabel}</span> : null}
         </small>
       </div>
     </article>

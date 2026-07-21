@@ -68,7 +68,7 @@ def get_stream_state(session_id: str) -> dict:
 
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
-        _streams[session_id] = {"text": "", "done": False, "seq": 0, "timeline": []}
+        _streams[session_id] = {"text": "", "done": False, "seq": 0, "timeline": [], "tool_starts": {}}
 
 
 def _stream_tool_event(session_id: str, event: dict) -> None:
@@ -79,14 +79,29 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
             return
         timeline: list[dict] = state.setdefault("timeline", [])
         if event.get("type") == "tool_start":
-            card = {"id": event.get("toolCallId"), "name": event.get("name"), "args": event.get("args"), "status": "running"}
+            tool_call_id = str(event.get("toolCallId") or "")
+            started_at = now().isoformat()
+            state.setdefault("tool_starts", {})[tool_call_id] = time.monotonic()
+            card = {
+                "id": tool_call_id,
+                "name": event.get("name"),
+                "args": event.get("args"),
+                "status": "running",
+                "usage": {"started_at": started_at},
+            }
             timeline.append({"type": "tool", "tool": card})
         elif event.get("type") == "tool_end":
+            tool_call_id = str(event.get("toolCallId") or "")
+            started = state.setdefault("tool_starts", {}).pop(tool_call_id, None)
+            usage = {"finished_at": now().isoformat()}
+            if isinstance(started, (int, float)):
+                usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
             for item in timeline:
                 tool = item.get("tool")
-                if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == event.get("toolCallId"):
+                if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == tool_call_id:
                     tool["status"] = "error" if event.get("isError") else "done"
                     tool["result"] = event.get("result")
+                    tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
                     break
         state["seq"] += 1
 
@@ -147,6 +162,10 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
         else:
             timeline.append({"type": "text", "text": tail})
     return timeline
+
+
+def _usage_from_started(started: float) -> dict:
+    return {"duration_seconds": round(max(0.0, time.monotonic() - started), 1)}
 
 
 def on_turn_finished(callback: Callable[[str], None]) -> None:
@@ -352,7 +371,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     role="assistant",
                     content=final_text,
                     payload={
-                        "duration_seconds": round(time.monotonic() - turn_started, 1),
+                        "usage": _usage_from_started(turn_started),
                         **({"timeline": timeline} if timeline else {}),
                     },
                 )
@@ -366,13 +385,18 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     role="assistant",
                     content="智能体执行失败，请稍后重试。",
                     error=str(exc)[:800],
+                    payload={"usage": _usage_from_started(turn_started)},
                 )
             )
         except Exception as exc:  # worker threads must never die silently
             logger.exception("Agent turn crashed")
             db.add(
                 AgentMessage(
-                    session_id=session.id, role="assistant", content="智能体执行异常。", error=str(exc)[:800]
+                    session_id=session.id,
+                    role="assistant",
+                    content="智能体执行异常。",
+                    error=str(exc)[:800],
+                    payload={"usage": _usage_from_started(turn_started)},
                 )
             )
         finally:

@@ -34,6 +34,7 @@ import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
+import { formatElapsedSeconds } from "@/lib/time";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -411,7 +412,9 @@ export function ChatWorkspace({
                   <AgentTurnContent timeline={streamTimeline} />
                   <div className="chat-msg-meta live">
                     <Loader2 size={11} className="spin" />
-                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                    <span className="chat-msg-duration timecode">
+                      {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+                    </span>
                   </div>
                 </div>
               )}
@@ -420,7 +423,9 @@ export function ChatWorkspace({
                   <AgentTurnContent timeline={streamTimeline} />
                   <span className="chat-thinking-row">
                     <Loader2 size={13} className="spin" /> {t("chatThinking")}
-                    <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
+                    <span className="chat-msg-duration timecode">
+                      {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+                    </span>
                   </span>
                 </div>
               )}
@@ -781,8 +786,8 @@ function formatInspectorTime(value: string | null | undefined) {
 function ChatBubble({ message }: { message: AgentMessage }) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
-  const payload = message.payload as { duration_seconds?: number; timeline?: AgentTimelineItem[] } | null;
-  const duration = payload?.duration_seconds;
+  const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
+  const duration = payload?.usage?.duration_seconds;
 
   const copy = () => {
     void navigator.clipboard.writeText(message.content).then(() => {
@@ -810,7 +815,9 @@ function ChatBubble({ message }: { message: AgentMessage }) {
             {copied ? t("copied") : t("copyMessage")}
           </button>
           {typeof duration === "number" && (
-            <span className="chat-msg-duration timecode">{duration.toFixed(1)}s</span>
+            <span className="chat-msg-duration timecode">
+              {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
+            </span>
           )}
         </div>
       )}

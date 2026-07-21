@@ -7,6 +7,7 @@ import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/ui/image-preview";
 import { decodeByteFallback } from "@/lib/byteFallback";
+import { formatElapsedSeconds } from "@/lib/time";
 import { ToolResultCard, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -16,6 +17,11 @@ export type ToolCall = {
   args?: unknown;
   status: "running" | "done" | "error";
   result?: unknown;
+  usage?: {
+    started_at?: string;
+    finished_at?: string;
+    duration_seconds?: number;
+  };
 };
 
 export type AgentTimelineItem =
@@ -131,6 +137,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
   const resultText = format(data ?? tool.result);
   const hasBody = Boolean(argText || resultText);
+  const elapsed =
+    typeof tool.usage?.duration_seconds === "number" ? formatElapsedSeconds(tool.usage.duration_seconds) : null;
   // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
   // playable/viewable cards so the agent's media "returns" are visible in chat, not just text.
   const assetIds = React.useMemo(
@@ -162,6 +170,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         <span className="agent-tool-status">
           {tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone")}
         </span>
+        {elapsed && <span className="agent-tool-usage">{t("usageDuration").replace("{t}", elapsed)}</span>}
         {hasBody && <ChevronRight size={13} className={`agent-tool-chevron ${open ? "open" : ""}`} aria-hidden />}
       </button>
       {card && <div className="agent-tool-card">{card}</div>}
