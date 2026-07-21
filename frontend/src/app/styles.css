@@ -5520,6 +5520,92 @@
 .gen-turn-status.failed {
   color: var(--destructive);
 }
+.generation-error-card {
+  display: grid;
+  gap: 8px;
+  width: min(560px, 100%);
+  border: 1px solid color-mix(in srgb, var(--destructive) 34%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--destructive) 7%, var(--card));
+  padding: 10px 12px;
+}
+.generation-error-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  color: var(--destructive);
+}
+.generation-error-head svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.generation-error-head div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.generation-error-head strong {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--destructive);
+}
+.generation-error-head span {
+  color: color-mix(in srgb, var(--destructive) 82%, var(--foreground));
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.generation-error-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.generation-error-detail {
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.generation-error-detail summary {
+  cursor: pointer;
+  width: fit-content;
+  list-style: none;
+}
+.generation-error-detail summary::-webkit-details-marker {
+  display: none;
+}
+.generation-error-detail summary::after {
+  content: "›";
+  display: inline-block;
+  margin-left: 4px;
+  transition: transform 120ms ease;
+}
+.generation-error-detail[open] summary::after {
+  transform: rotate(90deg);
+}
+.generation-error-detail pre {
+  max-height: 160px;
+  max-width: 100%;
+  overflow: auto;
+  margin: 7px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 72%, var(--card));
+  color: var(--muted-foreground);
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.generation-error-copy {
+  height: 24px;
+  flex-shrink: 0;
+  padding-inline: 7px;
+  font-size: 11px;
+}
 .gen-turn small,
 .gen-turn-meta {
   justify-self: start;

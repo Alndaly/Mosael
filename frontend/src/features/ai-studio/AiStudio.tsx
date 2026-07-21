@@ -1,7 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Check,
   CircleAlert,
+  Copy,
   ImagePlus,
   Loader2,
   MessageSquarePlus,
@@ -1038,10 +1040,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
             <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
           </button>
         ) : status === "failed" ? (
-          <span className="gen-turn-status failed">
-            <CircleAlert size={13} /> {t("genFailed")}
-            {job?.error ? ` · ${job.error}` : ""}
-          </span>
+          <GenerationFailureCard error={job?.error ?? ""} />
         ) : (
           <span className="gen-turn-status">
             <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
@@ -1056,4 +1055,67 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
       </div>
     </article>
   );
+}
+
+function GenerationFailureCard({ error }: { error: string }) {
+  const t = useI18n();
+  const [copied, setCopied] = React.useState(false);
+  const summary = React.useMemo(() => generationErrorSummary(error, t("genFailed")), [error, t]);
+  const copy = () => {
+    if (!error) return;
+    void navigator.clipboard?.writeText(error);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <div className="generation-error-card">
+      <div className="generation-error-head">
+        <CircleAlert size={14} />
+        <div>
+          <strong>{t("generationFailedTitle")}</strong>
+          <span>{summary}</span>
+        </div>
+      </div>
+      {error ? (
+        <div className="generation-error-actions">
+          <details className="generation-error-detail">
+            <summary>{t("generationErrorDetail")}</summary>
+            <pre>{error}</pre>
+          </details>
+          <Button type="button" variant="ghost" size="sm" className="generation-error-copy" onClick={copy}>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            {copied ? t("copied") : t("copyMessage")}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function generationErrorSummary(error: string, fallback: string): string {
+  const text = error.trim();
+  if (!text) return fallback;
+  const bodyMatch = text.match(/body:\s*(\{.*\})\s*$/s);
+  if (bodyMatch) {
+    try {
+      const parsed = JSON.parse(bodyMatch[1]) as { error?: { message?: unknown }; message?: unknown };
+      const message = parsed.error?.message ?? parsed.message;
+      if (typeof message === "string" && message.trim()) return trimErrorSummary(message);
+    } catch {
+      // Fall through to text cleanup.
+    }
+  }
+  const messageMatch = text.match(/"message"\s*:\s*"([^"]+)"/);
+  if (messageMatch?.[1]) return trimErrorSummary(messageMatch[1]);
+  const beforeDetails = text
+    .replace(/^失败\s*·\s*/i, "")
+    .split(" For more information check:")[0]
+    .split("; body:")[0]
+    .trim();
+  return trimErrorSummary(beforeDetails || fallback);
+}
+
+function trimErrorSummary(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, 150);
 }
