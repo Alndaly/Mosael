@@ -5,7 +5,43 @@ import { Check, ChevronDown } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
-const Select = SelectPrimitive.Root;
+let openSelectLayers = 0;
+
+function setSelectLayerOpen(open: boolean) {
+  if (typeof document === "undefined") return;
+  openSelectLayers = Math.max(0, openSelectLayers + (open ? 1 : -1));
+  document.documentElement.toggleAttribute("data-mibu-select-open", openSelectLayers > 0);
+}
+
+function Select({ onOpenChange, open, defaultOpen, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  const trackedOpenRef = React.useRef(false);
+  const trackOpen = React.useCallback((nextOpen: boolean) => {
+    if (trackedOpenRef.current === nextOpen) return;
+    trackedOpenRef.current = nextOpen;
+    setSelectLayerOpen(nextOpen);
+  }, []);
+
+  React.useEffect(() => {
+    if (open !== undefined) trackOpen(open);
+  }, [open, trackOpen]);
+
+  React.useEffect(() => {
+    if (open === undefined && defaultOpen) trackOpen(true);
+    return () => trackOpen(false);
+  }, [defaultOpen, open, trackOpen]);
+
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      open={open}
+      defaultOpen={defaultOpen}
+      onOpenChange={(nextOpen) => {
+        if (open === undefined) trackOpen(nextOpen);
+        onOpenChange?.(nextOpen);
+      }}
+    />
+  );
+}
 
 /** 空值时必须有占位提醒:调用方没给 placeholder 就用全局默认「请选择」。 */
 function SelectValue({ placeholder, ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
@@ -39,6 +75,7 @@ function SelectContent({ className, children, ...props }: React.ComponentProps<t
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
+        data-mibu-select-content=""
         position="popper"
         sideOffset={4}
         className={cn(
