@@ -73,7 +73,6 @@ import {
   deleteWorkflow,
   fetchWorkflowNodeTypes,
   listAssets,
-  listCredentials,
   listPublishAccounts,
   listVoices,
   listWorkflows,
@@ -888,19 +887,25 @@ function WorkflowEditor({
   const hasGen = graph.nodes.some((node) => node.type === "ai_generate");
   const providers = useQuery({
     queryKey: ["provider-profiles"],
-    queryFn: () => api<Array<{ id: string; name: string; vendor: string }>>("/api/settings/providers"),
-    enabled: hasLlm,
+    queryFn: () =>
+      api<Array<{ id: string; name: string; vendor: string; capability_ids: string[]; enabled: boolean }>>(
+        "/api/settings/providers",
+      ),
+    enabled: hasLlm || hasGen,
   });
-  const credentials = useQuery({ queryKey: ["credentials"], queryFn: listCredentials, enabled: hasGen });
   const analysis = React.useMemo(
     () =>
       analyzeWorkflow(graph, registry, {
         providerIds: new Set((providers.data ?? []).map((p) => p.id)),
-        providersLoaded: !hasLlm || providers.isSuccess,
-        configuredGenProviders: new Set((credentials.data ?? []).filter((c) => c.configured).map((c) => c.provider)),
-        credentialsLoaded: !hasGen || credentials.isSuccess,
+        providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
+        configuredGenProviders: new Set(
+          (providers.data ?? [])
+            .filter((p) => p.enabled && (p.capability_ids ?? []).some((capability) => capability === "image" || capability === "video"))
+            .map((p) => p.vendor),
+        ),
+        genProvidersLoaded: !hasGen || providers.isSuccess,
       }),
-    [graph, registry, providers.data, providers.isSuccess, credentials.data, credentials.isSuccess, hasLlm, hasGen],
+    [graph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
   );
 
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。

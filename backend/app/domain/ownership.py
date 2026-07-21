@@ -38,6 +38,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "GeneratedAsset": ("app/domain/generation/",),
     "GenerationModel": ("app/domain/generation/",),
     "GenerationJob": ("app/domain/generation/",),
+    "GenerationSession": ("app/domain/generation/", "app/api/routes/generation.py"),
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),
@@ -50,12 +51,11 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
-    # 配置/凭据
+    # 配置
     "ProviderProfile": ("app/domain/providers.py", "app/api/routes/settings.py"),
     "ProviderDefault": ("app/domain/provider_defaults.py", "app/api/routes/settings.py"),
     "KbEmbeddingConfig": ("app/domain/kb/",),
     "TtsConfig": ("app/domain/tts_config.py",),
-    "Credential": ("app/domain/providers.py", "app/api/routes/settings.py"),
     # 智能体/集成
     "AgentSession": ("app/ai/agent/", "app/domain/agent/"),
     "AgentMessage": ("app/ai/agent/", "app/domain/agent/"),

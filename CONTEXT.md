@@ -62,8 +62,8 @@ _Avoid_: 队列服务、调度中心
 变更工具的属性(manifest 的 `confirmation: true`):调用只创建待确认卡,用户批准后才执行;sidecar 对此类工具统一阻塞轮询。
 _Avoid_: 按工具名硬编码确认逻辑
 
-**供应商能力归属**:
-`app/domain/providers.py` 暴露的派生接口,声明一个 ProviderProfile 可用于哪些能力(chat / image / video / embedding / tts / podcast)。设置页、默认模型与能力校验都消费它;具体调用方式仍落在各能力自己的 Adapter。
+**供应商能力配置**:
+`app/domain/providers.py` 暴露的 Adapter preset,按供应商/能力声明它支持哪些能力(chat / image / video / embedding / tts / podcast)以及设置页要收集哪些配置字段。前端只渲染后端声明的 `fields`,不要硬编码 `api_key/base_url/default_model` 这类通用凭据模型。
 _Avoid_: 仅凭 vendor 文案推断能力
 
 ## Relationships
@@ -72,7 +72,7 @@ _Avoid_: 仅凭 vendor 文案推断能力
 - **引擎**只认**执行器注册表**;**执行器注册表**与**节点注册表**一一对应
 - **卫星进程**经 **worker 协议**(external 类)或 stdio/subprocess(共生类)与**事实源**通信
 - 每张表有且只有一个**数据归属**领域;**归属棘轮**守护它
-- **供应商能力归属**只说明 profile 能不能进入某能力;能力的实际 HTTP/SDK 差异由该能力的 Adapter 接缝负责
+- **供应商能力配置**只说明某个 adapter 需要哪些配置以及能进入哪些能力;能力的实际 HTTP/SDK 差异由该能力自己的 Adapter 接缝负责
 
 ## Example dialogue
 

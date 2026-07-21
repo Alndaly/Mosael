@@ -2569,41 +2569,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Credentials */
-        get: operations["list_credentials_api_settings_credentials_get"];
-        /** Set Credential */
-        put: operations["set_credential_api_settings_credentials_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/credentials/{provider}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Credential */
-        delete: operations["delete_credential_api_settings_credentials__provider__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/confirmations": {
         parameters: {
             query?: never;
@@ -3687,25 +3652,6 @@ export interface components {
             /** Resolved At */
             resolved_at: string | null;
         };
-        /** CredentialSetRequest */
-        CredentialSetRequest: {
-            /** Provider */
-            provider: string;
-            /** Secret */
-            secret: string;
-        };
-        /** CredentialStatusOut */
-        CredentialStatusOut: {
-            /** Provider */
-            provider: string;
-            /** Configured */
-            configured: boolean;
-            /**
-             * Hint
-             * @default
-             */
-            hint: string;
-        };
         /** CutClipRangeRequest */
         CutClipRangeRequest: {
             /** Src Start */
@@ -4699,20 +4645,8 @@ export interface components {
             name: string;
             /** Vendor */
             vendor: string;
-            /** Api Key */
-            api_key: string;
-            /**
-             * Base Url
-             * @default
-             */
-            base_url: string;
-            /**
-             * Default Model
-             * @default
-             */
-            default_model: string;
-            /** Extra */
-            extra?: {
+            /** Config */
+            config?: {
                 [key: string]: string;
             };
         };
@@ -4746,23 +4680,21 @@ export interface components {
             extra?: {
                 [key: string]: string;
             };
+            /** Config */
+            config?: {
+                [key: string]: string;
+            };
         };
         /** ProviderProfileUpdate */
         ProviderProfileUpdate: {
             /** Name */
             name?: string | null;
-            /** Api Key */
-            api_key?: string | null;
-            /** Base Url */
-            base_url?: string | null;
-            /** Default Model */
-            default_model?: string | null;
-            /** Enabled */
-            enabled?: boolean | null;
-            /** Extra */
-            extra?: {
+            /** Config */
+            config?: {
                 [key: string]: string;
             } | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /** PublishAccountCreate */
         PublishAccountCreate: {
@@ -5629,7 +5561,7 @@ export interface components {
         };
         /**
          * VendorFieldOut
-         * @description One vendor-specific credential the form should collect.
+         * @description One adapter-specific setting the form should collect.
          */
         VendorFieldOut: {
             /** Key */
@@ -5637,10 +5569,25 @@ export interface components {
             /** Label */
             label: string;
             /**
+             * Storage
+             * @default extra
+             */
+            storage: string;
+            /**
              * Secret
              * @default false
              */
             secret: boolean;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Default
+             * @default
+             */
+            default: string;
             /**
              * Hint
              * @default
@@ -11751,97 +11698,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["KbEmbeddingConfigOut"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_credentials_api_settings_credentials_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CredentialStatusOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_credential_api_settings_credentials_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CredentialSetRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CredentialStatusOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_credential_api_settings_credentials__provider__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

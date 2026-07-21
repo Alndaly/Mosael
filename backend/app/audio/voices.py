@@ -349,12 +349,12 @@ def _synthesize_remote(
     but the outcome has to look identical to the caller: an audio asset on the job's result.
     """
     from app.audio.tts_providers import SpeechRequest, build_remote_provider
-    from app.domain.providers import resolve_profile, resolve_secret
+    from app.domain.providers import resolve_profile
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     profile = resolve_profile(db, engine)
-    api_key = (profile.api_key if profile else None) or resolve_secret(db, engine) or ""
+    api_key = (profile.api_key if profile else None) or ""
     provider = build_remote_provider(
         engine,
         api_key=api_key,
@@ -447,7 +447,7 @@ def _run_podcast_body(
     speed: float,
 ) -> None:
     from app.audio.podcast import synthesize_podcast
-    from app.domain.providers import profile_extra, resolve_profile, resolve_secret
+    from app.domain.providers import profile_extra, resolve_profile
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -461,7 +461,7 @@ def _run_podcast_body(
         profile = resolve_profile(db, "volcano-podcast")
         # The token lives in api_key and the appid in extra — the podcast socket takes both,
         # and neither is the v3 speech API Key.
-        token = (profile.api_key if profile else None) or resolve_secret(db, "volcano-podcast") or ""
+        token = (profile.api_key if profile else None) or ""
         appid = profile_extra(db, "volcano-podcast", "appid")
 
         with tempfile.TemporaryDirectory(prefix="mibu-podcast-") as tmp:

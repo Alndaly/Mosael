@@ -449,28 +449,26 @@ class AnalyzeAssetResponse(BaseModel):
 class ProviderProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     vendor: str = Field(min_length=1, max_length=60)
-    api_key: str = Field(min_length=1, max_length=500)
-    base_url: str = Field(default="", max_length=300)
-    default_model: str = Field(default="", max_length=120)
-    extra: dict[str, str] = Field(default_factory=dict)
+    #: Adapter-specific form values, keyed by VendorFieldOut.key.
+    config: dict[str, str] = Field(default_factory=dict)
 
 
 class ProviderProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    api_key: str | None = Field(default=None, min_length=1, max_length=500)
-    base_url: str | None = Field(default=None, max_length=300)
-    default_model: str | None = Field(default=None, max_length=120)
+    #: Adapter-specific form values, keyed by VendorFieldOut.key.
+    config: dict[str, str] | None = None
     enabled: bool | None = None
-    #: Merged, not replaced — see merge_profile_extra for what a blank value means.
-    extra: dict[str, str] | None = None
 
 
 class VendorFieldOut(BaseModel):
-    """One vendor-specific credential the form should collect."""
+    """One adapter-specific setting the form should collect."""
 
     key: str
     label: str
+    storage: str = "extra"
     secret: bool = False
+    required: bool = False
+    default: str = ""
     hint: str = ""
 
 
@@ -487,6 +485,8 @@ class ProviderProfileOut(OrmModel):
     #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
     #: same rule as api_key/key_hint.
     extra: dict[str, str] = Field(default_factory=dict)
+    #: Masked, adapter-shaped config for the settings form; secret fields are hints only.
+    config: dict[str, str] = Field(default_factory=dict)
 
 
 class ProviderDefaultOut(BaseModel):
@@ -642,20 +642,9 @@ class VendorPresetOut(BaseModel):
     base_url: str = ""
     default_model: str = ""
     capabilities: str = ""
-    #: Extra credential inputs this vendor needs beyond api_key. The form renders these, so
-    #: adding a vendor stays a one-dict-entry change.
+    #: Adapter-specific configuration inputs. The form renders these, so adding a vendor stays
+    #: a one-dict-entry change.
     fields: list[VendorFieldOut] = Field(default_factory=list)
-
-
-class CredentialSetRequest(BaseModel):
-    provider: str = Field(min_length=1, max_length=80)
-    secret: str = Field(min_length=1, max_length=500)
-
-
-class CredentialStatusOut(BaseModel):
-    provider: str
-    configured: bool
-    hint: str = ""
 
 
 class GenerationModelOut(OrmModel):

@@ -4,6 +4,8 @@ import time
 
 from app.ai.agent import adapters, host
 from app.ai.agent.adapters import TurnResult, build_claude_command, mibu_mcp_config
+from app.core.db import SessionLocal
+from app.db.models import ProviderProfile
 from tests.util import fresh_client
 
 
@@ -195,11 +197,20 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    # 启用一个没有 default_model 的供应商
-    client.post(
-        "/api/settings/providers",
-        json={"name": "P", "vendor": "openai-compatible", "base_url": "http://localhost:1/v1", "api_key": "k", "default_model": "", "enabled": True},
-    )
+    # Public settings now reject a missing model. Insert one invalid row directly so the agent's
+    # own preflight guard remains covered against corrupted/manual state.
+    with SessionLocal() as db:
+        db.add(
+            ProviderProfile(
+                name="P",
+                vendor="openai-compatible",
+                base_url="http://localhost:1/v1",
+                api_key="k",
+                default_model="",
+                enabled=True,
+            )
+        )
+        db.commit()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 

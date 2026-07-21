@@ -74,9 +74,9 @@ export interface AnalyzeContext {
   /** 已存在的供应商配置 id。 */
   providerIds: Set<string>;
   providersLoaded: boolean;
-  /** 已配置密钥的生成服务商名。 */
+  /** 已配置且启用 image/video 能力的生成供应商名。 */
   configuredGenProviders: Set<string>;
-  credentialsLoaded: boolean;
+  genProvidersLoaded: boolean;
 }
 
 interface ConfigSpecLike {
@@ -199,7 +199,7 @@ export function analyzeWorkflow(
       if (
         typeof provider === "string" &&
         provider &&
-        ctx.credentialsLoaded &&
+        ctx.genProvidersLoaded &&
         !ctx.configuredGenProviders.has(provider)
       )
         push("error", "gen-provider-unconfigured", { configKey: "provider" });

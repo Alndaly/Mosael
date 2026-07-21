@@ -290,7 +290,7 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_key": True,
             "needs_voice_id": False,
             "voices": [voice for voice, _ in PODCAST_SPEAKERS],
-            "note": "两个发音人对谈;凭据是 App ID + Access Token,不是 API Key。",
+            "note": "两个发音人对谈;配置是 App ID + Access Token,不是方舟 API Key。",
         },
         {
             "id": VolcanoTTS.id,

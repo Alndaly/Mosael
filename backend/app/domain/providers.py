@@ -5,12 +5,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Credential, ProviderProfile
+from app.db.models import ProviderProfile
 
 """
-Provider profile resolution. Profiles are the primary credential store
-(multiple per vendor allowed); the legacy single-secret credentials table
-remains a fallback so earlier setups keep working.
+Provider adapter configuration.
+
+Each vendor preset declares the exact fields its adapter needs. The database
+still stores the resolved values in ProviderProfile columns/extra for now, but
+the public contract is adapter config, not a generic "credential" shape.
 """
 
 VENDOR_PRESETS: dict[str, dict[str, Any]] = {
@@ -19,12 +21,33 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://dashscope.aliyuncs.com",
         "capabilities": "图像生成(qwen-image)。对话/嵌入请用 OpenAI 兼容端点单独配置。",
         "capability_ids": ["image"],
+        "fields": [
+            {"key": "api_key", "label": "DashScope API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "图像生成 Endpoint",
+                "storage": "base_url",
+                "default": "https://dashscope.aliyuncs.com",
+                "hint": "通常保持默认;自建代理或区域端点可在这里覆盖。",
+            },
+            {"key": "default_model", "label": "图像模型", "storage": "default_model", "default": "qwen-image"},
+        ],
     },
     "bytedance": {
         "label": "火山方舟 ARK (Seedance/Doubao)",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "capabilities": "对话(Doubao / OpenAI 兼容)与视频生成(Seedance)。",
         "capability_ids": ["chat", "video"],
+        "fields": [
+            {"key": "api_key", "label": "方舟 API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "方舟 Endpoint",
+                "storage": "base_url",
+                "default": "https://ark.cn-beijing.volces.com/api/v3",
+            },
+            {"key": "default_model", "label": "默认模型", "storage": "default_model", "default": "seedance"},
+        ],
     },
     "moonshot": {
         "label": "Kimi (Moonshot)",
@@ -32,6 +55,21 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "default_model": "moonshot-v1-8k-vision-preview",
         "capabilities": "对话、长文本、视觉理解(不支持图像 / 视频生成)",
         "capability_ids": ["chat"],
+        "fields": [
+            {"key": "api_key", "label": "Moonshot API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "Moonshot Endpoint",
+                "storage": "base_url",
+                "default": "https://api.moonshot.cn/v1",
+            },
+            {
+                "key": "default_model",
+                "label": "对话模型",
+                "storage": "default_model",
+                "default": "moonshot-v1-8k-vision-preview",
+            },
+        ],
     },
     "minimax": {
         "label": "MiniMax",
@@ -39,6 +77,16 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "default_model": "MiniMax-VL-01",
         "capabilities": "对话/视觉理解。图像、视频、语音能力需等对应 Adapter 接入后再开放。",
         "capability_ids": ["chat"],
+        "fields": [
+            {"key": "api_key", "label": "MiniMax API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "MiniMax Endpoint",
+                "storage": "base_url",
+                "default": "https://api.minimaxi.com/v1",
+            },
+            {"key": "default_model", "label": "对话模型", "storage": "default_model", "default": "MiniMax-VL-01"},
+        ],
     },
     "openai": {
         "label": "OpenAI",
@@ -46,6 +94,11 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "default_model": "gpt-image-2",
         "capabilities": "对话、图像生成(gpt-image)、向量嵌入",
         "capability_ids": ["chat", "image", "embedding"],
+        "fields": [
+            {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
+            {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
+            {"key": "default_model", "label": "默认模型", "storage": "default_model", "default": "gpt-image-2"},
+        ],
     },
     "volcano": {
         "label": "火山引擎语音合成(豆包 TTS)",
@@ -58,19 +111,35 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         # voice list. Synthesis works without them — the built-in list is the fallback — so they
         # are optional and say so.
         "fields": [
-            {"key": "ak", "label": "Access Key (AK)", "secret": True, "hint": "选填,用于拉取账号可用音色"},
-            {"key": "sk", "label": "Secret Key (SK)", "secret": True, "hint": "选填,与 AK 配对"},
+            {
+                "key": "api_key",
+                "label": "语音合成 API Key",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "火山语音技术的大模型 TTS API Key。",
+            },
+            {"key": "ak", "label": "Access Key (AK)", "storage": "extra", "secret": True, "hint": "选填,用于拉取账号可用音色"},
+            {"key": "sk", "label": "Secret Key (SK)", "storage": "extra", "secret": True, "hint": "选填,与 AK 配对"},
         ],
     },
     "volcano-podcast": {
         "label": "火山引擎播客(双人对话)",
         "base_url": "wss://openspeech.bytedance.com",
-        # A third 火山 credential, again not interchangeable: the podcast WebSocket authenticates
+        # A third 火山 adapter config, again not interchangeable: the podcast WebSocket authenticates
         # with appid + access token, and rejects the v3 API Key outright.
-        "capabilities": "播客式双人对话音频(WebSocket,凭据是 appid + Access Token,不是 API Key)",
+        "capabilities": "播客式双人对话音频(WebSocket,配置是 appid + Access Token,不是方舟 API Key)",
         "capability_ids": ["podcast"],
         "fields": [
-            {"key": "appid", "label": "App ID", "secret": False, "hint": "语音技术控制台的 App ID"},
+            {
+                "key": "api_key",
+                "label": "Access Token",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "播客 WebSocket 使用的 Access Token,不是方舟 API Key。",
+            },
+            {"key": "appid", "label": "App ID", "storage": "extra", "secret": False, "required": True, "hint": "语音技术控制台的 App ID"},
         ],
     },
     "openai-compatible": {
@@ -78,6 +147,11 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "",
         "capabilities": "OpenAI 兼容对话、图像生成与向量嵌入端点。不同能力的 base_url / 模型可用独立 profile 配置。",
         "capability_ids": ["chat", "image", "embedding"],
+        "fields": [
+            {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
+            {"key": "base_url", "label": "兼容 Endpoint", "storage": "base_url", "required": True},
+            {"key": "default_model", "label": "默认模型", "storage": "default_model", "required": True},
+        ],
     },
     "google": {
         "label": "Google (Veo/Gemini)",
@@ -85,6 +159,21 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "default_model": "veo-3.1-generate-preview",
         "capabilities": "视频生成(Veo)。Gemini/Imagen/Embedding 待对应 Adapter 接入后再开放。",
         "capability_ids": ["video"],
+        "fields": [
+            {"key": "api_key", "label": "Google API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "Generative Language Endpoint",
+                "storage": "base_url",
+                "default": "https://generativelanguage.googleapis.com/v1beta",
+            },
+            {
+                "key": "default_model",
+                "label": "视频模型",
+                "storage": "default_model",
+                "default": "veo-3.1-generate-preview",
+            },
+        ],
     },
     "kuaishou": {
         "label": "快手 (Kling)",
@@ -94,11 +183,21 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "capability_ids": ["video"],
         "fields": [
             {
+                "key": "api_key",
+                "label": "Access Key / Bearer Token",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+            },
+            {
                 "key": "secret_key",
                 "label": "Secret Key",
+                "storage": "extra",
                 "secret": True,
                 "hint": "官方 Kling 使用 Access Key + Secret Key:上面的 API Key 填 Access Key。第三方兼容端点可只填 Bearer API Key。",
             },
+            {"key": "base_url", "label": "Kling Endpoint", "storage": "base_url", "default": "https://api.klingai.com"},
+            {"key": "default_model", "label": "视频模型", "storage": "default_model", "default": "kling-v3"},
         ],
     },
 }
@@ -137,7 +236,7 @@ def first_enabled_profile(db: Session) -> ProviderProfile | None:
 
 
 def profile_extra(db: Session, vendor: str, key: str) -> str:
-    """One vendor-specific credential, or "" when unset.
+    """One adapter-specific extra field, or "" when unset.
 
     Callers treat "" as absent rather than raising: every extra field is either optional
     (火山 AK/SK) or checked by the feature that needs it, which can say what is missing far
@@ -167,12 +266,3 @@ def require_profile(
     if profile is None:
         raise error("没有可用的 AI 供应商,请先在设置里添加")
     return profile
-
-
-def resolve_secret(db: Session, vendor: str) -> str | None:
-    """Profile key first; legacy credentials row as fallback."""
-    profile = resolve_profile(db, vendor)
-    if profile is not None:
-        return profile.api_key
-    legacy = db.get(Credential, vendor)
-    return legacy.secret if legacy else None

@@ -8140,115 +8140,6 @@
         }
       }
     },
-    "/api/settings/credentials": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "List Credentials",
-        "operationId": "list_credentials_api_settings_credentials_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CredentialStatusOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Credentials Api Settings Credentials Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Set Credential",
-        "operationId": "set_credential_api_settings_credentials_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CredentialSetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialStatusOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/credentials/{provider}": {
-      "delete": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Delete Credential",
-        "operationId": "delete_credential_api_settings_credentials__provider__delete",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Provider"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/confirmations": {
       "post": {
         "tags": [
@@ -11440,51 +11331,6 @@
         ],
         "title": "ConfirmationOut"
       },
-      "CredentialSetRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Provider"
-          },
-          "secret": {
-            "type": "string",
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Secret"
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider",
-          "secret"
-        ],
-        "title": "CredentialSetRequest"
-      },
-      "CredentialStatusOut": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "title": "Provider"
-          },
-          "configured": {
-            "type": "boolean",
-            "title": "Configured"
-          },
-          "hint": {
-            "type": "string",
-            "title": "Hint",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider",
-          "configured"
-        ],
-        "title": "CredentialStatusOut"
-      },
       "CutClipRangeRequest": {
         "properties": {
           "src_start": {
@@ -13983,37 +13829,18 @@
             "minLength": 1,
             "title": "Vendor"
           },
-          "api_key": {
-            "type": "string",
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Api Key"
-          },
-          "base_url": {
-            "type": "string",
-            "maxLength": 300,
-            "title": "Base Url",
-            "default": ""
-          },
-          "default_model": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Default Model",
-            "default": ""
-          },
-          "extra": {
+          "config": {
             "additionalProperties": {
               "type": "string"
             },
             "type": "object",
-            "title": "Extra"
+            "title": "Config"
           }
         },
         "type": "object",
         "required": [
           "name",
-          "vendor",
-          "api_key"
+          "vendor"
         ],
         "title": "ProviderProfileCreate"
       },
@@ -14066,6 +13893,13 @@
             },
             "type": "object",
             "title": "Extra"
+          },
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Config"
           }
         },
         "type": "object",
@@ -14095,55 +13929,7 @@
             ],
             "title": "Name"
           },
-          "api_key": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Key"
-          },
-          "base_url": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Url"
-          },
-          "default_model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Model"
-          },
-          "enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enabled"
-          },
-          "extra": {
+          "config": {
             "anyOf": [
               {
                 "additionalProperties": {
@@ -14155,7 +13941,18 @@
                 "type": "null"
               }
             ],
-            "title": "Extra"
+            "title": "Config"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
           }
         },
         "type": "object",
@@ -16176,10 +15973,25 @@
             "type": "string",
             "title": "Label"
           },
+          "storage": {
+            "type": "string",
+            "title": "Storage",
+            "default": "extra"
+          },
           "secret": {
             "type": "boolean",
             "title": "Secret",
             "default": false
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          },
+          "default": {
+            "type": "string",
+            "title": "Default",
+            "default": ""
           },
           "hint": {
             "type": "string",
@@ -16193,7 +16005,7 @@
           "label"
         ],
         "title": "VendorFieldOut",
-        "description": "One vendor-specific credential the form should collect."
+        "description": "One adapter-specific setting the form should collect."
       },
       "VendorPresetOut": {
         "properties": {

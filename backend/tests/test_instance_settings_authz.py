@@ -28,8 +28,11 @@ def owner_and_outsider():
 
 ADMIN_ONLY_WRITES = [
     ("put", "/api/settings/tts", {"engine": "f5-tts", "python_path": "/tmp/evil"}),
-    ("post", "/api/settings/providers", {"name": "p", "vendor": "openai", "api_key": "k", "base_url": "http://x/v1"}),
-    ("put", "/api/settings/credentials", {"provider": "openai", "secret": "stolen"}),
+    (
+        "post",
+        "/api/settings/providers",
+        {"name": "p", "vendor": "openai", "config": {"api_key": "k", "base_url": "http://x/v1"}},
+    ),
     ("post", "/api/plugins/scan", None),
 ]
 
@@ -41,28 +44,25 @@ def test_a_user_who_owns_nothing_cannot_change_instance_settings(owner_and_outsi
     assert res.status_code == 403, f"{method.upper()} {path} returned {res.status_code}"
 
 
-def test_stored_credentials_are_not_readable_by_an_outsider(owner_and_outsider) -> None:
+def test_legacy_credentials_api_is_removed(owner_and_outsider) -> None:
     owner, outsider = owner_and_outsider
-    owner.put("/api/settings/credentials", json={"provider": "openai", "secret": "sk-SECRET"})
-
-    # The listing carries key hints, so it is disclosure even without the full key.
-    assert outsider.get("/api/settings/credentials").status_code == 403
-    assert outsider.delete("/api/settings/credentials/openai").status_code == 403
-    assert owner.get("/api/settings/credentials").status_code == 200
+    assert owner.get("/api/settings/credentials").status_code == 404
+    assert owner.put("/api/settings/credentials", json={"provider": "openai", "secret": "sk-SECRET"}).status_code == 404
+    assert outsider.delete("/api/settings/credentials/openai").status_code == 404
 
 
 def test_an_outsider_cannot_repoint_a_provider_and_harvest_its_key(owner_and_outsider) -> None:
     owner, outsider = owner_and_outsider
     profile = owner.post(
         "/api/settings/providers",
-        json={"name": "mine", "vendor": "openai", "api_key": "sk-VICTIM", "base_url": "http://localhost:11434/v1"},
+        json={"name": "mine", "vendor": "openai", "config": {"api_key": "sk-VICTIM", "base_url": "http://localhost:11434/v1"}},
     )
     assert profile.status_code == 200, profile.text
     profile_id = profile.json()["id"]
 
     # Repointing base_url is the setup; the models probe is what ships the key.
     assert outsider.patch(
-        f"/api/settings/providers/{profile_id}", json={"base_url": "http://attacker.example/v1"}
+        f"/api/settings/providers/{profile_id}", json={"config": {"base_url": "http://attacker.example/v1"}}
     ).status_code == 403
     assert outsider.get(f"/api/settings/providers/{profile_id}/models").status_code == 403
     assert outsider.delete(f"/api/settings/providers/{profile_id}").status_code == 403
@@ -82,7 +82,7 @@ def test_the_owner_is_not_locked_out_of_their_own_install(owner_and_outsider) ->
     assert owner.post("/api/plugins/scan").status_code == 200
     created = owner.post(
         "/api/settings/providers",
-        json={"name": "p", "vendor": "openai", "api_key": "k", "base_url": "http://x/v1"},
+        json={"name": "p", "vendor": "openai", "config": {"api_key": "k", "base_url": "http://x/v1"}},
     )
     assert created.status_code == 200
     assert owner.get(f"/api/settings/providers/{created.json()['id']}/models").status_code in (200, 502)

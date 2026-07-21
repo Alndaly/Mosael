@@ -10,8 +10,6 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.permissions import ensure_instance_admin
 from app.api.schemas import (
-    CredentialSetRequest,
-    CredentialStatusOut,
     KbEmbeddingConfigOut,
     KbEmbeddingConfigUpdate,
     ProviderDefaultOut,
@@ -23,7 +21,7 @@ from app.api.schemas import (
     VendorPresetOut,
 )
 from app.core.db import SessionLocal
-from app.db.models import Credential, KbEmbeddingConfig, ProviderDefault, ProviderProfile
+from app.db.models import KbEmbeddingConfig, ProviderDefault, ProviderProfile
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
@@ -32,19 +30,65 @@ from app.domain.providers import VENDOR_PRESETS, capability_ids_for_vendor, supp
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
-KNOWN_PROVIDERS = ["alibaba", "bytedance", "openai", "google", "kuaishou"]
-
-
 def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out = ProviderProfileOut.model_validate(profile)
     out.capability_ids = capability_ids_for_vendor(profile.vendor)
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
     out.extra = _masked_extra(profile)
+    out.config = _masked_config(profile)
     return out
 
 
 def _field_specs(vendor: str) -> list[dict]:
     return list(VENDOR_PRESETS.get(vendor, {}).get("fields", []))  # type: ignore[arg-type]
+
+
+def _field_storage(spec: dict) -> str:
+    return str(spec.get("storage") or "extra")
+
+
+def _read_config_field(profile: ProviderProfile, spec: dict) -> str:
+    storage = _field_storage(spec)
+    key = str(spec.get("key", ""))
+    if storage == "api_key":
+        return profile.api_key or ""
+    if storage == "base_url":
+        return profile.base_url or ""
+    if storage == "default_model":
+        return profile.default_model or ""
+    value = (profile.extra or {}).get(key)
+    return str(value) if value else ""
+
+
+def _write_config_field(profile: ProviderProfile, spec: dict, value: str) -> None:
+    storage = _field_storage(spec)
+    key = str(spec.get("key", ""))
+    if storage == "api_key":
+        profile.api_key = value
+        return
+    if storage == "base_url":
+        profile.base_url = value
+        return
+    if storage == "default_model":
+        profile.default_model = value
+        return
+    merged = dict(profile.extra or {})
+    if value:
+        merged[key] = value
+    else:
+        merged.pop(key, None)
+    profile.extra = merged
+
+
+def _masked_config(profile: ProviderProfile) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for spec in _field_specs(profile.vendor):
+        key = str(spec.get("key", ""))
+        value = _read_config_field(profile, spec)
+        if not key or not value:
+            continue
+        out[key] = f"…{value[-4:]}" if spec.get("secret") else value
+    return out
 
 
 def _masked_extra(profile: ProviderProfile) -> dict[str, str]:
@@ -54,7 +98,9 @@ def _masked_extra(profile: ProviderProfile) -> dict[str, str]:
     those to the browser would undo the reason api_key is never serialised either.
     """
     stored = profile.extra or {}
-    secret_keys = {spec["key"] for spec in _field_specs(profile.vendor) if spec.get("secret")}
+    secret_keys = {
+        spec["key"] for spec in _field_specs(profile.vendor) if _field_storage(spec) == "extra" and spec.get("secret")
+    }
     out: dict[str, str] = {}
     for key, value in stored.items():
         text_value = str(value or "")
@@ -73,7 +119,9 @@ def merge_profile_extra(profile: ProviderProfile, incoming: dict[str, str]) -> d
     back blank was blanked on purpose, so it clears.
     """
     merged = dict(profile.extra or {})
-    secret_keys = {spec["key"] for spec in _field_specs(profile.vendor) if spec.get("secret")}
+    secret_keys = {
+        spec["key"] for spec in _field_specs(profile.vendor) if _field_storage(spec) == "extra" and spec.get("secret")
+    }
     for key, value in incoming.items():
         text_value = (value or "").strip()
         if text_value:
@@ -81,6 +129,51 @@ def merge_profile_extra(profile: ProviderProfile, incoming: dict[str, str]) -> d
         elif key not in secret_keys:
             merged.pop(key, None)
     return merged
+
+
+def _config_from_body(body: ProviderProfileCreate | ProviderProfileUpdate) -> dict[str, str]:
+    return dict(body.config or {})
+
+
+def _apply_profile_config(profile: ProviderProfile, incoming: dict[str, str], *, creating: bool) -> None:
+    preset = VENDOR_PRESETS.get(profile.vendor, {})
+    if creating:
+        profile.api_key = ""
+        profile.base_url = str(preset.get("base_url", "") or "")
+        profile.default_model = str(preset.get("default_model", "") or "")
+        profile.extra = {}
+
+    specs = _field_specs(profile.vendor)
+    for spec in specs:
+        key = str(spec.get("key", ""))
+        if not key:
+            continue
+        raw_value = incoming.get(key)
+        default_value = str(spec.get("default", "") or "")
+        if raw_value is None:
+            if creating and default_value:
+                _write_config_field(profile, spec, default_value)
+            continue
+
+        value = str(raw_value or "").strip()
+        if value:
+            _write_config_field(profile, spec, value)
+            continue
+
+        if spec.get("secret") and not creating:
+            continue
+        if default_value and creating:
+            _write_config_field(profile, spec, default_value)
+        else:
+            _write_config_field(profile, spec, "")
+
+    missing = [
+        str(spec.get("label") or spec.get("key"))
+        for spec in specs
+        if spec.get("required") and not _read_config_field(profile, spec).strip()
+    ]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"缺少必要配置: {', '.join(missing)}")
 
 
 @router.get("/settings/provider-vendors", response_model=list[VendorPresetOut])
@@ -108,15 +201,8 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     ensure_instance_admin(db, user, "credentials")
-    preset = VENDOR_PRESETS.get(body.vendor, {})
-    profile = ProviderProfile(
-        name=body.name,
-        vendor=body.vendor,
-        api_key=body.api_key,
-        base_url=body.base_url or preset.get("base_url", ""),
-        default_model=body.default_model or preset.get("default_model", ""),
-    )
-    profile.extra = merge_profile_extra(profile, body.extra)
+    profile = ProviderProfile(name=body.name, vendor=body.vendor)
+    _apply_profile_config(profile, _config_from_body(body), creating=True)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -132,15 +218,13 @@ def update_provider_profile(
     if profile is None:
         raise HTTPException(status_code=404, detail="Not found")
     patch = body.model_dump(exclude_unset=True)
-    # extra is merged, never assigned: the generic loop below would overwrite the whole dict
-    # with whatever the form sent, deleting every credential the browser was not allowed to
-    # read back in the first place.
-    incoming_extra = patch.pop("extra", None)
-    for key, value in patch.items():
-        if value is not None:
-            setattr(profile, key, value)
-    if incoming_extra is not None:
-        profile.extra = merge_profile_extra(profile, incoming_extra)
+    if "name" in patch and body.name is not None:
+        profile.name = body.name
+    if "enabled" in patch and body.enabled is not None:
+        profile.enabled = body.enabled
+    incoming = _config_from_body(body)
+    if incoming:
+        _apply_profile_config(profile, incoming, creating=False)
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
@@ -275,42 +359,3 @@ def set_kb_embedding(
 
         threading.Thread(target=run, daemon=True).start()
     return _kb_embedding_out()
-
-
-@router.get("/settings/credentials", response_model=list[CredentialStatusOut])
-def list_credentials(db: DbSession, user: CurrentUser) -> list[CredentialStatusOut]:
-    ensure_instance_admin(db, user, "credentials")
-    """Secrets never leave the backend — only configured-status and a hint."""
-    stored = {credential.provider: credential for credential in db.scalars(select(Credential))}
-    providers = sorted(set(KNOWN_PROVIDERS) | set(stored))
-    return [
-        CredentialStatusOut(
-            provider=provider,
-            configured=provider in stored,
-            hint=f"…{stored[provider].secret[-4:]}" if provider in stored else "",
-        )
-        for provider in providers
-    ]
-
-
-@router.put("/settings/credentials", response_model=CredentialStatusOut)
-def set_credential(body: CredentialSetRequest, db: DbSession, user: CurrentUser) -> CredentialStatusOut:
-    ensure_instance_admin(db, user, "credentials")
-    credential = db.get(Credential, body.provider)
-    if credential is None:
-        credential = Credential(provider=body.provider, secret=body.secret)
-        db.add(credential)
-    else:
-        credential.secret = body.secret
-    db.commit()
-    return CredentialStatusOut(provider=body.provider, configured=True, hint=f"…{body.secret[-4:]}")
-
-
-@router.delete("/settings/credentials/{provider}", status_code=204)
-def delete_credential(provider: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_instance_admin(db, user, "credentials")
-    credential = db.get(Credential, provider)
-    if credential is not None:
-        db.delete(credential)
-        db.commit()
-    return Response(status_code=204)

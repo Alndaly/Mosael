@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, Database, ImageIcon, KeyRound, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
+import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -35,7 +35,6 @@ type SectionId =
   | "provider-image"
   | "provider-video"
   | "provider-embedding"
-  | "provider-accounts"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -49,7 +48,6 @@ const SECTION_IDS: SectionId[] = [
   "provider-image",
   "provider-video",
   "provider-embedding",
-  "provider-accounts",
   "transcribe",
   "voice",
   "feishu",
@@ -84,7 +82,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               ? "provider-image"
               : focus === "video"
                 ? "provider-video"
-                : "provider-accounts";
+                : "provider-chat";
         setSection(next);
         setFocusProviderCapability(focus || null);
         return;
@@ -106,7 +104,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "provider-image", label: t("providerImageTitle"), icon: <ImageIcon size={14} /> },
     { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
     { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
-    { id: "provider-accounts", label: t("providerAccountsTitle"), icon: <KeyRound size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -177,7 +174,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               />
             </>
           )}
-          {section === "provider-accounts" && <ProviderProfilesSection />}
           {section === "transcribe" && <AsrModelsSection />}
           {section === "voice" && <VoiceCloneSection />}
           {section === "feishu" && <FeishuSection workspace={workspace} />}

@@ -40,7 +40,7 @@ def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) ->
     client = _admin_client()
     client.post(
         "/api/settings/providers",
-        json={"name": "v", "vendor": "volcano", "api_key": "k", "extra": {"ak": "AK", "sk": "SK"}},
+        json={"name": "v", "vendor": "volcano", "config": {"api_key": "k", "ak": "AK", "sk": "SK"}},
     )
     monkeypatch.setattr(
         "app.integrations.volc_openapi.list_all_speakers",
@@ -57,7 +57,7 @@ def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) ->
     client = _admin_client()
     client.post(
         "/api/settings/providers",
-        json={"name": "v", "vendor": "volcano", "api_key": "k", "extra": {"ak": "bad", "sk": "bad"}},
+        json={"name": "v", "vendor": "volcano", "config": {"api_key": "k", "ak": "bad", "sk": "bad"}},
     )
 
     def boom(ak, sk):

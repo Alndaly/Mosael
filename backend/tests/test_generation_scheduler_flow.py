@@ -73,7 +73,15 @@ def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monke
 
     profile = client.post(
         "/api/settings/providers",
-        json={"name": "OpenAI compatible", "vendor": "openai-compatible", "api_key": "sk-test", "base_url": "https://example.test/v1"},
+        json={
+            "name": "OpenAI compatible",
+            "vendor": "openai-compatible",
+            "config": {
+                "api_key": "sk-test",
+                "base_url": "https://example.test/v1",
+                "default_model": "gpt-image-2",
+            },
+        },
     ).json()
     renamed = client.patch(f"/api/generation/sessions/{session['id']}", json={"title": "女孩分镜"}).json()
     assert renamed["title"] == "女孩分镜"

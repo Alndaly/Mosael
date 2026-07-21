@@ -21,12 +21,8 @@ type VendorPreset = components["schemas"]["VendorPresetOut"];
 type ProfileForm = {
   vendor: string;
   name: string;
-  api_key: string;
-  base_url: string;
-  default_model: string;
-  /** Vendor-specific credentials, keyed by the preset's field spec. 火山 needs three of these
-      across its two vendors, and they are not interchangeable. */
-  extra: Record<string, string>;
+  /** Adapter-specific settings, keyed by the backend preset's field spec. */
+  config: Record<string, string>;
 };
 
 /** 各供应商创建密钥的官方控制台入口(告知用户"去哪拿 key")。外链走系统浏览器。 */
@@ -38,7 +34,13 @@ const VENDOR_DOCS: Record<string, string> = {
   openai: "https://platform.openai.com/api-keys",
   google: "https://aistudio.google.com/app/apikey",
   kuaishou: "https://klingai.com/",
+  "volcano-podcast": "https://console.volcengine.com/speech/service",
+  volcano: "https://console.volcengine.com/speech/service",
 };
+
+function cleanConfig(config: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, (value ?? "").trim()]));
+}
 
 export function ProviderProfilesSection({
   capability,
@@ -53,7 +55,7 @@ export function ProviderProfilesSection({
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
-  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", api_key: "", base_url: "", default_model: "", extra: {} };
+  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
     queryKey: ["provider-profiles"],
@@ -66,19 +68,22 @@ export function ProviderProfilesSection({
   const refresh = () => qc.invalidateQueries({ queryKey: ["provider-profiles"] });
 
   const schema = React.useMemo(() => {
-    const base = z.object({
-      vendor: z.string(),
-      name: z.string().trim().min(1, t("fieldRequired")),
-      api_key: z.string(),
-      base_url: z.string(),
-      default_model: z.string(),
-      extra: z.record(z.string(), z.string()),
-    });
-    // API key required when creating; on edit a blank key means "keep existing".
-    return editing
-      ? base
-      : base.refine((data) => data.api_key.trim().length > 0, { message: t("fieldRequired"), path: ["api_key"] });
-  }, [editing, t]);
+    return z
+      .object({
+        vendor: z.string(),
+        name: z.string().trim().min(1, t("fieldRequired")),
+        config: z.record(z.string(), z.string()),
+      })
+      .superRefine((data, ctx) => {
+        const preset = (vendors.data ?? []).find((item) => item.vendor === data.vendor);
+        for (const spec of preset?.fields ?? []) {
+          if (!spec.required) continue;
+          if (editing && spec.secret) continue;
+          if ((data.config?.[spec.key] ?? "").trim()) continue;
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: t("fieldRequired"), path: ["config", spec.key] });
+        }
+      });
+  }, [editing, t, vendors.data]);
   const form = useForm<ProfileForm>({ resolver: zodResolver(schema), defaultValues: EMPTY });
   const vendor = form.watch("vendor");
 
@@ -114,15 +119,12 @@ export function ProviderProfilesSection({
     form.reset({
       vendor: profile.vendor,
       name: profile.name,
-      api_key: "",
-      base_url: profile.base_url,
-      default_model: profile.default_model,
-      // Secret extras come back only as "…abcd", so prefilling one would submit the mask as
-      // the new value. Blank means "keep", exactly like api_key above.
-      extra: Object.fromEntries(
+      // Secret fields come back only as "…abcd", so prefilling one would submit the mask as
+      // the new value. Blank means "keep".
+      config: Object.fromEntries(
         (vendors.data?.find((item) => item.vendor === profile.vendor)?.fields ?? []).map((spec) => [
           spec.key,
-          spec.secret ? "" : (profile.extra ?? {})[spec.key] ?? "",
+          spec.secret ? "" : (profile.config ?? {})[spec.key] ?? "",
         ]),
       ),
     });
@@ -135,10 +137,7 @@ export function ProviderProfilesSection({
         body: JSON.stringify({
           name: values.name.trim(),
           vendor: values.vendor,
-          api_key: values.api_key.trim(),
-          base_url: values.base_url.trim(),
-          default_model: values.default_model.trim(),
-          extra: values.extra,
+          config: cleanConfig(values.config),
         }),
       }),
     onSuccess: () => {
@@ -152,12 +151,7 @@ export function ProviderProfilesSection({
         method: "PATCH",
         body: JSON.stringify({
           name: values.name.trim(),
-          base_url: values.base_url.trim(),
-          default_model: values.default_model.trim(),
-          // 只有真正输入了新 key 才提交,否则后端保持原值
-          ...(values.api_key.trim() ? { api_key: values.api_key.trim() } : {}),
-          // extra 由后端按字段是否 secret 合并:密钥留空=保持,可见标识留空=清除
-          extra: values.extra,
+          config: cleanConfig(values.config),
         }),
       }),
     onSuccess: () => {
@@ -247,84 +241,40 @@ export function ProviderProfilesSection({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="api_key"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="provider-key-label">
-                    API Key
-                    {docsUrl && (
-                      <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
-                        {t("providerGetKey")}
-                        <ExternalLink size={11} />
-                      </a>
-                    )}
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder={editing ? t("providerKeyKeepPlaceholder") : t("providerKeyPlaceholder")}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             {(preset?.fields ?? []).map((spec) => (
               <FormField
                 key={spec.key}
                 control={form.control}
-                name={`extra.${spec.key}` as const}
+                name={`config.${spec.key}` as const}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{spec.label}</FormLabel>
+                    <FormLabel className="provider-key-label">
+                      {spec.label}
+                      {spec.storage === "api_key" && docsUrl && (
+                        <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
+                          {t("providerGetKey")}
+                          <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </FormLabel>
                     <FormControl>
                       <Input
                         type={spec.secret ? "password" : "text"}
-                        placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : ""}
+                        placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
                         {...field}
                         value={field.value ?? ""}
                       />
                     </FormControl>
-                    {spec.hint && <FormDescription>{spec.hint}</FormDescription>}
+                    {(spec.hint || spec.default) && (
+                      <FormDescription>
+                        {spec.hint || t("providerFieldDefault").replace("{value}", spec.default)}
+                      </FormDescription>
+                    )}
+                    <FormMessage />
                   </FormItem>
                 )}
               />
             ))}
-            <FormField
-              control={form.control}
-              name="base_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Base URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder={preset?.base_url || t("providerBaseUrl")} {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    {preset?.base_url
-                      ? t("providerBaseUrlDefault").replace("{url}", preset.base_url)
-                      : t("providerBaseUrlRequired")}
-                  </FormDescription>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="default_model"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("providerModelLabel")}</FormLabel>
-                  <FormControl>
-                    <Input placeholder={t("providerModel")} {...field} />
-                  </FormControl>
-                  {preset?.default_model && (
-                    <FormDescription>{t("providerModelExample").replace("{model}", preset.default_model)}</FormDescription>
-                  )}
-                </FormItem>
-              )}
-            />
             <div className="task-create-actions">
               <Button type="button" variant="outline" size="sm" onClick={closeModal}>
                 {t("cancel")}

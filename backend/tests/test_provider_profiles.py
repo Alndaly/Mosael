@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.domain.providers import resolve_profile, resolve_secret
+from app.domain.providers import resolve_profile
 from tests.util import fresh_client
 
 
@@ -11,17 +11,20 @@ def test_profile_crud_with_masked_keys() -> None:
 
     created = client.post(
         "/api/settings/providers",
-        json={"name": "我的 Kimi", "vendor": "moonshot", "api_key": "sk-kimi-1234"},
+        json={"name": "我的 Kimi", "vendor": "moonshot", "config": {"api_key": "sk-kimi-1234"}},
     ).json()
     # Preset fills base_url + default model; key never serializes, only a hint.
     assert created["base_url"] == "https://api.moonshot.cn/v1"
     assert created["default_model"] == "moonshot-v1-8k-vision-preview"
     assert "api_key" not in created
     assert created["key_hint"] == "…1234"
+    assert created["config"]["api_key"] == "…1234"
+    assert created["config"]["base_url"] == "https://api.moonshot.cn/v1"
+    assert created["config"]["default_model"] == "moonshot-v1-8k-vision-preview"
 
     second = client.post(
         "/api/settings/providers",
-        json={"name": "备用 Kimi", "vendor": "moonshot", "api_key": "sk-kimi-5678"},
+        json={"name": "备用 Kimi", "vendor": "moonshot", "config": {"api_key": "sk-kimi-5678"}},
     ).json()
     listed = client.get("/api/settings/providers").json()
     assert len(listed) == 2  # multiple profiles per vendor
@@ -33,20 +36,15 @@ def test_profile_crud_with_masked_keys() -> None:
     assert len(client.get("/api/settings/providers").json()) == 1
 
 
-def test_resolution_prefers_profiles_then_legacy() -> None:
+def test_resolution_reads_enabled_profiles() -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
-    client.put("/api/settings/credentials", json={"provider": "alibaba", "secret": "legacy-key"})
-
-    with SessionLocal() as db:
-        assert resolve_secret(db, "alibaba") == "legacy-key"  # legacy fallback
 
     client.post(
         "/api/settings/providers",
-        json={"name": "主力 DashScope", "vendor": "alibaba", "api_key": "profile-key"},
+        json={"name": "主力 DashScope", "vendor": "alibaba", "config": {"api_key": "profile-key"}},
     )
     with SessionLocal() as db:
-        assert resolve_secret(db, "alibaba") == "profile-key"  # profile wins
         assert resolve_profile(db, "alibaba").name == "主力 DashScope"
 
 
@@ -57,6 +55,8 @@ def test_vendor_presets_listed() -> None:
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
     assert presets["alibaba"]["capability_ids"] == ["image"]
     assert "video" in presets["bytedance"]["capability_ids"]
+    assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == ["api_key", "appid"]
+    assert presets["volcano-podcast"]["fields"][0]["label"] == "Access Token"
 
 
 def test_provider_defaults_require_matching_capability() -> None:
@@ -64,7 +64,7 @@ def test_provider_defaults_require_matching_capability() -> None:
     client.post("/api/workspaces", json={"name": "W"})
     kimi = client.post(
         "/api/settings/providers",
-        json={"name": "Kimi", "vendor": "moonshot", "api_key": "sk-kimi"},
+        json={"name": "Kimi", "vendor": "moonshot", "config": {"api_key": "sk-kimi"}},
     ).json()
     assert kimi["capability_ids"] == ["chat"]
 
@@ -83,8 +83,15 @@ def test_kb_embedding_config_put_get() -> None:
     client.post("/api/workspaces", json={"name": "W"})
     profile = client.post(
         "/api/settings/providers",
-        json={"name": "本地 Ollama", "vendor": "openai-compatible", "api_key": "x",
-              "base_url": "http://localhost:11434/v1"},
+        json={
+            "name": "本地 Ollama",
+            "vendor": "openai-compatible",
+            "config": {
+                "api_key": "x",
+                "base_url": "http://localhost:11434/v1",
+                "default_model": "nomic-embed-text",
+            },
+        },
     ).json()
 
     saved = client.put(

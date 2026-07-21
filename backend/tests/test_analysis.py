@@ -17,7 +17,7 @@ HAS_FFMPEG = shutil.which("ffmpeg") is not None
 def add_profile(client, vendor: str, name: str = "P") -> dict:
     return client.post(
         "/api/settings/providers",
-        json={"name": name, "vendor": vendor, "api_key": f"sk-{vendor}"},
+        json={"name": name, "vendor": vendor, "config": {"api_key": f"sk-{vendor}"}},
     ).json()
 
 

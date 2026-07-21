@@ -33,7 +33,7 @@ const fullCtx: AnalyzeContext = {
   providerIds: new Set(["p1"]),
   providersLoaded: true,
   configuredGenProviders: new Set(["alibaba"]),
-  credentialsLoaded: true,
+  genProvidersLoaded: true,
 };
 
 function graph(nodes: WorkflowGraph["nodes"], edges: WorkflowGraph["edges"] = []): WorkflowGraph {
@@ -210,7 +210,7 @@ describe("analyzeWorkflow", () => {
       providerIds: new Set(),
       providersLoaded: false,
       configuredGenProviders: new Set(),
-      credentialsLoaded: false,
+      genProvidersLoaded: false,
     });
     // profile_id is set but providers not loaded yet — don't false-alarm.
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();

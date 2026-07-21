@@ -1,9 +1,9 @@
-"""Vendor-specific credentials beyond the single api_key slot.
+"""Adapter-specific provider configuration beyond a single api_key shape.
 
 火山 is the reason: its speech v3 API Key, the podcast appid + access token, and the account
 AK/SK for listing voices are three unrelated credentials from three different consoles. They
-live in ProviderProfile.extra, and the rules about what leaves the server and what a blank
-field means are the whole risk surface — get them wrong and a working credential disappears
+are exposed through backend-declared field specs, and the rules about what leaves the server
+and what a blank field means are the whole risk surface — get them wrong and a working config disappears
 on an unrelated save.
 """
 
@@ -20,9 +20,10 @@ def _admin_client():
 
 
 def _create(client, vendor: str, extra: dict) -> dict:
+    config = {"api_key": "sk-abcd1234", **extra}
     res = client.post(
         "/api/settings/providers",
-        json={"name": "t", "vendor": vendor, "api_key": "sk-abcd1234", "extra": extra},
+        json={"name": "t", "vendor": vendor, "config": config},
     )
     assert res.status_code == 200, res.text
     return res.json()
@@ -55,7 +56,7 @@ def test_saving_the_form_without_a_secret_keeps_the_stored_one() -> None:
 
     res = client.patch(
         f"/api/settings/providers/{created['id']}",
-        json={"name": "renamed", "extra": {"ak": "", "sk": ""}},
+        json={"name": "renamed", "config": {"ak": "", "sk": ""}},
     )
     assert res.status_code == 200, res.text
 
@@ -65,17 +66,18 @@ def test_saving_the_form_without_a_secret_keeps_the_stored_one() -> None:
         assert stored.extra == {"ak": "AKLTsecret", "sk": "SKsupersecret"}
 
 
-def test_blanking_a_visible_field_does_clear_it() -> None:
-    """The user could see the App ID, so blanking it was deliberate."""
+def test_blanking_a_required_visible_field_is_rejected() -> None:
+    """The user can see the App ID, but podcast cannot run without it."""
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
 
     client = _admin_client()
     created = _create(client, "volcano-podcast", {"appid": "1234567890"})
-    client.patch(f"/api/settings/providers/{created['id']}", json={"extra": {"appid": ""}})
+    res = client.patch(f"/api/settings/providers/{created['id']}", json={"config": {"appid": ""}})
+    assert res.status_code == 422
 
     with SessionLocal() as db:
-        assert "appid" not in (db.get(ProviderProfile, created["id"]).extra or {})
+        assert db.get(ProviderProfile, created["id"]).extra == {"appid": "1234567890"}
 
 
 def test_an_untouched_extra_survives_an_unrelated_patch() -> None:
@@ -96,12 +98,15 @@ def test_the_form_spec_is_served_with_the_vendor() -> None:
     client = _admin_client()
     vendors = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
 
-    assert [f["key"] for f in vendors["volcano"]["fields"]] == ["ak", "sk"]
+    assert [f["key"] for f in vendors["volcano"]["fields"]] == ["api_key", "ak", "sk"]
     assert all(f["secret"] for f in vendors["volcano"]["fields"])
     podcast = vendors["volcano-podcast"]["fields"]
-    assert [f["key"] for f in podcast] == ["appid"] and podcast[0]["secret"] is False
-    # A vendor with nothing extra to collect still answers, with an empty list.
-    assert vendors["openai"]["fields"] == []
+    assert [f["key"] for f in podcast] == ["api_key", "appid"]
+    assert podcast[0]["label"] == "Access Token"
+    assert podcast[0]["secret"] is True
+    assert podcast[1]["secret"] is False
+    # Every vendor answers with the exact adapter fields the settings form should render.
+    assert [f["storage"] for f in vendors["openai"]["fields"]] == ["api_key", "base_url", "default_model"]
 
 
 def test_profile_extra_reads_one_field() -> None:
