@@ -2534,6 +2534,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/provider-pricing-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Provider Pricing Rules */
+        get: operations["list_provider_pricing_rules_api_settings_provider_pricing_rules_get"];
+        put?: never;
+        /** Create Provider Pricing Rule */
+        post: operations["create_provider_pricing_rule_api_settings_provider_pricing_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/provider-pricing-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Provider Pricing Rule */
+        delete: operations["delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Provider Pricing Rule */
+        patch: operations["update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch"];
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/models": {
         parameters: {
             query?: never;
@@ -4685,6 +4721,114 @@ export interface components {
              * @default
              */
             model: string;
+        };
+        /** ProviderPricingRuleCreate */
+        ProviderPricingRuleCreate: {
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /** Capability */
+            capability: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Billing Unit */
+            billing_unit: string;
+            /** Unit Amount Micros */
+            unit_amount_micros: number;
+            /**
+             * Currency
+             * @default USD
+             */
+            currency: string;
+            /**
+             * Source
+             * @default manual
+             */
+            source: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Effective To */
+            effective_to?: string | null;
+        };
+        /** ProviderPricingRuleOut */
+        ProviderPricingRuleOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Provider */
+            provider: string;
+            /** Capability */
+            capability: string;
+            /** Model */
+            model: string;
+            /** Billing Unit */
+            billing_unit: string;
+            /** Unit Amount Micros */
+            unit_amount_micros: number;
+            /** Currency */
+            currency: string;
+            /** Source */
+            source: string;
+            /** Notes */
+            notes: string;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Effective To */
+            effective_to?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProviderPricingRuleUpdate */
+        ProviderPricingRuleUpdate: {
+            /** Workspace Id */
+            workspace_id?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Capability */
+            capability?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Billing Unit */
+            billing_unit?: string | null;
+            /** Unit Amount Micros */
+            unit_amount_micros?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Effective To */
+            effective_to?: string | null;
         };
         /** ProviderProfileCreate */
         ProviderProfileCreate: {
@@ -11693,6 +11837,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderDefaultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_provider_pricing_rules_api_settings_provider_pricing_rules_get: {
+        parameters: {
+            query?: {
+                workspace_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_provider_pricing_rule_api_settings_provider_pricing_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPricingRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPricingRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
                 };
             };
             /** @description Validation Error */

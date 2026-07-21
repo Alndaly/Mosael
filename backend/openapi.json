@@ -8024,6 +8024,183 @@
         }
       }
     },
+    "/api/settings/provider-pricing-rules": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Provider Pricing Rules",
+        "operationId": "list_provider_pricing_rules_api_settings_provider_pricing_rules_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                  },
+                  "title": "Response List Provider Pricing Rules Api Settings Provider Pricing Rules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create Provider Pricing Rule",
+        "operationId": "create_provider_pricing_rule_api_settings_provider_pricing_rules_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderPricingRuleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/provider-pricing-rules/{rule_id}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Provider Pricing Rule",
+        "operationId": "update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderPricingRuleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Provider Pricing Rule",
+        "operationId": "delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/models": {
       "get": {
         "tags": [
@@ -13912,6 +14089,373 @@
         },
         "type": "object",
         "title": "ProviderDefaultUpdate"
+      },
+      "ProviderPricingRuleCreate": {
+        "properties": {
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Provider",
+            "default": ""
+          },
+          "capability": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Capability"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Model",
+            "default": ""
+          },
+          "billing_unit": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Billing Unit"
+          },
+          "unit_amount_micros": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unit Amount Micros"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 1,
+            "title": "Currency",
+            "default": "USD"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Source",
+            "default": "manual"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Notes",
+            "default": ""
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capability",
+          "billing_unit",
+          "unit_amount_micros"
+        ],
+        "title": "ProviderPricingRuleCreate"
+      },
+      "ProviderPricingRuleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "billing_unit": {
+            "type": "string",
+            "title": "Billing Unit"
+          },
+          "unit_amount_micros": {
+            "type": "integer",
+            "title": "Unit Amount Micros"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "capability",
+          "model",
+          "billing_unit",
+          "unit_amount_micros",
+          "currency",
+          "source",
+          "notes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProviderPricingRuleOut"
+      },
+      "ProviderPricingRuleUpdate": {
+        "properties": {
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "capability": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "billing_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Unit"
+          },
+          "unit_amount_micros": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Amount Micros"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          }
+        },
+        "type": "object",
+        "title": "ProviderPricingRuleUpdate"
       },
       "ProviderProfileCreate": {
         "properties": {

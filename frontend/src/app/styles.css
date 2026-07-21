@@ -974,6 +974,21 @@
   color: var(--muted-foreground);
 }
 
+.home-chart-empty button {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.home-chart-empty button:hover {
+  text-decoration: underline;
+}
+
 /* ---- 首页统计带 ---- */
 .home-stats {
   display: grid;
@@ -1582,6 +1597,30 @@
 
 .provider-row.disabled {
   opacity: 0.55;
+}
+
+.pricing-rule-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+}
+
+.pricing-rule-price {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pricing-field {
+  display: grid;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pricing-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 96px;
+  gap: 8px;
 }
 
 /* ---------- Feishu binding ---------- */

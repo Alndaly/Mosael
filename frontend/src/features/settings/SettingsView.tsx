@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
+import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -17,6 +17,7 @@ import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
+import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ type SectionId =
   | "provider-video"
   | "provider-embedding"
   | "provider-audio"
+  | "provider-pricing"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -50,6 +52,7 @@ const SECTION_IDS: SectionId[] = [
   "provider-video",
   "provider-embedding",
   "provider-audio",
+  "provider-pricing",
   "transcribe",
   "voice",
   "feishu",
@@ -111,6 +114,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
     { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
     { id: "provider-audio", label: t("providerAudioTitle"), icon: <AudioLines size={14} /> },
+    { id: "provider-pricing", label: t("providerPricingTitle"), icon: <ReceiptText size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -198,6 +202,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               />
             </>
           )}
+          {section === "provider-pricing" && <ProviderPricingSection workspace={workspace} />}
           {section === "transcribe" && <AsrModelsSection />}
           {section === "voice" && <VoiceCloneSection />}
           {section === "feishu" && <FeishuSection workspace={workspace} />}

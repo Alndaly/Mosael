@@ -500,6 +500,54 @@ class ProviderDefaultUpdate(BaseModel):
     model: str = Field(default="", max_length=120)
 
 
+class ProviderPricingRuleCreate(BaseModel):
+    workspace_id: str | None = None
+    provider_profile_id: str | None = None
+    provider: str = Field(default="", max_length=80)
+    capability: str = Field(min_length=1, max_length=40)
+    model: str = Field(default="", max_length=120)
+    billing_unit: str = Field(min_length=1, max_length=40)
+    unit_amount_micros: int = Field(ge=0)
+    currency: str = Field(default="USD", min_length=1, max_length=8)
+    source: str = Field(default="manual", max_length=40)
+    notes: str = Field(default="", max_length=2000)
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+
+class ProviderPricingRuleUpdate(BaseModel):
+    workspace_id: str | None = None
+    provider_profile_id: str | None = None
+    provider: str | None = Field(default=None, max_length=80)
+    capability: str | None = Field(default=None, min_length=1, max_length=40)
+    model: str | None = Field(default=None, max_length=120)
+    billing_unit: str | None = Field(default=None, min_length=1, max_length=40)
+    unit_amount_micros: int | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=1, max_length=8)
+    source: str | None = Field(default=None, max_length=40)
+    notes: str | None = Field(default=None, max_length=2000)
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+
+class ProviderPricingRuleOut(OrmModel):
+    id: str
+    workspace_id: str | None = None
+    provider_profile_id: str | None = None
+    provider: str
+    capability: str
+    model: str
+    billing_unit: str
+    unit_amount_micros: int
+    currency: str
+    source: str
+    notes: str
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class KbEmbeddingConfigOut(BaseModel):
     provider_profile_id: str | None = None
     model: str = ""

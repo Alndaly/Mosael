@@ -11,6 +11,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { gotoSettings } from "@/lib/deepLink";
 
 /**
  * 首页图表(shadcn/ui chart + Recharts):近 14 天任务活动(堆叠柱)+ 素材构成(环形)。
@@ -106,9 +107,12 @@ export function UsageCostChart({
   }
   if (maxCost === 0 && unknown > 0) {
     return (
-      <p className="home-chart-empty">
-        {t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}
-      </p>
+      <div className="home-chart-empty">
+        <span>{t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}</span>
+        <button type="button" onClick={() => gotoSettings("provider-pricing")}>
+          {t("homeChartUsageConfigurePricing")}
+        </button>
+      </div>
     );
   }
   if (maxCost === 0) {

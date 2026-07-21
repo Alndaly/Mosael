@@ -33,6 +33,71 @@ class UsageSummary:
     by_provider: dict[str, int]
 
 
+PRICING_BILLING_UNITS = frozenset(
+    {
+        "request",
+        "image",
+        "video_second",
+        "audio_second",
+        "character",
+        "token",
+        "input_token",
+        "output_token",
+    }
+)
+
+
+def create_pricing_rule(
+    db: Session,
+    *,
+    workspace_id: str | None = None,
+    provider_profile_id: str | None = None,
+    provider: str = "",
+    capability: str,
+    model: str = "",
+    billing_unit: str,
+    unit_amount_micros: int,
+    currency: str = "USD",
+    source: str = "manual",
+    notes: str = "",
+    effective_from: datetime | None = None,
+    effective_to: datetime | None = None,
+) -> ProviderPricingRule:
+    fields = _normalize_pricing_fields(
+        {
+            "workspace_id": workspace_id,
+            "provider_profile_id": provider_profile_id,
+            "provider": provider,
+            "capability": capability,
+            "model": model,
+            "billing_unit": billing_unit,
+            "unit_amount_micros": unit_amount_micros,
+            "currency": currency,
+            "source": source,
+            "notes": notes,
+            "effective_from": effective_from,
+            "effective_to": effective_to,
+        }
+    )
+    rule = ProviderPricingRule(**fields)
+    db.add(rule)
+    db.flush()
+    return rule
+
+
+def update_pricing_rule(db: Session, rule: ProviderPricingRule, **patch: Any) -> ProviderPricingRule:
+    fields = _normalize_pricing_fields(patch, partial=True)
+    for key, value in fields.items():
+        setattr(rule, key, value)
+    db.flush()
+    return rule
+
+
+def delete_pricing_rule(db: Session, rule: ProviderPricingRule) -> None:
+    db.delete(rule)
+    db.flush()
+
+
 def record_usage(
     db: Session,
     *,
@@ -123,6 +188,32 @@ def record_usage(
             },
         )
     return event
+
+
+def _normalize_pricing_fields(fields: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
+    normalized = dict(fields)
+    for key in ("workspace_id", "provider_profile_id"):
+        if key in normalized:
+            normalized[key] = str(normalized[key]).strip() if normalized[key] else None
+    for key in ("provider", "capability", "model", "billing_unit", "currency", "source", "notes"):
+        if key in normalized and normalized[key] is not None:
+            normalized[key] = str(normalized[key]).strip()
+    if not partial or "capability" in normalized:
+        if not normalized.get("capability"):
+            raise ValueError("capability is required")
+    if not partial or "billing_unit" in normalized:
+        if normalized.get("billing_unit") not in PRICING_BILLING_UNITS:
+            raise ValueError("unsupported billing unit")
+    if not partial or "unit_amount_micros" in normalized:
+        amount = int(normalized.get("unit_amount_micros") or 0)
+        if amount < 0:
+            raise ValueError("unit amount must be non-negative")
+        normalized["unit_amount_micros"] = amount
+    if "currency" in normalized:
+        normalized["currency"] = (normalized.get("currency") or "USD").upper()[:8]
+    if "source" in normalized:
+        normalized["source"] = normalized.get("source") or "manual"
+    return normalized
 
 
 def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageSummary:

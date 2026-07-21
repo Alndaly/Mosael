@@ -14,6 +14,9 @@ from app.api.schemas import (
     KbEmbeddingConfigUpdate,
     ProviderDefaultOut,
     ProviderDefaultUpdate,
+    ProviderPricingRuleCreate,
+    ProviderPricingRuleOut,
+    ProviderPricingRuleUpdate,
     ProviderProfileCreate,
     ProviderProfileOut,
     ProviderProfileUpdate,
@@ -21,11 +24,12 @@ from app.api.schemas import (
     VendorPresetOut,
 )
 from app.core.db import SessionLocal
-from app.db.models import KbEmbeddingConfig, ProviderDefault, ProviderProfile
+from app.db.models import KbEmbeddingConfig, ProviderDefault, ProviderPricingRule, ProviderProfile
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.providers import VENDOR_PRESETS, capability_ids_for_vendor, supports_capability
+from app.domain.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -269,6 +273,86 @@ def set_provider_default(
     db.commit()
     db.refresh(row)
     return ProviderDefaultOut(capability=row.capability, provider_profile_id=row.provider_profile_id, model=row.model)
+
+
+def _pricing_payload_with_profile_defaults(
+    db: DbSession,
+    payload: dict,
+    *,
+    existing: ProviderPricingRule | None = None,
+) -> dict:
+    profile_id = payload.get("provider_profile_id")
+    if profile_id is None and "provider_profile_id" not in payload and existing is not None:
+        profile_id = existing.provider_profile_id
+    capability = payload.get("capability") or (existing.capability if existing is not None else "")
+    if profile_id:
+        profile = db.get(ProviderProfile, profile_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="供应商不存在")
+        if capability and not supports_capability(profile.vendor, capability):
+            raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
+        if not payload.get("provider"):
+            payload["provider"] = profile.vendor
+    return payload
+
+
+@router.get("/settings/provider-pricing-rules", response_model=list[ProviderPricingRuleOut])
+def list_provider_pricing_rules(
+    db: DbSession, user: CurrentUser, workspace_id: str | None = None
+) -> list[ProviderPricingRuleOut]:
+    stmt = select(ProviderPricingRule).order_by(
+        ProviderPricingRule.capability.asc(),
+        ProviderPricingRule.provider.asc(),
+        ProviderPricingRule.model.asc(),
+        ProviderPricingRule.created_at.asc(),
+    )
+    if workspace_id:
+        stmt = stmt.where(ProviderPricingRule.workspace_id == workspace_id)
+    rules = db.scalars(stmt).all()
+    return [ProviderPricingRuleOut.model_validate(rule) for rule in rules]
+
+
+@router.post("/settings/provider-pricing-rules", response_model=ProviderPricingRuleOut)
+def create_provider_pricing_rule(
+    body: ProviderPricingRuleCreate, db: DbSession, user: CurrentUser
+) -> ProviderPricingRuleOut:
+    ensure_instance_admin(db, user, "credentials")
+    payload = _pricing_payload_with_profile_defaults(db, body.model_dump())
+    try:
+        rule = create_pricing_rule(db, **payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(rule)
+    return ProviderPricingRuleOut.model_validate(rule)
+
+
+@router.patch("/settings/provider-pricing-rules/{rule_id}", response_model=ProviderPricingRuleOut)
+def update_provider_pricing_rule(
+    rule_id: str, body: ProviderPricingRuleUpdate, db: DbSession, user: CurrentUser
+) -> ProviderPricingRuleOut:
+    ensure_instance_admin(db, user, "credentials")
+    rule = db.get(ProviderPricingRule, rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    patch = _pricing_payload_with_profile_defaults(db, body.model_dump(exclude_unset=True), existing=rule)
+    try:
+        update_pricing_rule(db, rule, **patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(rule)
+    return ProviderPricingRuleOut.model_validate(rule)
+
+
+@router.delete("/settings/provider-pricing-rules/{rule_id}", status_code=204)
+def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser) -> Response:
+    ensure_instance_admin(db, user, "credentials")
+    rule = db.get(ProviderPricingRule, rule_id)
+    if rule is not None:
+        delete_pricing_rule(db, rule)
+        db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/settings/providers/{profile_id}/models", response_model=list[str])
