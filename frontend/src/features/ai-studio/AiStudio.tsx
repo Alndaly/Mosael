@@ -400,7 +400,7 @@ function GenerateWorkspace({
     }
   }, [succeededCount, qc, workspace.id, activeSession?.id]);
 
-  const ordered = React.useMemo(() => [...(sessionJobs.data ?? [])].reverse(), [sessionJobs.data]);
+  const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
 
   React.useEffect(() => {
     const el = threadRef.current;

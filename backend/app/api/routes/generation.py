@@ -128,7 +128,7 @@ def list_generation_jobs(
         stmt = stmt.where(GenerationJob.session_id == session_id)
     if kind:
         stmt = stmt.where(GenerationJob.kind == kind)
-    stmt = stmt.order_by(GenerationJob.id.desc())
+    stmt = stmt.join(Job, GenerationJob.job_id == Job.id).order_by(Job.created_at.asc(), GenerationJob.id.asc())
     return list(db.scalars(stmt))
 
 
