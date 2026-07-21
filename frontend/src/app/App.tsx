@@ -15,6 +15,7 @@ import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/ui/image-preview";
+import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
@@ -152,7 +153,7 @@ function PublishViewBar() {
       </div>
       <form className="pvb-address titlebar-no-drag" onSubmit={submit}>
         {state.loading && <Loader2 size={13} className="pvb-spin" />}
-        <input
+        <Input
           value={address}
           spellCheck={false}
           placeholder={t("addressPlaceholder")}

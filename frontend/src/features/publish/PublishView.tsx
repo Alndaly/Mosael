@@ -28,6 +28,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -785,7 +786,7 @@ function CreatePublishDialog({
         )}
         <label className="wf-field">
           <span>{t("publishDescription")}</span>
-          <textarea
+          <Textarea
             rows={3}
             value={description}
             onChange={(event) => setDescription(event.target.value)}

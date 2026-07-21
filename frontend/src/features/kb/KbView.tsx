@@ -472,7 +472,7 @@ function DocumentDetail({
           <span className="kb-saved-hint">{t("kbSaved")}</span>
         )}
       </div>
-      <input
+      <Input
         className="kb-title-input"
         value={title}
         onChange={(event) => {

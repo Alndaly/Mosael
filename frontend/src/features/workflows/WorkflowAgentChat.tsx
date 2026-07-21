@@ -22,6 +22,7 @@ import { API_BASE, api, getAuthToken } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
@@ -638,7 +639,7 @@ export function WorkflowAgentChat({
             event.target.value = "";
           }}
         />
-        <textarea
+        <Textarea
           rows={1}
           value={draft}
           placeholder={t("wfAgentPlaceholder")}

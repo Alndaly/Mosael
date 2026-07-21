@@ -33,6 +33,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -671,7 +672,7 @@ function GenerateWorkspace({
           ))}
         </div>
         <form className="gen-composer" onSubmit={submit}>
-          <textarea
+          <Textarea
             rows={2}
             value={prompt}
             placeholder={t("promptPlaceholder")}
@@ -769,7 +770,7 @@ function GenerateWorkspace({
                 {supportsParameter(selectedModel, "num_images") && (
                   <label className="generation-setting">
                     <span>{t("genNumImages")}</span>
-                    <input
+                    <Input
                       className="generation-config-input"
                       type="number"
                       min={1}
@@ -782,7 +783,7 @@ function GenerateWorkspace({
                 {supportsParameter(selectedModel, "seed") && (
                   <label className="generation-setting">
                     <span>{t("genSeed")}</span>
-                    <input
+                    <Input
                       className="generation-config-input"
                       type="number"
                       placeholder="auto"
@@ -794,7 +795,7 @@ function GenerateWorkspace({
                 {supportsNegativePrompt && (
                   <label className="generation-setting">
                     <span>{t("genNegativePrompt")}</span>
-                    <input
+                    <Input
                       className="generation-config-input"
                       value={generationConfig.negativePrompt}
                       onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
@@ -877,7 +878,7 @@ function GenerateWorkspace({
                         </SelectContent>
                       </Select>
                     ) : (
-                      <input
+                      <Input
                         className="generation-config-input"
                         type="number"
                         min={1}

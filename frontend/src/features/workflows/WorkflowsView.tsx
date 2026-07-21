@@ -1006,8 +1006,9 @@ function WorkflowEditor({
             <PopoverContent align="end" className="wf-nodesearch-pop">
               <div className="wf-nodesearch-field">
                 <Search size={13} />
-                <input
+                <Input
                   autoFocus
+                  className="wf-nodesearch-input"
                   value={nodeSearch}
                   onChange={(event) => setNodeSearch(event.target.value)}
                   placeholder={t("wfNodeSearchPlaceholder")}
@@ -1845,7 +1846,7 @@ function NodeInspector({
         </span>
         <div className="wf-inspector-heading">
           {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。 */}
-          <input
+          <Input
             className="wf-inspector-name"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}

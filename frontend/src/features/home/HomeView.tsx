@@ -37,6 +37,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Input } from "@/components/ui/input";
 
 export function HomeView({
   workspace,
@@ -251,7 +252,7 @@ export function HomeView({
 
       <div className="feature-toolbar media-toolbar">
         <div className="media-toolbar-left">
-          <input
+          <Input
             ref={searchRef}
             className="toolbar-search"
             value={search}

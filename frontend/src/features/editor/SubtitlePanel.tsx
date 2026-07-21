@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
@@ -114,7 +115,7 @@ export function SubtitlePanel({
                   <Trash2 size={12} />
                 </button>
               </div>
-              <textarea
+              <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
                 className="subtitle-input"
                 rows={2}

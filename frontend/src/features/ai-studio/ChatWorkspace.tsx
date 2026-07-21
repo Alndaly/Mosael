@@ -26,6 +26,7 @@ import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, typ
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
@@ -510,7 +511,7 @@ export function ChatWorkspace({
               </div>
             )}
             <form className="chat-composer" onSubmit={submit}>
-              <textarea
+              <Textarea
                 rows={2}
                 value={draft}
                 placeholder={t("chatPlaceholder")}

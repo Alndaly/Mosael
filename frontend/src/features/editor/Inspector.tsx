@@ -2,7 +2,9 @@ import React from "react";
 import { Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 
 import type { Asset, Clip, Sequence } from "@/api/client";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { CurveEditor } from "@/features/editor/CurveEditor";
@@ -199,7 +201,7 @@ export function Inspector({
             {isTextClip && onSetText && (
               <div className="pip-controls">
                 <span className="pip-label">{t("subtitleText")}</span>
-                <textarea
+                <Textarea
                   key={`text-${selectedClip.id}`}
                   className="subtitle-input"
                   rows={3}
@@ -260,7 +262,7 @@ export function Inspector({
               <div className="pip-controls">
                 <span className="pip-label">{t("videoFade")}</span>
                 <div className="pip-row">
-                  <input
+                  <Input
                     key={`vfi-${selectedClip.id}`}
                     className="fade-input"
                     type="number"
@@ -270,7 +272,7 @@ export function Inspector({
                     onBlur={(event) => applyFade("video_fade_in", event.target.value)}
                     aria-label={t("fadeIn")}
                   />
-                  <input
+                  <Input
                     key={`vfo-${selectedClip.id}`}
                     className="fade-input"
                     type="number"
@@ -283,7 +285,7 @@ export function Inspector({
                 </div>
                 <span className="pip-label">{t("audioFade")}</span>
                 <div className="pip-row">
-                  <input
+                  <Input
                     key={`fi-${selectedClip.id}`}
                     className="fade-input"
                     type="number"
@@ -293,7 +295,7 @@ export function Inspector({
                     onBlur={(event) => applyFade("fade_in", event.target.value)}
                     aria-label={t("fadeIn")}
                   />
-                  <input
+                  <Input
                     key={`fo-${selectedClip.id}`}
                     className="fade-input"
                     type="number"
