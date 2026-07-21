@@ -649,6 +649,7 @@ class GenerationModelOut(OrmModel):
 
 class GenerationCreate(BaseModel):
     workspace_id: str
+    session_id: str | None = None
     project_id: str | None = None
     provider: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
@@ -661,6 +662,7 @@ class GenerationCreate(BaseModel):
 class GenerationJobOut(OrmModel):
     id: str
     workspace_id: str
+    session_id: str | None = None
     job_id: str
     provider: str
     model: str
@@ -672,6 +674,23 @@ class GenerationJobOut(OrmModel):
 class GenerationCreateResponse(BaseModel):
     generation: GenerationJobOut
     job: JobOut
+
+
+class GenerationSessionCreate(BaseModel):
+    workspace_id: str
+    title: str = Field(default="新生成", max_length=200)
+
+
+class GenerationSessionUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class GenerationSessionOut(OrmModel):
+    id: str
+    workspace_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class ScheduledTaskCreate(BaseModel):

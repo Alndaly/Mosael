@@ -3748,24 +3748,6 @@
   overflow: auto;
 }
 
-.generation-model-group {
-  display: grid;
-  gap: 4px;
-}
-
-.generation-model-group + .generation-model-group {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-}
-
-.generation-model-group-title {
-  padding: 2px 8px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .chat-session {
   display: grid;
   gap: 1px;
@@ -4813,6 +4795,19 @@
   font-size: 11.5px;
   white-space: nowrap;
 }
+
+.composer-model-select {
+  max-width: 210px;
+  border-radius: 999px;
+}
+
+.generation-model-select-group {
+  padding: 6px 8px 3px;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
 .gen-turn {
   display: grid;
   gap: 6px;

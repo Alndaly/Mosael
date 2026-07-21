@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, ImagePlus, Loader2, Send, Sparkles, Video } from "lucide-react";
+import { CircleAlert, ImagePlus, Loader2, MessageSquarePlus, Pencil, Plus, Send, Sparkles, Trash2, Video } from "lucide-react";
 
 import {
   api,
@@ -16,11 +16,16 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
+import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
+type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
 export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -60,12 +65,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   );
 }
 
-/**
- * Generation, shaped exactly like the chat surface: models live in the left
- * rail (where chat keeps its sessions), each generation renders as a
- * prompt-bubble + result-row pair in the centered thread, and the same
- * composer sits at the bottom.
- */
+/** Generation mirrors chat: left rail = sessions, center = current session transcript. */
 function GenerateWorkspace({
   workspace,
   switcher,
@@ -75,10 +75,18 @@ function GenerateWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const sessionKey = generationSessionSelectionKey(workspace.id);
+  const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
   const [modelId, setModelId] = React.useState<string | null>(null);
+  const [renamingSession, setRenamingSession] = React.useState<GenerationSession | null>(null);
+  const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
 
+  const sessions = useQuery({
+    queryKey: ["generation-sessions", workspace.id],
+    queryFn: () => api<GenerationSession[]>(`/api/generation/sessions?workspace_id=${workspace.id}`),
+  });
   const models = useQuery({
     queryKey: ["generation-models"],
     queryFn: () => api<GenerationModel[]>("/api/generation/models"),
@@ -91,15 +99,26 @@ function GenerateWorkspace({
     queryKey: ["provider-defaults"],
     queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
   });
-  const generations = useQuery({
-    queryKey: ["generation-jobs", workspace.id],
-    queryFn: () => api<GenerationJob[]>(`/api/generation/jobs?workspace_id=${workspace.id}`),
-  });
   const jobs = useQuery({
     queryKey: ["jobs", workspace.id, "ai_generation"],
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
+    refetchOnWindowFocus: true,
+  });
+  const activeSession =
+    (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
+  const sessionJobs = useQuery({
+    queryKey: ["generation-jobs", workspace.id, activeSession?.id],
+    enabled: Boolean(activeSession),
+    queryFn: () =>
+      api<GenerationJob[]>(`/api/generation/jobs?workspace_id=${workspace.id}&session_id=${activeSession!.id}`),
+    refetchInterval: (query) => {
+      const activeJobIds = new Set(
+        (jobs.data ?? []).filter((job) => job.status === "queued" || job.status === "running").map((job) => job.id),
+      );
+      return query.state.data?.some((generation) => activeJobIds.has(generation.job_id)) ? 1000 : false;
+    },
     refetchOnWindowFocus: true,
   });
 
@@ -122,14 +141,38 @@ function GenerateWorkspace({
       : null;
     return defaults.isSuccess && providers.isSuccess && (!row?.provider_profile_id || !row.model || !profile?.enabled);
   };
+  const selectedCapabilityMissing = selectedModel ? capabilityMissing(selectedModel.kind) : false;
+
+  const createSession = useMutation({
+    mutationFn: () =>
+      api<GenerationSession>("/api/generation/sessions", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: workspace.id }),
+      }),
+    onSuccess: (created) => {
+      setSessionId(created.id);
+      window.localStorage.setItem(sessionKey, created.id);
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+    },
+  });
 
   const createGeneration = useMutation({
-    mutationFn: () =>
-      api<GenerationCreateResponse>("/api/generation/jobs", {
+    mutationFn: async () => {
+      let targetSessionId = activeSession?.id;
+      if (!targetSessionId) {
+        const created = await api<GenerationSession>("/api/generation/sessions", {
+          method: "POST",
+          body: JSON.stringify({ workspace_id: workspace.id, title: prompt.trim().slice(0, 40) || undefined }),
+        });
+        targetSessionId = created.id;
+        setSessionId(created.id);
+        window.localStorage.setItem(sessionKey, created.id);
+      }
+      await api<GenerationCreateResponse>("/api/generation/jobs", {
         method: "POST",
         body: JSON.stringify({
           workspace_id: workspace.id,
-          // 生成的产物是工作区级素材,不挂项目 —— 与素材页、AI 助手附件一致。
+          session_id: targetSessionId,
           project_id: null,
           provider: selectedModel!.provider,
           model: selectedModel!.model,
@@ -140,28 +183,49 @@ function GenerateWorkspace({
               ? { size: "1024x576" }
               : { duration_seconds: 5, resolution: "720p", aspect_ratio: "16:9" },
         }),
-      }),
-    onSuccess: () => {
+      });
+      return targetSessionId;
+    },
+    onSuccess: (targetSessionId) => {
       setPrompt("");
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+    },
+  });
+  const renameSession = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api<GenerationSession>(`/api/generation/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+    onSuccess: () => {
+      setRenamingSession(null);
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+    },
+  });
+  const deleteSession = useMutation({
+    mutationFn: (id: string) => api(`/api/generation/sessions/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      setDeletingSession(null);
+      if (sessionId === id) {
+        setSessionId(null);
+        window.localStorage.removeItem(sessionKey);
+      }
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
     },
   });
 
-  // Refresh assets when a generation lands.
   const succeededCount = (jobs.data ?? []).filter((job) => job.status === "succeeded").length;
   React.useEffect(() => {
     if (succeededCount > 0) {
       void qc.invalidateQueries({ queryKey: ["assets"] });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     }
-  }, [succeededCount, qc, workspace.id]);
+  }, [succeededCount, qc, workspace.id, activeSession?.id]);
 
-  // Oldest first, like a conversation.
-  const ordered = React.useMemo(() => [...(generations.data ?? [])].reverse(), [generations.data]);
+  const ordered = React.useMemo(() => [...(sessionJobs.data ?? [])].reverse(), [sessionJobs.data]);
 
-  // 贴底跟随(与聊天一致):结果图片/视频异步加载会持续长高,
-  // 只要用户没往上翻就保持钉在底部。
   React.useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
@@ -179,7 +243,7 @@ function GenerateWorkspace({
       el.removeEventListener("scroll", onScroll);
       observer.disconnect();
     };
-  }, []);
+  }, [activeSession?.id]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -191,35 +255,58 @@ function GenerateWorkspace({
     <div className="chat-grid">
       <aside className="chat-sessions panel">
         <div className="panel-head">
-          <h2>{t("generationModels")}</h2>
+          <h2>{t("generationSessionsTitle")}</h2>
+          <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
+            <Plus size={13} /> {t("generationNewSession")}
+          </Button>
         </div>
         <div className="chat-session-list">
-          {modelGroups.map((group) => (
-            <div key={group.kind} className="generation-model-group">
-              <div className="generation-model-group-title">{capabilityLabel(group.kind)}</div>
-              {capabilityMissing(group.kind) && (
-                <ConfigNotice
-                  message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(group.kind))}
-                  actionLabel={t("wfGoConfigure")}
-                  section={`providers:${group.kind}`}
-                />
-              )}
-              {group.models.map((model) => (
-                <button
-                  key={model.id}
-                  type="button"
-                  className={selectedModel?.id === model.id ? "chat-session active" : "chat-session"}
-                  onClick={() => setModelId(model.id)}
-                >
-                  <strong>
-                    {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />} {model.model}
-                  </strong>
-                  <small>{model.provider}</small>
-                </button>
-              ))}
+          {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
+            <div className="chat-session-empty">
+              <MessageSquarePlus size={16} />
+              <span>{t("generationNoSessions")}</span>
             </div>
+          )}
+          {(sessions.data ?? []).map((item) => (
+            <ContextMenu key={item.id}>
+              <ContextMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
+                  onClick={() => {
+                    setSessionId(item.id);
+                    window.localStorage.setItem(sessionKey, item.id);
+                  }}
+                >
+                  <strong>{item.title}</strong>
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => setRenamingSession(item)}>
+                  <Pencil /> {t("rename")}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem destructive onSelect={() => setDeletingSession(item)}>
+                  <Trash2 /> {t("delete")}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
         </div>
+        <RenameDialog
+          open={renamingSession !== null}
+          title={t("renameGenerationSession")}
+          initialValue={renamingSession?.title ?? ""}
+          onCancel={() => setRenamingSession(null)}
+          onSubmit={(title) => renamingSession && renameSession.mutate({ id: renamingSession.id, title })}
+        />
+        <ConfirmDialog
+          open={deletingSession !== null}
+          title={t("deleteConfirmTitle")}
+          body={t("deleteGenerationSessionBody")}
+          onCancel={() => setDeletingSession(null)}
+          onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
+        />
       </aside>
 
       <section className="chat-main panel">
@@ -236,6 +323,13 @@ function GenerateWorkspace({
           ))}
         </div>
         <form className="chat-composer" onSubmit={submit}>
+          {selectedModel && selectedCapabilityMissing && (
+            <ConfigNotice
+              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
+              actionLabel={t("wfGoConfigure")}
+              section={`providers:${selectedModel.kind}`}
+            />
+          )}
           <textarea
             rows={2}
             value={prompt}
@@ -256,10 +350,24 @@ function GenerateWorkspace({
             <div className="chat-composer-left">
               {switcher}
               {selectedModel && (
-                <span className="composer-model">
-                  {selectedModel.kind === "image" ? <ImagePlus size={11} /> : <Video size={11} />}
-                  {selectedModel.model}
-                </span>
+                <Select value={selectedModel.id} onValueChange={setModelId}>
+                  <SelectTrigger className="composer-model-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelGroups.map((group) => (
+                      <React.Fragment key={group.kind}>
+                        <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
+                        {group.models.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
+                            {model.model} · {model.provider}
+                          </SelectItem>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
             <Button

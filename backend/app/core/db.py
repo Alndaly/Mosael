@@ -64,10 +64,43 @@ def init_db() -> None:
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_kb_schema()
     _migrate_agent_sessions()
+    _migrate_generation_sessions()
     _migrate_clip_transform()
     _migrate_tts_config()
     _migrate_provider_extra()
     Base.metadata.create_all(bind=engine)
+
+
+def _migrate_generation_sessions() -> None:
+    """加生成会话表,并给 generation_jobs 增加 session_id。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "generation_sessions" not in tables:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE generation_sessions (
+                        id VARCHAR(64) NOT NULL PRIMARY KEY,
+                        workspace_id VARCHAR NOT NULL,
+                        title VARCHAR(200) NOT NULL DEFAULT '新生成',
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL,
+                        FOREIGN KEY(workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX idx_generation_sessions_ws_updated "
+                    "ON generation_sessions (workspace_id, updated_at)"
+                )
+            )
+        if "generation_jobs" in tables:
+            cols = {c["name"] for c in inspector.get_columns("generation_jobs")}
+            if "session_id" not in cols:
+                conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN session_id VARCHAR(64)"))
 
 
 def _migrate_tts_config() -> None:

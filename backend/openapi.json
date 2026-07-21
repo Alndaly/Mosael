@@ -156,7 +156,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Logout Api Auth Logout Post"
                 }
@@ -190,7 +189,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Bootstrap Api Auth Bootstrap Get"
                 }
@@ -234,7 +232,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Fire Scheduled Task Api Hooks Scheduled Tasks  Task Id  Post"
                 }
               }
@@ -276,7 +273,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Claim Api Publish Worker Claim Post"
                 }
@@ -319,7 +315,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Report Api Publish Worker Report Patch"
                 }
@@ -352,7 +347,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Claim Check Api Publish Worker Claim Check Post"
                 }
@@ -375,7 +369,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Mark Due Api Publish Worker Mark Due Post"
                 }
@@ -408,7 +401,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Patch Account Api Publish Worker Account Patch"
                 }
@@ -454,7 +446,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Worker Account Api Publish Worker Account  Account Id  Get"
                 }
               }
@@ -486,7 +477,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Heartbeat Api Publish Worker Heartbeat Post"
                 }
@@ -509,7 +499,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Status Api Publish Worker Status Get"
                 }
@@ -542,7 +531,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Claim Api Jobs Worker Claim Post"
                 }
@@ -585,7 +573,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Report Api Jobs Worker Report Patch"
                 }
@@ -628,7 +615,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Heartbeat Api Jobs Worker Heartbeat Post"
                 }
@@ -927,7 +913,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Rename Workspace Api Workspaces  Workspace Id  Patch"
                 }
               }
@@ -2654,7 +2639,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Web Search Api Websearch Get"
                 }
               }
@@ -2700,7 +2684,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Web Fetch Api Webfetch Get"
                 }
               }
@@ -4765,7 +4748,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Delete Finished Jobs Api Jobs Finished Delete"
                 }
               }
@@ -5043,7 +5025,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Read All Notifications Api Notifications Read All Post"
                 }
               }
@@ -5927,6 +5908,176 @@
         }
       }
     },
+    "/api/generation/sessions": {
+      "post": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Create Generation Session",
+        "operationId": "create_generation_session_api_generation_sessions_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationSessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "List Generation Sessions",
+        "operationId": "list_generation_sessions_api_generation_sessions_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GenerationSessionOut"
+                  },
+                  "title": "Response List Generation Sessions Api Generation Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generation/sessions/{session_id}": {
+      "patch": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Update Generation Session",
+        "operationId": "update_generation_session_api_generation_sessions__session_id__patch",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationSessionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Delete Generation Session",
+        "operationId": "delete_generation_session_api_generation_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/generation/models": {
       "get": {
         "tags": [
@@ -6050,6 +6201,22 @@
                 }
               ],
               "title": "Kind"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
             }
           }
         ],
@@ -9466,7 +9633,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Steer Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Steer Post"
                 }
               }
@@ -9520,7 +9686,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Cancel Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Delete"
                 }
               }
@@ -9565,7 +9730,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Stop Agent Turn Api Agent Sessions  Session Id  Stop Post"
                 }
               }
@@ -9850,7 +10014,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true,
                   "title": "Response Invoke Agent Tool Api Agent Tools  Name  Post"
                 }
               }
@@ -10036,7 +10199,6 @@
             "title": "Content"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -10454,7 +10616,6 @@
             "default": ""
           },
           "media_info": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Media Info"
           }
@@ -10509,7 +10670,6 @@
             "title": "File Key"
           },
           "media_info": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Media Info"
           },
@@ -10650,7 +10810,6 @@
           },
           "params_list": {
             "items": {
-              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -10675,7 +10834,6 @@
             "title": "Index"
           },
           "params": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Params"
           },
@@ -10993,12 +11151,10 @@
             "title": "Text Override"
           },
           "effects": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Effects"
           },
           "transform": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Transform"
           }
@@ -11055,7 +11211,6 @@
             "title": "Tool"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -11096,7 +11251,6 @@
             "title": "Summary"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -11105,7 +11259,6 @@
             "title": "Status"
           },
           "result": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Result"
           },
@@ -11661,6 +11814,17 @@
             "type": "string",
             "title": "Workspace Id"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "project_id": {
             "anyOf": [
               {
@@ -11695,7 +11859,6 @@
             "title": "Prompt"
           },
           "parameters": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Parameters"
           },
@@ -11743,6 +11906,17 @@
             "type": "string",
             "title": "Workspace Id"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "job_id": {
             "type": "string",
             "title": "Job Id"
@@ -11760,7 +11934,6 @@
             "title": "Kind"
           },
           "request": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Request"
           },
@@ -11812,7 +11985,6 @@
             "title": "Enabled"
           },
           "capabilities": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Capabilities"
           }
@@ -11827,6 +11999,79 @@
           "capabilities"
         ],
         "title": "GenerationModelOut"
+      },
+      "GenerationSessionCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": "新生成"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "GenerationSessionCreate"
+      },
+      "GenerationSessionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GenerationSessionOut"
+      },
+      "GenerationSessionUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "title": "GenerationSessionUpdate"
       },
       "HTTPValidationError": {
         "properties": {
@@ -11952,12 +12197,10 @@
             "title": "Message"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
           "result": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Result"
           },
@@ -12912,7 +13155,6 @@
             "title": "Link"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -12980,12 +13222,10 @@
             "title": "Status"
           },
           "input": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Input"
           },
           "output": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Output"
           },
@@ -13022,7 +13262,6 @@
       "PluginInvokeRequest": {
         "properties": {
           "input": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Input"
           }
@@ -13049,7 +13288,6 @@
             "title": "Enabled"
           },
           "manifest": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Manifest"
           }
@@ -13132,7 +13370,6 @@
             "default": ""
           },
           "input_schema": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Input Schema"
           },
@@ -13639,7 +13876,6 @@
             "title": "Name"
           },
           "config": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Config"
           },
@@ -13683,7 +13919,6 @@
             "title": "Name"
           },
           "config": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Config"
           },
@@ -13777,7 +14012,6 @@
           "config": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -13944,7 +14178,6 @@
             "title": "Description"
           },
           "config": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Config"
           },
@@ -14034,7 +14267,6 @@
             "title": "Error"
           },
           "result": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Result"
           },
@@ -14145,7 +14377,6 @@
             "title": "Trigger Type"
           },
           "schedule": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Schedule"
           },
@@ -14161,7 +14392,6 @@
             "default": true
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           }
@@ -14209,7 +14439,6 @@
             "title": "Trigger Type"
           },
           "schedule": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Schedule"
           },
@@ -14222,7 +14451,6 @@
             "title": "Enabled"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -14306,7 +14534,6 @@
             "title": "Status"
           },
           "result": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Result"
           },
@@ -14389,7 +14616,6 @@
           "schedule": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -14424,7 +14650,6 @@
           "payload": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -14508,12 +14733,10 @@
             "title": "Fps"
           },
           "reframe": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Reframe"
           },
           "subtitle_style": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Subtitle Style"
           },
@@ -14555,7 +14778,6 @@
       "SetClipEffectsRequest": {
         "properties": {
           "effects": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Effects"
           }
@@ -14634,7 +14856,6 @@
       "SetClipTransformRequest": {
         "properties": {
           "transform": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Transform"
           }
@@ -14703,7 +14924,6 @@
       "SetSubtitleStyleRequest": {
         "properties": {
           "style": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Style"
           }
@@ -14858,7 +15078,6 @@
             "title": "Type"
           },
           "payload": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Payload"
           },
@@ -14881,7 +15100,6 @@
       "ToolInvocation": {
         "properties": {
           "arguments": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Arguments",
             "default": {}
@@ -14906,7 +15124,6 @@
             "title": "Description"
           },
           "parameters": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Parameters"
           },
@@ -15718,7 +15935,6 @@
           "graph": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -15748,7 +15964,6 @@
       "WorkflowAiEditResponse": {
         "properties": {
           "graph": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Graph"
           },
@@ -15785,7 +16000,6 @@
           "graph": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -15817,7 +16031,6 @@
             "title": "Description"
           },
           "config": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Config"
           },
@@ -15858,7 +16071,6 @@
             "title": "Description"
           },
           "graph": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Graph"
           },
@@ -15888,7 +16100,6 @@
       "WorkflowRunRequest": {
         "properties": {
           "params": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Params"
           }
@@ -15926,7 +16137,6 @@
           "graph": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -16174,7 +16384,6 @@
           "result": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {

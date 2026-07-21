@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine, init_db
@@ -39,6 +40,38 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
     assert payload["job"]["status"] == "queued"
     assert payload["generation"]["job_id"] == payload["job"]["id"]
     assert payload["generation"]["request"]["prompt"].startswith("A clean")
+    assert payload["generation"]["session_id"] is not None
+
+
+def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
+    client = fresh_client()
+
+    ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
+    session = client.post("/api/generation/sessions", json={"workspace_id": ws["id"], "title": "海边女孩"}).json()
+    res = client.post(
+        "/api/generation/jobs",
+        json={
+            "workspace_id": ws["id"],
+            "session_id": session["id"],
+            "provider": "mock",
+            "model": "mock-image",
+            "kind": "image",
+            "prompt": "海边女孩",
+            "parameters": {"size": "320x180"},
+        },
+    )
+
+    assert res.status_code == 200
+    generation = res.json()["generation"]
+    assert generation["session_id"] == session["id"]
+    scoped = client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session['id']}").json()
+    assert [item["id"] for item in scoped] == [generation["id"]]
+
+    renamed = client.patch(f"/api/generation/sessions/{session['id']}", json={"title": "女孩分镜"}).json()
+    assert renamed["title"] == "女孩分镜"
+    assert client.delete(f"/api/generation/sessions/{session['id']}").status_code == 204
+    assert client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session['id']}").status_code == 404
 
 
 def test_scheduled_task_run_creates_job(tmp_path: Path) -> None:
