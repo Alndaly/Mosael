@@ -34,12 +34,24 @@ const usageConfigBase = {
   cost: { label: "", color: "var(--chart-image)" },
 } satisfies ChartConfig;
 
+const tokenConfigBase = {
+  input: { label: "", color: "var(--chart-video)" },
+  output: { label: "", color: "var(--chart-audio)" },
+  other: { label: "", color: "var(--chart-image)" },
+} satisfies ChartConfig;
+
 function formatMicros(value: number, currency: string): string {
   if (value <= 0) return `0 ${currency}`;
   const amount = value / 1_000_000;
   if (amount < 1) return `${amount.toFixed(4)} ${currency}`;
   if (amount < 100) return `${amount.toFixed(2)} ${currency}`;
   return `${Math.round(amount).toLocaleString()} ${currency}`;
+}
+
+function formatCount(value: number): string {
+  if (value < 1_000) return String(value);
+  if (value < 1_000_000) return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)}k`;
+  return `${(value / 1_000_000).toFixed(value < 10_000_000 ? 1 : 0)}m`;
 }
 
 export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
@@ -129,6 +141,52 @@ export function UsageCostChart({
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {maxLabel}</span>} />} />
+      </BarChart>
+    </ChartContainer>
+  );
+}
+
+export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_token_daily"] }) {
+  const t = useI18n();
+  const rows = daily ?? [];
+  const maxTokens = Math.max(0, ...rows.map((day) => day.total_tokens));
+  if (maxTokens === 0) {
+    return <p className="home-chart-empty">{t("homeChartEmptyTokens")}</p>;
+  }
+  const config: ChartConfig = {
+    input: { ...tokenConfigBase.input, label: t("homeLegendInputTokens") },
+    output: { ...tokenConfigBase.output, label: t("homeLegendOutputTokens") },
+    other: { ...tokenConfigBase.other, label: t("homeLegendOtherTokens") },
+  };
+  const data = rows.map((day) => {
+    const split = day.input_tokens + day.output_tokens;
+    return {
+      day: day.date.slice(5),
+      input: day.input_tokens,
+      output: day.output_tokens,
+      other: Math.max(0, day.total_tokens - split),
+    };
+  });
+
+  return (
+    <ChartContainer config={config} className="home-chart-plot">
+      <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
+        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <XAxis
+          dataKey="day"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={6}
+          interval="preserveStartEnd"
+          minTickGap={48}
+        />
+        <ChartTooltip cursor={{ fillOpacity: 0.06 }} content={<ChartTooltipContent valueFormatter={(value) => formatCount(Number(value))} />} />
+        <Bar dataKey="input" stackId="tokens" fill="var(--color-input)" maxBarSize={14} />
+        <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
+        <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />
+        <ChartLegend
+          content={<ChartLegendContent extra={<span className="home-chart-max">max {formatCount(maxTokens)}</span>} />}
+        />
       </BarChart>
     </ChartContainer>
   );

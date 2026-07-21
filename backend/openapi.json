@@ -11453,6 +11453,35 @@
         "title": "DailyUsageOut",
         "description": "一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。"
       },
+      "DailyUsageTokensOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "input_tokens",
+          "output_tokens",
+          "total_tokens"
+        ],
+        "title": "DailyUsageTokensOut",
+        "description": "一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。"
+      },
       "EngineSynthesizeRequest": {
         "properties": {
           "workspace_id": {
@@ -16614,12 +16643,24 @@
             "title": "Usage Duration Seconds",
             "default": 0
           },
+          "usage_token_count": {
+            "type": "integer",
+            "title": "Usage Token Count",
+            "default": 0
+          },
           "usage_daily": {
             "items": {
               "$ref": "#/components/schemas/DailyUsageOut"
             },
             "type": "array",
             "title": "Usage Daily"
+          },
+          "usage_token_daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsageTokensOut"
+            },
+            "type": "array",
+            "title": "Usage Token Daily"
           },
           "usage_by_capability": {
             "additionalProperties": {

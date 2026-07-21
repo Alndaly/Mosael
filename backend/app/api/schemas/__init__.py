@@ -1267,6 +1267,15 @@ class DailyUsageOut(BaseModel):
     unknown: int
 
 
+class DailyUsageTokensOut(BaseModel):
+    """一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。"""
+
+    date: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
 class WorkspaceSummaryOut(BaseModel):
     """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
 
@@ -1292,6 +1301,8 @@ class WorkspaceSummaryOut(BaseModel):
     usage_event_count: int = 0
     usage_unknown_cost_events: int = 0
     usage_duration_seconds: float = 0
+    usage_token_count: int = 0
     usage_daily: list[DailyUsageOut] = Field(default_factory=list)
+    usage_token_daily: list[DailyUsageTokensOut] = Field(default_factory=list)
     usage_by_capability: dict[str, int] = Field(default_factory=dict)
     usage_by_provider: dict[str, int] = Field(default_factory=dict)

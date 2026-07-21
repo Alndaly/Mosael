@@ -21,7 +21,14 @@ import {
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
-import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostChart } from "@/features/home/HomeCharts";
+import {
+  ActivityChart,
+  AssetKindsChart,
+  PublishActivityChart,
+  PublishPlatformsChart,
+  UsageCostChart,
+  UsageTokensChart,
+} from "@/features/home/HomeCharts";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -234,6 +241,10 @@ export function HomeView({
           <div className="home-chart">
             <h2 className="home-chart-title">{t("homeChartUsage")}</h2>
             <UsageCostChart daily={stats.usage_daily} currency={stats.usage_currency} unknown={stats.usage_unknown_cost_events} />
+          </div>
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartTokens")}</h2>
+            <UsageTokensChart daily={stats.usage_token_daily} />
           </div>
         </section>
       )}

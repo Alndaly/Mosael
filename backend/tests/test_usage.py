@@ -58,7 +58,7 @@ def test_workspace_summary_includes_usage_rollup() -> None:
                 source_id="gen-2",
                 idempotency_key="gen-2:succeeded",
                 duration_seconds=4.2,
-                units={"images": 1},
+                units={"images": 1, "input_tokens": 100, "output_tokens": 25},
                 cost_micros=120_000,
                 currency="USD",
                 cost_confidence="estimated",
@@ -74,7 +74,7 @@ def test_workspace_summary_includes_usage_rollup() -> None:
                 source_type="generation_job",
                 source_id="gen-3",
                 idempotency_key="gen-3:succeeded",
-                units={"video_seconds": 5},
+                units={"video_seconds": 5, "total_tokens": 80},
                 cost_micros=None,
                 cost_confidence="unknown",
             )
@@ -86,7 +86,14 @@ def test_workspace_summary_includes_usage_rollup() -> None:
     assert summary["usage_event_count"] == 2
     assert summary["usage_unknown_cost_events"] == 1
     assert summary["usage_duration_seconds"] == 4.2
+    assert summary["usage_token_count"] == 205
     assert summary["usage_daily"][-1]["events"] == 2
+    assert summary["usage_token_daily"][-1] == {
+        "date": summary["usage_daily"][-1]["date"],
+        "input_tokens": 100,
+        "output_tokens": 25,
+        "total_tokens": 205,
+    }
     assert summary["usage_by_capability"] == {"image": 120_000, "video": 0}
     assert summary["usage_by_provider"] == {"bytedance": 0, "openai-compatible": 120_000}
 

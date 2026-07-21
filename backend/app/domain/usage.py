@@ -26,7 +26,9 @@ class UsageSummary:
     event_count: int
     unknown_cost_events: int
     duration_seconds: float
+    token_count: int
     daily: list[dict[str, Any]]
+    token_daily: list[dict[str, Any]]
     by_capability: dict[str, int]
     by_provider: dict[str, int]
 
@@ -139,6 +141,9 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             "cost_micros": 0,
             "events": 0,
             "unknown": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
         }
         for offset in range(days)
     }
@@ -147,9 +152,12 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     total_cost = 0
     unknown = 0
     duration = 0.0
+    token_count = 0
     currency = "USD"
     for event in rows:
         amount = int(event.cost_micros or 0)
+        tokens = _token_usage(event.units or {})
+        token_count += tokens["total_tokens"]
         if event.cost_micros is not None:
             total_cost += amount
             currency = event.currency or currency
@@ -163,16 +171,30 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             daily_index[day]["events"] += 1
             if event.cost_micros is None:
                 daily_index[day]["unknown"] += 1
+            daily_index[day]["input_tokens"] += tokens["input_tokens"]
+            daily_index[day]["output_tokens"] += tokens["output_tokens"]
+            daily_index[day]["total_tokens"] += tokens["total_tokens"]
         by_capability[event.capability] = by_capability.get(event.capability, 0) + amount
         provider_key = event.provider or "unknown"
         by_provider[provider_key] = by_provider.get(provider_key, 0) + amount
+    daily = list(daily_index.values())
     return UsageSummary(
         total_cost_micros=total_cost,
         currency=currency,
         event_count=len(rows),
         unknown_cost_events=unknown,
         duration_seconds=round(duration, 1),
-        daily=list(daily_index.values()),
+        token_count=token_count,
+        daily=daily,
+        token_daily=[
+            {
+                "date": day["date"],
+                "input_tokens": day["input_tokens"],
+                "output_tokens": day["output_tokens"],
+                "total_tokens": day["total_tokens"],
+            }
+            for day in daily
+        ],
         by_capability=by_capability,
         by_provider=by_provider,
     )
@@ -225,7 +247,9 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
         "video_second": ("video_second", "video_seconds", "duration_seconds"),
         "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
         "character": ("character", "characters", "input_characters"),
-        "token": ("token", "tokens", "input_tokens", "total_tokens"),
+        "token": ("token", "tokens", "total_token", "total_tokens"),
+        "input_token": ("input_token", "input_tokens", "prompt_tokens"),
+        "output_token": ("output_token", "output_tokens", "completion_tokens"),
     }
     for key in (billing_unit, *aliases.get(billing_unit, ())):
         value = units.get(key)
@@ -239,3 +263,18 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
             except ValueError:
                 continue
     return None
+
+
+def _token_usage(units: dict[str, Any]) -> dict[str, int]:
+    input_tokens = round(_quantity_for_unit(units, "input_token") or 0)
+    output_tokens = round(_quantity_for_unit(units, "output_token") or 0)
+    total_tokens = round(_quantity_for_unit(units, "token") or 0)
+    if total_tokens <= 0:
+        total_tokens = input_tokens + output_tokens
+    elif input_tokens + output_tokens > total_tokens:
+        total_tokens = input_tokens + output_tokens
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }

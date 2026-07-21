@@ -3707,6 +3707,20 @@ export interface components {
             unknown: number;
         };
         /**
+         * DailyUsageTokensOut
+         * @description 一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。
+         */
+        DailyUsageTokensOut: {
+            /** Date */
+            date: string;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+        };
+        /**
          * EngineSynthesizeRequest
          * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
          */
@@ -5887,8 +5901,15 @@ export interface components {
              * @default 0
              */
             usage_duration_seconds: number;
+            /**
+             * Usage Token Count
+             * @default 0
+             */
+            usage_token_count: number;
             /** Usage Daily */
             usage_daily?: components["schemas"]["DailyUsageOut"][];
+            /** Usage Token Daily */
+            usage_token_daily?: components["schemas"]["DailyUsageTokensOut"][];
             /** Usage By Capability */
             usage_by_capability?: {
                 [key: string]: number;
