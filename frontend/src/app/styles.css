@@ -5093,16 +5093,14 @@
 }
 
 .gen-thread {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  padding: 24px;
+  padding: 28px 16px 10px;
   overflow-y: auto;
 }
 
 .gen-thread > .empty-state {
-  align-self: center;
-  justify-self: center;
   margin: auto;
 }
 
@@ -5279,20 +5277,18 @@
 
 .generation-turn-card {
   display: grid;
-  gap: 12px;
-  width: min(720px, 100%);
-  justify-self: center;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--panel);
-  padding: 14px;
+  gap: 10px;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  flex-shrink: 0;
 }
 
 .generation-turn-prompt {
   justify-self: end;
-  max-width: min(520px, 92%);
-  border-radius: 14px;
-  border-bottom-right-radius: 5px;
+  max-width: min(560px, 82%);
+  border-radius: 10px;
+  border-bottom-right-radius: 4px;
   background: var(--secondary);
   color: var(--foreground);
   padding: 9px 12px;
@@ -5303,15 +5299,13 @@
 
 .gen-turn {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   justify-items: center;
-  min-height: 120px;
-  border-radius: 12px;
-  background: var(--panel-inset);
-  padding: 14px;
+  min-height: 28px;
+  padding: 2px 0 8px;
 }
 .gen-turn-image {
-  max-width: min(520px, 100%);
+  max-width: min(640px, 100%);
   width: 100%;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -5319,7 +5313,7 @@
 }
 .gen-turn-image-button {
   display: block;
-  width: min(520px, 100%);
+  width: min(640px, 100%);
   border: 0;
   background: none;
   padding: 0;
@@ -5336,6 +5330,7 @@
   gap: 6px;
   color: var(--muted-foreground);
   font-size: 12.5px;
+  padding: 8px 0;
 }
 .gen-turn-status.failed {
   color: var(--destructive);
