@@ -43,6 +43,17 @@ def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     assert "confirmation_id/status=pending" in prompt
 
 
+def test_turn_metering_estimates_tokens_when_adapter_usage_is_missing() -> None:
+    units = host._turn_metering("请分析这些素材", "可以,我先查看素材列表。", None)
+    assert units["requests"] == 1
+    assert units["input_characters"] > 0
+    assert units["output_characters"] > 0
+    assert units["input_tokens"] > 0
+    assert units["output_tokens"] > 0
+    assert units["total_tokens"] == units["input_tokens"] + units["output_tokens"]
+    assert units["token_estimate"] is True
+
+
 def test_stream_timeline_preserves_text_tool_text_order() -> None:
     session_id = "timeline-order-test"
     host._stream_reset(session_id)

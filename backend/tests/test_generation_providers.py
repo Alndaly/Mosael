@@ -5,7 +5,14 @@ import pytest
 from app.ai.providers import get_provider
 import httpx
 
-from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError, provider_http_error, sanitize_provider_error
+from app.ai.providers.base import (
+    GenerationRequest,
+    ProviderContext,
+    ProviderError,
+    metering_from_request,
+    provider_http_error,
+    sanitize_provider_error,
+)
 from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.openai_image import build_edit_fields as openai_edit_fields, build_submit_payload as openai_payload, extract_image_bytes
 from app.ai.providers.qwen_image import (
@@ -54,6 +61,23 @@ def test_guardrails_reject_out_of_bounds() -> None:
         video.validate_request(make_request("video", resolution="8k"))
     with pytest.raises(ProviderError, match="Prompt"):
         video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
+
+
+def test_generation_metering_estimates_prompt_tokens() -> None:
+    units = metering_from_request(
+        GenerationRequest(
+            kind="image",
+            model="qwen-image",
+            prompt="海边散步的女孩",
+            negative_prompt="low quality",
+            parameters={"num_images": 2, "size": "1024x1024"},
+        )
+    )
+    assert units["images"] == 2
+    assert units["input_characters"] > 0
+    assert units["input_tokens"] > 0
+    assert units["total_tokens"] == units["input_tokens"]
+    assert units["token_estimate"] is True
 
 
 def test_qwen_payload_shape() -> None:

@@ -16,7 +16,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
 from app.domain.agent.prompt_skills import skills_index_for_prompt
-from app.domain.usage import record_usage
+from app.domain.usage import estimate_text_tokens, record_usage
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mibu;
@@ -174,6 +174,28 @@ def _turn_metering(prompt: str, text: str, adapter_usage: dict | None = None) ->
     metering.setdefault("requests", 1)
     metering.setdefault("input_characters", len(prompt))
     metering.setdefault("output_characters", len(text))
+    has_token_usage = any(
+        key in metering
+        for key in (
+            "token",
+            "tokens",
+            "total_token",
+            "total_tokens",
+            "input_token",
+            "input_tokens",
+            "prompt_tokens",
+            "output_token",
+            "output_tokens",
+            "completion_tokens",
+        )
+    )
+    if not has_token_usage:
+        input_tokens = estimate_text_tokens(prompt)
+        output_tokens = estimate_text_tokens(text)
+        metering["input_tokens"] = input_tokens
+        metering["output_tokens"] = output_tokens
+        metering["total_tokens"] = input_tokens + output_tokens
+        metering["token_estimate"] = True
     return metering
 
 

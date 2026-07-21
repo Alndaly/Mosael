@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.usage import estimate_text_tokens
+
 """
 Generation provider contract (plan §18.2). A provider turns a validated
 request into a downloaded media file; asset/artifact registration and job
@@ -83,6 +85,12 @@ class GenerationProvider(ABC):
 def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
     """Provider-neutral metering facts that can be priced even before a provider returns usage."""
     units: dict[str, Any] = {"requests": 1}
+    prompt_text = "\n".join(part for part in (request.prompt, request.negative_prompt) if part.strip())
+    if prompt_text:
+        units["input_characters"] = len(prompt_text)
+        units["input_tokens"] = estimate_text_tokens(prompt_text)
+        units["total_tokens"] = units["input_tokens"]
+        units["token_estimate"] = True
     if request.kind == "image":
         size = str(request.parameters.get("size") or "")
         units.update(
