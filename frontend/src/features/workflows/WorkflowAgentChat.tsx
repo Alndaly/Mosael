@@ -491,7 +491,7 @@ export function WorkflowAgentChat({
           const payload = message.payload as { tools?: ToolCall[] } | null;
           if (queuedIds.has(message.id)) return null;
           return (
-            <div key={message.id} className={`wf-agent-msg ${message.role}`}>
+            <div key={message.id} className={`wf-agent-msg chat-bubble ${message.role}`}>
               {message.role === "assistant" && <ToolCalls tools={payload?.tools} />}
               {message.role === "assistant" ? (
                 message.error ? (
@@ -500,19 +500,19 @@ export function WorkflowAgentChat({
                   <Streamdown controls={{ table: false }}>{decodeByteFallback(message.content)}</Streamdown>
                 )
               ) : (
-                message.content
+                <div className="chat-bubble-content">{message.content}</div>
               )}
             </div>
           );
         })}
         {running && streamText && (
-          <div className="wf-agent-msg assistant">
+          <div className="wf-agent-msg chat-bubble assistant streaming">
             <ToolCalls tools={streamTools} />
             <Streamdown controls={{ table: false }}>{decodeByteFallback(streamText)}</Streamdown>
           </div>
         )}
         {running && !streamText && (
-          <div className="wf-agent-msg assistant thinking">
+          <div className="wf-agent-msg chat-bubble assistant thinking">
             <ToolCalls tools={streamTools} />
             <span className="wf-agent-thinking-row">
               <Loader2 size={12} className="spin" /> {t("chatThinking")}

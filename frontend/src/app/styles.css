@@ -8329,25 +8329,30 @@
 }
 
 .wf-agent-msg {
-  font-size: 12.5px;
-  line-height: 1.6;
+  min-width: 0;
   word-break: break-word;
 }
 
-.wf-agent-msg.user {
-  justify-self: end;
-  max-width: 88%;
-  background: var(--secondary);
-  border-radius: 8px 8px 3px 8px;
-  padding: 6px 8px;
-  white-space: pre-wrap;
+.wf-agent-thread > .chat-bubble {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
-.wf-agent-msg.assistant :is(p, ul, ol, pre) {
+.wf-agent-thread > .chat-bubble.user {
+  justify-self: end;
+  width: fit-content !important;
+  max-width: min(560px, 88%) !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+.wf-agent-msg.assistant:not(.chat-bubble) :is(p, ul, ol, pre) {
   margin: 0 0 8px;
 }
 
-.wf-agent-msg.assistant :is(p, ul, ol, pre):last-child {
+.wf-agent-msg.assistant:not(.chat-bubble) :is(p, ul, ol, pre):last-child {
   margin-bottom: 0;
 }
 
