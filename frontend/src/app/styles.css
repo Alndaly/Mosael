@@ -4044,10 +4044,53 @@
   position: fixed;
   right: 16px;
   top: 56px;
-  z-index: 50;
+  /* 必须压过 AI 助手浮窗(z 55):确认卡是写操作的闸门,被盖住等于闸门失踪 */
+  z-index: 60;
   display: grid;
   gap: 8px;
   width: 340px;
+}
+
+/* 聊天流内联确认卡:对话里的写操作闸门(Claude Code 式三档动作) */
+.inline-confirms {
+  display: grid;
+  gap: 8px;
+}
+
+.inline-confirm {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12.5px;
+}
+
+.inline-confirm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inline-confirm-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.inline-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inline-confirm-reject {
+  color: var(--destructive);
 }
 
 .confirm-card {

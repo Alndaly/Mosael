@@ -9,6 +9,7 @@ import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client"
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -375,6 +376,9 @@ export function WorkflowAgentChat({
               <Loader2 size={12} className="spin" /> {t("chatThinking")}
             </span>
           </div>
+        )}
+        {session.data && (
+          <InlineConfirmations workspaceId={session.data.workspace_id} allowKey={session.data.id} />
         )}
       </div>
       {(queue.data ?? []).map((message) => (

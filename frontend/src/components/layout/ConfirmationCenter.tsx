@@ -6,6 +6,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useInlineConfirmSurfaceOpen } from "@/components/agent/confirmSurface";
 
 type Confirmation = components["schemas"]["ConfirmationOut"];
 
@@ -35,8 +36,12 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     },
   });
 
+  // 聊天面板打开时确认卡走对话内联(InlineConfirmations),这里让位——
+  // 否则同一张卡出现两份,而且这层 fixed 卡曾被 z-index 更高的 AI 助手浮窗整块盖住。
+  const inlineOpen = useInlineConfirmSurfaceOpen();
+
   const items = pending.data ?? [];
-  if (items.length === 0) return null;
+  if (inlineOpen || items.length === 0) return null;
 
   return (
     <div className="confirm-stack" role="region" aria-label={t("confirmTitle")}>

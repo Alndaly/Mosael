@@ -1,0 +1,140 @@
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, CheckCheck, ShieldAlert, X } from "lucide-react";
+
+import { api } from "@/api/client";
+import type { components } from "@/api/generated/schema";
+import { useI18n } from "@/app/preferences";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { registerInlineConfirmSurface } from "@/components/agent/confirmSurface";
+
+type Confirmation = components["schemas"]["ConfirmationOut"];
+
+/**
+ * 聊天流里的确认卡(Claude Code / Codex 式):智能体提出的写操作在对话里就地决策,
+ * 三档动作——允许一次 / 本会话始终允许(按工具记忆,自动批准后续同工具请求)/ 拒绝。
+ *
+ * 此前确认只存在于右上角的全局 ConfirmationCenter,而它 z-index 低于 AI 助手浮窗,
+ * 会被整块盖住——模型说"等待您的确认",用户却什么都看不到。现在:聊天面板打开时
+ * 卡片就在对话里(本组件),全局中心让位(见 confirmSurface.ts);没有聊天面板时
+ * 全局中心照常兜底(MCP / 飞书等外部智能体仍走它)。
+ *
+ * 「本会话始终允许」是客户端策略:按 (allowKey, tool) 记在 localStorage,本组件
+ * 挂载期间对匹配的 pending 卡自动批准——与 Claude Code 的 session allowlist 同构,
+ * 后端确认内核不感知也不需要感知。
+ */
+export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: string; allowKey: string }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const storageKey = `mibu.agent.allow.${allowKey}`;
+
+  const [allowed, setAllowed] = React.useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  });
+  const allowTool = (tool: string) => {
+    setAllowed((current) => {
+      const next = current.includes(tool) ? current : [...current, tool];
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // 挂载登记:全局 ConfirmationCenter 据此让位,避免同一张卡出现两份。
+  React.useEffect(() => registerInlineConfirmSurface(), []);
+
+  const pending = useQuery({
+    queryKey: ["confirmations", workspaceId, "pending"],
+    queryFn: () => api<Confirmation[]>(`/api/confirmations?workspace_id=${workspaceId}&status=pending`),
+    refetchInterval: 1500,
+    refetchOnWindowFocus: true,
+  });
+
+  const settle = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
+      api<Confirmation>(`/api/confirmations/${id}/${action}`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
+      void qc.invalidateQueries({ queryKey: ["sequences"] });
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: ["workflows"] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs"] });
+    },
+  });
+
+  // 会话允许的工具自动批准。in-flight 集合防止轮询窗口内重复 approve。
+  const autoApproving = React.useRef(new Set<string>());
+  const items = pending.data ?? [];
+  React.useEffect(() => {
+    for (const item of items) {
+      if (allowed.includes(item.tool) && !autoApproving.current.has(item.id)) {
+        autoApproving.current.add(item.id);
+        settle.mutate({ id: item.id, action: "approve" });
+      }
+    }
+    // settle 引用稳定性由 useMutation 保证;items/allowed 变化时重扫。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, allowed]);
+
+  const visible = items.filter((item) => !allowed.includes(item.tool));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="inline-confirms" role="region" aria-label={t("confirmTitle")}>
+      {visible.map((item) => (
+        <div className="inline-confirm" key={item.id}>
+          <div className="inline-confirm-head">
+            <span className="inline-confirm-source">
+              <ShieldAlert size={13} /> {item.summary}
+            </span>
+            <PermissionBadge permission={item.permission} />
+          </div>
+          {/* 载荷保持展开:这张卡是智能体写操作与执行之间唯一的闸,摘要不足以构成知情同意
+              (例如 add_node 可能藏着一段任意本地 Python)。高度有界,大图滚动而不是把按钮挤走。 */}
+          <details className="confirm-payload" open>
+            <summary>{t("confirmPayload")}</summary>
+            <pre>{JSON.stringify(item.payload, null, 2)}</pre>
+          </details>
+          <div className="inline-confirm-actions">
+            <Button size="sm" disabled={settle.isPending} onClick={() => settle.mutate({ id: item.id, action: "approve" })}>
+              <Check size={13} /> {t("confirmAllowOnce")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={settle.isPending}
+              onClick={() => {
+                allowTool(item.tool);
+                settle.mutate({ id: item.id, action: "approve" });
+              }}
+            >
+              <CheckCheck size={13} /> {t("confirmAllowSession")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="inline-confirm-reject"
+              disabled={settle.isPending}
+              onClick={() => settle.mutate({ id: item.id, action: "reject" })}
+            >
+              <X size={13} /> {t("confirmReject")}
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PermissionBadge({ permission }: { permission: string }) {
+  const t = useI18n();
+  const label =
+    permission === "edit" ? t("permEdit") : permission === "ai-cost" ? t("permAiCost") : t("permRenderCost");
+  return <Badge variant={permission === "edit" ? "secondary" : "default"}>{label}</Badge>;
+}

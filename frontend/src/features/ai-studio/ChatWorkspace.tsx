@@ -14,6 +14,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
+import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -384,6 +385,7 @@ export function ChatWorkspace({
               {(messages.data ?? []).length === 0 && !running && (
                 <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
               )}
+              {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
             </div>
             {/* Pending strip, above the composer: these have not been sent yet, so they do not
                 belong in the transcript. Each one can be steered into the running turn or
