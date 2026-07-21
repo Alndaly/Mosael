@@ -42,7 +42,7 @@ function SelectContent({ className, children, ...props }: React.ComponentProps<t
         position="popper"
         sideOffset={4}
         className={cn(
-          "z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border-strong bg-popover p-1",
+          "z-[120] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border-strong bg-popover p-1",
           "max-h-[min(280px,var(--radix-select-content-available-height))] overflow-y-auto",
           className,
         )}

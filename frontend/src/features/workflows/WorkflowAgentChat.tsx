@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CornerDownRight, GripHorizontal, Loader2, Paperclip, Plus, Send, Square, Trash2, X } from "lucide-react";
+import { Bot, Check, ChevronDown, CornerDownRight, GripHorizontal, Loader2, Paperclip, Plus, Send, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { decodeByteFallback } from "../../lib/byteFallback";
 import { toast } from "sonner";
@@ -9,9 +9,15 @@ import { API_BASE, api, createWorkflowAgentSession, getAuthToken, listWorkflowAg
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
+import { ConfirmDialog } from "@/components/ui/modals";
+import {
+  mergeWorkflowAgentSessions,
+  nextWorkflowAgentSessionAfterDelete,
+  resolveWorkflowAgentSession,
+} from "@/features/workflows/sessionState";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -111,7 +117,7 @@ export function WorkflowAgentChat({
   }, []);
 
   const startDrag = (event: React.PointerEvent) => {
-    if ((event.target as HTMLElement).closest("button")) return;
+    if ((event.target as HTMLElement).closest("button,input,textarea,a,[role='combobox'],[data-no-drag]")) return;
     event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
@@ -174,19 +180,18 @@ export function WorkflowAgentChat({
     queryKey: ["workflow-agent-sessions", workflowId],
     enabled: Boolean(defaultSession.data),
     queryFn: () => listWorkflowAgentSessions(workflowId),
+    // 首条消息会把「新对话」自动改题,轮询让下拉里的标题跟上
+    refetchInterval: 4000,
   });
   const [selectedId, setSelectedId] = React.useState<string | null>(
     () => window.localStorage.getItem(SESSION_KEY) || null,
   );
-  const sessionList = sessions.data ?? [];
-  const activeSession =
-    sessionList.find((item) => item.id === selectedId) ??
-    sessionList.find((item) => item.id === defaultSession.data?.id) ??
-    defaultSession.data ??
-    null;
+  const [sessionMenuOpen, setSessionMenuOpen] = React.useState(false);
+  const sessionList = mergeWorkflowAgentSessions(defaultSession.data ?? null, sessions.data ?? []);
+  const activeSession = resolveWorkflowAgentSession(selectedId, defaultSession.data ?? null, sessionList);
   const sessionId = activeSession?.id ?? null;
   const switchSession = (nextId: string) => {
-    if (nextId === sessionId) return;
+    if (nextId === selectedId) return;
     // 旧会话的流不许串进新视图:先掐流、清流态,再切。
     abortRef.current?.abort();
     streamingRef.current = null;
@@ -195,11 +200,53 @@ export function WorkflowAgentChat({
     setSelectedId(nextId);
     window.localStorage.setItem(SESSION_KEY, nextId);
   };
+  const clearSessionSelection = () => {
+    abortRef.current?.abort();
+    streamingRef.current = null;
+    setStreamText("");
+    setStreamTools([]);
+    setSelectedId(null);
+    window.localStorage.removeItem(SESSION_KEY);
+  };
+  React.useEffect(() => {
+    if (!sessionId || selectedId === sessionId) return;
+    setSelectedId(sessionId);
+    window.localStorage.setItem(SESSION_KEY, sessionId);
+  }, [sessionId, selectedId, SESSION_KEY]);
   const newSession = useMutation({
     mutationFn: () => createWorkflowAgentSession(workflowId),
     onSuccess: (created) => {
-      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
+      // 先播种缓存再切换:等 invalidate 重拉的间隙里 selectedId 在列表里找不到,
+      // 会瞬间回落到默认会话——看起来就像「点了没反应」。
+      qc.setQueryData<AgentSession[]>(["workflow-agent-sessions", workflowId], (old) => [
+        created,
+        ...(old ?? []).filter((item) => item.id !== created.id),
+      ]);
       switchSession(created.id);
+      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
+    },
+  });
+  const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
+  const deleteSession = useMutation({
+    mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, deletedId) => {
+      setDeletingSession(null);
+      const fallback = nextWorkflowAgentSessionAfterDelete(deletedId, defaultSession.data ?? null, sessionList);
+      qc.setQueryData<AgentSession[]>(["workflow-agent-sessions", workflowId], (old) =>
+        (old ?? []).filter((item) => item.id !== deletedId),
+      );
+      if (defaultSession.data?.id === deletedId) {
+        qc.setQueryData(["workflow-agent-session", workflowId], undefined);
+        void qc.invalidateQueries({ queryKey: ["workflow-agent-session", workflowId] });
+      }
+      if (deletedId === sessionId) {
+        if (fallback) switchSession(fallback.id);
+        else clearSessionSelection();
+      }
+      qc.removeQueries({ queryKey: ["agent-messages", deletedId] });
+      qc.removeQueries({ queryKey: ["agent-session", deletedId] });
+      qc.removeQueries({ queryKey: ["agent-queue", deletedId] });
+      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
     },
   });
 
@@ -368,18 +415,55 @@ export function WorkflowAgentChat({
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
         {sessionList.length > 0 && sessionId && (
-          <Select value={sessionId} onValueChange={switchSession}>
-            <SelectTrigger className="wf-agent-session-picker" aria-label={t("wfAgentSessions")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sessionList.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
+            <Popover open={sessionMenuOpen} onOpenChange={setSessionMenuOpen}>
+              <PopoverTrigger asChild>
+                <button type="button" className="wf-agent-session-picker" aria-label={t("wfAgentSessions")}>
+                  <span>{activeSession?.title ?? t("wfAgentSessions")}</span>
+                  <ChevronDown size={12} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="wf-agent-session-menu"
+                aria-label={t("wfAgentSessions")}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {sessionList.map((item) => (
+                  <div
+                    key={item.id}
+                    className={item.id === sessionId ? "wf-agent-session-row active" : "wf-agent-session-row"}
+                  >
+                    <button
+                      type="button"
+                      className="wf-agent-session-main"
+                      onClick={() => {
+                        setSessionMenuOpen(false);
+                        switchSession(item.id);
+                      }}
+                    >
+                      <span>{item.title}</span>
+                      {item.id === sessionId && <Check size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="wf-agent-session-row-delete"
+                      aria-label={t("delete")}
+                      title={t("delete")}
+                      disabled={deleteSession.isPending}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSessionMenuOpen(false);
+                        setDeletingSession(item);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </span>
         )}
         <button
           type="button"
@@ -536,6 +620,13 @@ export function WorkflowAgentChat({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={deletingSession !== null}
+        title={t("deleteConfirmTitle")}
+        body={t("deleteSessionBody")}
+        onCancel={() => setDeletingSession(null)}
+        onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
+      />
     </aside>
   );
 }

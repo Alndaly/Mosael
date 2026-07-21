@@ -8182,17 +8182,108 @@
 
 /* 头部会话切换器:压缩到头栏高度,标题超长省略 */
 .wf-agent-session-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   height: 24px;
   max-width: 150px;
   min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--foreground);
   font-size: 12px;
   padding: 0 8px;
+  cursor: pointer;
 }
 
 .wf-agent-session-picker > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wf-agent-session-picker:hover {
+  border-color: var(--border-strong);
+}
+
+.wf-agent-session-picker svg {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+.wf-agent-session-menu {
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(320px, var(--radix-popover-content-available-height));
+  overflow-y: auto;
+  padding: 6px;
+  z-index: 120;
+  box-shadow: var(--shadow-raised);
+}
+
+.wf-agent-session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 4px;
+  border-radius: 7px;
+}
+
+.wf-agent-session-row:hover,
+.wf-agent-session-row.active {
+  background: var(--secondary);
+}
+
+.wf-agent-session-main,
+.wf-agent-session-row-delete {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.wf-agent-session-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.wf-agent-session-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-agent-session-main svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.wf-agent-session-row-delete {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+
+.wf-agent-session-row-delete:hover {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.wf-agent-session-row-delete:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .wf-agent-grip {
@@ -9605,6 +9696,12 @@
   border: none;
   border-radius: 0;
   background: none;
+}
+
+/* Radix popper wrapper itself can form the stacking context. Keep popovers/selects above
+   the workflow AI assistant (.wf-agent z-index 55), not just their inner content. */
+[data-radix-popper-content-wrapper] {
+  z-index: 120 !important;
 }
 
 /* ============================================================

@@ -28,10 +28,10 @@ export function ModalShell({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 animate-in fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/30 animate-in fade-in-0" />
         <DialogPrimitive.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 w-[360px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
+            "fixed left-1/2 top-1/2 z-[110] w-[360px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border",
             "bg-popover p-3 shadow-[var(--shadow-raised)] animate-in fade-in-0 zoom-in-95",
             className,
           )}
