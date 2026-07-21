@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
@@ -73,25 +73,12 @@ function DefaultRow({
     capability === "chat"
       ? chatModels.data ?? []
       : generationModelSuggestions(selectedProfile, genModels, model);
-  const datalistId = `provider-default-model-options-${capability}`;
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
       api(`/api/settings/provider-defaults/${capability}`, { method: "PUT", body: JSON.stringify(patch) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
   });
-  const [draftModel, setDraftModel] = React.useState(model);
-
-  React.useEffect(() => {
-    setDraftModel(model);
-  }, [model, providerId]);
-
-  const commitDraftModel = () => {
-    const nextModel = draftModel.trim();
-    if (nextModel === model) return;
-    save.mutate({ provider_profile_id: providerId || null, model: nextModel });
-  };
-
   return (
     <SettingsRow
       id={`provider-default-${capability}`}
@@ -104,7 +91,7 @@ function DefaultRow({
           value={providerId || NONE}
           onValueChange={(value) => {
             const nextProviderId = value === NONE ? "" : value;
-          const nextProfile = capabilityProviders.find((profile) => profile.id === nextProviderId) ?? null;
+            const nextProfile = capabilityProviders.find((profile) => profile.id === nextProviderId) ?? null;
             const nextModel = isGenerationCapability
               ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
               : "";
@@ -124,27 +111,20 @@ function DefaultRow({
           </SelectContent>
         </Select>
         {isGenerationCapability ? (
-          <>
-            <Input
-              className="provider-default-field"
-              list={datalistId}
-              value={draftModel}
-              placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
-              disabled={!providerId}
-              onBlur={commitDraftModel}
-              onChange={(event) => setDraftModel(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            <datalist id={datalistId}>
-              {modelOptions.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-          </>
+          <Combobox
+            value={model}
+            options={modelOptions.map((name) => ({ value: name }))}
+            placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
+            searchPlaceholder={t("providerDefaultsModelInputPlaceholder")}
+            emptyText={t("providerDefaultsNoModels")}
+            allowCustomValue
+            disabled={!providerId}
+            className="provider-default-field"
+            onValueChange={(nextModel) =>
+              save.mutate({ provider_profile_id: providerId || null, model: nextModel.trim() })
+            }
+            customValueLabel={(query) => t("providerDefaultsUseCustomModel").replace("{model}", query)}
+          />
         ) : (
           <Select
             key={`m-${model || "none"}`}
