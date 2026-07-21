@@ -843,7 +843,7 @@
   transition: transform 0.25s ease;
 }
 
-/* ---- 首页图表 ---- */
+/* ---- 首页图表(shadcn chart / Recharts) ---- */
 .home-charts {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -857,7 +857,7 @@
 
 .home-chart {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: start;
   padding: 10px 14px 8px;
   border: 1px solid var(--border);
@@ -872,28 +872,40 @@
   color: var(--muted-foreground);
 }
 
-.home-chart-plot {
-  width: 100%;
-  height: 112px;
-  display: block;
-}
+.mibu-chart { width: 100%; }
+.home-chart-plot { height: 150px; }
 
-.home-chart-baseline {
-  stroke: var(--border);
-  stroke-width: 1;
-  /* preserveAspectRatio=none 会把线条随视口拉伸变粗,钉住像素宽 */
-  vector-effect: non-scaling-stroke;
-}
-
-.home-chart-ok { fill: var(--chart-ok); }
-.home-chart-fail { fill: var(--chart-fail); }
-
-.home-chart-ticks {
-  display: flex;
-  justify-content: space-between;
-  margin-top: -4px;
+/* Recharts 的退隐层:网格与轴文字统一走令牌 */
+.mibu-chart .recharts-cartesian-grid line { stroke: var(--border); }
+.mibu-chart .recharts-cartesian-axis-tick text {
+  fill: var(--muted-foreground);
   font-size: 10px;
-  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.mibu-chart-tooltip {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 11px;
+}
+
+.mibu-chart-tooltip-label { font-weight: 650; }
+
+.mibu-chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mibu-chart-tooltip-name { color: var(--muted-foreground); }
+
+.mibu-chart-tooltip-value {
+  margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
 
@@ -911,11 +923,14 @@
   gap: 5px;
 }
 
+.mibu-chart-legend { padding-top: 4px; }
+
 .home-chart-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   display: inline-block;
+  flex: none;
 }
 
 .home-chart-count,
@@ -927,18 +942,29 @@
 
 .home-chart-max { margin-left: auto; color: var(--muted-foreground); }
 
-.home-chart-bar {
-  display: flex;
-  gap: 2px;
-  height: 14px;
-  border-radius: 4px;
-  overflow: hidden;
+/* 素材构成:环形图 + 侧栏(居中总数 + 逐类计数) */
+.home-chart-donut-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
 }
 
-.home-chart-seg {
-  flex-basis: 0;
-  min-width: 3px;
+.home-chart-donut {
+  width: 120px;
+  height: 120px;
 }
+
+.home-chart-donut-side { display: grid; gap: 8px; min-width: 0; }
+
+.home-chart-donut-total { display: flex; align-items: baseline; gap: 6px; }
+.home-chart-donut-total strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.home-chart-donut-total span { font-size: 11px; color: var(--muted-foreground); }
+
+.home-chart-donut-legend { flex-direction: column; gap: 4px; align-items: start; }
 
 .home-chart-empty {
   margin: 0;
