@@ -3632,6 +3632,18 @@ export interface components {
             ranges: components["schemas"]["CutClipRangeRequest"][];
         };
         /**
+         * DailyActivityOut
+         * @description 一天的任务活动(首页活动图的一根柱)。date 为 YYYY-MM-DD(UTC)。
+         */
+        DailyActivityOut: {
+            /** Date */
+            date: string;
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+        };
+        /**
          * EngineSynthesizeRequest
          * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
          */
@@ -5647,6 +5659,12 @@ export interface components {
             publish_accounts: number;
             /** Week Published */
             week_published: number;
+            /** Daily */
+            daily: components["schemas"]["DailyActivityOut"][];
+            /** Asset Kinds */
+            asset_kinds: {
+                [key: string]: number;
+            };
         };
         /** ClaimRequest */
         app__api__routes__job_worker__ClaimRequest: {

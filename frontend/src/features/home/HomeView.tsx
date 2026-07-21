@@ -20,6 +20,7 @@ import {
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
+import { ActivityChart, AssetKindsChart } from "@/features/home/HomeCharts";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -198,6 +199,19 @@ export function HomeView({
               </span>
             </button>
           ))}
+        </section>
+      )}
+
+      {stats && (
+        <section className="home-charts">
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartActivity")}</h2>
+            <ActivityChart daily={stats.daily} />
+          </div>
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartAssets")}</h2>
+            <AssetKindsChart assetKinds={stats.asset_kinds} />
+          </div>
         </section>
       )}
 

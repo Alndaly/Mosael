@@ -99,6 +99,14 @@
   --track-subtitle-bg: #fcefd3;
   --track-subtitle-border: #e5c37f;
   --track-subtitle-text: #7a5518;
+
+  /* 图表色(dataviz 校验通过:亮度带/彩度/CVD/普通视觉分离/对比)。
+     活动图 成功/失败;素材构成 视频/音频/图片(挂靠轨道色系但为图表加深提彩)。 */
+  --chart-ok: #2f62ea;
+  --chart-fail: #d93025;
+  --chart-video: #3565d9;
+  --chart-audio: #1e9e8f;
+  --chart-image: #c8801d;
   --track-overlay-bg: #e9e2fa;
   --track-overlay-border: #bba6ec;
   --track-overlay-text: #4a3585;
@@ -165,6 +173,13 @@
   --track-overlay-bg: #322851;
   --track-overlay-border: #5d4a99;
   --track-overlay-text: #cfc0f2;
+
+  /* 图表色暗档:同族重新取档并单独校验,不是明档的自动翻转 */
+  --chart-ok: #4d80ff;
+  --chart-fail: #e35d4f;
+  --chart-video: #5b8bf5;
+  --chart-audio: #27a08f;
+  --chart-image: #bd7c22;
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让

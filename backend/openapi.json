@@ -11139,6 +11139,30 @@
         ],
         "title": "CutClipRangesRequest"
       },
+      "DailyActivityOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "succeeded": {
+            "type": "integer",
+            "title": "Succeeded"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "succeeded",
+          "failed"
+        ],
+        "title": "DailyActivityOut",
+        "description": "一天的任务活动(首页活动图的一根柱)。date 为 YYYY-MM-DD(UTC)。"
+      },
       "EngineSynthesizeRequest": {
         "properties": {
           "workspace_id": {
@@ -15902,6 +15926,20 @@
           "week_published": {
             "type": "integer",
             "title": "Week Published"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyActivityOut"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "asset_kinds": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Asset Kinds"
           }
         },
         "type": "object",
@@ -15915,7 +15953,9 @@
           "week_jobs_succeeded",
           "week_jobs_failed",
           "publish_accounts",
-          "week_published"
+          "week_published",
+          "daily",
+          "asset_kinds"
         ],
         "title": "WorkspaceSummaryOut",
         "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"

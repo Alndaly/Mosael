@@ -54,3 +54,21 @@ def test_summary_of_a_foreign_workspace_is_404() -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     stranger = second_client()
     assert stranger.get(f"/api/workspaces/{ws}/summary").status_code == 404
+
+
+def test_summary_charts_daily_and_asset_kinds() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        db.add(Asset(workspace_id=ws, name="v", kind="video"))
+        db.add(Asset(workspace_id=ws, name="a", kind="audio"))
+        db.add(Job(workspace_id=ws, kind="render", status="succeeded", payload={}))
+        db.add(Job(workspace_id=ws, kind="render", status="failed", payload={}))
+        db.commit()
+
+    summary = client.get(f"/api/workspaces/{ws}/summary").json()
+    assert len(summary["daily"]) == 14  # 缺日补零,长度恒定
+    today = summary["daily"][-1]
+    assert today["succeeded"] == 1 and today["failed"] == 1
+    assert all(day["succeeded"] == 0 for day in summary["daily"][:-1])
+    assert summary["asset_kinds"] == {"video": 1, "audio": 1}

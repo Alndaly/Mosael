@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AddMemberRequest,
+    DailyActivityOut,
     MembersOut,
     RenameRequest,
     SetMemberPermsRequest,
@@ -165,7 +166,7 @@ def set_member_perms(
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
 def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> WorkspaceSummaryOut:
     """首页仪表:工作区一屏统计。只读聚合,单请求给全。"""
-    from datetime import timedelta
+    from datetime import datetime, timedelta
 
     from sqlalchemy import func
 
@@ -179,7 +180,37 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
     week_ago = now() - timedelta(days=7)
     scoped = lambda model: select(func.count()).select_from(model).where(model.workspace_id == workspace_id)  # noqa: E731
 
+    # 活动图:近 14 天逐日成功/失败(按终态时间 updated_at 归日,UTC),缺日补零。
+    span_start = (now() - timedelta(days=13)).date()
+    day_rows = db.execute(
+        select(func.date(Job.updated_at), Job.status, func.count())
+        .where(
+            Job.workspace_id == workspace_id,
+            Job.status.in_(("succeeded", "failed")),
+            Job.updated_at >= datetime.combine(span_start, datetime.min.time()),
+        )
+        .group_by(func.date(Job.updated_at), Job.status)
+    ).all()
+    by_day: dict[str, dict[str, int]] = {}
+    for day, status, count_ in day_rows:
+        by_day.setdefault(str(day), {})[str(status)] = int(count_)
+    daily = [
+        DailyActivityOut(
+            date=str(span_start + timedelta(days=offset)),
+            succeeded=by_day.get(str(span_start + timedelta(days=offset)), {}).get("succeeded", 0),
+            failed=by_day.get(str(span_start + timedelta(days=offset)), {}).get("failed", 0),
+        )
+        for offset in range(14)
+    ]
+
+    kind_rows = db.execute(
+        select(Asset.kind, func.count()).where(Asset.workspace_id == workspace_id).group_by(Asset.kind)
+    ).all()
+    asset_kinds = {str(kind): int(count_) for kind, count_ in kind_rows}
+
     return WorkspaceSummaryOut(
+        daily=daily,
+        asset_kinds=asset_kinds,
         project_count=count(scoped(Project)),
         asset_count=count(scoped(Asset)),
         sequence_count=count(scoped(Sequence)),

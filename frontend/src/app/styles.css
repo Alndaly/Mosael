@@ -843,6 +843,111 @@
   transition: transform 0.25s ease;
 }
 
+/* ---- 首页图表 ---- */
+.home-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 880px) {
+  .home-charts { grid-template-columns: 1fr; }
+}
+
+.home-chart {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 10px 14px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.home-chart-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted-foreground);
+}
+
+.home-chart-plot {
+  width: 100%;
+  height: 112px;
+  display: block;
+}
+
+.home-chart-baseline {
+  stroke: var(--border);
+  stroke-width: 1;
+  /* preserveAspectRatio=none 会把线条随视口拉伸变粗,钉住像素宽 */
+  vector-effect: non-scaling-stroke;
+}
+
+.home-chart-ok { fill: var(--chart-ok); }
+.home-chart-fail { fill: var(--chart-fail); }
+
+.home-chart-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.home-chart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.home-chart-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.home-chart-count,
+.home-chart-max {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.home-chart-max { margin-left: auto; color: var(--muted-foreground); }
+
+.home-chart-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.home-chart-seg {
+  flex-basis: 0;
+  min-width: 3px;
+}
+
+.home-chart-empty {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
 /* ---- 首页统计带 ---- */
 .home-stats {
   display: grid;
