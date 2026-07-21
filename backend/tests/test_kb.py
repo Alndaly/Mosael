@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import time
+from dataclasses import dataclass
 
 from app.domain import kb
 from tests.util import fresh_client
@@ -258,20 +262,48 @@ def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
     assert {h["document_id"] for h in hits} == {doc_a["id"], doc_b["id"]}
 
 
-def test_kb_milvus_lite_roundtrip(tmp_path, monkeypatch) -> None:
-    from app.core.config import settings
+def test_kb_vector_client_roundtrip_without_native_milvus(monkeypatch) -> None:
     from app.domain.kb import vectors
 
-    monkeypatch.setattr(settings, "kb_embedding_vendor", "openai-compatible")
-    monkeypatch.setattr(settings, "kb_embedding_model", "fake-embed")
-    monkeypatch.setattr(settings, "kb_embedding_dim", 8)
-    monkeypatch.setattr(settings, "kb_milvus_uri", str(tmp_path / "vec.db"))
-    monkeypatch.setattr(vectors, "_client", None)
+    @dataclass(frozen=True)
+    class FakeEmbeddingConfig:
+        provider_profile_id: str | None = None
+        vendor: str = "fake"
+        model: str = "fake-embed"
+        dim: int = 8
+
+        @property
+        def enabled(self) -> bool:
+            return True
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.rows: list[dict] = []
+
+        def delete(self, *, collection_name: str, filter: str) -> None:
+            assert collection_name == vectors.COLLECTION
+            document_id = filter.split('"')[1]
+            self.rows = [row for row in self.rows if row["document_id"] != document_id]
+
+        def insert(self, *, collection_name: str, data: list[dict]) -> None:
+            assert collection_name == vectors.COLLECTION
+            self.rows.extend(data)
+
+        def search(self, *, collection_name: str, data: list[list[float]], limit: int, filter: str, output_fields: list[str]) -> list[list[dict]]:
+            assert collection_name == vectors.COLLECTION
+            workspace_id = filter.split('"')[1]
+            query = data[0]
+            rows = [row for row in self.rows if row["workspace_id"] == workspace_id]
+            rows.sort(key=lambda row: sum(a * b for a, b in zip(row["vector"], query)), reverse=True)
+            return [[{"id": row["id"], "entity": {"document_id": row["document_id"]}} for row in rows[:limit]]]
 
     def fake_embed(db, texts):
         return [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
 
+    fake_client = FakeClient()
+    monkeypatch.setattr(vectors.kb_config, "get", lambda: FakeEmbeddingConfig())
     monkeypatch.setattr(vectors, "embed_texts", fake_embed)
+    monkeypatch.setattr(vectors, "_get_client", lambda: fake_client)
 
     vectors.upsert_document_vectors(None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")])
     hits = vectors.dense_search(None, "ws1", "abc", limit=5)
@@ -279,7 +311,40 @@ def test_kb_milvus_lite_roundtrip(tmp_path, monkeypatch) -> None:
     assert vectors.dense_search(None, "ws-other", "abc", limit=5) == []
     vectors.delete_document_vectors("d1")
     assert vectors.dense_search(None, "ws1", "abc", limit=5) == []
-    monkeypatch.setattr(vectors, "_client", None)
+
+
+def test_kb_milvus_lite_roundtrip_opt_in_subprocess(tmp_path) -> None:
+    """Real milvus-lite has crashed the Python 3.13/gRPC process during delete/search.
+
+    Keep the default suite trustworthy: exercise the vector seam with a fake client above,
+    and only run the native smoke when explicitly requested. Even then, run it out-of-process
+    so a segfault reports as a failing smoke instead of killing pytest itself.
+    """
+    if os.environ.get("MIBU_RUN_MILVUS_LITE_TEST") != "1":
+        import pytest
+
+        pytest.skip("Set MIBU_RUN_MILVUS_LITE_TEST=1 to run the native milvus-lite smoke")
+
+    script = f"""
+from app.core.db import init_db
+from app.core.config import settings
+from app.domain.kb import vectors
+settings.kb_embedding_vendor = "openai-compatible"
+settings.kb_embedding_model = "fake-embed"
+settings.kb_embedding_dim = 8
+settings.kb_milvus_uri = {str(tmp_path / "vec.db")!r}
+init_db()
+vectors._client = None
+vectors.embed_texts = lambda db, texts: [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
+vectors.upsert_document_vectors(None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")])
+hits = vectors.dense_search(None, "ws1", "abc", limit=5)
+assert hits and hits[0][1] == "d1"
+assert vectors.dense_search(None, "ws-other", "abc", limit=5) == []
+vectors.delete_document_vectors("d1")
+assert vectors.dense_search(None, "ws1", "abc", limit=5) == []
+"""
+    result = subprocess.run([sys.executable, "-c", script], cwd=os.getcwd(), text=True, capture_output=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_kb_graph_expansion_merges_related_docs(monkeypatch) -> None:

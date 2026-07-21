@@ -36,3 +36,6 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+  "error::pytest.PytestUnhandledThreadExceptionWarning",
+]

@@ -102,7 +102,7 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 ## 仓库结构
 
 ```
-backend/          FastAPI + SQLAlchemy 2.0 + Alembic(18 个迁移)
+backend/          FastAPI + SQLAlchemy 2.0 + Alembic(20 个迁移)
   app/domain/     领域内核:sequences(剪辑) render workflows publish kb agent
                   scheduler transcripts generation plugins notifications
   app/api/routes/ HTTP 路由

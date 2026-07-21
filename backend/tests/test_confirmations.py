@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from fastapi.testclient import TestClient
 
 from tests.util import fresh_client
@@ -22,6 +24,17 @@ def setup_sequence(client: TestClient) -> tuple[dict, dict, dict, dict]:
 
 def video_clips(sequence: dict) -> list[dict]:
     return next(t for t in sequence["tracks"] if t["kind"] == "video")["clips"]
+
+
+def wait_job(client: TestClient, job_id: str, timeout: float = 10.0) -> dict:
+    deadline = time.time() + timeout
+    job = client.get(f"/api/jobs/{job_id}").json()
+    while time.time() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            return job
+        time.sleep(0.05)
+    return job
 
 
 def test_edit_timeline_requires_approval_then_executes() -> None:
@@ -163,6 +176,8 @@ def test_generate_image_confirmation_carries_ai_cost_permission() -> None:
     approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["job_id"]
+    job = wait_job(client, approved["result"]["job_id"])
+    assert job["status"] == "succeeded", job.get("error")
 
 
 def test_invalid_payloads_rejected() -> None:

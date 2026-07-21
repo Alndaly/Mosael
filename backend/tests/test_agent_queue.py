@@ -54,6 +54,7 @@ def test_a_mid_turn_message_is_queued_not_steered(monkeypatch) -> None:
 
     assert steers == [], "the queued message was pushed into the running turn"
     assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["two"]
+    assert _wait_idle(sid) == "idle"
 
 
 def test_a_queued_message_runs_as_its_own_turn_when_the_first_ends(monkeypatch) -> None:
@@ -96,6 +97,7 @@ def test_steering_is_opt_in_per_message(monkeypatch) -> None:
     assert steers == ["改成竖屏"]
     # It left the queue: steering it and then running it again would answer it twice.
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    assert _wait_idle(sid) == "idle"
 
 
 def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch) -> None:
@@ -113,6 +115,7 @@ def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch) -> N
 
     assert res.status_code == 200 and res.json() == {"steered": False}
     assert [m["content"] for m in client.get(f"/api/agent/sessions/{sid}/queue").json()] == ["two"]
+    assert _wait_idle(sid) == "idle"
 
 
 def test_a_queued_message_can_be_withdrawn(monkeypatch) -> None:
@@ -137,6 +140,7 @@ def test_the_message_being_answered_is_not_in_the_queue(monkeypatch) -> None:
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    assert _wait_idle(sid) == "idle"
 
 
 def test_nothing_is_queued_when_idle() -> None:
@@ -192,3 +196,4 @@ def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch) -> 
         original = db.get(AgentMessage, first["id"])
         assert steered.created_at >= original.created_at
         assert not (steered.payload or {}).get("queued")
+    assert _wait_idle(sid) == "idle"

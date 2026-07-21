@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.core.db import SessionLocal
-from app.db.models import Job, TaskEvent
+from app.db.models import Job, TaskEvent, now
 from app.domain.jobs import clear_finished_jobs, prune_task_events, reconcile_orphaned_jobs
 from tests.util import fresh_client
 
@@ -15,7 +15,7 @@ def seed_job(db, workspace_id: str, *, status: str, events: int, age_days: int =
     for index in range(events):
         db.add(TaskEvent(job_id=job.id, type=f"e{index}", payload={}))
     if age_days:
-        job.updated_at = datetime.utcnow() - timedelta(days=age_days)
+        job.updated_at = now() - timedelta(days=age_days)
     db.commit()
     return job
 
