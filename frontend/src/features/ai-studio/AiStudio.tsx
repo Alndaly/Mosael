@@ -720,7 +720,7 @@ function GenerateWorkspace({
                     onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                   />
                 </label>
-                <label className="generation-setting">
+                <div className="generation-setting">
                   <span>{t("genReferenceImage")}</span>
                   <input
                     ref={referenceImageInputRef}
@@ -773,7 +773,7 @@ function GenerateWorkspace({
                       </Button>
                     </div>
                   )}
-                </label>
+                </div>
               </>
             ) : (
               <>
