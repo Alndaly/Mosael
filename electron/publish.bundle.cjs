@@ -1357,20 +1357,7 @@ var isAutomationBlockedError = (error) => {
   return error instanceof AutomationBlockedError;
 };
 
-// electron/publish/adapters.ts
-var wait2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-var TEXT_PUBLISH_VIDEO = "\u53D1\u5E03\u89C6\u9891";
-var TEXT_NEW_TOPIC = "\u65B0\u5EFA\u8BDD\u9898";
-var UPLOAD_TIMEOUT = 10 * 60 * 1e3;
-var RESULT_TIMEOUT = 2 * 60 * 1e3;
-var ACTION_TIMEOUT = 30 * 1e3;
-var HUMAN_INTERVENTION_TIMEOUT = 10 * 60 * 1e3;
-var normalizeTag = (tag) => tag.replace(/^#/, "").trim();
-var escapeHtml = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-var stringOption = (task, key) => {
-  const value = task.platformOptions[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-};
+// electron/publish/selectors.ts
 var SELECTORS = {
   douyin: {
     uploadUrl: resolvePlatform("douyin").publishUrl,
@@ -1474,6 +1461,21 @@ var SELECTORS = {
     isLoginUrl: (u) => /passport\.bilibili\.com|\/login/.test(u),
     isManageUrl: (u) => /upload-manager|content-manager|article/.test(u)
   }
+};
+
+// electron/publish/adapters.ts
+var wait2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var TEXT_PUBLISH_VIDEO = "\u53D1\u5E03\u89C6\u9891";
+var TEXT_NEW_TOPIC = "\u65B0\u5EFA\u8BDD\u9898";
+var UPLOAD_TIMEOUT = 10 * 60 * 1e3;
+var RESULT_TIMEOUT = 2 * 60 * 1e3;
+var ACTION_TIMEOUT = 30 * 1e3;
+var HUMAN_INTERVENTION_TIMEOUT = 10 * 60 * 1e3;
+var normalizeTag = (tag) => tag.replace(/^#/, "").trim();
+var escapeHtml = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+var stringOption = (task, key) => {
+  const value = task.platformOptions[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 var MockAdapter = class {
   constructor(driver, task) {
