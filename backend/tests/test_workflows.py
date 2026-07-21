@@ -85,14 +85,14 @@ def test_data_edge_satisfies_required_and_orders() -> None:
 
 
 def test_apply_data_edges_binds_input() -> None:
-    from app.domain.workflows.engine import _apply_data_edges
+    from app.domain.workflows.binding import apply_data_edges
 
     edges = data_edge_graph()["edges"]
     context = {"llm-1": {"text": "你好世界"}}
-    config = _apply_data_edges("tmpl", {"template": ""}, edges, context)
+    config = apply_data_edges("tmpl", {"template": ""}, edges, context)
     assert config["template"] == "你好世界"
     # 上游还没跑(不在 context)→ 不绑定,保留原字面量。
-    config2 = _apply_data_edges("tmpl", {"template": "orig"}, edges, {})
+    config2 = apply_data_edges("tmpl", {"template": "orig"}, edges, {})
     assert config2["template"] == "orig"
 
 
@@ -377,56 +377,56 @@ def test_asset_query_filters_and_feeds_loop() -> None:
 
 
 def test_json_extract_node() -> None:
-    from app.domain.workflows.engine import _handle_json_extract
+    from app.domain.workflows.executors.basic import json_extract
 
     src = '{"data": {"items": [{"title": "hello"}, {"title": "world"}]}}'
-    assert _handle_json_extract(None, None, {"source": src, "path": "data.items.0.title"}) == {
+    assert json_extract(None, None, {"source": src, "path": "data.items.0.title"}) == {
         "value": "hello", "text": "hello",
     }
     # missing path → None/""; already-parsed dict source works too
-    assert _handle_json_extract(None, None, {"source": {"a": 1}, "path": "b"}) == {"value": None, "text": ""}
+    assert json_extract(None, None, {"source": {"a": 1}, "path": "b"}) == {"value": None, "text": ""}
     # whole object when path empty → JSON text
-    out = _handle_json_extract(None, None, {"source": {"a": 1}, "path": ""})
+    out = json_extract(None, None, {"source": {"a": 1}, "path": ""})
     assert out["value"] == {"a": 1} and out["text"] == '{"a": 1}'
 
 
 def test_text_transform_node() -> None:
-    from app.domain.workflows.engine import _handle_text_transform
+    from app.domain.workflows.executors.basic import text_transform
 
-    assert _handle_text_transform(None, None, {"text": "  Hi ", "op": "trim"})["text"] == "Hi"
-    assert _handle_text_transform(None, None, {"text": "abc", "op": "upper"})["text"] == "ABC"
-    assert _handle_text_transform(None, None, {"text": "a-b-c", "op": "replace", "find": "-", "replace": "_"})["text"] == "a_b_c"
-    assert _handle_text_transform(None, None, {"text": "id=42 x", "op": "regex_extract", "find": r"id=(\d+)"})["text"] == "42"
-    assert _handle_text_transform(None, None, {"text": "hello", "op": "length"}) == {"text": "5", "length": 1}
+    assert text_transform(None, None, {"text": "  Hi ", "op": "trim"})["text"] == "Hi"
+    assert text_transform(None, None, {"text": "abc", "op": "upper"})["text"] == "ABC"
+    assert text_transform(None, None, {"text": "a-b-c", "op": "replace", "find": "-", "replace": "_"})["text"] == "a_b_c"
+    assert text_transform(None, None, {"text": "id=42 x", "op": "regex_extract", "find": r"id=(\d+)"})["text"] == "42"
+    assert text_transform(None, None, {"text": "hello", "op": "length"}) == {"text": "5", "length": 1}
 
 
 def test_delay_node_clamps(monkeypatch) -> None:
-    from app.domain.workflows import engine
+    from app.domain.workflows.executors import basic
 
     slept: list[float] = []
-    monkeypatch.setattr(engine.time, "sleep", lambda s: slept.append(s))  # never actually block
-    assert engine._handle_delay(None, None, {"seconds": 0})["waited"] == 0.0
-    assert engine._handle_delay(None, None, {"seconds": 99999})["waited"] == 300.0  # clamped to max
-    assert engine._handle_delay(None, None, {"seconds": "oops"})["waited"] == 1.0  # unparsable → default 1
-    assert engine._handle_delay(None, None, {})["waited"] == 1.0  # default
+    monkeypatch.setattr(basic.time, "sleep", lambda s: slept.append(s))  # never actually block
+    assert basic.delay(None, None, {"seconds": 0})["waited"] == 0.0
+    assert basic.delay(None, None, {"seconds": 99999})["waited"] == 300.0  # clamped to max
+    assert basic.delay(None, None, {"seconds": "oops"})["waited"] == 1.0  # unparsable → default 1
+    assert basic.delay(None, None, {})["waited"] == 1.0  # default
     assert slept == [0.0, 300.0, 1.0, 1.0]
 
 
 def test_translate_node_google(monkeypatch) -> None:
-    from app.domain.workflows import engine
+    from app.domain.workflows.executors import ai as ai_nodes
 
     monkeypatch.setattr("app.domain.translate.google_translate", lambda text, target, source="auto": f"[{target}]{text}")
-    assert engine._handle_translate(None, None, {"text": "hi", "target_lang": "zh-CN"}) == {"text": "[zh-CN]hi"}
-    assert engine._handle_translate(None, None, {"text": "  ", "target_lang": "en"}) == {"text": ""}  # empty short-circuit
+    assert ai_nodes.translate(None, None, {"text": "hi", "target_lang": "zh-CN"}) == {"text": "[zh-CN]hi"}
+    assert ai_nodes.translate(None, None, {"text": "  ", "target_lang": "en"}) == {"text": ""}  # empty short-circuit
 
 
 def test_new_nodes_registered_and_validate() -> None:
     from app.domain.workflows import NODE_TYPES, validate_graph
-    from app.domain.workflows.engine import _HANDLERS
+    from app.domain.workflows.executors import registered_types
 
     for node_type in ("json_extract", "text_transform", "delay", "synthesize_speech", "notify"):
         assert node_type in NODE_TYPES, node_type
-        assert node_type in _HANDLERS, node_type
+        assert node_type in registered_types(), node_type
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {}},
@@ -443,11 +443,11 @@ def test_new_nodes_registered_and_validate() -> None:
 
 def test_condition_operators_and_bad_branch_handle() -> None:
     from app.domain.workflows import validate_graph
-    from app.domain.workflows.engine import _handle_condition
+    from app.domain.workflows.executors.basic import condition
 
-    assert _handle_condition(None, None, {"left": "5", "op": "gt", "right": "3"})["result"] is True
-    assert _handle_condition(None, None, {"left": "", "op": "empty"})["result"] is True
-    assert _handle_condition(None, None, {"left": "abc", "op": "not_contains", "right": "x"})["result"] is True
+    assert condition(None, None, {"left": "5", "op": "gt", "right": "3"})["result"] is True
+    assert condition(None, None, {"left": "", "op": "empty"})["result"] is True
+    assert condition(None, None, {"left": "abc", "op": "not_contains", "right": "x"})["result"] is True
 
     bad = {
         "nodes": [
@@ -662,3 +662,14 @@ def test_parallel_branches_run_concurrently() -> None:
     assert job["result"]["context"]["c2"]["output"] == 1
     # 串行会 ≥ 2s;并发应明显更短。给足子进程/调度开销余量。
     assert elapsed < 1.8, f"两条 1s 分支耗时 {elapsed:.2f}s,疑似未并发"
+
+
+def test_node_types_and_executor_registry_stay_in_lockstep() -> None:
+    """NODE_TYPES 是节点的元数据接缝,executors 注册表是行为接缝——两边必须一一对应。
+
+    少一边都意味着漂移:有元数据没执行器 = 画布能拖出一个跑不了的节点;有执行器没
+    元数据 = 校验/画布/智能体都不知道它存在。"""
+    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.executors import registered_types
+
+    assert set(NODE_TYPES) == set(registered_types())

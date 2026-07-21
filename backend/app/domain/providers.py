@@ -115,6 +115,25 @@ def profile_extra(db: Session, vendor: str, key: str) -> str:
     return str(value) if value else ""
 
 
+def require_profile(
+    db: Session, profile_id: str | None = None, *, error: type[Exception] = RuntimeError
+) -> ProviderProfile:
+    """指定 id 时要求该 profile 存在且启用;缺省回退最早启用的一个。
+
+    供应商选取是 providers 领域的事——workflows / publish / agent 各自的调用方只提供
+    要抛的领域错误类型,不再各自复制这段查询(此前同一逻辑存在三份)。
+    """
+    if profile_id:
+        profile = db.get(ProviderProfile, str(profile_id))
+        if profile is None or not profile.enabled:
+            raise error("指定的供应商配置不存在或已停用")
+        return profile
+    profile = first_enabled_profile(db)
+    if profile is None:
+        raise error("没有可用的 AI 供应商,请先在设置里添加")
+    return profile
+
+
 def resolve_secret(db: Session, vendor: str) -> str | None:
     """Profile key first; legacy credentials row as fallback."""
     profile = resolve_profile(db, vendor)

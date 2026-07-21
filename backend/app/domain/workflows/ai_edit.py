@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderProfile
+from app.domain.providers import require_profile
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
 TIMEOUT_SECONDS = 120
@@ -38,7 +39,7 @@ _SYSTEM = """你是 Mibu 视频创作工作台的工作流编辑器。工作流�
 def ai_edit_graph(
     db: Session, *, instruction: str, graph: dict[str, Any], profile_id: str | None = None
 ) -> tuple[dict[str, Any], str]:
-    profile = _pick_profile(db, profile_id)
+    profile = require_profile(db, profile_id, error=WorkflowDomainError)
     registry = json.dumps(
         {key: {"label": meta["label"], "config": meta["config"], "outputs": meta["outputs"]} for key, meta in NODE_TYPES.items()},
         ensure_ascii=False,
@@ -92,16 +93,3 @@ def _chat(profile: ProviderProfile, system: str, user: str) -> str:
     response.raise_for_status()
     return str(response.json()["choices"][0]["message"]["content"])
 
-
-def _pick_profile(db: Session, profile_id: str | None) -> ProviderProfile:
-    if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-        if profile is None or not profile.enabled:
-            raise WorkflowDomainError("指定的供应商配置不存在或已停用")
-        return profile
-    profile = db.scalars(
-        select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at)
-    ).first()
-    if profile is None:
-        raise WorkflowDomainError("没有可用的 AI 供应商,请先在设置里添加")
-    return profile

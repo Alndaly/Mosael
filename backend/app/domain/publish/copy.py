@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, ProviderProfile, Transcript
+from app.domain.providers import require_profile
 from app.domain.publish import PublishDomainError
 
 TIMEOUT_SECONDS = 90
@@ -26,7 +27,7 @@ _SYSTEM = """你是短视频发布运营。根据素材信息写发布文案,只
 def generate_copy(
     db: Session, *, workspace_id: str, asset_id: str | None = None, brief: str = "", profile_id: str | None = None
 ) -> dict[str, Any]:
-    profile = _pick_profile(db, profile_id)
+    profile = require_profile(db, profile_id, error=PublishDomainError)
     parts: list[str] = []
     if brief.strip():
         parts.append(f"创作者要求:{brief.strip()}")
@@ -85,16 +86,3 @@ def _chat(profile: ProviderProfile, user: str) -> str:
     response.raise_for_status()
     return str(response.json()["choices"][0]["message"]["content"])
 
-
-def _pick_profile(db: Session, profile_id: str | None) -> ProviderProfile:
-    if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-        if profile is None or not profile.enabled:
-            raise PublishDomainError("指定的供应商配置不存在或已停用")
-        return profile
-    profile = db.scalars(
-        select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at)
-    ).first()
-    if profile is None:
-        raise PublishDomainError("没有可用的 AI 供应商,请先在设置里添加")
-    return profile
