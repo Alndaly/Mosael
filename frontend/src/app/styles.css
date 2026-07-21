@@ -3751,6 +3751,30 @@
   gap: 4px;
   padding: 6px;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: none;
+}
+
+.chat-session-list:hover,
+.chat-session-list:focus-within {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+}
+
+.chat-session-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.chat-session-list:hover::-webkit-scrollbar,
+.chat-session-list:focus-within::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.chat-session-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
 }
 
 .chat-session {
