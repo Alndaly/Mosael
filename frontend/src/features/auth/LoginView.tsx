@@ -28,6 +28,7 @@ function friendlyAuthError(raw: string, mode: "login" | "register", t: (key: Mes
   if (!raw || raw.toLowerCase().includes("failed to fetch") || raw.toLowerCase().includes("networkerror")) {
     return t("loginNetworkError");
   }
+  if (/^5\d\d\b/.test(raw)) return t("loginServerError");
   return mode === "login" ? t("loginFailed") : t("registerFailed");
 }
 

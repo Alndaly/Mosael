@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "electron:dev": "pnpm --dir .. build:publisher && concurrently -k -n vite,bundle,electron -c cyan,yellow,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"wait-on http://127.0.0.1:5173 && node ../electron/brand-dev.cjs && electron ../electron/main.cjs\"",
+    "electron:dev": "pnpm --dir .. build:publisher && concurrently -k -n vite,bundle,backend,electron -c cyan,yellow,magenta,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"pnpm --dir .. dev:backend\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:${MIBU_BACKEND_PORT:-8800}/api/health && node ../electron/brand-dev.cjs && electron ../electron/main.cjs\"",
     "test": "vitest run"
   },
   "dependencies": {

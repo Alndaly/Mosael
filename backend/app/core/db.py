@@ -62,6 +62,7 @@ def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
+    _migrate_user_profile()
     _migrate_kb_schema()
     _migrate_agent_sessions()
     _migrate_generation_sessions()
@@ -69,6 +70,25 @@ def init_db() -> None:
     _migrate_tts_config()
     _migrate_provider_extra()
     Base.metadata.create_all(bind=engine)
+
+
+def _migrate_user_profile() -> None:
+    """账户页已经把昵称/个性签名变成 User 模型字段。
+
+    本地 dev 数据库可能是在该字段加入前创建的；若不在启动时补列,
+    /api/auth/login 查询 User 会直接因缺列 500,但 /api/health 仍返回 ok,
+    Electron dev 就会复用一个看似健康、实际无法登录的后端进程。
+    """
+    inspector = inspect(engine)
+    if "users" not in set(inspector.get_table_names()):
+        return
+    cols = {c["name"] for c in inspector.get_columns("users")}
+    with engine.begin() as conn:
+        if "display_name" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT ''"))
+            conn.execute(text("UPDATE users SET display_name = username WHERE display_name = ''"))
+        if "signature" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN signature TEXT NOT NULL DEFAULT ''"))
 
 
 def _migrate_generation_sessions() -> None:

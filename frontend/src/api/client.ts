@@ -241,7 +241,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     onUnauthorized?.();
     throw new Error("Not authenticated");
   }
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
