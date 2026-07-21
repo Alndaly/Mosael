@@ -454,6 +454,7 @@ export const messages = {
     wfInsertVar: "插入到光标处",
     // 就绪检查 / 画布角标
     wfChecklist: "就绪检查",
+    wfChecklistReadyShort: "就绪",
     wfChecklistReady: "全部就绪,可以运行",
     wfChecklistBlocked: "{n} 项待解决",
     wfChecklistWarnOnly: "{n} 项提醒(不阻塞运行)",
@@ -1717,6 +1718,7 @@ export const messages = {
     wfGenModelMissing: "This node's generation model is gone — reselect or configure one.",
     wfModelPresetHint: "Pick a model to fill provider/model/kind",
     wfChecklist: "Readiness",
+    wfChecklistReadyShort: "Ready",
     wfChecklistReady: "All set — ready to run",
     wfChecklistBlocked: "{n} to resolve",
     wfChecklistWarnOnly: "{n} warning(s) — won't block a run",

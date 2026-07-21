@@ -51,7 +51,6 @@ import {
   Plus,
   Rocket,
   Redo2,
-  Save,
   Search,
   Undo2,
   Sparkles,
@@ -923,6 +922,13 @@ function WorkflowEditor({
       }),
     [graph, registry, providers.data, providers.isSuccess, hasLlm, hasGen],
   );
+  const checklistCount = analysis.errorCount + analysis.warnCount;
+  const checklistLabel = analysis.errorCount
+    ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
+    : analysis.warnCount
+      ? t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))
+      : t("wfChecklistReady");
+  const showSaveStatus = save.isPending || dirty;
 
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
   const displayNodes = React.useMemo(
@@ -1052,12 +1058,12 @@ function WorkflowEditor({
                 className={`wf-checklist-btn${
                   analysis.errorCount ? " has-error" : analysis.warnCount ? " has-warn" : " ok"
                 }`}
+                aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
+                title={checklistLabel}
               >
                 {analysis.errorCount || analysis.warnCount ? <AlertTriangle size={13} /> : <CircleCheck size={13} />}
-                <span>{t("wfChecklist")}</span>
-                {analysis.errorCount + analysis.warnCount > 0 && (
-                  <em className="wf-checklist-count">{analysis.errorCount + analysis.warnCount}</em>
-                )}
+                <span>{checklistCount > 0 ? t("wfChecklist") : t("wfChecklistReadyShort")}</span>
+                {checklistCount > 0 && <em className="wf-checklist-count">{checklistCount}</em>}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="wf-checklist-pop">
@@ -1092,20 +1098,17 @@ function WorkflowEditor({
               )}
             </PopoverContent>
           </Popover>
-          <div className="wf-toolbar-sep" />
-          <span className="wf-save-status" aria-live="polite">
-            {save.isPending ? (
-              <>
-                <Loader2 size={12} className="spin" /> {t("wfSaving")}
-              </>
-            ) : dirty ? (
-              t("wfUnsaved")
-            ) : (
-              <>
-                <Save size={12} /> {t("wfSavedShort")}
-              </>
-            )}
-          </span>
+          {showSaveStatus && (
+            <span className={`wf-save-status${save.isPending ? " is-saving" : " is-dirty"}`} aria-live="polite">
+              {save.isPending ? (
+                <>
+                  <Loader2 size={12} className="spin" /> {t("wfSaving")}
+                </>
+              ) : (
+                t("wfUnsaved")
+              )}
+            </span>
+          )}
           <Button
             size="sm"
             disabled={run.isPending || dirty || !analysis.runnable}
