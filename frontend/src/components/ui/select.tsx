@@ -5,8 +5,38 @@ import { Check, ChevronDown } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
-function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root {...props} />;
+let openNonModalSelects = 0;
+
+function hasOpenNonModalSelect() {
+  return openNonModalSelects > 0;
+}
+
+function Select({ open, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  // In this app Select is used as a form control, often inside Dialog/AlertDialog.
+  // When a select is open, the first outside click should dismiss the select only;
+  // after it closes, the next outside click should dismiss the dialog in one step.
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(Boolean(defaultOpen));
+  const actualOpen = open ?? uncontrolledOpen;
+
+  React.useEffect(() => {
+    if (!actualOpen) return;
+    openNonModalSelects += 1;
+    return () => {
+      openNonModalSelects = Math.max(0, openNonModalSelects - 1);
+    };
+  }, [actualOpen]);
+
+  return (
+    <SelectPrimitive.Root
+      open={open}
+      defaultOpen={defaultOpen}
+      onOpenChange={(next) => {
+        if (open === undefined) setUncontrolledOpen(next);
+        onOpenChange?.(next);
+      }}
+      {...props}
+    />
+  );
 }
 
 /** 空值时必须有占位提醒:调用方没给 placeholder 就用全局默认「请选择」。 */
@@ -81,4 +111,4 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
   );
 }
 
-export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue };
+export { hasOpenNonModalSelect, Select, SelectContent, SelectItem, SelectTrigger, SelectValue };

@@ -34,16 +34,9 @@ export function ModalShell({
   /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
   className?: string;
 }) {
-  const ignoreSelectOutsideInteraction = (event: Event) => {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("[data-mibu-select-content]")) {
-      event.preventDefault();
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onInteractOutside={ignoreSelectOutsideInteraction} className={className}>
+      <DialogContent className={className}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
