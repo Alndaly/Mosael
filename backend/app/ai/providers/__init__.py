@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.kling import KlingProvider
 from app.ai.providers.openai_image import OpenAIImageProvider
 from app.ai.providers.qwen_image import QwenImageProvider
 from app.ai.providers.seedance import SeedanceProvider
+from app.ai.providers.veo import VeoProvider
 
 _PROVIDERS: dict[tuple[str, str], GenerationProvider] = {}
 
@@ -16,6 +18,8 @@ def _register(provider: GenerationProvider) -> None:
 
 _register(QwenImageProvider())
 _register(SeedanceProvider())
+_register(VeoProvider())
+_register(KlingProvider())
 _register(OpenAIImageProvider("openai"))
 _register(OpenAIImageProvider("openai-compatible"))
 

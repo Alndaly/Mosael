@@ -71,13 +71,23 @@ VENDOR_PRESETS: dict[str, dict[str, str]] = {
     },
     "google": {
         "label": "Google (Veo/Gemini)",
-        "base_url": "",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "default_model": "veo-3.1-generate-preview",
         "capabilities": "对话(Gemini)、图像(Imagen)、视频(Veo)、向量嵌入",
     },
     "kuaishou": {
         "label": "快手 (Kling)",
-        "base_url": "",
+        "base_url": "https://api.klingai.com",
+        "default_model": "kling-v3",
         "capabilities": "视频与图像生成(可灵 Kling)",
+        "fields": [
+            {
+                "key": "secret_key",
+                "label": "Secret Key",
+                "secret": True,
+                "hint": "官方 Kling 使用 Access Key + Secret Key:上面的 API Key 填 Access Key。第三方兼容端点可只填 Bearer API Key。",
+            },
+        ],
     },
 }
 

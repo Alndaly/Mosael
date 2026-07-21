@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import GenerationRequest, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.openai_image import build_submit_payload as openai_payload, extract_image_bytes
 from app.ai.providers.qwen_image import build_submit_payload as qwen_payload, extract_result_url
 from app.ai.providers.seedance import build_submit_payload as seedance_payload, extract_video_url
+from app.ai.providers.veo import build_submit_payload as veo_payload, extract_video_uri
 
 
 def make_request(kind: str, **params) -> GenerationRequest:
@@ -16,6 +18,8 @@ def make_request(kind: str, **params) -> GenerationRequest:
 def test_registry_resolves_providers() -> None:
     assert get_provider("alibaba", "image") is not None
     assert get_provider("bytedance", "video") is not None
+    assert get_provider("google", "video") is not None
+    assert get_provider("kuaishou", "video") is not None
     assert get_provider("openai", "image") is not None
     assert get_provider("openai-compatible", "image") is not None
     assert get_provider("mock", "image") is None
@@ -84,6 +88,56 @@ def test_openai_image_payload_and_parsing() -> None:
     assert extract_image_bytes({"data": [{"b64_json": "aGk="}]}) == b"hi"
     with pytest.raises(ProviderError):
         extract_image_bytes({"data": []})
+
+
+def test_veo_payload_and_parsing() -> None:
+    request = GenerationRequest(
+        kind="video",
+        model="veo",
+        prompt="p",
+        parameters={"aspect_ratio": "9:16", "duration_seconds": 8, "resolution": "1080p", "seed": 12},
+    )
+    payload = veo_payload(request)
+    assert payload == {
+        "instances": [{"prompt": "p"}],
+        "parameters": {"numberOfVideos": 1, "aspectRatio": "9:16", "durationSeconds": "8", "resolution": "1080p", "seed": 12},
+    }
+    assert extract_video_uri({"done": False}) is None
+    assert (
+        extract_video_uri(
+            {"done": True, "response": {"generateVideoResponse": {"generatedSamples": [{"video": {"uri": "https://x/v.mp4"}}]}}}
+        )
+        == "https://x/v.mp4"
+    )
+    with pytest.raises(ProviderError):
+        extract_video_uri({"error": {"message": "blocked"}})
+
+
+def test_kling_payload_and_parsing() -> None:
+    request = GenerationRequest(
+        kind="video",
+        model="kling",
+        prompt="p",
+        negative_prompt="n",
+        parameters={"duration_seconds": 5, "resolution": "1080p", "aspect_ratio": "9:16", "first_frame_url": "https://x/i.png"},
+    )
+    payload = kling_payload(request, ProviderContext(None, "kuaishou", "ak", default_model="kling-v3"))
+    assert payload == {
+        "model_name": "kling-v3",
+        "prompt": "p",
+        "mode": "pro",
+        "aspect_ratio": "9:16",
+        "duration": "5",
+        "negative_prompt": "n",
+        "image": "https://x/i.png",
+    }
+    assert extract_kling_video_url({"data": {"task_status": "processing"}}) is None
+    assert (
+        extract_kling_video_url({"code": 0, "data": {"task_status": "succeed", "task_result": {"videos": [{"url": "https://x/v.mp4"}]}}})
+        == "https://x/v.mp4"
+    )
+    with pytest.raises(ProviderError):
+        extract_kling_video_url({"code": 1100, "message": "bad request"})
 
 
 def test_error_sanitization_strips_secrets() -> None:
