@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db.models import GenerationModel
@@ -22,11 +22,25 @@ BUILTIN_MODELS = [
         "capabilities": {"modes": ["text-to-image", "image-to-image"], "max_prompt_chars": 8000},
     },
     {
+        "id": "alibaba:qwen-image-2.0-pro:image",
+        "provider": "alibaba",
+        "kind": "image",
+        "model": "qwen-image-2.0-pro",
+        "capabilities": {"modes": ["text-to-image", "image-to-image"], "max_prompt_chars": 8000},
+    },
+    {
+        "id": "alibaba:qwen-image-edit:image",
+        "provider": "alibaba",
+        "kind": "image",
+        "model": "qwen-image-edit",
+        "capabilities": {"modes": ["image-to-image"], "max_prompt_chars": 8000},
+    },
+    {
         "id": "alibaba:qwen-image:image",
         "provider": "alibaba",
         "kind": "image",
         "model": "qwen-image",
-        "capabilities": {"modes": ["text-to-image", "image-to-image"], "max_prompt_chars": 8000},
+        "capabilities": {"modes": ["text-to-image"], "max_prompt_chars": 8000},
     },
     {
         "id": "bytedance:doubao-seedance-2-0-260128:video",
@@ -123,9 +137,14 @@ REMOVED_BUILTIN_MODEL_IDS = {
 
 def ensure_builtin_generation_models(db: Session) -> None:
     db.execute(delete(GenerationModel).where(GenerationModel.id.in_(REMOVED_BUILTIN_MODEL_IDS)))
-    existing = set(db.scalars(select(GenerationModel.id)))
     for item in BUILTIN_MODELS:
-        if item["id"] in existing:
+        existing = db.get(GenerationModel, item["id"])
+        if existing is None:
+            db.add(GenerationModel(**item))
             continue
-        db.add(GenerationModel(**item))
+        existing.provider = item["provider"]
+        existing.kind = item["kind"]
+        existing.model = item["model"]
+        existing.capabilities = item["capabilities"]
+        existing.enabled = True
     db.commit()

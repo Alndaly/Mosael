@@ -7,8 +7,15 @@ import httpx
 
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError, provider_http_error, sanitize_provider_error
 from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
-from app.ai.providers.openai_image import build_submit_payload as openai_payload, extract_image_bytes
-from app.ai.providers.qwen_image import DASHSCOPE_BASE, build_submit_payload as qwen_payload, extract_result_url, resolve_dashscope_base
+from app.ai.providers.openai_image import build_edit_fields as openai_edit_fields, build_submit_payload as openai_payload, extract_image_bytes
+from app.ai.providers.qwen_image import (
+    DASHSCOPE_BASE,
+    build_edit_payload as qwen_edit_payload,
+    build_submit_payload as qwen_payload,
+    extract_result_url,
+    resolve_dashscope_base,
+    resolve_qwen_edit_base,
+)
 from app.ai.providers.seedance import (
     ARK_BASE,
     LAS_BASE,
@@ -59,6 +66,27 @@ def test_qwen_payload_shape() -> None:
     assert payload["parameters"] == {"size": "1024*576", "n": 2, "seed": 7}
 
 
+def test_qwen_edit_payload_uses_uploaded_reference_image(tmp_path) -> None:
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image-bytes")
+    request = GenerationRequest(
+        kind="image",
+        model="qwen-image-edit",
+        prompt="把女孩变成男孩",
+        negative_prompt="low quality",
+        parameters={"num_images": 1, "size": "1024x1024", "seed": 9},
+        source_files=(source,),
+    )
+    payload = qwen_edit_payload(request)
+    content = payload["input"]["messages"][0]["content"]
+    assert payload["model"] == "qwen-image-edit"
+    assert content == [
+        {"image": "data:image/png;base64,aW1hZ2UtYnl0ZXM="},
+        {"text": "把女孩变成男孩"},
+    ]
+    assert payload["parameters"] == {"n": 1, "watermark": False, "negative_prompt": "low quality", "seed": 9}
+
+
 def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_compatible_mode() -> None:
     context = ProviderContext(
         profile_id="p1",
@@ -67,6 +95,7 @@ def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_co
         base_url="https://llm-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
     )
     assert resolve_dashscope_base(context) == DASHSCOPE_BASE
+    assert resolve_qwen_edit_base(context) == "https://llm-example.cn-beijing.maas.aliyuncs.com"
 
     custom = ProviderContext(
         profile_id="p1",
@@ -80,6 +109,12 @@ def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_co
 def test_qwen_poll_parsing() -> None:
     assert extract_result_url({"output": {"task_status": "RUNNING"}}) is None
     assert extract_result_url({"output": {"task_status": "SUCCEEDED", "results": [{"url": "https://x/y.png"}]}}) == "https://x/y.png"
+    assert (
+        extract_result_url(
+            {"output": {"choices": [{"message": {"content": [{"image": "https://x/edit.png"}], "role": "assistant"}}]}}
+        )
+        == "https://x/edit.png"
+    )
     with pytest.raises(ProviderError):
         extract_result_url({"output": {"task_status": "FAILED"}})
 
@@ -162,6 +197,23 @@ def test_openai_image_payload_and_parsing() -> None:
     assert extract_image_bytes({"data": [{"b64_json": "aGk="}]}) == b"hi"
     with pytest.raises(ProviderError):
         extract_image_bytes({"data": []})
+
+
+def test_openai_image_edit_fields() -> None:
+    request = GenerationRequest(
+        kind="image",
+        model="gpt-image-2",
+        prompt="edit it",
+        parameters={"size": "1024*1024", "num_images": 2, "quality": "high", "input_fidelity": "high"},
+    )
+    assert openai_edit_fields(request) == {
+        "model": "gpt-image-2",
+        "prompt": "edit it",
+        "n": "2",
+        "size": "1024x1024",
+        "quality": "high",
+        "input_fidelity": "high",
+    }
 
 
 def test_veo_payload_and_parsing() -> None:

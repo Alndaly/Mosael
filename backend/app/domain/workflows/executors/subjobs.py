@@ -65,7 +65,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         prompt=str(config.get("prompt", "")),
         negative_prompt=str(config.get("negative_prompt", "")),
         parameters=dict(config.get("parameters") or {}),
-        source_asset_ids=[],
+        source_asset_ids=[str(item) for item in config.get("source_asset_ids") or []],
     )
     db.commit()
     start_generation_thread(generation.id)

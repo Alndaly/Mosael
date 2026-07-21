@@ -5379,6 +5379,12 @@
   justify-content: center;
 }
 
+.generation-reference-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
 .generation-first-frame-preview {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 28px;

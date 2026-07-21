@@ -337,10 +337,18 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
-def generate_image(prompt: str, model: str = "", provider: str = "", workspace_id: str = "") -> dict[str, Any]:
-    """Confirmation required: generate a NEW image asset from a text prompt.
+def generate_image(
+    prompt: str,
+    model: str = "",
+    provider: str = "",
+    workspace_id: str = "",
+    source_asset_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Confirmation required: generate or edit an image asset.
 
-    Use when the user asks to create a new still image/illustration/visual asset.
+    Use without source_asset_ids for text-to-image. Use source_asset_ids with
+    existing image asset ids when the user asks to edit/transform/continue from
+    a specific image, for example "把这张图里的女孩变成男孩" or "按上一张图继续改"。
     This creates a confirmation card because it may spend AI budget; after
     approval get_confirmation returns the job_id and the finished image appears
     in the media pool. Leave provider/model empty only when the user wants the
@@ -354,7 +362,13 @@ def generate_image(prompt: str, model: str = "", provider: str = "", workspace_i
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_image",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
+            "payload": {
+                "prompt": prompt,
+                "provider": provider,
+                "model": model,
+                "parameters": {},
+                "source_asset_ids": source_asset_ids or [],
+            },
         },
     )
     return _confirmation_reply(confirmation)

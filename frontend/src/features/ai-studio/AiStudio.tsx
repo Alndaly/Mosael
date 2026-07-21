@@ -61,6 +61,9 @@ type GenerationConfig = {
   firstFrameUrl: string;
   firstFrameAssetId: string;
   firstFrameAssetName: string;
+  referenceImageAssetId: string;
+  referenceImageAssetName: string;
+  usePreviousImage: boolean;
 };
 
 type GenerationEngineOption = GenerationModel & {
@@ -81,6 +84,9 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     firstFrameUrl: "",
     firstFrameAssetId: "",
     firstFrameAssetName: "",
+    referenceImageAssetId: "",
+    referenceImageAssetName: "",
+    usePreviousImage: true,
   };
 }
 
@@ -221,6 +227,7 @@ function GenerateWorkspace({
   const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
   const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
+  const referenceImageInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const sessions = useQuery({
     queryKey: ["generation-sessions", workspace.id],
@@ -308,6 +315,27 @@ function GenerateWorkspace({
     }));
   const clearFirstFrameAsset = () =>
     setGenerationConfig((current) => ({ ...current, firstFrameAssetId: "", firstFrameAssetName: "" }));
+  const setReferenceImageAsset = (asset: Asset) =>
+    setGenerationConfig((current) => ({
+      ...current,
+      referenceImageAssetId: asset.id,
+      referenceImageAssetName: asset.name,
+      usePreviousImage: false,
+    }));
+  const clearReferenceImage = () =>
+    setGenerationConfig((current) => ({
+      ...current,
+      referenceImageAssetId: "",
+      referenceImageAssetName: "",
+      usePreviousImage: false,
+    }));
+  const usePreviousImageAsReference = () =>
+    setGenerationConfig((current) => ({
+      ...current,
+      referenceImageAssetId: "",
+      referenceImageAssetName: "",
+      usePreviousImage: true,
+    }));
   const selectEngine = (value: string) => {
     const option = optionByValue.get(value);
     if (!option) return;
@@ -347,6 +375,29 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["assets"] });
     },
   });
+  const uploadReferenceImage = useMutation({
+    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file, name: file.name }),
+    onSuccess: (asset: Asset) => {
+      setReferenceImageAsset(asset);
+      void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+  const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
+  const latestImageResult = React.useMemo(
+    () => [...ordered].reverse().find((generation) => generation.kind === "image" && generation.result_asset_id) ?? null,
+    [ordered],
+  );
+  const effectiveReferenceImageAssetId =
+    selectedModel?.kind === "image"
+      ? generationConfig.referenceImageAssetId ||
+        (generationConfig.usePreviousImage ? latestImageResult?.result_asset_id ?? "" : "")
+      : "";
+  const effectiveReferenceImageName =
+    generationConfig.referenceImageAssetName ||
+    (effectiveReferenceImageAssetId && latestImageResult?.result_asset_id === effectiveReferenceImageAssetId
+      ? t("genPreviousImage")
+      : "");
 
   const createGeneration = useMutation({
     mutationFn: async () => {
@@ -385,7 +436,9 @@ function GenerateWorkspace({
           source_asset_ids:
             selectedModel!.kind === "video" && generationConfig.firstFrameAssetId
               ? [generationConfig.firstFrameAssetId]
-              : [],
+              : selectedModel!.kind === "image" && effectiveReferenceImageAssetId
+                ? [effectiveReferenceImageAssetId]
+                : [],
         }),
       });
       return targetSessionId;
@@ -447,8 +500,6 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     }
   }, [succeededCount, qc, workspace.id, activeSession?.id]);
-
-  const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
 
   React.useEffect(() => {
     const el = threadRef.current;
@@ -668,6 +719,60 @@ function GenerateWorkspace({
                     value={generationConfig.negativePrompt}
                     onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                   />
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genReferenceImage")}</span>
+                  <input
+                    ref={referenceImageInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) uploadReferenceImage.mutate(file);
+                    }}
+                  />
+                  <div className="generation-reference-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="generation-first-frame-upload"
+                      onClick={() => referenceImageInputRef.current?.click()}
+                      disabled={uploadReferenceImage.isPending}
+                    >
+                      {uploadReferenceImage.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                      {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
+                    </Button>
+                    {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
+                      <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
+                        {t("genUsePreviousImage")}
+                      </Button>
+                    )}
+                  </div>
+                  {effectiveReferenceImageAssetId && (
+                    <div className="generation-first-frame-preview">
+                      <button
+                        type="button"
+                        className="generation-first-frame-thumb"
+                        onClick={() =>
+                          openImagePreview({
+                            src: assetFileUrl(effectiveReferenceImageAssetId),
+                            title: effectiveReferenceImageName || t("genReferenceImage"),
+                          })
+                        }
+                      >
+                        <img src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
+                      </button>
+                      <span title={effectiveReferenceImageName || t("genReferenceImage")}>
+                        {effectiveReferenceImageName || t("genReferenceImage")}
+                      </span>
+                      <Button type="button" variant="ghost" size="icon" onClick={clearReferenceImage} aria-label={t("delete")}>
+                        <X size={13} />
+                      </Button>
+                    </div>
+                  )}
                 </label>
               </>
             ) : (

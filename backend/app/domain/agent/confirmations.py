@@ -255,7 +255,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             prompt=str(payload["prompt"]),
             negative_prompt=str(payload.get("negative_prompt", "")),
             parameters=dict(payload.get("parameters") or {}),
-            source_asset_ids=[],
+            source_asset_ids=[str(item) for item in payload.get("source_asset_ids") or []],
         )
         start_generation_thread(generation.id)
         return {"job_id": job.id, "generation_id": generation.id}

@@ -134,7 +134,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 prompt=str(payload.get("prompt", "")),
                 negative_prompt=str(payload.get("negative_prompt", "")),
                 parameters=dict(payload.get("parameters") or {}),
-                source_asset_ids=[],
+                source_asset_ids=[str(item) for item in payload.get("source_asset_ids") or []],
             )
             job.status = "running"
             job.message = f"Dispatched generation {generation.id}"

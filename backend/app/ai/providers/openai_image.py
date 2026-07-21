@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,22 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     return payload
 
 
+def build_edit_fields(request: GenerationRequest) -> dict[str, str]:
+    fields: dict[str, str] = {
+        "model": request.model,
+        "prompt": request.prompt,
+        "n": str(int(request.parameters.get("num_images", 1))),
+    }
+    size = request.parameters.get("size")
+    if size:
+        fields["size"] = str(size).replace("*", "x")
+    for key in ("quality", "background", "output_format", "moderation", "input_fidelity"):
+        value = request.parameters.get(key)
+        if value:
+            fields[key] = str(value)
+    return fields
+
+
 def extract_image_bytes(payload: dict[str, Any]) -> bytes:
     data = payload.get("data") or []
     if not data or not isinstance(data[0], dict):
@@ -55,7 +72,21 @@ class OpenAIImageProvider(GenerationProvider):
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
             with httpx.Client(base_url=base_url, timeout=120, headers=headers) as client:
-                response = client.post("/images/generations", json=build_submit_payload(request))
+                if request.source_files:
+                    files = []
+                    handles = []
+                    try:
+                        for path in request.source_files[:16]:
+                            handle = path.open("rb")
+                            handles.append(handle)
+                            mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+                            files.append(("image[]", (path.name, handle, mime_type)))
+                        response = client.post("/images/edits", data=build_edit_fields(request), files=files)
+                    finally:
+                        for handle in handles:
+                            handle.close()
+                else:
+                    response = client.post("/images/generations", json=build_submit_payload(request))
                 response.raise_for_status()
                 content = response.json()
                 data = content.get("data") or []

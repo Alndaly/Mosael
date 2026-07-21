@@ -6,7 +6,14 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
+from app.ai.providers.base import (
+    GenerationProvider,
+    GenerationRequest,
+    ProviderContext,
+    ProviderError,
+    image_file_to_data_url,
+    provider_http_error,
+)
 
 """
 Alibaba DashScope qwen-image adapter (async task API):
@@ -15,6 +22,7 @@ submit → poll /api/v1/tasks/{id} → download result URL.
 
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com"
 SUBMIT_PATH = "/api/v1/services/aigc/text2image/image-synthesis"
+EDIT_PATH = "/api/v1/services/aigc/multimodal-generation/generation"
 POLL_INTERVAL_SECONDS = 2.0
 POLL_TIMEOUT_SECONDS = 300
 
@@ -36,6 +44,36 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     return payload
 
 
+def build_edit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
+    model = resolve_edit_model(request, context)
+    content: list[dict[str, str]] = [{"image": image_file_to_data_url(path)} for path in request.source_files[:3]]
+    content.append({"text": request.prompt})
+    parameters: dict[str, Any] = {
+        "n": int(request.parameters.get("num_images", 1)),
+        "watermark": False,
+    }
+    if request.negative_prompt:
+        parameters["negative_prompt"] = request.negative_prompt
+    if request.parameters.get("seed") is not None:
+        parameters["seed"] = int(request.parameters["seed"])
+    if request.parameters.get("size") and model != "qwen-image-edit":
+        parameters["size"] = str(request.parameters["size"]).replace("x", "*")
+    if model != "qwen-image-edit":
+        parameters["prompt_extend"] = bool(request.parameters.get("prompt_extend", True))
+    return {
+        "model": model,
+        "input": {"messages": [{"role": "user", "content": content}]},
+        "parameters": parameters,
+    }
+
+
+def resolve_edit_model(request: GenerationRequest, context: ProviderContext | None = None) -> str:
+    model = (request.model or (context.default_model if context else "") or "qwen-image-edit").strip()
+    if model in {"qwen-image", "qwen-image-plus", "qwen-image-max"}:
+        return "qwen-image-edit"
+    return model
+
+
 def resolve_dashscope_base(context: ProviderContext) -> str:
     """Qwen image uses DashScope's native async task API, not Bailian compatible-mode.
 
@@ -47,8 +85,28 @@ def resolve_dashscope_base(context: ProviderContext) -> str:
     return (configured or DASHSCOPE_BASE).rstrip("/")
 
 
+def resolve_qwen_edit_base(context: ProviderContext) -> str:
+    configured = str(context.extra.get("qwen_edit_base_url") or context.extra.get("generation_base_url") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+    base_url = (context.base_url or "").rstrip("/")
+    if base_url.endswith("/compatible-mode/v1"):
+        return base_url.removesuffix("/compatible-mode/v1")
+    if base_url and base_url != DASHSCOPE_BASE:
+        return base_url
+    return DASHSCOPE_BASE
+
+
 def extract_result_url(task_payload: dict[str, Any]) -> str | None:
     output = task_payload.get("output") or {}
+    choices = output.get("choices") or []
+    for choice in choices:
+        message = choice.get("message") if isinstance(choice, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("image"):
+                    return str(item["image"])
     status = output.get("task_status")
     if status == "SUCCEEDED":
         results = output.get("results") or []
@@ -69,8 +127,23 @@ class QwenImageProvider(GenerationProvider):
         if not context.api_key:
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
         base_url = resolve_dashscope_base(context)
-        headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
         try:
+            if request.source_files:
+                headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
+                with httpx.Client(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
+                    submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))
+                    submit.raise_for_status()
+                    url = extract_result_url(submit.json())
+                    if not url:
+                        raise ProviderError("Provider returned success without a result URL")
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    target = output_dir / "generated.png"
+                    download = client.get(url)
+                    download.raise_for_status()
+                    target.write_bytes(download.content)
+                    return target
+
+            headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
             with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
