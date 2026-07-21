@@ -41,6 +41,29 @@ def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     assert "confirmation_id/status=pending" in prompt
 
 
+def test_stream_timeline_preserves_text_tool_text_order() -> None:
+    session_id = "timeline-order-test"
+    host._stream_reset(session_id)
+    host._stream_append(session_id, "先说明。")
+    host._stream_tool_event(
+        session_id,
+        {"type": "tool_start", "toolCallId": "tool-1", "name": "list_workflows", "args": {"workspace_id": "w"}},
+    )
+    host._stream_tool_event(
+        session_id,
+        {"type": "tool_end", "toolCallId": "tool-1", "result": [{"name": "新工作流"}], "isError": False},
+    )
+    host._stream_append(session_id, "再总结。")
+
+    state = host.get_stream_state(session_id)
+
+    assert [item["type"] for item in state["timeline"]] == ["text", "tool", "text"]
+    assert state["timeline"][0]["text"] == "先说明。"
+    assert state["timeline"][1]["tool"]["name"] == "list_workflows"
+    assert state["timeline"][1]["tool"]["status"] == "done"
+    assert state["timeline"][2]["text"] == "再总结。"
+
+
 def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     calls: dict = {}
 

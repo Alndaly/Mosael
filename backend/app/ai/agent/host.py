@@ -60,15 +60,16 @@ def get_stream_state(session_id: str) -> dict:
     with _streams_lock:
         state = _streams.get(session_id)
         if not state:
-            return {"text": "", "done": True, "seq": 0, "tools": []}
+            return {"text": "", "done": True, "seq": 0, "tools": [], "timeline": []}
         snapshot = dict(state)
         snapshot["tools"] = [dict(card) for card in state["tools"]]
+        snapshot["timeline"] = [dict(item) for item in state.get("timeline", [])]
         return snapshot
 
 
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
-        _streams[session_id] = {"text": "", "done": False, "seq": 0, "tools": []}
+        _streams[session_id] = {"text": "", "done": False, "seq": 0, "tools": [], "timeline": []}
 
 
 def _stream_tool_event(session_id: str, event: dict) -> None:
@@ -78,15 +79,21 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
         if state is None:
             return
         cards: list[dict] = state["tools"]
+        timeline: list[dict] = state.setdefault("timeline", [])
         if event.get("type") == "tool_start":
-            cards.append(
-                {"id": event.get("toolCallId"), "name": event.get("name"), "args": event.get("args"), "status": "running"}
-            )
+            card = {"id": event.get("toolCallId"), "name": event.get("name"), "args": event.get("args"), "status": "running"}
+            cards.append(card)
+            timeline.append({"type": "tool", "tool": card})
         elif event.get("type") == "tool_end":
             for card in cards:
                 if card["id"] == event.get("toolCallId"):
                     card["status"] = "error" if event.get("isError") else "done"
                     card["result"] = event.get("result")
+                    for item in timeline:
+                        tool = item.get("tool")
+                        if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == card["id"]:
+                            item["tool"] = card
+                            break
                     break
         state["seq"] += 1
 
@@ -96,15 +103,57 @@ def _stream_append(session_id: str, delta: str) -> None:
         state = _streams.get(session_id)
         if state is not None:
             state["text"] += delta
+            timeline: list[dict] = state.setdefault("timeline", [])
+            if timeline and timeline[-1].get("type") == "text":
+                timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
+            else:
+                timeline.append({"type": "text", "text": delta})
             state["seq"] += 1
 
 
 def _stream_finish(session_id: str, final_text: str) -> None:
     with _streams_lock:
-        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0, "tools": []})
+        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0, "tools": [], "timeline": []})
         state["text"] = final_text
+        timeline: list[dict] = state.setdefault("timeline", [])
+        existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
+        if final_text and not existing_text:
+            timeline.append({"type": "text", "text": final_text})
+        elif final_text and final_text.startswith(existing_text) and len(final_text) > len(existing_text):
+            tail = final_text[len(existing_text) :]
+            if timeline and timeline[-1].get("type") == "text":
+                timeline[-1]["text"] = str(timeline[-1].get("text", "")) + tail
+            else:
+                timeline.append({"type": "text", "text": tail})
         state["done"] = True
         state["seq"] += 1
+
+
+def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
+    """Return the persisted, display-ready event order for one assistant turn.
+
+    The live stream stores a denormalized text snapshot plus an ordered timeline. The snapshot
+    is for quick SSE consumers; the timeline is what the chat UI needs after refresh so tool
+    cards stay where they actually happened.
+    """
+    timeline: list[dict] = []
+    for item in stream_state.get("timeline") or []:
+        if item.get("type") == "text":
+            text = decode_byte_fallback(str(item.get("text", "")))
+            if text:
+                timeline.append({"type": "text", "text": text})
+        elif item.get("type") == "tool" and isinstance(item.get("tool"), dict):
+            timeline.append({"type": "tool", "tool": dict(item["tool"])})
+    existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
+    if final_text and not existing_text:
+        timeline.append({"type": "text", "text": final_text})
+    elif final_text and final_text.startswith(existing_text) and len(final_text) > len(existing_text):
+        tail = final_text[len(existing_text) :]
+        if timeline and timeline[-1].get("type") == "text":
+            timeline[-1]["text"] = str(timeline[-1].get("text", "")) + tail
+        else:
+            timeline.append({"type": "text", "text": tail})
+    return timeline
 
 
 def on_turn_finished(callback: Callable[[str], None]) -> None:
@@ -294,7 +343,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             final_text = decode_byte_fallback(result.text)
             if result.adapter_state is not None:
                 session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
-            tool_cards = get_stream_state(session_id)["tools"]  # 持久化工具卡到消息,turn 结束后仍可见
+            stream_state = get_stream_state(session_id)
+            tool_cards = stream_state["tools"]  # 持久化工具卡到消息,turn 结束后仍可见
+            timeline = _timeline_for_payload(stream_state, final_text)
             # Never persist a blank assistant turn: an empty reply with no tool calls means the
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
@@ -311,6 +362,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     payload={
                         "duration_seconds": round(time.monotonic() - turn_started, 1),
                         **({"tools": tool_cards} if tool_cards else {}),
+                        **({"timeline": timeline} if timeline else {}),
                     },
                 )
             )

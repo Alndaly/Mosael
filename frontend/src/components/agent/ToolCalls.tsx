@@ -1,10 +1,12 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "lucide-react";
+import { Streamdown } from "streamdown";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/ui/image-preview";
+import { decodeByteFallback } from "@/lib/byteFallback";
 import { ToolResultCard, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -15,6 +17,10 @@ export type ToolCall = {
   status: "running" | "done" | "error";
   result?: unknown;
 };
+
+export type AgentTimelineItem =
+  | { type: "text"; text?: string }
+  | { type: "tool"; tool?: ToolCall; tool_id?: string };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
 function summarize(args: unknown): string | null {
@@ -195,6 +201,52 @@ export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
         <ToolCallCard key={tool.id} tool={tool} />
       ))}
     </div>
+  );
+}
+
+export function agentTurnParts(
+  timeline: AgentTimelineItem[] | undefined,
+  tools: ToolCall[] | undefined,
+  content: string,
+): AgentTimelineItem[] {
+  if (!timeline?.length) {
+    return [...(tools ?? []).map((tool) => ({ type: "tool" as const, tool })), { type: "text", text: content }];
+  }
+  const toolById = new Map((tools ?? []).map((tool) => [tool.id, tool]));
+  const parts: AgentTimelineItem[] = [];
+  for (const item of timeline) {
+    if (item.type === "text") {
+      parts.push({ type: "text", text: item.text ?? "" });
+    } else {
+      const tool = item.tool ?? (item.tool_id ? toolById.get(item.tool_id) : undefined);
+      if (tool) parts.push({ type: "tool", tool });
+    }
+  }
+  return parts;
+}
+
+/** Assistant answer renderer: preserves text/tool event order when payload.timeline exists. */
+export function AgentTurnContent({
+  content,
+  tools,
+  timeline,
+}: {
+  content: string;
+  tools?: ToolCall[];
+  timeline?: AgentTimelineItem[];
+}) {
+  return (
+    <>
+      {agentTurnParts(timeline, tools, content).map((item, index) =>
+        item.type === "tool" && item.tool ? (
+          <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
+        ) : item.type === "text" && item.text ? (
+          <Streamdown key={`text-${index}`} controls={{ table: false }}>
+            {decodeByteFallback(item.text)}
+          </Streamdown>
+        ) : null,
+      )}
+    </>
   );
 }
 
