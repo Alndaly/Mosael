@@ -2189,9 +2189,36 @@ export interface paths {
         put?: never;
         /**
          * Workflow Agent Session
-         * @description 工作流专属常驻智能体会话:按 external_key 找回,记忆随会话长期保留。
+         * @description 工作流的默认智能体会话:按 external_key 找回,记忆随会话长期保留。
+         *
+         *     一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回
+         *     「默认会话」(get-or-create),保持老调用方语义不变。
          */
         post: operations["workflow_agent_session_api_workflows__workflow_id__agent_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/{workflow_id}/agent-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workflow Agent Sessions
+         * @description 该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。
+         */
+        get: operations["list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get"];
+        put?: never;
+        /**
+         * Create Workflow Agent Session
+         * @description 给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。
+         */
+        post: operations["create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10489,6 +10516,68 @@ export interface operations {
         };
     };
     workflow_agent_session_api_workflows__workflow_id__agent_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post: {
         parameters: {
             query?: never;
             header?: never;

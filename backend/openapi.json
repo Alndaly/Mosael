@@ -6767,8 +6767,96 @@
           "workflows"
         ],
         "summary": "Workflow Agent Session",
-        "description": "工作流专属常驻智能体会话:按 external_key 找回,记忆随会话长期保留。",
+        "description": "工作流的默认智能体会话:按 external_key 找回,记忆随会话长期保留。\n\n一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回\n「默认会话」(get-or-create),保持老调用方语义不变。",
         "operationId": "workflow_agent_session_api_workflows__workflow_id__agent_session_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}/agent-sessions": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "List Workflow Agent Sessions",
+        "description": "该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。",
+        "operationId": "list_workflow_agent_sessions_api_workflows__workflow_id__agent_sessions_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSessionOut"
+                  },
+                  "title": "Response List Workflow Agent Sessions Api Workflows  Workflow Id  Agent Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Create Workflow Agent Session",
+        "description": "给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。",
+        "operationId": "create_workflow_agent_session_api_workflows__workflow_id__agent_sessions_post",
         "parameters": [
           {
             "name": "workflow_id",

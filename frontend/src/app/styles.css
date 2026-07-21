@@ -8154,6 +8154,21 @@
   font-weight: 600;
 }
 
+/* 头部会话切换器:压缩到头栏高度,标题超长省略 */
+.wf-agent-session-picker {
+  height: 24px;
+  max-width: 150px;
+  min-width: 0;
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.wf-agent-session-picker > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wf-agent-grip {
   margin-left: auto;
   color: var(--muted-foreground);

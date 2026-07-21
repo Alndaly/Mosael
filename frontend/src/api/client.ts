@@ -501,6 +501,14 @@ export function workflowAgentSession(workflowId: string): Promise<AgentSessionIn
   return api<AgentSessionInfo>(`/api/workflows/${workflowId}/agent-session`, { method: "POST" });
 }
 
+export function listWorkflowAgentSessions(workflowId: string): Promise<AgentSessionInfo[]> {
+  return api<AgentSessionInfo[]>(`/api/workflows/${workflowId}/agent-sessions`);
+}
+
+export function createWorkflowAgentSession(workflowId: string): Promise<AgentSessionInfo> {
+  return api<AgentSessionInfo>(`/api/workflows/${workflowId}/agent-sessions`, { method: "POST" });
+}
+
 export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
   return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
 }

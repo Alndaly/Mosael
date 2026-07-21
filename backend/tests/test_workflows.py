@@ -673,3 +673,27 @@ def test_node_types_and_executor_registry_stay_in_lockstep() -> None:
     from app.domain.workflows.executors import registered_types
 
     assert set(NODE_TYPES) == set(registered_types())
+
+
+def test_workflow_supports_multiple_agent_sessions() -> None:
+    """一个工作流不止一个 AI 会话:默认会话 get-or-create,新会话带唯一后缀,
+    列表把两类都按前缀归组返回。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF"}).json()
+
+    default = client.post(f"/api/workflows/{wf['id']}/agent-session").json()
+    assert client.post(f"/api/workflows/{wf['id']}/agent-session").json()["id"] == default["id"]  # 幂等
+
+    second = client.post(f"/api/workflows/{wf['id']}/agent-sessions").json()
+    third = client.post(f"/api/workflows/{wf['id']}/agent-sessions").json()
+    assert len({default["id"], second["id"], third["id"]}) == 3
+
+    listed = client.get(f"/api/workflows/{wf['id']}/agent-sessions").json()
+    assert {item["id"] for item in listed} == {default["id"], second["id"], third["id"]}
+
+    # 别的工作流看不到这些会话
+    other = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF2"}).json()
+    assert client.get(f"/api/workflows/{other['id']}/agent-sessions").json() == []

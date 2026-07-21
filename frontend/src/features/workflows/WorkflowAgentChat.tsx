@@ -1,14 +1,15 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CornerDownRight, GripHorizontal, Loader2, Paperclip, Send, Square, Trash2, X } from "lucide-react";
+import { Bot, CornerDownRight, GripHorizontal, Loader2, Paperclip, Plus, Send, Square, Trash2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { decodeByteFallback } from "../../lib/byteFallback";
 import { toast } from "sonner";
 
-import { API_BASE, api, getAuthToken, workflowAgentSession } from "@/api/client";
+import { API_BASE, api, createWorkflowAgentSession, getAuthToken, listWorkflowAgentSessions, workflowAgentSession } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 
@@ -162,12 +163,45 @@ export function WorkflowAgentChat({
     window.addEventListener("pointerup", onUp);
   };
 
-  const session = useQuery({
+  // 多会话:默认会话 get-or-create 兜底;列表含手动新建的;选中项按工作流记忆。
+  const SESSION_KEY = `mibu.wf.agent.session.${workflowId}`;
+  const defaultSession = useQuery({
     queryKey: ["workflow-agent-session", workflowId],
     queryFn: () => workflowAgentSession(workflowId),
     staleTime: Infinity,
   });
-  const sessionId = session.data?.id ?? null;
+  const sessions = useQuery({
+    queryKey: ["workflow-agent-sessions", workflowId],
+    enabled: Boolean(defaultSession.data),
+    queryFn: () => listWorkflowAgentSessions(workflowId),
+  });
+  const [selectedId, setSelectedId] = React.useState<string | null>(
+    () => window.localStorage.getItem(SESSION_KEY) || null,
+  );
+  const sessionList = sessions.data ?? [];
+  const activeSession =
+    sessionList.find((item) => item.id === selectedId) ??
+    sessionList.find((item) => item.id === defaultSession.data?.id) ??
+    defaultSession.data ??
+    null;
+  const sessionId = activeSession?.id ?? null;
+  const switchSession = (nextId: string) => {
+    if (nextId === sessionId) return;
+    // 旧会话的流不许串进新视图:先掐流、清流态,再切。
+    abortRef.current?.abort();
+    streamingRef.current = null;
+    setStreamText("");
+    setStreamTools([]);
+    setSelectedId(nextId);
+    window.localStorage.setItem(SESSION_KEY, nextId);
+  };
+  const newSession = useMutation({
+    mutationFn: () => createWorkflowAgentSession(workflowId),
+    onSuccess: (created) => {
+      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
+      switchSession(created.id);
+    },
+  });
 
   const messages = useQuery({
     queryKey: ["agent-messages", sessionId],
@@ -333,6 +367,30 @@ export function WorkflowAgentChat({
         <h2 className="wf-agent-title">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
+        {sessionList.length > 0 && sessionId && (
+          <Select value={sessionId} onValueChange={switchSession}>
+            <SelectTrigger className="wf-agent-session-picker" aria-label={t("wfAgentSessions")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sessionList.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <button
+          type="button"
+          className="inspector-delete"
+          aria-label={t("wfAgentNewSession")}
+          title={t("wfAgentNewSession")}
+          disabled={newSession.isPending}
+          onClick={() => newSession.mutate()}
+        >
+          <Plus size={13} />
+        </button>
         <GripHorizontal size={13} className="wf-agent-grip" />
         <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
@@ -377,8 +435,8 @@ export function WorkflowAgentChat({
             </span>
           </div>
         )}
-        {session.data && (
-          <InlineConfirmations workspaceId={session.data.workspace_id} allowKey={session.data.id} />
+        {activeSession && (
+          <InlineConfirmations workspaceId={activeSession.workspace_id} allowKey={activeSession.id} />
         )}
       </div>
       {(queue.data ?? []).map((message) => (
