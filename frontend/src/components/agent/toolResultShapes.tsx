@@ -92,6 +92,7 @@ const PLAYABLE = new Set(["video", "audio", "image"]);
 
 function AssetRow({ row }: { row: Record<string, unknown> }) {
   const [open, setOpen] = React.useState(false);
+  const [thumbFailed, setThumbFailed] = React.useState(false);
   const id = String(row.id ?? "");
   const kind = String(row.kind ?? "");
   const name = String(row.name ?? id);
@@ -102,12 +103,19 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
   const duration = kind === "image" ? null : row.duration_seconds ?? info?.duration;
   const playable = Boolean(id) && PLAYABLE.has(kind);
   const isImage = kind === "image";
+  const shouldTryThumb = Boolean(id) && !thumbFailed && (kind === "image" || kind === "video");
 
   const body = (
     <>
       <span className="tool-card-thumb-wrap">
-        {info?.has_thumbnail ? (
-          <img className="tool-card-thumb" src={assetThumbnailUrl(id)} alt="" loading="lazy" />
+        {info?.has_thumbnail || shouldTryThumb ? (
+          <img
+            className="tool-card-thumb"
+            src={assetThumbnailUrl(id)}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbFailed(true)}
+          />
         ) : (
           <span className="tool-card-thumb tool-card-thumb-empty" data-kind={kind} />
         )}
@@ -152,6 +160,10 @@ function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
+function EmptyResult() {
+  return <div className="tool-card-empty">没有返回条目</div>;
+}
+
 function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
     <ul className="tool-card-list">
@@ -161,6 +173,27 @@ function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
           {row.active_sequence_id ? <span className="tool-card-meta">有活动序列</span> : null}
         </li>
       ))}
+    </ul>
+  );
+}
+
+function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
+  return (
+    <ul className="tool-card-list">
+      {rows.map((row, index) => {
+        const title = String(row.name ?? row.title ?? row.label ?? row.tool_name ?? row.id ?? `条目 ${index + 1}`);
+        const meta = String(row.kind ?? row.type ?? row.status ?? row.plugin_id ?? "");
+        const snippet = String(row.description ?? row.snippet ?? row.summary ?? row.content ?? "");
+        return (
+          <li className="tool-card-result" key={String(row.id ?? row.tool_name ?? row.title ?? index)}>
+            <span className="tool-card-row">
+              <span className="tool-card-name" title={title}>{title}</span>
+              {meta && <span className="tool-card-meta">{meta}</span>}
+            </span>
+            {snippet && <span className="tool-card-snippet">{snippet}</span>}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -288,6 +321,104 @@ function TaggedAsset({ value }: { value: Record<string, unknown> }) {
   );
 }
 
+function UpdatedList({ value }: { value: Record<string, unknown> }) {
+  const rows = (value.updated as Record<string, unknown>[]).filter(isRecord);
+  return (
+    <div className="tool-card-stack">
+      <span className="tool-card-meta">已更新 {String(value.count ?? rows.length)} 项</span>
+      <ul className="tool-card-list">
+        {rows.map((row, index) => (
+          <li className="tool-card-row" key={String(row.id ?? index)}>
+            <span className="tool-card-name" title={String(row.name ?? row.id ?? "")}>
+              {String(row.name ?? row.id ?? `条目 ${index + 1}`)}
+            </span>
+            {Array.isArray(row.tags) && (
+              <span className="tool-card-chips">
+                {row.tags.map((tag) => (
+                  <span className="tool-card-chip" key={String(tag)}>{String(tag)}</span>
+                ))}
+              </span>
+            )}
+            {typeof row.project_id === "string" && row.project_id && (
+              <span className="tool-card-meta">项目 {row.project_id.slice(0, 8)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AssetBundle({ value }: { value: Record<string, unknown> }) {
+  const rows = Array.isArray(value.assets) ? (value.assets as Record<string, unknown>[]).filter(isRecord) : [];
+  if (rows.length > 0 && rows.every((row) => "id" in row && "name" in row && "kind" in row)) {
+    return <AssetList rows={rows} />;
+  }
+  return (
+    <div className="tool-card-workflow">
+      <span className="tool-card-name">素材集合</span>
+      <span className="tool-card-meta">{String(value.count ?? rows.length)} 项</span>
+    </div>
+  );
+}
+
+function AssetRef({ value }: { value: Record<string, unknown> }) {
+  const id = String(value.asset_id ?? "");
+  return (
+    <div className="tool-card-workflow">
+      <span className="tool-card-name">{String(value.name ?? value.title ?? "素材")}</span>
+      {id && <span className="tool-card-chip">{id.slice(0, 12)}</span>}
+      {typeof value.generation_id === "string" && value.generation_id.trim() && (
+        <span className="tool-card-meta">生成任务 {value.generation_id.slice(0, 8)}</span>
+      )}
+    </div>
+  );
+}
+
+function RefSummary({ value }: { value: Record<string, unknown> }) {
+  const refs = [
+    ["workflow_id", "工作流"],
+    ["project_id", "项目"],
+    ["sequence_id", "序列"],
+    ["job_id", "任务"],
+    ["generation_id", "生成"],
+  ].filter(([key]) => typeof value[key] === "string" && String(value[key]).trim());
+  return (
+    <div className="tool-card-workflow">
+      <span className="tool-card-name">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
+      {refs.map(([key, label]) => (
+        <span className="tool-card-chip" key={key}>
+          {label} {String(value[key]).slice(0, 12)}
+        </span>
+      ))}
+      {value.nodes != null && <span className="tool-card-meta">{String(value.nodes)} 节点</span>}
+    </div>
+  );
+}
+
+function PluginOutput({ value }: { value: Record<string, unknown> }) {
+  const output = value.output;
+  const error = value.error;
+  return (
+    <div className="tool-card-stack">
+      <div className="tool-card-confirm" data-status={String(value.status ?? "")}>
+        <span className="tool-card-name">插件工具</span>
+        <span className="tool-card-meta">{String(value.status ?? "done")}</span>
+      </div>
+      {error ? <LongText text={String(error)} /> : <ToolResultCard value={output} />}
+    </div>
+  );
+}
+
+function NestedResults({ value }: { value: Record<string, unknown> }) {
+  return (
+    <div className="tool-card-stack">
+      {typeof value.text === "string" && value.text.trim() && <LongText text={value.text} />}
+      <ToolResultCard value={value.results} />
+    </div>
+  );
+}
+
 function DocRef({ value }: { value: Record<string, unknown> }) {
   return (
     <div className="tool-card-row">
@@ -299,6 +430,55 @@ function DocRef({ value }: { value: Record<string, unknown> }) {
 
 function LongText({ text }: { text: string }) {
   return <div className="tool-card-text">{text}</div>;
+}
+
+function valueLabel(value: unknown): string {
+  if (value == null) return "—";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.length === 0 ? "空列表" : `${value.length} 项`;
+  if (isRecord(value)) return Object.keys(value).length === 0 ? "空对象" : `${Object.keys(value).length} 个字段`;
+  return String(value);
+}
+
+function keyLabel(key: string): string {
+  const map: Record<string, string> = {
+    answer: "分析结果",
+    asset_id: "素材",
+    count: "数量",
+    error: "错误",
+    frames: "帧数",
+    json: "JSON",
+    length: "长度",
+    message: "消息",
+    model: "模型",
+    output: "输出",
+    provider: "供应商",
+    result: "结果",
+    sent: "通知",
+    status: "状态",
+    text: "文本",
+    waited: "等待",
+  };
+  return map[key] ?? key.replaceAll("_", " ");
+}
+
+function SummaryCard({ value }: { value: Record<string, unknown> }) {
+  const entries = Object.entries(value)
+    .filter(([, item]) => item != null && item !== "")
+    .slice(0, 8);
+  if (entries.length === 0) return <EmptyResult />;
+  return (
+    <dl className="tool-card-summary">
+      {entries.map(([key, item]) => (
+        <React.Fragment key={key}>
+          <dt>{keyLabel(key)}</dt>
+          <dd title={typeof item === "string" ? item : undefined}>{valueLabel(item)}</dd>
+        </React.Fragment>
+      ))}
+    </dl>
+  );
 }
 
 /**
@@ -317,7 +497,16 @@ export type ResultShape =
   | "confirmation"
   | "workflow"
   | "tagged"
+  | "assetBundle"
+  | "assetRef"
+  | "updated"
+  | "refs"
+  | "pluginOutput"
+  | "nestedResults"
   | "docref"
+  | "records"
+  | "empty"
+  | "summary"
   | "text"
   | null;
 
@@ -330,14 +519,22 @@ export type ResultShape =
  */
 export function detectShape(value: unknown): ResultShape {
   if (value == null) return null;
+  if (typeof value === "string") return value.trim() ? "text" : "empty";
+  if (typeof value === "number" || typeof value === "boolean") return "summary";
 
+  if (Array.isArray(value) && value.length === 0) return "empty";
   if (everyRecordHas(value, "id", "name", "kind")) return "assets";
   if (everyRecordHas(value, "document_id", "snippet")) return "kb";
   if (everyRecordHas(value, "url", "title")) return "search";
   if (everyRecordHas(value, "id", "name", "active_sequence_id")) return "projects";
   if (everyRecordHas(value, "id", "name") || everyRecordHas(value, "type", "label")) return "named";
+  if (Array.isArray(value) && value.every(isRecord)) return "records";
 
   if (isRecord(value)) {
+    if (Array.isArray(value.assets) && "count" in value) return "assetBundle";
+    if (Array.isArray(value.updated) && "count" in value) return "updated";
+    if ("status" in value && "output" in value && "error" in value) return "pluginOutput";
+    if (Array.isArray(value.results)) return "nestedResults";
     if ("tracks" in value && Array.isArray(value.tracks)) return "sequence";
     if ("confirmation_id" in value && "status" in value) return "confirmation";
     // get_workflow(以及确认卡执行后的 workflow 结果):graph 里有 nodes/edges 就是一张图。
@@ -346,21 +543,27 @@ export function detectShape(value: unknown): ResultShape {
     }
     // update_asset_tags:单素材 + 新标签集。
     if ("asset_id" in value && Array.isArray(value.tags) && "name" in value) return "tagged";
+    if (typeof value.asset_id === "string" && value.asset_id.trim()) return "assetRef";
+    if (["workflow_id", "project_id", "sequence_id", "job_id", "generation_id"].some((key) => typeof value[key] === "string" && String(value[key]).trim())) {
+      return "refs";
+    }
     // create_kb_note:单条文档引用(数组版是 kb 搜索,已在上面命中)。
     if ("document_id" in value && "title" in value && !("snippet" in value)) return "docref";
-    // analyze_asset / fetch_url / read_kb_document: one long body is prose, not data.
+    // analyze_asset / fetch_url / read_kb_document / llm nodes: prose, not raw data.
     for (const key of ["answer", "text", "content", "body"]) {
       const text = value[key];
-      if (typeof text === "string" && text.trim().length > 80) return "text";
+      if (typeof text === "string" && text.trim()) return "text";
     }
+    return "summary";
   }
   return null;
 }
 
-function longTextOf(value: Record<string, unknown>): string {
+function longTextOf(value: Record<string, unknown> | string): string {
+  if (typeof value === "string") return value;
   for (const key of ["answer", "text", "content", "body"]) {
     const text = value[key];
-    if (typeof text === "string" && text.trim().length > 80) return text;
+    if (typeof text === "string" && text.trim()) return text;
   }
   return "";
 }
@@ -385,10 +588,28 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
       return <WorkflowCard value={value as Record<string, unknown>} />;
     case "tagged":
       return <TaggedAsset value={value as Record<string, unknown>} />;
+    case "assetBundle":
+      return <AssetBundle value={value as Record<string, unknown>} />;
+    case "assetRef":
+      return <AssetRef value={value as Record<string, unknown>} />;
+    case "updated":
+      return <UpdatedList value={value as Record<string, unknown>} />;
+    case "refs":
+      return <RefSummary value={value as Record<string, unknown>} />;
+    case "pluginOutput":
+      return <PluginOutput value={value as Record<string, unknown>} />;
+    case "nestedResults":
+      return <NestedResults value={value as Record<string, unknown>} />;
     case "docref":
       return <DocRef value={value as Record<string, unknown>} />;
+    case "records":
+      return <GenericRecordList rows={value as Record<string, unknown>[]} />;
+    case "empty":
+      return <EmptyResult />;
+    case "summary":
+      return isRecord(value) ? <SummaryCard value={value} /> : <SummaryCard value={{ value }} />;
     case "text":
-      return <LongText text={longTextOf(value as Record<string, unknown>)} />;
+      return <LongText text={longTextOf(value as Record<string, unknown> | string)} />;
     default:
       return null;
   }

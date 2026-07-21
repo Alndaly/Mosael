@@ -81,19 +81,19 @@ describe("detectShape", () => {
   });
 
   it("leaves a short body alone — a two-word answer is not a document", () => {
-    expect(detectShape({ answer: "好的" })).toBeNull();
+    expect(detectShape({ answer: "好的" })).toBe("text");
   });
 
   it("falls back to null for anything unrecognised", () => {
-    expect(detectShape({ applied_operations: 3, sequence_revision: 12 })).toBeNull();
-    expect(detectShape([])).toBeNull();
-    expect(detectShape("plain text")).toBeNull();
+    expect(detectShape({ applied_operations: 3, sequence_revision: 12 })).toBe("summary");
+    expect(detectShape([])).toBe("empty");
+    expect(detectShape("plain text")).toBe("text");
     expect(detectShape(null)).toBeNull();
   });
 
   it("does not match a partial list where only some rows have the keys", () => {
-    // Half-rendering a list is worse than not rendering it.
-    expect(detectShape([{ id: "a", name: "n", kind: "video" }, { id: "b" }])).toBeNull();
+    // It should not half-render as an asset list; the generic row card is the safe fallback.
+    expect(detectShape([{ id: "a", name: "n", kind: "video" }, { id: "b" }])).toBe("records");
   });
 });
 
@@ -113,7 +113,7 @@ describe("single-object shapes (get_workflow / update_asset_tags / create_kb_not
   });
 
   it("does not mistake an object with a non-graph `graph` key", () => {
-    expect(detectShape({ graph: "not-a-graph" })).toBeNull();
+    expect(detectShape({ graph: "not-a-graph" })).toBe("summary");
   });
 
   it("recognises a tagging result: asset + new tag set", () => {
@@ -126,5 +126,43 @@ describe("single-object shapes (get_workflow / update_asset_tags / create_kb_not
 
   it("keeps kb SEARCH results (array with snippets) on the kb card", () => {
     expect(detectShape([{ document_id: "d1", snippet: "…", title: "t" }])).toBe("kb");
+  });
+});
+
+describe("common tool and workflow result cards", () => {
+  it("recognises workflow asset-query bundles", () => {
+    expect(
+      detectShape({
+        assets: [{ id: "a1", name: "素材.mp4", kind: "video", duration: 12 }],
+        ids: ["a1"],
+        count: 1,
+      }),
+    ).toBe("assetBundle");
+  });
+
+  it("recognises generated/exported asset references", () => {
+    expect(detectShape({ asset_id: "a1", generation_id: "g1" })).toBe("assetRef");
+  });
+
+  it("recognises workflow batch update results", () => {
+    expect(detectShape({ updated: [{ id: "a1", name: "素材.mp4", tags: ["悬疑"] }], count: 1 })).toBe("updated");
+  });
+
+  it("recognises id-only creation/job results", () => {
+    expect(detectShape({ workflow_id: "w1", nodes: 6 })).toBe("refs");
+    expect(detectShape({ project_id: "p1", name: "新项目" })).toBe("refs");
+    expect(detectShape({ job_id: "j1" })).toBe("refs");
+  });
+
+  it("recognises plugin output envelopes", () => {
+    expect(detectShape({ status: "succeeded", output: { ok: true }, error: null })).toBe("pluginOutput");
+  });
+
+  it("recognises nested result lists from workflow nodes", () => {
+    expect(detectShape({ text: "命中文档", results: [{ document_id: "d1", snippet: "s" }] })).toBe("nestedResults");
+  });
+
+  it("uses generic rows for otherwise valid object lists", () => {
+    expect(detectShape([{ plugin_id: "p1", tool_name: "t", description: "desc" }])).toBe("records");
   });
 });
