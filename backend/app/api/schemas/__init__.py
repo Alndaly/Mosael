@@ -663,12 +663,14 @@ class GenerationModelOut(OrmModel):
     model: str
     enabled: bool
     capabilities: dict
+    adapter_available: bool
 
 
 class GenerationCreate(BaseModel):
     workspace_id: str
     session_id: str | None = None
     project_id: str | None = None
+    provider_profile_id: str | None = None
     provider: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
     kind: str = Field(pattern="^(image|video)$")
@@ -683,6 +685,7 @@ class GenerationJobOut(OrmModel):
     workspace_id: str
     session_id: str | None = None
     job_id: str
+    provider_profile_id: str | None = None
     provider: str
     model: str
     kind: str
@@ -698,16 +701,25 @@ class GenerationCreateResponse(BaseModel):
 class GenerationSessionCreate(BaseModel):
     workspace_id: str
     title: str = Field(default="新生成", max_length=200)
+    provider_profile_id: str | None = None
+    model: str | None = Field(default=None, max_length=120)
+    kind: str | None = Field(default=None, pattern="^(image|video)$")
 
 
 class GenerationSessionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
+    provider_profile_id: str | None = None
+    model: str | None = Field(default=None, max_length=120)
+    kind: str | None = Field(default=None, pattern="^(image|video)$")
 
 
 class GenerationSessionOut(OrmModel):
     id: str
     workspace_id: str
     title: str
+    provider_profile_id: str | None = None
+    model: str | None = None
+    kind: str | None = None
     created_at: datetime
     updated_at: datetime
 

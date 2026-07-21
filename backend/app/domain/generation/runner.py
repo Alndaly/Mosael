@@ -5,7 +5,7 @@ import tempfile
 import threading
 from pathlib import Path
 
-from app.ai.providers import GenerationRequest, ProviderError, get_provider
+from app.ai.providers import GenerationRequest, ProviderContext, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, GenerationJob, Job
@@ -45,9 +45,20 @@ def _run_generation(generation_id: str) -> None:
             _fail(db, job, f"No adapter for provider {generation.provider}/{generation.kind}")
             return
 
-        from app.domain.providers import resolve_secret
+        from app.domain.providers import resolve_profile
 
-        secret = resolve_secret(db, generation.provider)
+        profile = resolve_profile(db, generation.provider, generation.provider_profile_id)
+        if provider.requires_credentials() and (profile is None or not profile.api_key):
+            _fail(db, job, f"Provider profile for {generation.provider} is not configured")
+            return
+        context = ProviderContext(
+            profile_id=profile.id if profile is not None else None,
+            vendor=profile.vendor if profile is not None else generation.provider,
+            api_key=profile.api_key if profile is not None else "",
+            base_url=profile.base_url if profile is not None else "",
+            default_model=profile.default_model if profile is not None else "",
+            extra=dict(profile.extra or {}) if profile is not None else {},
+        )
         request = GenerationRequest(
             kind=generation.kind,
             model=generation.model,
@@ -64,7 +75,7 @@ def _run_generation(generation_id: str) -> None:
         workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
         try:
             provider.validate_request(request)
-            output = provider.generate(request, secret, workdir)
+            output = provider.generate(request, context, workdir)
             asset = register_file_asset(
                 db,
                 workspace_id=job.workspace_id,
@@ -93,7 +104,7 @@ def _run_generation(generation_id: str) -> None:
         except ProviderError as exc:
             _fail(db, job, str(exc))
         except Exception as exc:  # defensive: worker threads must never die silently
-            _fail(db, job, sanitize_provider_error(str(exc), secret))
+            _fail(db, job, sanitize_provider_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 

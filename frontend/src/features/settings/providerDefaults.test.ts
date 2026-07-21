@@ -26,7 +26,9 @@ const model = (patch: Partial<GenerationModel>): GenerationModel =>
     provider: "openai",
     kind: "image",
     model: "gpt-image-2",
+    enabled: true,
     capabilities: {},
+    adapter_available: true,
     ...patch,
   }) as GenerationModel;
 

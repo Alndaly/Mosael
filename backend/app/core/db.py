@@ -72,7 +72,7 @@ def init_db() -> None:
 
 
 def _migrate_generation_sessions() -> None:
-    """加生成会话表,并给 generation_jobs 增加 session_id。"""
+    """加生成会话表,并给生成链路补 profile/model 字段。"""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     with engine.begin() as conn:
@@ -84,9 +84,13 @@ def _migrate_generation_sessions() -> None:
                         id VARCHAR(64) NOT NULL PRIMARY KEY,
                         workspace_id VARCHAR NOT NULL,
                         title VARCHAR(200) NOT NULL DEFAULT '新生成',
+                        provider_profile_id VARCHAR(64),
+                        model VARCHAR(120),
+                        kind VARCHAR(24),
                         created_at DATETIME NOT NULL,
                         updated_at DATETIME NOT NULL,
-                        FOREIGN KEY(workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+                        FOREIGN KEY(workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+                        FOREIGN KEY(provider_profile_id) REFERENCES provider_profiles (id) ON DELETE SET NULL
                     )
                     """
                 )
@@ -97,10 +101,20 @@ def _migrate_generation_sessions() -> None:
                     "ON generation_sessions (workspace_id, updated_at)"
                 )
             )
+        if "generation_sessions" in tables:
+            session_cols = {c["name"] for c in inspector.get_columns("generation_sessions")}
+            if "provider_profile_id" not in session_cols:
+                conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN provider_profile_id VARCHAR(64)"))
+            if "model" not in session_cols:
+                conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN model VARCHAR(120)"))
+            if "kind" not in session_cols:
+                conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN kind VARCHAR(24)"))
         if "generation_jobs" in tables:
             cols = {c["name"] for c in inspector.get_columns("generation_jobs")}
             if "session_id" not in cols:
                 conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN session_id VARCHAR(64)"))
+            if "provider_profile_id" not in cols:
+                conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN provider_profile_id VARCHAR(64)"))
 
 
 def _migrate_tts_config() -> None:

@@ -14,7 +14,8 @@ from app.api.schemas import (
     GenerationSessionUpdate,
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job, now
+from app.ai.providers import get_provider
+from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.runner import start_generation_thread
@@ -28,7 +29,13 @@ def create_generation_session(
 ) -> GenerationSession:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
     title = body.title.strip() or "新生成"
-    session = GenerationSession(workspace_id=body.workspace_id, title=title)
+    session = GenerationSession(
+        workspace_id=body.workspace_id,
+        title=title,
+        provider_profile_id=body.provider_profile_id,
+        model=body.model,
+        kind=body.kind,
+    )
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -38,7 +45,6 @@ def create_generation_session(
 @router.get("/generation/sessions", response_model=list[GenerationSessionOut])
 def list_generation_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> list[GenerationSession]:
     ensure_workspace_access(db, user, workspace_id)
-    _attach_legacy_generations(db, workspace_id)
     stmt = (
         select(GenerationSession)
         .where(GenerationSession.workspace_id == workspace_id)
@@ -53,8 +59,15 @@ def update_generation_session(
     session_id: str, body: GenerationSessionUpdate, db: DbSession, user: CurrentUser
 ) -> GenerationSession:
     session = _require_generation_session(db, user, session_id)
-    if body.title is not None:
+    fields = body.model_fields_set
+    if "title" in fields and body.title is not None:
         session.title = body.title
+    if "provider_profile_id" in fields:
+        session.provider_profile_id = body.provider_profile_id
+    if "model" in fields:
+        session.model = body.model
+    if "kind" in fields:
+        session.kind = body.kind
     db.commit()
     db.refresh(session)
     return session
@@ -74,13 +87,13 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
 
 
 @router.get("/generation/models", response_model=list[GenerationModelOut])
-def list_generation_models(db: DbSession, kind: str | None = None) -> list[GenerationModel]:
+def list_generation_models(db: DbSession, kind: str | None = None) -> list[GenerationModelOut]:
     ensure_builtin_generation_models(db)
     stmt = select(GenerationModel).where(GenerationModel.enabled.is_(True))
     if kind:
         stmt = stmt.where(GenerationModel.kind == kind)
     stmt = stmt.order_by(GenerationModel.provider, GenerationModel.model)
-    return list(db.scalars(stmt))
+    return [_generation_model_out(model) for model in db.scalars(stmt)]
 
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
@@ -119,28 +132,21 @@ def list_generation_jobs(
     return list(db.scalars(stmt))
 
 
+def _generation_model_out(model: GenerationModel) -> GenerationModelOut:
+    return GenerationModelOut(
+        id=model.id,
+        provider=model.provider,
+        kind=model.kind,
+        model=model.model,
+        enabled=model.enabled,
+        capabilities=model.capabilities,
+        adapter_available=get_provider(model.provider, model.kind) is not None,
+    )
+
+
 def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str) -> GenerationSession:
     session = db.get(GenerationSession, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_access(db, user, session.workspace_id)
     return session
-
-
-def _attach_legacy_generations(db: DbSession, workspace_id: str) -> None:
-    legacy = list(
-        db.scalars(
-            select(GenerationJob)
-            .where(GenerationJob.workspace_id == workspace_id, GenerationJob.session_id.is_(None))
-            .order_by(GenerationJob.id)
-        )
-    )
-    if not legacy:
-        return
-    session = GenerationSession(workspace_id=workspace_id, title="历史生成")
-    db.add(session)
-    db.flush()
-    for generation in legacy:
-        generation.session_id = session.id
-    session.updated_at = now()
-    db.commit()

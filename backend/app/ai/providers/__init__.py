@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderError
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.openai_image import OpenAIImageProvider
 from app.ai.providers.qwen_image import QwenImageProvider
 from app.ai.providers.seedance import SeedanceProvider
 
@@ -15,10 +16,12 @@ def _register(provider: GenerationProvider) -> None:
 
 _register(QwenImageProvider())
 _register(SeedanceProvider())
+_register(OpenAIImageProvider("openai"))
+_register(OpenAIImageProvider("openai-compatible"))
 
 
 def get_provider(name: str, kind: str) -> GenerationProvider | None:
     return _PROVIDERS.get((name, kind))
 
 
-__all__ = ["GenerationProvider", "GenerationRequest", "ProviderError", "get_provider"]
+__all__ = ["GenerationProvider", "GenerationRequest", "ProviderContext", "ProviderError", "get_provider"]

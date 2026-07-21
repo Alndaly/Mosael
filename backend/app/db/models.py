@@ -576,6 +576,11 @@ class GenerationSession(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新生成")
+    provider_profile_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
@@ -593,6 +598,9 @@ class GenerationJob(Base):
         String(64), ForeignKey("generation_sessions.id", ondelete="CASCADE"), nullable=True
     )
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    provider_profile_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
     model: Mapped[str] = mapped_column(String(120), nullable=False)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)

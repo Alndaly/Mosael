@@ -21,6 +21,7 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     models = client.get("/api/generation/models?kind=image").json()
     assert any(model["model"] == "qwen-image" for model in models)
+    assert any(model["provider"] == "openai-compatible" and model["adapter_available"] for model in models)
 
     res = client.post(
         "/api/generation/jobs",
@@ -70,8 +71,18 @@ def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monke
     scoped = client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session['id']}").json()
     assert [item["id"] for item in scoped] == [generation["id"]]
 
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "OpenAI compatible", "vendor": "openai-compatible", "api_key": "sk-test", "base_url": "https://example.test/v1"},
+    ).json()
     renamed = client.patch(f"/api/generation/sessions/{session['id']}", json={"title": "女孩分镜"}).json()
     assert renamed["title"] == "女孩分镜"
+    configured = client.patch(
+        f"/api/generation/sessions/{session['id']}",
+        json={"provider_profile_id": profile["id"], "model": "gpt-image-2", "kind": "image"},
+    ).json()
+    assert configured["provider_profile_id"] == profile["id"]
+    assert configured["model"] == "gpt-image-2"
     assert client.delete(f"/api/generation/sessions/{session['id']}").status_code == 204
     assert client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session['id']}").status_code == 404
 

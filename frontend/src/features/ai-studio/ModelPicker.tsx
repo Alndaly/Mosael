@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
+type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 const SEP = "::";
 
@@ -23,7 +24,12 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
   });
+  const defaults = useQuery({
+    queryKey: ["provider-defaults"],
+    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+  });
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
+  const defaultChat = (defaults.data ?? []).find((item) => item.capability === "chat");
 
   const modelQueries = useQueries({
     queries: enabled.map((profile) => ({
@@ -33,12 +39,16 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     })),
   });
 
-  const options = enabled.flatMap((profile, index) =>
-    (modelQueries[index].data ?? []).map((model) => ({
+  const options = enabled.flatMap((profile, index) => {
+    const models = new Set(modelQueries[index].data ?? []);
+    if (profile.default_model) models.add(profile.default_model);
+    if (defaultChat?.provider_profile_id === profile.id && defaultChat.model) models.add(defaultChat.model);
+    if (session?.provider_profile_id === profile.id && session.model) models.add(session.model);
+    return [...models].map((model) => ({
       value: `${profile.id}${SEP}${model}`,
       label: enabled.length > 1 ? `${profile.name} · ${model}` : model,
-    })),
-  );
+    }));
+  });
 
   const setModel = useMutation({
     mutationFn: (value: string) => {
@@ -55,7 +65,9 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   });
 
   if (!session || options.length === 0) return null;
-  const current = session.provider_profile_id && session.model ? `${session.provider_profile_id}${SEP}${session.model}` : "";
+  const currentProfileId = session.provider_profile_id ?? defaultChat?.provider_profile_id ?? "";
+  const currentModel = session.model ?? defaultChat?.model ?? "";
+  const current = currentProfileId && currentModel ? `${currentProfileId}${SEP}${currentModel}` : "";
 
   return (
     // key 随 current 变化重挂,规避 Radix 对初始受控值不刷新显示文本的问题

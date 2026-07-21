@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
 
 """
 Alibaba DashScope qwen-image adapter (async task API):
@@ -54,12 +54,13 @@ class QwenImageProvider(GenerationProvider):
     name = "alibaba"
     kind = "image"
 
-    def generate(self, request: GenerationRequest, credential: str | None, output_dir: Path) -> Path:
-        if not credential:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
+        if not context.api_key:
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
-        headers = {"Authorization": f"Bearer {credential}", "X-DashScope-Async": "enable"}
+        base_url = (context.base_url or DASHSCOPE_BASE).rstrip("/")
+        headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
         try:
-            with httpx.Client(base_url=DASHSCOPE_BASE, timeout=30, headers=headers) as client:
+            with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
@@ -85,4 +86,4 @@ class QwenImageProvider(GenerationProvider):
                 target.write_bytes(download.content)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"DashScope request failed: {exc}", credential)) from exc
+            raise ProviderError(sanitize_provider_error(f"DashScope request failed: {exc}", context.api_key)) from exc

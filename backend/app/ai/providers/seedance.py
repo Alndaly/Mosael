@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
 
 """
 ByteDance Seedance adapter via Volcano ARK content-generation tasks:
@@ -50,13 +50,15 @@ class SeedanceProvider(GenerationProvider):
     name = "bytedance"
     kind = "video"
 
-    def generate(self, request: GenerationRequest, credential: str | None, output_dir: Path) -> Path:
-        if not credential:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
+        if not context.api_key:
             raise ProviderError("ARK API key is not configured (settings → 生成服务)")
-        headers = {"Authorization": f"Bearer {credential}"}
+        base_url = (context.base_url or ARK_BASE).rstrip("/")
+        tasks_path = "/contents/generations/tasks" if base_url.endswith("/api/v3") else TASKS_PATH
+        headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with httpx.Client(base_url=ARK_BASE, timeout=30, headers=headers) as client:
-                submit = client.post(TASKS_PATH, json=build_submit_payload(request))
+            with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
+                submit = client.post(tasks_path, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = submit.json().get("id") or ""
                 if not task_id:
@@ -65,7 +67,7 @@ class SeedanceProvider(GenerationProvider):
                 deadline = time.time() + POLL_TIMEOUT_SECONDS
                 url: str | None = None
                 while time.time() < deadline:
-                    poll = client.get(f"{TASKS_PATH}/{task_id}")
+                    poll = client.get(f"{tasks_path}/{task_id}")
                     poll.raise_for_status()
                     url = extract_video_url(poll.json())
                     if url:
@@ -83,4 +85,4 @@ class SeedanceProvider(GenerationProvider):
                             out.write(chunk)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"ARK request failed: {exc}", credential)) from exc
+            raise ProviderError(sanitize_provider_error(f"ARK request failed: {exc}", context.api_key)) from exc

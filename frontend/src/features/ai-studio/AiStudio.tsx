@@ -29,10 +29,10 @@ type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
-const IMPLEMENTED_GENERATION_ADAPTERS = new Set(["alibaba:image", "bytedance:video"]);
 const IMAGE_SIZES = ["1024x576", "1024x1024", "576x1024", "768x768", "1280x720"];
 const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
 const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];
+const ENGINE_SEP = "::";
 
 type GenerationConfig = {
   size: string;
@@ -43,6 +43,12 @@ type GenerationConfig = {
   resolution: string;
   aspectRatio: string;
   firstFrameUrl: string;
+};
+
+type GenerationEngineOption = GenerationModel & {
+  value: string;
+  provider_profile_id: string;
+  label: string;
 };
 
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
@@ -72,6 +78,69 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
     aspect_ratio: config.aspectRatio,
     ...(config.firstFrameUrl.trim() ? { first_frame_url: config.firstFrameUrl.trim() } : {}),
   };
+}
+
+function generationOptionValue(providerProfileId: string, kind: string, model: string) {
+  return [providerProfileId, kind, model].join(ENGINE_SEP);
+}
+
+function buildGenerationEngineOptions(
+  catalog: GenerationModel[],
+  profiles: ProviderProfile[],
+  defaults: ProviderDefault[],
+): GenerationEngineOption[] {
+  const enabledProfiles = profiles.filter((profile) => profile.enabled);
+  const byProviderKind = new Map<string, GenerationModel[]>();
+  for (const model of catalog) {
+    const key = `${model.provider}:${model.kind}`;
+    byProviderKind.set(key, [...(byProviderKind.get(key) ?? []), model]);
+  }
+  const options = new Map<string, GenerationEngineOption>();
+  const add = (profile: ProviderProfile, kind: string, modelName: string, source?: GenerationModel) => {
+    if (!modelName) return;
+    const providerKind = byProviderKind.get(`${profile.vendor}:${kind}`) ?? [];
+    const model = source ?? providerKind.find((item) => item.model === modelName) ?? providerKind[0];
+    const value = generationOptionValue(profile.id, kind, modelName);
+    options.set(value, {
+      id: model?.id ?? value,
+      provider: profile.vendor,
+      kind,
+      model: modelName,
+      enabled: true,
+      capabilities: model?.capabilities ?? {},
+      adapter_available: model?.adapter_available ?? false,
+      provider_profile_id: profile.id,
+      value,
+      label: `${profile.name} · ${modelName}`,
+    });
+  };
+
+  for (const profile of enabledProfiles) {
+    for (const model of catalog.filter((item) => item.provider === profile.vendor)) {
+      add(profile, model.kind, model.model, model);
+    }
+    for (const row of defaults) {
+      if ((row.capability === "image" || row.capability === "video") && row.provider_profile_id === profile.id) {
+        add(profile, row.capability, row.model);
+      }
+    }
+  }
+  return [...options.values()];
+}
+
+function findGenerationOption(
+  options: GenerationEngineOption[],
+  providerProfileId: string,
+  kind: string,
+  model: string,
+) {
+  return options.find((option) => option.value === generationOptionValue(providerProfileId, kind, model)) ?? null;
+}
+
+function defaultGenerationOption(options: GenerationEngineOption[], defaults: ProviderDefault[], kind: "image" | "video") {
+  const row = defaults.find((item) => item.capability === kind);
+  if (!row?.provider_profile_id || !row.model) return null;
+  return findGenerationOption(options, row.provider_profile_id, kind, row.model);
 }
 
 export function AiStudio({ workspace }: { workspace: Workspace }) {
@@ -170,34 +239,57 @@ function GenerateWorkspace({
     refetchOnWindowFocus: true,
   });
 
-  const selectedModel =
-    (models.data ?? []).find((model) => model.id === modelId) ?? (models.data ?? [])[0] ?? null;
-  const selectedAdapterAvailable = selectedModel
-    ? IMPLEMENTED_GENERATION_ADAPTERS.has(`${selectedModel.provider}:${selectedModel.kind}`)
-    : false;
+  const providerById = React.useMemo(
+    () => new Map((providers.data ?? []).filter((profile) => profile.enabled).map((profile) => [profile.id, profile])),
+    [providers.data],
+  );
+  const modelOptions = React.useMemo(
+    () => buildGenerationEngineOptions(models.data ?? [], providers.data ?? [], defaults.data ?? []),
+    [models.data, providers.data, defaults.data],
+  );
+  const optionByValue = React.useMemo(
+    () => new Map(modelOptions.map((option) => [option.value, option])),
+    [modelOptions],
+  );
+  const sessionOption =
+    activeSession?.provider_profile_id && activeSession.model && activeSession.kind
+      ? findGenerationOption(modelOptions, activeSession.provider_profile_id, activeSession.kind, activeSession.model)
+      : null;
+  const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
+  const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
+  const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
+  React.useEffect(() => {
+    setModelId(null);
+  }, [activeSession?.id]);
   React.useEffect(() => {
     setGenerationConfig(defaultGenerationConfig(selectedModel));
   }, [selectedModel?.id]);
   const modelGroups = React.useMemo(() => {
-    const grouped = new Map<string, GenerationModel[]>();
-    for (const model of models.data ?? []) {
+    const grouped = new Map<string, GenerationEngineOption[]>();
+    for (const model of modelOptions) {
       grouped.set(model.kind, [...(grouped.get(model.kind) ?? []), model]);
     }
     return ["image", "video", ...[...grouped.keys()].filter((kind) => kind !== "image" && kind !== "video")]
       .filter((kind) => (grouped.get(kind) ?? []).length > 0)
       .map((kind) => ({ kind, models: grouped.get(kind) ?? [] }));
-  }, [models.data]);
+  }, [modelOptions]);
   const capabilityLabel = (kind: string) => (kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind);
-  const capabilityMissing = (kind: string) => {
-    const row = (defaults.data ?? []).find((item) => item.capability === kind);
-    const profile = row?.provider_profile_id
-      ? (providers.data ?? []).find((item) => item.id === row.provider_profile_id)
-      : null;
-    return defaults.isSuccess && providers.isSuccess && (!row?.provider_profile_id || !row.model || !profile?.enabled);
-  };
-  const selectedCapabilityMissing = selectedModel ? capabilityMissing(selectedModel.kind) : false;
+  const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
+  const selectEngine = (value: string) => {
+    const option = optionByValue.get(value);
+    if (!option) return;
+    setModelId(value);
+    if (activeSession) {
+      updateSessionEngine.mutate({
+        id: activeSession.id,
+        provider_profile_id: option.provider_profile_id,
+        model: option.model,
+        kind: option.kind,
+      });
+    }
+  };
 
   const createSession = useMutation({
     mutationFn: () =>
@@ -216,9 +308,18 @@ function GenerateWorkspace({
     mutationFn: async () => {
       let targetSessionId = activeSession?.id;
       if (!targetSessionId) {
+        const payload: Record<string, string> = {
+          workspace_id: workspace.id,
+          title: prompt.trim().slice(0, 40) || "新生成",
+        };
+        if (modelId && selectedModel) {
+          payload.provider_profile_id = selectedModel.provider_profile_id;
+          payload.model = selectedModel.model;
+          payload.kind = selectedModel.kind;
+        }
         const created = await api<GenerationSession>("/api/generation/sessions", {
           method: "POST",
-          body: JSON.stringify({ workspace_id: workspace.id, title: prompt.trim().slice(0, 40) || undefined }),
+          body: JSON.stringify(payload),
         });
         targetSessionId = created.id;
         setSessionId(created.id);
@@ -230,6 +331,7 @@ function GenerateWorkspace({
           workspace_id: workspace.id,
           session_id: targetSessionId,
           project_id: null,
+          provider_profile_id: selectedModel!.provider_profile_id,
           provider: selectedModel!.provider,
           model: selectedModel!.model,
           kind: selectedModel!.kind,
@@ -252,6 +354,26 @@ function GenerateWorkspace({
       api<GenerationSession>(`/api/generation/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
     onSuccess: () => {
       setRenamingSession(null);
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+    },
+  });
+  const updateSessionEngine = useMutation({
+    mutationFn: ({
+      id,
+      provider_profile_id,
+      model,
+      kind,
+    }: {
+      id: string;
+      provider_profile_id: string;
+      model: string;
+      kind: string;
+    }) =>
+      api<GenerationSession>(`/api/generation/sessions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ provider_profile_id, model, kind }),
+      }),
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },
   });
@@ -396,7 +518,7 @@ function GenerateWorkspace({
           <div className="chat-composer-bar">
             <div className="chat-composer-left">
               {switcher}
-              {selectedModel && <span className="composer-model">{selectedModel.model} · {selectedModel.provider}</span>}
+              {selectedModel && <span className="composer-model">{selectedModel.label}</span>}
             </div>
             <Button
               type="submit"
@@ -432,7 +554,7 @@ function GenerateWorkspace({
           <>
             <label className="generation-setting">
               <span>{t("wfModelPreset")}</span>
-              <Select value={selectedModel.id} onValueChange={setModelId}>
+              <Select value={selectedModel.value} onValueChange={selectEngine}>
                 <SelectTrigger className="generation-config-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -441,10 +563,10 @@ function GenerateWorkspace({
                     <React.Fragment key={group.kind}>
                       <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
                       {group.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id} className="generation-model-option-item">
+                        <SelectItem key={model.value} value={model.value} className="generation-model-option-item">
                           <span className="generation-model-option">
                             {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
-                            <span>{model.model} · {model.provider}</span>
+                            <span>{model.label}</span>
                           </span>
                         </SelectItem>
                       ))}

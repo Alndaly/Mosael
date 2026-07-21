@@ -3847,6 +3847,8 @@ export interface components {
             session_id?: string | null;
             /** Project Id */
             project_id?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
             /** Provider */
             provider: string;
             /** Model */
@@ -3880,6 +3882,8 @@ export interface components {
             session_id?: string | null;
             /** Job Id */
             job_id: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
             /** Provider */
             provider: string;
             /** Model */
@@ -3905,6 +3909,8 @@ export interface components {
             enabled: boolean;
             /** Capabilities */
             capabilities: Record<string, never>;
+            /** Adapter Available */
+            adapter_available: boolean;
         };
         /** GenerationSessionCreate */
         GenerationSessionCreate: {
@@ -3915,6 +3921,12 @@ export interface components {
              * @default 新生成
              */
             title: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Kind */
+            kind?: string | null;
         };
         /** GenerationSessionOut */
         GenerationSessionOut: {
@@ -3924,6 +3936,12 @@ export interface components {
             workspace_id: string;
             /** Title */
             title: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Kind */
+            kind?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3939,6 +3957,12 @@ export interface components {
         GenerationSessionUpdate: {
             /** Title */
             title?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Kind */
+            kind?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

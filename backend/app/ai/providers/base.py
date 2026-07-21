@@ -31,6 +31,16 @@ class GenerationRequest:
     source_files: tuple[Path, ...] = ()
 
 
+@dataclass(frozen=True)
+class ProviderContext:
+    profile_id: str | None
+    vendor: str
+    api_key: str
+    base_url: str = ""
+    default_model: str = ""
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
 class GenerationProvider(ABC):
     name: str
     kind: str
@@ -55,7 +65,7 @@ class GenerationProvider(ABC):
                 raise ProviderError(f"resolution must be one of {', '.join(ALLOWED_VIDEO_RESOLUTIONS)}")
 
     @abstractmethod
-    def generate(self, request: GenerationRequest, credential: str | None, output_dir: Path) -> Path:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
         """Run submit→poll→download synchronously; return the media file path."""
 
 

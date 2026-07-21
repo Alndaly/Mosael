@@ -5,7 +5,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import GenerationJob, GenerationModel, GenerationSession, now
+from app.ai.providers import get_provider
+from app.db.models import GenerationJob, GenerationModel, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
 
@@ -26,17 +27,26 @@ def create_generation_job(
     negative_prompt: str,
     parameters: dict[str, Any],
     source_asset_ids: list[str],
+    provider_profile_id: str | None = None,
 ) -> tuple[GenerationJob, Any]:
-    generation_model = db.scalar(
-        select(GenerationModel).where(
-            GenerationModel.provider == provider,
-            GenerationModel.model == model,
-            GenerationModel.kind == kind,
-            GenerationModel.enabled.is_(True),
+    provider = provider.strip()
+    model = model.strip()
+    provider_profile = _resolve_provider_profile(db, provider_profile_id)
+    if provider_profile is not None:
+        provider = provider_profile.vendor
+    else:
+        generation_model = db.scalar(
+            select(GenerationModel).where(
+                GenerationModel.provider == provider,
+                GenerationModel.model == model,
+                GenerationModel.kind == kind,
+                GenerationModel.enabled.is_(True),
+            )
         )
-    )
-    if generation_model is None:
-        raise GenerationDomainError("Generation model is not enabled or does not exist")
+        if generation_model is None:
+            raise GenerationDomainError("Generation model is not enabled or does not exist")
+    if get_provider(provider, kind) is None:
+        raise GenerationDomainError(f"Generation adapter is not available for {provider}/{kind}")
 
     session = _resolve_session(db, workspace_id=workspace_id, session_id=session_id, prompt=prompt)
     request = {
@@ -51,6 +61,7 @@ def create_generation_job(
         workspace_id=workspace_id,
         kind="ai_generation",
         payload={
+            "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,
             "kind": kind,
@@ -62,6 +73,7 @@ def create_generation_job(
         workspace_id=workspace_id,
         session_id=session.id,
         job_id=job.id,
+        provider_profile_id=provider_profile.id if provider_profile else None,
         provider=provider,
         model=model,
         kind=kind,
@@ -73,6 +85,15 @@ def create_generation_job(
     db.refresh(generation)
     db.refresh(job)
     return generation, job
+
+
+def _resolve_provider_profile(db: Session, provider_profile_id: str | None) -> ProviderProfile | None:
+    if not provider_profile_id:
+        return None
+    profile = db.get(ProviderProfile, provider_profile_id)
+    if profile is None or not profile.enabled:
+        raise GenerationDomainError("Generation provider profile is not available")
+    return profile
 
 
 def _resolve_session(db: Session, *, workspace_id: str, session_id: str | None, prompt: str) -> GenerationSession:
