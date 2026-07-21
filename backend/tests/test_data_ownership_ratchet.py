@@ -18,16 +18,10 @@ from app.domain.ownership import EXEMPT_PREFIXES, TABLE_OWNERS
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# (文件, 模型) 存量越界——每一条都是已知债务,修复后从这里删除:
-# - agent/feishu 为智能体铸造服务 token,直接建 AuthSession(应走 auth 领域的铸造函数)
-# - feishu 把群聊消息直接写成 AgentMessage(应走 agent 领域的会话接口)
-ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("app/ai/agent/host.py", "AuthSession"),
-        ("app/integrations/feishu/service.py", "AuthSession"),
-        ("app/integrations/feishu/service.py", "AgentMessage"),
-    }
-)
+# (文件, 模型) 存量越界——每一条都是已知债务,修复后从这里删除。
+# 2026-07-21 清零:AuthSession 铸造收敛进 core.security.mint_service_session,
+# AgentMessage 写入收敛进 agent host 的 append_message。保持为空。
+ALLOWLIST: frozenset[tuple[str, str]] = frozenset()
 
 
 def _scan() -> set[tuple[str, str]]:

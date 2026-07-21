@@ -18,15 +18,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, run_turn
-from app.ai.agent.host import SYSTEM_PROMPT_TEMPLATE, get_or_create_external_session
+from app.ai.agent.host import SYSTEM_PROMPT_TEMPLATE, get_or_create_external_session, append_message
 from app.domain.agent.prompt_skills import skills_index_for_prompt
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.security import new_session_token
+from app.core.security import mint_service_session
 from app.db.models import (
-    AgentMessage,
     AgentSession,
-    AuthSession,
     FeishuBindCode,
     FeishuBinding,
     FeishuBot,
@@ -166,11 +164,9 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
         if session.status == "running":
             send_text(bot, chat_id, "上一条还在处理中,稍等片刻再发~")
             return
-        db.add(AgentMessage(session_id=session.id, role="user", content=text))
+        append_message(db, session.id, role="user", content=text)
         session.status = "running"
-        token = new_session_token()
-        db.add(AuthSession(token=token, user_id=user.id))
-        db.commit()
+        token = mint_service_session(db, user.id)  # 铸造即提交,连同上面的消息与状态
         session_id, adapter, adapter_session_id, workspace_id, capability = (
             session.id, session.adapter, session.adapter_session_id, bot.workspace_id, bot.capability
         )
@@ -208,7 +204,7 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
         if session is not None:
-            db.add(AgentMessage(session_id=session.id, role="assistant", content=reply_text, error=error))
+            append_message(db, session.id, role="assistant", content=reply_text, error=error)
             if new_adapter_session:
                 session.adapter_session_id = new_adapter_session
             session.status = "idle"

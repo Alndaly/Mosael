@@ -28,3 +28,18 @@ def verify_password(password: str, stored: str) -> bool:
 
 def new_session_token() -> str:
     return secrets.token_hex(32)
+
+
+def mint_service_session(db, user_id: str) -> str:
+    """为服务侧调用(智能体回合 / 工具通道 / 飞书 bot)铸造一个会话 token 并立即提交。
+
+    AuthSession 行只在 auth 归属方创建(见 app/domain/ownership.py)——此前 agent host
+    与飞书各自 `db.add(AuthSession(...))`,是归属棘轮里的存量债务;现在收敛到这里。
+    立即 commit:token 马上要被带出去做回连请求,不能停留在未提交事务里。
+    """
+    from app.db.models import AuthSession
+
+    token = new_session_token()
+    db.add(AuthSession(token=token, user_id=user_id))
+    db.commit()
+    return token

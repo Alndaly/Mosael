@@ -13,7 +13,7 @@ from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn
 from app.ai.agent.textclean import decode_byte_fallback
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.security import new_session_token
+from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
 from app.domain.agent.prompt_skills import skills_index_for_prompt
 
@@ -140,6 +140,18 @@ def create_session(
     return session
 
 
+def append_message(
+    db: Session, session_id: str, *, role: str, content: str, error: str | None = None
+) -> AgentMessage:
+    """往会话里追加一条消息(不 commit,跟随调用方事务)。
+
+    AgentMessage 行只在 agent 归属方创建(ownership.py)——飞书等集成经这里写,
+    不直接构造模型。"""
+    message = AgentMessage(session_id=session_id, role=role, content=content, error=error)
+    db.add(message)
+    return message
+
+
 def get_or_create_external_session(db: Session, *, workspace_id: str, external_key: str, title: str) -> AgentSession:
     existing = db.scalar(select(AgentSession).where(AgentSession.external_key == external_key))
     if existing is not None:
@@ -194,10 +206,7 @@ def mint_tool_token(db: Session, user: User) -> str:
 
 
 def _mint_service_token(db: Session, user: User) -> str:
-    token = new_session_token()
-    db.add(AuthSession(token=token, user_id=user.id))
-    db.commit()
-    return token
+    return mint_service_session(db, user.id)
 
 
 def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
