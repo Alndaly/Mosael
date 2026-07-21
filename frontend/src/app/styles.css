@@ -8600,6 +8600,27 @@
   gap: 4px;
 }
 
+.wf-llm-advanced {
+  display: grid;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
+.wf-llm-param-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1180px) {
+  .wf-llm-param-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Loop body (nested sub-graph) read-only summary — sub-canvas editor lands in a later slice. */
 .wf-body-summary {
   padding: 8px 10px;

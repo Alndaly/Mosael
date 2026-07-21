@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -18,6 +19,106 @@ LLM_TIMEOUT_SECONDS = 120
 _LLM_PRESET_TEMPS = {"precise": 0.1, "balanced": 0.4, "creative": 0.9}
 
 
+def _float_config(config: dict[str, Any], key: str, *, min_value: float | None = None, max_value: float | None = None) -> float | None:
+    raw = config.get(key)
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowDomainError(f"{key} 必须是数字") from exc
+    if min_value is not None and value < min_value:
+        raise WorkflowDomainError(f"{key} 不能小于 {min_value:g}")
+    if max_value is not None and value > max_value:
+        raise WorkflowDomainError(f"{key} 不能大于 {max_value:g}")
+    return value
+
+
+def _int_config(config: dict[str, Any], key: str, *, min_value: int | None = None) -> int | None:
+    raw = config.get(key)
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowDomainError(f"{key} 必须是整数") from exc
+    if min_value is not None and value < min_value:
+        raise WorkflowDomainError(f"{key} 不能小于 {min_value}")
+    return value
+
+
+def _bool_config(config: dict[str, Any], key: str, default: bool) -> bool:
+    raw = config.get(key)
+    if raw in (None, ""):
+        return default
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in {"0", "false", "no", "off", "否"}
+
+
+def _stop_sequences(value: Any) -> list[str] | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, list):
+        items = [str(item).strip() for item in value if str(item).strip()]
+    else:
+        items = [line.strip() for line in str(value).splitlines() if line.strip()]
+    return items or None
+
+
+def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
+    mode = str(config.get("response_format") or "text")
+    if mode == "text":
+        return None
+    if mode == "json_object":
+        return {"type": "json_object"}
+    if mode != "json_schema":
+        raise WorkflowDomainError("response_format 只能是 text/json_object/json_schema")
+    schema = config.get("json_schema")
+    if not isinstance(schema, dict) or not schema:
+        raise WorkflowDomainError("JSON Schema 不能为空")
+    name = str(config.get("json_schema_name") or schema.get("title") or "workflow_output").strip() or "workflow_output"
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "schema": schema,
+            "strict": _bool_config(config, "json_schema_strict", True),
+        },
+    }
+
+
+def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {"model": model, "messages": messages}
+    temperature = _float_config(config, "temperature", min_value=0, max_value=2)
+    if temperature is None:
+        temperature = _LLM_PRESET_TEMPS.get(str(config.get("preset") or "balanced"), 0.4)
+    payload["temperature"] = temperature
+
+    numeric_fields = {
+        "top_p": (0.0, 1.0),
+        "frequency_penalty": (-2.0, 2.0),
+        "presence_penalty": (-2.0, 2.0),
+    }
+    for key, (min_value, max_value) in numeric_fields.items():
+        value = _float_config(config, key, min_value=min_value, max_value=max_value)
+        if value is not None:
+            payload[key] = value
+    max_tokens = _int_config(config, "max_tokens", min_value=1)
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+    seed = _int_config(config, "seed")
+    if seed is not None:
+        payload["seed"] = seed
+    stop = _stop_sequences(config.get("stop"))
+    if stop is not None:
+        payload["stop"] = stop
+    response_format = _response_format(config)
+    if response_format is not None:
+        payload["response_format"] = response_format
+    return payload
+
+
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     profile = require_profile(db, config.get("profile_id"), error=WorkflowDomainError)
@@ -27,16 +128,21 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     messages.append({"role": "user", "content": str(config.get("prompt", ""))})
     base_url = profile.base_url.rstrip("/")
     model = str(config.get("model") or profile.default_model)
-    temperature = _LLM_PRESET_TEMPS.get(str(config.get("preset") or "balanced"), 0.4)
     response = httpx.post(
         f"{base_url}/chat/completions",
         headers={"Authorization": f"Bearer {profile.api_key}"},
-        json={"model": model, "messages": messages, "temperature": temperature},
+        json=_request_payload(config, model, messages),
         timeout=LLM_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     text = str(response.json()["choices"][0]["message"]["content"]).strip()
-    return {"text": text}
+    result: dict[str, Any] = {"text": text}
+    if str(config.get("response_format") or "text") in {"json_object", "json_schema"}:
+        try:
+            result["json"] = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise WorkflowDomainError("LLM 未返回合法 JSON") from exc
+    return result
 
 
 @register("translate")

@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 
 from app.core.db import SessionLocal
-from app.db.models import Job, TaskEvent, Workflow
-from app.domain.workflows import default_graph, interpolate, topo_order, validate_graph
+from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError, default_graph, interpolate, topo_order, validate_graph
 from tests.util import fresh_client
 
 
@@ -428,13 +428,121 @@ def test_translate_node_google(monkeypatch) -> None:
     assert ai_nodes.translate(None, None, {"text": "  ", "target_lang": "en"}) == {"text": ""}  # empty short-circuit
 
 
+def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> None:
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    captured: dict = {}
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": '{"title":"海边"}'}}]}
+
+    def fake_post(url: str, headers: dict, json: dict, timeout: int) -> Response:
+        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+
+    with SessionLocal() as db:
+        profile = ProviderProfile(
+            name="LLM",
+            vendor="openai-compatible",
+            base_url="https://example.test/v1",
+            api_key="sk-test",
+            default_model="gpt-default",
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add_all([profile, workflow])
+        db.flush()
+
+        result = ai_nodes.llm(
+            db,
+            workflow,
+            {
+                "profile_id": profile.id,
+                "system": "只返回 JSON",
+                "prompt": "生成标题",
+                "model": "gpt-custom",
+                "temperature": "0.2",
+                "top_p": "0.8",
+                "max_tokens": "128",
+                "frequency_penalty": "0.1",
+                "presence_penalty": "0.2",
+                "seed": "42",
+                "stop": "END\nDONE",
+                "response_format": "json_schema",
+                "json_schema_name": "scene_plan",
+                "json_schema_strict": "true",
+                "json_schema": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]},
+            },
+        )
+
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    assert captured["url"] == "https://example.test/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer sk-test"
+    assert captured["timeout"] == ai_nodes.LLM_TIMEOUT_SECONDS
+    assert captured["json"] == {
+        "model": "gpt-custom",
+        "messages": [{"role": "system", "content": "只返回 JSON"}, {"role": "user", "content": "生成标题"}],
+        "temperature": 0.2,
+        "top_p": 0.8,
+        "frequency_penalty": 0.1,
+        "presence_penalty": 0.2,
+        "max_tokens": 128,
+        "seed": 42,
+        "stop": ["END", "DONE"],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "scene_plan",
+                "schema": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]},
+                "strict": True,
+            },
+        },
+    }
+
+
+def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "not json"}}]}
+
+    monkeypatch.setattr(ai_nodes.httpx, "post", lambda *args, **kwargs: Response())
+
+    with SessionLocal() as db:
+        profile = ProviderProfile(name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk")
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add_all([profile, workflow])
+        db.flush()
+
+        try:
+            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "x", "response_format": "json_object"})
+        except WorkflowDomainError as exc:
+            assert "合法 JSON" in str(exc)
+        else:
+            raise AssertionError("expected WorkflowDomainError")
+
+
 def test_new_nodes_registered_and_validate() -> None:
-    from app.domain.workflows import NODE_TYPES, validate_graph
     from app.domain.workflows.executors import registered_types
 
     for node_type in ("json_extract", "text_transform", "delay", "synthesize_speech", "notify"):
         assert node_type in NODE_TYPES, node_type
         assert node_type in registered_types(), node_type
+    assert "json" in NODE_TYPES["llm"]["outputs"]
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {}},

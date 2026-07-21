@@ -92,6 +92,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
@@ -265,6 +266,21 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   template: "wffTemplate",
   params: "wffParams",
 };
+
+const LLM_SPECIAL_CONFIG_KEYS = new Set([
+  "preset",
+  "temperature",
+  "top_p",
+  "max_tokens",
+  "frequency_penalty",
+  "presence_penalty",
+  "seed",
+  "stop",
+  "response_format",
+  "json_schema_name",
+  "json_schema",
+  "json_schema_strict",
+]);
 
 /** 连线统一带闭合箭头,方向一目了然。 */
 const DEFAULT_EDGE_OPTIONS = {
@@ -1699,6 +1715,8 @@ function NodeInspector({
   }, [onClose]);
 
   const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
+  const responseFormat = String(config.response_format || "text");
+  const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => setConfig(key, event.target.value);
 
   // 重新指向:把某字段里的失效引用整体替换为新引用(空串=移除该引用)。
   const repoint = (key: string, oldRef: string, newRef: string) => {
@@ -1919,32 +1937,162 @@ function NodeInspector({
           </div>
         )}
         {node.type === "llm" && (
-          <div className="wf-field">
-            <span>{t("wfLlmPreset")}</span>
-            <Select
-              value={(config.preset as string) || "balanced"}
-              onValueChange={(next) => setConfig("preset", next)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="precise">{t("wfPresetPrecise")}</SelectItem>
-                <SelectItem value="balanced">{t("wfPresetBalanced")}</SelectItem>
-                <SelectItem value="creative">{t("wfPresetCreative")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <small>
-              {config.preset === "precise"
-                ? t("wfPresetPreciseHint")
-                : config.preset === "creative"
-                  ? t("wfPresetCreativeHint")
-                  : t("wfPresetBalancedHint")}
-            </small>
+          <div className="wf-llm-advanced">
+            <div className="wf-field">
+              <span>{t("wfLlmPreset")}</span>
+              <Select
+                value={(config.preset as string) || "balanced"}
+                onValueChange={(next) => setConfig("preset", next)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="precise">{t("wfPresetPrecise")}</SelectItem>
+                  <SelectItem value="balanced">{t("wfPresetBalanced")}</SelectItem>
+                  <SelectItem value="creative">{t("wfPresetCreative")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <small>
+                {config.preset === "precise"
+                  ? t("wfPresetPreciseHint")
+                  : config.preset === "creative"
+                    ? t("wfPresetCreativeHint")
+                    : t("wfPresetBalancedHint")}
+              </small>
+            </div>
+            <div className="wf-field">
+              <span>{t("wfLlmResponseFormat")}</span>
+              <Select value={responseFormat} onValueChange={(next) => setConfig("response_format", next)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">{t("wfLlmResponseText")}</SelectItem>
+                  <SelectItem value="json_object">{t("wfLlmResponseJsonObject")}</SelectItem>
+                  <SelectItem value="json_schema">{t("wfLlmResponseJsonSchema")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="wf-llm-param-grid">
+              <div className="wf-field">
+                <span>{t("wfLlmTemperature")}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={2}
+                  step="0.1"
+                  value={String(config.temperature ?? "")}
+                  placeholder={t("wfLlmTemperaturePlaceholder")}
+                  onChange={setTextConfig("temperature")}
+                />
+              </div>
+              <div className="wf-field">
+                <span>{t("wfLlmTopP")}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.05"
+                  value={String(config.top_p ?? "")}
+                  placeholder="0-1"
+                  onChange={setTextConfig("top_p")}
+                />
+              </div>
+              <div className="wf-field">
+                <span>{t("wfLlmMaxTokens")}</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step="1"
+                  value={String(config.max_tokens ?? "")}
+                  placeholder={t("wfLlmBlankDefault")}
+                  onChange={setTextConfig("max_tokens")}
+                />
+              </div>
+              <div className="wf-field">
+                <span>{t("wfLlmSeed")}</span>
+                <Input
+                  type="number"
+                  step="1"
+                  value={String(config.seed ?? "")}
+                  placeholder={t("wfLlmBlankDefault")}
+                  onChange={setTextConfig("seed")}
+                />
+              </div>
+              <div className="wf-field">
+                <span>{t("wfLlmFrequencyPenalty")}</span>
+                <Input
+                  type="number"
+                  min={-2}
+                  max={2}
+                  step="0.1"
+                  value={String(config.frequency_penalty ?? "")}
+                  placeholder="-2 到 2"
+                  onChange={setTextConfig("frequency_penalty")}
+                />
+              </div>
+              <div className="wf-field">
+                <span>{t("wfLlmPresencePenalty")}</span>
+                <Input
+                  type="number"
+                  min={-2}
+                  max={2}
+                  step="0.1"
+                  value={String(config.presence_penalty ?? "")}
+                  placeholder="-2 到 2"
+                  onChange={setTextConfig("presence_penalty")}
+                />
+              </div>
+            </div>
+            <div className="wf-field">
+              <span>{t("wfLlmStop")}</span>
+              <VarTextarea
+                rows={2}
+                value={String(config.stop ?? "")}
+                onChange={(next) => setConfig("stop", next)}
+                variables={variables}
+              />
+              <small>{t("wfLlmStopHint")}</small>
+            </div>
+            {responseFormat === "json_schema" && (
+              <>
+                <div className="wf-field">
+                  <span>{t("wfLlmJsonSchemaName")}</span>
+                  <Input
+                    value={String(config.json_schema_name ?? "")}
+                    placeholder="workflow_output"
+                    onChange={setTextConfig("json_schema_name")}
+                  />
+                </div>
+                <div className="wf-field">
+                  <span>{t("wfLlmJsonStrict")}</span>
+                  <Select
+                    value={String(config.json_schema_strict ?? "true")}
+                    onValueChange={(next) => setConfig("json_schema_strict", next)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">{t("wfLlmJsonStrictOn")}</SelectItem>
+                      <SelectItem value="false">{t("wfLlmJsonStrictOff")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="wf-field">
+                  <span>{t("wfLlmJsonSchema")}</span>
+                  <JsonField
+                    value={config.json_schema ?? { type: "object", properties: {} }}
+                    onChange={(parsed) => setConfig("json_schema", parsed)}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
         {specs
-          .filter(([key]) => !(node.type === "llm" && key === "preset"))
+          .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
           .map(([key, spec]) => {
           // 循环体是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
           if (spec?.type === "graph") {
