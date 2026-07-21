@@ -27,10 +27,7 @@ export function ModalShell({
 }) {
   const ignoreSelectOutsideInteraction = (event: Event) => {
     const target = event.target as HTMLElement | null;
-    if (
-      document.documentElement.hasAttribute("data-mibu-select-open") ||
-      target?.closest("[data-mibu-select-content]")
-    ) {
+    if (target?.closest("[data-mibu-select-content]")) {
       event.preventDefault();
     }
   };
