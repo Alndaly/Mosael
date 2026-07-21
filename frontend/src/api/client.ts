@@ -661,6 +661,12 @@ export function generatePublishCopy(body: {
   return api<PublishCopy>("/api/publish/copy", { method: "POST", body: JSON.stringify(body) });
 }
 
+export type WorkspaceSummary = components["schemas"]["WorkspaceSummaryOut"];
+
+export function workspaceSummary(workspaceId: string): Promise<WorkspaceSummary> {
+  return api<WorkspaceSummary>(`/api/workspaces/${workspaceId}/summary`);
+}
+
 export function renameProject(projectId: string, name: string): Promise<Project> {
   return api<Project>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }

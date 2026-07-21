@@ -264,7 +264,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClaimRequest"
+                "$ref": "#/components/schemas/app__api__routes__publish_worker__ClaimRequest"
               }
             }
           },
@@ -307,7 +307,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReportRequest"
+                "$ref": "#/components/schemas/app__api__routes__publish_worker__ReportRequest"
               }
             }
           },
@@ -512,6 +512,135 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Status Api Publish Worker Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/worker/claim": {
+      "post": {
+        "tags": [
+          "job-worker"
+        ],
+        "summary": "Claim",
+        "operationId": "claim_api_jobs_worker_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__job_worker__ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Claim Api Jobs Worker Claim Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/worker/report": {
+      "patch": {
+        "tags": [
+          "job-worker"
+        ],
+        "summary": "Report",
+        "operationId": "report_api_jobs_worker_report_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__job_worker__ReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Report Api Jobs Worker Report Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/worker/heartbeat": {
+      "post": {
+        "tags": [
+          "job-worker"
+        ],
+        "summary": "Heartbeat",
+        "operationId": "heartbeat_api_jobs_worker_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Heartbeat Api Jobs Worker Heartbeat Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1089,6 +1218,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceMemberOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/summary": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Workspace Summary",
+        "description": "首页仪表:工作区一屏统计。只读聚合,单请求给全。",
+        "operationId": "workspace_summary_api_workspaces__workspace_id__summary_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSummaryOut"
                 }
               }
             }
@@ -10645,19 +10817,6 @@
         ],
         "title": "Body_upload_voice_api_voices_upload_post"
       },
-      "ClaimRequest": {
-        "properties": {
-          "exclude_accounts": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Exclude Accounts"
-          }
-        },
-        "type": "object",
-        "title": "ClaimRequest"
-      },
       "ClipOut": {
         "properties": {
           "id": {
@@ -11523,6 +11682,26 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HeartbeatRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "title": "Worker"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "HeartbeatRequest"
       },
       "InsertClipRequest": {
         "properties": {
@@ -13753,46 +13932,6 @@
         ],
         "title": "RenameRequest"
       },
-      "ReportRequest": {
-        "properties": {
-          "task_id": {
-            "type": "string",
-            "title": "Task Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "screenshot_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Screenshot Path"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_id",
-          "status"
-        ],
-        "title": "ReportRequest"
-      },
       "RunScheduledTaskResponse": {
         "properties": {
           "task": {
@@ -14588,6 +14727,11 @@
             "type": "object",
             "title": "Arguments",
             "default": {}
+          },
+          "requested_by": {
+            "type": "string",
+            "title": "Requested By",
+            "default": ""
           }
         },
         "type": "object",
@@ -14607,6 +14751,11 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Parameters"
+          },
+          "confirmation": {
+            "type": "boolean",
+            "title": "Confirmation",
+            "default": false
           }
         },
         "type": "object",
@@ -15711,6 +15860,199 @@
           "name"
         ],
         "title": "WorkspaceOut"
+      },
+      "WorkspaceSummaryOut": {
+        "properties": {
+          "project_count": {
+            "type": "integer",
+            "title": "Project Count"
+          },
+          "asset_count": {
+            "type": "integer",
+            "title": "Asset Count"
+          },
+          "sequence_count": {
+            "type": "integer",
+            "title": "Sequence Count"
+          },
+          "workflow_count": {
+            "type": "integer",
+            "title": "Workflow Count"
+          },
+          "kb_document_count": {
+            "type": "integer",
+            "title": "Kb Document Count"
+          },
+          "running_jobs": {
+            "type": "integer",
+            "title": "Running Jobs"
+          },
+          "week_jobs_succeeded": {
+            "type": "integer",
+            "title": "Week Jobs Succeeded"
+          },
+          "week_jobs_failed": {
+            "type": "integer",
+            "title": "Week Jobs Failed"
+          },
+          "publish_accounts": {
+            "type": "integer",
+            "title": "Publish Accounts"
+          },
+          "week_published": {
+            "type": "integer",
+            "title": "Week Published"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_count",
+          "asset_count",
+          "sequence_count",
+          "workflow_count",
+          "kb_document_count",
+          "running_jobs",
+          "week_jobs_succeeded",
+          "week_jobs_failed",
+          "publish_accounts",
+          "week_published"
+        ],
+        "title": "WorkspaceSummaryOut",
+        "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"
+      },
+      "app__api__routes__job_worker__ClaimRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "title": "Worker",
+            "default": ""
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "title": "ClaimRequest"
+      },
+      "app__api__routes__job_worker__ReportRequest": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "ReportRequest"
+      },
+      "app__api__routes__publish_worker__ClaimRequest": {
+        "properties": {
+          "exclude_accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exclude Accounts"
+          }
+        },
+        "type": "object",
+        "title": "ClaimRequest"
+      },
+      "app__api__routes__publish_worker__ReportRequest": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "screenshot_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screenshot Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "status"
+        ],
+        "title": "ReportRequest"
       }
     }
   }

@@ -265,6 +265,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/worker/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim */
+        post: operations["claim_api_jobs_worker_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/worker/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Report */
+        patch: operations["report_api_jobs_worker_report_patch"];
+        trace?: never;
+    };
+    "/api/jobs/worker/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat */
+        post: operations["heartbeat_api_jobs_worker_heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces": {
         parameters: {
             query?: never;
@@ -388,6 +439,26 @@ export interface paths {
         head?: never;
         /** Set Member Perms */
         patch: operations["set_member_perms_api_workspaces__workspace_id__members__user_id__perms_patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace Summary
+         * @description 首页仪表:工作区一屏统计。只读聚合,单请求给全。
+         */
+        get: operations["workspace_summary_api_workspaces__workspace_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/assets": {
@@ -3435,11 +3506,6 @@ export interface components {
             /** File */
             file: string;
         };
-        /** ClaimRequest */
-        ClaimRequest: {
-            /** Exclude Accounts */
-            exclude_accounts?: string[];
-        };
         /** ClipOut */
         ClipOut: {
             /** Id */
@@ -3768,6 +3834,13 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeartbeatRequest */
+        HeartbeatRequest: {
+            /** Worker */
+            worker: string;
+            /** Kinds */
+            kinds?: string[];
         };
         /** InsertClipRequest */
         InsertClipRequest: {
@@ -4683,17 +4756,6 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** ReportRequest */
-        ReportRequest: {
-            /** Task Id */
-            task_id: string;
-            /** Status */
-            status: string;
-            /** Error Message */
-            error_message?: string | null;
-            /** Screenshot Path */
-            screenshot_path?: string | null;
-        };
         /** RunScheduledTaskResponse */
         RunScheduledTaskResponse: {
             task: components["schemas"]["ScheduledTaskOut"];
@@ -5009,6 +5071,11 @@ export interface components {
             arguments: {
                 [key: string]: unknown;
             };
+            /**
+             * Requested By
+             * @default
+             */
+            requested_by: string;
         };
         /** ToolSpec */
         ToolSpec: {
@@ -5020,6 +5087,11 @@ export interface components {
             parameters: {
                 [key: string]: unknown;
             };
+            /**
+             * Confirmation
+             * @default false
+             */
+            confirmation: boolean;
         };
         /** TrackOut */
         TrackOut: {
@@ -5550,6 +5622,75 @@ export interface components {
             /** Role */
             role?: string | null;
         };
+        /**
+         * WorkspaceSummaryOut
+         * @description 首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。
+         */
+        WorkspaceSummaryOut: {
+            /** Project Count */
+            project_count: number;
+            /** Asset Count */
+            asset_count: number;
+            /** Sequence Count */
+            sequence_count: number;
+            /** Workflow Count */
+            workflow_count: number;
+            /** Kb Document Count */
+            kb_document_count: number;
+            /** Running Jobs */
+            running_jobs: number;
+            /** Week Jobs Succeeded */
+            week_jobs_succeeded: number;
+            /** Week Jobs Failed */
+            week_jobs_failed: number;
+            /** Publish Accounts */
+            publish_accounts: number;
+            /** Week Published */
+            week_published: number;
+        };
+        /** ClaimRequest */
+        app__api__routes__job_worker__ClaimRequest: {
+            /**
+             * Worker
+             * @default
+             */
+            worker: string;
+            /** Kinds */
+            kinds?: string[];
+        };
+        /** ReportRequest */
+        app__api__routes__job_worker__ReportRequest: {
+            /** Job Id */
+            job_id: string;
+            /** Status */
+            status: string;
+            /** Progress */
+            progress?: number | null;
+            /** Message */
+            message?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ClaimRequest */
+        app__api__routes__publish_worker__ClaimRequest: {
+            /** Exclude Accounts */
+            exclude_accounts?: string[];
+        };
+        /** ReportRequest */
+        app__api__routes__publish_worker__ReportRequest: {
+            /** Task Id */
+            task_id: string;
+            /** Status */
+            status: string;
+            /** Error Message */
+            error_message?: string | null;
+            /** Screenshot Path */
+            screenshot_path?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -5773,7 +5914,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClaimRequest"];
+                "application/json": components["schemas"]["app__api__routes__publish_worker__ClaimRequest"];
             };
         };
         responses: {
@@ -5808,7 +5949,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReportRequest"];
+                "application/json": components["schemas"]["app__api__routes__publish_worker__ReportRequest"];
             };
         };
         responses: {
@@ -5986,6 +6127,111 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    claim_api_jobs_worker_claim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__job_worker__ClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_jobs_worker_report_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__job_worker__ReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_api_jobs_worker_heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6401,6 +6647,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_summary_api_workspaces__workspace_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSummaryOut"];
                 };
             };
             /** @description Validation Error */

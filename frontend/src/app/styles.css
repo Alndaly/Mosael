@@ -756,6 +756,144 @@
 
 /* ---------- Home ---------- */
 
+/* ---- 首页 hero:问候 + 每日一句 ---- */
+.home-hero {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-hero-greeting {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-hero-greeting h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.home-hero-greeting small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.home-poem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 34px 10px 32px;
+  max-width: 46ch;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.home-poem-icon {
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  color: var(--muted-foreground);
+}
+
+.home-poem blockquote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.home-poem figcaption {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.home-poem-refresh {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.home-poem-refresh:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.home-poem-refresh:active svg {
+  transform: rotate(180deg);
+  transition: transform 0.25s ease;
+}
+
+/* ---- 首页统计带 ---- */
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.home-stat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.home-stat-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  color: var(--muted-foreground);
+}
+
+.home-stat-value {
+  font-size: 16px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.home-stat-label {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-stat-extra {
+  font-style: normal;
+  color: var(--destructive);
+}
+
+@media (max-width: 880px) {
+  .home-hero { flex-direction: column; }
+  .home-poem { max-width: none; }
+}
+
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

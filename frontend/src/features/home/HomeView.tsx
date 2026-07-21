@@ -1,9 +1,25 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clapperboard, Clock3, Film, FolderPlus, Layers, Pencil, Scissors, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Activity,
+  BookOpen,
+  BookText,
+  Clapperboard,
+  Clock3,
+  Film,
+  FolderPlus,
+  Layers,
+  Megaphone,
+  Pencil,
+  RefreshCcw,
+  Scissors,
+  Trash2,
+  Workflow as WorkflowIcon,
+} from "lucide-react";
 
-import { api, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
+import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
 import { Button } from "@/components/ui/button";
@@ -28,6 +44,28 @@ export function HomeView({
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<"updated" | "created" | "name">("updated");
+
+  const [poem, setPoem] = React.useState<Poem>(poemOfToday);
+  const [poemSpins, setPoemSpins] = React.useState(0);
+  const spinPoem = () => {
+    setPoem((current) => randomPoem(current));
+    setPoemSpins((n) => n + 1);
+  };
+
+  const greetingKey = React.useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 5) return "homeGreetingDawn" as const;
+    if (hour < 11) return "homeGreetingMorning" as const;
+    if (hour < 13) return "homeGreetingNoon" as const;
+    if (hour < 18) return "homeGreetingAfternoon" as const;
+    return "homeGreetingEvening" as const;
+  }, []);
+
+  const summary = useQuery({
+    queryKey: ["workspace-summary", workspace.id],
+    queryFn: () => workspaceSummary(workspace.id),
+    staleTime: 30_000,
+  });
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -73,8 +111,68 @@ export function HomeView({
     },
   });
 
+  const stats = summary.data;
+  const statTiles = stats
+    ? ([
+        { key: "homeStatProjects", value: stats.project_count, icon: <Clapperboard size={13} /> },
+        { key: "homeStatAssets", value: stats.asset_count, icon: <Film size={13} /> },
+        { key: "homeStatSequences", value: stats.sequence_count, icon: <Layers size={13} /> },
+        { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} /> },
+        { key: "homeStatKbDocs", value: stats.kb_document_count, icon: <BookOpen size={13} /> },
+        { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} /> },
+        {
+          key: "homeStatWeekDone",
+          value: stats.week_jobs_succeeded,
+          icon: <Clock3 size={13} />,
+          extra:
+            stats.week_jobs_failed > 0
+              ? t("homeStatWeekFailedSuffix").replace("{n}", String(stats.week_jobs_failed))
+              : undefined,
+        },
+        { key: "homeStatWeekPublished", value: stats.week_published, icon: <Megaphone size={13} /> },
+      ] as const)
+    : [];
+
   return (
     <div className="feature-view">
+      <section className="home-hero">
+        <div className="home-hero-greeting">
+          <h1>{t(greetingKey)}</h1>
+          <small>{displayWorkspaceName(workspace.name, t)}</small>
+        </div>
+        <figure className="home-poem" aria-live="polite">
+          <BookText size={13} className="home-poem-icon" />
+          {poemSpins > 0 && poemSpins % 10 === 0 ? (
+            <blockquote>{t("homePoemEgg")}</blockquote>
+          ) : (
+            <>
+              <blockquote>{poem.text}</blockquote>
+              <figcaption>
+                {poem.author} · 《{poem.source}》
+              </figcaption>
+            </>
+          )}
+          <button type="button" className="home-poem-refresh" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
+            <RefreshCcw size={12} />
+          </button>
+        </figure>
+      </section>
+
+      {statTiles.length > 0 && (
+        <section className="home-stats">
+          {statTiles.map((tile) => (
+            <div className="home-stat" key={tile.key}>
+              <span className="home-stat-icon">{tile.icon}</span>
+              <strong className="home-stat-value">{tile.value}</strong>
+              <span className="home-stat-label">
+                {t(tile.key)}
+                {"extra" in tile && tile.extra ? <em className="home-stat-extra"> · {tile.extra}</em> : null}
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
       <div className="feature-toolbar media-toolbar">
         <div className="media-toolbar-left">
           <input

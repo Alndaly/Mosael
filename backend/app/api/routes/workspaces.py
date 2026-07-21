@@ -11,6 +11,7 @@ from app.api.schemas import (
     SetMemberPermsRequest,
     SetRoleRequest,
     WorkspaceMemberOut,
+    WorkspaceSummaryOut,
 )
 from app.core.permissions import (
     effective_member_perms,
@@ -20,7 +21,19 @@ from app.core.permissions import (
     workspace_role,
 )
 from app.core.roles import PERMS, ROLES, role_defaults
-from app.db.models import User, Workspace, WorkspaceMember
+from app.db.models import (
+    Asset,
+    Job,
+    KbDocument,
+    Project,
+    PublishAccount,
+    PublishTask,
+    Sequence,
+    User,
+    Workflow,
+    Workspace,
+    WorkspaceMember,
+)
 from app.domain import members as members_svc
 
 router = APIRouter(tags=["workspaces"])
@@ -146,4 +159,37 @@ def set_member_perms(
         username=member_user.username if member_user else user_id,
         role=target.role,
         perms=effective_member_perms(db, workspace_id, user_id, target.role),
+    )
+
+
+@router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
+def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> WorkspaceSummaryOut:
+    """首页仪表:工作区一屏统计。只读聚合,单请求给全。"""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from app.db.models import now
+
+    ensure_workspace_access(db, user, workspace_id)
+
+    def count(stmt) -> int:
+        return int(db.scalar(stmt) or 0)
+
+    week_ago = now() - timedelta(days=7)
+    scoped = lambda model: select(func.count()).select_from(model).where(model.workspace_id == workspace_id)  # noqa: E731
+
+    return WorkspaceSummaryOut(
+        project_count=count(scoped(Project)),
+        asset_count=count(scoped(Asset)),
+        sequence_count=count(scoped(Sequence)),
+        workflow_count=count(scoped(Workflow)),
+        kb_document_count=count(scoped(KbDocument)),
+        running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
+        week_jobs_succeeded=count(scoped(Job).where(Job.status == "succeeded", Job.updated_at >= week_ago)),
+        week_jobs_failed=count(scoped(Job).where(Job.status == "failed", Job.updated_at >= week_ago)),
+        publish_accounts=count(scoped(PublishAccount)),
+        week_published=count(
+            scoped(PublishTask).where(PublishTask.status == "success", PublishTask.updated_at >= week_ago)
+        ),
     )

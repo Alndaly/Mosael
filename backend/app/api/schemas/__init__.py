@@ -1191,3 +1191,18 @@ class AgentManifestOut(BaseModel):
     version: str
     openapi_url: str
     skills: list[AgentSkillOut]
+
+
+class WorkspaceSummaryOut(BaseModel):
+    """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
+
+    project_count: int
+    asset_count: int
+    sequence_count: int
+    workflow_count: int
+    kb_document_count: int
+    running_jobs: int
+    week_jobs_succeeded: int
+    week_jobs_failed: int
+    publish_accounts: int
+    week_published: int
