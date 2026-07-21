@@ -96,7 +96,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
-import { WorkflowAgentChat } from "@/features/workflows/WorkflowAgentChat";
+import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import {
@@ -577,7 +577,8 @@ function WorkflowEditor({
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  const [agentOpen, setAgentOpen] = React.useState(false);
+  const [agentOpen, setAgentOpen] = React.useState(true);
+  const [agentMode, setAgentMode] = React.useState<WorkflowAgentMode>("docked");
   const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
   const [nodeSearch, setNodeSearch] = React.useState("");
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
@@ -956,7 +957,10 @@ function WorkflowEditor({
           <Button
             variant={agentOpen ? "secondary" : "outline"}
             size="sm"
-            onClick={() => setAgentOpen((value) => !value)}
+            onClick={() => {
+              setAgentOpen((value) => !value);
+              if (!agentOpen) setAgentMode("docked");
+            }}
           >
             <Bot size={13} /> {t("wfAgentTitle")}
           </Button>
@@ -1106,7 +1110,7 @@ function WorkflowEditor({
         </div>
       </div>
 
-      <div className="wf-canvas-wrap">
+      <div className={agentOpen && agentMode === "docked" ? "wf-canvas-wrap has-docked-agent" : "wf-canvas-wrap"}>
         <div className="wf-canvas">
           <ReactFlow
             nodes={displayNodes}
@@ -1146,6 +1150,8 @@ function WorkflowEditor({
             workflowId={workflow.id}
             workflowName={workflow.name}
             workspaceId={workflow.workspace_id}
+            mode={agentMode}
+            onModeChange={setAgentMode}
             onClose={() => setAgentOpen(false)}
           />
         )}

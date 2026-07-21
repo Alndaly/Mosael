@@ -1,6 +1,21 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, CornerDownRight, GripHorizontal, Loader2, Paperclip, Plus, Send, Square, Trash2, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  ChevronDown,
+  CornerDownRight,
+  GripHorizontal,
+  Loader2,
+  Move,
+  PanelRight,
+  Paperclip,
+  Plus,
+  Send,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Streamdown } from "streamdown";
 import { decodeByteFallback } from "../../lib/byteFallback";
 import { toast } from "sonner";
@@ -17,6 +32,7 @@ import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection"
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
+export type WorkflowAgentMode = "docked" | "floating";
 
 // v2:默认尺寸加大 + 八向缩放手柄。升键让老用户存下的 320×460 小窗让位给新默认(仅一次)。
 const RECT_KEY = "mibu.wf.agent.rect.v2";
@@ -71,11 +87,15 @@ export function WorkflowAgentChat({
   workflowId,
   workflowName,
   workspaceId,
+  mode,
+  onModeChange,
   onClose,
 }: {
   workflowId: string;
   workflowName: string;
   workspaceId: string;
+  mode: WorkflowAgentMode;
+  onModeChange: (mode: WorkflowAgentMode) => void;
   onClose: () => void;
 }) {
   const t = useI18n();
@@ -105,6 +125,7 @@ export function WorkflowAgentChat({
   };
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
+  const isFloating = mode === "floating";
 
   // 悬浮窗:标题栏拖动 + 原生右下角缩放,位置尺寸记忆。
   const [rect, setRect] = React.useState<FloatRect>(loadRect);
@@ -114,6 +135,7 @@ export function WorkflowAgentChat({
   }, []);
 
   const startDrag = (event: React.PointerEvent) => {
+    if (!isFloating) return;
     if ((event.target as HTMLElement).closest("button,input,textarea,a,[role='combobox'],[data-no-drag]")) return;
     event.preventDefault();
     const startX = event.clientX;
@@ -135,6 +157,7 @@ export function WorkflowAgentChat({
   // 用自定义手柄而不是原生 resize: both——原生只有右下一个不显眼的小角,
   // 且在 position: fixed + 手动定位下无法向上/向左扩展。
   const startResize = (edge: ResizeEdge) => (event: React.PointerEvent) => {
+    if (!isFloating) return;
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
@@ -402,14 +425,15 @@ export function WorkflowAgentChat({
   return (
     <aside
       ref={panelRef}
-      className="wf-agent"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      role="dialog"
+      className={`wf-agent wf-agent-${mode}`}
+      style={isFloating ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : undefined}
+      role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfAgentTitle")}
     >
-      {RESIZE_EDGES.map((edge) => (
-        <div key={edge} className={`wf-agent-rs wf-agent-rs-${edge}`} onPointerDown={startResize(edge)} />
-      ))}
+      {isFloating &&
+        RESIZE_EDGES.map((edge) => (
+          <div key={edge} className={`wf-agent-rs wf-agent-rs-${edge}`} onPointerDown={startResize(edge)} />
+        ))}
       <div className="wf-agent-head" onPointerDown={startDrag}>
         <h2 className="wf-agent-title">
           <Bot size={14} /> {t("wfAgentTitle")}
@@ -475,7 +499,16 @@ export function WorkflowAgentChat({
         >
           <Plus size={13} />
         </button>
-        <GripHorizontal size={13} className="wf-agent-grip" />
+        <button
+          type="button"
+          className="inspector-delete wf-agent-mode-toggle"
+          aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          onClick={() => onModeChange(isFloating ? "docked" : "floating")}
+        >
+          {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
+        </button>
+        {isFloating && <GripHorizontal size={13} className="wf-agent-grip" />}
         <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>

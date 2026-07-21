@@ -7221,12 +7221,17 @@
   background: var(--border);
 }
 
-/* 画布区:检查器是画布内右侧浮层(Dify 式),不参与布局。 */
+/* 画布区:默认单栏;AI 助手停靠时变成「画布 + 右侧助手」双栏。 */
 .wf-canvas-wrap {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   min-height: 0;
+}
+
+.wf-canvas-wrap.has-docked-agent {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
 }
 
 .wf-canvas {
@@ -8292,22 +8297,37 @@
   white-space: pre;
 }
 
-/* 工作流常驻 AI 助手:悬浮窗 —— 标题栏拖动,右下角原生缩放,不占画布布局。 */
+/* 工作流常驻 AI 助手:默认是右侧停靠面板;用户可切成悬浮窗后拖动/八向缩放。 */
 .wf-agent {
-  position: fixed;
-  z-index: 55;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.wf-agent-floating {
+  position: fixed;
+  z-index: 55;
   /* min/max 与 WorkflowAgentChat 的 clampRect(MIN_W/MIN_H)是刻意对齐的一对,改一处要同步另一处 */
   min-width: 320px;
   min-height: 380px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--panel);
-  overflow: hidden;
   /* 缩放走八向自定义手柄(.wf-agent-rs),不用原生 resize——原生只有右下角且无法向上/向左扩 */
+}
+
+.wf-agent-docked {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-color: var(--border);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 /* 八向缩放手柄:6px 隐形命中区骑在边框上;绝对定位脱离 grid 行流 */
@@ -8346,9 +8366,13 @@
   gap: 6px;
   border-bottom: 1px solid var(--border);
   padding: 6px 8px 6px 10px;
-  cursor: move;
+  cursor: default;
   user-select: none;
   touch-action: none;
+}
+
+.wf-agent-floating .wf-agent-head {
+  cursor: move;
 }
 
 .wf-agent-head h2 {
@@ -8464,9 +8488,12 @@
 }
 
 .wf-agent-grip {
-  margin-left: auto;
   color: var(--muted-foreground);
   opacity: 0.6;
+}
+
+.wf-agent-mode-toggle {
+  margin-left: auto;
 }
 
 /* 空状态在整个消息区高度上居中 */
