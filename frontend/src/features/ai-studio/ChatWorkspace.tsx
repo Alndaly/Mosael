@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Check, Copy, CornerDownRight, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import { decodeByteFallback } from "../../lib/byteFallback";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -364,7 +365,7 @@ export function ChatWorkspace({
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
                   <ToolCalls tools={streamTools} />
-                  <Streamdown controls={{ table: false }}>{streamText}</Streamdown>
+                  <Streamdown controls={{ table: false }}>{decodeByteFallback(streamText)}</Streamdown>
                   <div className="chat-msg-meta live">
                     <Loader2 size={11} className="spin" />
                     <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
@@ -553,7 +554,7 @@ function ChatBubble({ message }: { message: AgentMessage }) {
         message.error ? (
           <AgentErrorCard content={message.content} error={message.error} />
         ) : (
-          <Streamdown controls={{ table: false }}>{message.content}</Streamdown>
+          <Streamdown controls={{ table: false }}>{decodeByteFallback(message.content)}</Streamdown>
         )
       ) : (
         <div className="chat-bubble-content">{message.content}</div>

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, set_turn_queue, steer_turn
+from app.ai.agent.textclean import decode_byte_fallback
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import new_session_token
@@ -260,7 +261,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 adapter_state=session.adapter_state,
                 session_key=session.id,
             )
-            final_text = result.text
+            # 本地模型的 byte-fallback token(<0xF0>… 字面串)在落库前重组回 UTF-8。
+            final_text = decode_byte_fallback(result.text)
             if result.adapter_state is not None:
                 session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
             tool_cards = get_stream_state(session_id)["tools"]  # 持久化工具卡到消息,turn 结束后仍可见
@@ -276,7 +278,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 AgentMessage(
                     session_id=session.id,
                     role="assistant",
-                    content=result.text,
+                    content=final_text,
                     payload={
                         "duration_seconds": round(time.monotonic() - turn_started, 1),
                         **({"tools": tool_cards} if tool_cards else {}),
