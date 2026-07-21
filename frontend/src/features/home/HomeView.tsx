@@ -19,6 +19,7 @@ import {
 
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
+import { gotoRecord } from "@/lib/deepLink";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -111,25 +112,44 @@ export function HomeView({
     },
   });
 
+  // 每块磁贴都是入口:goto 是 hash 路由,action 是页面内动作(深链事件/打开项目)。
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
+  const latestProject = React.useMemo(
+    () => [...projects].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0],
+    [projects],
+  );
+  const openTaskCenter = () => window.dispatchEvent(new CustomEvent("mibu:open-tasks"));
+
   const stats = summary.data;
   const statTiles = stats
     ? ([
-        { key: "homeStatProjects", value: stats.project_count, icon: <Clapperboard size={13} /> },
-        { key: "homeStatAssets", value: stats.asset_count, icon: <Film size={13} /> },
-        { key: "homeStatSequences", value: stats.sequence_count, icon: <Layers size={13} /> },
-        { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} /> },
-        { key: "homeStatKbDocs", value: stats.kb_document_count, icon: <BookOpen size={13} /> },
-        { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} /> },
+        {
+          key: "homeStatProjects",
+          value: stats.project_count,
+          icon: <Clapperboard size={13} />,
+          action: () => searchRef.current?.focus(),
+        },
+        { key: "homeStatAssets", value: stats.asset_count, icon: <Film size={13} />, goto: "/media" },
+        {
+          key: "homeStatSequences",
+          value: stats.sequence_count,
+          icon: <Layers size={13} />,
+          action: () => latestProject && onOpenProject(latestProject.id),
+        },
+        { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} />, goto: "/workflows" },
+        { key: "homeStatKbDocs", value: stats.kb_document_count, icon: <BookOpen size={13} />, goto: "/kb" },
+        { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} />, action: openTaskCenter },
         {
           key: "homeStatWeekDone",
           value: stats.week_jobs_succeeded,
           icon: <Clock3 size={13} />,
+          action: openTaskCenter,
           extra:
             stats.week_jobs_failed > 0
               ? t("homeStatWeekFailedSuffix").replace("{n}", String(stats.week_jobs_failed))
               : undefined,
         },
-        { key: "homeStatWeekPublished", value: stats.week_published, icon: <Megaphone size={13} /> },
+        { key: "homeStatWeekPublished", value: stats.week_published, icon: <Megaphone size={13} />, goto: "/publish" },
       ] as const)
     : [];
 
@@ -161,14 +181,22 @@ export function HomeView({
       {statTiles.length > 0 && (
         <section className="home-stats">
           {statTiles.map((tile) => (
-            <div className="home-stat" key={tile.key}>
+            <button
+              type="button"
+              className="home-stat"
+              key={tile.key}
+              onClick={() => {
+                if ("goto" in tile && tile.goto) gotoRecord(tile.goto);
+                else if ("action" in tile && tile.action) tile.action();
+              }}
+            >
               <span className="home-stat-icon">{tile.icon}</span>
               <strong className="home-stat-value">{tile.value}</strong>
               <span className="home-stat-label">
                 {t(tile.key)}
                 {"extra" in tile && tile.extra ? <em className="home-stat-extra"> · {tile.extra}</em> : null}
               </span>
-            </div>
+            </button>
           ))}
         </section>
       )}
@@ -176,6 +204,7 @@ export function HomeView({
       <div className="feature-toolbar media-toolbar">
         <div className="media-toolbar-left">
           <input
+            ref={searchRef}
             className="toolbar-search"
             value={search}
             placeholder={t("searchProjects")}

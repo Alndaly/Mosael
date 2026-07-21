@@ -861,6 +861,20 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
+  /* 磁贴是入口(点击跳对应页面):按钮重置 + 可点击暗示 */
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.home-stat:hover {
+  border-color: var(--border-strong);
+}
+
+.home-stat:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
 }
 
 .home-stat-icon {

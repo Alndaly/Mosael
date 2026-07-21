@@ -58,11 +58,30 @@ def _auth_headers() -> dict[str, str]:
 mcp = FastMCP("mibu")
 
 
+def _raise_with_detail(response: httpx.Response) -> None:
+    """4xx/5xx 时把后端的 detail 带进异常文本。
+
+    裸的 `422 Unprocessable Content` 对模型毫无用处——它无法自我纠正;
+    detail(如「不能删除 start 节点」)才是它需要的反馈。"""
+    if response.is_success:
+        return
+    detail = ""
+    try:
+        body = response.json()
+        detail = str(body.get("detail", "")) if isinstance(body, dict) else ""
+    except ValueError:
+        detail = response.text[:300]
+    message = f"{response.status_code} {response.reason_phrase}"
+    if detail:
+        message += f": {detail}"
+    raise ValueError(message)
+
+
 def _get(path: str, params: dict[str, Any] | None = None) -> Any:
     headers = _auth_headers()
     with httpx.Client(base_url=api_base(), timeout=15, headers=headers) as client:
         response = client.get(path, params=params)
-        response.raise_for_status()
+        _raise_with_detail(response)
         return response.json()
 
 
@@ -70,7 +89,7 @@ def _post(path: str, payload: dict[str, Any]) -> Any:
     headers = _auth_headers()
     with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
         response = client.post(path, json=payload)
-        response.raise_for_status()
+        _raise_with_detail(response)
         return response.json()
 
 
@@ -78,7 +97,7 @@ def _patch(path: str, payload: dict[str, Any]) -> Any:
     headers = _auth_headers()
     with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
         response = client.patch(path, json=payload)
-        response.raise_for_status()
+        _raise_with_detail(response)
         return response.json()
 
 

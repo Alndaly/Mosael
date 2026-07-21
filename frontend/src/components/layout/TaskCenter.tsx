@@ -35,6 +35,12 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+  // 深链通道(与 mibu:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
+  React.useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("mibu:open-tasks", onOpen);
+    return () => window.removeEventListener("mibu:open-tasks", onOpen);
+  }, []);
   const [detailJob, setDetailJob] = React.useState<Job | null>(null);
 
   const jobs = useQuery({
