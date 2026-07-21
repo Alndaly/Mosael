@@ -71,6 +71,7 @@ export interface PiTurnInput {
 
 export interface PiTurnResult {
   text: string;
+  usage: Record<string, unknown>;
   /** 本轮结束后的完整消息数组,回存给下一轮。 */
   sessionState: AgentMessage[];
   /**
@@ -135,5 +136,11 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     .find((message) => (message as { stopReason?: string }).stopReason === "error") as
     | { errorMessage?: string }
     | undefined;
-  return { text: full, sessionState: messages, errorMessage: aborted ? undefined : failed?.errorMessage, aborted };
+  return {
+    text: full,
+    usage: { requests: 1 },
+    sessionState: messages,
+    errorMessage: aborted ? undefined : failed?.errorMessage,
+    aborted,
+  };
 }

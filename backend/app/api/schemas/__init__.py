@@ -1258,6 +1258,15 @@ class DailyPublishOut(BaseModel):
     blocked: int
 
 
+class DailyUsageOut(BaseModel):
+    """一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。"""
+
+    date: str
+    cost_micros: int
+    events: int
+    unknown: int
+
+
 class WorkspaceSummaryOut(BaseModel):
     """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
 
@@ -1277,3 +1286,12 @@ class WorkspaceSummaryOut(BaseModel):
     # 发布图表:近 14 天发布任务状态(旧→新,缺日补零)与按平台聚合的发布任务数
     publish_daily: list[DailyPublishOut]
     publish_platforms: dict[str, int]
+    # 供应商费用/用量:近 14 天聚合;没有价格规则时 cost 为 0,unknown 计数仍保留审计线索
+    usage_cost_micros: int = 0
+    usage_currency: str = "USD"
+    usage_event_count: int = 0
+    usage_unknown_cost_events: int = 0
+    usage_duration_seconds: float = 0
+    usage_daily: list[DailyUsageOut] = Field(default_factory=list)
+    usage_by_capability: dict[str, int] = Field(default_factory=dict)
+    usage_by_provider: dict[str, int] = Field(default_factory=dict)

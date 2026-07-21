@@ -16,6 +16,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
 from app.domain.agent.prompt_skills import skills_index_for_prompt
+from app.domain.usage import record_usage
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mibu;
@@ -168,6 +169,14 @@ def _usage_from_started(started: float) -> dict:
     return {"duration_seconds": round(max(0.0, time.monotonic() - started), 1)}
 
 
+def _turn_metering(prompt: str, text: str, adapter_usage: dict | None = None) -> dict:
+    metering = dict(adapter_usage or {})
+    metering.setdefault("requests", 1)
+    metering.setdefault("input_characters", len(prompt))
+    metering.setdefault("output_characters", len(text))
+    return metering
+
+
 def on_turn_finished(callback: Callable[[str], None]) -> None:
     """Register a listener (e.g. the Feishu worker) fired with session_id after each turn."""
     _turn_callbacks.append(callback)
@@ -299,6 +308,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         session = db.get(AgentSession, session_id)
         if session is None:
             return
+        provider_profile_id: str | None = None
+        provider_vendor = ""
+        provider_model = ""
         # Everything below runs inside the try: a failure while resolving the provider (or
         # building the prompt) must still write an error message and reset session.status —
         # otherwise the worker dies silently and the session hangs in "running" forever.
@@ -329,6 +341,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 if profile is not None:
                     provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
                     agent_model = (model or profile.default_model or "").strip()
+                    provider_profile_id = profile.id
+                    provider_vendor = profile.vendor
+                    provider_model = agent_model
                     # A profile with no usable model would otherwise reach the sidecar as model=""
                     # and come back as a silent empty turn.
                     if not agent_model:
@@ -365,40 +380,107 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
                     "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
                 )
-            db.add(
-                AgentMessage(
-                    session_id=session.id,
-                    role="assistant",
-                    content=final_text,
-                    payload={
-                        "usage": _usage_from_started(turn_started),
-                        **({"timeline": timeline} if timeline else {}),
-                    },
-                )
+            usage = _usage_from_started(turn_started)
+            usage["metering"] = _turn_metering(prompt, final_text, result.usage)
+            assistant_message = AgentMessage(
+                session_id=session.id,
+                role="assistant",
+                content=final_text,
+                payload={
+                    "usage": usage,
+                    **({"timeline": timeline} if timeline else {}),
+                },
             )
+            db.add(assistant_message)
+            db.flush()
+            if provider_vendor or provider_model:
+                event = record_usage(
+                    db,
+                    workspace_id=session.workspace_id,
+                    provider_profile_id=provider_profile_id,
+                    provider=provider_vendor,
+                    model=provider_model,
+                    capability="chat",
+                    operation="agent_turn",
+                    source_type="agent_message",
+                    source_id=assistant_message.id,
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    status="succeeded",
+                    duration_seconds=usage["duration_seconds"],
+                    units=usage["metering"],
+                    raw_usage=result.usage or {},
+                    agent_message_id=assistant_message.id,
+                )
+                usage["cost"] = {
+                    "cost_micros": event.cost_micros,
+                    "currency": event.currency,
+                    "confidence": event.cost_confidence,
+                }
+                assistant_message.payload = {
+                    "usage": usage,
+                    **({"timeline": timeline} if timeline else {}),
+                }
             if result.adapter_session_id:
                 session.adapter_session_id = result.adapter_session_id
         except AdapterError as exc:
-            db.add(
-                AgentMessage(
-                    session_id=session.id,
-                    role="assistant",
-                    content="智能体执行失败，请稍后重试。",
-                    error=str(exc)[:800],
-                    payload={"usage": _usage_from_started(turn_started)},
-                )
+            usage = _usage_from_started(turn_started)
+            usage["metering"] = _turn_metering(prompt, "", None)
+            assistant_message = AgentMessage(
+                session_id=session.id,
+                role="assistant",
+                content="智能体执行失败，请稍后重试。",
+                error=str(exc)[:800],
+                payload={"usage": usage},
             )
+            db.add(assistant_message)
+            db.flush()
+            if provider_vendor or provider_model:
+                record_usage(
+                    db,
+                    workspace_id=session.workspace_id,
+                    provider_profile_id=provider_profile_id,
+                    provider=provider_vendor,
+                    model=provider_model,
+                    capability="chat",
+                    operation="agent_turn",
+                    source_type="agent_message",
+                    source_id=assistant_message.id,
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    status="failed",
+                    duration_seconds=usage["duration_seconds"],
+                    units=usage["metering"],
+                    agent_message_id=assistant_message.id,
+                )
         except Exception as exc:  # worker threads must never die silently
             logger.exception("Agent turn crashed")
-            db.add(
-                AgentMessage(
-                    session_id=session.id,
-                    role="assistant",
-                    content="智能体执行异常。",
-                    error=str(exc)[:800],
-                    payload={"usage": _usage_from_started(turn_started)},
-                )
+            usage = _usage_from_started(turn_started)
+            usage["metering"] = _turn_metering(prompt, "", None)
+            assistant_message = AgentMessage(
+                session_id=session.id,
+                role="assistant",
+                content="智能体执行异常。",
+                error=str(exc)[:800],
+                payload={"usage": usage},
             )
+            db.add(assistant_message)
+            db.flush()
+            if provider_vendor or provider_model:
+                record_usage(
+                    db,
+                    workspace_id=session.workspace_id,
+                    provider_profile_id=provider_profile_id,
+                    provider=provider_vendor,
+                    model=provider_model,
+                    capability="chat",
+                    operation="agent_turn",
+                    source_type="agent_message",
+                    source_id=assistant_message.id,
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    status="failed",
+                    duration_seconds=usage["duration_seconds"],
+                    units=usage["metering"],
+                    agent_message_id=assistant_message.id,
+                )
         finally:
             session.status = "idle"
             session.updated_at = now()

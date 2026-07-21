@@ -13,9 +13,11 @@ import httpx
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
+    GenerationResult,
     ProviderContext,
     ProviderError,
     image_file_to_data_url,
+    metering_from_request,
     provider_http_error,
 )
 
@@ -110,7 +112,7 @@ class KlingProvider(GenerationProvider):
     name = "kuaishou"
     kind = "video"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise ProviderError("Kling Access Key/API key is not configured (settings → 生成服务)")
         base_url = (context.base_url or KLING_BASE).rstrip("/")
@@ -127,10 +129,12 @@ class KlingProvider(GenerationProvider):
 
                 deadline = time.time() + POLL_TIMEOUT_SECONDS
                 url: str | None = None
+                poll_payload: dict[str, Any] = {}
                 while time.time() < deadline:
                     poll = client.get(f"{endpoint}/{task_id}")
                     poll.raise_for_status()
-                    url = extract_video_url(poll.json())
+                    poll_payload = poll.json()
+                    url = extract_video_url(poll_payload)
                     if url:
                         break
                     time.sleep(POLL_INTERVAL_SECONDS)
@@ -142,7 +146,7 @@ class KlingProvider(GenerationProvider):
                 download = client.get(url)
                 download.raise_for_status()
                 target.write_bytes(download.content)
-                return target
+                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("Kling request failed", exc, context.api_key)) from exc
 

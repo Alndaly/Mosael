@@ -3,15 +3,17 @@ from __future__ import annotations
 import shutil
 import tempfile
 import threading
+import time
 from pathlib import Path
 
-from app.ai.providers import GenerationRequest, ProviderContext, ProviderError, get_provider
+from app.ai.providers import GenerationRequest, GenerationResult, ProviderContext, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain.jobs import dispatch_job, emit_job_event
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
+from app.domain.usage import record_usage
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -66,6 +68,8 @@ def _run_generation(generation_id: str) -> None:
         db.commit()
 
         workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
+        request: GenerationRequest | None = None
+        started = time.monotonic()
         try:
             request = GenerationRequest(
                 kind=generation.kind,
@@ -76,12 +80,12 @@ def _run_generation(generation_id: str) -> None:
                 source_files=_source_files_for_generation(db, generation),
             )
             provider.validate_request(request)
-            output = provider.generate(request, context, workdir)
+            result = provider.generate(request, context, workdir)
             asset = register_file_asset(
                 db,
                 workspace_id=job.workspace_id,
                 project_id=generation.request.get("project_id"),
-                source_path=output,
+                source_path=result.output_path,
                 name=_asset_name(request.prompt, generation.model),
                 source="generated",
             )
@@ -100,11 +104,16 @@ def _run_generation(generation_id: str) -> None:
             job.progress = 1.0
             job.message = "Generation complete"
             job.result = {"asset_id": asset.id}
+            _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
         except ProviderError as exc:
+            if request is not None:
+                _record_generation_usage(db, generation, job, request, context, None, started, "failed")
             _fail(db, job, str(exc))
         except Exception as exc:  # defensive: worker threads must never die silently
+            if request is not None:
+                _record_generation_usage(db, generation, job, request, context, None, started, "failed")
             _fail(db, job, sanitize_provider_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -134,6 +143,50 @@ def _source_files_for_generation(db, generation: GenerationJob) -> tuple[Path, .
             raise ProviderError("首帧素材文件不存在")
         paths.append(path)
     return tuple(paths)
+
+
+def _record_generation_usage(
+    db,
+    generation: GenerationJob,
+    job: Job,
+    request: GenerationRequest,
+    context: ProviderContext,
+    result: GenerationResult | None,
+    started: float,
+    status: str,
+) -> None:
+    duration_seconds = round(max(0.0, time.monotonic() - started), 1)
+    units = dict(result.usage if result is not None else {})
+    if "requests" not in units:
+        units["requests"] = 1
+    if request.kind == "image":
+        units.setdefault("images", int(request.parameters.get("num_images", 1)))
+        units.setdefault("source_images", len(request.source_files))
+        if request.parameters.get("size"):
+            units.setdefault("size", str(request.parameters["size"]).replace("*", "x"))
+    if request.kind == "video":
+        units.setdefault("videos", 1)
+        units.setdefault("video_seconds", float(request.parameters.get("duration_seconds", 5)))
+        units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
+        units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
+        units.setdefault("source_images", len(request.source_files))
+    record_usage(
+        db,
+        workspace_id=job.workspace_id,
+        provider_profile_id=context.profile_id,
+        provider=generation.provider,
+        model=generation.model,
+        capability=generation.kind,
+        operation="generation_job",
+        source_type="generation_job",
+        source_id=generation.id,
+        idempotency_key=f"generation:{generation.id}:{status}",
+        status=status,
+        duration_seconds=duration_seconds,
+        units=units,
+        raw_usage=result.raw_usage if result is not None else {},
+        job_id=job.id,
+    )
 
 
 def _asset_name(prompt: str, model: str) -> str:

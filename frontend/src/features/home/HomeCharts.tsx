@@ -30,6 +30,18 @@ const publishConfigBase = {
   blocked: { label: "", color: "var(--chart-image)" },
 } satisfies ChartConfig;
 
+const usageConfigBase = {
+  cost: { label: "", color: "var(--chart-image)" },
+} satisfies ChartConfig;
+
+function formatMicros(value: number, currency: string): string {
+  if (value <= 0) return `0 ${currency}`;
+  const amount = value / 1_000_000;
+  if (amount < 1) return `${amount.toFixed(4)} ${currency}`;
+  if (amount < 100) return `${amount.toFixed(2)} ${currency}`;
+  return `${Math.round(amount).toLocaleString()} ${currency}`;
+}
+
 export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   const t = useI18n();
   const max = Math.max(...daily.map((day) => day.succeeded + day.failed));
@@ -59,6 +71,64 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {max}</span>} />} />
+      </BarChart>
+    </ChartContainer>
+  );
+}
+
+export function UsageCostChart({
+  daily,
+  currency,
+  unknown,
+}: {
+  daily: WorkspaceSummary["usage_daily"];
+  currency: string;
+  unknown: number;
+}) {
+  const t = useI18n();
+  const rows = daily ?? [];
+  const totalEvents = rows.reduce((sum, day) => sum + day.events, 0);
+  const maxCost = Math.max(0, ...rows.map((day) => day.cost_micros));
+  if (totalEvents === 0) {
+    return <p className="home-chart-empty">{t("homeChartEmptyUsage")}</p>;
+  }
+  if (maxCost === 0 && unknown > 0) {
+    return (
+      <p className="home-chart-empty">
+        {t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}
+      </p>
+    );
+  }
+  if (maxCost === 0) {
+    return <p className="home-chart-empty">{t("homeChartUsageZeroCost").replace("{n}", String(totalEvents))}</p>;
+  }
+  const config: ChartConfig = {
+    cost: { ...usageConfigBase.cost, label: t("homeLegendCost") },
+  };
+  const data = rows.map((day) => ({ ...day, day: day.date.slice(5), cost: day.cost_micros }));
+  const maxLabel =
+    unknown > 0
+      ? `${formatMicros(maxCost, currency)} · ${t("homeLegendUnpriced")} ${unknown}`
+      : formatMicros(maxCost, currency);
+
+  return (
+    <ChartContainer config={config} className="home-chart-plot">
+      <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
+        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <XAxis
+          dataKey="day"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={6}
+          interval="preserveStartEnd"
+          minTickGap={48}
+        />
+        <ChartTooltip
+          cursor={{ fillOpacity: 0.06 }}
+          content={<ChartTooltipContent valueFormatter={(value) => formatMicros(Number(value), currency)} />}
+        />
+        <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {maxLabel}</span>} />} />
       </BarChart>
     </ChartContainer>
   );

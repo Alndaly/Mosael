@@ -11424,6 +11424,35 @@
         "title": "DailyPublishOut",
         "description": "一天的发布活动(首页发布图的一根柱)。date 为 YYYY-MM-DD(UTC)。"
       },
+      "DailyUsageOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "cost_micros": {
+            "type": "integer",
+            "title": "Cost Micros"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "unknown": {
+            "type": "integer",
+            "title": "Unknown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "cost_micros",
+          "events",
+          "unknown"
+        ],
+        "title": "DailyUsageOut",
+        "description": "一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。"
+      },
       "EngineSynthesizeRequest": {
         "properties": {
           "workspace_id": {
@@ -16559,6 +16588,52 @@
             },
             "type": "object",
             "title": "Publish Platforms"
+          },
+          "usage_cost_micros": {
+            "type": "integer",
+            "title": "Usage Cost Micros",
+            "default": 0
+          },
+          "usage_currency": {
+            "type": "string",
+            "title": "Usage Currency",
+            "default": "USD"
+          },
+          "usage_event_count": {
+            "type": "integer",
+            "title": "Usage Event Count",
+            "default": 0
+          },
+          "usage_unknown_cost_events": {
+            "type": "integer",
+            "title": "Usage Unknown Cost Events",
+            "default": 0
+          },
+          "usage_duration_seconds": {
+            "type": "number",
+            "title": "Usage Duration Seconds",
+            "default": 0
+          },
+          "usage_daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsageOut"
+            },
+            "type": "array",
+            "title": "Usage Daily"
+          },
+          "usage_by_capability": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Usage By Capability"
+          },
+          "usage_by_provider": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Usage By Provider"
           }
         },
         "type": "object",

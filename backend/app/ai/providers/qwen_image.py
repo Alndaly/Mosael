@@ -9,9 +9,11 @@ import httpx
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
+    GenerationResult,
     ProviderContext,
     ProviderError,
     image_file_to_data_url,
+    metering_from_request,
     provider_http_error,
 )
 
@@ -133,7 +135,7 @@ class QwenImageProvider(GenerationProvider):
     name = "alibaba"
     kind = "image"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
         base_url = resolve_dashscope_base(context)
@@ -148,7 +150,7 @@ class QwenImageProvider(GenerationProvider):
                         raise ProviderError("Provider returned success without a result URL")
                     target = output_dir / "generated.png"
                     download_result_asset(url, target)
-                    return target
+                    return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=submit.json())
 
             headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
             with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
@@ -163,7 +165,8 @@ class QwenImageProvider(GenerationProvider):
                 while time.time() < deadline:
                     poll = client.get(f"/api/v1/tasks/{task_id}")
                     poll.raise_for_status()
-                    url = extract_result_url(poll.json())
+                    poll_payload = poll.json()
+                    url = extract_result_url(poll_payload)
                     if url:
                         break
                     time.sleep(POLL_INTERVAL_SECONDS)
@@ -172,6 +175,6 @@ class QwenImageProvider(GenerationProvider):
 
                 target = output_dir / "generated.png"
                 download_result_asset(url, target)
-                return target
+                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc

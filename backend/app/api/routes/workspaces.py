@@ -191,6 +191,7 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
     from sqlalchemy import func
 
     from app.db.models import now
+    from app.domain.usage import summarize_usage
 
     ensure_workspace_access(db, user, workspace_id)
 
@@ -259,12 +260,21 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
         .group_by(PublishAccount.platform)
     ).all()
     publish_platforms = {str(platform): int(count_) for platform, count_ in publish_platform_rows}
+    usage = summarize_usage(db, workspace_id=workspace_id, days=14)
 
     return WorkspaceSummaryOut(
         daily=daily,
         asset_kinds=asset_kinds,
         publish_daily=publish_daily,
         publish_platforms=publish_platforms,
+        usage_cost_micros=usage.total_cost_micros,
+        usage_currency=usage.currency,
+        usage_event_count=usage.event_count,
+        usage_unknown_cost_events=usage.unknown_cost_events,
+        usage_duration_seconds=usage.duration_seconds,
+        usage_daily=usage.daily,
+        usage_by_capability=usage.by_capability,
+        usage_by_provider=usage.by_provider,
         project_count=count(scoped(Project)),
         asset_count=count(scoped(Asset)),
         sequence_count=count(scoped(Sequence)),

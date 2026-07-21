@@ -38,6 +38,7 @@ class TurnResult:
     text: str
     adapter_session_id: str | None = None
     adapter_state: object | None = None  # pi: 序列化的消息数组,用于下一轮多轮记忆
+    usage: dict | None = None
 
 
 def mibu_mcp_config(api_base: str, token: str) -> dict:
@@ -231,6 +232,7 @@ def _run_pi(
     child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
     result_text: str | None = None
     result_state: object | None = None
+    result_usage: dict | None = None
     saw_tool = False
     aborted = False
     for line in child.lines():
@@ -248,6 +250,8 @@ def _run_pi(
         elif kind == "turn_done":
             result_text = str(event.get("text", ""))
             result_state = event.get("sessionState")
+            usage = event.get("usage")
+            result_usage = usage if isinstance(usage, dict) else None
             # Stop reading here rather than waiting for the process to exit. stdin now stays
             # open for the whole turn so steering has somewhere to go, which means the sidecar's
             # readline loop no longer ends on its own — waiting for EOF left every turn
@@ -277,13 +281,13 @@ def _run_pi(
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
-        return TurnResult(text=result_text, adapter_session_id=None, adapter_state=result_state)
+        return TurnResult(text=result_text, adapter_session_id=None, adapter_state=result_state, usage=result_usage)
     if not result_text.strip() and not saw_tool:
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
         raise AdapterError(stderr_tail or f"模型没有返回任何内容。{_PROVIDER_HINT}")
-    return TurnResult(text=result_text.strip(), adapter_state=result_state)
+    return TurnResult(text=result_text.strip(), adapter_state=result_state, usage=result_usage)
 
 
 def build_claude_command(

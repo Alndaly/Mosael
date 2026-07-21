@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.base import GenerationProvider, GenerationRequest, GenerationResult, ProviderContext, ProviderError
 from app.ai.providers.kling import KlingProvider
 from app.ai.providers.openai_image import OpenAIImageProvider
 from app.ai.providers.qwen_image import QwenImageProvider
@@ -28,4 +28,4 @@ def get_provider(name: str, kind: str) -> GenerationProvider | None:
     return _PROVIDERS.get((name, kind))
 
 
-__all__ = ["GenerationProvider", "GenerationRequest", "ProviderContext", "ProviderError", "get_provider"]
+__all__ = ["GenerationProvider", "GenerationRequest", "GenerationResult", "ProviderContext", "ProviderError", "get_provider"]

@@ -68,7 +68,7 @@ export type Event =
   | { type: "text_delta"; turnId: string; delta: string }
   | { type: "tool_start"; turnId: string; toolCallId: string; name: string; args: unknown }
   | { type: "tool_end"; turnId: string; toolCallId: string; result: unknown; isError: boolean }
-  | { type: "turn_done"; turnId: string; text: string; sessionState: unknown }
+  | { type: "turn_done"; turnId: string; text: string; sessionState: unknown; usage?: Record<string, unknown> }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
   | { type: "error"; turnId: string | null; message: string };

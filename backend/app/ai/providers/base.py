@@ -36,6 +36,13 @@ class GenerationRequest:
 
 
 @dataclass(frozen=True)
+class GenerationResult:
+    output_path: Path
+    usage: dict[str, Any] = field(default_factory=dict)
+    raw_usage: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ProviderContext:
     profile_id: str | None
     vendor: str
@@ -69,8 +76,34 @@ class GenerationProvider(ABC):
                 raise ProviderError(f"resolution must be one of {', '.join(ALLOWED_VIDEO_RESOLUTIONS)}")
 
     @abstractmethod
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
-        """Run submit→poll→download synchronously; return the media file path."""
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+        """Run submit→poll→download synchronously; return the media file plus provider usage."""
+
+
+def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
+    """Provider-neutral metering facts that can be priced even before a provider returns usage."""
+    units: dict[str, Any] = {"requests": 1}
+    if request.kind == "image":
+        size = str(request.parameters.get("size") or "")
+        units.update(
+            {
+                "images": int(request.parameters.get("num_images", 1)),
+                "source_images": len(request.source_files),
+            }
+        )
+        if size:
+            units["size"] = size.replace("*", "x")
+    elif request.kind == "video":
+        units.update(
+            {
+                "videos": 1,
+                "video_seconds": float(request.parameters.get("duration_seconds", 5)),
+                "resolution": str(request.parameters.get("resolution", "720p")),
+                "aspect_ratio": str(request.parameters.get("aspect_ratio", "")),
+                "source_images": len(request.source_files),
+            }
+        )
+    return units
 
 
 def sanitize_provider_error(message: str, credential: str | None) -> str:

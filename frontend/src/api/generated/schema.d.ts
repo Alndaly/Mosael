@@ -3693,6 +3693,20 @@ export interface components {
             blocked: number;
         };
         /**
+         * DailyUsageOut
+         * @description 一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。
+         */
+        DailyUsageOut: {
+            /** Date */
+            date: string;
+            /** Cost Micros */
+            cost_micros: number;
+            /** Events */
+            events: number;
+            /** Unknown */
+            unknown: number;
+        };
+        /**
          * EngineSynthesizeRequest
          * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
          */
@@ -5846,6 +5860,41 @@ export interface components {
             publish_daily: components["schemas"]["DailyPublishOut"][];
             /** Publish Platforms */
             publish_platforms: {
+                [key: string]: number;
+            };
+            /**
+             * Usage Cost Micros
+             * @default 0
+             */
+            usage_cost_micros: number;
+            /**
+             * Usage Currency
+             * @default USD
+             */
+            usage_currency: string;
+            /**
+             * Usage Event Count
+             * @default 0
+             */
+            usage_event_count: number;
+            /**
+             * Usage Unknown Cost Events
+             * @default 0
+             */
+            usage_unknown_cost_events: number;
+            /**
+             * Usage Duration Seconds
+             * @default 0
+             */
+            usage_duration_seconds: number;
+            /** Usage Daily */
+            usage_daily?: components["schemas"]["DailyUsageOut"][];
+            /** Usage By Capability */
+            usage_by_capability?: {
+                [key: string]: number;
+            };
+            /** Usage By Provider */
+            usage_by_provider?: {
                 [key: string]: number;
             };
         };

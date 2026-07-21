@@ -7,7 +7,15 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
+from app.ai.providers.base import (
+    GenerationProvider,
+    GenerationRequest,
+    GenerationResult,
+    ProviderContext,
+    ProviderError,
+    metering_from_request,
+    provider_http_error,
+)
 
 """
 OpenAI Images-compatible adapter:
@@ -65,7 +73,7 @@ class OpenAIImageProvider(GenerationProvider):
     def __init__(self, name: str = "openai") -> None:
         self.name = name
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
+    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
             raise ProviderError("OpenAI API key is not configured (settings → 生成服务)")
         base_url = (context.base_url or OPENAI_BASE).rstrip("/")
@@ -103,6 +111,6 @@ class OpenAIImageProvider(GenerationProvider):
                     suffix = "png"
                 target = output_dir / f"generated.{suffix}"
                 target.write_bytes(image_bytes)
-                return target
+                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("OpenAI image request failed", exc, context.api_key)) from exc

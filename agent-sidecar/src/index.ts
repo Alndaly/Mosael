@@ -49,13 +49,13 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
       send({ type: "error", turnId, message: result.errorMessage });
       return;
     }
-    send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState });
+    send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState, usage: result.usage });
     return;
   }
   // 无 provider:退回 echo(便于纯传输测试)
   const text = `「sidecar echo」未提供 provider/model。收到 prompt:${prompt ?? ""}`;
   for (const ch of text) send({ type: "text_delta", turnId, delta: ch });
-  send({ type: "turn_done", turnId, text, sessionState: null });
+  send({ type: "turn_done", turnId, text, sessionState: null, usage: { requests: 1 } });
 }
 
 async function main(): Promise<void> {

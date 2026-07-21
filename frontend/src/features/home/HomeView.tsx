@@ -6,6 +6,7 @@ import {
   BookText,
   Clapperboard,
   Clock3,
+  Coins,
   Film,
   FolderPlus,
   Layers,
@@ -20,7 +21,7 @@ import {
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
-import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart } from "@/features/home/HomeCharts";
+import { ActivityChart, AssetKindsChart, PublishActivityChart, PublishPlatformsChart, UsageCostChart } from "@/features/home/HomeCharts";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -141,6 +142,16 @@ export function HomeView({
         { key: "homeStatKbDocs", value: stats.kb_document_count, icon: <BookOpen size={13} />, goto: "/kb" },
         { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} />, action: openTaskCenter },
         {
+          key: "homeStatAiUsage",
+          value: stats.usage_event_count,
+          icon: <Coins size={13} />,
+          goto: "/ai",
+          extra:
+            stats.usage_unknown_cost_events > 0
+              ? t("homeStatUsageUnknownSuffix").replace("{n}", String(stats.usage_unknown_cost_events))
+              : undefined,
+        },
+        {
           key: "homeStatWeekDone",
           value: stats.week_jobs_succeeded,
           icon: <Clock3 size={13} />,
@@ -219,6 +230,10 @@ export function HomeView({
           <div className="home-chart">
             <h2 className="home-chart-title">{t("homeChartPublishPlatforms")}</h2>
             <PublishPlatformsChart platforms={stats.publish_platforms} />
+          </div>
+          <div className="home-chart">
+            <h2 className="home-chart-title">{t("homeChartUsage")}</h2>
+            <UsageCostChart daily={stats.usage_daily} currency={stats.usage_currency} unknown={stats.usage_unknown_cost_events} />
           </div>
         </section>
       )}

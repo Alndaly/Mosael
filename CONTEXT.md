@@ -53,6 +53,10 @@ _Avoid_: 队列服务、调度中心
 **归属棘轮**:
 `tests/test_data_ownership_ratchet.py`:存量越界冻结在 allowlist 只减不增;新增越界与修复后未删条目都会失败。
 
+**用量台账**:
+`provider_usage_events` + `provider_pricing_rules` 两张表加 `app/domain/usage.py` 的接口;记录 AI 对话、图片/视频/音频生成、嵌入等供应商调用的可审计事实。调用方只上报 provider/model/capability/operation/units/raw_usage/duration,价格估算与幂等写入收敛在台账模块。
+_Avoid_: 把费用写进 `task_events`、把供应商账单逻辑散落在各 adapter、用 toast 文案替代可查询的成本事实
+
 ### 智能体
 
 **工具注册表**:
@@ -72,6 +76,7 @@ _Avoid_: 仅凭 vendor 文案推断能力
 - **引擎**只认**执行器注册表**;**执行器注册表**与**节点注册表**一一对应
 - **卫星进程**经 **worker 协议**(external 类)或 stdio/subprocess(共生类)与**事实源**通信
 - 每张表有且只有一个**数据归属**领域;**归属棘轮**守护它
+- **用量台账**从任务总线、智能体、生成执行器接收事实,不反向决定业务是否成功
 - **供应商能力配置**只说明某个 adapter 需要哪些配置以及能进入哪些能力;能力的实际 HTTP/SDK 差异由该能力自己的 Adapter 接缝负责
 
 ## Example dialogue
