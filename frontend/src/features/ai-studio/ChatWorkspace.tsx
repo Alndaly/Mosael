@@ -1,6 +1,25 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, Copy, CornerDownRight, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, Send, Sparkles, Square, Trash2, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  CircleDot,
+  Copy,
+  CornerDownRight,
+  Database,
+  FileText,
+  Loader2,
+  MessageSquarePlus,
+  Paperclip,
+  Pencil,
+  Plus,
+  Send,
+  Sparkles,
+  Square,
+  Trash2,
+  Wrench,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -18,6 +37,8 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
+type AgentManifest = components["schemas"]["AgentManifestOut"];
+type AgentTool = components["schemas"]["ToolSpec"];
 type PromptSkill = components["schemas"]["PromptSkillOut"];
 
 export function ChatWorkspace({
@@ -39,6 +60,16 @@ export function ChatWorkspace({
   const skills = useQuery({
     queryKey: ["prompt-skills"],
     queryFn: () => api<PromptSkill[]>("/api/agent/prompt-skills"),
+    staleTime: 60_000,
+  });
+  const manifest = useQuery({
+    queryKey: ["agent-manifest"],
+    queryFn: () => api<AgentManifest>("/api/agent/manifest"),
+    staleTime: 60_000,
+  });
+  const tools = useQuery({
+    queryKey: ["agent-tools"],
+    queryFn: () => api<AgentTool[]>("/api/agent/tools"),
     staleTime: 60_000,
   });
   const uploadAttachment = useMutation({
@@ -305,6 +336,8 @@ export function ChatWorkspace({
     setAttachments([]);
   };
 
+  const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+
   return (
     <div className="chat-grid">
       <aside className="chat-sessions panel">
@@ -370,11 +403,9 @@ export function ChatWorkspace({
         {
           <>
             <div className="chat-thread" ref={threadRef}>
-              {(messages.data ?? [])
-                .filter((message) => !queuedIds.has(message.id))
-                .map((message) => (
-                  <ChatBubble key={message.id} message={message} />
-                ))}
+              {visibleMessages.map((message) => (
+                <ChatBubble key={message.id} message={message} />
+              ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
                   <AgentTurnContent timeline={streamTimeline} />
@@ -543,8 +574,208 @@ export function ChatWorkspace({
           </>
         }
       </section>
+
+      <ChatInspector
+        workspace={workspace}
+        session={session.data ?? activeSession}
+        messages={visibleMessages}
+        queue={queue.data ?? []}
+        running={running}
+        elapsedSeconds={elapsedSeconds}
+        streamTimeline={streamTimeline}
+        skills={skills.data ?? []}
+        manifest={manifest.data ?? null}
+        tools={tools.data ?? []}
+      />
     </div>
   );
+}
+
+function ChatInspector({
+  workspace,
+  session,
+  messages,
+  queue,
+  running,
+  elapsedSeconds,
+  streamTimeline,
+  skills,
+  manifest,
+  tools,
+}: {
+  workspace: Workspace;
+  session: AgentSession | null;
+  messages: AgentMessage[];
+  queue: AgentMessage[];
+  running: boolean;
+  elapsedSeconds: number;
+  streamTimeline: AgentTimelineItem[];
+  skills: PromptSkill[];
+  manifest: AgentManifest | null;
+  tools: AgentTool[];
+}) {
+  const t = useI18n();
+  const recentTools = React.useMemo(
+    () => collectRecentToolCalls(messages, running ? streamTimeline : []).slice(0, 6),
+    [messages, running, streamTimeline],
+  );
+  const userCount = messages.filter((message) => message.role === "user").length;
+  const assistantCount = messages.filter((message) => message.role === "assistant").length;
+  const failedCount = messages.filter((message) => message.error).length;
+  const status = session?.status ?? (running ? "running" : "idle");
+  const statusLabel = running
+    ? `${t("agentStatusRunning")} · ${elapsedSeconds}s`
+    : status === "idle"
+      ? t("agentStatusIdle")
+      : status;
+
+  return (
+    <aside className="chat-inspector panel" aria-label={t("agentInspectorTitle")}>
+      <div className="chat-inspector-head">
+        <h2>{t("agentInspectorTitle")}</h2>
+        <span className={`chat-inspector-status ${running ? "running" : ""}`}>
+          <CircleDot size={10} /> {statusLabel}
+        </span>
+      </div>
+
+      <section className="chat-inspector-section">
+        <h3>
+          <Database size={13} /> {t("agentInspectorContext")}
+        </h3>
+        <dl className="chat-inspector-kv">
+          <div>
+            <dt>{t("agentWorkspace")}</dt>
+            <dd title={workspace.name}>{workspace.name}</dd>
+          </div>
+          <div>
+            <dt>{t("agentSession")}</dt>
+            <dd title={session?.title ?? ""}>{session?.title ?? t("agentNoActiveSession")}</dd>
+          </div>
+          <div>
+            <dt>{t("agentModel")}</dt>
+            <dd title={session?.model ?? session?.adapter ?? ""}>{session?.model ?? session?.adapter ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>{t("agentUpdatedAt")}</dt>
+            <dd>{session ? formatInspectorTime(session.updated_at) : "—"}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="chat-inspector-section">
+        <h3>
+          <FileText size={13} /> {t("agentInspectorThread")}
+        </h3>
+        <div className="chat-inspector-metrics">
+          <span>
+            <strong>{messages.length}</strong>
+            {t("agentMetricMessages")}
+          </span>
+          <span>
+            <strong>{userCount}</strong>
+            {t("agentMetricUser")}
+          </span>
+          <span>
+            <strong>{assistantCount}</strong>
+            {t("agentMetricAssistant")}
+          </span>
+          <span>
+            <strong>{queue.length}</strong>
+            {t("agentMetricQueue")}
+          </span>
+        </div>
+        {failedCount > 0 && (
+          <p className="chat-inspector-warning">
+            {t("agentFailedTurns").replace("{n}", String(failedCount))}
+          </p>
+        )}
+      </section>
+
+      <section className="chat-inspector-section">
+        <h3>
+          <Wrench size={13} /> {t("agentInspectorRecentTools")}
+        </h3>
+        {recentTools.length > 0 ? (
+          <ul className="chat-inspector-tool-list">
+            {recentTools.map((tool) => (
+              <li key={tool.key}>
+                <span className={`chat-inspector-dot ${tool.status}`} />
+                <span title={tool.name}>{tool.name}</span>
+                <em>{tool.status === "error" ? t("toolStatusFailed") : tool.status === "running" ? t("toolStatusRunning") : t("toolStatusDone")}</em>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="chat-inspector-empty">{t("agentNoRecentTools")}</p>
+        )}
+      </section>
+
+      <section className="chat-inspector-section">
+        <h3>
+          <Sparkles size={13} /> {t("agentInspectorCapabilities")}
+        </h3>
+        <div className="chat-inspector-cap-row">
+          <span>{t("skillsTitle")}</span>
+          <strong>{skills.length}</strong>
+        </div>
+        <div className="chat-inspector-cap-row">
+          <span>{t("agentTools")}</span>
+          <strong>{tools.length}</strong>
+        </div>
+        {manifest && (
+          <div className="chat-inspector-cap-row">
+            <span>{manifest.app}</span>
+            <strong>{manifest.version}</strong>
+          </div>
+        )}
+        <div className="chat-inspector-chips">
+          {skills.slice(0, 4).map((skill) => (
+            <span key={skill.id} title={skill.description}>
+              {skill.name}
+            </span>
+          ))}
+          {tools.slice(0, Math.max(0, 6 - Math.min(skills.length, 4))).map((tool) => (
+            <span key={tool.name} title={tool.description}>
+              {tool.name}
+            </span>
+          ))}
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentTimelineItem[]) {
+  const tools: { key: string; name: string; status: "running" | "done" | "error" }[] = [];
+  const pushTimeline = (timeline: AgentTimelineItem[] | undefined, scope: string) => {
+    for (const item of timeline ?? []) {
+      if (item.type !== "tool") continue;
+      tools.push({
+        key: `${scope}:${item.tool.id}`,
+        name: item.tool.name,
+        status: item.tool.status,
+      });
+    }
+  };
+
+  for (const message of messages) {
+    const payload = message.payload as { timeline?: AgentTimelineItem[] } | null;
+    pushTimeline(payload?.timeline, message.id);
+  }
+  pushTimeline(streamTimeline, "stream");
+  return tools.reverse();
+}
+
+function formatInspectorTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function ChatBubble({ message }: { message: AgentMessage }) {
