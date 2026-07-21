@@ -13,7 +13,30 @@ type GenerationModel = components["schemas"]["GenerationModelOut"];
 
 const NONE = "__none__";
 
-/** 一行:某能力的默认供应商 + 模型。chat 的模型取自供应商 /models;image/video 取自生成目录(按 vendor 过滤)。 */
+function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  values.forEach((value) => {
+    const trimmed = value?.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  });
+  return out;
+}
+
+export function generationModelSuggestions(
+  profile: ProviderProfile | null,
+  genModels: GenerationModel[] | null,
+  currentModel: string,
+): string[] {
+  const catalogModels = (genModels ?? [])
+    .filter((item) => !profile || item.provider === profile.vendor)
+    .map((item) => item.model);
+  return uniqueNonEmpty([currentModel, profile?.default_model, ...catalogModels]);
+}
+
+/** 一行:某能力的默认供应商 + 模型。chat 的模型取自供应商 /models;image/video 允许自定义端点手填模型名。 */
 function DefaultRow({
   capability,
   label,
@@ -34,6 +57,7 @@ function DefaultRow({
   const providerId = current?.provider_profile_id ?? "";
   const model = current?.model ?? "";
   const selectedProfile = providers.find((p) => p.id === providerId) ?? null;
+  const isGenerationCapability = capability === "image" || capability === "video";
 
   // chat:该供应商的 LLM 列表
   const chatModels = useQuery({
@@ -45,13 +69,25 @@ function DefaultRow({
   const modelOptions =
     capability === "chat"
       ? chatModels.data ?? []
-      : (genModels ?? []).filter((m) => !selectedProfile || m.provider === selectedProfile.vendor).map((m) => m.model);
+      : generationModelSuggestions(selectedProfile, genModels, model);
+  const datalistId = `provider-default-model-options-${capability}`;
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
       api(`/api/settings/provider-defaults/${capability}`, { method: "PUT", body: JSON.stringify(patch) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
   });
+  const [draftModel, setDraftModel] = React.useState(model);
+
+  React.useEffect(() => {
+    setDraftModel(model);
+  }, [model, providerId]);
+
+  const commitDraftModel = () => {
+    const nextModel = draftModel.trim();
+    if (nextModel === model) return;
+    save.mutate({ provider_profile_id: providerId || null, model: nextModel });
+  };
 
   return (
     <div
@@ -62,7 +98,14 @@ function DefaultRow({
       <Select
         key={`p-${providerId || "none"}`}
         value={providerId || NONE}
-        onValueChange={(value) => save.mutate({ provider_profile_id: value === NONE ? null : value, model: "" })}
+        onValueChange={(value) => {
+          const nextProviderId = value === NONE ? "" : value;
+          const nextProfile = providers.find((profile) => profile.id === nextProviderId) ?? null;
+          const nextModel = isGenerationCapability
+            ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
+            : "";
+          save.mutate({ provider_profile_id: nextProviderId || null, model: nextModel });
+        }}
       >
         <SelectTrigger className="provider-default-select">
           <SelectValue placeholder={t("kbEmbedPickProvider")} />
@@ -76,31 +119,55 @@ function DefaultRow({
           ))}
         </SelectContent>
       </Select>
-      <Select
-        key={`m-${model || "none"}`}
-        value={model || NONE}
-        onValueChange={(value) => save.mutate({ provider_profile_id: providerId || null, model: value === NONE ? "" : value })}
-        disabled={!providerId || modelOptions.length === 0}
-      >
-        <SelectTrigger className="provider-default-select">
-          <SelectValue
-            placeholder={
-              !providerId
-                ? t("providerDefaultsPickFirst")
-                : modelOptions.length === 0
-                  ? t("providerDefaultsNoModels")
-                  : t("agentModelPlaceholder")
-            }
+      {isGenerationCapability ? (
+        <>
+          <input
+            className="provider-default-model-input"
+            list={datalistId}
+            value={draftModel}
+            placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
+            disabled={!providerId}
+            onBlur={commitDraftModel}
+            onChange={(event) => setDraftModel(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
           />
-        </SelectTrigger>
-        <SelectContent>
-          {modelOptions.map((name) => (
-            <SelectItem key={name} value={name}>
-              {name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <datalist id={datalistId}>
+            {modelOptions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </>
+      ) : (
+        <Select
+          key={`m-${model || "none"}`}
+          value={model || NONE}
+          onValueChange={(value) => save.mutate({ provider_profile_id: providerId || null, model: value === NONE ? "" : value })}
+          disabled={!providerId || modelOptions.length === 0}
+        >
+          <SelectTrigger className="provider-default-select">
+            <SelectValue
+              placeholder={
+                !providerId
+                  ? t("providerDefaultsPickFirst")
+                  : modelOptions.length === 0
+                    ? t("providerDefaultsNoModels")
+                    : t("agentModelPlaceholder")
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {modelOptions.map((name) => (
+              <SelectItem key={name} value={name}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
