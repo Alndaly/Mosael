@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import threading
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.domain.jobs import RENDER_SLOTS, run_job_guarded
+from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded
 from app.db.models import Asset, Font, Job, Lut, Sequence, TaskEvent, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, finish_job, register_job_child, unregister_job_child
@@ -145,9 +143,9 @@ def start_export(db: Session, sequence_id: str) -> Job:
         },
         message="Export queued",
     )
-    db.commit()
-    thread = threading.Thread(target=_run_export, args=(job.id, plan), daemon=True)
-    thread.start()
+    # 「怎么跑」在这里,「由谁跑」是任务总线的决定:render 翻成 external 模式时
+    # (MIBU_EXTERNAL_JOB_KINDS=render),任务留在 queued 等外部 worker 认领,本函数不变。
+    dispatch_job(db, job, lambda: _run_export(job.id, plan))
     return job
 
 

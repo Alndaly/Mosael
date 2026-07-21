@@ -104,11 +104,49 @@ TERMINAL_KEEP_EVENTS = 5
 EVENT_RETENTION_DAYS = 30
 
 
-# Publish jobs are driven by the external desktop worker (a separate Electron
-# process that polls the publish-worker endpoint), so they can legitimately stay
-# "running" across a backend restart. Every other kind runs in an in-process
-# daemon thread that dies with the process — those are orphaned by a restart.
-EXTERNAL_WORKER_KINDS = ("publish",)
+# ---------- 执行模式接缝 ----------
+#
+# 每种 job kind 声明由谁执行,两个适配器:
+#
+# - "in_process"(默认):领域模块 spawn 守护线程,进程死任务亡——重启时 reconcile 判失败。
+# - "external":外部 worker 经 claim/report 协议(/api/jobs/worker/*,worker key 鉴权)驱动,
+#   任务跨后端重启存活。发布器是第一个外部 worker;任何计算类 kind(render/transcribe…)
+#   都可以经 MIBU_EXTERNAL_JOB_KINDS 或 register_external_kind() 翻成 external,
+#   由团队服务器旁的独立 worker 机器认领——这是"多机"的接缝,不是新架构。
+#
+# publish 由 publish 领域自己注册(app/domain/publish/__init__.py);
+# 任务总线不点名任何具体领域。
+_EXECUTION_MODES: dict[str, str] = {}
+
+
+def register_external_kind(kind: str) -> None:
+    _EXECUTION_MODES[kind] = "external"
+
+
+def execution_mode(kind: str) -> str:
+    return _EXECUTION_MODES.get(kind, "in_process")
+
+
+def external_kinds() -> tuple[str, ...]:
+    return tuple(sorted(k for k, mode in _EXECUTION_MODES.items() if mode == "external"))
+
+
+def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bool:
+    """按 kind 的执行模式派发一个刚创建的 job。
+
+    in_process → 立刻 spawn 守护线程(现状不变);external → 什么都不做,留在
+    queued 等外部 worker 认领。领域模块只描述「怎么跑」(thread_target),
+    「由谁跑」是总线的决定——这样把一个 kind 挪到外部 worker 不需要改领域代码。
+    Returns True when a thread was started in-process.
+    """
+    if execution_mode(job.kind) == "external":
+        job.message = "等待执行器认领"
+        db.add(TaskEvent(job_id=job.id, type="job.awaiting_worker", payload={}))
+        db.commit()
+        return False
+    db.commit()
+    threading.Thread(target=thread_target, daemon=True).start()
+    return True
 
 
 def create_job(
@@ -136,7 +174,7 @@ def reconcile_orphaned_jobs(db: Session) -> int:
     stale = db.scalars(
         select(Job)
         .where(Job.status.in_(("queued", "running")))
-        .where(Job.kind.notin_(EXTERNAL_WORKER_KINDS))
+        .where(Job.kind.notin_(external_kinds()))
     ).all()
     for job in stale:
         job.status = "failed"
@@ -171,6 +209,90 @@ def cancel_job(db: Session, job: Job) -> Job:
         task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
         if task is not None and task.status not in ("success", "prepared", "failed", "cancelled"):
             task.status = "cancelled"
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+# ---------- 通用 worker 协议(claim / report) ----------
+#
+# 发布器验证过的拉取模式,推广给所有 external kind:worker 主动认领(CAS 原子翻
+# running)、富状态回报、后端从不反向连接 worker。publish 因历史契约仍走
+# /api/publish/worker/*(任务粒度是 PublishTask);其余 external kind 走这里。
+
+CLAIMABLE_STATUSES = ("queued",)
+
+
+def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str = "") -> Job | None:
+    """认领最老的一条可认领 job 并原子翻成 running。
+
+    只允许认领 external 模式的 kind——in_process 的 kind 已有线程在跑,被外部
+    worker 抢走会双跑。CAS(status 仍是 queued 才更新)保证并发认领不重复。
+    """
+    allowed = set(external_kinds())
+    if kinds:
+        allowed &= set(kinds)
+    if not allowed:
+        return None
+    while True:
+        job = db.scalars(
+            select(Job)
+            .where(Job.status.in_(CLAIMABLE_STATUSES), Job.kind.in_(sorted(allowed)))
+            .order_by(Job.created_at)
+            .limit(1)
+        ).first()
+        if job is None:
+            return None
+        claimed = db.execute(
+            Job.__table__.update()
+            .where(Job.id == job.id, Job.status.in_(CLAIMABLE_STATUSES))
+            .values(status="running", message="执行器已认领")
+        ).rowcount
+        if claimed:
+            db.add(TaskEvent(job_id=job.id, type="job.claimed", payload={"worker": worker}))
+            db.commit()
+            db.refresh(job)
+            return job
+        db.rollback()  # 另一个 worker 抢先了;重试下一条
+
+
+def report_job(
+    db: Session,
+    job: Job,
+    *,
+    status: str,
+    progress: float | None = None,
+    message: str | None = None,
+    error: str | None = None,
+    result: dict[str, Any] | None = None,
+) -> Job:
+    """外部 worker 回报:running 更新进度,succeeded/failed 落终态。
+
+    与发布器同一条规则:已终态(含用户取消)的 job 不给后到的回报复活——
+    worker 是在为一个已经不存在的意图干活,结果只能丢弃。
+    """
+    if status not in ("running", "succeeded", "failed"):
+        raise ValueError(f"未知回报状态: {status}")
+    db.refresh(job)
+    if job.status in TERMINAL_STATUSES:
+        return job
+    if status == "running":
+        if progress is not None:
+            job.progress = max(0.0, min(1.0, float(progress)))
+        if message is not None:
+            job.message = message
+        db.add(TaskEvent(job_id=job.id, type="job.progress", payload={"progress": job.progress}))
+    else:
+        job.status = status
+        if message is not None:
+            job.message = message
+        if status == "failed":
+            job.error = (error or message or "worker 报告失败")[:500]
+        else:
+            job.progress = 1.0
+            if result is not None:
+                job.result = result
+        db.add(TaskEvent(job_id=job.id, type=f"job.{status}", payload={}))
     db.commit()
     db.refresh(job)
     return job

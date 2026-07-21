@@ -33,6 +33,7 @@ from app.api.routes.settings import router as settings_router
 from app.api.routes.batches import router as batches_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.job_worker import router as job_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
@@ -42,7 +43,7 @@ from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.generation import ensure_builtin_generation_models
-from app.domain.jobs import reconcile_orphaned_jobs
+from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
 from app.media.proxy import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
@@ -53,6 +54,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
     issue_worker_key()
+    # 配置指定的 kind 翻成 external 执行模式(外部 worker 经 claim/report 驱动)。
+    # 必须在 reconcile 之前——external kind 的任务跨重启存活,不能被判失败。
+    for kind in (k.strip() for k in settings.external_job_kinds.split(",")):
+        if kind:
+            register_external_kind(kind)
     with SessionLocal() as db:
         ensure_builtin_generation_models(db)
         # A restart kills every in-process worker thread — fail the jobs they
@@ -126,6 +132,8 @@ def create_app() -> FastAPI:
     app.include_router(hooks_router, prefix="/api")
     # 桌面发布器 worker:本机进程,不走用户会话,改用启动时下发的共享密钥(见 worker_key.py)。
     app.include_router(publish_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
+    # 通用 job worker 通道(claim/report/heartbeat):同一把 worker key,任意 external kind。
+    app.include_router(job_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(workspaces_router, prefix="/api", dependencies=protected)

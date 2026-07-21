@@ -20,9 +20,13 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, PublishAccount, PublishTask, TaskEvent
-from app.domain.jobs import create_job
+from app.domain.jobs import create_job, register_external_kind
 from app.domain.notifications import notify
 from app.media.paths import resolve_key
+
+# 发布任务由桌面端执行器经 claim/report 驱动,跨后端重启存活;
+# 声明执行模式是领域自己的事,任务总线不点名 publish。
+register_external_kind("publish")
 
 
 class PublishDomainError(ValueError):

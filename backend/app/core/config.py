@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     feishu_autostart: bool = True
 
+    # 逗号分隔的 job kind 列表,把这些 kind 的执行模式翻成 external:任务只入队,
+    # 由外部 worker 经 /api/jobs/worker/* 认领执行(如 MIBU_EXTERNAL_JOB_KINDS=render
+    # 让渲染由团队服务器旁的独立 worker 机器承担)。默认全部 in_process。
+    external_job_kinds: str = ""
+
     # ffmpeg/ffprobe binaries. Default to PATH; override (MIBU_FFMPEG / MIBU_FFPROBE) to
     # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
     # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.
