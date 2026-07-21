@@ -784,7 +784,15 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
     <article className="generation-turn-card">
       <div className="generation-turn-prompt">{String(generation.request.prompt ?? "")}</div>
       <div className="gen-turn">
-        {generation.result_asset_id ? (
+        {generation.result_asset_id && generation.kind === "video" ? (
+          <video
+            className="gen-turn-video"
+            src={assetFileUrl(generation.result_asset_id)}
+            poster={assetThumbnailUrl(generation.result_asset_id)}
+            controls
+            preload="metadata"
+          />
+        ) : generation.result_asset_id ? (
           <button
             type="button"
             className="gen-turn-image-button"

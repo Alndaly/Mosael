@@ -5482,6 +5482,15 @@
   outline-offset: 3px;
   border-radius: 8px;
 }
+.gen-turn-video {
+  display: block;
+  max-width: min(560px, 100%);
+  width: 100%;
+  max-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #05070a;
+}
 .gen-turn-status {
   display: inline-flex;
   align-items: center;
