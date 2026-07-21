@@ -38,16 +38,20 @@ export function SettingsGroup({
 }
 
 export function SettingsRow({
+  id,
+  className,
   label,
   description,
   children,
 }: {
+  id?: string;
+  className?: string;
   label: string;
   description?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="sg-row">
+    <div id={id} className={className ? `sg-row ${className}` : "sg-row"}>
       <div className="sg-row-text">
         <span>{label}</span>
         {description && <small>{description}</small>}

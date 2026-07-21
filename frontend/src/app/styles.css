@@ -10169,37 +10169,36 @@
   gap: 6px;
 }
 
-/* 默认供应商:每能力一行 —— 能力名 + 供应商下拉 + 模型下拉 */
-.provider-defaults {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+/* 默认供应商:沿用设置页 Row 尺寸,右侧只负责供应商 + 模型两列。 */
 .provider-default-row {
-  display: grid;
-  grid-template-columns: 96px 1fr 1fr;
-  align-items: center;
-  gap: 10px;
-  border-radius: 8px;
-  margin: -4px;
-  padding: 4px;
+  grid-template-columns: 140px minmax(0, 1fr);
+  padding-block: 10px;
   transition: background 160ms, box-shadow 160ms;
 }
 .provider-default-row.is-highlighted {
   background: color-mix(in srgb, var(--primary) 10%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 38%, transparent);
 }
-.provider-default-cap {
-  font-weight: 500;
-  color: var(--foreground);
+.provider-default-row .sg-row-control {
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 1;
 }
-.provider-default-select {
+.provider-default-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
   width: 100%;
   min-width: 0;
 }
+.provider-default-field {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+}
 /* 禁用态(未选供应商/无可用模型)要一眼看出不可点,别让人以为点击没反应 */
-.provider-default-select:disabled,
-.provider-default-select[data-disabled] {
+.provider-default-field:disabled,
+.provider-default-field[data-disabled] {
   opacity: 0.45;
   cursor: not-allowed;
 }

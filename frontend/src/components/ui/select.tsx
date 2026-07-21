@@ -17,7 +17,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "inline-flex h-7 max-w-full min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-panel px-2 text-xs",
+        "inline-flex h-8 max-w-full min-w-0 items-center justify-between gap-1.5 rounded-md border border-border bg-panel px-2.5 text-[13px]",
         "text-foreground outline-none transition-colors hover:border-border-strong",
         "focus-visible:border-primary data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:truncate",
         className,
@@ -64,7 +64,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
   return (
     <SelectPrimitive.Item
       className={cn(
-        "flex cursor-pointer select-none items-center gap-2 rounded-[4px] px-2 py-1.5 text-xs text-foreground outline-none",
+        "flex cursor-pointer select-none items-center gap-2 rounded-[4px] px-2 py-1.5 text-[13px] text-foreground outline-none",
         "data-[highlighted]:bg-secondary data-[state=checked]:font-semibold",
         className,
       )}

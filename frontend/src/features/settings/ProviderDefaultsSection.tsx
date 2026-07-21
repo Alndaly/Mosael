@@ -6,7 +6,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -91,85 +91,89 @@ function DefaultRow({
   };
 
   return (
-    <div
-      className={highlighted ? "provider-default-row is-highlighted" : "provider-default-row"}
+    <SettingsRow
       id={`provider-default-${capability}`}
+      className={highlighted ? "provider-default-row is-highlighted" : "provider-default-row"}
+      label={label}
     >
-      <span className="provider-default-cap">{label}</span>
-      <Select
-        key={`p-${providerId || "none"}`}
-        value={providerId || NONE}
-        onValueChange={(value) => {
-          const nextProviderId = value === NONE ? "" : value;
-          const nextProfile = providers.find((profile) => profile.id === nextProviderId) ?? null;
-          const nextModel = isGenerationCapability
-            ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
-            : "";
-          save.mutate({ provider_profile_id: nextProviderId || null, model: nextModel });
-        }}
-      >
-        <SelectTrigger className="provider-default-select">
-          <SelectValue placeholder={t("kbEmbedPickProvider")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>—</SelectItem>
-          {providers.map((profile) => (
-            <SelectItem key={profile.id} value={profile.id}>
-              {profile.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {isGenerationCapability ? (
-        <>
-          <Input
-            className="h-10 min-w-0"
-            list={datalistId}
-            value={draftModel}
-            placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
-            disabled={!providerId}
-            onBlur={commitDraftModel}
-            onChange={(event) => setDraftModel(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.currentTarget.blur();
-              }
-            }}
-          />
-          <datalist id={datalistId}>
-            {modelOptions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </>
-      ) : (
+      <div className="provider-default-controls">
         <Select
-          key={`m-${model || "none"}`}
-          value={model || NONE}
-          onValueChange={(value) => save.mutate({ provider_profile_id: providerId || null, model: value === NONE ? "" : value })}
-          disabled={!providerId || modelOptions.length === 0}
+          key={`p-${providerId || "none"}`}
+          value={providerId || NONE}
+          onValueChange={(value) => {
+            const nextProviderId = value === NONE ? "" : value;
+            const nextProfile = providers.find((profile) => profile.id === nextProviderId) ?? null;
+            const nextModel = isGenerationCapability
+              ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
+              : "";
+            save.mutate({ provider_profile_id: nextProviderId || null, model: nextModel });
+          }}
         >
-          <SelectTrigger className="provider-default-select">
-            <SelectValue
-              placeholder={
-                !providerId
-                  ? t("providerDefaultsPickFirst")
-                  : modelOptions.length === 0
-                    ? t("providerDefaultsNoModels")
-                    : t("agentModelPlaceholder")
-              }
-            />
+          <SelectTrigger className="provider-default-field">
+            <SelectValue placeholder={t("kbEmbedPickProvider")} />
           </SelectTrigger>
           <SelectContent>
-            {modelOptions.map((name) => (
-              <SelectItem key={name} value={name}>
-                {name}
+            <SelectItem value={NONE}>—</SelectItem>
+            {providers.map((profile) => (
+              <SelectItem key={profile.id} value={profile.id}>
+                {profile.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-      )}
-    </div>
+        {isGenerationCapability ? (
+          <>
+            <Input
+              className="provider-default-field"
+              list={datalistId}
+              value={draftModel}
+              placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
+              disabled={!providerId}
+              onBlur={commitDraftModel}
+              onChange={(event) => setDraftModel(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <datalist id={datalistId}>
+              {modelOptions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </>
+        ) : (
+          <Select
+            key={`m-${model || "none"}`}
+            value={model || NONE}
+            onValueChange={(value) =>
+              save.mutate({ provider_profile_id: providerId || null, model: value === NONE ? "" : value })
+            }
+            disabled={!providerId || modelOptions.length === 0}
+          >
+            <SelectTrigger className="provider-default-field">
+              <SelectValue
+                placeholder={
+                  !providerId
+                    ? t("providerDefaultsPickFirst")
+                    : modelOptions.length === 0
+                      ? t("providerDefaultsNoModels")
+                      : t("agentModelPlaceholder")
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {modelOptions.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </SettingsRow>
   );
 }
 
@@ -212,25 +216,25 @@ export function ProviderDefaultsSection({ focusCapability }: { focusCapability?:
 
   return (
     <SettingsGroup title={t("providerDefaultsTitle")} description={t("providerDefaultsDesc")}>
-      <SettingsBlock>
-        {enabled.length === 0 ? (
+      {enabled.length === 0 ? (
+        <SettingsBlock>
           <p className="feishu-empty">{t("kbEmbedNoProvider")}</p>
-        ) : (
-          <div className="provider-defaults">
-            {rows.map((row) => (
-              <DefaultRow
-                key={row.capability}
-                capability={row.capability}
-                label={row.label}
-                providers={enabled}
-                current={byCapability.get(row.capability)}
-                genModels={row.genModels}
-                highlighted={focusCapability === row.capability}
-              />
-            ))}
-          </div>
-        )}
-      </SettingsBlock>
+        </SettingsBlock>
+      ) : (
+        <>
+          {rows.map((row) => (
+            <DefaultRow
+              key={row.capability}
+              capability={row.capability}
+              label={row.label}
+              providers={enabled}
+              current={byCapability.get(row.capability)}
+              genModels={row.genModels}
+              highlighted={focusCapability === row.capability}
+            />
+          ))}
+        </>
+      )}
     </SettingsGroup>
   );
 }
