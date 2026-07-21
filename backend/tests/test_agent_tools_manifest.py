@@ -52,6 +52,30 @@ def test_every_tool_carries_a_description_and_a_schema() -> None:
         assert tool["parameters"].get("type") == "object", f"{tool['name']} has no object schema"
 
 
+def test_high_risk_tool_descriptions_disambiguate_common_misuse() -> None:
+    """The descriptions are the model's routing table. Ambiguous neighbors must explicitly
+    say what they are NOT for, otherwise the agent will pick the nearest-sounding tool."""
+    client = fresh_client()
+    descriptions = {tool["name"]: tool["description"] for tool in _manifest(client)}
+
+    assert "Do NOT use for workflow" in descriptions["edit_timeline"]
+    assert "use edit_workflow" in descriptions["edit_timeline"]
+    assert "Do NOT use for video" in descriptions["edit_workflow"]
+    assert "use edit_timeline" in descriptions["edit_workflow"]
+    assert "NOT for routine" in descriptions["update_workflow"]
+    assert "use edit_workflow" in descriptions["update_workflow"]
+
+    assert "Do NOT use for knowledge-base" in descriptions["list_assets"]
+    assert "Do NOT use for media assets" in descriptions["search_kb"]
+    assert "Do NOT use for media asset tags" in descriptions["create_kb_note"]
+    assert "Do NOT use for KB document tags" in descriptions["update_asset_tags"]
+
+    assert "Do NOT use for running visual workflows" in descriptions["render_sequence"]
+    assert "Do NOT use to edit the workflow graph" in descriptions["run_workflow"]
+    assert "Do NOT use to analyze an existing asset" in descriptions["generate_image"]
+    assert "Do NOT use for exporting an existing sequence" in descriptions["generate_video"]
+
+
 def test_an_unknown_tool_is_a_404() -> None:
     client = fresh_client()
     assert client.post("/api/agent/tools/no_such_tool", json={"arguments": {}}).status_code == 404
@@ -73,6 +97,35 @@ def test_a_failing_tool_is_a_result_not_a_500() -> None:
     res = client.post("/api/agent/tools/analyze_asset", json={"arguments": {"asset_id": "nope"}})
     assert res.status_code == 200
     assert "error" in res.json()
+
+
+def test_workflow_graph_ops_sent_to_edit_timeline_get_recoverable_feedback(monkeypatch) -> None:
+    """When the model confuses workflow nodes with timeline clips, the error must teach it
+    the right tool instead of leaking the unrelated Sequence validator."""
+    client = fresh_client()
+
+    def should_not_post(*_args, **_kwargs) -> dict:
+        raise AssertionError("workflow graph ops should be rejected before creating a timeline confirmation")
+
+    monkeypatch.setattr(mcp_server, "_post", should_not_post)
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    res = client.post(
+        "/api/agent/tools/edit_timeline",
+        json={
+            "arguments": {
+                "sequence_id": None,
+                "workspace_id": workspace_id,
+                "operations": [{"kind": "remove_node", "node_id": "kb-search-1"}],
+            }
+        },
+    )
+
+    assert res.status_code == 200, res.text
+    error = res.json()["error"]
+    assert "edit_workflow" in error
+    assert "remove_node" in error
+    assert "Sequence not found" not in error
 
 
 def test_the_token_is_context_bound_not_global() -> None:

@@ -108,6 +108,28 @@ def _default_workspace_id() -> str:
     return workspaces[0]["id"]
 
 
+WORKFLOW_GRAPH_OP_KINDS = frozenset(
+    {
+        "add_node",
+        "connect",
+        "connect_data",
+        "set_node_config",
+        "set_node_name",
+        "remove_node",
+        "remove_edge",
+    }
+)
+
+
+def _looks_like_workflow_graph_ops(operations: list[dict[str, Any]] | None) -> bool:
+    if not isinstance(operations, list):
+        return False
+    return any(
+        isinstance(operation, dict) and operation.get("kind") in WORKFLOW_GRAPH_OP_KINDS
+        for operation in operations
+    )
+
+
 # 确认门控的工具集合:manifest(/api/agent/tools)据此给每个工具打 confirmation 标,
 # 各 runtime(pi sidecar / MCP 客户端)统一从元数据生成阻塞或轮询逻辑,不再手写第二份。
 CONFIRMATION_TOOLS = frozenset(
@@ -144,9 +166,12 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 @mcp.tool()
 def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "") -> list[dict[str, Any]]:
-    """List media assets in a workspace (id, name, kind, source, duration).
+    """Read-only: list media assets in a workspace (id, name, kind, source, duration).
 
-    Filter with kind ("video"/"image"/"audio") and/or name_contains to batch-select.
+    Use when you need asset_id values for timeline clips, visual analysis, tagging,
+    or choosing generated/imported media. Filter with kind ("video"/"image"/"audio")
+    and/or name_contains to batch-select. Do NOT use for knowledge-base documents,
+    scripts, notes, or workflow nodes — use search_kb/list_workflows instead.
     Leave workspace_id empty to use the first workspace.
     """
     if not workspace_id:
@@ -174,9 +199,12 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
 
 @mcp.tool()
 def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, Any]:
-    """Summarize a timeline: format, revision, duration, tracks, and clips.
+    """Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips.
 
-    Provide sequence_id, or project_id to inspect its most recent sequence.
+    Use before edit_timeline/render_sequence so you have the right sequence_id,
+    track layout, clip_id values, and current timing. Provide sequence_id, or
+    project_id to inspect its most recent sequence. Do NOT use for visual workflows
+    or workflow canvas nodes/edges — use get_workflow for those.
     """
     if not sequence_id:
         if not project_id:
@@ -226,7 +254,12 @@ def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, A
 
 @mcp.tool()
 def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
-    """List projects in a workspace (id, name, active_sequence_id)."""
+    """Read-only: list video projects in a workspace (id, name, active_sequence_id).
+
+    Use this to find a project's active_sequence_id before inspecting, editing,
+    or rendering a video timeline. Do NOT use for visual workflow IDs — use
+    list_workflows for workflows.
+    """
     if not workspace_id:
         workspaces = _get("/api/workspaces")
         if not workspaces:
@@ -241,7 +274,13 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
 
 @mcp.tool()
 def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
-    """Propose timeline edits (permission: edit). Requires user confirmation in Mibu.
+    """Confirmation required: propose edits to a VIDEO TIMELINE sequence.
+
+    Use ONLY for clips/tracks/cuts/trims/effects on a sequence_id after
+    inspect_sequence. This creates a confirmation card; no edit is applied until
+    the user approves it in Mibu, then get_confirmation returns the result.
+    Do NOT use for workflow canvas nodes/edges such as add_node, connect,
+    set_node_config, remove_node, or remove_edge — use edit_workflow for those.
 
     operations: list of {kind, ...args}. Supported kinds: insert_clip
     (track_id, asset_id, timeline_start, src_in, src_out), move_clip
@@ -251,6 +290,17 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
     set_clip_effects (clip_id, effects).
     Every applied edit is undoable by the user.
     """
+    if _looks_like_workflow_graph_ops(operations):
+        raise ValueError(
+            "Workflow graph operations were sent to edit_timeline. "
+            "Use edit_workflow(workflow_id, operations) for workflow canvas nodes/edges; "
+            "remove_node deletes workflow nodes there. edit_timeline only edits clips/tracks on a sequence_id."
+        )
+    if not str(sequence_id or "").strip():
+        raise ValueError(
+            "edit_timeline requires sequence_id and only edits video timelines. "
+            "For workflow canvas nodes/edges, use edit_workflow(workflow_id, operations)."
+        )
     confirmation = _post(
         "/api/confirmations",
         {
@@ -265,9 +315,12 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
 
 @mcp.tool()
 def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
-    """Export a timeline to mp4 (permission: render-cost). Requires user confirmation.
+    """Confirmation required: export an existing VIDEO TIMELINE sequence to mp4.
 
-    After approval the confirmation result carries the render job id.
+    Use after inspect_sequence/edit_timeline when the user wants a rendered video
+    file from a sequence_id. This creates a confirmation card because rendering
+    may spend time/resources; after approval get_confirmation returns the render
+    job id. Do NOT use for running visual workflows — use run_workflow.
     """
     confirmation = _post(
         "/api/confirmations",
@@ -283,10 +336,14 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
 
 @mcp.tool()
 def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
-    """Generate an image asset (permission: ai-cost). Requires user confirmation.
+    """Confirmation required: generate a NEW image asset from a text prompt.
 
-    After approval the result carries job_id; the finished image lands in the
-    media pool as a generated asset.
+    Use when the user asks to create a new still image/illustration/visual asset.
+    This creates a confirmation card because it may spend AI budget; after
+    approval get_confirmation returns the job_id and the finished image appears
+    in the media pool. Do NOT use to analyze an existing asset (analyze_asset),
+    tag an asset (update_asset_tags), search the KB (search_kb), or edit a
+    workflow/timeline.
     """
     confirmation = _post(
         "/api/confirmations",
@@ -302,7 +359,14 @@ def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock
 
 @mcp.tool()
 def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock", workspace_id: str = "") -> dict[str, Any]:
-    """Generate a video asset (permission: ai-cost). Requires user confirmation."""
+    """Confirmation required: generate a NEW video asset from a text prompt.
+
+    Use when the user asks to create new footage/animation/B-roll as a media
+    asset. This does not place the video onto a timeline; after approval the
+    generated asset lands in the media pool and can later be inserted with
+    edit_timeline. Do NOT use for exporting an existing sequence (render_sequence),
+    running a workflow (run_workflow), or editing workflow nodes (edit_workflow).
+    """
     confirmation = _post(
         "/api/confirmations",
         {
@@ -317,30 +381,36 @@ def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock
 
 @mcp.tool()
 def analyze_asset(asset_id: str, question: str = "") -> dict[str, Any]:
-    """Understand an image or video asset with a multimodal model (small ai-cost, runs directly).
+    """Runs directly: analyze an EXISTING image/video media asset with a multimodal model.
 
-    Videos are sampled into frames; ask about content, scenes, text on
-    screen, mood, best moments for cutting, etc.
+    Use after list_assets when you need to understand visual/audio content,
+    scenes, on-screen text, mood, or best moments for cutting. Videos are sampled
+    into frames. Do NOT use for KB documents, web pages, workflow graphs, or to
+    generate new media — use read_kb_document/fetch_url/get_workflow/generate_*.
     """
     return _post(f"/api/assets/{asset_id}/analyze", {"question": question})
 
 
 @mcp.tool()
 def list_plugin_tools() -> list[dict[str, Any]]:
-    """List tools contributed by enabled (and permission-granted) user plugins.
+    """Read-only: list tools contributed by enabled and permission-granted user plugins.
 
-    Each entry has plugin_id, tool_name, description, and input_schema — call
-    them with invoke_plugin_tool. Plugins are pure functions over their input
-    (no timeline mutation, no network) so calls run directly.
+    Use only when the built-in Mibu tools do not cover the user's request and a
+    plugin-specific capability may. Each entry has plugin_id, tool_name,
+    description, and input_schema; call with invoke_plugin_tool. Do NOT use for
+    built-in timeline/workflow/KB/media operations when a first-party tool exists.
     """
     return _get("/api/plugins/tools")
 
 
 @mcp.tool()
 def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) -> dict[str, Any]:
-    """Run a plugin tool (see list_plugin_tools) with a JSON input payload.
+    """Runs directly: invoke one plugin tool returned by list_plugin_tools.
 
-    Returns the invocation record: status succeeded/failed, output, error.
+    Use only with a plugin_id/tool_name/input_schema you got from list_plugin_tools.
+    Built-in Mibu edits, renders, generations, KB operations, and workflow runs
+    should use their dedicated first-party tools instead. Returns status,
+    output, and error.
     """
     invocation = _post(f"/api/plugins/{plugin_id}/tools/{tool_name}/invoke", {"input": input})
     return {
@@ -352,7 +422,7 @@ def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) ->
 
 @mcp.tool()
 def search_kb(query: str, workspace_id: str = "", dataset_id: str = "", limit: int = 6) -> list[dict[str, Any]]:
-    """Search the knowledge base (scripts, briefs, notes, imported articles).
+    """Read-only: search the KNOWLEDGE BASE — scripts, briefs, notes, imported articles.
 
     Use this BEFORE writing copy, planning a cut, or answering questions about
     the user's project background — the KB holds their scripts, style guides
@@ -380,11 +450,13 @@ def search_kb(query: str, workspace_id: str = "", dataset_id: str = "", limit: i
 
 @mcp.tool()
 def read_kb_document(document_id: str) -> dict[str, Any]:
-    """Read one knowledge-base document in full (title, markdown content, tags).
+    """Read-only: read one KNOWLEDGE BASE document in full.
 
-    Get document_id from search_kb results or the user. Prefer search_kb
-    snippets when you only need a fact; read the full document when you must
-    follow a script or style guide precisely.
+    Returns title, markdown content, tags, source_type, and source_ref. Get
+    document_id from search_kb results or the user. Prefer search_kb snippets
+    when you only need a fact; read the full document when you must follow a
+    script or style guide precisely. Do NOT use for media asset analysis or
+    workflow graph inspection — use analyze_asset/get_workflow.
     """
     doc = _get(f"/api/kb/documents/{document_id}")
     return {
@@ -399,12 +471,13 @@ def read_kb_document(document_id: str) -> dict[str, Any]:
 
 @mcp.tool()
 def create_kb_note(title: str, content: str, workspace_id: str = "", tags: list[str] | None = None) -> dict[str, Any]:
-    """Save a note into the knowledge base (runs directly, no confirmation).
+    """Runs directly: save a NEW polished note into the knowledge base.
 
     Use to persist reusable creative output the user asks you to keep:
     finalized scripts, shot lists, title/description drafts, research digests.
-    Do NOT dump raw chat replies — save polished, reusable material with a
-    clear title.
+    Do NOT dump raw chat replies; save polished reusable material with a clear
+    title. Do NOT use for media asset tags (update_asset_tags), timeline edits
+    (edit_timeline), or workflow graph edits (edit_workflow/update_workflow).
     """
     ws = workspace_id or _default_workspace_id()
     doc = _post(
@@ -416,26 +489,34 @@ def create_kb_note(title: str, content: str, workspace_id: str = "", tags: list[
 
 @mcp.tool()
 def list_skills() -> list[dict[str, Any]]:
-    """List available agent skills (reusable playbooks for common Mibu workflows).
+    """Read-only: list available agent skills/playbooks for common Mibu tasks.
 
-    Each entry has id, name, description. When a task matches a skill, call
-    load_skill(id) and follow its body strictly.
+    Use at the start of a task when a reusable workflow may apply. Each entry has
+    id, name, description. When a task matches a skill, call load_skill(id) and
+    follow its body strictly. This does not inspect or modify media/workflows.
     """
     return _get("/api/agent/prompt-skills")
 
 
 @mcp.tool()
 def load_skill(skill_id: str) -> dict[str, Any]:
-    """Load one skill's full playbook body (markdown). Follow it step by step."""
+    """Read-only: load one skill/playbook body by skill_id.
+
+    Use only after list_skills or when the user names a skill. Follow the
+    returned markdown step by step. This is guidance for your process, not a
+    project asset, KB document, timeline, or workflow graph.
+    """
     return _get(f"/api/agent/prompt-skills/{skill_id}")
 
 
 @mcp.tool()
 def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
-    """Replace an asset's tag list (metadata only, reversible — runs directly).
+    """Runs directly: replace an EXISTING media asset's tag list.
 
-    Read the asset's current tags via list_assets first if you want to merge
-    instead of replace.
+    Use for metadata organisation of assets returned by list_assets. This
+    replaces the entire tag array; read current tags first if you want to merge
+    instead of overwrite. Do NOT use for KB document tags, workflow node labels,
+    or project names — use KB/workflow/project-specific tools instead.
     """
     asset = _patch(f"/api/assets/{asset_id}", {"tags": tags})
     return {"asset_id": asset["id"], "name": asset["name"], "tags": asset.get("tags", [])}
@@ -443,21 +524,35 @@ def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
 
 @mcp.tool()
 def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
-    """Search the web for up-to-date info (read-only, runs directly). Returns up to `count`
-    results as {title, url, snippet}. Follow up with fetch_url to read a promising page."""
+    """Read-only: search the public web for up-to-date external information.
+
+    Use when the user needs current facts beyond local Mibu data. Returns up to
+    count results as {title, url, snippet}; follow up with fetch_url to read a
+    promising page. Do NOT use for the user's local assets, KB, projects, or
+    workflows — use list_assets/search_kb/list_projects/list_workflows.
+    """
     return _get("/api/websearch", {"q": query, "count": count}).get("results", [])
 
 
 @mcp.tool()
 def fetch_url(url: str) -> dict[str, Any]:
-    """Fetch a public web page and return its readable text as {title, url, text} (read-only).
-    Only http/https public pages; internal/localhost addresses are blocked."""
+    """Read-only: fetch one public web page as readable text.
+
+    Use after web_search when you need the page body. Returns {title, url, text}.
+    Only http/https public pages are allowed; internal/localhost addresses are
+    blocked. Do NOT use for local Mibu KB documents/assets/workflows.
+    """
     return _get("/api/webfetch", {"url": url})
 
 
 @mcp.tool()
 def list_workflows(workspace_id: str = "") -> list[dict[str, Any]]:
-    """List visual workflows (id, name, description, node count). Read-only, runs directly."""
+    """Read-only: list VISUAL WORKFLOWS in a workspace.
+
+    Returns workflow id, name, description, and node count. Use this to find a
+    workflow_id before get_workflow/edit_workflow/run_workflow. Do NOT use for
+    video projects or timeline sequence IDs — use list_projects/inspect_sequence.
+    """
     workflows = _get("/api/workflows", {"workspace_id": workspace_id or _default_workspace_id()})
     return [
         {
@@ -472,22 +567,34 @@ def list_workflows(workspace_id: str = "") -> list[dict[str, Any]]:
 
 @mcp.tool()
 def get_workflow(workflow_id: str) -> dict[str, Any]:
-    """Read a workflow's full graph (nodes/edges/configs). Read-only, runs directly."""
+    """Read-only: inspect one VISUAL WORKFLOW graph in full.
+
+    Returns nodes, edges, configs, and workflow metadata. Use before edit_workflow
+    or update_workflow so you preserve existing nodes/edges and know exact
+    node_id values. Do NOT use for video timelines — use inspect_sequence.
+    """
     return _get(f"/api/workflows/{workflow_id}")
 
 
 @mcp.tool()
 def list_workflow_node_types() -> list[dict[str, Any]]:
-    """Node type registry for building workflow graphs: config fields and output
-    variables per type. Reference outputs downstream as {{node_id.output}}."""
+    """Read-only: list allowed workflow node types, config fields, and outputs.
+
+    Use before create_workflow/edit_workflow when adding or configuring workflow
+    canvas nodes. Reference upstream outputs downstream as {{node_id.output}}.
+    Do NOT use for video timeline tracks/clips or media asset tags.
+    """
     return _get("/api/workflows/node-types")
 
 
 @mcp.tool()
 def create_workflow(name: str, graph: dict[str, Any] | None = None, description: str = "", workspace_id: str = "") -> dict[str, Any]:
-    """Create a visual workflow (permission: edit). Requires user confirmation.
+    """Confirmation required: create a NEW visual workflow.
 
-    graph = {"nodes": [{id,type,name,position,config}], "edges": [{id,source,target}]};
+    Use when the user wants a new workflow canvas/automation, not when editing an
+    existing workflow. For an existing workflow use edit_workflow for node/edge
+    changes or update_workflow only for rename/full replacement. graph =
+    {"nodes": [{id,type,name,position,config}], "edges": [{id,source,target}]};
     omit graph for a bare start-node workflow. Check list_workflow_node_types first.
     """
     confirmation = _post(
@@ -504,10 +611,16 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
 
 @mcp.tool()
 def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
-    """Edit a workflow with granular ops — PREFER THIS over update_workflow (permission: edit,
-    requires user confirmation). You describe intent; the server applies it to the current graph,
-    so you never regenerate the whole graph. Ops apply in order, so add_node then connect in one
-    call works. Check list_workflow_node_types for available types and their config fields.
+    """Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops.
+
+    Use this for workflow canvas nodes/edges/configs: add_node, connect,
+    connect_data, set_node_config, set_node_name, remove_node, remove_edge.
+    Prefer this over update_workflow for almost every workflow edit. The server
+    applies your ops onto the current graph, so you do not regenerate or replace
+    the whole graph. Ops apply in order, so add_node then connect in one call
+    works. Check get_workflow first for exact node_id values and
+    list_workflow_node_types for node types/config fields. Do NOT use for video
+    timeline clips/tracks/sequences — use edit_timeline.
 
     operations is a list of:
       {"kind":"add_node","type":"llm","name":"改写","node_id":"llm_1","config":{"prompt":"..."}}
@@ -534,11 +647,13 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
 
 @mcp.tool()
 def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name: str = "", description: str = "", workspace_id: str = "") -> dict[str, Any]:
-    """Replace a workflow's ENTIRE graph and/or rename it (permission: edit, requires confirmation).
+    """Confirmation required: rename a workflow or replace its ENTIRE graph.
 
-    For editing nodes/edges prefer edit_workflow (granular ops) — it's far less error-prone.
-    Use this only to rename, or to replace the whole graph wholesale. When passing graph,
-    read the current one with get_workflow first; the update replaces, it does not merge.
+    Use this only for metadata rename/description changes, or when the user
+    explicitly wants a wholesale graph replacement. This is NOT for routine
+    add/remove/configure node edits; use edit_workflow for those. When passing
+    graph, read the current one with get_workflow first because update_workflow
+    replaces the graph; it does not merge and can drop omitted nodes/edges.
     """
     payload: dict[str, Any] = {"workflow_id": workflow_id}
     if graph is not None:
@@ -561,8 +676,14 @@ def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name:
 
 @mcp.tool()
 def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspace_id: str = "") -> dict[str, Any]:
-    """Run a workflow (permission: ai-cost — nodes may spend render/AI budget).
-    Requires user confirmation; after approval the result carries the job id."""
+    """Confirmation required: execute an EXISTING visual workflow.
+
+    Use after get_workflow when the user wants to run the workflow automation.
+    params supplies start/input variables. This may spend AI/render budget, so it
+    creates a confirmation card; after approval get_confirmation returns the job
+    id. Do NOT use to edit the workflow graph (edit_workflow/update_workflow) or
+    export a video timeline (render_sequence).
+    """
     confirmation = _post(
         "/api/confirmations",
         {
@@ -577,7 +698,13 @@ def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspa
 
 @mcp.tool()
 def get_confirmation(confirmation_id: str) -> dict[str, Any]:
-    """Check a pending confirmation: status becomes executed/rejected/failed after the user decides."""
+    """Read-only: poll one confirmation card by confirmation_id.
+
+    Use only after a confirmation-required tool returns {confirmation_id,
+    status:"pending"}. Status becomes executed/rejected/failed after the user
+    decides in Mibu; result/error explain the outcome. Do NOT call this to find
+    projects, assets, workflows, jobs, or arbitrary IDs.
+    """
     confirmation = _get(f"/api/confirmations/{confirmation_id}")
     return {
         "confirmation_id": confirmation["id"],

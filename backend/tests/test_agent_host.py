@@ -7,6 +7,17 @@ from app.ai.agent.adapters import TurnResult, build_claude_command, mibu_mcp_con
 from tests.util import fresh_client
 
 
+def wait_idle(client, session_id: str, seconds: float = 8) -> str:
+    deadline = time.time() + seconds
+    status = client.get(f"/api/agent/sessions/{session_id}").json()["status"]
+    while time.time() < deadline:
+        status = client.get(f"/api/agent/sessions/{session_id}").json()["status"]
+        if status != "running":
+            return status
+        time.sleep(0.05)
+    return status
+
+
 def test_claude_command_and_mcp_config_shape() -> None:
     config = mibu_mcp_config("http://127.0.0.1:8800", "tok123")
     server = config["mcpServers"]["mibu"]
@@ -17,6 +28,15 @@ def test_claude_command_and_mcp_config_shape() -> None:
     assert "--resume" in command and "sess-1" in command
     assert "mcp__mibu" in command
     assert command[command.index("--mcp-config") + 1] == "/tmp/cfg.json"
+
+
+def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
+    """The workflow side panel asks the same general agent to edit a graph. The global
+    prompt must not steer node deletion into the video timeline tool."""
+    prompt = host.SYSTEM_PROMPT_TEMPLATE
+    assert "edit_workflow" in prompt
+    assert "remove_node" in prompt
+    assert "edit_timeline 只用于视频时间线" in prompt
 
 
 def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
@@ -166,6 +186,7 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
     assert second.status_code == 200, second.text
     assert steers == [], "a plain follow-up must not cut into the running turn"
     assert [m["content"] for m in client.get(f"/api/agent/sessions/{session['id']}/queue").json()] == ["two"]
+    assert wait_idle(client, session["id"]) == "idle"
 
 
 def test_stop_is_not_an_error_when_nothing_is_running() -> None:
