@@ -126,7 +126,10 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               key={item.id}
               type="button"
               className={section === item.id ? "settings-nav-item active" : "settings-nav-item"}
-              onClick={() => setSection(item.id)}
+              onClick={() => {
+                setFocusProviderCapability(null);
+                setSection(item.id);
+              }}
             >
               {item.icon} {item.label}
             </button>
@@ -143,7 +146,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-chat" && (
             <>
-              <ProviderDefaultsSection capabilities={["chat"]} focusCapability={focusProviderCapability ?? "chat"} />
+              <ProviderDefaultsSection capabilities={["chat"]} focusCapability={focusProviderCapability} />
               <ProviderProfilesSection
                 capability="chat"
                 title={t("providerChatTitle")}
@@ -153,7 +156,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-image" && (
             <>
-              <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability ?? "image"} />
+              <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability} />
               <ProviderProfilesSection
                 capability="image"
                 title={t("providerImageTitle")}
@@ -163,7 +166,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-video" && (
             <>
-              <ProviderDefaultsSection capabilities={["video"]} focusCapability={focusProviderCapability ?? "video"} />
+              <ProviderDefaultsSection capabilities={["video"]} focusCapability={focusProviderCapability} />
               <ProviderProfilesSection
                 capability="video"
                 title={t("providerVideoTitle")}
