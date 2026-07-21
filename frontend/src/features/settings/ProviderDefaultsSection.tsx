@@ -13,6 +13,7 @@ type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type GenerationModel = components["schemas"]["GenerationModelOut"];
 
 const NONE = "__none__";
+const DEFAULT_CAPABILITIES = ["chat", "image", "video"] as const;
 
 function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
@@ -57,7 +58,8 @@ function DefaultRow({
   const qc = useQueryClient();
   const providerId = current?.provider_profile_id ?? "";
   const model = current?.model ?? "";
-  const selectedProfile = providers.find((p) => p.id === providerId) ?? null;
+  const capabilityProviders = providers.filter((profile) => (profile.capability_ids ?? []).includes(capability));
+  const selectedProfile = capabilityProviders.find((p) => p.id === providerId) ?? null;
   const isGenerationCapability = capability === "image" || capability === "video";
 
   // chat:该供应商的 LLM 列表
@@ -102,7 +104,7 @@ function DefaultRow({
           value={providerId || NONE}
           onValueChange={(value) => {
             const nextProviderId = value === NONE ? "" : value;
-            const nextProfile = providers.find((profile) => profile.id === nextProviderId) ?? null;
+          const nextProfile = capabilityProviders.find((profile) => profile.id === nextProviderId) ?? null;
             const nextModel = isGenerationCapability
               ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
               : "";
@@ -114,7 +116,7 @@ function DefaultRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>—</SelectItem>
-            {providers.map((profile) => (
+            {capabilityProviders.map((profile) => (
               <SelectItem key={profile.id} value={profile.id}>
                 {profile.name}
               </SelectItem>
@@ -177,7 +179,13 @@ function DefaultRow({
   );
 }
 
-export function ProviderDefaultsSection({ focusCapability }: { focusCapability?: string | null }) {
+export function ProviderDefaultsSection({
+  capabilities,
+  focusCapability,
+}: {
+  capabilities?: string[];
+  focusCapability?: string | null;
+}) {
   const t = useI18n();
   const providers = useQuery({
     queryKey: ["provider-profiles"],
@@ -198,11 +206,13 @@ export function ProviderDefaultsSection({ focusCapability }: { focusCapability?:
 
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const byCapability = new Map((defaults.data ?? []).map((row) => [row.capability, row]));
-  const rows: Array<{ capability: string; label: string; genModels: GenerationModel[] | null }> = [
+  const allRows: Array<{ capability: string; label: string; genModels: GenerationModel[] | null }> = [
     { capability: "chat", label: t("capChat"), genModels: null },
     { capability: "image", label: t("capImage"), genModels: genImage.data ?? null },
     { capability: "video", label: t("capVideo"), genModels: genVideo.data ?? null },
   ];
+  const wanted = new Set(capabilities ?? DEFAULT_CAPABILITIES);
+  const rows = allRows.filter((row) => wanted.has(row.capability));
 
   React.useEffect(() => {
     if (!focusCapability) return;

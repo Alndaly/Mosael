@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import logging
 
 import httpx
 from fastapi import APIRouter, HTTPException, Response
@@ -26,15 +27,17 @@ from app.db.models import Credential, KbEmbeddingConfig, ProviderDefault, Provid
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
-from app.domain.providers import VENDOR_PRESETS
+from app.domain.providers import VENDOR_PRESETS, capability_ids_for_vendor, supports_capability
 
 router = APIRouter(tags=["settings"])
+logger = logging.getLogger(__name__)
 
 KNOWN_PROVIDERS = ["alibaba", "bytedance", "openai", "google", "kuaishou"]
 
 
 def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out = ProviderProfileOut.model_validate(profile)
+    out.capability_ids = capability_ids_for_vendor(profile.vendor)
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
     out.extra = _masked_extra(profile)
     return out
@@ -86,6 +89,7 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
         VendorPresetOut(
             vendor=vendor,
             label=preset.get("label", vendor),
+            capability_ids=capability_ids_for_vendor(vendor),
             base_url=preset.get("base_url", ""),
             default_model=preset.get("default_model", ""),
             capabilities=preset.get("capabilities", ""),
@@ -166,8 +170,12 @@ def set_provider_default(
     ensure_instance_admin(db, user, "credentials")
     if capability not in CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
-    if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
-        raise HTTPException(status_code=404, detail="供应商不存在")
+    if body.provider_profile_id:
+        profile = db.get(ProviderProfile, body.provider_profile_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="供应商不存在")
+        if not supports_capability(profile.vendor, capability):
+            raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
     row = db.get(ProviderDefault, capability)
     if row is None:
         row = ProviderDefault(capability=capability)
@@ -232,8 +240,12 @@ def set_kb_embedding(
     body: KbEmbeddingConfigUpdate, db: DbSession, user: CurrentUser
 ) -> KbEmbeddingConfigOut:
     ensure_instance_admin(db, user, "credentials")
-    if body.provider_profile_id and db.get(ProviderProfile, body.provider_profile_id) is None:
-        raise HTTPException(status_code=404, detail="供应商不存在")
+    if body.provider_profile_id:
+        profile = db.get(ProviderProfile, body.provider_profile_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="供应商不存在")
+        if not supports_capability(profile.vendor, "embedding"):
+            raise HTTPException(status_code=422, detail="该供应商不支持知识库嵌入能力")
     old = kb_config.get()
     row = db.get(KbEmbeddingConfig, "default")
     if row is None:
@@ -255,8 +267,11 @@ def set_kb_embedding(
         dim_changed = old.dim != new.dim
 
         def run() -> None:
-            with SessionLocal() as session:
-                kb.rebuild_all_vectors(session, dim_changed=dim_changed)
+            try:
+                with SessionLocal() as session:
+                    kb.rebuild_all_vectors(session, dim_changed=dim_changed)
+            except Exception:  # noqa: BLE001 - background rebuild must not poison request/test processes
+                logger.exception("KB embedding rebuild failed")
 
         threading.Thread(target=run, daemon=True).start()
     return _kb_embedding_out()

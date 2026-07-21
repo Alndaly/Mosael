@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, ImageIcon, KeyRound, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, X } from "lucide-react";
+import { AudioLines, Check, Database, ImageIcon, KeyRound, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -27,9 +27,34 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
-type SectionId = "account" | "team" | "appearance" | "providers" | "transcribe" | "voice" | "feishu" | "backend";
+type SectionId =
+  | "account"
+  | "team"
+  | "appearance"
+  | "provider-chat"
+  | "provider-image"
+  | "provider-video"
+  | "provider-embedding"
+  | "provider-accounts"
+  | "transcribe"
+  | "voice"
+  | "feishu"
+  | "backend";
 
-const SECTION_IDS: SectionId[] = ["account", "team", "appearance", "providers", "transcribe", "voice", "feishu", "backend"];
+const SECTION_IDS: SectionId[] = [
+  "account",
+  "team",
+  "appearance",
+  "provider-chat",
+  "provider-image",
+  "provider-video",
+  "provider-embedding",
+  "provider-accounts",
+  "transcribe",
+  "voice",
+  "feishu",
+  "backend",
+];
 
 const SECTION_STORAGE_KEY = "mibu:settings-section";
 
@@ -51,9 +76,22 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
       const [id, focus] = String(detail || "").split(":");
+      if (id === "providers") {
+        const next =
+          focus === "chat"
+            ? "provider-chat"
+            : focus === "image"
+              ? "provider-image"
+              : focus === "video"
+                ? "provider-video"
+                : "provider-accounts";
+        setSection(next);
+        setFocusProviderCapability(focus || null);
+        return;
+      }
       if (SECTION_IDS.includes(id as SectionId)) {
         setSection(id as SectionId);
-        setFocusProviderCapability(id === "providers" && focus ? focus : null);
+        setFocusProviderCapability(focus ?? null);
       }
     };
     window.addEventListener("mibu:open-settings", onOpen);
@@ -64,7 +102,11 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "account", label: t("settingsAccount"), icon: <UserRound size={14} /> },
     { id: "team", label: t("teamTitle"), icon: <Users size={14} /> },
     { id: "appearance", label: t("settingsAppearance"), icon: <Palette size={14} /> },
-    { id: "providers", label: t("settingsProviders"), icon: <KeyRound size={14} /> },
+    { id: "provider-chat", label: t("providerChatTitle"), icon: <MessageSquare size={14} /> },
+    { id: "provider-image", label: t("providerImageTitle"), icon: <ImageIcon size={14} /> },
+    { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
+    { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
+    { id: "provider-accounts", label: t("providerAccountsTitle"), icon: <KeyRound size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -95,13 +137,47 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               <BackgroundSection />
             </>
           )}
-          {section === "providers" && (
+          {section === "provider-chat" && (
             <>
-              <ProviderProfilesSection />
-              <ProviderDefaultsSection focusCapability={focusProviderCapability} />
-              <KbEmbeddingSection />
+              <ProviderDefaultsSection capabilities={["chat"]} focusCapability={focusProviderCapability ?? "chat"} />
+              <ProviderProfilesSection
+                capability="chat"
+                title={t("providerChatTitle")}
+                description={t("providerChatDesc")}
+              />
             </>
           )}
+          {section === "provider-image" && (
+            <>
+              <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability ?? "image"} />
+              <ProviderProfilesSection
+                capability="image"
+                title={t("providerImageTitle")}
+                description={t("providerImageDesc")}
+              />
+            </>
+          )}
+          {section === "provider-video" && (
+            <>
+              <ProviderDefaultsSection capabilities={["video"]} focusCapability={focusProviderCapability ?? "video"} />
+              <ProviderProfilesSection
+                capability="video"
+                title={t("providerVideoTitle")}
+                description={t("providerVideoDesc")}
+              />
+            </>
+          )}
+          {section === "provider-embedding" && (
+            <>
+              <KbEmbeddingSection />
+              <ProviderProfilesSection
+                capability="embedding"
+                title={t("providerEmbeddingTitle")}
+                description={t("providerEmbeddingDesc")}
+              />
+            </>
+          )}
+          {section === "provider-accounts" && <ProviderProfilesSection />}
           {section === "transcribe" && <AsrModelsSection />}
           {section === "voice" && <VoiceCloneSection />}
           {section === "feishu" && <FeishuSection workspace={workspace} />}

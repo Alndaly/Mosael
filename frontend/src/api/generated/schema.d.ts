@@ -17,7 +17,11 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Health Head
+         * @description Dev process managers such as wait-on probe HTTP URLs with HEAD.
+         */
+        head: operations["health_head_api_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -66,6 +70,24 @@ export interface paths {
         get: operations["me_api_auth_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Me */
+        patch: operations["update_me_api_auth_me_patch"];
+        trace?: never;
+    };
+    "/api/auth/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Password */
+        post: operations["update_password_api_auth_me_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3252,7 +3274,9 @@ export interface components {
             /** Content */
             content: string;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Error */
             error: string | null;
             /**
@@ -3416,7 +3440,9 @@ export interface components {
              */
             file_key: string;
             /** Media Info */
-            media_info?: Record<string, never>;
+            media_info?: {
+                [key: string]: unknown;
+            };
         };
         /** AssetOut */
         AssetOut: {
@@ -3437,7 +3463,9 @@ export interface components {
             /** File Key */
             file_key: string;
             /** Media Info */
-            media_info: Record<string, never>;
+            media_info: {
+                [key: string]: unknown;
+            };
             /** Tags */
             tags?: string[];
             /** Created At */
@@ -3474,14 +3502,18 @@ export interface components {
             /** Name */
             name: string;
             /** Params List */
-            params_list: Record<string, never>[];
+            params_list: {
+                [key: string]: unknown;
+            }[];
         };
         /** BatchItemOut */
         BatchItemOut: {
             /** Index */
             index: number;
             /** Params */
-            params: Record<string, never>;
+            params: {
+                [key: string]: unknown;
+            };
             /** Job Id */
             job_id: string | null;
             /** Status */
@@ -3590,9 +3622,13 @@ export interface components {
             /** Text Override */
             text_override: string | null;
             /** Effects */
-            effects: Record<string, never>;
+            effects: {
+                [key: string]: unknown;
+            };
             /** Transform */
-            transform?: Record<string, never>;
+            transform?: {
+                [key: string]: unknown;
+            };
         };
         /** ClipTextEntry */
         ClipTextEntry: {
@@ -3608,7 +3644,9 @@ export interface components {
             /** Tool */
             tool: string;
             /** Payload */
-            payload?: Record<string, never>;
+            payload?: {
+                [key: string]: unknown;
+            };
             /**
              * Requested By
              * @default external-agent
@@ -3628,11 +3666,15 @@ export interface components {
             /** Summary */
             summary: string;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Status */
             status: string;
             /** Result */
-            result: Record<string, never>;
+            result: {
+                [key: string]: unknown;
+            };
             /** Error */
             error: string | null;
             /** Requested By */
@@ -3863,7 +3905,9 @@ export interface components {
              */
             negative_prompt: string;
             /** Parameters */
-            parameters?: Record<string, never>;
+            parameters?: {
+                [key: string]: unknown;
+            };
             /** Source Asset Ids */
             source_asset_ids?: string[];
         };
@@ -3891,7 +3935,9 @@ export interface components {
             /** Kind */
             kind: string;
             /** Request */
-            request: Record<string, never>;
+            request: {
+                [key: string]: unknown;
+            };
             /** Result Asset Id */
             result_asset_id: string | null;
         };
@@ -3908,7 +3954,9 @@ export interface components {
             /** Enabled */
             enabled: boolean;
             /** Capabilities */
-            capabilities: Record<string, never>;
+            capabilities: {
+                [key: string]: unknown;
+            };
             /** Adapter Available */
             adapter_available: boolean;
         };
@@ -4027,9 +4075,13 @@ export interface components {
             /** Message */
             message: string;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Result */
-            result: Record<string, never>;
+            result: {
+                [key: string]: unknown;
+            };
             /** Error */
             error: string | null;
             /**
@@ -4395,7 +4447,9 @@ export interface components {
             /** Link */
             link: string | null;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Read At */
             read_at: string | null;
             /**
@@ -4403,6 +4457,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PasswordUpdate */
+        PasswordUpdate: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
         };
         /** PluginEnableRequest */
         PluginEnableRequest: {
@@ -4420,9 +4481,13 @@ export interface components {
             /** Status */
             status: string;
             /** Input */
-            input: Record<string, never>;
+            input: {
+                [key: string]: unknown;
+            };
             /** Output */
-            output: Record<string, never>;
+            output: {
+                [key: string]: unknown;
+            };
             /** Error */
             error: string | null;
             /**
@@ -4434,7 +4499,9 @@ export interface components {
         /** PluginInvokeRequest */
         PluginInvokeRequest: {
             /** Input */
-            input?: Record<string, never>;
+            input?: {
+                [key: string]: unknown;
+            };
         };
         /** PluginOut */
         PluginOut: {
@@ -4447,7 +4514,9 @@ export interface components {
             /** Enabled */
             enabled: boolean;
             /** Manifest */
-            manifest: Record<string, never>;
+            manifest: {
+                [key: string]: unknown;
+            };
         };
         /** PluginPermissionGrantOut */
         PluginPermissionGrantOut: {
@@ -4489,7 +4558,9 @@ export interface components {
              */
             description: string;
             /** Input Schema */
-            input_schema?: Record<string, never>;
+            input_schema?: {
+                [key: string]: unknown;
+            };
             /** Permissions */
             permissions?: unknown[];
             /** Skills */
@@ -4653,6 +4724,8 @@ export interface components {
             name: string;
             /** Vendor */
             vendor: string;
+            /** Capability Ids */
+            capability_ids?: string[];
             /** Base Url */
             base_url: string;
             /** Default Model */
@@ -4700,7 +4773,9 @@ export interface components {
             /** Name */
             name: string;
             /** Config */
-            config?: Record<string, never>;
+            config?: {
+                [key: string]: unknown;
+            };
             /** Proxy */
             proxy?: string | null;
         };
@@ -4715,7 +4790,9 @@ export interface components {
             /** Name */
             name: string;
             /** Config */
-            config: Record<string, never>;
+            config: {
+                [key: string]: unknown;
+            };
             /** Enabled */
             enabled: boolean;
             /** Proxy */
@@ -4742,7 +4819,9 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Config */
-            config?: Record<string, never> | null;
+            config?: {
+                [key: string]: unknown;
+            } | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Proxy */
@@ -4806,7 +4885,9 @@ export interface components {
             /** Description */
             description: string;
             /** Config */
-            config: Record<string, never>;
+            config: {
+                [key: string]: unknown;
+            };
             /**
              * Executor
              * @default local
@@ -4850,7 +4931,9 @@ export interface components {
             /** Error */
             error: string | null;
             /** Result */
-            result: Record<string, never>;
+            result: {
+                [key: string]: unknown;
+            };
             /** Job Id */
             job_id: string | null;
             /**
@@ -4858,6 +4941,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** RegisterCredentials */
+        RegisterCredentials: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
         };
         /** RenameRequest */
         RenameRequest: {
@@ -4883,7 +4978,9 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Schedule */
-            schedule?: Record<string, never>;
+            schedule?: {
+                [key: string]: unknown;
+            };
             /**
              * Timezone
              * @default UTC
@@ -4895,7 +4992,9 @@ export interface components {
              */
             enabled: boolean;
             /** Payload */
-            payload?: Record<string, never>;
+            payload?: {
+                [key: string]: unknown;
+            };
         };
         /** ScheduledTaskOut */
         ScheduledTaskOut: {
@@ -4912,13 +5011,17 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Schedule */
-            schedule: Record<string, never>;
+            schedule: {
+                [key: string]: unknown;
+            };
             /** Timezone */
             timezone: string;
             /** Enabled */
             enabled: boolean;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Next Run At */
             next_run_at: string | null;
             /** Last Run At */
@@ -4945,7 +5048,9 @@ export interface components {
             /** Status */
             status: string;
             /** Result */
-            result: Record<string, never>;
+            result: {
+                [key: string]: unknown;
+            };
             /** Error */
             error: string | null;
             /** Started At */
@@ -4960,13 +5065,17 @@ export interface components {
             /** Trigger Type */
             trigger_type?: string | null;
             /** Schedule */
-            schedule?: Record<string, never> | null;
+            schedule?: {
+                [key: string]: unknown;
+            } | null;
             /** Timezone */
             timezone?: string | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Payload */
-            payload?: Record<string, never> | null;
+            payload?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** SequenceCreate */
         SequenceCreate: {
@@ -5009,9 +5118,13 @@ export interface components {
             /** Fps */
             fps: number;
             /** Reframe */
-            reframe?: Record<string, never>;
+            reframe?: {
+                [key: string]: unknown;
+            };
             /** Subtitle Style */
-            subtitle_style?: Record<string, never>;
+            subtitle_style?: {
+                [key: string]: unknown;
+            };
             /** Revision */
             revision: number;
             /**
@@ -5030,7 +5143,9 @@ export interface components {
         /** SetClipEffectsRequest */
         SetClipEffectsRequest: {
             /** Effects */
-            effects?: Record<string, never>;
+            effects?: {
+                [key: string]: unknown;
+            };
         };
         /** SetClipGainRequest */
         SetClipGainRequest: {
@@ -5060,7 +5175,9 @@ export interface components {
         /** SetClipTransformRequest */
         SetClipTransformRequest: {
             /** Transform */
-            transform?: Record<string, never>;
+            transform?: {
+                [key: string]: unknown;
+            };
         };
         /** SetMemberPermsRequest */
         SetMemberPermsRequest: {
@@ -5089,7 +5206,9 @@ export interface components {
         /** SetSubtitleStyleRequest */
         SetSubtitleStyleRequest: {
             /** Style */
-            style: Record<string, never>;
+            style: {
+                [key: string]: unknown;
+            };
         };
         /** SetTrackStateRequest */
         SetTrackStateRequest: {
@@ -5137,7 +5256,9 @@ export interface components {
             /** Type */
             type: string;
             /** Payload */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -5150,7 +5271,9 @@ export interface components {
              * Arguments
              * @default {}
              */
-            arguments: Record<string, never>;
+            arguments: {
+                [key: string]: unknown;
+            };
             /**
              * Requested By
              * @default
@@ -5164,7 +5287,9 @@ export interface components {
             /** Description */
             description: string;
             /** Parameters */
-            parameters: Record<string, never>;
+            parameters: {
+                [key: string]: unknown;
+            };
             /**
              * Confirmation
              * @default false
@@ -5472,6 +5597,22 @@ export interface components {
             id: string;
             /** Username */
             username: string;
+            /** Display Name */
+            display_name: string;
+            /** Signature */
+            signature: string;
+        };
+        /** UserProfileUpdate */
+        UserProfileUpdate: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Signature
+             * @default
+             */
+            signature: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -5512,6 +5653,8 @@ export interface components {
             vendor: string;
             /** Label */
             label: string;
+            /** Capability Ids */
+            capability_ids?: string[];
             /**
              * Base Url
              * @default
@@ -5576,14 +5719,18 @@ export interface components {
             /** Instruction */
             instruction: string;
             /** Graph */
-            graph?: Record<string, never> | null;
+            graph?: {
+                [key: string]: unknown;
+            } | null;
             /** Profile Id */
             profile_id?: string | null;
         };
         /** WorkflowAiEditResponse */
         WorkflowAiEditResponse: {
             /** Graph */
-            graph: Record<string, never>;
+            graph: {
+                [key: string]: unknown;
+            };
             /**
              * Summary
              * @default
@@ -5602,7 +5749,9 @@ export interface components {
              */
             description: string;
             /** Graph */
-            graph?: Record<string, never> | null;
+            graph?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** WorkflowNodeTypeOut */
         WorkflowNodeTypeOut: {
@@ -5613,7 +5762,9 @@ export interface components {
             /** Description */
             description: string;
             /** Config */
-            config: Record<string, never>;
+            config: {
+                [key: string]: unknown;
+            };
             /** Outputs */
             outputs: string[];
         };
@@ -5628,7 +5779,9 @@ export interface components {
             /** Description */
             description: string;
             /** Graph */
-            graph: Record<string, never>;
+            graph: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -5643,7 +5796,9 @@ export interface components {
         /** WorkflowRunRequest */
         WorkflowRunRequest: {
             /** Params */
-            params?: Record<string, never>;
+            params?: {
+                [key: string]: unknown;
+            };
         };
         /** WorkflowUpdate */
         WorkflowUpdate: {
@@ -5652,7 +5807,9 @@ export interface components {
             /** Description */
             description?: string | null;
             /** Graph */
-            graph?: Record<string, never> | null;
+            graph?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {
@@ -5665,6 +5822,8 @@ export interface components {
             user_id: string;
             /** Username */
             username: string;
+            /** Display Name */
+            display_name: string;
             /** Role */
             role: string;
             /** Perms */
@@ -5747,7 +5906,9 @@ export interface components {
             /** Error */
             error?: string | null;
             /** Result */
-            result?: Record<string, never> | null;
+            result?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ClaimRequest */
         app__api__routes__publish_worker__ClaimRequest: {
@@ -5796,6 +5957,24 @@ export interface operations {
             };
         };
     };
+    health_head_api_health_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     register_api_auth_register_post: {
         parameters: {
             query?: never;
@@ -5805,7 +5984,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AuthCredentials"];
+                "application/json": components["schemas"]["RegisterCredentials"];
             };
         };
         responses: {
@@ -5891,6 +6070,74 @@ export interface operations {
             };
         };
     };
+    update_me_api_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_password_api_auth_me_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout_api_auth_logout_post: {
         parameters: {
             query?: never;
@@ -5906,7 +6153,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -5935,7 +6184,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -5959,7 +6210,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -5992,7 +6245,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6025,7 +6280,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6054,7 +6311,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -6074,7 +6333,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -6098,7 +6359,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6129,7 +6392,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6158,7 +6423,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -6178,7 +6445,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -6202,7 +6471,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6235,7 +6506,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6268,7 +6541,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6522,7 +6797,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -7737,7 +8014,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -7768,7 +8047,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -9114,7 +9395,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -9302,7 +9585,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12628,7 +12913,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12660,7 +12947,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12691,7 +12980,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -12906,7 +13197,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -40,7 +40,15 @@ const VENDOR_DOCS: Record<string, string> = {
   kuaishou: "https://klingai.com/",
 };
 
-export function ProviderProfilesSection() {
+export function ProviderProfilesSection({
+  capability,
+  title,
+  description,
+}: {
+  capability?: string | null;
+  title?: string;
+  description?: string;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
@@ -74,14 +82,29 @@ export function ProviderProfilesSection() {
   const form = useForm<ProfileForm>({ resolver: zodResolver(schema), defaultValues: EMPTY });
   const vendor = form.watch("vendor");
 
+  const vendorOptions = React.useMemo(() => {
+    const items = vendors.data ?? [];
+    return capability ? items.filter((item) => (item.capability_ids ?? []).includes(capability)) : items;
+  }, [capability, vendors.data]);
+  const visibleProfiles = React.useMemo(() => {
+    const items = profiles.data ?? [];
+    return capability ? items.filter((profile) => (profile.capability_ids ?? []).includes(capability)) : items;
+  }, [capability, profiles.data]);
+  const initialVendor = vendorOptions[0]?.vendor ?? "moonshot";
+
+  React.useEffect(() => {
+    if (!adding || editing || vendorOptions.some((item) => item.vendor === vendor)) return;
+    form.setValue("vendor", initialVendor);
+  }, [adding, editing, form, initialVendor, vendor, vendorOptions]);
+
   const closeModal = () => {
     setAdding(false);
     setEditing(null);
-    form.reset(EMPTY);
+    form.reset({ ...EMPTY, vendor: initialVendor });
   };
   const openCreate = () => {
     setEditing(null);
-    form.reset(EMPTY);
+    form.reset({ ...EMPTY, vendor: initialVendor });
     setAdding(true);
   };
   const openEdit = (profile: ProviderProfile) => {
@@ -165,8 +188,8 @@ export function ProviderProfilesSection() {
 
   return (
     <SettingsGroup
-      title={t("settingsProviders")}
-      description={t("providerSectionDesc")}
+      title={title ?? t("providerAccountsTitle")}
+      description={description ?? t("providerAccountsDesc")}
       actions={
         <Button variant="outline" size="sm" onClick={openCreate}>
           <Plus size={13} /> {t("providerAdd")}
@@ -196,7 +219,7 @@ export function ProviderProfilesSection() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {(vendors.data ?? []).map((item) => (
+                          {vendorOptions.map((item) => (
                             <SelectItem key={item.vendor} value={item.vendor}>
                               {item.label}
                             </SelectItem>
@@ -322,7 +345,7 @@ export function ProviderProfilesSection() {
 
       <SettingsBlock>
         <div className="provider-list">
-          {(profiles.data ?? []).map((profile) => (
+          {visibleProfiles.map((profile) => (
             <div className={profile.enabled ? "provider-row" : "provider-row disabled"} key={profile.id}>
               <span className="feishu-bot-icon">
                 <KeyRound size={13} />
@@ -349,7 +372,9 @@ export function ProviderProfilesSection() {
               </div>
             </div>
           ))}
-          {profiles.data?.length === 0 && <p className="feishu-empty">{t("providerNoProfiles")}</p>}
+          {profiles.data && visibleProfiles.length === 0 && (
+            <p className="feishu-empty">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
+          )}
         </div>
       </SettingsBlock>
     </SettingsGroup>

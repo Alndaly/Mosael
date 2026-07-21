@@ -55,6 +55,27 @@ def test_vendor_presets_listed() -> None:
     presets = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
     assert "moonshot" in presets and "minimax" in presets
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
+    assert presets["alibaba"]["capability_ids"] == ["image"]
+    assert "video" in presets["bytedance"]["capability_ids"]
+
+
+def test_provider_defaults_require_matching_capability() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    kimi = client.post(
+        "/api/settings/providers",
+        json={"name": "Kimi", "vendor": "moonshot", "api_key": "sk-kimi"},
+    ).json()
+    assert kimi["capability_ids"] == ["chat"]
+
+    assert client.put(
+        "/api/settings/provider-defaults/chat",
+        json={"provider_profile_id": kimi["id"], "model": "moonshot-v1-8k"},
+    ).status_code == 200
+    assert client.put(
+        "/api/settings/provider-defaults/image",
+        json={"provider_profile_id": kimi["id"], "model": "qwen-image"},
+    ).status_code == 422
 
 
 def test_kb_embedding_config_put_get() -> None:

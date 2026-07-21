@@ -87,7 +87,9 @@ export function KbEmbeddingSection() {
     },
   });
 
-  const enabledProfiles = (profiles.data ?? []).filter((profile) => profile.enabled);
+  const enabledProfiles = (profiles.data ?? []).filter(
+    (profile) => profile.enabled && (profile.capability_ids ?? []).includes("embedding"),
+  );
   const watched = useWatch({ control: form.control });
   const dimChanged = (watched.dim ?? 0) !== initialDim;
   // 两个查询都就绪再挂表单:否则 Radix Select 会在选项挂载前拿到 value,显示空占位。

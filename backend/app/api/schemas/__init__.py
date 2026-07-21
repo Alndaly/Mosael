@@ -478,6 +478,7 @@ class ProviderProfileOut(OrmModel):
     id: str
     name: str
     vendor: str
+    capability_ids: list[str] = Field(default_factory=list)
     base_url: str
     default_model: str
     enabled: bool
@@ -637,6 +638,7 @@ class AsrModelOut(BaseModel):
 class VendorPresetOut(BaseModel):
     vendor: str
     label: str
+    capability_ids: list[str] = Field(default_factory=list)
     base_url: str = ""
     default_model: str = ""
     capabilities: str = ""
