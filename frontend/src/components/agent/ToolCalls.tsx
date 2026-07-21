@@ -4,6 +4,7 @@ import { Check, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { useImagePreview } from "@/components/ui/image-preview";
 import { ToolResultCard, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -55,6 +56,7 @@ function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<stri
 /** 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。 */
 function MediaPreview({ assetId }: { assetId: string }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const asset = useQuery({
     queryKey: ["agent-asset", assetId],
     queryFn: () => api<Asset>(`/api/assets/${assetId}`),
@@ -79,7 +81,13 @@ function MediaPreview({ assetId }: { assetId: string }) {
   return (
     <figure className="agent-media">
       {asset.data.kind === "image" ? (
-        <img src={src} alt={asset.data.name} loading="lazy" />
+        <button
+          type="button"
+          className="agent-media-image-button"
+          onClick={() => openImagePreview({ src, title: asset.data.name })}
+        >
+          <img src={src} alt={asset.data.name} loading="lazy" />
+        </button>
       ) : asset.data.kind === "video" ? (
         <video src={src} controls preload="metadata" />
       ) : asset.data.kind === "audio" ? (

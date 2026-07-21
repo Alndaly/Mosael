@@ -3,6 +3,7 @@ import React from "react";
 import { Maximize2, Play } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
+import { useImagePreview } from "@/components/ui/image-preview";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -72,15 +73,20 @@ function seconds(value: unknown): string {
 /** Inline player for one asset. Mounted only once its row is opened — a list of twenty
     assets would otherwise create twenty decoders for media nobody asked to see. */
 function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: string }) {
+  const { openImagePreview } = useImagePreview();
   const src = assetFileUrl(id);
   // Bounded, not full-bleed: an inline preview sits inside a conversation, and a portrait
   // photo at full width pushes the rest of the answer off the screen. Click through to the
   // original for a real look at it.
   if (kind === "image") {
     return (
-      <a className="tool-card-player-image" href={src} target="_blank" rel="noreferrer noopener">
+      <button
+        type="button"
+        className="tool-card-player-image"
+        onClick={() => openImagePreview({ src, title: name })}
+      >
         <img src={src} alt={name} loading="lazy" />
-      </a>
+      </button>
     );
   }
   if (kind === "video") return <video className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
@@ -91,6 +97,7 @@ function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: strin
 const PLAYABLE = new Set(["video", "audio", "image"]);
 
 function AssetRow({ row }: { row: Record<string, unknown> }) {
+  const { openImagePreview } = useImagePreview();
   const [open, setOpen] = React.useState(false);
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const id = String(row.id ?? "");
@@ -139,7 +146,18 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
   return (
     <li className="tool-card-item">
       {playable ? (
-        <button type="button" className="tool-card-row is-playable" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <button
+          type="button"
+          className="tool-card-row is-playable"
+          onClick={() => {
+            if (isImage) {
+              openImagePreview({ src: assetFileUrl(id), title: name });
+            } else {
+              setOpen((v) => !v);
+            }
+          }}
+          aria-expanded={isImage ? undefined : open}
+        >
           {body}
         </button>
       ) : (

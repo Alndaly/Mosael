@@ -14,6 +14,7 @@ import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ImagePreviewProvider } from "@/components/ui/image-preview";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
@@ -77,9 +78,11 @@ export function App() {
         <AppearanceProvider>
           <TooltipProvider delayDuration={300}>
             <AuthProvider>
-              <AuthGate />
-              <AppToaster />
-              <PublishViewBar />
+              <ImagePreviewProvider>
+                <AuthGate />
+                <AppToaster />
+                <PublishViewBar />
+              </ImagePreviewProvider>
             </AuthProvider>
           </TooltipProvider>
         </AppearanceProvider>

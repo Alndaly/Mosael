@@ -2,11 +2,12 @@ import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleDot, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
+import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { useImagePreview } from "@/components/ui/image-preview";
 import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
@@ -127,6 +128,7 @@ export function MediaPool({
 
 function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : null;
   const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
@@ -147,7 +149,14 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
-      <div className="pool-thumb">
+      <div
+        className={asset.kind === "image" ? "pool-thumb is-previewable" : "pool-thumb"}
+        onClick={(event) => {
+          if (asset.kind !== "image") return;
+          event.stopPropagation();
+          openImagePreview({ src: assetFileUrl(asset.id), title: asset.name });
+        }}
+      >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
       <div className="pool-meta">

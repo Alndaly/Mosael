@@ -4,6 +4,7 @@ import { CircleAlert, ImagePlus, Loader2, MessageSquarePlus, Pencil, Plus, Send,
 
 import {
   api,
+  assetFileUrl,
   assetThumbnailUrl,
   type GenerationCreateResponse,
   type GenerationJob,
@@ -19,6 +20,7 @@ import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useImagePreview } from "@/components/ui/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -388,6 +390,7 @@ function GenerateWorkspace({
 
 function GenerationTurn({ generation, job }: { generation: GenerationJob; job: Job | null }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const status = job?.status ?? "queued";
   return (
     <>
@@ -395,7 +398,18 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
       <div className="chat-bubble assistant">
         <div className="gen-turn">
           {generation.result_asset_id ? (
-            <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
+            <button
+              type="button"
+              className="gen-turn-image-button"
+              onClick={() =>
+                openImagePreview({
+                  src: assetFileUrl(generation.result_asset_id!),
+                  title: String(generation.request.prompt ?? generation.model),
+                })
+              }
+            >
+              <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
+            </button>
           ) : status === "failed" ? (
             <span className="gen-turn-status failed">
               <CircleAlert size={13} /> {t("genFailed")}
