@@ -8065,6 +8065,16 @@
   color: var(--muted-foreground);
 }
 
+/* 「思考中」一行:Tailwind preflight 把 svg 设成 display:block,
+   裸 span 里的 spinner 会独占一行把文案挤下去——用 inline-flex 收成一行。 */
+.wf-agent-thinking-row,
+.chat-thinking-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 /* ChatGPT-style composer: one rounded container holds the auto-growing textarea (top) and an
    action row (attach left, send right). Focus ring lives on the container, not the textarea. */
 .wf-agent-composer {
