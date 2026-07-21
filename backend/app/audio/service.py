@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.jobs import ASR_SLOTS, run_job_guarded
-from app.db.models import Asset, Job, TaskEvent
-from app.domain.jobs import create_job
+from app.db.models import Asset, Job
+from app.domain.jobs import create_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
 
@@ -189,7 +189,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job.status = "running"
             job.message = f"{provider} 转写中(首次会自动下载模型)"
             job.progress = 0.1
-            db.add(TaskEvent(job_id=job.id, type="job.running", payload={"provider": provider}))
+            emit_job_event(db, job.id, "job.running", {"provider": provider})
             db.commit()
 
             asset = db.get(Asset, asset_id)
@@ -222,7 +222,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job.progress = 1.0
             job.message = "转写完成"
             job.result = {"transcript_id": transcript.id, "segments": len(segments)}
-            db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"transcript_id": transcript.id}))
+            emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
             db.commit()
         except Exception as exc:  # noqa: BLE001 — worker thread must record, not die
             db.rollback()
@@ -231,7 +231,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 job.status = "failed"
                 job.message = "转写失败"
                 job.error = str(exc)[:800]
-                db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+                emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
 
 

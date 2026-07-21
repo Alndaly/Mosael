@@ -19,8 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job, PublishAccount, PublishTask, TaskEvent
-from app.domain.jobs import create_job, register_external_kind
+from app.db.models import Asset, Job, PublishAccount, PublishTask
+from app.domain.jobs import create_job, emit_job_event, register_external_kind
 from app.domain.notifications import notify
 from app.media.paths import resolve_key
 
@@ -215,7 +215,7 @@ def _run_publish_thread(task_id: str) -> None:
             job.result = result
             job.message = f"发布完成: {task.title or asset.name}"
             task.status = "success"
-            db.add(TaskEvent(job_id=job.id, type="publish.finished", payload=result))
+            emit_job_event(db, job.id, "publish.finished", result)
             notify(
                 db,
                 task.workspace_id,
@@ -230,7 +230,7 @@ def _run_publish_thread(task_id: str) -> None:
             job.message = "发布失败"
             task.status = "failed"
             task.error_message = str(exc)[:500]
-            db.add(TaskEvent(job_id=job.id, type="publish.failed", payload={"error": str(exc)[:500]}))
+            emit_job_event(db, job.id, "publish.failed", {"error": str(exc)[:500]})
             notify(
                 db,
                 task.workspace_id,

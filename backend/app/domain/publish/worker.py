@@ -15,7 +15,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Job, PublishAccount, PublishTask, TaskEvent, now
+from app.db.models import Asset, Job, PublishAccount, PublishTask, now
+from app.domain.jobs import emit_job_event
 from app.domain.notifications import notify
 from app.domain.publish import (
     BINDING_STATUSES,
@@ -165,16 +166,16 @@ def _sync_job(db: Session, task: PublishTask) -> None:
         job.progress = 1.0
         job.message = f"发布完成: {task.title}"
         job.result = {"platform_status": task.status}
-        db.add(TaskEvent(job_id=job.id, type="publish.finished", payload={"status": task.status}))
+        emit_job_event(db, job.id, "publish.finished", {"status": task.status})
     elif task.status in ("failed", "cancelled"):
         job.status = "failed"
         job.error = task.error_message or task.status
         job.message = "发布失败" if task.status == "failed" else "发布已取消"
-        db.add(TaskEvent(job_id=job.id, type="publish.failed", payload={"status": task.status, "error": job.error}))
+        emit_job_event(db, job.id, "publish.failed", {"status": task.status, "error": job.error})
     else:
         job.status = "running"
         job.message = f"发布 {task.status}: {task.title}"
-        db.add(TaskEvent(job_id=job.id, type="publish.status", payload={"status": task.status}))
+        emit_job_event(db, job.id, "publish.status", {"status": task.status})
 
 
 def claim_check(db: Session) -> dict[str, Any] | None:

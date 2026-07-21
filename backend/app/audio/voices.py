@@ -19,9 +19,9 @@ from app.audio.tts_models import WORKER_PATH, resolve_tts_python
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded
-from app.db.models import Asset, Job, TaskEvent, Voice
+from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import create_job
+from app.domain.jobs import create_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 
 REFERENCE_MAX_SECONDS = 15
@@ -252,7 +252,7 @@ def _run_synthesis_body(
             job.status = "running"
             job.progress = 0.2
             job.message = f"合成《{voice.name if voice else (engine_voice or engine)}》配音中"
-            db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
+            emit_job_event(db, job.id, "job.running", {})
             db.commit()
 
             if engine != "clone":
@@ -307,7 +307,7 @@ def _run_synthesis_body(
             job.progress = 1.0
             job.message = "配音已生成" if used != "placeholder" else "配音已生成(占位音,装 f5-tts 后为真实音色)"
             job.result = {"asset_id": asset.id, "engine": used}
-            db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
         except Exception as exc:  # noqa: BLE001
             db.rollback()
@@ -316,7 +316,7 @@ def _run_synthesis_body(
                 job.status = "failed"
                 job.message = "配音生成失败"
                 job.error = str(exc)[:600]
-                db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+                emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
 
 
@@ -381,7 +381,7 @@ def _synthesize_remote(
     job.progress = 1.0
     job.message = "配音已生成"
     job.result = {"asset_id": asset.id, "engine": engine}
-    db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+    emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
     db.commit()
 
 
@@ -457,7 +457,7 @@ def _run_podcast_body(
             return
         job.status = "running"
         job.progress = 0.2
-        db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
+        emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
         profile = resolve_profile(db, "volcano-podcast")
@@ -498,5 +498,5 @@ def _run_podcast_body(
         # counts would produce subtitles that drift audibly. Callers that need a timed
         # transcript can run the normal 转写 over the generated audio, which measures them.
         job.result = {"asset_id": asset.id, "texts": result.texts}
-        db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+        emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
         db.commit()

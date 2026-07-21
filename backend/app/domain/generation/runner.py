@@ -8,7 +8,8 @@ from pathlib import Path
 from app.ai.providers import GenerationRequest, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
-from app.db.models import GeneratedAsset, GenerationJob, Job, TaskEvent
+from app.db.models import GeneratedAsset, GenerationJob, Job
+from app.domain.jobs import emit_job_event
 from app.domain.assets.importer import register_file_asset
 
 """
@@ -48,7 +49,7 @@ def _run_generation(generation_id: str) -> None:
 
         job.status = "running"
         job.message = "Generating"
-        db.add(TaskEvent(job_id=job.id, type="job.running", payload={"provider": generation.provider}))
+        emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
         db.commit()
 
         workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
@@ -78,7 +79,7 @@ def _run_generation(generation_id: str) -> None:
             job.progress = 1.0
             job.message = "Generation complete"
             job.result = {"asset_id": asset.id}
-            db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
         except ProviderError as exc:
             _fail(db, job, str(exc))
@@ -92,7 +93,7 @@ def _fail(db, job: Job, message: str) -> None:
     job.status = "failed"
     job.message = "Generation failed"
     job.error = message[:500]
-    db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+    emit_job_event(db, job.id, "job.failed", {})
     db.commit()
 
 

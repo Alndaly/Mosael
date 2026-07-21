@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded
-from app.db.models import Asset, Font, Job, Lut, Sequence, TaskEvent, Track
+from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import create_job, finish_job, register_job_child, unregister_job_child
+from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
 from app.media.render_executor import RenderExecutionError, execute_render
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
@@ -163,7 +163,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             return
         job.status = "running"
         job.message = "Rendering"
-        db.add(TaskEvent(job_id=job.id, type="job.running", payload={"render_plan_hash": plan.render_plan_hash}))
+        emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
         db.commit()
 
         last_progress = -1.0
@@ -209,7 +209,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 message="Export complete",
                 result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
             ):
-                db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"asset_id": asset.id}))
+                emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
         except RenderExecutionError as exc:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
             # cancellation's own message rather than relabelling it "Export failed".
@@ -217,16 +217,10 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 db.commit()
                 unregister_job_child(job_id)
                 return
-            db.add(
-                TaskEvent(
-                    job_id=job.id,
-                    type="job.failed",
-                    payload={"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash},
-                )
-            )
+            emit_job_event(db, job.id, "job.failed", {"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash})
         except Exception as exc:  # defensive: a worker thread must never die silently
             if finish_job(db, job, status="failed", message="Export failed", error=str(exc)[:500]):
-                db.add(TaskEvent(job_id=job.id, type="job.failed", payload={}))
+                emit_job_event(db, job.id, "job.failed", {})
         finally:
             # The registry must not outlive the run, or a later cancel would kill a dead
             # process handle — or worse, a recycled one.

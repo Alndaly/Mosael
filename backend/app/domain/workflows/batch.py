@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import BatchRun, Job, TaskEvent, Workflow
-from app.domain.jobs import create_job
+from app.db.models import BatchRun, Job, Workflow
+from app.domain.jobs import create_job, emit_job_event
 from app.domain.notifications import notify
 from app.domain.workflows import WorkflowDomainError, validate_graph
 from app.domain.workflows.engine import run_workflow
@@ -102,7 +102,7 @@ def _run_batch_thread(batch_id: str) -> None:
                 item_job.status = "failed"
                 item_job.error = str(exc)[:500]
                 item_job.message = f"{batch.name} · #{index + 1} 失败"
-                db.add(TaskEvent(job_id=item_job.id, type="workflow.failed", payload={"error": str(exc)[:500]}))
+                emit_job_event(db, item_job.id, "workflow.failed", {"error": str(exc)[:500]})
                 failed += 1
             parent.progress = (index + 1) / total
             parent.message = f"批量运行中: {batch.name} ({index + 1}/{total})"

@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job, TaskEvent
-from app.domain.jobs import run_job_guarded, create_job
+from app.db.models import Asset, Job
+from app.domain.jobs import create_job, emit_job_event, run_job_guarded
 from app.media.paths import resolve_key
 
 PROXY_NAME = "proxy.mp4"
@@ -133,7 +133,7 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
             job.status = "running"
             job.message = "生成预览代理中"
             job.progress = 0.1
-            db.add(TaskEvent(job_id=job.id, type="job.running", payload={}))
+            emit_job_event(db, job.id, "job.running", {})
             db.commit()
 
             asset = db.get(Asset, asset_id)
@@ -151,7 +151,7 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
                 job.progress = 1.0
                 job.message = "预览代理完成"
                 job.result = {"proxy_key": key}
-                db.add(TaskEvent(job_id=job.id, type="job.succeeded", payload={"proxy_key": key}))
+                emit_job_event(db, job.id, "job.succeeded", {"proxy_key": key})
                 db.commit()
             else:
                 _fail(db, job_id, asset_id, "ffmpeg 代理转码失败")
@@ -167,7 +167,7 @@ def _fail(db: Session, job_id: str, asset_id: str, reason: str) -> None:
         job.status = "failed"
         job.message = "预览代理生成失败"
         job.error = reason
-        db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": reason}))
+        emit_job_event(db, job.id, "job.failed", {"reason": reason})
         db.commit()
 
 

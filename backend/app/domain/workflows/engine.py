@@ -20,8 +20,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import Job, TaskEvent, Workflow
-from app.domain.jobs import create_job
+from app.db.models import Job, Workflow
+from app.domain.jobs import create_job, emit_job_event
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -74,7 +74,7 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
             job.status = "failed"
             job.error = str(exc)[:500]
             job.message = "工作流失败"
-            db.add(TaskEvent(job_id=job.id, type="workflow.failed", payload={"error": str(exc)[:500]}))
+            emit_job_event(db, job.id, "workflow.failed", {"error": str(exc)[:500]})
             notify(
                 db,
                 workflow.workspace_id,
@@ -180,18 +180,12 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                 if node_types.get(nid) != "start" and not incoming_active(nid):
                     with lock:
                         done.add(nid)
-                    db.add(TaskEvent(job_id=job.id, type="workflow.node.skipped", payload={"node_id": nid, "name": node_label(nid)}))
+                    emit_job_event(db, job.id, "workflow.node.skipped", {"node_id": nid, "name": node_label(nid)})
                     processed += 1
                     job.progress = processed / total
                     db.commit()
                     continue
-                db.add(
-                    TaskEvent(
-                        job_id=job.id,
-                        type="workflow.node.started",
-                        payload={"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)},
-                    )
-                )
+                emit_job_event(db, job.id, "workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)})
                 db.commit()
                 futures[pool.submit(run_node, nid)] = nid
 
@@ -201,7 +195,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
             db.refresh(job)
             if job.status == "failed":
                 cancelled = True
-                db.add(TaskEvent(job_id=job.id, type="workflow.cancelled", payload={"pending": len(futures)}))
+                emit_job_event(db, job.id, "workflow.cancelled", {"pending": len(futures)})
                 db.commit()
                 break
             completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
@@ -217,13 +211,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                     executed.add(nid)
                     done.add(nid)
                 processed += 1
-                db.add(
-                    TaskEvent(
-                        job_id=job.id,
-                        type="workflow.node.finished",
-                        payload={"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)},
-                    )
-                )
+                emit_job_event(db, job.id, "workflow.node.finished", {"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)})
                 job.progress = processed / total
                 db.commit()
             if error is None and not cancelled:
@@ -238,7 +226,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
     job.progress = 1.0
     job.message = f"工作流完成: {wf_name}"
     job.result = {"context": {nid: _trim_outputs(out) for nid, out in context.items()}}
-    db.add(TaskEvent(job_id=job.id, type="workflow.finished", payload={"nodes": len(order_ids), "executed": len(executed)}))
+    emit_job_event(db, job.id, "workflow.finished", {"nodes": len(order_ids), "executed": len(executed)})
     db.commit()
     return context
 

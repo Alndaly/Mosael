@@ -149,6 +149,16 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
     return True
 
 
+def emit_job_event(db: Session, job_id: str, type: str, payload: dict[str, Any] | None = None) -> None:
+    """在任务总线上发一条事件(不 commit,跟随调用方事务)。
+
+    TaskEvent 行只在总线创建——领域模块经这里发事件,而不是自己 `db.add(TaskEvent(...))`
+    (数据归属规约,见 ownership.py)。这也是未来把「job 终态 → 站内通知」做成事件
+    消费者的挂点。
+    """
+    db.add(TaskEvent(job_id=job_id, type=type, payload=payload or {}))
+
+
 def create_job(
     db: Session,
     *,
