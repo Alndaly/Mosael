@@ -54,7 +54,8 @@ def test_vendor_presets_listed() -> None:
     assert "moonshot" in presets and "minimax" in presets
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
     assert presets["alibaba"]["capability_ids"] == ["image"]
-    assert "video" in presets["bytedance"]["capability_ids"]
+    assert presets["bytedance"]["capability_ids"] == ["video"]
+    assert presets["bytedance"]["default_model"] == "doubao-seedance-2-0-260128"
     assert presets["openai-tts"]["capability_ids"] == ["tts"]
     assert presets["openai-tts"]["default_model"] == "gpt-4o-mini-tts"
     assert presets["openai-compatible-tts"]["capability_ids"] == ["tts"]
@@ -79,6 +80,15 @@ def test_provider_defaults_require_matching_capability() -> None:
         "/api/settings/provider-defaults/image",
         json={"provider_profile_id": kimi["id"], "model": "qwen-image"},
     ).status_code == 422
+
+    openai_tts = client.post(
+        "/api/settings/providers",
+        json={"name": "OpenAI TTS", "vendor": "openai-tts", "config": {"api_key": "sk-tts"}},
+    ).json()
+    assert client.put(
+        "/api/settings/provider-defaults/tts",
+        json={"provider_profile_id": openai_tts["id"], "model": "gpt-4o-mini-tts"},
+    ).status_code == 200
 
 
 def test_kb_embedding_config_put_get() -> None:

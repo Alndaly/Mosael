@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import GenerationModel
@@ -29,11 +29,76 @@ BUILTIN_MODELS = [
         "capabilities": {"modes": ["text-to-image", "image-to-image"], "max_prompt_chars": 8000},
     },
     {
-        "id": "bytedance:seedance:video",
+        "id": "bytedance:doubao-seedance-2-0-260128:video",
         "provider": "bytedance",
         "kind": "video",
-        "model": "seedance",
-        "capabilities": {"modes": ["text-to-video", "image-to-video"], "max_duration_seconds": 10},
+        "model": "doubao-seedance-2-0-260128",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "ark",
+            "max_duration_seconds": 10,
+            "supports_audio": True,
+        },
+    },
+    {
+        "id": "bytedance:doubao-seedance-2-0-fast-260128:video",
+        "provider": "bytedance",
+        "kind": "video",
+        "model": "doubao-seedance-2-0-fast-260128",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "ark",
+            "max_duration_seconds": 10,
+            "supports_audio": True,
+        },
+    },
+    {
+        "id": "bytedance:doubao-seedance-2-0-mini-260615:video",
+        "provider": "bytedance",
+        "kind": "video",
+        "model": "doubao-seedance-2-0-mini-260615",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "ark",
+            "max_duration_seconds": 10,
+            "supports_audio": True,
+        },
+    },
+    {
+        "id": "bytedance:doubao-seedance-1-5-pro-251215:video",
+        "provider": "bytedance",
+        "kind": "video",
+        "model": "doubao-seedance-1-5-pro-251215",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "las",
+            "max_duration_seconds": 10,
+            "supports_audio": True,
+        },
+    },
+    {
+        "id": "bytedance:doubao-seedance-1-0-pro-250528:video",
+        "provider": "bytedance",
+        "kind": "video",
+        "model": "doubao-seedance-1-0-pro-250528",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "las",
+            "max_duration_seconds": 10,
+            "supports_audio": False,
+        },
+    },
+    {
+        "id": "bytedance:doubao-seedance-1-0-pro-fast-251015:video",
+        "provider": "bytedance",
+        "kind": "video",
+        "model": "doubao-seedance-1-0-pro-fast-251015",
+        "capabilities": {
+            "modes": ["text-to-video", "image-to-video"],
+            "endpoint": "las",
+            "max_duration_seconds": 10,
+            "supports_audio": False,
+        },
     },
     {
         "id": "google:veo:video",
@@ -51,8 +116,13 @@ BUILTIN_MODELS = [
     },
 ]
 
+REMOVED_BUILTIN_MODEL_IDS = {
+    "bytedance:seedance:video",
+}
+
 
 def ensure_builtin_generation_models(db: Session) -> None:
+    db.execute(delete(GenerationModel).where(GenerationModel.id.in_(REMOVED_BUILTIN_MODEL_IDS)))
     existing = set(db.scalars(select(GenerationModel.id)))
     for item in BUILTIN_MODELS:
         if item["id"] in existing:

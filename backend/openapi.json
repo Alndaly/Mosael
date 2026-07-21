@@ -7942,7 +7942,7 @@
           "settings"
         ],
         "summary": "List Provider Defaults",
-        "description": "每种能力(chat/image/video)的默认供应商+模型;未配置的返回空默认。",
+        "description": "每种能力的默认供应商+模型;未配置的返回空默认。",
         "operationId": "list_provider_defaults_api_settings_provider_defaults_get",
         "responses": {
           "200": {
@@ -11442,6 +11442,23 @@
             "minLength": 1,
             "title": "Engine"
           },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "engine_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Model",
+            "default": ""
+          },
           "engine_voice": {
             "type": "string",
             "maxLength": 120,
@@ -13551,6 +13568,17 @@
               }
             ],
             "title": "Project Id"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
           },
           "text": {
             "type": "string",

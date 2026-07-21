@@ -34,19 +34,26 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         ],
     },
     "bytedance": {
-        "label": "火山方舟 ARK (Seedance/Doubao)",
+        "label": "火山 Seedance 视频生成",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "capabilities": "对话(Doubao / OpenAI 兼容)与视频生成(Seedance)。",
-        "capability_ids": ["chat", "video"],
+        "default_model": "doubao-seedance-2-0-260128",
+        "capabilities": "视频生成(Seedance)。2.x 走 ARK;1.x 在默认端点下由 Adapter 切到 LAS。",
+        "capability_ids": ["video"],
         "fields": [
             {"key": "api_key", "label": "方舟 API Key", "storage": "api_key", "secret": True, "required": True},
             {
                 "key": "base_url",
-                "label": "方舟 Endpoint",
+                "label": "Seedance 2.x Endpoint",
                 "storage": "base_url",
                 "default": "https://ark.cn-beijing.volces.com/api/v3",
+                "hint": "通常保持默认。Seedance 1.x 模型会自动使用 LAS Endpoint。",
             },
-            {"key": "default_model", "label": "默认模型", "storage": "default_model", "default": "seedance"},
+            {
+                "key": "default_model",
+                "label": "视频模型",
+                "storage": "default_model",
+                "default": "doubao-seedance-2-0-260128",
+            },
         ],
     },
     "moonshot": {

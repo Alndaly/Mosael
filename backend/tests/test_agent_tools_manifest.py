@@ -74,6 +74,8 @@ def test_high_risk_tool_descriptions_disambiguate_common_misuse() -> None:
     assert "Do NOT use to edit the workflow graph" in descriptions["run_workflow"]
     assert "Do NOT use to analyze an existing asset" in descriptions["generate_image"]
     assert "Do NOT use for exporting an existing sequence" in descriptions["generate_video"]
+    assert "Do NOT use for two-host" in descriptions["generate_audio"]
+    assert "use generate_audio" in descriptions["generate_podcast"]
 
 
 def test_an_unknown_tool_is_a_404() -> None:
@@ -224,7 +226,7 @@ def test_confirmation_gated_tools_are_marked_in_the_manifest() -> None:
     marked = {tool["name"] for tool in _manifest(client) if tool.get("confirmation")}
     assert marked == set(mcp_server.CONFIRMATION_TOOLS)
     # 会真实创建确认卡的核心变更工具必须在列
-    for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video"):
+    for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video", "generate_audio", "generate_podcast"):
         assert name in marked
 
 

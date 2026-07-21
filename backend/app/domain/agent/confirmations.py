@@ -26,6 +26,8 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "render_sequence": {"permission": "render-cost", "cost": "render"},
     "generate_image": {"permission": "ai-cost", "cost": "ai"},
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
+    "generate_audio": {"permission": "ai-cost", "cost": "ai"},
+    "generate_podcast": {"permission": "ai-cost", "cost": "ai"},
     # 工作流:建/改是编辑权限;运行可能触发渲染与 AI 消耗,按最高档要求确认。
     "create_workflow": {"permission": "edit", "cost": "none"},
     "update_workflow": {"permission": "edit", "cost": "none"},
@@ -127,9 +129,19 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
             kind = operation.get("kind") if isinstance(operation, dict) else None
             if kind not in EDIT_OP_KINDS:
                 raise ConfirmationError(f"Unsupported timeline operation: {kind}")
-    if tool in ("generate_image", "generate_video"):
-        if not str(payload.get("prompt", "")).strip():
+    if tool in ("generate_image", "generate_video", "generate_audio"):
+        if not str(payload.get("prompt") or payload.get("text") or "").strip():
             raise ConfirmationError("Generation requires a prompt")
+    if tool == "generate_podcast":
+        mode = str(payload.get("mode") or "summarize")
+        if mode not in {"summarize", "read", "research"}:
+            raise ConfirmationError("Unsupported podcast mode")
+        if mode == "research":
+            required = payload.get("topic")
+        else:
+            required = payload.get("text") or payload.get("prompt")
+        if not str(required or "").strip():
+            raise ConfirmationError("Podcast generation requires text or topic")
     if tool == "create_workflow":
         from app.domain.workflows import validate_graph
 
@@ -196,8 +208,16 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
     if tool == "run_workflow":
         name = str(payload.get("name") or payload.get("workflow_id") or "")
         return f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
-    prompt = str(payload.get("prompt", ""))[:80]
-    return f"生成{'图片' if tool == 'generate_image' else '视频'}: {prompt}"
+    prompt = str(payload.get("prompt") or payload.get("text") or payload.get("topic") or "")[:80]
+    if tool == "generate_image":
+        return f"生成图片: {prompt}"
+    if tool == "generate_video":
+        return f"生成视频: {prompt}"
+    if tool == "generate_audio":
+        return f"生成音频: {prompt}"
+    if tool == "generate_podcast":
+        return f"生成播客: {prompt}"
+    return f"{tool}: {prompt}"
 
 
 def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
@@ -239,6 +259,55 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         )
         start_generation_thread(generation.id)
         return {"job_id": job.id, "generation_id": generation.id}
+    if confirmation.tool == "generate_audio":
+        from app.audio.voices import start_synthesis
+        from app.domain.provider_defaults import resolve_default
+
+        profile_id = str(payload.get("provider_profile_id") or "").strip()
+        engine = str(payload.get("engine") or payload.get("provider") or "").strip()
+        model = str(payload.get("model") or "").strip()
+        if not engine:
+            default_profile, default_model = resolve_default(db, "tts")
+            if default_profile is not None:
+                profile_id = default_profile.id
+                engine = default_profile.vendor
+                model = model or default_model
+        if not engine:
+            raise RuntimeError("没有配置可用于语音生成的真实供应商")
+        job = start_synthesis(
+            db,
+            text=str(payload.get("text") or payload.get("prompt") or ""),
+            project_id=payload.get("project_id"),
+            workspace_id=confirmation.workspace_id,
+            engine=engine,
+            engine_voice=str(payload.get("voice") or payload.get("engine_voice") or ""),
+            engine_voice_resource=str(payload.get("voice_resource") or payload.get("engine_voice_resource") or ""),
+            speed=float(payload.get("speed") or 1.0),
+            provider_profile_id=profile_id or None,
+            engine_model=model,
+        )
+        return {"job_id": job.id}
+    if confirmation.tool == "generate_podcast":
+        from app.audio.voices import start_podcast
+        from app.domain.provider_defaults import resolve_default
+
+        profile_id = str(payload.get("provider_profile_id") or "").strip()
+        if not profile_id:
+            default_profile, _default_model = resolve_default(db, "podcast")
+            if default_profile is not None:
+                profile_id = default_profile.id
+        job = start_podcast(
+            db,
+            workspace_id=confirmation.workspace_id,
+            project_id=payload.get("project_id"),
+            text=str(payload.get("text") or payload.get("prompt") or ""),
+            topic=str(payload.get("topic") or ""),
+            mode=str(payload.get("mode") or "summarize"),
+            speakers=list(payload.get("speakers") or []),
+            speed=float(payload.get("speed") or 1.0),
+            provider_profile_id=profile_id or None,
+        )
+        return {"job_id": job.id}
     if confirmation.tool == "create_workflow":
         from app.domain.workflows import create_workflow
 

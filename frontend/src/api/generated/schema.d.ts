@@ -2506,7 +2506,7 @@ export interface paths {
         };
         /**
          * List Provider Defaults
-         * @description 每种能力(chat/image/video)的默认供应商+模型;未配置的返回空默认。
+         * @description 每种能力的默认供应商+模型;未配置的返回空默认。
          */
         get: operations["list_provider_defaults_api_settings_provider_defaults_get"];
         put?: never;
@@ -3703,6 +3703,13 @@ export interface components {
             text: string;
             /** Engine */
             engine: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Engine Model
+             * @default
+             */
+            engine_model: string;
             /**
              * Engine Voice
              * @default
@@ -4521,6 +4528,8 @@ export interface components {
             workspace_id: string;
             /** Project Id */
             project_id?: string | null;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
             /**
              * Text
              * @default

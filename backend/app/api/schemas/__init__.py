@@ -552,6 +552,8 @@ class EngineSynthesizeRequest(BaseModel):
     workspace_id: str
     text: str = Field(min_length=1, max_length=2000)
     engine: str = Field(min_length=1, max_length=40)
+    provider_profile_id: str | None = None
+    engine_model: str = Field(default="", max_length=120)
     engine_voice: str = Field(default="", max_length=120)
     #: 火山 only: the voice's resource family. Only the account's voice list knows it, and the
     #: synthesis header must agree with it or the call fails with an opaque 55000000. Blank
@@ -566,6 +568,7 @@ class PodcastRequest(BaseModel):
 
     workspace_id: str
     project_id: str | None = None
+    provider_profile_id: str | None = None
     #: The material. summarize/read use this; research uses `topic` instead.
     text: str = Field(default="", max_length=20000)
     topic: str = Field(default="", max_length=2000)

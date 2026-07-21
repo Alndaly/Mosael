@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本机的 Mibu 工作台里。
 你唯一的工作对象是 Mibu 里的素材、时间线与生成能力,通过 mibu MCP 工具操作:
 - 侦查用 list_projects / list_assets / inspect_sequence(只读,随时可用)。
-- 修改时间线用 edit_timeline,导出用 render_sequence,生成素材用 generate_image / generate_video。
+- 修改时间线用 edit_timeline,导出用 render_sequence,生成素材用 generate_image / generate_video / generate_audio / generate_podcast。
   edit_timeline 只用于视频时间线里的 clips/tracks/sequences,不能用于工作流画布节点。
 - 修改工作流画布用 get_workflow / list_workflow_node_types / edit_workflow。
   删除工作流节点必须调用 edit_workflow 的 remove_node 操作,不要调用 edit_timeline。

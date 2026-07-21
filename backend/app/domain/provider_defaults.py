@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 from app.db.models import ProviderDefault, ProviderProfile
 
 """每种能力的默认供应商解析(统一到 ProviderProfile)。
-capability: chat / image / video(embedding 走 KbEmbeddingConfig)。"""
+capability: chat / image / video / tts / podcast(embedding 走 KbEmbeddingConfig)。"""
 
-CAPABILITIES = ("chat", "image", "video")
+CAPABILITIES = ("chat", "image", "video", "tts", "podcast")
 
 
 def resolve_default(db: Session, capability: str) -> tuple[ProviderProfile | None, str]:

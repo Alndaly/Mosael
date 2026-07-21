@@ -232,7 +232,7 @@ def update_provider_profile(
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
-    """每种能力(chat/image/video)的默认供应商+模型;未配置的返回空默认。"""
+    """每种能力的默认供应商+模型;未配置的返回空默认。"""
     rows = {row.capability: row for row in db.scalars(select(ProviderDefault))}
     out: list[ProviderDefaultOut] = []
     for capability in CAPABILITIES:

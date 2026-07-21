@@ -161,6 +161,8 @@ def start_synthesis(
     engine: str = "clone",
     engine_voice: str = "",
     engine_voice_resource: str = "",
+    provider_profile_id: str | None = None,
+    engine_model: str = "",
     speed: float = 1.0,
 ) -> Job:
     """Queue a synthesis job.
@@ -192,6 +194,8 @@ def start_synthesis(
             "text": text[:200],
             "engine": engine,
             "engine_voice": engine_voice,
+            "provider_profile_id": provider_profile_id,
+            "engine_model": engine_model,
         },
         message=f"合成《{label}》配音中",
     )
@@ -199,7 +203,19 @@ def start_synthesis(
     dispatch_job(
         db,
         job,
-        lambda: _run_synthesis(job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource),
+        lambda: _run_synthesis(
+            job_id,
+            voice_id,
+            text,
+            project_id,
+            engine,
+            engine_voice,
+            speed,
+            workspace_id,
+            engine_voice_resource,
+            provider_profile_id,
+            engine_model,
+        ),
     )
     return job
 
@@ -214,6 +230,8 @@ def _run_synthesis(
     speed: float = 1.0,
     workspace_id: str = "",
     engine_voice_resource: str = "",
+    provider_profile_id: str | None = None,
+    engine_model: str = "",
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded.
 
@@ -221,7 +239,19 @@ def _run_synthesis(
     model in memory, so queueing it behind the single local slot would serialise work that has
     no reason to be serial.
     """
-    args = (job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource)
+    args = (
+        job_id,
+        voice_id,
+        text,
+        project_id,
+        engine,
+        engine_voice,
+        speed,
+        workspace_id,
+        engine_voice_resource,
+        provider_profile_id,
+        engine_model,
+    )
     if engine == "clone":
         with TTS_SLOTS:
             run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
@@ -239,6 +269,8 @@ def _run_synthesis_body(
     speed: float = 1.0,
     workspace_id: str = "",
     engine_voice_resource: str = "",
+    provider_profile_id: str | None = None,
+    engine_model: str = "",
 ) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -259,6 +291,8 @@ def _run_synthesis_body(
                     db, job, engine, engine_voice, text, speed,
                     workspace_id=workspace_id or job.workspace_id, project_id=project_id,
                     voice_resource=engine_voice_resource,
+                    provider_profile_id=provider_profile_id,
+                    model_override=engine_model,
                 )
                 return
 
@@ -342,6 +376,8 @@ def _synthesize_remote(
     workspace_id: str,
     project_id: str | None,
     voice_resource: str = "",
+    provider_profile_id: str | None = None,
+    model_override: str = "",
 ) -> None:
     """Synthesise through a remote engine and register the result, mirroring the clone path.
 
@@ -353,9 +389,9 @@ def _synthesize_remote(
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
-    profile = resolve_profile(db, engine)
+    profile = resolve_profile(db, engine, provider_profile_id)
     api_key = (profile.api_key if profile else None) or ""
-    model = voice_resource if engine == "volcano" else ((profile.default_model if profile else "") or "")
+    model = model_override or voice_resource or ((profile.default_model if profile else "") or "")
     provider = build_remote_provider(
         engine,
         api_key=api_key,
@@ -395,6 +431,7 @@ def start_podcast(
     mode: str = "summarize",
     speakers: list[str] | None = None,
     speed: float = 1.0,
+    provider_profile_id: str | None = None,
 ) -> Job:
     """Queue a 火山 podcast job: two voices reading or discussing the given material.
 
@@ -420,6 +457,7 @@ def start_podcast(
             "speakers": speakers or [],
             "text": text[:500],
             "topic": topic,
+            "provider_profile_id": provider_profile_id,
         },
         message="生成播客中",
     )
@@ -430,7 +468,17 @@ def start_podcast(
         job,
         lambda: run_job_guarded(
             job_id,
-            lambda: _run_podcast_body(job_id, workspace_id, project_id, text, topic, action, speakers or [], speed),
+            lambda: _run_podcast_body(
+                job_id,
+                workspace_id,
+                project_id,
+                text,
+                topic,
+                action,
+                speakers or [],
+                speed,
+                provider_profile_id,
+            ),
             what="播客",
         ),
     )
@@ -446,6 +494,7 @@ def _run_podcast_body(
     action: int,
     speakers: list[str],
     speed: float,
+    provider_profile_id: str | None = None,
 ) -> None:
     from app.audio.podcast import synthesize_podcast
     from app.domain.providers import profile_extra, resolve_profile
@@ -459,7 +508,7 @@ def _run_podcast_body(
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-        profile = resolve_profile(db, "volcano-podcast")
+        profile = resolve_profile(db, "volcano-podcast", provider_profile_id)
         # The token lives in api_key and the appid in extra — the podcast socket takes both,
         # and neither is the v3 speech API Key.
         token = (profile.api_key if profile else None) or ""

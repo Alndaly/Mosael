@@ -138,6 +138,8 @@ CONFIRMATION_TOOLS = frozenset(
         "render_sequence",
         "generate_image",
         "generate_video",
+        "generate_audio",
+        "generate_podcast",
         "create_workflow",
         "edit_workflow",
         "update_workflow",
@@ -366,8 +368,8 @@ def generate_video(prompt: str, model: str = "", provider: str = "", workspace_i
     asset. This does not place the video onto a timeline; after approval the
     generated asset lands in the media pool and can later be inserted with
     edit_timeline. Leave provider/model empty only when the configured
-    video-generation default should be used. Do NOT use for exporting an existing
-    sequence (render_sequence), running a workflow (run_workflow), or editing
+    video-generation default should be used. Do NOT use for exporting an existing sequence
+    (render_sequence), running a workflow (run_workflow), or editing
     workflow nodes (edit_workflow).
     """
     confirmation = _post(
@@ -377,6 +379,64 @@ def generate_video(prompt: str, model: str = "", provider: str = "", workspace_i
             "tool": "generate_video",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def generate_audio(
+    text: str,
+    engine: str = "",
+    voice: str = "",
+    model: str = "",
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: generate a NEW spoken-audio asset from text.
+
+    Use when the user asks for narration, voiceover, TTS, or other single-speaker
+    generated audio. This creates a confirmation card because it may spend AI
+    budget; after approval get_confirmation returns the audio job_id and the
+    generated audio appears in the media pool. Leave engine/model empty only
+    when the configured speech default should be used. Do NOT use for two-host podcast/dialogue
+    audio — use generate_podcast for that. Do NOT use for
+    analyzing existing audio/video assets — use analyze_asset.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "generate_audio",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"text": text, "engine": engine, "voice": voice, "model": model},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def generate_podcast(
+    text: str = "",
+    topic: str = "",
+    mode: str = "summarize",
+    speakers: list[str] | None = None,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: generate a NEW two-speaker podcast/dialogue audio asset.
+
+    Use when the user wants a podcast-style two-person discussion, reading, or
+    research audio. mode is summarize/read/research: summarize/read use text,
+    research uses topic. This is not the same adapter as ordinary TTS and uses
+    its own provider configuration. Do NOT use for one-speaker narration —
+    use generate_audio for that.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "generate_podcast",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"text": text, "topic": topic, "mode": mode, "speakers": speakers or []},
         },
     )
     return _confirmation_reply(confirmation)

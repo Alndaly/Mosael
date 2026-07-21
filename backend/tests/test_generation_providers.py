@@ -9,7 +9,13 @@ from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderEr
 from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.openai_image import build_submit_payload as openai_payload, extract_image_bytes
 from app.ai.providers.qwen_image import DASHSCOPE_BASE, build_submit_payload as qwen_payload, extract_result_url, resolve_dashscope_base
-from app.ai.providers.seedance import build_submit_payload as seedance_payload, extract_video_url
+from app.ai.providers.seedance import (
+    ARK_BASE,
+    LAS_BASE,
+    build_submit_payload as seedance_payload,
+    extract_video_url,
+    resolve_seedance_base,
+)
 from app.ai.providers.veo import build_submit_payload as veo_payload, extract_video_uri
 
 
@@ -80,18 +86,50 @@ def test_qwen_poll_parsing() -> None:
 
 def test_seedance_payload_shape() -> None:
     request = GenerationRequest(
-        kind="video", model="seedance", prompt="waves",
-        parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "16:9", "first_frame_url": "https://x/f.png"},
+        kind="video",
+        model="doubao-seedance-2-0-260128",
+        prompt="waves",
+        parameters={
+            "duration_seconds": 5,
+            "resolution": "720p",
+            "aspect_ratio": "16:9",
+            "first_frame_url": "https://x/f.png",
+            "generate_audio": True,
+        },
     )
     payload = seedance_payload(request)
-    assert payload["model"].startswith("seedance-1-0")
-    assert payload["content"][0]["text"] == "waves --resolution 720p --duration 5 --ratio 16:9"
+    assert payload["model"] == "doubao-seedance-2-0-260128"
+    assert payload["content"][0]["text"] == "waves"
     assert payload["content"][1]["image_url"]["url"] == "https://x/f.png"
+    assert payload["content"][1]["role"] == "first_frame"
+    assert payload["duration"] == 5
+    assert payload["resolution"] == "720p"
+    assert "ratio" not in payload
+    assert payload["generate_audio"] is True
+
+
+def test_seedance_text_to_video_keeps_ratio_as_a_json_parameter() -> None:
+    request = GenerationRequest(
+        kind="video",
+        model="doubao-seedance-1-0-pro-250528",
+        prompt="waves",
+        parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "16:9"},
+    )
+    payload = seedance_payload(request)
+    assert payload["content"] == [{"type": "text", "text": "waves"}]
+    assert payload["ratio"] == "16:9"
+
+
+def test_seedance_one_x_routes_to_las_when_profile_uses_default_ark_base() -> None:
+    context = ProviderContext(None, "bytedance", "sk-test", base_url=ARK_BASE)
+    assert resolve_seedance_base("doubao-seedance-1-5-pro-251215", context) == LAS_BASE
+    assert resolve_seedance_base("doubao-seedance-2-0-260128", context) == ARK_BASE
 
 
 def test_seedance_poll_parsing() -> None:
     assert extract_video_url({"status": "running"}) is None
     assert extract_video_url({"status": "succeeded", "content": {"video_url": "https://x/v.mp4"}}) == "https://x/v.mp4"
+    assert extract_video_url({"status": "succeeded", "output": {"video_url": "https://x/out.mp4"}}) == "https://x/out.mp4"
     with pytest.raises(ProviderError):
         extract_video_url({"status": "failed"})
 

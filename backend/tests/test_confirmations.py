@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -259,6 +260,42 @@ def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> 
     assert approved["result"]["job_id"]
     job = client.get(f"/api/jobs/{approved['result']['job_id']}").json()
     assert job["status"] == "queued"
+
+
+def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_start_synthesis(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(id="tts-job-1")
+
+    monkeypatch.setattr("app.audio.voices.start_synthesis", lambda _db, **kwargs: fake_start_synthesis(**kwargs))
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "Speech", "vendor": "openai-tts", "config": {"api_key": "sk-tts", "default_model": "tts-model"}},
+    ).json()
+    client.put(
+        "/api/settings/provider-defaults/tts",
+        json={"provider_profile_id": profile["id"], "model": "tts-model"},
+    )
+    data = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "generate_audio",
+            "payload": {"text": "旁白测试", "voice": "nova"},
+        },
+    ).json()
+    assert data["permission"] == "ai-cost"
+    approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    assert approved["result"]["job_id"] == "tts-job-1"
+    assert captured["engine"] == "openai-tts"
+    assert captured["provider_profile_id"] == profile["id"]
+    assert captured["engine_model"] == "tts-model"
+    assert captured["engine_voice"] == "nova"
 
 
 def test_invalid_payloads_rejected() -> None:

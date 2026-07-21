@@ -145,6 +145,7 @@ def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> 
             mode=body.mode,
             speakers=body.speakers,
             speed=body.speed,
+            provider_profile_id=body.provider_profile_id,
         )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -206,7 +207,9 @@ def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: C
             workspace_id=body.workspace_id,
             engine=body.engine,
             engine_voice=body.engine_voice,
-        engine_voice_resource=body.engine_voice_resource,
+            engine_voice_resource=body.engine_voice_resource,
+            provider_profile_id=body.provider_profile_id,
+            engine_model=body.engine_model,
             speed=body.speed,
         )
     except voices.VoiceError as exc:
