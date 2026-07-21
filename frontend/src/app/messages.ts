@@ -245,6 +245,9 @@ export const messages = {
     copied: "已复制",
     usageDuration: "耗时 {t}",
     usageRunning: "已用 {t}",
+    usageTokens: "{n} Token",
+    usageCost: "费用 {cost}",
+    usageCostUnknown: "未定价",
 
     // Batch
     batchTitle: "批量",
@@ -1516,6 +1519,9 @@ export const messages = {
     copied: "Copied",
     usageDuration: "Took {t}",
     usageRunning: "{t} elapsed",
+    usageTokens: "{n} tokens",
+    usageCost: "Cost {cost}",
+    usageCostUnknown: "Unpriced",
 
     // Batch
     batchTitle: "Batch",

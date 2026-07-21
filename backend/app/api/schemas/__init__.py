@@ -548,6 +548,29 @@ class ProviderPricingRuleOut(OrmModel):
     updated_at: datetime
 
 
+class ProviderUsageEventOut(OrmModel):
+    id: str
+    workspace_id: str
+    provider_profile_id: str | None = None
+    provider: str
+    model: str
+    capability: str
+    operation: str
+    source_type: str
+    source_id: str
+    job_id: str | None = None
+    agent_message_id: str | None = None
+    status: str
+    duration_seconds: float | None = None
+    units: dict
+    raw_usage: dict
+    cost_micros: int | None = None
+    currency: str
+    cost_confidence: str
+    pricing_rule_id: str | None = None
+    created_at: datetime
+
+
 class KbEmbeddingConfigOut(BaseModel):
     provider_profile_id: str | None = None
     model: str = ""

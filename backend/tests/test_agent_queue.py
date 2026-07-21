@@ -16,7 +16,7 @@ import time
 from app.ai.agent import host
 from app.ai.agent.adapters import TurnResult
 from app.core.db import SessionLocal
-from app.db.models import AgentMessage, AgentSession
+from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from tests.util import fresh_client
 
 
@@ -172,6 +172,55 @@ def test_nothing_is_queued_when_idle() -> None:
     client = fresh_client()
     sid = _session(client)
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+
+
+def test_agent_usage_events_are_scoped_to_session_messages() -> None:
+    client = fresh_client()
+    sid = _session(client)
+    other_sid = _session(client)
+
+    with SessionLocal() as db:
+        message = AgentMessage(session_id=sid, role="assistant", content="ok")
+        other_message = AgentMessage(session_id=other_sid, role="assistant", content="nope")
+        db.add_all([message, other_message])
+        db.flush()
+        message_id = message.id
+        other_message_id = other_message.id
+        db.add(
+            ProviderUsageEvent(
+                workspace_id=db.get(AgentSession, sid).workspace_id,
+                provider="openai-compatible",
+                model="deepseek-v4-pro",
+                capability="chat",
+                operation="agent_chat",
+                idempotency_key="agent-usage-visible",
+                agent_message_id=message_id,
+                duration_seconds=2.5,
+                units={"input_tokens": 12, "output_tokens": 34},
+                cost_micros=123,
+                currency="USD",
+                cost_confidence="estimated",
+            )
+        )
+        db.add(
+            ProviderUsageEvent(
+                workspace_id=db.get(AgentSession, other_sid).workspace_id,
+                provider="openai-compatible",
+                model="deepseek-v4-pro",
+                capability="chat",
+                operation="agent_chat",
+                idempotency_key="agent-usage-hidden",
+                agent_message_id=other_message_id,
+                units={"input_tokens": 99},
+            )
+        )
+        db.commit()
+
+    events = client.get(f"/api/agent/sessions/{sid}/usage-events").json()
+    assert len(events) == 1
+    assert events[0]["agent_message_id"] == message_id
+    assert events[0]["units"] == {"input_tokens": 12, "output_tokens": 34}
+    assert events[0]["cost_micros"] == 123
 
 
 def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:

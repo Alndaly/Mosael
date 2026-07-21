@@ -18,9 +18,10 @@ from app.api.schemas import (
     AgentSessionUpdate,
     AgentSkillOut,
     PromptSkillOut,
+    ProviderUsageEventOut,
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import AgentMessage, AgentSession
+from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_skills
 from app.domain.agent.prompt_skills import list_prompt_skills, load_prompt_skill
 
@@ -57,6 +58,18 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
 def list_agent_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
     session = _require_session(db, user, session_id)
     stmt = select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)
+    return list(db.scalars(stmt))
+
+
+@router.get("/agent/sessions/{session_id}/usage-events", response_model=list[ProviderUsageEventOut])
+def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -> list[ProviderUsageEvent]:
+    session = _require_session(db, user, session_id)
+    stmt = (
+        select(ProviderUsageEvent)
+        .join(AgentMessage, ProviderUsageEvent.agent_message_id == AgentMessage.id)
+        .where(AgentMessage.session_id == session.id)
+        .order_by(ProviderUsageEvent.created_at.asc())
+    )
     return list(db.scalars(stmt))
 
 

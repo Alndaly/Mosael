@@ -41,6 +41,20 @@ type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentManifest = components["schemas"]["AgentManifestOut"];
 type AgentTool = components["schemas"]["ToolSpec"];
 type PromptSkill = components["schemas"]["PromptSkillOut"];
+type AgentUsageEvent = {
+  id: string;
+  agent_message_id: string | null;
+  provider: string;
+  model: string;
+  capability: string;
+  operation: string;
+  status: string;
+  duration_seconds: number | null;
+  units: Record<string, unknown>;
+  cost_micros: number | null;
+  currency: string;
+  cost_confidence: string;
+};
 
 export function ChatWorkspace({
   workspace,
@@ -144,6 +158,7 @@ export function ChatWorkspace({
           setStreamText("");
           setStreamTimeline([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
+          void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
         }
       }
@@ -173,6 +188,13 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  const usageEvents = useQuery({
+    queryKey: ["agent-usage-events", activeSession?.id],
+    enabled: Boolean(activeSession),
+    queryFn: () => api<AgentUsageEvent[]>(`/api/agent/sessions/${activeSession!.id}/usage-events`),
+    refetchInterval: running ? 1200 : false,
+    refetchOnWindowFocus: true,
+  });
   // What is still waiting behind the current answer. Read from the server rather than counted
   // locally so it survives a reload and stays right when a turn ends mid-flight.
   const queue = useQuery({
@@ -338,6 +360,16 @@ export function ChatWorkspace({
   };
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+  const usageByMessage = React.useMemo(() => {
+    const byMessage = new Map<string, AgentUsageEvent[]>();
+    for (const event of usageEvents.data ?? []) {
+      if (!event.agent_message_id) continue;
+      const current = byMessage.get(event.agent_message_id) ?? [];
+      current.push(event);
+      byMessage.set(event.agent_message_id, current);
+    }
+    return byMessage;
+  }, [usageEvents.data]);
 
   return (
     <div className="chat-grid">
@@ -405,7 +437,7 @@ export function ChatWorkspace({
           <>
             <div className="chat-thread" ref={threadRef}>
               {visibleMessages.map((message) => (
-                <ChatBubble key={message.id} message={message} />
+                <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
               ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
@@ -783,11 +815,112 @@ function formatInspectorTime(value: string | null | undefined) {
   }).format(date);
 }
 
-function ChatBubble({ message }: { message: AgentMessage }) {
+function numberUnit(value: unknown): number | null {
+  if (typeof value === "boolean") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function quantityForUnit(units: Record<string, unknown>, unit: "token" | "input_token" | "output_token"): number {
+  const aliases = {
+    token: ["token", "tokens", "total_token", "total_tokens"],
+    input_token: ["input_token", "input_tokens", "prompt_tokens", "input_characters"],
+    output_token: ["output_token", "output_tokens", "completion_tokens", "output_characters"],
+  } satisfies Record<typeof unit, string[]>;
+  for (const key of aliases[unit]) {
+    const value = numberUnit(units[key]);
+    if (value != null) return value;
+  }
+  if (unit === "token") {
+    const input = quantityForUnit(units, "input_token");
+    const output = quantityForUnit(units, "output_token");
+    return input + output;
+  }
+  return 0;
+}
+
+function summarizeMessageUsage(events: AgentUsageEvent[]) {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let totalTokens = 0;
+  let durationSeconds = 0;
+  let hasDuration = false;
+  let unknownCostEvents = 0;
+  const costByCurrency = new Map<string, number>();
+
+  for (const event of events) {
+    const units = event.units ?? {};
+    const input = quantityForUnit(units, "input_token");
+    const output = quantityForUnit(units, "output_token");
+    const total = Math.max(quantityForUnit(units, "token"), input + output);
+    inputTokens += input;
+    outputTokens += output;
+    totalTokens += total;
+    if (typeof event.duration_seconds === "number") {
+      durationSeconds += event.duration_seconds;
+      hasDuration = true;
+    }
+    if (typeof event.cost_micros === "number") {
+      const currency = event.currency || "USD";
+      costByCurrency.set(currency, (costByCurrency.get(currency) ?? 0) + event.cost_micros);
+    } else {
+      unknownCostEvents += 1;
+    }
+  }
+
+  return {
+    inputTokens: Math.round(inputTokens),
+    outputTokens: Math.round(outputTokens),
+    totalTokens: Math.round(totalTokens),
+    durationSeconds: hasDuration ? durationSeconds : null,
+    costByCurrency,
+    unknownCostEvents,
+  };
+}
+
+function formatTokenCount(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatCostMicros(currency: string, micros: number): string {
+  const amount = micros / 1_000_000;
+  const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : "";
+  const precision = amount > 0 && amount < 0.01 ? 6 : 4;
+  const value = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: amount === 0 ? 0 : 2,
+    maximumFractionDigits: precision,
+  }).format(amount);
+  return symbol ? `${symbol}${value}` : `${value} ${currency}`;
+}
+
+function formatUsageCost(events: ReturnType<typeof summarizeMessageUsage>, t: ReturnType<typeof useI18n>): string | null {
+  const known = [...events.costByCurrency.entries()].filter(([, value]) => value >= 0);
+  if (known.length > 0) {
+    return t("usageCost").replace(
+      "{cost}",
+      known.map(([currency, micros]) => formatCostMicros(currency, micros)).join(" + "),
+    );
+  }
+  return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
+}
+
+function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
   const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
-  const duration = payload?.usage?.duration_seconds;
+  const usage = summarizeMessageUsage(usageEvents);
+  const duration = payload?.usage?.duration_seconds ?? usage.durationSeconds;
+  const tokenLabel =
+    usage.totalTokens > 0 ? t("usageTokens").replace("{n}", formatTokenCount(usage.totalTokens)) : null;
+  const tokenTitle =
+    usage.inputTokens > 0 || usage.outputTokens > 0
+      ? `${t("homeLegendInputTokens")} ${formatTokenCount(usage.inputTokens)} · ${t("homeLegendOutputTokens")} ${formatTokenCount(usage.outputTokens)}`
+      : undefined;
+  const costLabel = formatUsageCost(usage, t);
 
   const copy = () => {
     void navigator.clipboard.writeText(message.content).then(() => {
@@ -819,6 +952,12 @@ function ChatBubble({ message }: { message: AgentMessage }) {
               {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
             </span>
           )}
+          {tokenLabel && (
+            <span className="chat-msg-usage" title={tokenTitle}>
+              {tokenLabel}
+            </span>
+          )}
+          {costLabel && <span className="chat-msg-usage">{costLabel}</span>}
         </div>
       )}
     </div>
