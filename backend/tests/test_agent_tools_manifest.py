@@ -162,3 +162,47 @@ def test_workspace_scoped_tools_declare_workspace_id() -> None:
         assert "workspace_id" not in declared[unscoped], (
             f"{unscoped} now declares workspace_id; the sidecar will start sending it"
         )
+
+
+def test_confirmation_gated_tools_are_marked_in_the_manifest() -> None:
+    """runtime 从元数据生成确认等待逻辑,不再按名字手写第二份工具。少标 = 静默丢确认门,
+    多标 = 对着普通结果空等确认卡——两个方向都必须钉死。"""
+    client = fresh_client()
+    marked = {tool["name"] for tool in _manifest(client) if tool.get("confirmation")}
+    assert marked == set(mcp_server.CONFIRMATION_TOOLS)
+    # 会真实创建确认卡的核心变更工具必须在列
+    for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video"):
+        assert name in marked
+
+
+def test_requested_by_reaches_the_confirmation_card(monkeypatch) -> None:
+    """sidecar 经 invoke 通道调用时,确认卡显示的请求方应是它自己(pi-agent),
+    而不是注册表默认的 mcp-agent。
+
+    工具体经 loopback HTTP 回连后端;TestClient 没有真实端口,把 _post 路由回
+    TestClient 本身——链路其余部分(invoke → 工具 → 确认卡)保持真实。"""
+    client = fresh_client()
+
+    def fake_post(path: str, payload: dict) -> dict:
+        res = client.post(path, json=payload)
+        assert res.status_code < 300, res.text
+        return res.json()
+
+    monkeypatch.setattr(mcp_server, "_post", fake_post)
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    project = client.post("/api/projects", json={"workspace_id": workspace_id, "name": "P"}).json()
+    sequence = client.post(
+        "/api/sequences",
+        json={"workspace_id": workspace_id, "project_id": project["id"], "name": "S"},
+    ).json()
+
+    res = client.post(
+        "/api/agent/tools/render_sequence",
+        json={"arguments": {"sequence_id": sequence["id"], "workspace_id": workspace_id}, "requested_by": "pi-agent"},
+    )
+    assert res.status_code == 200, res.text
+    result = res.json()["result"]
+    assert result["status"] == "pending"
+
+    card = client.get(f"/api/confirmations/{result['confirmation_id']}").json()
+    assert card["requested_by"] == "pi-agent"

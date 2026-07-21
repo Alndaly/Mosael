@@ -42,10 +42,16 @@ class ToolSpec(BaseModel):
     name: str
     description: str
     parameters: dict[str, Any]
+    # 确认门控标:调用该工具只会创建一张待确认卡并立刻返回 {confirmation_id, status:
+    # pending}。runtime 据此生成等待逻辑(sidecar 阻塞轮询 / MCP 客户端自行 get_confirmation)
+    # ——以前 sidecar 为此手写第二份工具实现,现在这是元数据。
+    confirmation: bool = False
 
 
 class ToolInvocation(BaseModel):
     arguments: dict[str, Any] = {}
+    # 确认卡上显示的请求方(如 "pi-agent");留空用注册表默认("mcp-agent")。
+    requested_by: str = ""
 
 
 @router.get("/agent/tools", response_model=list[ToolSpec])
@@ -58,6 +64,7 @@ def list_agent_tools(user: CurrentUser) -> list[ToolSpec]:
             name=tool.name,
             description=tool.description or "",
             parameters=tool.inputSchema or {"type": "object", "properties": {}},
+            confirmation=tool.name in registry.CONFIRMATION_TOOLS,
         )
         for tool in tools
     ]
@@ -91,6 +98,7 @@ def invoke_agent_tool(
     from app.core.config import settings
 
     base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
+    requested_by_reset = registry.set_requested_by(body.requested_by) if body.requested_by else None
     try:
         result = fn(**body.arguments)
     except TypeError as exc:  # wrong/missing arguments from the model, not a server fault
@@ -101,4 +109,6 @@ def invoke_agent_tool(
     finally:
         registry._API_TOKEN.reset(reset)
         registry._API_BASE.reset(base_reset)
+        if requested_by_reset is not None:
+            registry._REQUESTED_BY.reset(requested_by_reset)
     return {"result": result}

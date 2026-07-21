@@ -89,6 +89,30 @@ def _default_workspace_id() -> str:
     return workspaces[0]["id"]
 
 
+# 确认门控的工具集合:manifest(/api/agent/tools)据此给每个工具打 confirmation 标,
+# 各 runtime(pi sidecar / MCP 客户端)统一从元数据生成阻塞或轮询逻辑,不再手写第二份。
+CONFIRMATION_TOOLS = frozenset(
+    {
+        "edit_timeline",
+        "render_sequence",
+        "generate_image",
+        "generate_video",
+        "create_workflow",
+        "edit_workflow",
+        "update_workflow",
+        "run_workflow",
+    }
+)
+
+# 确认卡上显示的请求方。经 /api/agent/tools 间接调用时由调用方标注(如 "pi-agent"),
+# 直连 MCP(Claude CLI 等)保持默认。
+_REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("mibu_requested_by", default="mcp-agent")
+
+
+def set_requested_by(name: str) -> contextvars.Token:
+    return _REQUESTED_BY.set(name)
+
+
 def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
     return {
         "confirmation_id": confirmation["id"],
@@ -213,7 +237,7 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "edit_timeline",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"sequence_id": sequence_id, "operations": operations},
         },
     )
@@ -231,7 +255,7 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "render_sequence",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"sequence_id": sequence_id},
         },
     )
@@ -250,7 +274,7 @@ def generate_image(prompt: str, model: str = "mock-image", provider: str = "mock
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_image",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
         },
     )
@@ -265,7 +289,7 @@ def generate_video(prompt: str, model: str = "mock-video", provider: str = "mock
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_video",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
         },
     )
@@ -452,7 +476,7 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "create_workflow",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"name": name, "description": description, "graph": graph},
         },
     )
@@ -482,7 +506,7 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "edit_workflow",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"workflow_id": workflow_id, "operations": operations},
         },
     )
@@ -509,7 +533,7 @@ def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name:
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "update_workflow",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": payload,
         },
     )
@@ -525,7 +549,7 @@ def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspa
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "run_workflow",
-            "requested_by": "mcp-agent",
+            "requested_by": _REQUESTED_BY.get(),
             "payload": {"workflow_id": workflow_id, "params": params or {}},
         },
     )
