@@ -100,6 +100,23 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "default_model", "label": "默认模型", "storage": "default_model", "default": "gpt-image-2"},
         ],
     },
+    "openai-tts": {
+        "label": "OpenAI 语音合成",
+        "base_url": "https://api.openai.com/v1",
+        "default_model": "gpt-4o-mini-tts",
+        "capabilities": "语音合成(/audio/speech,预置音色)",
+        "capability_ids": ["tts"],
+        "fields": [
+            {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
+            {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
+            {
+                "key": "default_model",
+                "label": "语音模型",
+                "storage": "default_model",
+                "default": "gpt-4o-mini-tts",
+            },
+        ],
+    },
     "volcano": {
         "label": "火山引擎语音合成(豆包 TTS)",
         "base_url": "https://openspeech.bytedance.com",
@@ -151,6 +168,23 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "兼容 Endpoint", "storage": "base_url", "required": True},
             {"key": "default_model", "label": "默认模型", "storage": "default_model", "required": True},
+        ],
+    },
+    "openai-compatible-tts": {
+        "label": "OpenAI 兼容语音端点",
+        "base_url": "",
+        "capabilities": "OpenAI 兼容语音合成(/audio/speech)。用于自定义 base_url、代理或第三方兼容服务。",
+        "capability_ids": ["tts"],
+        "fields": [
+            {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
+            {"key": "base_url", "label": "兼容语音 Endpoint", "storage": "base_url", "required": True},
+            {
+                "key": "default_model",
+                "label": "语音模型",
+                "storage": "default_model",
+                "default": "gpt-4o-mini-tts",
+                "required": True,
+            },
         ],
     },
     "google": {

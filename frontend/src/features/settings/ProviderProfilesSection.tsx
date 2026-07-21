@@ -32,6 +32,7 @@ const VENDOR_DOCS: Record<string, string> = {
   moonshot: "https://platform.moonshot.cn/console/api-keys",
   minimax: "https://platform.minimaxi.com/user-center/basic-information/interface-key",
   openai: "https://platform.openai.com/api-keys",
+  "openai-tts": "https://platform.openai.com/api-keys",
   google: "https://aistudio.google.com/app/apikey",
   kuaishou: "https://klingai.com/",
   "volcano-podcast": "https://console.volcengine.com/speech/service",

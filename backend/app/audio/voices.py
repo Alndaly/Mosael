@@ -355,11 +355,12 @@ def _synthesize_remote(
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     profile = resolve_profile(db, engine)
     api_key = (profile.api_key if profile else None) or ""
+    model = voice_resource if engine == "volcano" else ((profile.default_model if profile else "") or "")
     provider = build_remote_provider(
         engine,
         api_key=api_key,
         voice=engine_voice,
-        model=voice_resource,
+        model=model,
         base_url=(profile.base_url if profile else "") or "",
     )
     with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:

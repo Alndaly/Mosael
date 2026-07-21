@@ -65,8 +65,10 @@ class TTSProvider(Protocol):
 class OpenAITTS:
     """OpenAI's speech endpoint. Stock voices, no reference clip, no local model."""
 
-    id = "openai"
-    label = "OpenAI"
+    id = "openai-tts"
+    compatible_id = "openai-compatible-tts"
+    label = "OpenAI 语音合成"
+    compatible_label = "OpenAI 兼容语音端点"
     parallel_safe = True
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
 
@@ -261,6 +263,7 @@ PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
 #: it is the local reference-driven path and needs a Voice row, not an engine voice id.
 REMOTE_ENGINES = {
     OpenAITTS.id: OpenAITTS,
+    OpenAITTS.compatible_id: OpenAITTS,
     VolcanoTTS.id: VolcanoTTS,
 }
 
@@ -283,6 +286,14 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_voice_id": False,
             "voices": list(OpenAITTS.VOICES),
             "note": "预置音色,不需要参考音频。",
+        },
+        {
+            "id": OpenAITTS.compatible_id,
+            "label": OpenAITTS.compatible_label,
+            "needs_key": True,
+            "needs_voice_id": False,
+            "voices": list(OpenAITTS.VOICES),
+            "note": "走 OpenAI /audio/speech 兼容接口,使用独立语音 profile 的 base_url 与模型。",
         },
         {
             "id": "volcano-podcast",

@@ -130,16 +130,17 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
     engines = {item["id"]: item for item in client.get("/api/tts/engines").json()}
 
     assert engines["clone"]["needs_key"] is False
-    assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
+    assert engines["openai-tts"]["needs_voice_id"] is False and engines["openai-tts"]["voices"]
+    assert engines["openai-compatible-tts"]["needs_voice_id"] is False and engines["openai-compatible-tts"]["voices"]
     # 火山's catalogue is account-specific, but /api/tts/voices always answers with a list —
     # live when AK/SK are configured, built-in otherwise — so the panel offers a dropdown
     # rather than asking the user to type an opaque id.
     assert engines["volcano"]["needs_voice_id"] is False and engines["volcano"]["voices"]
 
 
-def test_a_profile_base_url_reaches_the_engine() -> None:
-    """A user pointing "openai" at a proxy must not have the request sent to api.openai.com
-    with a key that is not valid there — a 401 whose cause is invisible."""
+def test_an_openai_compatible_tts_profile_base_url_reaches_the_engine() -> None:
+    """A user pointing an OpenAI-compatible TTS profile at a proxy must not have the request
+    sent to api.openai.com with a key that is not valid there — a 401 whose cause is invisible."""
     import time
 
     import app.audio.tts_providers as providers
@@ -149,13 +150,21 @@ def test_a_profile_base_url_reaches_the_engine() -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        db.add(ProviderProfile(name="proxy", vendor="openai", api_key="k", base_url="https://proxy.test/v1"))
+        db.add(
+            ProviderProfile(
+                name="proxy",
+                vendor="openai-compatible-tts",
+                api_key="k",
+                base_url="https://proxy.test/v1",
+                default_model="custom-tts",
+            )
+        )
         db.commit()
 
     seen: dict = {}
 
     def spy(engine, api_key, voice="", model="", base_url=""):
-        seen.update(engine=engine, api_key=api_key, base_url=base_url)
+        seen.update(engine=engine, api_key=api_key, model=model, base_url=base_url)
         raise RuntimeError("no network in tests — the constructor arguments are what this asserts")
 
     saved = providers.build_remote_provider
@@ -163,7 +172,12 @@ def test_a_profile_base_url_reaches_the_engine() -> None:
     try:
         res = client.post(
             "/api/tts/synthesize",
-            json={"workspace_id": workspace_id, "text": "hello", "engine": "openai", "engine_voice": "alloy"},
+            json={
+                "workspace_id": workspace_id,
+                "text": "hello",
+                "engine": "openai-compatible-tts",
+                "engine_voice": "alloy",
+            },
         )
         assert res.status_code == 200, res.text
         # Synthesis runs on a job thread; wait for it rather than racing it.
@@ -175,6 +189,7 @@ def test_a_profile_base_url_reaches_the_engine() -> None:
 
     assert seen.get("base_url") == "https://proxy.test/v1", seen
     assert seen.get("api_key") == "k"
+    assert seen.get("model") == "custom-tts"
 
 
 def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:

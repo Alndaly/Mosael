@@ -55,6 +55,9 @@ def test_vendor_presets_listed() -> None:
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
     assert presets["alibaba"]["capability_ids"] == ["image"]
     assert "video" in presets["bytedance"]["capability_ids"]
+    assert presets["openai-tts"]["capability_ids"] == ["tts"]
+    assert presets["openai-tts"]["default_model"] == "gpt-4o-mini-tts"
+    assert presets["openai-compatible-tts"]["capability_ids"] == ["tts"]
     assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == ["api_key", "appid"]
     assert presets["volcano-podcast"]["fields"][0]["label"] == "Access Token"
 

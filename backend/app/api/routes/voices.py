@@ -162,7 +162,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     from app.audio.tts_providers import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, OpenAITTS
     from app.domain.providers import profile_extra
 
-    if engine == "openai":
+    if engine in {OpenAITTS.id, OpenAITTS.compatible_id}:
         return [{"value": voice, "label": voice} for voice in OpenAITTS.VOICES]
     if engine == "volcano-podcast":
         return [{"value": voice, "label": label} for voice, label in PODCAST_SPEAKERS]
