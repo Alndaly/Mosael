@@ -9,6 +9,7 @@ import type { WorkflowGraph } from "@/api/client";
 export type IssueSeverity = "error" | "warn";
 
 export type IssueCode =
+  | "missing-start" // 工作流没有开始节点
   | "required-missing" // 必填字段为空
   | "disconnected" // 非 start 节点无法从 start 到达
   | "stale-var" // 配置里引用了已删除的节点
@@ -152,6 +153,15 @@ export function analyzeWorkflow(
   const nodeIds = new Set(graph.nodes.map((n) => n.id));
   const reachable = reachableFromStart(graph);
   const hasStart = graph.nodes.some((n) => n.type === "start");
+  if (!hasStart) {
+    issues.push({
+      nodeId: "__workflow__",
+      nodeName: "Workflow",
+      nodeType: "workflow",
+      severity: "error",
+      code: "missing-start",
+    });
+  }
   // 被数据边喂的输入,即便字面量为空也算已满足(与后端 validate_graph 同源)。
   const dataBound = new Set(
     graph.edges

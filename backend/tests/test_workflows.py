@@ -121,7 +121,9 @@ def test_workflow_crud_and_run() -> None:
     listed = client.get(f"/api/workflows?workspace_id={ws['id']}").json()
     assert [w["name"] for w in listed] == ["测试流"]
 
-    bad = client.patch(f"/api/workflows/{workflow_id}", json={"graph": {"nodes": [], "edges": []}})
+    duplicated_start = linear_graph()
+    duplicated_start["nodes"].append({"id": "start-2", "type": "start", "name": "开始 2", "config": {}})
+    bad = client.patch(f"/api/workflows/{workflow_id}", json={"graph": duplicated_start})
     assert bad.status_code == 422
 
     types = client.get("/api/workflows/node-types").json()
@@ -149,6 +151,12 @@ def test_workflow_crud_and_run() -> None:
         types_seen = {event.type for event in events}
         assert "workflow.node.started" in types_seen
         assert "workflow.finished" in types_seen
+
+    empty = client.patch(f"/api/workflows/{workflow_id}", json={"graph": {"nodes": [], "edges": []}})
+    assert empty.status_code == 200, empty.text
+    blocked_run = client.post(f"/api/workflows/{workflow_id}/run", json={"params": {}})
+    assert blocked_run.status_code == 422
+    assert "开始节点" in blocked_run.text
 
     gone = client.delete(f"/api/workflows/{workflow_id}")
     assert gone.status_code == 204
@@ -492,13 +500,15 @@ def test_workflow_tools_via_confirmations() -> None:
     listed = client.get(f"/api/workflows?workspace_id={ws['id']}").json()
     assert [w["name"] for w in listed] == ["智能体流"]
 
-    # 非法图在请求确认时就被拒(不产生确认卡)
+    # 非法图在请求确认时就被拒(不产生确认卡):多个 start 仍不允许。
+    duplicated_start = linear_graph()
+    duplicated_start["nodes"].append({"id": "start-2", "type": "start", "name": "开始 2", "config": {}})
     bad = client.post(
         "/api/confirmations",
         json={
             "workspace_id": ws["id"],
             "tool": "update_workflow",
-            "payload": {"workflow_id": workflow_id, "graph": {"nodes": [], "edges": []}},
+            "payload": {"workflow_id": workflow_id, "graph": duplicated_start},
         },
     )
     assert bad.status_code == 422

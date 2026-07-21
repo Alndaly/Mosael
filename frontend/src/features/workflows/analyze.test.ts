@@ -152,6 +152,12 @@ describe("analyzeWorkflow", () => {
     expect(a.severityByNode.get("tmpl")).toBe("warn");
   });
 
+  it("blocks running when the workflow has no start node", () => {
+    const a = analyzeWorkflow(graph([]), registry, fullCtx);
+    expect(a.runnable).toBe(false);
+    expect(a.issues[0]).toMatchObject({ code: "missing-start", severity: "error" });
+  });
+
   it("errors when an LLM binds a provider profile that no longer exists", () => {
     const g = graph(
       [

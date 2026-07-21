@@ -136,7 +136,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         if not str(payload.get("name", "")).strip():
             raise ConfirmationError("create_workflow requires a name")
         if payload.get("graph") is not None:
-            errors = validate_graph(payload["graph"], require_config=False)
+            errors = validate_graph(payload["graph"], require_config=False, allow_missing_start=True)
             if errors:
                 raise ConfirmationError("；".join(errors))
     if tool in ("update_workflow", "edit_workflow", "run_workflow"):
@@ -147,7 +147,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         if workflow is None or workflow.workspace_id != workspace_id:
             raise ConfirmationError("Workflow not found in this workspace")
         if tool == "update_workflow" and payload.get("graph") is not None:
-            errors = validate_graph(payload["graph"], require_config=False)
+            errors = validate_graph(payload["graph"], require_config=False, allow_missing_start=True)
             if errors:
                 raise ConfirmationError("；".join(errors))
         if tool == "edit_workflow":
@@ -166,7 +166,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
                 preview = apply_graph_ops(workflow.graph or {}, operations)
             except WorkflowDomainError as exc:
                 raise ConfirmationError(str(exc)) from exc
-            errors = validate_graph(preview, require_config=False)
+            errors = validate_graph(preview, require_config=False, allow_missing_start=True)
             if errors:
                 raise ConfirmationError("；".join(errors))
 

@@ -432,7 +432,7 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
       // 过滤通配输出(如 start 的 *params),它们不是可连接的具体接点。
       outputs: (registry.get(node.type)?.outputs ?? []).filter((output) => !output.startsWith("*")),
     } satisfies WfNodeData,
-    deletable: node.type !== "start",
+    deletable: true,
   }));
 }
 
@@ -475,6 +475,8 @@ function toFlowEdges(graph: WorkflowGraph): Edge[] {
 /** issue code → 本地化文案(角标 tooltip / checklist 行都用它)。 */
 function issueText(t: ReturnType<typeof useI18n>, issue: NodeIssue): string {
   switch (issue.code) {
+    case "missing-start":
+      return t("wfIssueMissingStart");
     case "required-missing":
       return t("wfIssueRequired").replace("{k}", issue.configKey ?? "");
     case "stale-var":
@@ -523,6 +525,7 @@ function WorkflowEditor({
   }
   const graphStore = graphStoreRef.current;
   const graph = useStore(graphStore, (s) => s.graph);
+  const graphHasStart = graph.nodes.some((node) => node.type === "start");
   const setGraph = useStore(graphStore, (s) => s.setGraph);
   const canUndo = useStore(graphStore.temporal, (s) => s.pastStates.length > 0);
   const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
@@ -782,10 +785,11 @@ function WorkflowEditor({
   const addNode = (type: string) => {
     const meta = registry.get(type);
     if (!meta) return;
+    if (type === "start" && graph.nodes.some((node) => node.type === "start")) return;
     const base = type.replace(/_/g, "-");
     let index = 1;
     while (graph.nodes.some((node) => node.id === `${base}-${index}`)) index += 1;
-    const id = `${base}-${index}`;
+    const id = type === "start" && !graph.nodes.some((node) => node.id === "start") ? "start" : `${base}-${index}`;
     const maxX = Math.max(0, ...graph.nodes.map((node) => node.position?.x ?? 0));
     const config: Record<string, unknown> = {};
     for (const [key, spec] of Object.entries(meta.config as Record<string, { type?: string }>)) {
@@ -930,7 +934,7 @@ function WorkflowEditor({
             </SelectTrigger>
             <SelectContent>
               {nodeTypes
-                .filter((meta) => meta.type !== "start")
+                .filter((meta) => meta.type !== "start" || !graphHasStart)
                 .map((meta) => (
                   <SelectItem key={meta.type} value={meta.type}>
                     {meta.label}
@@ -1175,20 +1179,16 @@ function WorkflowEditor({
               });
             }}
             onApplyGraph={applyGraph}
-            onDelete={
-              selectedNode.type === "start"
-                ? undefined
-                : () => {
-                    applyGraph({
-                      ...graph,
-                      nodes: graph.nodes.filter((node) => node.id !== selectedNode.id),
-                      edges: graph.edges.filter(
-                        (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id,
-                      ),
-                    });
-                    setSelectedNodeId(null);
-                  }
-            }
+            onDelete={() => {
+              applyGraph({
+                ...graph,
+                nodes: graph.nodes.filter((node) => node.id !== selectedNode.id),
+                edges: graph.edges.filter(
+                  (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id,
+                ),
+              });
+              setSelectedNodeId(null);
+            }}
             onClose={() => setSelectedNodeId(null)}
           />
         )}

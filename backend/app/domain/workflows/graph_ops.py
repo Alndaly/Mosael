@@ -60,9 +60,9 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             node_type = str(op.get("type", ""))
             if node_type not in NODE_TYPES:
                 raise WorkflowDomainError(f"未知节点类型: {node_type or '(空)'}")
-            if node_type == "start":
+            if node_type == "start" and any(str(node.get("type")) == "start" for node in nodes):
                 raise WorkflowDomainError("已有开始节点,不能再添加 start 节点")
-            node_id = str(op.get("node_id") or "").strip() or gen_node_id(node_type)
+            node_id = str(op.get("node_id") or "").strip() or ("start" if node_type == "start" and "start" not in by_id else gen_node_id(node_type))
             if node_id in by_id:
                 raise WorkflowDomainError(f"节点 id 已存在: {node_id}")
             node = {
@@ -123,8 +123,6 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             node["name"] = str(op.get("name", ""))
         elif kind == "remove_node":
             node_id = str(op.get("node_id", ""))
-            if by_id.get(node_id, {}).get("type") == "start":
-                raise WorkflowDomainError("不能删除开始节点")
             nodes[:] = [n for n in nodes if str(n.get("id")) != node_id]
             edges[:] = [e for e in edges if str(e.get("source")) != node_id and str(e.get("target")) != node_id]
             by_id.pop(node_id, None)

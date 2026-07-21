@@ -136,6 +136,86 @@ def test_edit_workflow_rejects_bad_ops() -> None:
     assert "ghost" in bad.text or "不存在" in bad.text
 
 
+def test_edit_workflow_clear_can_delete_start_and_create_confirmation() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "WF"}).json()
+    add = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "edit_workflow",
+            "requested_by": "pi",
+            "payload": {
+                "workflow_id": workflow["id"],
+                "operations": [
+                    {"kind": "add_node", "type": "llm", "node_id": "llm_1", "config": {"prompt": "hi"}},
+                    {"kind": "connect", "source": "start", "target": "llm_1"},
+                ],
+            },
+        },
+    ).json()
+    client.post(f"/api/confirmations/{add['id']}/approve")
+
+    clear = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "edit_workflow",
+            "requested_by": "pi",
+            "payload": {
+                "workflow_id": workflow["id"],
+                "operations": [
+                    {"kind": "remove_node", "node_id": "start"},
+                    {"kind": "remove_node", "node_id": "llm_1"},
+                ],
+            },
+        },
+    )
+
+    assert clear.status_code == 200, clear.text
+    data = clear.json()
+    assert data["status"] == "pending"
+    assert data["payload"]["operations"] == [
+        {"kind": "remove_node", "node_id": "start"},
+        {"kind": "remove_node", "node_id": "llm_1"},
+    ]
+    assert "2 个工作流编辑" in data["summary"]
+
+    approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    after = client.get(f"/api/workflows/{workflow['id']}").json()
+    assert after["graph"]["nodes"] == []
+    assert after["graph"]["edges"] == []
+
+
+def test_edit_workflow_can_delete_only_start() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "WF"}).json()
+
+    res = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "edit_workflow",
+            "requested_by": "pi",
+            "payload": {
+                "workflow_id": workflow["id"],
+                "operations": [{"kind": "remove_node", "node_id": "start"}],
+            },
+        },
+    )
+
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["status"] == "pending"
+    approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    after = client.get(f"/api/workflows/{workflow['id']}").json()
+    assert after["graph"]["nodes"] == []
+
+
 def test_reject_leaves_timeline_untouched() -> None:
     client = fresh_client()
     ws, _, asset, sequence = setup_sequence(client)

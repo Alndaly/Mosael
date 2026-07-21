@@ -37,6 +37,8 @@ def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     assert "edit_workflow" in prompt
     assert "remove_node" in prompt
     assert "edit_timeline 只用于视频时间线" in prompt
+    assert "start/开始节点也可以删除" in prompt
+    assert "confirmation_id/status=pending" in prompt
 
 
 def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:

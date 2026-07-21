@@ -620,7 +620,9 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
     the whole graph. Ops apply in order, so add_node then connect in one call
     works. Check get_workflow first for exact node_id values and
     list_workflow_node_types for node types/config fields. Do NOT use for video
-    timeline clips/tracks/sequences — use edit_timeline.
+    timeline clips/tracks/sequences — use edit_timeline. remove_node may delete
+    the start node too; a workflow with no start node is saved as a draft but
+    cannot run until a start node is added again.
 
     operations is a list of:
       {"kind":"add_node","type":"llm","name":"改写","node_id":"llm_1","config":{"prompt":"..."}}
