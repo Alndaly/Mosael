@@ -436,14 +436,16 @@ function GenerateWorkspace({
                 <SelectTrigger className="generation-config-select">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="generation-model-menu">
                   {modelGroups.map((group) => (
                     <React.Fragment key={group.kind}>
                       <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
                       {group.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
-                          {model.model} · {model.provider}
+                        <SelectItem key={model.id} value={model.id} className="generation-model-option-item">
+                          <span className="generation-model-option">
+                            {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
+                            <span>{model.model} · {model.provider}</span>
+                          </span>
                         </SelectItem>
                       ))}
                     </React.Fragment>
