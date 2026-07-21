@@ -3855,6 +3855,11 @@ export interface components {
             kind: string;
             /** Prompt */
             prompt: string;
+            /**
+             * Negative Prompt
+             * @default
+             */
+            negative_prompt: string;
             /** Parameters */
             parameters?: Record<string, never>;
             /** Source Asset Ids */

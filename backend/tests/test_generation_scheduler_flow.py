@@ -30,6 +30,7 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
             "model": "qwen-image",
             "kind": "image",
             "prompt": "A clean professional video editor interface",
+            "negative_prompt": "blurry",
             "parameters": {"size": "1024x1024"},
         },
     )
@@ -40,6 +41,7 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
     assert payload["job"]["status"] == "queued"
     assert payload["generation"]["job_id"] == payload["job"]["id"]
     assert payload["generation"]["request"]["prompt"].startswith("A clean")
+    assert payload["generation"]["request"]["negative_prompt"] == "blurry"
     assert payload["generation"]["session_id"] is not None
 
 

@@ -29,6 +29,51 @@ type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
+const IMPLEMENTED_GENERATION_ADAPTERS = new Set(["mock:image", "mock:video", "alibaba:image", "bytedance:video"]);
+const IMAGE_SIZES = ["1024x576", "1024x1024", "576x1024", "768x768", "1280x720"];
+const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
+const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];
+
+type GenerationConfig = {
+  size: string;
+  numImages: string;
+  seed: string;
+  negativePrompt: string;
+  durationSeconds: string;
+  resolution: string;
+  aspectRatio: string;
+  firstFrameUrl: string;
+};
+
+function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
+  return {
+    size: model?.kind === "image" ? "1024x576" : "1024x1024",
+    numImages: "1",
+    seed: "",
+    negativePrompt: "",
+    durationSeconds: model?.provider === "google" ? "8" : "5",
+    resolution: "720p",
+    aspectRatio: "16:9",
+    firstFrameUrl: "",
+  };
+}
+
+function generationParameters(model: GenerationModel, config: GenerationConfig) {
+  if (model.kind === "image") {
+    return {
+      size: config.size,
+      num_images: Math.max(1, Math.min(4, Number(config.numImages) || 1)),
+      ...(config.seed.trim() ? { seed: Number(config.seed) } : {}),
+    };
+  }
+  return {
+    duration_seconds: Math.max(1, Math.min(10, Number(config.durationSeconds) || 5)),
+    resolution: config.resolution,
+    aspect_ratio: config.aspectRatio,
+    ...(config.firstFrameUrl.trim() ? { first_frame_url: config.firstFrameUrl.trim() } : {}),
+  };
+}
+
 export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
@@ -81,6 +126,7 @@ function GenerateWorkspace({
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
   const [modelId, setModelId] = React.useState<string | null>(null);
+  const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   const [renamingSession, setRenamingSession] = React.useState<GenerationSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -126,6 +172,12 @@ function GenerateWorkspace({
 
   const selectedModel =
     (models.data ?? []).find((model) => model.id === modelId) ?? (models.data ?? [])[0] ?? null;
+  const selectedAdapterAvailable = selectedModel
+    ? IMPLEMENTED_GENERATION_ADAPTERS.has(`${selectedModel.provider}:${selectedModel.kind}`)
+    : false;
+  React.useEffect(() => {
+    setGenerationConfig(defaultGenerationConfig(selectedModel));
+  }, [selectedModel?.id]);
   const modelGroups = React.useMemo(() => {
     const grouped = new Map<string, GenerationModel[]>();
     for (const model of models.data ?? []) {
@@ -144,6 +196,8 @@ function GenerateWorkspace({
     return defaults.isSuccess && providers.isSuccess && (!row?.provider_profile_id || !row.model || !profile?.enabled);
   };
   const selectedCapabilityMissing = selectedModel ? capabilityMissing(selectedModel.kind) : false;
+  const setConfigValue = (key: keyof GenerationConfig, value: string) =>
+    setGenerationConfig((current) => ({ ...current, [key]: value }));
 
   const createSession = useMutation({
     mutationFn: () =>
@@ -180,10 +234,8 @@ function GenerateWorkspace({
           model: selectedModel!.model,
           kind: selectedModel!.kind,
           prompt,
-          parameters:
-            selectedModel!.kind === "image"
-              ? { size: "1024x576" }
-              : { duration_seconds: 5, resolution: "720p", aspect_ratio: "16:9" },
+          negative_prompt: generationConfig.negativePrompt.trim(),
+          parameters: generationParameters(selectedModel!, generationConfig),
         }),
       });
       return targetSessionId;
@@ -249,7 +301,7 @@ function GenerateWorkspace({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!prompt.trim() || !selectedModel || createGeneration.isPending) return;
+    if (!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
     createGeneration.mutate();
   };
 
@@ -332,6 +384,118 @@ function GenerateWorkspace({
               section={`providers:${selectedModel.kind}`}
             />
           )}
+          {selectedModel && !selectedAdapterAvailable && (
+            <div className="generation-engine-warning">
+              <CircleAlert size={13} />
+              {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
+            </div>
+          )}
+          {selectedModel && (
+            <div className="generation-config">
+              <span className="generation-config-title">{t("generationEngineSettings")}</span>
+              {selectedModel.kind === "image" ? (
+                <>
+                  <label>
+                    {t("genSize")}
+                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {IMAGE_SIZES.map((size) => (
+                          <SelectItem key={size} value={size}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label>
+                    {t("genNumImages")}
+                    <input
+                      className="generation-config-input"
+                      type="number"
+                      min={1}
+                      max={4}
+                      value={generationConfig.numImages}
+                      onChange={(event) => setConfigValue("numImages", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {t("genSeed")}
+                    <input
+                      className="generation-config-input"
+                      type="number"
+                      placeholder="auto"
+                      value={generationConfig.seed}
+                      onChange={(event) => setConfigValue("seed", event.target.value)}
+                    />
+                  </label>
+                  <label className="generation-config-wide">
+                    {t("genNegativePrompt")}
+                    <input
+                      className="generation-config-input"
+                      value={generationConfig.negativePrompt}
+                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    {t("genDuration")}
+                    <input
+                      className="generation-config-input"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={generationConfig.durationSeconds}
+                      onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {t("genResolution")}
+                    <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VIDEO_RESOLUTIONS.map((resolution) => (
+                          <SelectItem key={resolution} value={resolution}>
+                            {resolution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label>
+                    {t("genAspectRatio")}
+                    <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ASPECT_RATIOS.map((ratio) => (
+                          <SelectItem key={ratio} value={ratio}>
+                            {ratio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="generation-config-wide">
+                    {t("genFirstFrameUrl")}
+                    <input
+                      className="generation-config-input"
+                      placeholder="https://..."
+                      value={generationConfig.firstFrameUrl}
+                      onChange={(event) => setConfigValue("firstFrameUrl", event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          )}
           <textarea
             rows={2}
             value={prompt}
@@ -377,7 +541,7 @@ function GenerateWorkspace({
               size="icon"
               className="chat-send"
               aria-label={t("generate")}
-              disabled={!prompt.trim() || !selectedModel || createGeneration.isPending}
+              disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending}
             >
               {createGeneration.isPending ? <Loader2 size={15} className="spin" /> : <Send size={15} />}
             </Button>

@@ -655,6 +655,7 @@ class GenerationCreate(BaseModel):
     model: str = Field(min_length=1, max_length=120)
     kind: str = Field(pattern="^(image|video)$")
     prompt: str = Field(min_length=1)
+    negative_prompt: str = Field(default="", max_length=4000)
     parameters: dict = Field(default_factory=dict)
     source_asset_ids: list[str] = Field(default_factory=list)
 

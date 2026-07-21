@@ -11858,6 +11858,12 @@
             "minLength": 1,
             "title": "Prompt"
           },
+          "negative_prompt": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Negative Prompt",
+            "default": ""
+          },
           "parameters": {
             "type": "object",
             "title": "Parameters"

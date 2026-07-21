@@ -23,6 +23,7 @@ def create_generation_job(
     model: str,
     kind: str,
     prompt: str,
+    negative_prompt: str,
     parameters: dict[str, Any],
     source_asset_ids: list[str],
 ) -> tuple[GenerationJob, Any]:
@@ -41,6 +42,7 @@ def create_generation_job(
     request = {
         "project_id": project_id,
         "prompt": prompt,
+        "negative_prompt": negative_prompt,
         "parameters": parameters,
         "source_asset_ids": source_asset_ids,
     }
