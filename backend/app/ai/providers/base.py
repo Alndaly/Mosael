@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 """
 Generation provider contract (plan §18.2). A provider turns a validated
 request into a downloaded media file; asset/artifact registration and job
@@ -77,3 +79,21 @@ def sanitize_provider_error(message: str, credential: str | None) -> str:
     text = re.sub(r"(Bearer\s+)[A-Za-z0-9._-]+", r"\1***", text)
     text = re.sub(r"(api[_-]?key[\"'=:\s]+)[A-Za-z0-9._-]+", r"\1***", text, flags=re.IGNORECASE)
     return text[:500]
+
+
+def provider_http_error(label: str, exc: httpx.HTTPError, credential: str | None) -> str:
+    """Surface provider HTTP failures with the response body when available.
+
+    httpx's default message links to MDN but omits the provider's JSON error, which is the
+    part users need to fix a model name, unsupported size, or missing capability.
+    """
+    message = f"{label}: {exc}"
+    response = getattr(exc, "response", None)
+    if response is not None:
+        try:
+            body = response.text.strip()
+        except Exception:  # noqa: BLE001 - best-effort diagnostics only
+            body = ""
+        if body:
+            message = f"{message}; body: {body[:800]}"
+    return sanitize_provider_error(message, credential)

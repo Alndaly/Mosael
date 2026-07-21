@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
 
 """
 Alibaba DashScope qwen-image adapter (async task API):
@@ -36,6 +36,17 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     return payload
 
 
+def resolve_dashscope_base(context: ProviderContext) -> str:
+    """Qwen image uses DashScope's native async task API, not Bailian compatible-mode.
+
+    A single Alibaba profile may still use an OpenAI-compatible base_url for chat models.
+    Treat image generation as a separate capability endpoint; it can be overridden explicitly
+    via extra.dashscope_base_url, otherwise it must use DashScope native.
+    """
+    configured = str(context.extra.get("dashscope_base_url") or context.extra.get("generation_base_url") or "").strip()
+    return (configured or DASHSCOPE_BASE).rstrip("/")
+
+
 def extract_result_url(task_payload: dict[str, Any]) -> str | None:
     output = task_payload.get("output") or {}
     status = output.get("task_status")
@@ -57,7 +68,7 @@ class QwenImageProvider(GenerationProvider):
     def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> Path:
         if not context.api_key:
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
-        base_url = (context.base_url or DASHSCOPE_BASE).rstrip("/")
+        base_url = resolve_dashscope_base(context)
         headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
         try:
             with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
@@ -86,4 +97,4 @@ class QwenImageProvider(GenerationProvider):
                 target.write_bytes(download.content)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"DashScope request failed: {exc}", context.api_key)) from exc
+            raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc

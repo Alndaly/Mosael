@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
 
 """
 ByteDance Seedance adapter via Volcano ARK content-generation tasks:
@@ -85,4 +85,4 @@ class SeedanceProvider(GenerationProvider):
                             out.write(chunk)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"ARK request failed: {exc}", context.api_key)) from exc
+            raise ProviderError(provider_http_error("ARK request failed", exc, context.api_key)) from exc

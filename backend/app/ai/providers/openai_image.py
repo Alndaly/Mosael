@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
 
 """
 OpenAI Images-compatible adapter:
@@ -74,4 +74,4 @@ class OpenAIImageProvider(GenerationProvider):
                 target.write_bytes(image_bytes)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"OpenAI image request failed: {exc}", context.api_key)) from exc
+            raise ProviderError(provider_http_error("OpenAI image request failed", exc, context.api_key)) from exc

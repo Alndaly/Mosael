@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+import httpx
+
+from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError, provider_http_error, sanitize_provider_error
 from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.openai_image import build_submit_payload as openai_payload, extract_image_bytes
-from app.ai.providers.qwen_image import build_submit_payload as qwen_payload, extract_result_url
+from app.ai.providers.qwen_image import DASHSCOPE_BASE, build_submit_payload as qwen_payload, extract_result_url, resolve_dashscope_base
 from app.ai.providers.seedance import build_submit_payload as seedance_payload, extract_video_url
 from app.ai.providers.veo import build_submit_payload as veo_payload, extract_video_uri
 
@@ -49,6 +51,24 @@ def test_qwen_payload_shape() -> None:
     assert payload["model"] == "qwen-image"
     assert payload["input"] == {"prompt": "p", "negative_prompt": "n"}
     assert payload["parameters"] == {"size": "1024*576", "n": 2, "seed": 7}
+
+
+def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_compatible_mode() -> None:
+    context = ProviderContext(
+        profile_id="p1",
+        vendor="alibaba",
+        api_key="sk-test",
+        base_url="https://llm-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    )
+    assert resolve_dashscope_base(context) == DASHSCOPE_BASE
+
+    custom = ProviderContext(
+        profile_id="p1",
+        vendor="alibaba",
+        api_key="sk-test",
+        extra={"dashscope_base_url": "https://dashscope.example.com/"},
+    )
+    assert resolve_dashscope_base(custom) == "https://dashscope.example.com"
 
 
 def test_qwen_poll_parsing() -> None:
@@ -144,3 +164,13 @@ def test_error_sanitization_strips_secrets() -> None:
     message = "401 for url?api_key=sk-abc123 Bearer sk-abc123 body"
     cleaned = sanitize_provider_error(message, "sk-abc123")
     assert "sk-abc123" not in cleaned
+
+
+def test_provider_http_error_includes_safe_response_body() -> None:
+    request = httpx.Request("POST", "https://example.test")
+    response = httpx.Response(400, request=request, text='{"error":"model sk-abc123 unsupported"}')
+    exc = httpx.HTTPStatusError("bad", request=request, response=response)
+    message = provider_http_error("Provider failed", exc, "sk-abc123")
+    assert "body:" in message
+    assert "unsupported" in message
+    assert "sk-abc123" not in message

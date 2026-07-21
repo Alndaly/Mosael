@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, sanitize_provider_error
+from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
 
 """
 Google Veo adapter via Gemini long-running prediction:
@@ -110,7 +110,7 @@ class VeoProvider(GenerationProvider):
                 target.write_bytes(download.content)
                 return target
         except httpx.HTTPError as exc:
-            raise ProviderError(sanitize_provider_error(f"Google Veo request failed: {exc}", context.api_key)) from exc
+            raise ProviderError(provider_http_error("Google Veo request failed", exc, context.api_key)) from exc
 
 
 def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> GenerationRequest:
@@ -136,4 +136,4 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
                 source_files=request.source_files,
             )
     except httpx.HTTPError as exc:
-        raise ProviderError(sanitize_provider_error(f"Failed to fetch Veo first frame: {exc}", api_key)) from exc
+        raise ProviderError(provider_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc
