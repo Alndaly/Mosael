@@ -21,7 +21,7 @@
 | `sequences/` | 剪辑内核:insert/move/trim/delete/split/cut-range 等操作,每次操作校验不变量并落 `sequence_operations` + `sequence_revisions`(撤销/重做的基础) |
 | `render.py` | 序列 → RenderPlan(纯函数)→ ffmpeg 执行导出 |
 | `transcripts/` | 逐字稿:ASR 导入、token 级编辑、投影到时间线(删句 = 剪源区间) |
-| `workflows/` | DAG 工作流:节点注册表 + 分支感知引擎 + 批量运行 |
+| `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 纯调度引擎 + 批量运行;新增节点 = 元数据 + 一个执行器文件,引擎不动 |
 | `publish/` | 发布:平台注册表、任务队列、worker 协议、本地适配器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流 |
 | `agent/` | 智能体会话:CLI 适配器 + 流式 + 记忆 |
@@ -36,11 +36,19 @@
 任何耗时操作都建一个 `job`(kind = render/transcribe/ai_generation/workflow/publish/batch/scheduled),
 前端任务中心只认 `jobs` + `task_events`,不关心是谁在干活。这让"取消任务"能有统一语义:
 `cancel_job()` 把 job 落终态,工作流引擎与批量运行器**在每个节点边界重读 job 状态**决定是否停下
-——中断是节点粒度的(执行中的单个节点无法安全掐断)。
+——中断是节点粒度的(执行中的单个节点无法安全掐断)。事件统一经 `emit_job_event()` 发,
+TaskEvent 行只在总线创建。
+
+每种 kind 有一个**执行模式**:`in_process`(默认,守护线程)或 `external`(外部 worker 经
+`/api/jobs/worker/*` 的 claim/report 协议认领,跨后端重启存活——发布器同款模式的推广,
+见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`MIBU_EXTERNAL_JOB_KINDS=render`
+即可把渲染交给独立 worker 机器,领域代码不改。
 
 ### 数据模型要点
 
-SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(18 个迁移)。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离。
+SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(20 个迁移)。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离。
+每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
+(见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
 
 - `sequences` / `tracks` / `clips` — 时间线;`sequence_operations` 记录每次编辑及其逆操作(撤销)
 - `jobs` / `task_events` — 任务总线
@@ -88,3 +96,9 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(18 个迁移)。所有实体挂 `workspace
 
 因为 `hasUsers` 探测与 `login` 都打向 `API_BASE`,**服务器入口必须在登录之前**——所以 `ServerPicker`
 同时挂在登录页和设置页(同一组件)。切换前探活 `/api/health`,探不通给"仍要连接"兜底。
+
+## 解耦形态与决策记录
+
+进程层是「微内核 + 卫星进程」:后端唯一事实源,重活出进程,接缝画在进程边界、协议显式化。
+**不做网络微服务**——理由与边界见 [ADR-0001](adr/0001-no-network-microservices.md);
+统一语言见根目录 [CONTEXT.md](../CONTEXT.md)。
