@@ -19,8 +19,8 @@ export type ToolCall = {
 };
 
 export type AgentTimelineItem =
-  | { type: "text"; text?: string }
-  | { type: "tool"; tool?: ToolCall; tool_id?: string };
+  | { type: "text"; text: string }
+  | { type: "tool"; tool: ToolCall };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
 function summarize(args: unknown): string | null {
@@ -206,20 +206,14 @@ export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
 
 export function agentTurnParts(
   timeline: AgentTimelineItem[] | undefined,
-  tools: ToolCall[] | undefined,
-  content: string,
 ): AgentTimelineItem[] {
-  if (!timeline?.length) {
-    return [...(tools ?? []).map((tool) => ({ type: "tool" as const, tool })), { type: "text", text: content }];
-  }
-  const toolById = new Map((tools ?? []).map((tool) => [tool.id, tool]));
+  if (!timeline?.length) return [];
   const parts: AgentTimelineItem[] = [];
   for (const item of timeline) {
     if (item.type === "text") {
-      parts.push({ type: "text", text: item.text ?? "" });
+      parts.push({ type: "text", text: item.text });
     } else {
-      const tool = item.tool ?? (item.tool_id ? toolById.get(item.tool_id) : undefined);
-      if (tool) parts.push({ type: "tool", tool });
+      parts.push({ type: "tool", tool: item.tool });
     }
   }
   return parts;
@@ -227,17 +221,13 @@ export function agentTurnParts(
 
 /** Assistant answer renderer: preserves text/tool event order when payload.timeline exists. */
 export function AgentTurnContent({
-  content,
-  tools,
   timeline,
 }: {
-  content: string;
-  tools?: ToolCall[];
   timeline?: AgentTimelineItem[];
 }) {
   return (
     <>
-      {agentTurnParts(timeline, tools, content).map((item, index) =>
+      {agentTurnParts(timeline).map((item, index) =>
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
         ) : item.type === "text" && item.text ? (

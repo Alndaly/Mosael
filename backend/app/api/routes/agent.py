@@ -163,7 +163,6 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
                         {
                             "text": state["text"],
                             "done": state["done"],
-                            "tools": state["tools"],
                             "timeline": state.get("timeline", []),
                         }
                     )

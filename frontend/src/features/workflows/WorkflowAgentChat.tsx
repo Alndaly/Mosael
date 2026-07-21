@@ -24,7 +24,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
+import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { ConfirmDialog } from "@/components/ui/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 
@@ -100,7 +100,6 @@ export function WorkflowAgentChat({
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState("");
   const [streamText, setStreamText] = React.useState("");
-  const [streamTools, setStreamTools] = React.useState<ToolCall[]>([]);
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
   const [attachments, setAttachments] = React.useState<{ name: string; content: string }[]>([]);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
@@ -209,7 +208,7 @@ export function WorkflowAgentChat({
     abortRef.current?.abort();
     streamingRef.current = null;
     setStreamText("");
-    setStreamTools([]);
+    setStreamTimeline([]);
     setSelectedId(nextId);
     window.localStorage.setItem(sessionKey, nextId);
   };
@@ -217,7 +216,7 @@ export function WorkflowAgentChat({
     abortRef.current?.abort();
     streamingRef.current = null;
     setStreamText("");
-    setStreamTools([]);
+    setStreamTimeline([]);
     setSelectedId(null);
     window.localStorage.removeItem(sessionKey);
   };
@@ -316,7 +315,6 @@ export function WorkflowAgentChat({
       abortRef.current = controller;
       streamingRef.current = targetSessionId;
       setStreamText("");
-      setStreamTools([]);
       setStreamTimeline([]);
       try {
         const token = getAuthToken();
@@ -340,12 +338,10 @@ export function WorkflowAgentChat({
             try {
               const payload = JSON.parse(line.slice(6)) as {
                 text: string;
-                tools?: ToolCall[];
                 timeline?: AgentTimelineItem[];
               };
               if (streamingRef.current === targetSessionId) {
                 setStreamText(payload.text);
-                setStreamTools(payload.tools ?? []);
                 setStreamTimeline(payload.timeline ?? []);
               }
             } catch {
@@ -358,7 +354,6 @@ export function WorkflowAgentChat({
         if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
           streamingRef.current = null;
           setStreamText("");
-          setStreamTools([]);
           setStreamTimeline([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
@@ -529,7 +524,7 @@ export function WorkflowAgentChat({
           </div>
         )}
         {(messages.data ?? []).map((message) => {
-          const payload = message.payload as { tools?: ToolCall[]; timeline?: AgentTimelineItem[] } | null;
+          const payload = message.payload as { timeline?: AgentTimelineItem[] } | null;
           if (queuedIds.has(message.id)) return null;
           return (
             <div key={message.id} className={`wf-agent-msg chat-bubble ${message.role}`}>
@@ -537,7 +532,7 @@ export function WorkflowAgentChat({
                 message.error ? (
                   <AgentErrorCard content={message.content} error={message.error} />
                 ) : (
-                  <AgentTurnContent content={message.content} tools={payload?.tools} timeline={payload?.timeline} />
+                  <AgentTurnContent timeline={payload?.timeline} />
                 )
               ) : (
                 <div className="chat-bubble-content">{message.content}</div>
@@ -547,12 +542,12 @@ export function WorkflowAgentChat({
         })}
         {running && streamText && (
           <div className="wf-agent-msg chat-bubble assistant streaming">
-            <AgentTurnContent content={streamText} tools={streamTools} timeline={streamTimeline} />
+            <AgentTurnContent timeline={streamTimeline} />
           </div>
         )}
         {running && !streamText && (
           <div className="wf-agent-msg chat-bubble assistant thinking">
-            <AgentTurnContent content="" tools={streamTools} timeline={streamTimeline} />
+            <AgentTurnContent timeline={streamTimeline} />
             <span className="wf-agent-thinking-row">
               <Loader2 size={12} className="spin" /> {t("chatThinking")}
             </span>

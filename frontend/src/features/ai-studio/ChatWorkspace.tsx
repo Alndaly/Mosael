@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
+import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -50,7 +50,6 @@ export function ChatWorkspace({
     },
   });
   const [streamText, setStreamText] = React.useState<string>("");
-  const [streamTools, setStreamTools] = React.useState<ToolCall[]>([]);
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -69,7 +68,6 @@ export function ChatWorkspace({
       abortRef.current = controller;
       streamingRef.current = targetSessionId;
       setStreamText("");
-      setStreamTools([]);
       setStreamTimeline([]);
       try {
         const token = getAuthToken();
@@ -94,12 +92,10 @@ export function ChatWorkspace({
               const payload = JSON.parse(line.slice(6)) as {
                 text: string;
                 done: boolean;
-                tools?: ToolCall[];
                 timeline?: AgentTimelineItem[];
               };
               if (streamingRef.current === targetSessionId) {
                 setStreamText(payload.text);
-                setStreamTools(payload.tools ?? []);
                 setStreamTimeline(payload.timeline ?? []);
               }
             } catch {
@@ -114,7 +110,6 @@ export function ChatWorkspace({
         if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
           streamingRef.current = null;
           setStreamText("");
-          setStreamTools([]);
           setStreamTimeline([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
@@ -382,7 +377,7 @@ export function ChatWorkspace({
                 ))}
               {running && streamText && (
                 <div className="chat-bubble assistant streaming">
-                  <AgentTurnContent content={streamText} tools={streamTools} timeline={streamTimeline} />
+                  <AgentTurnContent timeline={streamTimeline} />
                   <div className="chat-msg-meta live">
                     <Loader2 size={11} className="spin" />
                     <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
@@ -391,7 +386,7 @@ export function ChatWorkspace({
               )}
               {running && !streamText && (
                 <div className="chat-bubble assistant thinking">
-                  <AgentTurnContent content="" tools={streamTools} timeline={streamTimeline} />
+                  <AgentTurnContent timeline={streamTimeline} />
                   <span className="chat-thinking-row">
                     <Loader2 size={13} className="spin" /> {t("chatThinking")}
                     <span className="chat-msg-duration timecode">{elapsedSeconds}s</span>
@@ -555,7 +550,7 @@ export function ChatWorkspace({
 function ChatBubble({ message }: { message: AgentMessage }) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
-  const payload = message.payload as { duration_seconds?: number; tools?: ToolCall[]; timeline?: AgentTimelineItem[] } | null;
+  const payload = message.payload as { duration_seconds?: number; timeline?: AgentTimelineItem[] } | null;
   const duration = payload?.duration_seconds;
 
   const copy = () => {
@@ -571,7 +566,7 @@ function ChatBubble({ message }: { message: AgentMessage }) {
         message.error ? (
           <AgentErrorCard content={message.content} error={message.error} />
         ) : (
-          <AgentTurnContent content={message.content} tools={payload?.tools} timeline={payload?.timeline} />
+          <AgentTurnContent timeline={payload?.timeline} />
         )
       ) : (
         <div className="chat-bubble-content">{message.content}</div>
