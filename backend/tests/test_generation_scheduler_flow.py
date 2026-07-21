@@ -49,6 +49,20 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
     assert payload["generation"]["session_id"] is not None
 
 
+def test_generation_models_expose_provider_specific_parameters() -> None:
+    client = fresh_client()
+    models = client.get("/api/generation/models?kind=image").json()
+    by_id = {model["id"]: model for model in models}
+
+    openai_sizes = by_id["openai-compatible:gpt-image-2:image"]["capabilities"]["sizes"]
+    assert "1024x1024" in openai_sizes
+    assert "1024x576" not in openai_sizes
+
+    qwen_edit_caps = by_id["alibaba:qwen-image-edit:image"]["capabilities"]
+    assert qwen_edit_caps["parameter_keys"] == ["reference_image"]
+    assert qwen_edit_caps["max_num_images"] == 1
+
+
 def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()

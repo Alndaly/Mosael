@@ -45,9 +45,9 @@ type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
-const IMAGE_SIZES = ["1024x576", "1024x1024", "576x1024", "768x768", "1280x720"];
-const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
-const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];
+const FALLBACK_IMAGE_SIZES = ["1024x1024"];
+const FALLBACK_VIDEO_RESOLUTIONS = ["720p"];
+const FALLBACK_ASPECT_RATIOS = ["16:9"];
 const ENGINE_SEP = "::";
 
 type GenerationConfig = {
@@ -72,15 +72,76 @@ type GenerationEngineOption = GenerationModel & {
   label: string;
 };
 
+function capabilityList(model: GenerationModel | null, key: string, fallback: string[]): string[] {
+  const value = model?.capabilities?.[key];
+  if (!Array.isArray(value)) return fallback;
+  const items = value.map((item) => String(item).trim()).filter(Boolean);
+  return items.length > 0 ? items : fallback;
+}
+
+function capabilityNumberList(model: GenerationModel | null, key: string, fallback: number[]): number[] {
+  const value = model?.capabilities?.[key];
+  if (!Array.isArray(value)) return fallback;
+  const items = value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
+  return items.length > 0 ? items : fallback;
+}
+
+function capabilityString(model: GenerationModel | null, key: string, fallback: string): string {
+  const value = model?.capabilities?.[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function capabilityNumber(model: GenerationModel | null, key: string, fallback: number): number {
+  const value = Number(model?.capabilities?.[key]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function parameterKeys(model: GenerationModel | null): string[] {
+  return capabilityList(model, "parameter_keys", []);
+}
+
+function supportsParameter(model: GenerationModel | null, key: string) {
+  const keys = parameterKeys(model);
+  return keys.length === 0 || keys.includes(key);
+}
+
+function imageSizeOptions(model: GenerationModel | null): string[] {
+  if (!supportsParameter(model, "size")) return [];
+  return capabilityList(model, "sizes", FALLBACK_IMAGE_SIZES);
+}
+
+function videoResolutionOptions(model: GenerationModel | null): string[] {
+  if (!supportsParameter(model, "resolution")) return [];
+  return capabilityList(model, "resolutions", FALLBACK_VIDEO_RESOLUTIONS);
+}
+
+function aspectRatioOptions(model: GenerationModel | null): string[] {
+  if (!supportsParameter(model, "aspect_ratio")) return [];
+  return capabilityList(model, "aspect_ratios", FALLBACK_ASPECT_RATIOS);
+}
+
+function durationOptions(model: GenerationModel | null): number[] {
+  if (!supportsParameter(model, "duration_seconds")) return [];
+  return capabilityNumberList(model, "duration_seconds", [5]);
+}
+
+function maxImages(model: GenerationModel | null): number {
+  return capabilityNumber(model, "max_num_images", 4);
+}
+
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
+  const sizes = imageSizeOptions(model);
+  const durations = durationOptions(model);
+  const resolutions = videoResolutionOptions(model);
+  const ratios = aspectRatioOptions(model);
   return {
-    size: model?.kind === "image" ? "1024x576" : "1024x1024",
+    size: capabilityString(model, "default_size", sizes[0] ?? ""),
     numImages: "1",
     seed: "",
     negativePrompt: "",
-    durationSeconds: model?.provider === "google" ? "8" : "5",
-    resolution: "720p",
-    aspectRatio: "16:9",
+    durationSeconds: String(capabilityNumber(model, "default_duration_seconds", durations[0] ?? 5)),
+    resolution: capabilityString(model, "default_resolution", resolutions[0] ?? ""),
+    aspectRatio: capabilityString(model, "default_aspect_ratio", ratios[0] ?? ""),
     firstFrameUrl: "",
     firstFrameAssetId: "",
     firstFrameAssetName: "",
@@ -92,18 +153,20 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
 
 function generationParameters(model: GenerationModel, config: GenerationConfig) {
   if (model.kind === "image") {
-    return {
-      size: config.size,
-      num_images: Math.max(1, Math.min(4, Number(config.numImages) || 1)),
-      ...(config.seed.trim() ? { seed: Number(config.seed) } : {}),
-    };
+    const params: Record<string, string | number> = {};
+    if (supportsParameter(model, "size") && config.size) params.size = config.size;
+    if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
+    if (supportsParameter(model, "seed") && config.seed.trim()) params.seed = Number(config.seed);
+    return params;
   }
-  return {
-    duration_seconds: Math.max(1, Math.min(10, Number(config.durationSeconds) || 5)),
-    resolution: config.resolution,
-    aspect_ratio: config.aspectRatio,
-    ...(config.firstFrameUrl.trim() ? { first_frame_url: config.firstFrameUrl.trim() } : {}),
-  };
+  const params: Record<string, string | number> = {};
+  if (supportsParameter(model, "duration_seconds")) {
+    params.duration_seconds = Math.max(1, Math.min(capabilityNumber(model, "max_duration_seconds", 10), Number(config.durationSeconds) || 5));
+  }
+  if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
+  if (supportsParameter(model, "aspect_ratio") && config.aspectRatio) params.aspect_ratio = config.aspectRatio;
+  if (supportsParameter(model, "first_frame") && config.firstFrameUrl.trim()) params.first_frame_url = config.firstFrameUrl.trim();
+  return params;
 }
 
 function generationOptionValue(providerProfileId: string, kind: string, model: string) {
@@ -287,12 +350,19 @@ function GenerateWorkspace({
   const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
   const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
+  const selectedImageSizes = imageSizeOptions(selectedModel);
+  const selectedDurations = durationOptions(selectedModel);
+  const selectedResolutions = videoResolutionOptions(selectedModel);
+  const selectedAspectRatios = aspectRatioOptions(selectedModel);
+  const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
+  const supportsReferenceImage = selectedModel?.kind === "image" && supportsParameter(selectedModel, "reference_image");
+  const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
   React.useEffect(() => {
     setGenerationConfig(defaultGenerationConfig(selectedModel));
-  }, [selectedModel?.id]);
+  }, [selectedModel?.value]);
   const modelGroups = React.useMemo(() => {
     const grouped = new Map<string, GenerationEngineOption[]>();
     for (const model of modelOptions) {
@@ -431,12 +501,12 @@ function GenerateWorkspace({
           model: selectedModel!.model,
           kind: selectedModel!.kind,
           prompt,
-          negative_prompt: generationConfig.negativePrompt.trim(),
+          negative_prompt: supportsNegativePrompt ? generationConfig.negativePrompt.trim() : "",
           parameters: generationParameters(selectedModel!, generationConfig),
           source_asset_ids:
-            selectedModel!.kind === "video" && generationConfig.firstFrameAssetId
+            selectedModel!.kind === "video" && supportsFirstFrame && generationConfig.firstFrameAssetId
               ? [generationConfig.firstFrameAssetId]
-              : selectedModel!.kind === "image" && effectiveReferenceImageAssetId
+              : selectedModel!.kind === "image" && supportsReferenceImage && effectiveReferenceImageAssetId
                 ? [effectiveReferenceImageAssetId]
                 : [],
         }),
@@ -676,202 +746,237 @@ function GenerateWorkspace({
             </label>
             {selectedModel.kind === "image" ? (
               <>
-                <label className="generation-setting">
-                  <span>{t("genSize")}</span>
-                  <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                    <SelectTrigger className="generation-config-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {IMAGE_SIZES.map((size) => (
-                        <SelectItem key={size} value={size}>
-                          {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genNumImages")}</span>
-                  <input
-                    className="generation-config-input"
-                    type="number"
-                    min={1}
-                    max={4}
-                    value={generationConfig.numImages}
-                    onChange={(event) => setConfigValue("numImages", event.target.value)}
-                  />
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genSeed")}</span>
-                  <input
-                    className="generation-config-input"
-                    type="number"
-                    placeholder="auto"
-                    value={generationConfig.seed}
-                    onChange={(event) => setConfigValue("seed", event.target.value)}
-                  />
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genNegativePrompt")}</span>
-                  <input
-                    className="generation-config-input"
-                    value={generationConfig.negativePrompt}
-                    onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
-                  />
-                </label>
-                <div className="generation-setting">
-                  <span>{t("genReferenceImage")}</span>
-                  <input
-                    ref={referenceImageInputRef}
-                    className="sr-only"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) uploadReferenceImage.mutate(file);
-                    }}
-                  />
-                  <div className="generation-reference-actions">
+                {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
+                  <label className="generation-setting">
+                    <span>{t("genSize")}</span>
+                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedImageSizes.map((size) => (
+                          <SelectItem key={size} value={size}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
+                {supportsParameter(selectedModel, "num_images") && (
+                  <label className="generation-setting">
+                    <span>{t("genNumImages")}</span>
+                    <input
+                      className="generation-config-input"
+                      type="number"
+                      min={1}
+                      max={maxImages(selectedModel)}
+                      value={generationConfig.numImages}
+                      onChange={(event) => setConfigValue("numImages", event.target.value)}
+                    />
+                  </label>
+                )}
+                {supportsParameter(selectedModel, "seed") && (
+                  <label className="generation-setting">
+                    <span>{t("genSeed")}</span>
+                    <input
+                      className="generation-config-input"
+                      type="number"
+                      placeholder="auto"
+                      value={generationConfig.seed}
+                      onChange={(event) => setConfigValue("seed", event.target.value)}
+                    />
+                  </label>
+                )}
+                {supportsNegativePrompt && (
+                  <label className="generation-setting">
+                    <span>{t("genNegativePrompt")}</span>
+                    <input
+                      className="generation-config-input"
+                      value={generationConfig.negativePrompt}
+                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
+                    />
+                  </label>
+                )}
+                {supportsReferenceImage && (
+                  <div className="generation-setting">
+                    <span>{t("genReferenceImage")}</span>
+                    <input
+                      ref={referenceImageInputRef}
+                      className="sr-only"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) uploadReferenceImage.mutate(file);
+                      }}
+                    />
+                    <div className="generation-reference-actions">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="generation-first-frame-upload"
+                        onClick={() => referenceImageInputRef.current?.click()}
+                        disabled={uploadReferenceImage.isPending}
+                      >
+                        {uploadReferenceImage.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                        {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
+                      </Button>
+                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
+                        <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
+                          {t("genUsePreviousImage")}
+                        </Button>
+                      )}
+                    </div>
+                    {effectiveReferenceImageAssetId && (
+                      <div className="generation-first-frame-preview">
+                        <button
+                          type="button"
+                          className="generation-first-frame-thumb"
+                          onClick={() =>
+                            openImagePreview({
+                              src: assetFileUrl(effectiveReferenceImageAssetId),
+                              title: effectiveReferenceImageName || t("genReferenceImage"),
+                            })
+                          }
+                        >
+                          <img src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
+                        </button>
+                        <span title={effectiveReferenceImageName || t("genReferenceImage")}>
+                          {effectiveReferenceImageName || t("genReferenceImage")}
+                        </span>
+                        <Button type="button" variant="ghost" size="icon" onClick={clearReferenceImage} aria-label={t("delete")}>
+                          <X size={13} />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {supportsParameter(selectedModel, "duration_seconds") && (
+                  <label className="generation-setting">
+                    <span>{t("genDuration")}</span>
+                    {selectedDurations.length > 1 ? (
+                      <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
+                        <SelectTrigger className="generation-config-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedDurations.map((duration) => (
+                            <SelectItem key={duration} value={String(duration)}>
+                              {duration}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <input
+                        className="generation-config-input"
+                        type="number"
+                        min={1}
+                        max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
+                        value={generationConfig.durationSeconds}
+                        onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
+                      />
+                    )}
+                  </label>
+                )}
+                {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
+                  <label className="generation-setting">
+                    <span>{t("genResolution")}</span>
+                    <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedResolutions.map((resolution) => (
+                          <SelectItem key={resolution} value={resolution}>
+                            {resolution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
+                {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
+                  <label className="generation-setting">
+                    <span>{t("genAspectRatio")}</span>
+                    <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
+                      <SelectTrigger className="generation-config-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedAspectRatios.map((ratio) => (
+                          <SelectItem key={ratio} value={ratio}>
+                            {ratio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
+                {supportsFirstFrame && (
+                  <div className="generation-setting">
+                    <span>{t("genFirstFrame")}</span>
+                    <input
+                      ref={firstFrameInputRef}
+                      className="sr-only"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) uploadFirstFrame.mutate(file);
+                      }}
+                    />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="generation-first-frame-upload"
-                      onClick={() => referenceImageInputRef.current?.click()}
-                      disabled={uploadReferenceImage.isPending}
+                      onClick={() => firstFrameInputRef.current?.click()}
+                      disabled={uploadFirstFrame.isPending}
                     >
-                      {uploadReferenceImage.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
-                      {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
+                      {uploadFirstFrame.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                      {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
                     </Button>
-                    {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
-                      <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
-                        {t("genUsePreviousImage")}
-                      </Button>
+                    {generationConfig.firstFrameAssetId && (
+                      <div className="generation-first-frame-preview">
+                        <button
+                          type="button"
+                          className="generation-first-frame-thumb"
+                          onClick={() =>
+                            openImagePreview({
+                              src: assetFileUrl(generationConfig.firstFrameAssetId),
+                              title: generationConfig.firstFrameAssetName || t("genFirstFrame"),
+                            })
+                          }
+                        >
+                          <img src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
+                        </button>
+                        <span title={generationConfig.firstFrameAssetName}>{generationConfig.firstFrameAssetName}</span>
+                        <Button type="button" variant="ghost" size="icon" onClick={clearFirstFrameAsset} aria-label={t("delete")}>
+                          <X size={13} />
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  {effectiveReferenceImageAssetId && (
-                    <div className="generation-first-frame-preview">
-                      <button
-                        type="button"
-                        className="generation-first-frame-thumb"
-                        onClick={() =>
-                          openImagePreview({
-                            src: assetFileUrl(effectiveReferenceImageAssetId),
-                            title: effectiveReferenceImageName || t("genReferenceImage"),
-                          })
-                        }
-                      >
-                        <img src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
-                      </button>
-                      <span title={effectiveReferenceImageName || t("genReferenceImage")}>
-                        {effectiveReferenceImageName || t("genReferenceImage")}
-                      </span>
-                      <Button type="button" variant="ghost" size="icon" onClick={clearReferenceImage} aria-label={t("delete")}>
-                        <X size={13} />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <label className="generation-setting">
-                  <span>{t("genDuration")}</span>
-                  <input
-                    className="generation-config-input"
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={generationConfig.durationSeconds}
-                    onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
-                  />
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genResolution")}</span>
-                  <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                    <SelectTrigger className="generation-config-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VIDEO_RESOLUTIONS.map((resolution) => (
-                        <SelectItem key={resolution} value={resolution}>
-                          {resolution}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genAspectRatio")}</span>
-                  <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                    <SelectTrigger className="generation-config-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ASPECT_RATIOS.map((ratio) => (
-                        <SelectItem key={ratio} value={ratio}>
-                          {ratio}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genFirstFrame")}</span>
-                  <input
-                    ref={firstFrameInputRef}
-                    className="sr-only"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) uploadFirstFrame.mutate(file);
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="generation-first-frame-upload"
-                    onClick={() => firstFrameInputRef.current?.click()}
-                    disabled={uploadFirstFrame.isPending}
-                  >
-                    {uploadFirstFrame.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
-                    {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
-                  </Button>
-                  {generationConfig.firstFrameAssetId && (
-                    <div className="generation-first-frame-preview">
-                      <button
-                        type="button"
-                        className="generation-first-frame-thumb"
-                        onClick={() =>
-                          openImagePreview({
-                            src: assetFileUrl(generationConfig.firstFrameAssetId),
-                            title: generationConfig.firstFrameAssetName || t("genFirstFrame"),
-                          })
-                        }
-                      >
-                        <img src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
-                      </button>
-                      <span title={generationConfig.firstFrameAssetName}>{generationConfig.firstFrameAssetName}</span>
-                      <Button type="button" variant="ghost" size="icon" onClick={clearFirstFrameAsset} aria-label={t("delete")}>
-                        <X size={13} />
-                      </Button>
-                    </div>
-                  )}
-                </label>
-                <label className="generation-setting">
-                  <span>{t("genFirstFrameUrl")}</span>
-                  <Input
-                    className="generation-config-input"
-                    placeholder="https://..."
-                    value={generationConfig.firstFrameUrl}
-                    onChange={(event) => setFirstFrameUrl(event.target.value)}
-                  />
-                </label>
+                )}
+                {supportsFirstFrame && (
+                  <label className="generation-setting">
+                    <span>{t("genFirstFrameUrl")}</span>
+                    <Input
+                      className="generation-config-input"
+                      placeholder="https://..."
+                      value={generationConfig.firstFrameUrl}
+                      onChange={(event) => setFirstFrameUrl(event.target.value)}
+                    />
+                  </label>
+                )}
               </>
             )}
           </>
