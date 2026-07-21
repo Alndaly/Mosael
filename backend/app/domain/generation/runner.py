@@ -8,9 +8,10 @@ from pathlib import Path
 from app.ai.providers import GenerationRequest, ProviderContext, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
-from app.db.models import GeneratedAsset, GenerationJob, Job
+from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain.jobs import dispatch_job, emit_job_event
 from app.domain.assets.importer import register_file_asset
+from app.media.paths import resolve_key
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -59,14 +60,6 @@ def _run_generation(generation_id: str) -> None:
             default_model=profile.default_model if profile is not None else "",
             extra=dict(profile.extra or {}) if profile is not None else {},
         )
-        request = GenerationRequest(
-            kind=generation.kind,
-            model=generation.model,
-            prompt=str(generation.request.get("prompt", "")),
-            negative_prompt=str(generation.request.get("negative_prompt", "")),
-            parameters=dict(generation.request.get("parameters") or {}),
-        )
-
         job.status = "running"
         job.message = "Generating"
         emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
@@ -74,6 +67,14 @@ def _run_generation(generation_id: str) -> None:
 
         workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
         try:
+            request = GenerationRequest(
+                kind=generation.kind,
+                model=generation.model,
+                prompt=str(generation.request.get("prompt", "")),
+                negative_prompt=str(generation.request.get("negative_prompt", "")),
+                parameters=dict(generation.request.get("parameters") or {}),
+                source_files=_source_files_for_generation(db, generation),
+            )
             provider.validate_request(request)
             output = provider.generate(request, context, workdir)
             asset = register_file_asset(
@@ -115,6 +116,24 @@ def _fail(db, job: Job, message: str) -> None:
     job.error = message[:500]
     emit_job_event(db, job.id, "job.failed", {})
     db.commit()
+
+
+def _source_files_for_generation(db, generation: GenerationJob) -> tuple[Path, ...]:
+    source_asset_ids = generation.request.get("source_asset_ids") or []
+    paths: list[Path] = []
+    for asset_id in source_asset_ids:
+        asset = db.get(Asset, str(asset_id))
+        if asset is None or asset.workspace_id != generation.workspace_id:
+            raise ProviderError("首帧素材不存在或不属于当前工作区")
+        if asset.kind != "image":
+            raise ProviderError("首帧素材必须是图片")
+        if not asset.file_key:
+            raise ProviderError("首帧素材缺少本地文件")
+        path = resolve_key(asset.file_key)
+        if not path.is_file():
+            raise ProviderError("首帧素材文件不存在")
+        paths.append(path)
+    return tuple(paths)
 
 
 def _asset_name(prompt: str, model: str) -> str:

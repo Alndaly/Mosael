@@ -16,7 +16,7 @@ from app.ai.providers.seedance import (
     extract_video_url,
     resolve_seedance_base,
 )
-from app.ai.providers.veo import build_submit_payload as veo_payload, extract_video_uri
+from app.ai.providers.veo import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
 
 
 def make_request(kind: str, **params) -> GenerationRequest:
@@ -108,6 +108,22 @@ def test_seedance_payload_shape() -> None:
     assert payload["generate_audio"] is True
 
 
+def test_seedance_payload_accepts_uploaded_first_frame(tmp_path) -> None:
+    first_frame = tmp_path / "first.png"
+    first_frame.write_bytes(b"image-bytes")
+    request = GenerationRequest(
+        kind="video",
+        model="doubao-seedance-2-0-260128",
+        prompt="waves",
+        parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "16:9"},
+        source_files=(first_frame,),
+    )
+    payload = seedance_payload(request)
+    assert payload["content"][1]["image_url"]["url"] == "data:image/png;base64,aW1hZ2UtYnl0ZXM="
+    assert payload["content"][1]["role"] == "first_frame"
+    assert "ratio" not in payload
+
+
 def test_seedance_text_to_video_keeps_ratio_as_a_json_parameter() -> None:
     request = GenerationRequest(
         kind="video",
@@ -171,6 +187,22 @@ def test_veo_payload_and_parsing() -> None:
         extract_video_uri({"error": {"message": "blocked"}})
 
 
+def test_veo_payload_accepts_uploaded_first_frame(tmp_path) -> None:
+    first_frame = tmp_path / "first.jpg"
+    first_frame.write_bytes(b"image-bytes")
+    request = GenerationRequest(
+        kind="video",
+        model="veo",
+        prompt="p",
+        source_files=(first_frame,),
+    )
+    payload = veo_payload(_with_first_frame_inline(request, "sk-test"))
+    assert payload["instances"][0]["image"]["inlineData"] == {
+        "mimeType": "image/jpeg",
+        "data": "aW1hZ2UtYnl0ZXM=",
+    }
+
+
 def test_kling_payload_and_parsing() -> None:
     request = GenerationRequest(
         kind="video",
@@ -196,6 +228,20 @@ def test_kling_payload_and_parsing() -> None:
     )
     with pytest.raises(ProviderError):
         extract_kling_video_url({"code": 1100, "message": "bad request"})
+
+
+def test_kling_payload_accepts_uploaded_first_frame(tmp_path) -> None:
+    first_frame = tmp_path / "first.png"
+    first_frame.write_bytes(b"image-bytes")
+    request = GenerationRequest(
+        kind="video",
+        model="kling",
+        prompt="p",
+        parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "9:16"},
+        source_files=(first_frame,),
+    )
+    payload = kling_payload(request, ProviderContext(None, "kuaishou", "ak", default_model="kling-v3"))
+    assert payload["image"] == "data:image/png;base64,aW1hZ2UtYnl0ZXM="
 
 
 def test_error_sanitization_strips_secrets() -> None:

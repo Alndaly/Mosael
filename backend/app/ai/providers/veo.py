@@ -8,7 +8,14 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
+from app.ai.providers.base import (
+    GenerationProvider,
+    GenerationRequest,
+    ProviderContext,
+    ProviderError,
+    image_file_to_base64,
+    provider_http_error,
+)
 
 """
 Google Veo adapter via Gemini long-running prediction:
@@ -114,8 +121,24 @@ class VeoProvider(GenerationProvider):
 
 
 def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> GenerationRequest:
+    if request.parameters.get("first_frame_base64") or request.parameters.get("image_base64"):
+        return request
+    if request.source_files:
+        mime_type, data = image_file_to_base64(request.source_files[0])
+        parameters = dict(request.parameters)
+        parameters["first_frame_base64"] = data
+        parameters["first_frame_mime_type"] = mime_type
+        return GenerationRequest(
+            kind=request.kind,
+            model=request.model,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            parameters=parameters,
+            source_files=request.source_files,
+        )
+
     first_frame_url = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
-    if not first_frame_url or request.parameters.get("first_frame_base64") or request.parameters.get("image_base64"):
+    if not first_frame_url:
         return request
     try:
         with httpx.Client(timeout=30, follow_redirects=True) as client:

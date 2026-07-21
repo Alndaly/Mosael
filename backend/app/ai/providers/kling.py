@@ -10,7 +10,14 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
+from app.ai.providers.base import (
+    GenerationProvider,
+    GenerationRequest,
+    ProviderContext,
+    ProviderError,
+    image_file_to_data_url,
+    provider_http_error,
+)
 
 """
 Kling video adapter:
@@ -49,14 +56,23 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
         if request.parameters.get(key) not in (None, ""):
             payload[key] = request.parameters[key]
 
-    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
+    first_frame = first_frame_value(request)
     if first_frame:
         payload["image"] = str(first_frame)
     return payload
 
 
 def endpoint_for(request: GenerationRequest) -> str:
-    return "/v1/videos/image2video" if (request.parameters.get("first_frame_url") or request.parameters.get("image_url")) else "/v1/videos/text2video"
+    return "/v1/videos/image2video" if first_frame_value(request) else "/v1/videos/text2video"
+
+
+def first_frame_value(request: GenerationRequest) -> str | None:
+    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
+    if first_frame:
+        return str(first_frame)
+    if request.source_files:
+        return image_file_to_data_url(request.source_files[0])
+    return None
 
 
 def extract_video_url(task_payload: dict[str, Any]) -> str | None:

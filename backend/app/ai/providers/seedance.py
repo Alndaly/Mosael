@@ -6,7 +6,14 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, ProviderContext, ProviderError, provider_http_error
+from app.ai.providers.base import (
+    GenerationProvider,
+    GenerationRequest,
+    ProviderContext,
+    ProviderError,
+    image_file_to_data_url,
+    provider_http_error,
+)
 
 """
 ByteDance Seedance adapter.
@@ -50,6 +57,8 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     ratio = str(request.parameters.get("aspect_ratio", "16:9"))
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt.strip()}]
     first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
+    if not first_frame and request.source_files:
+        first_frame = image_file_to_data_url(request.source_files[0])
     if first_frame:
         image: dict[str, Any] = {"type": "image_url", "image_url": {"url": str(first_frame)}}
         if _is_seedance2(model):

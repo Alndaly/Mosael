@@ -1,11 +1,26 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, ImagePlus, Loader2, MessageSquarePlus, Pencil, Plus, Send, Sparkles, Trash2, Video } from "lucide-react";
+import {
+  CircleAlert,
+  ImagePlus,
+  Loader2,
+  MessageSquarePlus,
+  Pencil,
+  Plus,
+  Send,
+  Sparkles,
+  Trash2,
+  Upload,
+  Video,
+  X,
+} from "lucide-react";
 
 import {
   api,
   assetFileUrl,
   assetThumbnailUrl,
+  importAsset,
+  type Asset,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationModel,
@@ -15,6 +30,7 @@ import {
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -43,6 +59,8 @@ type GenerationConfig = {
   resolution: string;
   aspectRatio: string;
   firstFrameUrl: string;
+  firstFrameAssetId: string;
+  firstFrameAssetName: string;
 };
 
 type GenerationEngineOption = GenerationModel & {
@@ -61,6 +79,8 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     resolution: "720p",
     aspectRatio: "16:9",
     firstFrameUrl: "",
+    firstFrameAssetId: "",
+    firstFrameAssetName: "",
   };
 }
 
@@ -191,6 +211,7 @@ function GenerateWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const { openImagePreview } = useImagePreview();
   const sessionKey = generationSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
@@ -199,6 +220,7 @@ function GenerateWorkspace({
   const [renamingSession, setRenamingSession] = React.useState<GenerationSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
+  const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const sessions = useQuery({
     queryKey: ["generation-sessions", workspace.id],
@@ -277,6 +299,15 @@ function GenerateWorkspace({
   const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
+  const setFirstFrameUrl = (value: string) =>
+    setGenerationConfig((current) => ({
+      ...current,
+      firstFrameUrl: value,
+      firstFrameAssetId: value.trim() ? "" : current.firstFrameAssetId,
+      firstFrameAssetName: value.trim() ? "" : current.firstFrameAssetName,
+    }));
+  const clearFirstFrameAsset = () =>
+    setGenerationConfig((current) => ({ ...current, firstFrameAssetId: "", firstFrameAssetName: "" }));
   const selectEngine = (value: string) => {
     const option = optionByValue.get(value);
     if (!option) return;
@@ -301,6 +332,19 @@ function GenerateWorkspace({
       setSessionId(created.id);
       window.localStorage.setItem(sessionKey, created.id);
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+    },
+  });
+  const uploadFirstFrame = useMutation({
+    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file, name: file.name }),
+    onSuccess: (asset: Asset) => {
+      setGenerationConfig((current) => ({
+        ...current,
+        firstFrameUrl: "",
+        firstFrameAssetId: asset.id,
+        firstFrameAssetName: asset.name,
+      }));
+      void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
+      void qc.invalidateQueries({ queryKey: ["assets"] });
     },
   });
 
@@ -338,6 +382,10 @@ function GenerateWorkspace({
           prompt,
           negative_prompt: generationConfig.negativePrompt.trim(),
           parameters: generationParameters(selectedModel!, generationConfig),
+          source_asset_ids:
+            selectedModel!.kind === "video" && generationConfig.firstFrameAssetId
+              ? [generationConfig.firstFrameAssetId]
+              : [],
         }),
       });
       return targetSessionId;
@@ -666,12 +714,57 @@ function GenerateWorkspace({
                   </Select>
                 </label>
                 <label className="generation-setting">
-                  <span>{t("genFirstFrameUrl")}</span>
+                  <span>{t("genFirstFrame")}</span>
                   <input
+                    ref={firstFrameInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) uploadFirstFrame.mutate(file);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="generation-first-frame-upload"
+                    onClick={() => firstFrameInputRef.current?.click()}
+                    disabled={uploadFirstFrame.isPending}
+                  >
+                    {uploadFirstFrame.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                    {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
+                  </Button>
+                  {generationConfig.firstFrameAssetId && (
+                    <div className="generation-first-frame-preview">
+                      <button
+                        type="button"
+                        className="generation-first-frame-thumb"
+                        onClick={() =>
+                          openImagePreview({
+                            src: assetFileUrl(generationConfig.firstFrameAssetId),
+                            title: generationConfig.firstFrameAssetName || t("genFirstFrame"),
+                          })
+                        }
+                      >
+                        <img src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
+                      </button>
+                      <span title={generationConfig.firstFrameAssetName}>{generationConfig.firstFrameAssetName}</span>
+                      <Button type="button" variant="ghost" size="icon" onClick={clearFirstFrameAsset} aria-label={t("delete")}>
+                        <X size={13} />
+                      </Button>
+                    </div>
+                  )}
+                </label>
+                <label className="generation-setting">
+                  <span>{t("genFirstFrameUrl")}</span>
+                  <Input
                     className="generation-config-input"
                     placeholder="https://..."
                     value={generationConfig.firstFrameUrl}
-                    onChange={(event) => setConfigValue("firstFrameUrl", event.target.value)}
+                    onChange={(event) => setFirstFrameUrl(event.target.value)}
                   />
                 </label>
               </>

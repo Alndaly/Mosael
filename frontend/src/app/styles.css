@@ -5374,6 +5374,51 @@
   line-height: 1;
 }
 
+.generation-first-frame-upload {
+  width: 100%;
+  justify-content: center;
+}
+
+.generation-first-frame-preview {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--muted) 12%);
+}
+
+.generation-first-frame-preview > span {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-first-frame-thumb {
+  display: block;
+  width: 44px;
+  height: 34px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  cursor: zoom-in;
+}
+
+.generation-first-frame-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .generation-model-option svg {
   display: block;
   flex: none;

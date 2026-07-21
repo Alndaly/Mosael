@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -97,3 +99,15 @@ def provider_http_error(label: str, exc: httpx.HTTPError, credential: str | None
         if body:
             message = f"{message}; body: {body[:800]}"
     return sanitize_provider_error(message, credential)
+
+
+def image_file_to_base64(path: Path) -> tuple[str, str]:
+    """Return (mime_type, base64) for a local image source file."""
+    mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+    return mime_type, base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def image_file_to_data_url(path: Path) -> str:
+    """Return a data URL for providers that accept image URLs or base64-like image fields."""
+    mime_type, data = image_file_to_base64(path)
+    return f"data:{mime_type};base64,{data}"
