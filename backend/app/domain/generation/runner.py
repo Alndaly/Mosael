@@ -9,7 +9,7 @@ from app.ai.providers import GenerationRequest, ProviderError, get_provider
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, GenerationJob, Job
-from app.domain.jobs import emit_job_event
+from app.domain.jobs import dispatch_job, emit_job_event
 from app.domain.assets.importer import register_file_asset
 
 """
@@ -19,7 +19,16 @@ as assets + generated_assets rows (plan §18.4) — never as loose temp files.
 
 
 def start_generation_thread(generation_id: str) -> None:
-    threading.Thread(target=_run_generation, args=(generation_id,), daemon=True).start()
+    """按 ai_generation 的执行模式派发(名字保留:四个调用方不需要知道派发细节)。
+
+    调用方先 create_generation_job + commit 再调这里,所以能安全地重开会话取 job;
+    external 模式下 dispatch 只把 job 标成等待认领,不起线程。"""
+    with SessionLocal() as db:
+        generation = db.get(GenerationJob, generation_id)
+        job = db.get(Job, generation.job_id) if generation is not None and generation.job_id else None
+        if job is None:
+            return
+        dispatch_job(db, job, lambda: _run_generation(generation_id))
 
 
 def _run_generation(generation_id: str) -> None:

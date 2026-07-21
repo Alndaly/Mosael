@@ -192,3 +192,65 @@ class TestHttpChannel:
             "/api/jobs/worker/heartbeat", json={"worker": "w1", "kinds": ["demo"]}, headers=self._headers()
         ).json()
         assert beat["ok"] is True and "demo" in beat["external_kinds"]
+
+
+class TestDispatchWiring:
+    """transcribe / tts / ai_generation 翻成 external 后:任务只入队等认领,不起线程。"""
+
+    def _external(self, monkeypatch, *kinds: str) -> None:
+        monkeypatch.setattr(
+            jobs_bus, "_EXECUTION_MODES", {**jobs_bus._EXECUTION_MODES, **{k: "external" for k in kinds}}
+        )
+
+    def test_transcribe_respects_external_mode(self, monkeypatch) -> None:
+        from app.audio.service import start_transcription
+        from app.db.models import Asset
+
+        self._external(monkeypatch, "transcribe")
+        workspace_id = _workspace()
+        with SessionLocal() as db:
+            asset = Asset(workspace_id=workspace_id, name="a", kind="video", file_key="media/a.mp4")
+            db.add(asset)
+            db.commit()
+            job = start_transcription(db, asset.id)
+            db.refresh(job)
+            assert job.status == "queued" and job.message == "等待执行器认领"
+            assert claim_next_job(db, kinds=["transcribe"]).id == job.id
+
+    def test_tts_respects_external_mode(self, monkeypatch) -> None:
+        from app.audio.voices import start_synthesis
+
+        self._external(monkeypatch, "tts")
+        workspace_id = _workspace()
+        with SessionLocal() as db:
+            job = start_synthesis(db, text="你好", project_id=None, workspace_id=workspace_id, engine="f5")
+            db.refresh(job)
+            assert job.status == "queued"
+            assert claim_next_job(db, kinds=["tts"]).id == job.id
+
+    def test_generation_respects_external_mode(self, monkeypatch) -> None:
+        from app.domain.generation import create_generation_job, ensure_builtin_generation_models
+        from app.domain.generation.runner import start_generation_thread
+
+        self._external(monkeypatch, "ai_generation")
+        workspace_id = _workspace()
+        with SessionLocal() as db:
+            ensure_builtin_generation_models(db)  # fresh_client 重建库,内置模型目录需补种
+            generation, job = create_generation_job(
+                db,
+                workspace_id=workspace_id,
+                project_id=None,
+                provider="mock",
+                model="mock-image",
+                kind="image",
+                prompt="p",
+                parameters={},
+                source_asset_ids=[],
+            )
+            db.commit()
+            generation_id, job_id = generation.id, job.id
+        start_generation_thread(generation_id)
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            assert job.status == "queued" and job.message == "等待执行器认领"
+            assert claim_next_job(db, kinds=["ai_generation"]).id == job_id

@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.jobs import ASR_SLOTS, run_job_guarded
 from app.db.models import Asset, Job
-from app.domain.jobs import create_job, emit_job_event
+from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
 
@@ -167,9 +167,7 @@ def start_transcription(db: Session, asset_id: str) -> Job:
         payload={"asset_id": asset_id},
         message="转写排队中",
     )
-    db.commit()
-    thread = threading.Thread(target=_run_transcription, args=(job.id, asset_id), daemon=True)
-    thread.start()
+    dispatch_job(db, job, lambda: _run_transcription(job.id, asset_id))
     return job
 
 

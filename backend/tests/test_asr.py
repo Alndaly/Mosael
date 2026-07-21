@@ -52,13 +52,16 @@ def test_to_segment_ins_builds_tokens_and_skips_empty() -> None:
 def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
     started: list[str] = []
 
-    def fake_thread(target=None, args=(), daemon=None):
+    # 线程由任务总线派发(dispatch_job),不再是 service 自己 spawn:
+    # 把总线的线程换成同步执行,再记录 worker 收到的 asset_id。
+    def fake_thread(target=None, daemon=None):
         class T:
             def start(self_inner) -> None:
-                started.append(args[1])
+                target()
         return T()
 
-    monkeypatch.setattr("app.audio.service.threading.Thread", fake_thread)
+    monkeypatch.setattr("app.domain.jobs.threading.Thread", fake_thread)
+    monkeypatch.setattr("app.audio.service._run_transcription", lambda job_id, asset_id: started.append(asset_id))
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset = client.post(

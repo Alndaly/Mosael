@@ -21,7 +21,7 @@ from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded
 from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import create_job, emit_job_event
+from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 
 REFERENCE_MAX_SECONDS = 15
@@ -195,13 +195,12 @@ def start_synthesis(
         },
         message=f"合成《{label}》配音中",
     )
-    db.commit()
-    thread = threading.Thread(
-        target=_run_synthesis,
-        args=(job.id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource),
-        daemon=True,
+    job_id = job.id
+    dispatch_job(
+        db,
+        job,
+        lambda: _run_synthesis(job_id, voice_id, text, project_id, engine, engine_voice, speed, workspace_id, engine_voice_resource),
     )
-    thread.start()
     return job
 
 
@@ -423,18 +422,17 @@ def start_podcast(
         },
         message="生成播客中",
     )
-    db.commit()
-    thread = threading.Thread(
-        target=lambda: run_job_guarded(
-            job.id,
-            lambda: _run_podcast_body(
-                job.id, workspace_id, project_id, text, topic, actions[mode], speakers or [], speed
-            ),
+    job_id = job.id
+    action = actions[mode]
+    dispatch_job(
+        db,
+        job,
+        lambda: run_job_guarded(
+            job_id,
+            lambda: _run_podcast_body(job_id, workspace_id, project_id, text, topic, action, speakers or [], speed),
             what="播客",
         ),
-        daemon=True,
     )
-    thread.start()
     return job
 
 
