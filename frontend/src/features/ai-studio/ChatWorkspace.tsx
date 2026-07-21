@@ -14,6 +14,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
+import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 
@@ -30,7 +31,8 @@ export function ChatWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const sessionKey = agentSessionSelectionKey(workspace.id);
+  const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [draft, setDraft] = React.useState("");
   const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
@@ -198,6 +200,7 @@ export function ChatWorkspace({
       }),
     onSuccess: (created) => {
       setSessionId(created.id);
+      window.localStorage.setItem(sessionKey, created.id);
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
     },
   });
@@ -212,6 +215,7 @@ export function ChatWorkspace({
         });
         targetId = created.id;
         setSessionId(created.id);
+        window.localStorage.setItem(sessionKey, created.id);
       }
       const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
@@ -240,7 +244,10 @@ export function ChatWorkspace({
     mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
     onSuccess: (_data, id) => {
       setDeletingSession(null);
-      if (sessionId === id) setSessionId(null);
+      if (sessionId === id) {
+        setSessionId(null);
+        window.localStorage.removeItem(sessionKey);
+      }
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
     },
   });
@@ -319,7 +326,10 @@ export function ChatWorkspace({
                 <button
                   type="button"
                   className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
-                  onClick={() => setSessionId(item.id)}
+                  onClick={() => {
+                    setSessionId(item.id);
+                    window.localStorage.setItem(sessionKey, item.id);
+                  }}
                 >
                   <strong>{item.title}</strong>
                 </button>

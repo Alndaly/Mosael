@@ -3202,6 +3202,8 @@ export interface components {
         AgentMessageCreate: {
             /** Content */
             content: string;
+            /** Context */
+            context?: string | null;
         };
         /** AgentMessageOut */
         AgentMessageOut: {

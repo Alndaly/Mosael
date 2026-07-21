@@ -78,6 +78,38 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     assert calls["token"]  # service token minted for MCP access
 
 
+def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypatch) -> None:
+    calls: dict = {}
+
+    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, adapter_session_id, on_delta=None, **_):
+        calls["prompt"] = prompt
+        return TurnResult(text=f"echo: {prompt}")
+
+    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    res = client.post(
+        f"/api/agent/sessions/{session['id']}/messages",
+        json={"content": "删掉这个节点", "context": "当前工作流 workflow_id=w1"},
+    )
+    assert res.status_code == 200
+    assert res.json()["content"] == "删掉这个节点"
+
+    deadline = time.time() + 10
+    messages = []
+    while time.time() < deadline:
+        messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+        if len(messages) >= 2:
+            break
+        time.sleep(0.1)
+    assert messages[0]["content"] == "删掉这个节点"
+    assert "workflow_id=w1" not in messages[0]["content"]
+    assert calls["prompt"] == "当前工作流 workflow_id=w1\n\n用户消息:\n删掉这个节点"
+    assert messages[1]["content"] == f"echo: {calls['prompt']}"
+
+
 def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     def failing_run_turn(*args, **kwargs):
         raise adapters.AdapterError("boom --api-key sk-secret")

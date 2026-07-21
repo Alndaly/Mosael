@@ -1138,7 +1138,12 @@ function WorkflowEditor({
           </ReactFlow>
         </div>
         {agentOpen && (
-          <WorkflowAgentChat workflowId={workflow.id} workflowName={workflow.name} onClose={() => setAgentOpen(false)} />
+          <WorkflowAgentChat
+            workflowId={workflow.id}
+            workflowName={workflow.name}
+            workspaceId={workflow.workspace_id}
+            onClose={() => setAgentOpen(false)}
+          />
         )}
         {showHistory && <WorkflowRunHistory workflowId={workflow.id} onClose={() => setShowHistory(false)} />}
         {editingLoopId &&

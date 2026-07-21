@@ -5,7 +5,7 @@ import { Streamdown } from "streamdown";
 import { decodeByteFallback } from "../../lib/byteFallback";
 import { toast } from "sonner";
 
-import { API_BASE, api, createWorkflowAgentSession, getAuthToken, listWorkflowAgentSessions, workflowAgentSession } from "@/api/client";
+import { API_BASE, api, getAuthToken } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, ToolCalls, type ToolCall } from "@/components/agent/ToolCalls";
 import { ConfirmDialog } from "@/components/ui/modals";
-import {
-  mergeWorkflowAgentSessions,
-  nextWorkflowAgentSessionAfterDelete,
-  resolveWorkflowAgentSession,
-} from "@/features/workflows/sessionState";
+import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -67,18 +63,19 @@ const RESIZE_EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
 type ResizeEdge = (typeof RESIZE_EDGES)[number];
 
 /**
- * 工作流常驻智能体面板:每个工作流绑定一个 agent 会话(external_key),
- * 记忆随会话长期保留(adapter --resume)。智能体通过 MCP 的
- * get_workflow / update_workflow 读改图 —— 改动走确认卡,批准后
- * 画布自动刷新。
+ * 工作流常驻智能体面板:它不是第二套 AI,而是全局 AI 助手的工作流入口。
+ * 会话池/消息/队列/确认卡都走同一套 agent session;入口只给每条消息附加
+ * 当前 workflow_id/name 的隐藏上下文。
  */
 export function WorkflowAgentChat({
   workflowId,
   workflowName,
+  workspaceId,
   onClose,
 }: {
   workflowId: string;
   workflowName: string;
+  workspaceId: string;
   onClose: () => void;
 }) {
   const t = useI18n();
@@ -169,26 +166,20 @@ export function WorkflowAgentChat({
     window.addEventListener("pointerup", onUp);
   };
 
-  // 多会话:默认会话 get-or-create 兜底;列表含手动新建的;选中项按工作流记忆。
-  const SESSION_KEY = `mibu.wf.agent.session.${workflowId}`;
-  const defaultSession = useQuery({
-    queryKey: ["workflow-agent-session", workflowId],
-    queryFn: () => workflowAgentSession(workflowId),
-    staleTime: Infinity,
-  });
+  // 多会话:工作流入口复用全局 AI 会话池,只共享选中的 session id。
+  const sessionKey = agentSessionSelectionKey(workspaceId);
   const sessions = useQuery({
-    queryKey: ["workflow-agent-sessions", workflowId],
-    enabled: Boolean(defaultSession.data),
-    queryFn: () => listWorkflowAgentSessions(workflowId),
+    queryKey: ["agent-sessions", workspaceId],
+    queryFn: () => api<AgentSession[]>(`/api/agent/sessions?workspace_id=${workspaceId}`),
     // 首条消息会把「新对话」自动改题,轮询让下拉里的标题跟上
     refetchInterval: 4000,
   });
   const [selectedId, setSelectedId] = React.useState<string | null>(
-    () => window.localStorage.getItem(SESSION_KEY) || null,
+    () => window.localStorage.getItem(sessionKey) || null,
   );
   const [sessionMenuOpen, setSessionMenuOpen] = React.useState(false);
-  const sessionList = mergeWorkflowAgentSessions(defaultSession.data ?? null, sessions.data ?? []);
-  const activeSession = resolveWorkflowAgentSession(selectedId, defaultSession.data ?? null, sessionList);
+  const sessionList = sessions.data ?? [];
+  const activeSession = sessionList.find((item) => item.id === selectedId) ?? sessionList[0] ?? null;
   const sessionId = activeSession?.id ?? null;
   const switchSession = (nextId: string) => {
     if (nextId === selectedId) return;
@@ -198,7 +189,7 @@ export function WorkflowAgentChat({
     setStreamText("");
     setStreamTools([]);
     setSelectedId(nextId);
-    window.localStorage.setItem(SESSION_KEY, nextId);
+    window.localStorage.setItem(sessionKey, nextId);
   };
   const clearSessionSelection = () => {
     abortRef.current?.abort();
@@ -206,24 +197,23 @@ export function WorkflowAgentChat({
     setStreamText("");
     setStreamTools([]);
     setSelectedId(null);
-    window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(sessionKey);
   };
-  React.useEffect(() => {
-    if (!sessionId || selectedId === sessionId) return;
-    setSelectedId(sessionId);
-    window.localStorage.setItem(SESSION_KEY, sessionId);
-  }, [sessionId, selectedId, SESSION_KEY]);
   const newSession = useMutation({
-    mutationFn: () => createWorkflowAgentSession(workflowId),
+    mutationFn: () =>
+      api<AgentSession>("/api/agent/sessions", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: workspaceId }),
+      }),
     onSuccess: (created) => {
       // 先播种缓存再切换:等 invalidate 重拉的间隙里 selectedId 在列表里找不到,
       // 会瞬间回落到默认会话——看起来就像「点了没反应」。
-      qc.setQueryData<AgentSession[]>(["workflow-agent-sessions", workflowId], (old) => [
+      qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => [
         created,
         ...(old ?? []).filter((item) => item.id !== created.id),
       ]);
       switchSession(created.id);
-      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
+      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
     },
   });
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
@@ -231,14 +221,10 @@ export function WorkflowAgentChat({
     mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
     onSuccess: (_data, deletedId) => {
       setDeletingSession(null);
-      const fallback = nextWorkflowAgentSessionAfterDelete(deletedId, defaultSession.data ?? null, sessionList);
-      qc.setQueryData<AgentSession[]>(["workflow-agent-sessions", workflowId], (old) =>
+      const fallback = sessionList.find((item) => item.id !== deletedId) ?? null;
+      qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) =>
         (old ?? []).filter((item) => item.id !== deletedId),
       );
-      if (defaultSession.data?.id === deletedId) {
-        qc.setQueryData(["workflow-agent-session", workflowId], undefined);
-        void qc.invalidateQueries({ queryKey: ["workflow-agent-session", workflowId] });
-      }
       if (deletedId === sessionId) {
         if (fallback) switchSession(fallback.id);
         else clearSessionSelection();
@@ -246,7 +232,7 @@ export function WorkflowAgentChat({
       qc.removeQueries({ queryKey: ["agent-messages", deletedId] });
       qc.removeQueries({ queryKey: ["agent-session", deletedId] });
       qc.removeQueries({ queryKey: ["agent-queue", deletedId] });
-      void qc.invalidateQueries({ queryKey: ["workflow-agent-sessions", workflowId] });
+      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
     },
   });
 
@@ -373,29 +359,43 @@ export function WorkflowAgentChat({
     mutationFn: async ({ text, files }: { text: string; files: { name: string; content: string }[] }) => {
       // Attached files are inlined as fenced context so the text-only agent can read them.
       const fileBlock = files.map((f) => `[${t("wfAgentAttached")} ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n");
-      const body = fileBlock ? (text ? `${fileBlock}\n\n${text}` : fileBlock) : text;
-      // 首条消息带上工作流上下文,智能体后续靠会话记忆 + MCP 工具工作。
-      const isFirst = (messages.data ?? []).length === 0;
-      const finalContent = isFirst
-        ? `${t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName)}\n\n${body}`
-        : body;
-      return api<AgentMessage>(`/api/agent/sessions/${sessionId}/messages`, {
+      const visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
+      const context = [
+        t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName),
+        fileBlock,
+      ].filter(Boolean).join("\n\n");
+      let targetId = sessionId;
+      if (!targetId) {
+        const created = await api<AgentSession>("/api/agent/sessions", {
+          method: "POST",
+          body: JSON.stringify({ workspace_id: workspaceId }),
+        });
+        qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => [
+          created,
+          ...(old ?? []).filter((item) => item.id !== created.id),
+        ]);
+        switchSession(created.id);
+        targetId = created.id;
+      }
+      const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content: finalContent }),
+        body: JSON.stringify({ content: visibleContent, context }),
       });
+      return { message, targetId };
     },
-    onSuccess: () => {
+    onSuccess: ({ targetId }) => {
       setDraft("");
       setAttachments([]);
-      void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
-      if (sessionId) void attachStream(sessionId);
+      void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
+      void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
+      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
+      void attachStream(targetId);
     },
   });
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draft.trim() && attachments.length === 0) || !sessionId || send.isPending) return;
+    if ((!draft.trim() && attachments.length === 0) || send.isPending) return;
     send.mutate({ text: draft.trim(), files: attachments });
   };
 
@@ -519,9 +519,7 @@ export function WorkflowAgentChat({
             </span>
           </div>
         )}
-        {activeSession && (
-          <InlineConfirmations workspaceId={activeSession.workspace_id} allowKey={activeSession.id} />
-        )}
+        {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}
       </div>
       {(queue.data ?? []).map((message) => (
         <div className="chat-pending" key={message.id}>
@@ -612,7 +610,7 @@ export function WorkflowAgentChat({
               size="icon-sm"
               className="wf-agent-send"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attachments.length === 0) || send.isPending || !sessionId}
+              disabled={(!draft.trim() && attachments.length === 0) || send.isPending}
               onClick={submit}
             >
               <Send size={14} />

@@ -171,8 +171,18 @@ class HostError(RuntimeError):
     pass
 
 
-def post_user_message(db: Session, session: AgentSession, content: str, user: User) -> AgentMessage:
+def _prompt_with_context(content: str, context: str | None) -> str:
+    context = (context or "").strip()
+    if not context:
+        return content
+    return f"{context}\n\n用户消息:\n{content}"
+
+
+def post_user_message(
+    db: Session, session: AgentSession, content: str, user: User, *, context: str | None = None
+) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
+    prompt = _prompt_with_context(content, context)
     if session.status == "running":
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
@@ -187,7 +197,11 @@ def post_user_message(db: Session, session: AgentSession, content: str, user: Us
             session_id=session.id,
             role="user",
             content=content,
-            payload={"queued": True, "queued_by": user.id},
+            payload={
+                "queued": True,
+                "queued_by": user.id,
+                **({"context": context.strip()} if context and context.strip() else {}),
+            },
         )
         db.add(message)
         db.commit()
@@ -201,7 +215,7 @@ def post_user_message(db: Session, session: AgentSession, content: str, user: Us
     db.commit()
 
     token = _mint_service_token(db, user)
-    threading.Thread(target=_run_turn_thread, args=(session.id, content, token), daemon=True).start()
+    threading.Thread(target=_run_turn_thread, args=(session.id, prompt, token), daemon=True).start()
     db.refresh(message)
     return message
 
@@ -384,7 +398,7 @@ def _drain_queue_locked(session_id: str) -> None:
         session.status = "running"
         db.commit()
         token = _mint_service_token(db, owner)
-        content = message.content
+        content = _prompt_with_context(message.content, (message.payload or {}).get("context"))
     threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True).start()
 
 
@@ -441,7 +455,7 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
     message = db.get(AgentMessage, message_id)
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
         raise HostError("找不到这条排队消息")
-    if not steer_turn(session.id, message.content):
+    if not steer_turn(session.id, _prompt_with_context(message.content, (message.payload or {}).get("context"))):
         return False
     _unqueue(db, message)
     db.commit()

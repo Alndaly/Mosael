@@ -72,7 +72,7 @@ def post_agent_message(
     session = _require_session(db, user, session_id)
     ensure_workspace_perm(db, user, session.workspace_id, "ai")
     try:
-        return host.post_user_message(db, session, body.content, user)
+        return host.post_user_message(db, session, body.content, user, context=body.context)
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

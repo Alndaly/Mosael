@@ -80,6 +80,28 @@ def test_a_queued_message_runs_as_its_own_turn_when_the_first_ends(monkeypatch) 
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
 
 
+def test_a_queued_message_keeps_hidden_context(monkeypatch) -> None:
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        host,
+        "run_turn",
+        lambda *a, **kw: (prompts.append(kw["prompt"]), time.sleep(0.2), TurnResult(text="ok"))[-1],
+    )
+
+    client = fresh_client()
+    sid = _session(client)
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
+    client.post(
+        f"/api/agent/sessions/{sid}/messages",
+        json={"content": "two", "context": "当前工作流 workflow_id=w1"},
+    )
+
+    queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
+    assert [m["content"] for m in queued] == ["two"]
+    assert _wait_idle(sid) == "idle"
+    assert prompts == ["one", "当前工作流 workflow_id=w1\n\n用户消息:\ntwo"], prompts
+
+
 def test_steering_is_opt_in_per_message(monkeypatch) -> None:
     steers: list[str] = []
     monkeypatch.setattr(host, "run_turn", _slow_turn)
@@ -88,13 +110,16 @@ def test_steering_is_opt_in_per_message(monkeypatch) -> None:
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "one"})
-    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "改成竖屏"})
+    client.post(
+        f"/api/agent/sessions/{sid}/messages",
+        json={"content": "改成竖屏", "context": "当前工作流 workflow_id=w1"},
+    )
     queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
 
     res = client.post(f"/api/agent/sessions/{sid}/queue/{queued[0]['id']}/steer")
 
     assert res.status_code == 200 and res.json() == {"steered": True}
-    assert steers == ["改成竖屏"]
+    assert steers == ["当前工作流 workflow_id=w1\n\n用户消息:\n改成竖屏"]
     # It left the queue: steering it and then running it again would answer it twice.
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
     assert _wait_idle(sid) == "idle"
