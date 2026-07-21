@@ -1,6 +1,7 @@
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { PhotoSlider } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
 
@@ -27,34 +28,43 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   return (
     <ImagePreviewContext.Provider value={value}>
       {children}
-      <DialogPrimitive.Root open={image !== null} onOpenChange={(open) => !open && close()}>
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="image-preview-overlay" />
-          <DialogPrimitive.Content className="image-preview-dialog" aria-describedby={undefined}>
-            {image && (
-              <>
-                <DialogPrimitive.Title className="image-preview-title">{image.title ?? t("imagePreviewTitle")}</DialogPrimitive.Title>
-                <div
-                  className="image-preview-stage"
-                  onPointerDown={(event) => {
-                    if (event.target === event.currentTarget) close();
-                  }}
-                >
-                  <img src={image.src} alt={image.title ?? ""} onPointerDown={(event) => event.stopPropagation()} />
-                </div>
-                <div className="image-preview-actions">
-                  <a href={image.src} target="_blank" rel="noreferrer noopener" className="image-preview-action">
-                    <ExternalLink size={14} /> {t("openOriginal")}
-                  </a>
-                  <DialogPrimitive.Close className="image-preview-close" aria-label={t("close")}>
-                    <X size={18} />
-                  </DialogPrimitive.Close>
-                </div>
-              </>
-            )}
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
+      <PhotoSlider
+        images={
+          image
+            ? [
+                {
+                  key: image.src,
+                  src: image.src,
+                  overlay: image.title ?? t("imagePreviewTitle"),
+                },
+              ]
+            : []
+        }
+        visible={image !== null}
+        onClose={close}
+        className="mibu-photo-preview"
+        maskClassName="mibu-photo-preview-mask"
+        photoClassName="mibu-photo-preview-photo"
+        maskOpacity={0.88}
+        toolbarRender={({ images, index }) => {
+          const src = images[index]?.src;
+          if (!src) return null;
+          return (
+            <a
+              href={src}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="mibu-photo-preview-open"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink size={14} /> {t("openOriginal")}
+            </a>
+          );
+        }}
+        overlayRender={({ overlay }) =>
+          overlay ? <div className="mibu-photo-preview-caption">{overlay}</div> : null
+        }
+      />
     </ImagePreviewContext.Provider>
   );
 }
