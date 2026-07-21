@@ -35,6 +35,7 @@ type SectionId =
   | "provider-image"
   | "provider-video"
   | "provider-embedding"
+  | "provider-audio"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -48,6 +49,7 @@ const SECTION_IDS: SectionId[] = [
   "provider-image",
   "provider-video",
   "provider-embedding",
+  "provider-audio",
   "transcribe",
   "voice",
   "feishu",
@@ -82,6 +84,10 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               ? "provider-image"
               : focus === "video"
                 ? "provider-video"
+                : focus === "embedding"
+                  ? "provider-embedding"
+                  : focus === "tts" || focus === "podcast" || focus === "audio"
+                    ? "provider-audio"
                 : "provider-chat";
         setSection(next);
         setFocusProviderCapability(focus || null);
@@ -104,6 +110,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "provider-image", label: t("providerImageTitle"), icon: <ImageIcon size={14} /> },
     { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
     { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
+    { id: "provider-audio", label: t("providerAudioTitle"), icon: <AudioLines size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -171,6 +178,20 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                 capability="embedding"
                 title={t("providerEmbeddingTitle")}
                 description={t("providerEmbeddingDesc")}
+              />
+            </>
+          )}
+          {section === "provider-audio" && (
+            <>
+              <ProviderProfilesSection
+                capability="tts"
+                title={t("providerTtsTitle")}
+                description={t("providerTtsDesc")}
+              />
+              <ProviderProfilesSection
+                capability="podcast"
+                title={t("providerPodcastTitle")}
+                description={t("providerPodcastDesc")}
               />
             </>
           )}
