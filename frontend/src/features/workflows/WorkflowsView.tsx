@@ -57,7 +57,7 @@ import {
   Trash2,
   X,
   Type,
-  Upload,
+  Import,
   Wand2,
   Workflow as WorkflowIcon,
   Wrench,
@@ -422,7 +422,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 <Plus size={15} /> {t("wfCreate")}
               </Button>
               <Button variant="outline" disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <Upload size={15} /> {t("wfImport")}
+                <Import size={15} /> {t("wfImport")}
               </Button>
               <input
                 ref={importInputRef}
@@ -450,7 +450,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             <h2>{t("navWorkflows")}</h2>
             <span className="inline-flex items-center gap-1">
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <Upload size={14} />}
+                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <Import size={14} />}
               </Button>
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
                 <Plus size={14} />
@@ -494,6 +494,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={() => menuExport.mutate(workflow)}>
                     <Download /> {t("wfExport")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => importInputRef.current?.click()}>
+                    <Import /> {t("wfImport")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
