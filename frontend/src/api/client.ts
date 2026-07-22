@@ -84,6 +84,19 @@ export function setMemberPerms(workspaceId: string, userId: string, perms: Recor
 export function removeMember(workspaceId: string, userId: string): Promise<void> {
   return api<void>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
 }
+/** 第三方登录:start 拿授权 URL(系统浏览器打开)+ pending_id,随后轮询取票。 */
+export function oauthProviders(): Promise<{ providers: string[] }> {
+  return api<{ providers: string[] }>("/api/auth/oauth/providers");
+}
+export function oauthStart(provider: string): Promise<{ pending_id: string; url: string }> {
+  return api<{ pending_id: string; url: string }>(`/api/auth/oauth/${provider}/start`, { method: "POST" });
+}
+export function oauthPending(
+  pendingId: string,
+): Promise<{ status: string; token?: string; user?: User; error?: string }> {
+  return api(`/api/auth/oauth/pending/${pendingId}`);
+}
+
 export function createWorkspace(name: string): Promise<Workspace> {
   return api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name }) });
 }

@@ -47,6 +47,19 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class OAuthIdentity(Base):
+    """第三方登录身份(google/apple)→ 本地账号的映射;同一账号可挂多个身份。
+    subject 是提供方 id_token 里的稳定用户标识(sub),email 只作展示留痕。"""
+
+    __tablename__ = "oauth_identities"
+
+    provider: Mapped[str] = mapped_column(String(20), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(255), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class WorkspaceMember(Base):
     __tablename__ = "workspace_members"
 

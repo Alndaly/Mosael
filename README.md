@@ -127,6 +127,21 @@ skills/           文件型智能体技能(skills/<id>/SKILL.md)
 - [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) — 插件清单格式与权限
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) — 已完成能力清单与前端规约
 
+## 第三方登录(可选)
+
+Google / Apple 登录按钮只在配置了对应凭据时出现(`backend/.env`):
+
+```
+MIBU_GOOGLE_CLIENT_ID=...        # Google Cloud「Web 应用」客户端
+MIBU_GOOGLE_CLIENT_SECRET=...    # 重定向 URI 登记 http://127.0.0.1:8800/api/auth/oauth/google/callback
+MIBU_APPLE_CLIENT_ID=...         # Apple Services ID;Apple 要求 HTTPS 回调,适用于团队部署
+MIBU_APPLE_CLIENT_SECRET=...     # 按 Apple 规范用团队密钥签好的 JWT
+MIBU_OAUTH_REDIRECT_BASE=...     # 团队部署时覆盖回调基址(默认 http://127.0.0.1:8800)
+```
+
+流程是桌面友好的授权码流:系统浏览器完成授权 → 回调打到本机后端 → App 轮询自动落座;
+首次登录按邮箱局部名创建本地账号(与密码账号同权,无本地口令)。
+
 ## 团队 / 远程服务器
 
 默认连本机后端。要连团队服务器:**登录页底部「后端服务器 · 切换」**——必须在登录前选,因为登录请求本身要打到目标服务器。

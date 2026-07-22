@@ -16,6 +16,7 @@ from app.api.routes.voices import router as voices_router
 from app.api.routes.translate import router as translate_router
 from app.api.routes.websearch import router as websearch_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.oauth import router as oauth_router
 from app.api.routes.confirmations import router as confirmations_router
 from app.api.routes.feishu import router as feishu_router
 from app.api.routes.generation import router as generation_router
@@ -131,6 +132,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
+    # OAuth 登录必须免鉴权:它本身就是登录入口(回调来自系统浏览器,不带会话)。
+    app.include_router(oauth_router, prefix="/api")
     # Webhook 触发按任务密钥鉴权,不挂登录依赖。
     app.include_router(hooks_router, prefix="/api")
     # 桌面发布器 worker:本机进程,不走用户会话,改用启动时下发的共享密钥(见 worker_key.py)。

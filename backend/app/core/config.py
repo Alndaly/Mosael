@@ -13,6 +13,15 @@ class Settings(BaseSettings):
     backend_port: int = 8800
     scheduler_enabled: bool = True
     feishu_autostart: bool = True
+    # 第三方登录(留空 = 对应按钮不出现)。Google 用「Web 应用」型客户端并把
+    # http://127.0.0.1:8800/api/auth/oauth/google/callback 登记为重定向 URI;
+    # Apple 要求 HTTPS 回调,适用于有公网域名的团队部署,client_secret 填按
+    # Apple 规范签好的 JWT。
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    apple_client_id: str = ""
+    apple_client_secret: str = ""
+    oauth_redirect_base: str = ""  # 团队部署时覆盖回调基址(默认 http://<host>:<port>)
 
     # 逗号分隔的 job kind 列表,把这些 kind 的执行模式翻成 external:任务只入队,
     # 由外部 worker 经 /api/jobs/worker/* 认领执行(如 MIBU_EXTERNAL_JOB_KINDS=render

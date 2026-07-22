@@ -4,6 +4,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { useQuery } from "@tanstack/react-query";
+
+import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -181,6 +184,8 @@ export function LoginView() {
           >
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
+
+          <OAuthButtons />
         </div>
         <LegalDialog doc={legalDoc} onClose={() => setLegalDoc(null)} />
 
@@ -189,6 +194,79 @@ export function LoginView() {
           <ServerPicker />
         </div>
       </main>
+    </div>
+  );
+}
+
+/** 第三方登录(Google / Apple):后端只报已配置的提供方,一个没配就整块不渲染。
+ *  流程:start 拿授权 URL(系统浏览器打开)+ pending_id → 每 2s 轮询取票 →
+ *  adoptAuth 落座。file://(Electron)与 5173 开发页都无需注册自己为回调目标。 */
+function OAuthButtons() {
+  const t = useI18n();
+  const { adoptAuth } = useAuth();
+  const [pendingId, setPendingId] = React.useState<string | null>(null);
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const providers = useQuery({ queryKey: ["oauth-providers"], queryFn: oauthProviders, staleTime: 60_000 });
+
+  React.useEffect(() => {
+    if (!pendingId) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const state = await oauthPending(pendingId);
+        if (state.status === "done" && state.token && state.user) {
+          setPendingId(null);
+          adoptAuth({ token: state.token, user: state.user });
+        } else if (state.status === "error" || state.status === "expired") {
+          setPendingId(null);
+          setFailure(state.error || t("authOauthFailed"));
+        }
+      } catch {
+        /* 后端瞬断:下一轮再试 */
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [pendingId, adoptAuth, t]);
+
+  const begin = async (provider: string) => {
+    setFailure(null);
+    try {
+      const { pending_id, url } = await oauthStart(provider);
+      window.open(url, "_blank", "noopener");
+      setPendingId(pending_id);
+    } catch (err) {
+      setFailure(String((err as Error).message));
+    }
+  };
+
+  const list = providers.data?.providers ?? [];
+  if (list.length === 0) return null;
+
+  return (
+    <div className="grid gap-2.5">
+      <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']">
+        {t("authOr")}
+      </div>
+      {list.includes("google") && (
+        <Button variant="outline" className="w-full" disabled={pendingId !== null} onClick={() => begin("google")}>
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.4Z"/><path fill="currentColor" opacity=".7" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="currentColor" opacity=".5" d="M6.4 14a6 6 0 0 1 0-3.9V7.5H3.1a10 10 0 0 0 0 9.1L6.4 14Z"/><path fill="currentColor" opacity=".85" d="M12 6c1.5 0 2.8.5 3.8 1.5L18.7 4.7A10 10 0 0 0 3.1 7.5L6.4 10c.8-2.3 3-4 5.6-4Z"/></svg>
+          {t("authContinueGoogle")}
+        </Button>
+      )}
+      {list.includes("apple") && (
+        <Button variant="outline" className="w-full" disabled={pendingId !== null} onClick={() => begin("apple")}>
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden><path fill="currentColor" d="M16.7 12.9c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.9-.8-3.1-.8-1.6 0-3 .9-3.9 2.4-1.6 2.9-.4 7.1 1.2 9.4.8 1.1 1.7 2.4 3 2.4 1.2 0 1.6-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.7-3.9ZM14.4 5.6c.6-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.5-.6.7-1.2 1.9-1 3 1 .1 2.1-.6 2.8-1.5Z"/></svg>
+          {t("authContinueApple")}
+        </Button>
+      )}
+      {pendingId && (
+        <p className="m-0 flex items-center justify-between gap-2 text-[11.5px] leading-normal text-muted-foreground">
+          {t("authOauthWaiting")}
+          <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline underline-offset-2" onClick={() => setPendingId(null)}>
+            {t("authOauthCancel")}
+          </button>
+        </p>
+      )}
+      {failure && <p className="m-0 text-[11.5px] text-destructive">{failure}</p>}
     </div>
   );
 }

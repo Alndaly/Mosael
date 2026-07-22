@@ -18,6 +18,8 @@ type AuthState = {
   hasUsers: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName?: string) => Promise<void>;
+  /** 第三方登录轮询取到票后直接落座(token+user 已由后端铸好)。 */
+  adoptAuth: (auth: { token: string; user: User }) => void;
   updateProfile: (profile: { username: string; display_name: string; signature: string }) => Promise<User>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -103,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       );
     },
+    adoptAuth: (auth) => applyAuth(auth as AuthOut),
     updateProfile,
     changePassword,
     logout: async () => {
