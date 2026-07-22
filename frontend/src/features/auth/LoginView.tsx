@@ -8,8 +8,7 @@ import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import type { MessageKey } from "@/app/messages";
@@ -76,18 +75,21 @@ export function LoginView() {
   });
 
   return (
-    <div className="grid min-h-screen place-items-center text-muted-foreground">
-      <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
-        <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center">
-          <div className="grid justify-items-center gap-2 [&_h1]:m-0 [&_h1]:text-[19px] [&_h1]:font-[640] [&_h1]:leading-[1.1] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:max-w-[30ch] [&_p]:text-[13px] [&_p]:leading-normal [&_p]:text-muted-foreground">
-            <div className="mb-0.5 grid h-[46px] w-[46px] place-items-center rounded-xl bg-primary text-primary-foreground">
-              <Film size={22} />
+    <div className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <LoginHero />
+
+      <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
+        <div className="grid w-[min(340px,100%)] content-center gap-6">
+          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-[22px] [&_h1]:font-[640] [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-[13px] [&_p]:leading-normal [&_p]:text-muted-foreground">
+            <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground">
+              <Film size={21} />
             </div>
-            <h1>Mibu</h1>
+            <h1>{mode === "login" ? t("loginWelcomeBack") : t("loginCreateTitle")}</h1>
             <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
           </div>
+
           <Form {...form}>
-            <form className="grid w-full gap-2" onSubmit={onSubmit} noValidate>
+            <form className="grid gap-3" onSubmit={onSubmit} noValidate>
               {form.formState.errors.root && (
                 <Alert variant="destructive">
                   <CircleAlert size={14} />
@@ -99,8 +101,9 @@ export function LoginView() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
+                    <FormLabel>{t("username")}</FormLabel>
                     <FormControl>
-                      <Input autoFocus placeholder={t("username")} autoComplete="username" {...field} />
+                      <Input autoFocus autoComplete="username" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -112,8 +115,9 @@ export function LoginView() {
                   name="displayName"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel>{t("displayName")}</FormLabel>
                       <FormControl>
-                        <Input placeholder={t("displayName")} autoComplete="name" {...field} />
+                        <Input autoComplete="name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -125,10 +129,10 @@ export function LoginView() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
+                    <FormLabel>{t("password")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder={t("password")}
                         autoComplete={mode === "login" ? "current-password" : "new-password"}
                         {...field}
                       />
@@ -143,33 +147,62 @@ export function LoginView() {
                   name="confirm"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel>{t("confirmPassword")}</FormLabel>
                       <FormControl>
-                        <Input
-                          type="password"
-                          placeholder={t("confirmPassword")}
-                          autoComplete="new-password"
-                          {...field}
-                        />
+                        <Input type="password" autoComplete="new-password" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               )}
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" className="mt-1.5" disabled={form.formState.isSubmitting}>
                 {mode === "login" ? t("signIn") : t("createAccount")}
               </Button>
             </form>
           </Form>
-          <button type="button" className="-mt-1.5 cursor-pointer border-0 bg-transparent p-0.5 text-[12.5px] text-muted-foreground hover:text-accent-foreground hover:underline" onClick={switchMode}>
+
+          <button
+            type="button"
+            className="-mt-2 cursor-pointer justify-self-start border-0 bg-transparent p-0.5 text-[12.5px] text-muted-foreground hover:text-accent-foreground hover:underline"
+            onClick={switchMode}
+          >
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
-          {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
-          <div className="mt-0.5 flex w-full justify-center border-t border-border pt-4">
-            <ServerPicker />
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
+        <div className="flex w-[min(340px,100%)] justify-start border-t border-border pt-4">
+          <ServerPicker />
+        </div>
+      </main>
     </div>
+  );
+}
+
+/** 左侧英雄面板:公共目录的 /login-hero.jpg 作满幅背景(加载失败时退回品牌渐变),
+ * 底部叠加品牌语。窄屏(<lg)整块隐藏,退回单列表单。 */
+function LoginHero() {
+  const t = useI18n();
+  const [imageOk, setImageOk] = React.useState(true);
+  return (
+    <aside className="relative hidden overflow-hidden lg:block">
+      {/* 渐变兜底始终垫底;图片在其上,onError 即撤下。 */}
+      <div className="absolute inset-0 bg-[linear-gradient(160deg,color-mix(in_srgb,var(--primary)_58%,var(--background))_0%,color-mix(in_srgb,var(--primary)_24%,var(--background))_46%,var(--background)_100%)]" />
+      {imageOk && (
+        <img
+          src="/login-hero.jpg"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setImageOk(false)}
+        />
+      )}
+      {/* 底部压暗渐变保证文字可读(图片场景);纯渐变兜底时同样成立。 */}
+      <div className="absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(to_top,rgba(10,8,16,0.62)_0%,rgba(10,8,16,0.32)_55%,transparent_100%)]" />
+      <div className="absolute inset-x-0 bottom-0 grid gap-1.5 p-10 [&_p]:m-0 [&_p]:max-w-[42ch] [&_p]:text-[13.5px] [&_p]:leading-relaxed [&_p]:text-white/85 [&_strong]:text-[21px] [&_strong]:font-[640] [&_strong]:leading-tight [&_strong]:tracking-[-0.015em] [&_strong]:text-white">
+        <strong>{t("loginHeroTitle")}</strong>
+        <p>{t("loginHeroBody")}</p>
+      </div>
+    </aside>
   );
 }
