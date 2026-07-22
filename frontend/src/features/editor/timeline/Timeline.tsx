@@ -179,16 +179,35 @@ export function Timeline({
 
   // Insert-mode ripple preview: downstream clips on the target track part only by
   // the actual overlap (mirrors the backend), so a nudge doesn't shove everything.
+  // 落点插进某个片段身体里时,后端会把它切开(头段留在原地、尾段并入右移)——预览
+  // 必须同步演出来,否则拖动时看着是覆盖、松手才弹开。split 口径与 _ripple_make_room
+  // 一致:切点贴边 0.05s 内不切,只按重叠量右移。
   const insertRipple = React.useMemo(() => {
     if (editMode !== "insert" || !dragDraft || dragDraft.kind !== "move") return null;
     const start = dragDraft.timeline_start;
     const end = start + dragMoveDuration;
-    const downstream = (tracks.find((t) => t.id === dragDraft.trackId)?.clips ?? []).filter(
-      (c) => c.id !== dragDraft.clipId && c.timeline_start >= start - 1e-9,
+    const others = (tracks.find((t) => t.id === dragDraft.trackId)?.clips ?? []).filter(
+      (c) => c.id !== dragDraft.clipId,
     );
-    if (!downstream.length) return null;
-    const shift = end - Math.min(...downstream.map((c) => c.timeline_start));
-    return shift > 1e-9 ? { trackId: dragDraft.trackId, from: start, shift } : null;
+    const MIN_CUT_REMAINDER = 0.05; // 与后端同值(src 秒)
+    let split: { clipId: string; cutSrc: number; tailDuration: number } | null = null;
+    const straddler = others.find((c) => {
+      const span = (c.src_out - c.src_in) / (c.speed || 1);
+      return c.timeline_start < start - 1e-9 && c.timeline_start + span > start + 1e-9;
+    });
+    if (straddler) {
+      const speed = straddler.speed || 1;
+      const cutSrc = straddler.src_in + (start - straddler.timeline_start) * speed;
+      if (straddler.src_in + MIN_CUT_REMAINDER < cutSrc && cutSrc < straddler.src_out - MIN_CUT_REMAINDER) {
+        split = { clipId: straddler.id, cutSrc, tailDuration: (straddler.src_out - cutSrc) / speed };
+      }
+    }
+    // 切出的尾段落在落点上,和既有下游片段一起按同一重叠量右移(间距保留)。
+    const downstreamStarts = others.filter((c) => c.timeline_start >= start - 1e-9).map((c) => c.timeline_start);
+    if (split) downstreamStarts.push(start);
+    if (!downstreamStarts.length) return null;
+    const shift = end - Math.min(...downstreamStarts);
+    return shift > 1e-9 ? { trackId: dragDraft.trackId, from: start, shift, split } : null;
   }, [editMode, dragDraft, dragMoveDuration, tracks]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
@@ -883,14 +902,21 @@ export function Timeline({
                   const isMoveDraft = Boolean(draft && draft.kind === "move");
                   const baseLeft = isMoveDraft ? clip.timeline_start : display.timeline_start;
                   const shiftTime = isMoveDraft ? display.timeline_start - clip.timeline_start : partingShift;
+                  // 插入预览要切开的跨落点片段:头段就地收尾到落点(尾段由 lane 末尾的
+                  // 幽灵段表达)。宽度走同一 200ms 过渡,松手落库后宽度恰好等于预览值。
+                  const splitPreview =
+                    insertRipple?.split && insertRipple.trackId === track.id && insertRipple.split.clipId === clip.id
+                      ? insertRipple.split
+                      : null;
+                  const displaySrcOut = splitPreview ? splitPreview.cutSrc : display.src_out;
                   const waveform =
                     (track.kind === "audio" || track.kind === "video") && clip.asset_id
                       ? waveformByAsset.get(clip.asset_id)
                       : undefined;
-                  const clipWidth = Math.max(10, timeToPx((display.src_out - display.src_in) / (clip.speed || 1), pxPerSecond));
+                  const clipWidth = Math.max(10, timeToPx((displaySrcOut - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks =
                     waveform && clip.asset_id
-                      ? cachedPeaks(peaksCache.current, clip.asset_id, waveform, display.src_in, display.src_out, clipWidth)
+                      ? cachedPeaks(peaksCache.current, clip.asset_id, waveform, display.src_in, displaySrcOut, clipWidth)
                       : undefined;
                   return (
                     <TimelineClip
@@ -921,6 +947,41 @@ export function Timeline({
                     />
                   );
                 })}
+                {/* 插入预览切出的尾段幽灵:落在切点上、随下游一起右移。松手落库后
+                    真尾段出现在同一视觉位置、幽灵同帧卸载,肉眼看不出交接。 */}
+                {insertRipple?.split &&
+                  insertRipple.trackId === track.id &&
+                  (() => {
+                    const src = (track.clips ?? []).find((c) => c.id === insertRipple.split?.clipId);
+                    if (!src) return null;
+                    const { cutSrc, tailDuration } = insertRipple.split;
+                    const width = Math.max(10, timeToPx(tailDuration, pxPerSecond));
+                    const waveform =
+                      (track.kind === "audio" || track.kind === "video") && src.asset_id
+                        ? waveformByAsset.get(src.asset_id)
+                        : undefined;
+                    const peaks =
+                      waveform && src.asset_id
+                        ? cachedPeaks(peaksCache.current, src.asset_id, waveform, cutSrc, src.src_out, width)
+                        : undefined;
+                    return (
+                      <TimelineClip
+                        key={`split-tail-${src.id}`}
+                        trackKind={track.kind}
+                        name={src.text_override ?? (src.asset_id ? assetById.get(src.asset_id)?.name ?? "" : "")}
+                        left={timeToPx(insertRipple.from, pxPerSecond)}
+                        shiftPx={timeToPx(insertRipple.shift, pxPerSecond)}
+                        width={width}
+                        animate={animateClips}
+                        selected={false}
+                        dragging={false}
+                        peaks={peaks}
+                        onPointerDown={() => undefined}
+                        onTrimPointerDown={() => undefined}
+                        onSelect={() => undefined}
+                      />
+                    );
+                  })()}
               </DroppableLane>
             ))}
             {dragDraft &&
