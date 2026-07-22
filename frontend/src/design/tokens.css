@@ -114,13 +114,13 @@
 
   /* Editor surfaces */
   --monitor-bg: #1b1922;
-  --timeline-bg: #f3f0ea;
+  --timeline-bg: #f8f6f2;
   --ruler-bg: #fdfcfa;
   --ruler-tick: #b5aec1;
   --ruler-text: #837d90;
   --playhead: #e5484d;
-  --track-lane: #ece8e0;
-  --track-lane-line: #e2ddd3;
+  --track-lane: #f2efe9;
+  --track-lane-line: #e9e4db;
 
   /* Semantic track colors(靛/青/紫,与主色同族但保持内容色身份) */
   --track-video-bg: #dfe4f9;
@@ -187,12 +187,12 @@
   --shadow-raised: none;
 
   --monitor-bg: #0b0a0f;
-  --timeline-bg: #17151d;
+  --timeline-bg: #18161f;
   --ruler-bg: #1c1a23;
   --ruler-tick: #4a4459;
   --ruler-text: #837d90;
   --playhead: #ff5d61;
-  --track-lane: #1d1a25;
+  --track-lane: #1e1b27;
   --track-lane-line: #262330;
 
   --track-video-bg: #262e52;
