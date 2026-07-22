@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
@@ -12,6 +15,7 @@ from app.api.schemas import (
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
     WorkflowCreate,
+    WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,
     WorkflowRunRequest,
@@ -62,6 +66,69 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
             db, workspace_id=body.workspace_id, name=body.name, description=body.description, graph=body.graph
         )
     except WorkflowDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------- 文件导出/导入 ----------------
+# 信封格式:{format, version, name, description, graph}。graph 原样携带 —— 节点里
+# 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
+# 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
+WORKFLOW_FILE_FORMAT = "mibu-workflow"
+WORKFLOW_FILE_VERSION = 1
+
+
+@router.get("/workflows/{workflow_id}/export")
+def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
+    workflow = _get(db, workflow_id)
+    ensure_workspace_access(db, user, workflow.workspace_id)
+    payload = {
+        "format": WORKFLOW_FILE_FORMAT,
+        "version": WORKFLOW_FILE_VERSION,
+        "name": workflow.name,
+        "description": workflow.description,
+        "graph": workflow.graph,
+    }
+    # ASCII 兜底文件名 + RFC 5987 UTF-8 全名,中文工作流名两头都不乱码。
+    ascii_name = "".join(ch if ch.isascii() and ch not in '\\/:*?"<>|' else "_" for ch in workflow.name) or "workflow"
+    utf8_name = quote(f"{workflow.name}.mibu-workflow.json")
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_name}.mibu-workflow.json"; filename*=UTF-8\'\'{utf8_name}'
+        },
+    )
+
+
+@router.post("/workflows/import", response_model=WorkflowOut)
+def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
+    ensure_workspace_access(db, user, body.workspace_id)
+    data = body.data
+    if data.get("format") != WORKFLOW_FILE_FORMAT or not isinstance(data.get("graph"), dict):
+        raise HTTPException(status_code=422, detail="不是有效的 Mibu 工作流文件")
+    try:
+        version = int(data.get("version", 0))
+    except (TypeError, ValueError):
+        version = 0
+    if version > WORKFLOW_FILE_VERSION:
+        raise HTTPException(status_code=422, detail=f"文件版本({version})比当前应用支持的更新,请升级应用后再导入")
+    name = str(data.get("name") or "").strip()[:180] or "导入的工作流"
+    # 同名冲突自动加序号,导入不打断
+    existing = {w.name for w in list_workflows(db, body.workspace_id)}
+    candidate, counter = name, 2
+    while candidate in existing:
+        candidate = f"{name} ({counter})"
+        counter += 1
+    try:
+        return create_workflow(
+            db,
+            workspace_id=body.workspace_id,
+            name=candidate,
+            description=str(data.get("description") or "")[:2000],
+            graph=data["graph"],
+        )
+    except WorkflowDomainError as exc:
+        # 未知节点类型(更新版本导出的文件)/结构非法都会在这里给出具体原因
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

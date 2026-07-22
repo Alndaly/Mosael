@@ -14,3 +14,18 @@ export function saveAssetToDisk(asset: Pick<Asset, "id" | "name" | "original_fil
   anchor.click();
   anchor.remove();
 }
+
+/** 把 JSON 数据落成本地文件(工作流导出等)。走 Blob object URL,同域 download
+ *  属性生效,文件名可控;用完即回收 URL。 */
+export function saveJsonToDisk(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

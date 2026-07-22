@@ -573,6 +573,15 @@ export function deleteWorkflow(workflowId: string): Promise<unknown> {
   return api(`/api/workflows/${workflowId}`, { method: "DELETE" });
 }
 
+/** 导出文件信封:{format, version, name, description, graph}。 */
+export function exportWorkflowFile(workflowId: string): Promise<Record<string, unknown>> {
+  return api<Record<string, unknown>>(`/api/workflows/${workflowId}/export`);
+}
+
+export function importWorkflow(body: { workspace_id: string; data: Record<string, unknown> }): Promise<Workflow> {
+  return api<Workflow>("/api/workflows/import", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function runWorkflow(workflowId: string, params: Record<string, unknown> = {}): Promise<Job> {
   return api<Job>(`/api/workflows/${workflowId}/run`, { method: "POST", body: JSON.stringify({ params }) });
 }

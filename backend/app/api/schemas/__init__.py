@@ -933,6 +933,13 @@ class WorkflowUpdate(BaseModel):
     graph: dict | None = None
 
 
+class WorkflowImportRequest(BaseModel):
+    """导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。"""
+
+    workspace_id: str
+    data: dict
+
+
 class WorkflowOut(OrmModel):
     id: str
     workspace_id: str

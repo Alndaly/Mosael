@@ -57,6 +57,7 @@ import {
   Trash2,
   X,
   Type,
+  Upload,
   Wand2,
   Workflow as WorkflowIcon,
   Wrench,
@@ -70,7 +71,9 @@ import {
   api,
   createWorkflow,
   deleteWorkflow,
+  exportWorkflowFile,
   fetchWorkflowNodeTypes,
+  importWorkflow,
   listAssets,
   listPublishAccounts,
   listVoices,
@@ -99,6 +102,7 @@ import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor"
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
+import { saveJsonToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import {
   analyzeWorkflow,
@@ -360,6 +364,33 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
   });
+  // 导出:取后端信封(格式/版本权威在后端)→ 落成 .mibu-workflow.json 文件。
+  const menuExport = useMutation({
+    mutationFn: async (workflow: Workflow) => {
+      const envelope = await exportWorkflowFile(workflow.id);
+      saveJsonToDisk(`${workflow.name}.mibu-workflow.json`, envelope);
+    },
+    onError: (error: Error) => toast.error(t("wfExportFailed"), { description: error.message }),
+  });
+  // 导入:读文件 → JSON 解析(坏文件在本地就报)→ 后端校验落库 → 选中新工作流。
+  const importInputRef = React.useRef<HTMLInputElement | null>(null);
+  const importFile = useMutation({
+    mutationFn: async (file: File) => {
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(await file.text()) as Record<string, unknown>;
+      } catch {
+        throw new Error(t("wfImportInvalid"));
+      }
+      return importWorkflow({ workspace_id: workspace.id, data });
+    },
+    onSuccess: (workflow) => {
+      toast.success(t("wfImported").replace("{name}", workflow.name));
+      setSelectedId(workflow.id);
+      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+    },
+    onError: (error: Error) => toast.error(t("wfImportFailed"), { description: error.message }),
+  });
   const menuRun = useMutation({
     mutationFn: (id: string) => runWorkflow(id),
     onSuccess: (_data, id) => {
@@ -381,9 +412,25 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           title={t("wfEmptyTitle")}
           body={t("wfEmptyBody")}
           action={
-            <Button disabled={create.isPending} onClick={() => create.mutate()}>
-              <Plus size={15} /> {t("wfCreate")}
-            </Button>
+            <span className="inline-flex items-center gap-2">
+              <Button disabled={create.isPending} onClick={() => create.mutate()}>
+                <Plus size={15} /> {t("wfCreate")}
+              </Button>
+              <Button variant="outline" disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+                <Upload size={15} /> {t("wfImport")}
+              </Button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) importFile.mutate(file);
+                }}
+              />
+            </span>
           }
         />
       </div>
@@ -396,9 +443,25 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("navWorkflows")}</h2>
-            <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
-              <Plus size={14} />
-            </Button>
+            <span className="inline-flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <Upload size={14} />}
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
+                <Plus size={14} />
+              </Button>
+            </span>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = ""; // 同一文件可再次选择
+                if (file) importFile.mutate(file);
+              }}
+            />
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(workflows.data ?? []).map((workflow) => (
@@ -423,6 +486,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={() => setMenuRenaming(workflow)}>
                     <Pencil /> {t("rename")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => menuExport.mutate(workflow)}>
+                    <Download /> {t("wfExport")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>

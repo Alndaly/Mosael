@@ -815,3 +815,59 @@ def test_workflow_supports_multiple_agent_sessions() -> None:
     # 别的工作流看不到这些会话
     other = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF2"}).json()
     assert client.get(f"/api/workflows/{other['id']}/agent-sessions").json() == []
+
+
+def test_workflow_export_import_roundtrip() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    created = client.post(
+        "/api/workflows", json={"workspace_id": ws["id"], "name": "出海流程", "description": "desc", "graph": linear_graph()}
+    ).json()
+
+    # 导出:信封 + attachment 头(中文名走 RFC 5987)
+    res = client.get(f"/api/workflows/{created['id']}/export")
+    assert res.status_code == 200
+    assert "attachment" in res.headers["content-disposition"]
+    envelope = res.json()
+    assert envelope["format"] == "mibu-workflow" and envelope["version"] == 1
+    assert envelope["name"] == "出海流程"
+    assert envelope["graph"] == linear_graph()
+
+    # 导入:同名自动加序号,graph 原样落库
+    imported = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": envelope})
+    assert imported.status_code == 200
+    body = imported.json()
+    assert body["name"] == "出海流程 (2)"
+    assert body["graph"] == linear_graph()
+
+    # 再导一次 → (3)
+    assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": envelope}).json()["name"] == "出海流程 (3)"
+
+
+def test_workflow_import_rejects_bad_files() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    # 非本格式 / 缺 graph
+    assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "other"}}).status_code == 422
+    assert (
+        client.post(
+            "/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "mibu-workflow", "version": 1}}
+        ).status_code
+        == 422
+    )
+
+    # 版本过新
+    too_new = {"format": "mibu-workflow", "version": 99, "name": "x", "graph": {"nodes": [], "edges": []}}
+    res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": too_new})
+    assert res.status_code == 422 and "版本" in res.json()["detail"]
+
+    # 未知节点类型(伪造的新版文件)→ 明确报错而不是落一个坏图
+    unknown_node = {
+        "format": "mibu-workflow",
+        "version": 1,
+        "name": "x",
+        "graph": {"nodes": [{"id": "n1", "type": "not-a-node", "config": {}}], "edges": []},
+    }
+    res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": unknown_node})
+    assert res.status_code == 422 and "未知节点类型" in res.json()["detail"]
