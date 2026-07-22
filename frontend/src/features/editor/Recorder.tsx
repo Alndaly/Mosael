@@ -78,17 +78,29 @@ export function Recorder({
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunks.push(event.data);
       };
+      recorder.onerror = () => {
+        toast.error(t("recordEmpty"));
+        cleanup();
+        setRecording(false);
+      };
       recorder.onstop = () => {
         const type = recorder.mimeType || (source === "mic" ? "audio/webm" : "video/webm");
         const blob = new Blob(chunks, { type });
         const label = source === "mic" ? "录音" : source === "camera" ? "摄像头" : "屏幕录制";
         cleanup();
-        if (blob.size > 0) onRecorded(new File([blob], `${label}-${Date.now()}.webm`, { type }));
+        // 设备不出数据时 MediaRecorder 只吐 ~110B 的容器头(摄像头/麦克风被占用或
+        // 虚拟设备):导入这种空壳只会得到坏素材,拦下并留在弹窗里让用户重试。
+        if (blob.size < 2048) {
+          toast.error(t("recordEmpty"));
+          return;
+        }
+        onRecorded(new File([blob], `${label}-${Date.now()}.webm`, { type }));
         onOpenChange(false);
       };
       // If the user ends screen sharing from the browser/OS chrome, stop the recording.
       stream.getVideoTracks()[0]?.addEventListener("ended", stop);
-      recorder.start();
+      // 1s 切片:数据持续落 chunks,即使收尾环节出岔子也不至于两手空空。
+      recorder.start(1000);
       recorderRef.current = recorder;
       setRecording(true);
       setSecs(0);

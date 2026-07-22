@@ -42,6 +42,7 @@ from app.api.deps import require_worker_key
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
+from app.domain.assets import reconcile_broken_media_info
 from app.domain.generation import ensure_builtin_generation_models
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
 from app.media.proxy import reconcile_missing_proxies
@@ -66,6 +67,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         reconcile_orphaned_jobs(db)
         # Backfill preview proxies for any videos missing one (best-effort).
         reconcile_missing_proxies(db)
+        # 修复 remux 上线前导入的坏素材(直录 webm 缺时长/缩略图/波形)。
+        reconcile_broken_media_info(db)
     if settings.scheduler_enabled:
         start_scheduler_loop()
     if settings.feishu_autostart:

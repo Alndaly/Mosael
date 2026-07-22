@@ -4,14 +4,15 @@ import shutil
 from pathlib import Path
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
-from app.media.paths import asset_dir, asset_key
+from app.media.paths import asset_dir, asset_key, resolve_key
 from app.media.probe import guess_kind, probe_media, remux_in_place
 from app.media.proxy import start_proxy_job
-from app.media.thumbnails import generate_thumbnail
-from app.media.waveform import generate_waveform
+from app.media.thumbnails import generate_thumbnail, thumbnail_path
+from app.media.waveform import generate_waveform, waveform_path
 
 
 def _probe_with_duration_repair(target: Path, kind: str) -> dict:
@@ -21,6 +22,37 @@ def _probe_with_duration_repair(target: Path, kind: str) -> dict:
     if kind != "image" and media_info.get("duration") is None and remux_in_place(target):
         media_info = probe_media(target)
     return media_info
+
+
+def reconcile_broken_media_info(db: Session) -> int:
+    """启动兜底:修复 remux 修复上线前导入的坏素材(摄像头/录音直录 webm,
+    media_info 缺 duration)。remux 是 `-c copy` 的 I/O 级操作,坏素材通常
+    也只有零星几条,同步跑完即可;顺带补缺失的缩略图/波形。"""
+    repaired = 0
+    for asset in db.scalars(select(Asset).where(Asset.kind.in_(("audio", "video")))):
+        info = asset.media_info or {}
+        if info.get("duration") is not None or not asset.file_key:
+            continue
+        source = resolve_key(asset.file_key)
+        if not source.is_file():
+            continue
+        if not remux_in_place(source):
+            continue
+        probed = probe_media(source)
+        if probed.get("duration") is None:
+            continue
+        directory = source.parent
+        extras: dict = {}
+        if not thumbnail_path(directory).is_file() and generate_thumbnail(source, asset.kind, directory) is not None:
+            extras["has_thumbnail"] = True
+        if not waveform_path(directory).is_file() and generate_waveform(source, asset.kind, directory) is not None:
+            extras["has_waveform"] = True
+        # 合并而不是替换:media_info 还承载 proxy 状态等旗标。
+        asset.media_info = {**info, **probed, **extras}
+        repaired += 1
+    if repaired:
+        db.commit()
+    return repaired
 
 
 def register_file_asset(
