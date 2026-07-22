@@ -105,7 +105,17 @@ export function HomeView({
         method: "POST",
         body: JSON.stringify({ workspace_id: workspace.id, name: `${t("projectDefault")} ${projects.length + 1}` }),
       }),
-    onSuccess: refresh,
+    onSuccess: (created) => {
+      // 先把新项目塞进列表缓存,再跳它的剪辑页:App 侧解析项目用
+      // `find(projectId) ?? list[0]` 兜底,列表还没刷出新 id 的间隙里
+      // 编辑器会悄悄落到第一个(旧)项目上 —"新项目打开却是旧时间线"。
+      qc.setQueryData<ProjectWithStats[]>(["projects", workspace.id], (old) => [
+        { ...created, asset_count: 0, sequence_count: 0, timeline_duration: 0 },
+        ...(old ?? []),
+      ]);
+      void refresh();
+      onOpenProject(created.id);
+    },
   });
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameProject(id, name),
