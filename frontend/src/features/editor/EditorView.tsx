@@ -69,7 +69,7 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
   const t = useI18n();
   if (!project) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <EmptyState icon={<Scissors size={22} />} title={t("emptyProject")} body={t("homeEmptyBody")} />
       </div>
     );
@@ -737,7 +737,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   if (!sequence) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <EmptyState
           icon={<Scissors size={22} />}
           title={t("emptyTimeline")}
@@ -819,8 +819,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       ) : leftTab === "voice" ? (
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
       ) : (
-        <section className="panel grid grid-rows-[auto_minmax(0,1fr)]">
-          <div className="panel-head">
+        <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)]">
+          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
           {leftTab === "transcript" ? (
@@ -855,7 +855,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="panel bg-[var(--monitor-bg)]">
+      <section className="min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--monitor-bg)]">
         <Monitor
           sequence={sequence}
           subtitleStyleOverride={styleDraft}
@@ -882,9 +882,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
-          return compact ? <div className="inspector-drawer">{inspector}</div> : inspector;
+          return compact ? <div className="fixed bottom-0 right-0 top-11 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
         })()}
-      <section className="panel col-span-full bg-[var(--timeline-bg)]">
+      <section className="col-span-full min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}
           assets={assets.data ?? []}

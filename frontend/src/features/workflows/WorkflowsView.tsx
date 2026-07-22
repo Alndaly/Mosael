@@ -374,7 +374,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <EmptyState
           icon={<WorkflowIcon size={22} />}
           title={t("wfEmptyTitle")}
@@ -390,10 +390,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="feature-view">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
-        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="panel-head">
+        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("navWorkflows")}</h2>
             <Button variant="outline" size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
               <Plus size={13} /> {t("wfCreate")}
@@ -1885,8 +1885,8 @@ function NodeInspector({
   };
 
   return (
-    <aside className="panel absolute bottom-2 right-2 top-2 z-30 grid min-h-0 w-[min(300px,calc(100%-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel" aria-label={node.name || meta?.label || node.type}>
-      <div className="panel-head flex items-center gap-2">
+    <aside className="absolute bottom-2 right-2 top-2 z-30 grid min-h-0 w-[min(300px,calc(100%-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]" aria-label={node.name || meta?.label || node.type}>
+      <div className="flex min-h-[38px] items-center justify-between gap-2 border-b border-border px-2.5">
         <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))] h-6 w-6" style={{ "--wf-node-color": WF_NODE_COLORS[node.type] } as React.CSSProperties}>
           {NODE_ICONS[node.type] ?? <Type size={13} />}
         </span>

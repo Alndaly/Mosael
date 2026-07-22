@@ -121,7 +121,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
 
   if (datasets.isSuccess && listed.length === 0) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <EmptyState
           icon={<BookOpen size={22} />}
           title={t("kbEmptyTitle")}
@@ -143,10 +143,10 @@ export function KbView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="feature-view">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
-        <aside className="panel flex flex-col gap-1.5 max-[880px]:flex-row max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="panel-head">
+        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex flex-col gap-1.5 max-[880px]:flex-row max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("kbTitle")}</h2>
             <Button size="icon" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
               <Plus size={14} />
@@ -532,7 +532,7 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
       </form>
       <p className="text-[11.5px] text-muted-foreground">{t("kbRecallHint")}</p>
       {run.isSuccess && (run.data ?? []).length === 0 && (
-        <div className="empty-inline">
+        <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">
           <Search size={14} /> {t("kbNoResults")}
         </div>
       )}

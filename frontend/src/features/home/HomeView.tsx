@@ -184,7 +184,7 @@ export function HomeView({
     : [];
 
   return (
-    <div className="feature-view">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
       <section className="mb-3 flex items-stretch justify-between gap-3 max-[880px]:flex-col">
         <div className="flex min-w-0 flex-col justify-center gap-0.5">
           <h1 className="m-0 text-xl font-[650] tracking-[-0.01em]">{t(greetingKey)}</h1>
@@ -260,11 +260,11 @@ export function HomeView({
         </section>
       )}
 
-      <div className="feature-toolbar media-toolbar">
-        <div className="media-toolbar-left">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Input
             ref={searchRef}
-            className="toolbar-search"
+            className="h-7 w-44 rounded border border-border bg-panel px-[9px] text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
             value={search}
             placeholder={t("searchProjects")}
             onChange={(event) => setSearch(event.target.value)}

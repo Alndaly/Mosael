@@ -188,7 +188,7 @@ function AppToaster() {
 function AuthGate() {
   const t = useI18n();
   const { status } = useAuth();
-  if (status === "loading") return <div className="center">{t("connecting")}</div>;
+  if (status === "loading") return <div className="grid min-h-screen place-items-center text-muted-foreground">{t("connecting")}</div>;
   if (status === "anonymous") return <LoginView />;
   return <WorkspaceGate />;
 }
@@ -242,12 +242,12 @@ function WorkspaceGate() {
     setActiveId(id);
   }, []);
 
-  if (workspaces.isLoading) return <div className="center">{t("connecting")}</div>;
+  if (workspaces.isLoading) return <div className="grid min-h-screen place-items-center text-muted-foreground">{t("connecting")}</div>;
   if (!workspace) {
     return (
-      <div className="center">
-        <Card className="welcome">
-          <CardContent className="welcome-content">
+      <div className="grid min-h-screen place-items-center text-muted-foreground">
+        <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
+          <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
             <Film size={34} />
             <h1>Mibu</h1>
             <p>{t("welcomeText")}</p>

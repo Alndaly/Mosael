@@ -144,7 +144,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       }
     >
       <SettingsBlock>
-        {beginScan.isError && <p className="login-error">{String((beginScan.error as Error).message)}</p>}
+        {beginScan.isError && <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>}
 
         {hasBots && (
           <div className="grid gap-1.5">
@@ -245,7 +245,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             value={appSecret}
             onChange={(event) => setAppSecret(event.target.value)}
           />
-          {addBot.isError && <p className="login-error">{String((addBot.error as Error).message)}</p>}
+          {addBot.isError && <p className="m-0 text-xs text-destructive">{String((addBot.error as Error).message)}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setManualOpen(false)}>
               {t("cancel")}

@@ -119,8 +119,8 @@ export function Inspector({
   }, [selectedClip?.id, isTextClip]);
 
   return (
-    <section className="panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="panel-head">
+    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
           <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             <button

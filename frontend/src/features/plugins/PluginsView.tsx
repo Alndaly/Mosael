@@ -40,7 +40,7 @@ export function PluginsView() {
   // 没有任何插件:整页一个居中空状态(扫描是唯一动作),不摆空骨架。
   if (plugins.isSuccess && (plugins.data ?? []).length === 0) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <EmptyState
           icon={<Plug size={22} />}
           title={t("noPlugins")}
@@ -56,10 +56,10 @@ export function PluginsView() {
   }
 
   return (
-    <div className="feature-view">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
-        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="panel-head">
+        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("installed")}</h2>
             <Button
               variant="outline"

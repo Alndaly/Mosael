@@ -375,8 +375,8 @@ export function ChatWorkspace({
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
-      <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="panel-head">
+      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
+        <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
           <h2>{t("chatSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
@@ -441,7 +441,7 @@ export function ChatWorkspace({
         />
       </aside>
 
-      <section className="panel grid grid-rows-[minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[minmax(0,1fr)_auto]">
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
         {
           <>
@@ -693,7 +693,7 @@ function ChatInspector({
 
   return (
     <aside
-      className="panel flex min-w-0 flex-col gap-2.5 overflow-y-auto px-2.5 pb-3 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-60 max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1"
+      className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-2.5 overflow-y-auto px-2.5 pb-3 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-60 max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1"
       aria-label={t("agentInspectorTitle")}
     >
       <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-border p-2.5 max-[1180px]:col-span-full">

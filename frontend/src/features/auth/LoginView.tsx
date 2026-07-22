@@ -76,18 +76,18 @@ export function LoginView() {
   });
 
   return (
-    <div className="center">
-      <Card className="welcome">
-        <CardContent className="welcome-content">
-          <div className="login-head">
-            <div className="login-brand">
+    <div className="grid min-h-screen place-items-center text-muted-foreground">
+      <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
+        <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center">
+          <div className="grid justify-items-center gap-2 [&_h1]:m-0 [&_h1]:text-[19px] [&_h1]:font-[640] [&_h1]:leading-[1.1] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:max-w-[30ch] [&_p]:text-[13px] [&_p]:leading-normal [&_p]:text-muted-foreground">
+            <div className="mb-0.5 grid h-[46px] w-[46px] place-items-center rounded-[13px] bg-primary text-primary-foreground">
               <Film size={22} />
             </div>
             <h1>Mibu</h1>
             <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
           </div>
           <Form {...form}>
-            <form className="login-form" onSubmit={onSubmit} noValidate>
+            <form className="grid w-full gap-2" onSubmit={onSubmit} noValidate>
               {form.formState.errors.root && (
                 <Alert variant="destructive">
                   <CircleAlert size={14} />
@@ -161,7 +161,7 @@ export function LoginView() {
               </Button>
             </form>
           </Form>
-          <button type="button" className="login-switch" onClick={switchMode}>
+          <button type="button" className="-mt-1.5 cursor-pointer border-0 bg-transparent p-0.5 text-[12.5px] text-muted-foreground hover:text-accent-foreground hover:underline" onClick={switchMode}>
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
           {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}

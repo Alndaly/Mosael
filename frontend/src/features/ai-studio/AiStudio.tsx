@@ -266,7 +266,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="feature-view flex flex-col gap-0 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0 gap-0 overflow-hidden">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
@@ -604,8 +604,8 @@ function GenerateWorkspace({
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
-      <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="panel-head">
+      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
+        <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2>{t("generationSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("generationNewSession")}
@@ -668,7 +668,7 @@ function GenerateWorkspace({
         />
       </aside>
 
-      <section className="panel grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
         <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
           {ordered.length === 0 && (
             <div className="m-auto">
@@ -726,8 +726,8 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className="panel flex min-w-0 flex-col gap-[9px] overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
-        <div className="panel-head -mx-3 px-3 py-2.5 max-[1180px]:col-span-full">
+      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-[9px] overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
+        <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
         </div>
         {selectedModel && selectedCapabilityMissing && (

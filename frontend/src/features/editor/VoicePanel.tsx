@@ -240,8 +240,8 @@ export function VoicePanel({
   });
 
   return (
-    <section className="panel media-panel voice-panel">
-      <div className="panel-head">{tabs}</div>
+    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)]">
+      <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">{tabs}</div>
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2.5">
         <div className="grid gap-[7px] rounded-lg border border-border bg-panel p-2.5">
           <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">

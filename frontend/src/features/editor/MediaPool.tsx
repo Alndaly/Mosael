@@ -74,8 +74,8 @@ export function MediaPool({
     onError: (error) => setDeleteError(String((error as Error).message)),
   });
   return (
-    <section className="panel media-panel">
-      <div className="panel-head">
+    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)]">
+      <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
@@ -151,8 +151,8 @@ export function MediaPool({
             </ContextMenuContent>
           </ContextMenu>
         ))}
-        {assets.length === 0 && <div className="empty-inline">{t("mediaEmptyBody")}</div>}
-        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline">{t("mediaNoMatchingAssets")}</div>}
+        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
+        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
       <RenameDialog

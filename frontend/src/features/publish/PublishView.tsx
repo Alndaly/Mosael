@@ -147,7 +147,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tab === "accounts") {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -161,10 +161,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="feature-view">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
-          <div className="empty-center min-h-0 flex-1 overflow-y-auto">
+          <div className="grid min-h-full place-items-center min-h-0 flex-1 overflow-y-auto">
             <EmptyState
               icon={<Rocket size={22} />}
               title={t("publishEmptyTitle")}
@@ -188,12 +188,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="feature-view">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
       <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)] overflow-y-auto">
-        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="panel-head">
+        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("publishListTitle")}</h2>
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
@@ -227,7 +227,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           {selected ? (
             <PublishDetail key={selected.id} task={selected} onDelete={() => setDeleting(selected)} />
           ) : (
-            <div className="empty-center">
+            <div className="grid min-h-full place-items-center">
               <EmptyState icon={<Rocket size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
             </div>
           )}
@@ -294,7 +294,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   const items = accounts.data ?? [];
   if (accounts.isSuccess && items.length === 0) {
     return (
-      <div className="empty-center">
+      <div className="grid min-h-full place-items-center">
         <EmptyState
           icon={<Users size={22} />}
           title={t("publishNoAccountsTitle")}
@@ -317,7 +317,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
         return (
           <ContextMenu key={account.id}>
             <ContextMenuTrigger asChild>
-              <div className={cn("panel flex min-h-32 flex-col gap-[3px] rounded-lg p-2.5", !account.enabled && "opacity-55")}>
+              <div className={cn("min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-h-32 flex-col gap-[3px] rounded-lg p-2.5", !account.enabled && "opacity-55")}>
                 <div className="flex items-center gap-1.5">
                   <span className="mr-auto text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">{meta?.label ?? account.platform}</span>
                   {isBrowser && account.proxy && (
@@ -535,7 +535,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
           <SettingsRow label={t("publishTags")}>
             <span className="flex flex-wrap gap-1">
               {task.tags.map((tag) => (
-                <span className="tag-chip readonly" key={tag}>
+                <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 text-[11px] text-muted-foreground" key={tag}>
                   {tag}
                 </span>
               ))}

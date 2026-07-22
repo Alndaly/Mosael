@@ -85,7 +85,7 @@ export function SubtitlePanel({
       )}
       <div className="grid content-start gap-1.5 overflow-y-auto p-1.5">
         {subtitles.length === 0 && (
-          <div className="empty-inline">
+          <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">
             <Type size={16} />
             {t("subtitleEmptyBody")}
           </div>
