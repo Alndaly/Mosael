@@ -990,7 +990,7 @@ function WorkflowEditor({
               <Plus size={12} />
               <span>{t("wfAddNode")}</span>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-none">
               {nodeTypes
                 .filter((meta) => meta.type !== "start" || !graphHasStart)
                 .map((meta) => (
@@ -1562,7 +1562,7 @@ function LoopBodyEditor({
             <Plus size={12} />
             <span>{t("wfAddNode")}</span>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-none">
             {nodeTypes
               .filter((meta) => meta.type !== "start")
               .map((meta) => (

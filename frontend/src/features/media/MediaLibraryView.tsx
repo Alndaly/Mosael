@@ -252,7 +252,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             <SelectTrigger className="h-8 w-auto min-w-32 bg-panel text-xs" aria-label={t("sortNewest")}>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-none">
               <SelectItem value="created">{t("sortNewest")}</SelectItem>
               <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
               <SelectItem value="name">{t("sortName")}</SelectItem>

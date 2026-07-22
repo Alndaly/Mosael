@@ -75,7 +75,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
       <SelectTrigger className="h-7 w-auto min-w-0 max-w-[220px] gap-1 px-2 text-xs text-muted-foreground" aria-label={t("agentModelLabel")}>
         <SelectValue placeholder={t("agentModelPlaceholder")} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="max-w-none">
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}
