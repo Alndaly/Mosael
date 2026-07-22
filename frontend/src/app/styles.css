@@ -1394,11 +1394,16 @@
 
 /* ---------- Asset preview modal ---------- */
 
+.asset-preview-dialog {
+  width: min(960px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
 .preview-modal {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;
   gap: 12px;
-  width: min(860px, 90vw);
+  width: 100%;
 }
 
 .preview-stage {
@@ -1434,6 +1439,16 @@
 
 .preview-meta dd {
   margin: 0 0 6px;
+}
+
+@media (max-width: 760px) {
+  .preview-modal {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-stage {
+    min-height: 220px;
+  }
 }
 
 /* ---------- AI Studio ---------- */

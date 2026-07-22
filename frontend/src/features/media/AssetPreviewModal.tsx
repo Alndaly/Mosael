@@ -8,7 +8,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
   const media = asset?.media_info ?? {};
   return (
     <Dialog open={asset !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="z-50 p-4">
+      <DialogContent className="asset-preview-dialog p-4">
         {asset && (
           <div className="preview-modal">
             <div className="preview-stage">
