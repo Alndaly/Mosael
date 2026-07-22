@@ -374,7 +374,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <EmptyState
           icon={<WorkflowIcon size={22} />}
           title={t("wfEmptyTitle")}
@@ -390,10 +390,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("navWorkflows")}</h2>
             <Button variant="outline" size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
               <Plus size={13} /> {t("wfCreate")}
@@ -1390,7 +1390,7 @@ function CodeField({
             <button
               key={ref}
               type="button"
-              className="cursor-pointer rounded border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
+              className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
               title={t("wfInsertVar")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => handle.current?.insertAtCursor(ref)}
@@ -1893,7 +1893,7 @@ function NodeInspector({
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-[10.5px] [&_small]:text-muted-foreground">
           {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。 */}
           <Input
-            className="-ml-1 min-w-0 rounded border border-transparent bg-transparent px-1 py-px text-[13px] font-semibold text-foreground hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none"
+            className="-ml-1 min-w-0 rounded-md border border-transparent bg-transparent px-1 py-px text-[13px] font-semibold text-foreground hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}
@@ -1903,12 +1903,12 @@ function NodeInspector({
           {node.name && node.name !== (meta?.label ?? node.type) && <small>{meta?.label ?? node.type}</small>}
         </div>
         {onDelete && (
-          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
+          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
             <Trash2 size={13} />
           </button>
         )}
         {onClose && (
-          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
+          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
             <X size={14} />
           </button>
         )}
@@ -1930,10 +1930,10 @@ function NodeInspector({
             </span>
             {staleRefs.map(({ key, ref }) => (
               <div className="flex items-center justify-between gap-2" key={`${key}-${ref}`}>
-                <code className="rounded border border-[color-mix(in_srgb,var(--destructive)_45%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-px font-mono text-[10.5px] text-destructive line-through">{ref}</code>
+                <code className="rounded-md border border-[color-mix(in_srgb,var(--destructive)_45%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-px font-mono text-[10.5px] text-destructive line-through">{ref}</code>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button type="button" className="flex-none cursor-pointer rounded border border-border bg-panel px-2 py-0.5 text-[11px] text-foreground hover:border-border-strong">
+                    <button type="button" className="flex-none cursor-pointer rounded-md border border-border bg-panel px-2 py-0.5 text-[11px] text-foreground hover:border-border-strong">
                       {t("wfRepoint")}
                     </button>
                   </PopoverTrigger>
@@ -1942,7 +1942,7 @@ function NodeInspector({
                       <button
                         key={valid}
                         type="button"
-                        className="cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1.5 text-left font-mono text-xs hover:bg-muted"
+                        className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left font-mono text-xs hover:bg-muted"
                         onClick={() => repoint(key, ref, valid)}
                       >
                         {valid.replace(/[{}]/g, "")}
@@ -1950,7 +1950,7 @@ function NodeInspector({
                     ))}
                     <button
                       type="button"
-                      className="cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
+                      className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
                       onClick={() => repoint(key, ref, "")}
                     >
                       {t("wfRemoveRef")}
@@ -2243,7 +2243,7 @@ function NodeInspector({
                     <button
                       key={ref}
                       type="button"
-                      className="cursor-pointer rounded border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
+                      className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
                       title={t("wfInsertVar")}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => insertVariable(key, ref)}
@@ -2267,7 +2267,7 @@ function NodeInspector({
                   <button
                     key={output}
                     type="button"
-                    className="cursor-copy rounded border border-border bg-secondary px-[7px] py-0.5 font-mono text-[10.5px] text-foreground transition-[border-color] duration-100 hover:border-primary"
+                    className="cursor-copy rounded-md border border-border bg-secondary px-[7px] py-0.5 font-mono text-[10.5px] text-foreground transition-[border-color] duration-100 hover:border-primary"
                     title={t("wfCopyRef")}
                     onClick={() => {
                       void navigator.clipboard.writeText(ref);

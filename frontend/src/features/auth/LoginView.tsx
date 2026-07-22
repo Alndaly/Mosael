@@ -80,7 +80,7 @@ export function LoginView() {
       <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
         <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center">
           <div className="grid justify-items-center gap-2 [&_h1]:m-0 [&_h1]:text-[19px] [&_h1]:font-[640] [&_h1]:leading-[1.1] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:max-w-[30ch] [&_p]:text-[13px] [&_p]:leading-normal [&_p]:text-muted-foreground">
-            <div className="mb-0.5 grid h-[46px] w-[46px] place-items-center rounded-[13px] bg-primary text-primary-foreground">
+            <div className="mb-0.5 grid h-[46px] w-[46px] place-items-center rounded-xl bg-primary text-primary-foreground">
               <Film size={22} />
             </div>
             <h1>Mibu</h1>

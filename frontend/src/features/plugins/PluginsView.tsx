@@ -40,7 +40,7 @@ export function PluginsView() {
   // 没有任何插件:整页一个居中空状态(扫描是唯一动作),不摆空骨架。
   if (plugins.isSuccess && (plugins.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <EmptyState
           icon={<Plug size={22} />}
           title={t("noPlugins")}
@@ -56,10 +56,10 @@ export function PluginsView() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("installed")}</h2>
             <Button
               variant="outline"
@@ -316,7 +316,7 @@ function ToolCard({
             </Button>
           </div>
           {result && (
-            <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", result.status === "succeeded" ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
+            <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", result.status === "succeeded" ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
               {result.status === "succeeded"
                 ? JSON.stringify(result.output, null, 2)
                 : result.error ?? result.status}
@@ -347,7 +347,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
         </button>
       </div>
       {open && (
-        <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", ok ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
+        <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", ok ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
           {JSON.stringify(ok ? invocation.output : { input: invocation.input, error: invocation.error }, null, 2)}
         </pre>
       )}

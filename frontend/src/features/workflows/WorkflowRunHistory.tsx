@@ -85,7 +85,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
         <h2>
           <History size={14} /> {t("wfHistory")}
         </h2>
-        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
+        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>
@@ -122,7 +122,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
               {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-[11.5px] text-destructive">{selected.error}</p>}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => (
-                  <li key={s.nid} className={cn("flex items-center gap-[7px] rounded-[5px] px-1.5 py-1 text-xs", s.status === "skipped" && "opacity-55")}>
+                  <li key={s.nid} className={cn("flex items-center gap-[7px] rounded-md px-1.5 py-1 text-xs", s.status === "skipped" && "opacity-55")}>
                     {s.status === "done" ? (
                       <CheckCircle2 size={12} className="text-[#3fb950]" />
                     ) : s.status === "skipped" ? (

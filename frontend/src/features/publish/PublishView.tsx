@@ -117,7 +117,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   const seg = (
     <div className="flex items-center justify-between">
-      <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
+      <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
         <button
           type="button"
           className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "records" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -147,7 +147,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tab === "accounts") {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -161,7 +161,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
           <div className="grid min-h-full place-items-center min-h-0 flex-1 overflow-y-auto">
@@ -188,12 +188,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)] overflow-y-auto">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)] overflow-y-auto">
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("publishListTitle")}</h2>
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">

@@ -121,7 +121,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
 
   if (datasets.isSuccess && listed.length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <EmptyState
           icon={<BookOpen size={22} />}
           title={t("kbEmptyTitle")}
@@ -143,10 +143,10 @@ export function KbView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex flex-col gap-1.5 max-[880px]:flex-row max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("kbTitle")}</h2>
             <Button size="icon" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
               <Plus size={14} />
@@ -161,7 +161,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
                     className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === ds.id && "bg-accent hover:bg-accent")}
                     onClick={() => setDatasetId(ds.id)}
                   >
-                    <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground">
+                    <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground">
                       <BookOpen size={14} />
                     </span>
                     <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
@@ -474,7 +474,7 @@ function DocumentDetail({
         )}
       </div>
       <Input
-        className="min-w-0 rounded-[3px] border-0 bg-transparent p-0 text-lg font-[650] text-foreground outline-none focus-visible:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]"
+        className="min-w-0 rounded-sm border-0 bg-transparent p-0 text-lg font-[650] text-foreground outline-none focus-visible:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]"
         value={title}
         onChange={(event) => {
           setTitle(event.target.value);

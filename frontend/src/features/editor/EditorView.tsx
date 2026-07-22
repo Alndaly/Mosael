@@ -69,7 +69,7 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
   const t = useI18n();
   if (!project) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <EmptyState icon={<Scissors size={22} />} title={t("emptyProject")} body={t("homeEmptyBody")} />
       </div>
     );
@@ -737,7 +737,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   if (!sequence) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <EmptyState
           icon={<Scissors size={22} />}
           title={t("emptyTimeline")}
@@ -762,7 +762,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   return (
     <div
-      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-1.5 p-2.5"
+      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-3"
       style={{
         gridTemplateColumns: inspectorInGrid
           ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`
@@ -819,8 +819,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       ) : leftTab === "voice" ? (
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
       ) : (
-        <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)]">
-          <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
           {leftTab === "transcript" ? (
@@ -978,28 +978,28 @@ function LeftTabs({
     <div className="flex shrink-0 gap-0.5">
       <button
         type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "media" && "bg-secondary text-foreground hover:bg-secondary")}
+        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "media" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("media")}
       >
         {t("media")}
       </button>
       <button
         type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "transcript" && "bg-secondary text-foreground hover:bg-secondary")}
+        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "transcript" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("transcript")}
       >
         {t("transcriptTab")}
       </button>
       <button
         type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "subtitle" && "bg-secondary text-foreground hover:bg-secondary")}
+        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "subtitle" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("subtitle")}
       >
         {t("subtitleTab")}
       </button>
       <button
         type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "voice" && "bg-secondary text-foreground hover:bg-secondary")}
+        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "voice" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("voice")}
       >
         {t("voiceTab")}

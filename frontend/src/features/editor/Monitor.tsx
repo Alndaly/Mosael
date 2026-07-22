@@ -426,7 +426,7 @@ export function Monitor({
         </svg>
       )}
       <div className="grid min-h-0 place-items-center p-3 [container-type:size] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-black [&:fullscreen::backdrop]:bg-black" ref={monitorStageRef}>
-        <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-[3px] bg-black [container-type:inline-size] w-[min(100cqw,calc(100cqh*var(--frame-ar,1.7778)))] [:fullscreen_&]:rounded-none" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
+        <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-sm bg-black [container-type:inline-size] w-[min(100cqw,calc(100cqh*var(--frame-ar,1.7778)))] [:fullscreen_&]:rounded-none" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
           {fillMode === "blur" && activeClip && (
             <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden>
               {isImage && activeAsset ? (
@@ -484,7 +484,7 @@ export function Monitor({
           )}
           {activeSubtitle?.text_override && (
             <div
-              className="pointer-events-none absolute bottom-[7%] left-1/2 z-[3] max-w-[86%] -translate-x-1/2 whitespace-pre-wrap rounded bg-[rgb(0_0_0/0.62)] px-2.5 py-[3px] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
+              className="pointer-events-none absolute bottom-[7%] left-1/2 z-[3] max-w-[86%] -translate-x-1/2 whitespace-pre-wrap rounded-md bg-[rgb(0_0_0/0.62)] px-2.5 py-[3px] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
               style={subtitleCss(
                 readSubtitleStyle(
                   (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,
@@ -568,7 +568,7 @@ export function Monitor({
           >
             <Repeat size={13} />
           </Button>
-          <button type="button" className="timecode cursor-pointer rounded border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-[11px] text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
+          <button type="button" className="timecode cursor-pointer rounded-md border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-[11px] text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
             {playbackRate}x
           </button>
         </div>

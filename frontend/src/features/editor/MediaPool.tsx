@@ -75,12 +75,12 @@ export function MediaPool({
   });
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
-    <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
-      <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
-          <Button asChild variant="outline" size="icon" disabled={uploading} title={t("import")} aria-label={t("import")}>
+          <Button asChild variant="outline" size="icon" className="h-8 w-8" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
               <input
                 type="file"
@@ -98,6 +98,7 @@ export function MediaPool({
           <Button
             variant="outline"
             size="icon"
+            className="h-8 w-8"
             onClick={() => setRecorderOpen(true)}
             title={t("record")}
             aria-label={t("record")}
@@ -117,7 +118,7 @@ export function MediaPool({
             aria-label={t("searchAssets")}
           />
         </div>
-        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
+        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-full border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
             <button
               key={kind}
@@ -185,7 +186,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
   const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
   return (
     <div
-      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded border border-border bg-panel p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
+      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded-md border border-border bg-panel p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-mibu-asset", asset.id);
@@ -201,7 +202,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
       <div
-        className={cn("grid aspect-video place-items-center overflow-hidden rounded-[3px] bg-panel-inset text-muted-foreground [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
+        className={cn("grid aspect-video place-items-center overflow-hidden rounded-sm bg-panel-inset text-muted-foreground [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
         onClick={(event) => {
           if (asset.kind !== "image") return;
           event.stopPropagation();
@@ -216,7 +217,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       </div>
       <button
         type="button"
-        className="absolute right-2 top-1/2 grid h-[22px] w-[22px] -translate-y-1/2 cursor-pointer place-items-center rounded border border-border bg-background text-muted-foreground opacity-0 transition-[opacity,color,border-color] duration-100 hover:border-primary hover:text-primary group-hover/pool:opacity-100"
+        className="absolute right-2 top-1/2 grid h-[22px] w-[22px] -translate-y-1/2 cursor-pointer place-items-center rounded-md border border-border bg-background text-muted-foreground opacity-0 transition-[opacity,color,border-color] duration-100 hover:border-primary hover:text-primary group-hover/pool:opacity-100"
         title={t("addToTimeline")}
         aria-label={t("addToTimeline")}
         onClick={(event) => {

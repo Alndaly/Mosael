@@ -374,9 +374,9 @@ export function ChatWorkspace({
   }, [usageEvents.data]);
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
+    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
           <h2>{t("chatSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
@@ -401,7 +401,7 @@ export function ChatWorkspace({
                 <button
                   type="button"
                   className={cn(
-                    "grid w-full cursor-pointer gap-px rounded border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+                    "grid w-full cursor-pointer gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
                     activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
                   )}
                   onClick={() => {
@@ -492,7 +492,7 @@ export function ChatWorkspace({
                 </span>
                 <button
                   type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => steerQueued.mutate(message.id)}
                   title={t("chatSteerHint")}
                 >
@@ -500,7 +500,7 @@ export function ChatWorkspace({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => cancelQueued.mutate(message.id)}
                   aria-label={t("chatQueuedCancel")}
                 >
@@ -529,7 +529,7 @@ export function ChatWorkspace({
               </div>
             )}
             <form
-              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[18px] border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
               onSubmit={submit}
             >
               <Textarea
@@ -571,7 +571,7 @@ export function ChatWorkspace({
                         <button
                           key={skill.id}
                           type="button"
-                          className="grid cursor-pointer gap-px rounded border-0 bg-transparent p-1.5 text-left transition-colors duration-100 hover:bg-secondary"
+                          className="grid cursor-pointer gap-px rounded-md border-0 bg-transparent p-1.5 text-left transition-colors duration-100 hover:bg-secondary"
                           onClick={() => {
                             setDraft((current) =>
                               current.trim()
@@ -708,7 +708,7 @@ function ChatInspector({
         </span>
       </div>
 
-      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
         <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Database size={13} /> {t("agentInspectorContext")}
         </h3>
@@ -732,7 +732,7 @@ function ChatInspector({
         </dl>
       </section>
 
-      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
         <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <FileText size={13} /> {t("agentInspectorThread")}
         </h3>
@@ -761,7 +761,7 @@ function ChatInspector({
         )}
       </section>
 
-      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
         <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Wrench size={13} /> {t("agentInspectorRecentTools")}
         </h3>
@@ -789,7 +789,7 @@ function ChatInspector({
         )}
       </section>
 
-      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
         <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Sparkles size={13} /> {t("agentInspectorCapabilities")}
         </h3>
@@ -984,7 +984,7 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
       className={
         message.role === "assistant"
           ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]"
-          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
+          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
       }
     >
       {message.role === "assistant" ? (
@@ -1001,7 +1001,7 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
         <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100">
           <button
             type="button"
-            className="inline-flex cursor-pointer items-center gap-1 rounded-[3px] border-0 bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
             title={t("copyMessage")}
             onClick={copy}
           >

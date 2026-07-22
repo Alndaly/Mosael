@@ -242,7 +242,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+    <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
       <button
         type="button"
         role="tab"
@@ -266,7 +266,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0 gap-0 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0 gap-0 overflow-hidden">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
@@ -603,9 +603,9 @@ function GenerateWorkspace({
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
+    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2>{t("generationSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("generationNewSession")}
@@ -629,7 +629,7 @@ function GenerateWorkspace({
                 <button
                   type="button"
                   className={cn(
-                    "grid w-full cursor-pointer gap-px rounded border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+                    "grid w-full cursor-pointer gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
                     activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
                   )}
                   onClick={() => {
@@ -684,7 +684,7 @@ function GenerateWorkspace({
           ))}
         </div>
         <form
-          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[18px] border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
           onSubmit={submit}
         >
           <Textarea
@@ -735,7 +735,7 @@ function GenerateWorkspace({
             message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
             actionLabel={t("wfGoConfigure")}
             section={`providers:${selectedModel.kind}`}
-            className="items-center gap-[7px] rounded-[10px] px-[9px] py-2 text-[11.5px] leading-[1.45]"
+            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-[11.5px] leading-[1.45]"
             textClassName="line-clamp-2"
             actionClassName="self-center"
           />
@@ -751,7 +751,7 @@ function GenerateWorkspace({
             <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
               <span>{t("wfModelPreset")}</span>
               <Select value={selectedModel.value} onValueChange={selectEngine}>
-                <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
+                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[min(320px,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] p-1.5">
@@ -779,7 +779,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>
                     <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -796,7 +796,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genNumImages")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       min={1}
                       max={maxImages(selectedModel)}
@@ -809,7 +809,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSeed")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       placeholder="auto"
                       value={generationConfig.seed}
@@ -821,7 +821,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genNegativePrompt")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       value={generationConfig.negativePrompt}
                       onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                     />
@@ -860,7 +860,7 @@ function GenerateWorkspace({
                       )}
                     </div>
                     {effectiveReferenceImageAssetId && (
-                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-[10px] border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
+                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-lg border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
                         <button
                           type="button"
                           className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
@@ -894,7 +894,7 @@ function GenerateWorkspace({
                     <span>{t("genDuration")}</span>
                     {selectedDurations.length > 1 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
-                        <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
+                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -907,7 +907,7 @@ function GenerateWorkspace({
                       </Select>
                     ) : (
                       <Input
-                        className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                        className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
                         min={1}
                         max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
@@ -921,7 +921,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genResolution")}</span>
                     <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -938,7 +938,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genAspectRatio")}</span>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -977,7 +977,7 @@ function GenerateWorkspace({
                       {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
                     </Button>
                     {generationConfig.firstFrameAssetId && (
-                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-[10px] border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
+                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-lg border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
                         <button
                           type="button"
                           className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
@@ -1004,7 +1004,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genFirstFrameUrl")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       placeholder="https://..."
                       value={generationConfig.firstFrameUrl}
                       onChange={(event) => setFirstFrameUrl(event.target.value)}
@@ -1041,7 +1041,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
   return (
     <article className="grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
       <div className="grid justify-items-end gap-1">
-        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-[10px] rounded-br bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground">
+        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground">
           {String(generation.request.prompt ?? "")}
         </div>
         {timestamp ? (
@@ -1053,7 +1053,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
         {generation.result_asset_id && generation.kind === "video" ? (
           <video
-            className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-[10px] border border-border bg-[#05070a]"
+            className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-lg border border-border bg-[#05070a]"
             src={assetFileUrl(generation.result_asset_id)}
             poster={assetThumbnailUrl(generation.result_asset_id)}
             controls
@@ -1071,7 +1071,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
             }
           >
             <img
-              className="block w-auto max-w-[min(560px,100%)] rounded-[10px] border border-border"
+              className="block w-auto max-w-[min(560px,100%)] rounded-lg border border-border"
               src={assetThumbnailUrl(generation.result_asset_id)}
               alt=""
               loading="lazy"
@@ -1107,7 +1107,7 @@ function GenerationFailureCard({ error }: { error: string }) {
   };
 
   return (
-    <div className="grid w-[min(560px,100%)] gap-2 rounded-[10px] border border-[color-mix(in_srgb,var(--destructive)_34%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_7%,var(--card))] px-3 py-2.5">
+    <div className="grid w-[min(560px,100%)] gap-2 rounded-lg border border-[color-mix(in_srgb,var(--destructive)_34%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_7%,var(--card))] px-3 py-2.5">
       <div className="flex min-w-0 items-start gap-2 text-destructive">
         <CircleAlert size={14} className="mt-0.5 shrink-0" />
         <div className="grid min-w-0 gap-0.5">

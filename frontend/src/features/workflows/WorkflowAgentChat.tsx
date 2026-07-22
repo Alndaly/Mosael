@@ -457,7 +457,7 @@ export function WorkflowAgentChat({
     <aside
       ref={panelRef}
       className={cn(
-        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[10px] border border-border-strong bg-panel",
+        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border-strong bg-panel",
         isFloating
           ? "fixed z-[55] min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
           : "relative z-[1] h-full w-full min-h-0 min-w-0 rounded-lg border-border shadow-none",
@@ -493,7 +493,7 @@ export function WorkflowAgentChat({
                   <div
                     key={item.id}
                     className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-[7px] hover:bg-secondary",
+                    "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-lg hover:bg-secondary",
                     item.id === sessionId && "bg-secondary",
                   )}
                   >
@@ -530,7 +530,7 @@ export function WorkflowAgentChat({
         )}
         <button
           type="button"
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           aria-label={t("wfAgentNewSession")}
           title={t("wfAgentNewSession")}
           disabled={newSession.isPending}
@@ -540,7 +540,7 @@ export function WorkflowAgentChat({
         </button>
         <button
           type="button"
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive ml-auto"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive ml-auto"
           aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
@@ -548,7 +548,7 @@ export function WorkflowAgentChat({
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </button>
         {isFloating && <GripHorizontal size={13} className="text-muted-foreground opacity-60" />}
-        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
+        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>
@@ -575,7 +575,7 @@ export function WorkflowAgentChat({
               className={
                 message.role === "assistant"
                   ? "relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]"
-                  : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
+                  : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
               }
             >
               {message.role === "assistant" ? (
@@ -632,7 +632,7 @@ export function WorkflowAgentChat({
           </span>
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => steerQueued.mutate(message.id)}
             title={t("chatSteerHint")}
           >
@@ -640,7 +640,7 @@ export function WorkflowAgentChat({
           </button>
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => cancelQueued.mutate(message.id)}
             aria-label={t("chatQueuedCancel")}
           >
@@ -651,7 +651,7 @@ export function WorkflowAgentChat({
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1 px-3.5 pt-1">
           {attachments.map((file, i) => (
-            <span key={`${file.name}-${i}`} className="inline-flex max-w-40 items-center gap-1 rounded-[5px] border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={file.name}>
+            <span key={`${file.name}-${i}`} className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={file.name}>
               <Paperclip size={11} />
               <span className="truncate">{file.name}</span>
               <button
@@ -665,7 +665,7 @@ export function WorkflowAgentChat({
           ))}
         </div>
       )}
-      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-2xl border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
+      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-[20px] border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
           type="file"

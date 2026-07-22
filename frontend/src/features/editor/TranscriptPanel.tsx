@@ -509,7 +509,7 @@ export function TranscriptPanel({
               {onSplitPoints && (
                 <button
                   type="button"
-                  className="absolute top-[3px] cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
+                  className="absolute top-[3px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
                   title={t("splitSentenceOutHint")}
                   aria-label={t("splitSentenceOut")}
                   onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -519,7 +519,7 @@ export function TranscriptPanel({
               )}
               <button
                 type="button"
-                className="absolute top-[3px] cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
+                className="absolute top-[3px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
                 title={t("cutSentenceHint")}
                 aria-label={t("cutSentence")}
                 onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -547,7 +547,7 @@ export function TranscriptPanel({
                         activeSrc.src >= token.start_time &&
                         activeSrc.src < token.end_time;
                       const classes = cn(
-                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-foreground [font:inherit] hover:bg-accent",
+                        "m-0 inline cursor-pointer rounded-sm border-0 bg-transparent p-px text-foreground [font:inherit] hover:bg-accent",
                         isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_18%,transparent)]",
                         current && "bg-[color-mix(in_oklab,var(--primary)_22%,transparent)] shadow-[0_1px_0_var(--primary)]",
                         selected.has(tokenKey) &&
@@ -572,7 +572,7 @@ export function TranscriptPanel({
                       <button
                         type="button"
                         className={cn(
-                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-left text-foreground [font:inherit] hover:bg-accent",
+                          "m-0 inline cursor-pointer rounded-sm border-0 bg-transparent p-px text-left text-foreground [font:inherit] hover:bg-accent",
                           selected.has(`${key}:all`) &&
                             "bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
                         )}

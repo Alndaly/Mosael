@@ -184,7 +184,7 @@ export function HomeView({
     : [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <section className="mb-3 flex items-stretch justify-between gap-3 max-[880px]:flex-col">
         <div className="flex min-w-0 flex-col justify-center gap-0.5">
           <h1 className="m-0 text-xl font-[650] tracking-[-0.01em]">{t(greetingKey)}</h1>
@@ -202,7 +202,7 @@ export function HomeView({
               </figcaption>
             </>
           )}
-          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
+          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
             <RefreshCcw size={12} />
           </button>
         </figure>
@@ -264,7 +264,7 @@ export function HomeView({
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Input
             ref={searchRef}
-            className="h-7 w-44 rounded border border-border bg-panel px-[9px] text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
+            className="h-7 w-44 rounded-md border border-border bg-panel px-[9px] text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
             value={search}
             placeholder={t("searchProjects")}
             onChange={(event) => setSearch(event.target.value)}

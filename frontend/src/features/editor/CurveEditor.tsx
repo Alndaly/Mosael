@@ -172,7 +172,7 @@ export function CurveEditor({
             key={c.key}
             type="button"
             className={cn(
-            "flex-1 cursor-pointer rounded border border-border bg-panel py-0.5 text-[11px] font-semibold text-muted-foreground transition-[border-color,color] duration-100",
+            "flex-1 cursor-pointer rounded-md border border-border bg-panel py-0.5 text-[11px] font-semibold text-muted-foreground transition-[border-color,color] duration-100",
             channel === c.key && "bg-[color-mix(in_srgb,currentColor_8%,transparent)]",
           )}
             style={channel === c.key ? { color: c.stroke, borderColor: c.stroke } : undefined}

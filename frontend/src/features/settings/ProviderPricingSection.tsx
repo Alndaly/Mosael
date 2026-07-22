@@ -333,7 +333,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         <div className="grid gap-1.5">
           {(rules.data ?? []).map((rule) => (
             <div className="grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5" key={rule.id}>
-              <span className="grid h-7 w-7 place-items-center rounded bg-accent text-accent-foreground">
+              <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <ReceiptText size={13} />
               </span>
               <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">

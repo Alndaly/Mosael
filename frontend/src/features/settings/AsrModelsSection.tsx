@@ -78,7 +78,7 @@ function AsrModelCard({
         <div className="grid min-w-0 gap-[3px]">
           <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
             <strong>{model.label}</strong>
-            <span className="rounded border border-border px-[5px] text-[10.5px] uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
+            <span className="rounded-md border border-border px-[5px] text-[10.5px] uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
             <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>

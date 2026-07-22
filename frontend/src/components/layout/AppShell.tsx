@@ -132,7 +132,7 @@ export function AppShell({
           {actions}
           <button
             type="button"
-            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-[3px] [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-[10px] [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
+            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-[10px] [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
             onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
           >
             <Search size={13} />
@@ -227,7 +227,7 @@ function WorkspaceSwitcher({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
+        <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
           {displayWorkspaceName(workspaceName, t)}
           <ChevronsUpDown size={12} />
         </button>
@@ -239,7 +239,7 @@ function WorkspaceSwitcher({
             key={ws.id}
             type="button"
             className={cn(
-            "flex cursor-pointer items-center justify-between gap-2 rounded border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+            "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
             ws.id === workspaceId && "font-semibold text-primary",
           )}
             onClick={() => {

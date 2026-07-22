@@ -123,8 +123,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] items-stretch gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <nav className="grid content-start gap-0.5 rounded-lg border border-border bg-panel p-1.5 max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
           {nav.map((item) => (
             <button
@@ -431,7 +431,7 @@ function AppearanceSection() {
   return (
     <SettingsGroup title={t("settingsAppearance")} description={t("settingsAppearanceDesc")}>
       <SettingsRow label={t("settingsTheme")} description={t("settingsThemeDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           <button
             type="button"
             className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "light" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -456,7 +456,7 @@ function AppearanceSection() {
         </div>
       </SettingsRow>
       <SettingsRow label={t("settingsLanguage")} description={t("settingsLanguageDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           <button
             type="button"
             className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", locale === "zh-CN" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -521,7 +521,7 @@ function BackgroundSection() {
   return (
     <SettingsGroup title={t("appearanceBgTitle")} description={t("appearanceBgDesc")}>
       <SettingsRow label={t("appearanceBgSource")} description={t("appearanceBgSourceDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           {(["none", "preset", "image"] as BackgroundKind[]).map((kind) => (
             <button
               key={kind}

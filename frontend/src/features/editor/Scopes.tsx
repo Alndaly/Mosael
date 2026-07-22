@@ -108,7 +108,7 @@ export function Scopes({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex">
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-6 flex-1" role="tablist">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-6 flex-1" role="tablist">
           <button
             type="button"
             role="tab"
@@ -130,7 +130,7 @@ export function Scopes({
         </div>
       </div>
       <div className="relative">
-        <canvas ref={displayRef} width={256} height={128} className="block h-auto w-full rounded bg-[#0b0b0d]" />
+        <canvas ref={displayRef} width={256} height={128} className="block h-auto w-full rounded-md bg-[#0b0b0d]" />
         {blocked && <p className="absolute inset-0 m-0 flex items-center justify-center p-2 text-center text-[10.5px] leading-normal text-[rgb(255_255_255/0.7)]">{t("scopeUnavailable")}</p>}
       </div>
     </div>

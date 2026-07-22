@@ -66,42 +66,41 @@
 }
 
 /*
- * Mibu design tokens.
- * Instrument-panel discipline: neutral cold grays, white panels, one refined
- * blue, semantic track colors. Hierarchy comes from 1px borders and background
- * value steps — never from heavy shadows or gradients.
+ * Mibu design tokens — 2026-07「暖纸面」重做。
+ * 昼:暖白纸底 + 柔靛紫,文字用暖灰紫系;夜:暖檀黑 + 长春花紫,独立调校
+ * 而非明档翻转。层级仍靠发丝边框 + 背景明度台阶(FLAT,无投影),
+ * 「不尖锐」靠圆角升档(--radius 8px)与低饱和主色实现。
+ * 图表色四组均通过 dataviz 校验器(明暗各自对面板底色跑过 CVD/对比检查)。
  */
 :root {
   color-scheme: light;
-  --radius: 4px;
+  --radius: 8px;
 
-  /* 2026-07 配色重做:冷纸面 + 宝蓝。页面/面板/内嵌三级明度台阶拉开,
-     文字用蓝灰系而非纯灰,主色统一 #2f62ea(暗色端提亮为 #4d80ff)。 */
-  --background: #f3f4f7;
-  --foreground: #16181d;
-  --card: #ffffff;
-  --card-foreground: #16181d;
-  --popover: #ffffff;
-  --popover-foreground: #16181d;
-  --primary: #2f62ea;
+  --background: #f6f4f0;
+  --foreground: #2c2a33;
+  --card: #fdfcfa;
+  --card-foreground: #2c2a33;
+  --popover: #fdfcfa;
+  --popover-foreground: #2c2a33;
+  --primary: #6a5cd8;
   --primary-foreground: #ffffff;
-  --secondary: #e9ebf0;
-  --secondary-foreground: #2f3540;
-  --muted: #f6f7fa;
-  --muted-foreground: #6a7180;
-  --accent: #e9effe;
-  --accent-foreground: #1c48c8;
-  --destructive: #d93025;
-  --success: #16a34a;
-  --border: #e2e5ea;
-  --input: #d3d8e0;
-  --ring: #a8c0f5;
+  --secondary: #edeae4;
+  --secondary-foreground: #3f3c49;
+  --muted: #f2efe9;
+  --muted-foreground: #756f80;
+  --accent: #ece9fb;
+  --accent-foreground: #4f43b8;
+  --destructive: #d8544b;
+  --success: #359460;
+  --border: #e6e1d8;
+  --input: #d8d2c6;
+  --ring: #b7adf0;
 
   /* Panel system */
   --panel: var(--card);
-  --panel-subtle: #f6f7fa;
-  --panel-inset: #eceef3;
-  --border-strong: #c9ced8;
+  --panel-subtle: #f4f1eb;
+  --panel-inset: #ece8e0;
+  --border-strong: #cdc6b9;
 
   /* 磨玻璃:仅用于浮层与顶部/侧栏 chrome(内容面板保持不透明,保可读 + 平面身份)。
      引用 --popover/--panel,故自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
@@ -114,36 +113,36 @@
   --shadow-raised: none;
 
   /* Editor surfaces */
-  --monitor-bg: #17191d;
-  --timeline-bg: #f6f7f8;
-  --ruler-bg: #ffffff;
-  --ruler-tick: #b6bbc2;
-  --ruler-text: #82878f;
+  --monitor-bg: #1b1922;
+  --timeline-bg: #f3f0ea;
+  --ruler-bg: #fdfcfa;
+  --ruler-tick: #b5aec1;
+  --ruler-text: #837d90;
   --playhead: #e5484d;
-  --track-lane: #eceef0;
-  --track-lane-line: #e2e4e8;
+  --track-lane: #ece8e0;
+  --track-lane-line: #e2ddd3;
 
-  /* Semantic track colors */
-  --track-video-bg: #dce7fb;
-  --track-video-border: #9dbcf0;
-  --track-video-text: #28497f;
-  --track-audio-bg: #d7f0e3;
-  --track-audio-border: #8fd0b0;
-  --track-audio-text: #1f5c40;
-  --track-subtitle-bg: #fcefd3;
-  --track-subtitle-border: #e5c37f;
-  --track-subtitle-text: #7a5518;
+  /* Semantic track colors(靛/青/紫,与主色同族但保持内容色身份) */
+  --track-video-bg: #dfe4f9;
+  --track-video-border: #a3b1ec;
+  --track-video-text: #33418a;
+  --track-audio-bg: #d7efe8;
+  --track-audio-border: #8bd0bb;
+  --track-audio-text: #1d5c4a;
+  --track-subtitle-bg: #f0e6fb;
+  --track-subtitle-border: #cbaaee;
+  --track-subtitle-text: #5f3a8f;
 
-  /* 图表色(dataviz 校验通过:亮度带/彩度/CVD/普通视觉分离/对比)。
-     活动图 成功/失败;素材构成 视频/音频/图片(挂靠轨道色系但为图表加深提彩)。 */
-  --chart-ok: #2f62ea;
-  --chart-fail: #d93025;
-  --chart-video: #3565d9;
-  --chart-audio: #1e9e8f;
-  --chart-image: #c8801d;
-  --track-overlay-bg: #e9e2fa;
-  --track-overlay-border: #bba6ec;
-  --track-overlay-text: #4a3585;
+  /* 图表色(dataviz 校验通过:明档对 #fdfcfa 面板;CVD/对比全过)。 */
+  --chart-ok: #6a5cd8;
+  --chart-fail: #e0524a;
+  --chart-video: #5873d6;
+  --chart-audio: #2f9e8f;
+  --chart-image: #b8801f;
+  --track-overlay-bg: #fbe4ef;
+  --track-overlay-border: #eba8c9;
+  --track-overlay-text: #8f3a63;
+
 
   /* 字体回退是逐字形的,所以栈的顺序本身就完成了分工:拉丁字符命中 Inter(界面里大量数字、
      时间码用它更整齐),中文字符落到霞鹜文楷 —— 楷体,比黑体更耐读。
@@ -158,62 +157,63 @@
 .dark {
   color-scheme: dark;
 
-  /* 深蓝石墨:比旧版更深的底、更亮的字、更清晰的面板台阶,
-     消除"糊成一片"的中灰;主色提亮为电光宝蓝。 */
-  --background: #0d0f13;
-  --foreground: #e7eaf0;
-  --card: #15181e;
-  --card-foreground: #e7eaf0;
-  --popover: #1b1f26;
-  --popover-foreground: #e7eaf0;
-  --primary: #4d80ff;
-  --primary-foreground: #f5f8ff;
-  --secondary: #232830;
-  --secondary-foreground: #d5dae2;
-  --muted: #12151a;
-  --muted-foreground: #8b93a1;
-  --accent: #1c2a4a;
-  --accent-foreground: #9fbcff;
-  --destructive: #f26d5f;
-  --border: #262c36;
-  --input: #333b47;
-  --ring: #3f62b8;
+  /* 夜:暖檀黑(带紫棕暖调)+ 长春花紫。不是明档的自动翻转:
+     底更暖、主色更亮更柔,台阶单独校过。 */
+  --background: #141218;
+  --foreground: #e9e6f0;
+  --card: #1c1a23;
+  --card-foreground: #e9e6f0;
+  --popover: #24212d;
+  --popover-foreground: #e9e6f0;
+  --primary: #8a7bf0;
+  --primary-foreground: #f7f5ff;
+  --secondary: #282433;
+  --secondary-foreground: #d3cfe0;
+  --muted: #191720;
+  --muted-foreground: #918a9f;
+  --accent: #2b2542;
+  --accent-foreground: #b7aaff;
+  --destructive: #e0645c;
+  --success: #4cb87e;
+  --border: #2b2836;
+  --input: #363044;
+  --ring: #5f53b8;
 
   --panel: var(--card);
-  --panel-subtle: #12151a;
-  --panel-inset: #0f1216;
-  --border-strong: #39414e;
+  --panel-subtle: #191720;
+  --panel-inset: #131118;
+  --border-strong: #3f3a4e;
   --shadow-panel: none;
   --shadow-raised: none;
 
-  --monitor-bg: #08090b;
-  --timeline-bg: #101319;
-  --ruler-bg: #15181e;
-  --ruler-tick: #49525f;
-  --ruler-text: #838b99;
+  --monitor-bg: #0b0a0f;
+  --timeline-bg: #17151d;
+  --ruler-bg: #1c1a23;
+  --ruler-tick: #4a4459;
+  --ruler-text: #837d90;
   --playhead: #ff5d61;
-  --track-lane: #191d24;
-  --track-lane-line: #242a33;
+  --track-lane: #1d1a25;
+  --track-lane-line: #262330;
 
-  --track-video-bg: #22375c;
-  --track-video-border: #3e63a8;
-  --track-video-text: #b9d0f5;
-  --track-audio-bg: #1c3d2e;
-  --track-audio-border: #35745a;
-  --track-audio-text: #a9e2c6;
-  --track-subtitle-bg: #423419;
-  --track-subtitle-border: #8a6d33;
-  --track-subtitle-text: #ecd39a;
-  --track-overlay-bg: #322851;
-  --track-overlay-border: #5d4a99;
-  --track-overlay-text: #cfc0f2;
+  --track-video-bg: #262e52;
+  --track-video-border: #46549b;
+  --track-video-text: #bcc7f5;
+  --track-audio-bg: #1b3a31;
+  --track-audio-border: #2f6b58;
+  --track-audio-text: #a5e0c8;
+  --track-subtitle-bg: #332a4d;
+  --track-subtitle-border: #5c4a94;
+  --track-subtitle-text: #cfc0f2;
+  --track-overlay-bg: #40243f;
+  --track-overlay-border: #7a4677;
+  --track-overlay-text: #eac3e6;
 
-  /* 图表色暗档:同族重新取档并单独校验,不是明档的自动翻转 */
-  --chart-ok: #4d80ff;
-  --chart-fail: #e35d4f;
-  --chart-video: #5b8bf5;
-  --chart-audio: #27a08f;
-  --chart-image: #bd7c22;
+  /* 图表色暗档:对 #1c1a23 面板单独校验,不是明档翻转 */
+  --chart-ok: #8a7bf0;
+  --chart-fail: #e0645c;
+  --chart-video: #5c7ce8;
+  --chart-audio: #219e8c;
+  --chart-image: #bb8326;
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
@@ -222,18 +222,18 @@
    否则表面保持不透明以保可读性。字面色值是各主题的实底,避免 var 自引用。 */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] {
-    --background: color-mix(in srgb, #f3f4f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --card: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --popover: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-subtle: color-mix(in srgb, #f6f7fa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-inset: color-mix(in srgb, #eceef3 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --background: color-mix(in srgb, #f6f4f0 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --card: color-mix(in srgb, #fdfcfa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --popover: color-mix(in srgb, #fdfcfa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-subtle: color-mix(in srgb, #f4f1eb calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-inset: color-mix(in srgb, #ece8e0 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
   :root[data-appearance="glass"].dark {
-    --background: color-mix(in srgb, #0d0f13 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --card: color-mix(in srgb, #15181e calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --popover: color-mix(in srgb, #1b1f26 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-subtle: color-mix(in srgb, #12151a calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-inset: color-mix(in srgb, #0f1216 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --background: color-mix(in srgb, #141218 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --card: color-mix(in srgb, #1c1a23 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --popover: color-mix(in srgb, #24212d calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-subtle: color-mix(in srgb, #191720 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-inset: color-mix(in srgb, #131118 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
 }
 
@@ -253,7 +253,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

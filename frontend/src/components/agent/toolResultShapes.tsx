@@ -117,17 +117,17 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
       <span className="relative inline-flex shrink-0">
         {info?.has_thumbnail || shouldTryThumb ? (
           <img
-            className="h-[22px] w-[34px] shrink-0 rounded border border-border bg-muted object-cover"
+            className="h-[22px] w-[34px] shrink-0 rounded-md border border-border bg-muted object-cover"
             src={assetThumbnailUrl(id)}
             alt=""
             loading="lazy"
             onError={() => setThumbFailed(true)}
           />
         ) : (
-          <span className="h-[22px] w-[34px] shrink-0 rounded border border-border bg-muted object-cover" data-kind={kind} />
+          <span className="h-[22px] w-[34px] shrink-0 rounded-md border border-border bg-muted object-cover" data-kind={kind} />
         )}
         {playable && (
-          <span className="absolute inset-0 flex items-center justify-center rounded bg-[color-mix(in_srgb,var(--background)_45%,transparent)] text-foreground opacity-0 transition-opacity duration-[120ms] group-hover/play:opacity-100 group-focus-visible/play:opacity-100 group-aria-expanded/play:opacity-100" aria-hidden>
+          <span className="absolute inset-0 flex items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--background)_45%,transparent)] text-foreground opacity-0 transition-opacity duration-[120ms] group-hover/play:opacity-100 group-focus-visible/play:opacity-100 group-aria-expanded/play:opacity-100" aria-hidden>
             {/* An image is opened, not played. */}
             {isImage ? <Maximize2 size={10} /> : <Play size={10} />}
           </span>
@@ -148,7 +148,7 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
       {playable ? (
         <button
           type="button"
-          className="group/play flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-[5px] border-0 bg-transparent p-0 text-left hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+          className="group/play flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 text-left hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           onClick={() => {
             if (isImage) {
               openImagePreview({ src: assetFileUrl(id), title: name });
@@ -236,7 +236,7 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
             </span>
             <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
               {clips.map((clip, clipIndex) => (
-                <span className="max-w-[140px] shrink-0 truncate rounded border border-border bg-muted px-[7px] py-0.5 text-[11px]" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
+                <span className="max-w-[140px] shrink-0 truncate rounded-md border border-border bg-muted px-[7px] py-0.5 text-[11px]" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
                   {String(clip.asset ?? clip.asset_id ?? "片段")}
                 </span>
               ))}
@@ -315,9 +315,9 @@ function WorkflowCard({ value }: { value: Record<string, unknown> }) {
       {chips.length > 0 && (
         <span className="flex min-w-0 flex-wrap gap-1">
           {chips.map((chip, index) => (
-            <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={`${chip}-${index}`}>{chip}</span>
+            <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={`${chip}-${index}`}>{chip}</span>
           ))}
-          {nodes.length > 8 && <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">+{nodes.length - 8}</span>}
+          {nodes.length > 8 && <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">+{nodes.length - 8}</span>}
         </span>
       )}
     </div>
@@ -332,7 +332,7 @@ function TaggedAsset({ value }: { value: Record<string, unknown> }) {
       <span className="flex min-w-0 flex-wrap gap-1">
         {tags.length === 0 && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">已清空标签</span>}
         {tags.map((tag) => (
-          <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>{tag}</span>
+          <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>{tag}</span>
         ))}
       </span>
     </div>
@@ -353,7 +353,7 @@ function UpdatedList({ value }: { value: Record<string, unknown> }) {
             {Array.isArray(row.tags) && (
               <span className="flex min-w-0 flex-wrap gap-1">
                 {row.tags.map((tag) => (
-                  <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={String(tag)}>{String(tag)}</span>
+                  <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={String(tag)}>{String(tag)}</span>
                 ))}
               </span>
             )}
@@ -385,7 +385,7 @@ function AssetRef({ value }: { value: Record<string, unknown> }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "素材")}</span>
-      {id && <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{id.slice(0, 12)}</span>}
+      {id && <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{id.slice(0, 12)}</span>}
       {typeof value.generation_id === "string" && value.generation_id.trim() && (
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">生成任务 {value.generation_id.slice(0, 8)}</span>
       )}
@@ -405,7 +405,7 @@ function RefSummary({ value }: { value: Record<string, unknown> }) {
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
       {refs.map(([key, label]) => (
-        <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={key}>
+        <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={key}>
           {label} {String(value[key]).slice(0, 12)}
         </span>
       ))}

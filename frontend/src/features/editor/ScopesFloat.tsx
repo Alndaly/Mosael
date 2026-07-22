@@ -84,7 +84,7 @@ export function ScopesFloat({
       >
         <GripHorizontal size={13} className="text-muted-foreground" />
         <span className="flex-1 text-[11px] font-medium text-foreground">{t("scopes")}</span>
-        <button type="button" className="inline-flex h-[18px] w-[18px] items-center justify-center rounded text-muted-foreground hover:bg-[rgb(255_255_255/0.1)] hover:text-foreground" onClick={onClose} aria-label={t("close")}>
+        <button type="button" className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-md text-muted-foreground hover:bg-[rgb(255_255_255/0.1)] hover:text-foreground" onClick={onClose} aria-label={t("close")}>
           <X size={13} />
         </button>
       </div>

@@ -111,7 +111,7 @@ export function SubtitlePanel({
                 </button>
                 <button
                   type="button"
-                  className="cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+                  className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
                   title={t("deleteClip")}
                   aria-label={t("deleteClip")}
                   onClick={() => onDeleteClip(clip.id)}
@@ -121,7 +121,7 @@ export function SubtitlePanel({
               </div>
               <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
-                className="w-full resize-y rounded border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                className="w-full resize-y rounded-md border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                 rows={2}
                 defaultValue={clip.text_override ?? ""}
                 onBlur={(event) => {
@@ -370,11 +370,11 @@ function SubtitleStyleControls({
           </label>
           <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subColor")}</span>
-            <input type="color" value={s.color} onChange={(e) => patch({ color: e.target.value })} />
+            <input type="color" className="h-7! w-10! cursor-pointer rounded-lg! border! border-input! bg-transparent! p-0.5! [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0" value={s.color} onChange={(e) => patch({ color: e.target.value })} />
           </label>
           <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subBg")}</span>
-            <input type="color" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
+            <input type="color" className="h-7! w-10! cursor-pointer rounded-lg! border! border-input! bg-transparent! p-0.5! [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
             <Slider
               min={0}
               max={1}

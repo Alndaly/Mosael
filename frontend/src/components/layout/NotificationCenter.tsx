@@ -101,7 +101,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
             >
               <span
                 className={cn(
-                  "grid h-[26px] w-[26px] place-items-center rounded border border-border text-muted-foreground",
+                  "grid h-[26px] w-[26px] place-items-center rounded-md border border-border text-muted-foreground",
                   !item.read_at && "border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] text-primary",
                 )}
               >

@@ -103,7 +103,7 @@ export function Recorder({
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={t("recordTitle")} className="w-[520px]">
       <div className="grid w-full gap-2.5">
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border w-fit justify-self-start" role="group" aria-label={t("recordTitle")}>
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border w-fit justify-self-start" role="group" aria-label={t("recordTitle")}>
           {(["screen", "camera", "mic"] as Source[]).map((s) => (
             <button
               key={s}

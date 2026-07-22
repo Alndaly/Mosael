@@ -414,7 +414,7 @@ export function Timeline({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]" data-tool={tool} onWheel={handleWheel}>
       <div className="flex flex-wrap items-center justify-between gap-y-0.5 border-b border-border bg-panel px-1.5 py-0.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editTools")}>
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <button
               type="button"
               className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -434,7 +434,7 @@ export function Timeline({
               <Slice size={12} /> {t("toolBlade")}
             </button>
           </div>
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editMode")}>
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <button
               type="button"
               className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -530,15 +530,15 @@ export function Timeline({
           <span className="mx-[3px] h-4 w-px bg-border" />
           {onAddTrack && (
             <>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
                 <Plus size={11} />
                 <Film size={12} /> {t("trackVideoShort")}
               </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
                 <Plus size={11} />
                 <AudioLines size={12} /> {t("trackAudioShort")}
               </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
                 <Plus size={11} />
                 <Type size={12} /> {t("trackSubtitleShort")}
               </button>
@@ -599,7 +599,7 @@ export function Timeline({
                 [t("hintDragLabel"), t("hintDragBody")],
                 ["↕", t("hintVerticalDrag")],
               ].map(([key, body]) => (
-                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-[3px] [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-[10.5px] [&_span]:text-muted-foreground" key={key}>
+                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-[10.5px] [&_span]:text-muted-foreground" key={key}>
                   <kbd>{key}</kbd>
                   <span>{body}</span>
                 </div>
@@ -622,7 +622,7 @@ export function Timeline({
                 <span className="ml-auto inline-flex gap-px">
                   <button
                     type="button"
-                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
+                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     aria-label={t("trackMoveUp")}
                     title={t("trackMoveUp")}
                     disabled={trackIndex === 0}
@@ -632,7 +632,7 @@ export function Timeline({
                   </button>
                   <button
                     type="button"
-                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
+                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     aria-label={t("trackMoveDown")}
                     title={t("trackMoveDown")}
                     disabled={trackIndex === tracks.length - 1}
@@ -648,7 +648,7 @@ export function Timeline({
                 <span className="inline-flex gap-0.5">
                   <button
                     type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.muted && "text-destructive opacity-100 enabled:hover:text-destructive")}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.muted && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.muted ? t("trackUnmute") : t("trackMute")}
                     onClick={() => onSetTrackState(track.id, { muted: !track.muted })}
                   >
@@ -656,7 +656,7 @@ export function Timeline({
                   </button>
                   <button
                     type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.solo && "text-destructive opacity-100 enabled:hover:text-destructive")}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.solo && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.solo ? t("trackUnsolo") : t("trackSolo")}
                     onClick={() => onSetTrackState(track.id, { solo: !track.solo })}
                   >
@@ -665,7 +665,7 @@ export function Timeline({
                   {track.kind === "audio" && (
                     <button
                       type="button"
-                      className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.duck && "text-destructive opacity-100 enabled:hover:text-destructive")}
+                      className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.duck && "text-destructive opacity-100 enabled:hover:text-destructive")}
                       aria-label={track.duck ? t("trackUnduck") : t("trackDuck")}
                       onClick={() => onSetTrackState(track.id, { duck: !track.duck })}
                     >
@@ -674,7 +674,7 @@ export function Timeline({
                   )}
                   <button
                     type="button"
-                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.locked && "text-destructive opacity-100 enabled:hover:text-destructive")}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.locked && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.locked ? t("trackUnlock") : t("trackLock")}
                     onClick={() => onSetTrackState(track.id, { locked: !track.locked })}
                   >
@@ -685,7 +685,7 @@ export function Timeline({
               {onRemoveTrack && (
                 <button
                   type="button"
-                  className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 hover:bg-destructive hover:text-white group-hover/label:opacity-100"
+                  className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 hover:bg-destructive hover:text-white group-hover/label:opacity-100"
                   aria-label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   title={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   onClick={() => onRemoveTrack(track.id, (track.clips ?? []).length)}
@@ -748,7 +748,7 @@ export function Timeline({
               >
                 {dropGhost?.trackId === track.id && (
                   <div
-                    className="pointer-events-none absolute bottom-[5px] top-[5px] z-[2] rounded border-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
+                    className="pointer-events-none absolute bottom-[5px] top-[5px] z-[2] rounded-md border-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
                     style={{
                       left: timeToPx(dropGhost.start, pxPerSecond),
                       width: Math.max(12, timeToPx(dropGhost.duration, pxPerSecond)),
@@ -842,7 +842,7 @@ export function Timeline({
                 if (trackIndex < 0) return null;
                 return (
                   <div
-                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded border border-border-strong bg-popover px-[7px] py-px text-[10.5px] tabular-nums text-foreground"
+                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded-md border border-border-strong bg-popover px-[7px] py-px text-[10.5px] tabular-nums text-foreground"
                     style={{
                       left: timeToPx(edgeTime, pxPerSecond),
                       top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,

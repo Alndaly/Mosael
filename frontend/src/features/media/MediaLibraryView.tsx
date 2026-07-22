@@ -202,7 +202,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Button asChild size="sm">
@@ -442,7 +442,7 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
         )}
         {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
         {asset.kind !== "image" && duration != null && (
-          <span className="absolute bottom-1.5 right-1.5 rounded-[3px] bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-[11px] tabular-nums text-[#e8eaed]">
+          <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-[11px] tabular-nums text-[#e8eaed]">
             {formatSeconds(duration)}
           </span>
         )}

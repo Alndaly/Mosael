@@ -235,7 +235,7 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
             {running && onCancel && (
               <button
                 type="button"
-                className="ml-[3px] inline-grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-destructive"
+                className="ml-[3px] inline-grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-destructive"
                 title={t("jobCancel")}
                 aria-label={t("jobCancel")}
                 onClick={(event) => {

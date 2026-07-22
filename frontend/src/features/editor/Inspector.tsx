@@ -120,9 +120,9 @@ export function Inspector({
 
   return (
     <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             <button
               type="button"
               role="tab"
@@ -149,7 +149,7 @@ export function Inspector({
           {selectedClip && (
             <button
               type="button"
-              className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+              className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
               title={t("deleteClip")}
               aria-label={t("deleteClip")}
               onClick={() => onDeleteClip(selectedClip.id)}
@@ -160,7 +160,7 @@ export function Inspector({
           {onClose && (
             <button
               type="button"
-              className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
+              className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
               title={t("close")}
               aria-label={t("close")}
               onClick={onClose}
@@ -204,7 +204,7 @@ export function Inspector({
                 <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
-                  className="w-full resize-y rounded border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                  className="w-full resize-y rounded-md border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                   rows={3}
                   defaultValue={selectedClip.text_override ?? ""}
                   onBlur={(event) => {
@@ -222,7 +222,7 @@ export function Inspector({
                     <button
                       key={option}
                       type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(selectedClip.speed - option) < 0.001 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(selectedClip.speed - option) < 0.001 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onSetSpeed(selectedClip.id, option)}
                     >
                       {option}x
@@ -238,13 +238,13 @@ export function Inspector({
                   <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
                   <button
                     type="button"
-                    className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                    className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                     onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
                   >
                     {selectedClip.muted ? t("clipMuted") : t("clipMute")}
                   </button>
                 </div>
-                <div className="grid grid-cols-[60px_1fr_40px] items-center gap-2 [&_input[type=range]]:w-full">
+                <div className="grid grid-cols-[60px_1fr_40px] items-center gap-2">
                   <span className="text-[11px] text-muted-foreground">{t("gain")}</span>
                   <Slider
                     key={`gain-${selectedClip.id}-${selectedClip.gain}`}
@@ -265,7 +265,7 @@ export function Inspector({
                 <div className="flex flex-wrap gap-1">
                   <Input
                     key={`vfi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -275,7 +275,7 @@ export function Inspector({
                   />
                   <Input
                     key={`vfo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -288,7 +288,7 @@ export function Inspector({
                 <div className="flex flex-wrap gap-1">
                   <Input
                     key={`fi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -298,7 +298,7 @@ export function Inspector({
                   />
                   <Input
                     key={`fo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -332,7 +332,7 @@ export function Inspector({
                     { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
                   ] as const
                 ).map((row) => (
-                  <div key={row.key} className="grid grid-cols-[60px_1fr_40px] items-center gap-2 [&_input[type=range]]:w-full">
+                  <div key={row.key} className="grid grid-cols-[60px_1fr_40px] items-center gap-2">
                     <span className="text-[11px] text-muted-foreground">{row.label}</span>
                     <Slider
                       // 值入 key:改画幅/重置后重挂,让非受控滑块跳到新值。
@@ -373,7 +373,7 @@ export function Inspector({
                     <button
                       key={size}
                       type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(pip.scale - size) < 0.01 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(pip.scale - size) < 0.01 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => applyPip({ scale: size })}
                     >
                       {Math.round(size * 100)}%
@@ -413,7 +413,7 @@ export function Inspector({
                     <button
                       key={preset.label}
                       type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", sequence.width === preset.w && sequence.height === preset.h && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", sequence.width === preset.w && sequence.height === preset.h && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onReframe(preset.w, preset.h, fill)}
                     >
                       {preset.label}
@@ -435,7 +435,7 @@ export function Inspector({
                     <button
                       key={mode.key}
                       type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", fill === mode.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", fill === mode.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onReframe(sequence.width, sequence.height, mode.key)}
                     >
                       {mode.label}
@@ -528,7 +528,7 @@ function ColorGradePanel({
         <div className="inline-flex items-center gap-1">
           <button
             type="button"
-            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
+            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             onClick={history.undo}
             disabled={!history.canUndo}
             title={t("colorUndo")}
@@ -538,7 +538,7 @@ function ColorGradePanel({
           </button>
           <button
             type="button"
-            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
+            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             onClick={history.redo}
             disabled={!history.canRedo}
             title={t("colorRedo")}
@@ -558,7 +558,7 @@ function ColorGradePanel({
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
-            className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", isCleanColor && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+            className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", isCleanColor && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
             title={t("colorPresetHint")}
             onClick={() => applyPreset(null)}
           >
@@ -568,7 +568,7 @@ function ColorGradePanel({
             <button
               key={preset.key}
               type="button"
-              className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", activePreset === preset.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+              className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", activePreset === preset.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
               title={t("colorPresetHint")}
               onClick={() => applyPreset(presetColorPayload(preset))}
             >
