@@ -23,6 +23,7 @@ import {
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
+import { cn } from "@/lib/utils";
 
 const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 26;
@@ -410,13 +411,13 @@ export function Timeline({
   };
 
   return (
-    <div className="tl" data-tool={tool} onWheel={handleWheel}>
-      <div className="tl-toolbar">
-        <div className="tl-toolbar-left">
-          <div className="seg tl-tool-seg" role="group" aria-label={t("editTools")}>
+    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]" data-tool={tool} onWheel={handleWheel}>
+      <div className="flex flex-wrap items-center justify-between gap-y-0.5 border-b border-border bg-panel px-1.5 py-0.5">
+        <div className="flex min-w-0 flex-nowrap items-center gap-2">
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <button
               type="button"
-              className={tool === "select" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("toolSelectHint")}
               aria-pressed={tool === "select"}
               onClick={() => useEditorStore.getState().setTool("select")}
@@ -425,7 +426,7 @@ export function Timeline({
             </button>
             <button
               type="button"
-              className={tool === "blade" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("toolBladeHint")}
               aria-pressed={tool === "blade"}
               onClick={() => useEditorStore.getState().setTool("blade")}
@@ -433,10 +434,10 @@ export function Timeline({
               <Slice size={12} /> {t("toolBlade")}
             </button>
           </div>
-          <div className="seg tl-tool-seg" role="group" aria-label={t("editMode")}>
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <button
               type="button"
-              className={editMode === "overwrite" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("editModeOverwriteHint")}
               aria-pressed={editMode === "overwrite"}
               onClick={() => useEditorStore.getState().setEditMode("overwrite")}
@@ -445,7 +446,7 @@ export function Timeline({
             </button>
             <button
               type="button"
-              className={editMode === "insert" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("editModeInsertHint")}
               aria-pressed={editMode === "insert"}
               onClick={() => useEditorStore.getState().setEditMode("insert")}
@@ -454,14 +455,14 @@ export function Timeline({
             </button>
           </div>
           <PlayheadReadout total={sequenceDuration(allClips)} />
-          <span className="tl-clip-count">
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground">
             {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
             {Math.round(sequence.fps)}fps
           </span>
         </div>
-        <div className="tl-toolbar-actions">
+        <div className="flex items-center gap-0.5">
           {toolbarExtra}
-          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="tl-toolbar-sep" />}
+          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="mx-[3px] h-4 w-px bg-border" />}
           {onSplitClip && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -526,18 +527,18 @@ export function Timeline({
               <TooltipContent>{t("deleteClip")}</TooltipContent>
             </Tooltip>
           )}
-          <span className="tl-toolbar-sep" />
+          <span className="mx-[3px] h-4 w-px bg-border" />
           {onAddTrack && (
             <>
-              <button type="button" className="tl-add-track" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
                 <Plus size={11} />
                 <Film size={12} /> {t("trackVideoShort")}
               </button>
-              <button type="button" className="tl-add-track" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
                 <Plus size={11} />
                 <AudioLines size={12} /> {t("trackAudioShort")}
               </button>
-              <button type="button" className="tl-add-track" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
                 <Plus size={11} />
                 <Type size={12} /> {t("trackSubtitleShort")}
               </button>
@@ -583,7 +584,7 @@ export function Timeline({
                 <CircleHelp size={14} />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="tl-help" aria-label={t("shortcutsHelp")}>
+            <PopoverContent className="grid w-[300px] gap-1.5 px-3 py-2.5 [&_strong]:mb-0.5 [&_strong]:text-xs" aria-label={t("shortcutsHelp")}>
               <strong>{t("shortcutsHelp")}</strong>
               {[
                 ["Space", t("hintPlayPause")],
@@ -598,7 +599,7 @@ export function Timeline({
                 [t("hintDragLabel"), t("hintDragBody")],
                 ["↕", t("hintVerticalDrag")],
               ].map(([key, body]) => (
-                <div className="tl-help-row" key={key}>
+                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-[3px] [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-[10.5px] [&_span]:text-muted-foreground" key={key}>
                   <kbd>{key}</kbd>
                   <span>{body}</span>
                 </div>
@@ -607,18 +608,18 @@ export function Timeline({
           </Popover>
         </div>
       </div>
-      <div className="tl-body">
-        <div className="tl-labels" ref={labelsRef}>
-          <div className="tl-labels-spacer" style={{ height: RULER_HEIGHT }} />
+      <div className="grid min-h-0 grid-cols-[112px_minmax(0,1fr)] overflow-hidden">
+        <div className="overflow-hidden border-r border-border bg-panel" ref={labelsRef}>
+          <div className="sticky top-0 z-[6] border-b border-border bg-panel" style={{ height: RULER_HEIGHT }} />
           {tracks.map((track, trackIndex) => (
-            <div className="tl-label" key={track.id} style={{ height: TRACK_HEIGHT }}>
-              <div className="tl-label-top">
-                <span className={`tl-label-dot dot-${track.kind}`} />
-                <span className="tl-label-name">{track.name}</span>
+            <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-[11px] font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className={cn("h-[7px] w-[7px] rounded-sm bg-[var(--track-video-border)]", track.kind === "audio" && "bg-[var(--track-audio-border)]", track.kind === "subtitle" && "bg-[#a855f7]")} />
+                <span className="truncate">{track.name}</span>
                 {/* Reorder sits with the name: it answers "which layer is this", not "what does
                     this track do". That also leaves the row below wide enough for the controls. */}
                 {onMoveTrack && (
-                <span className="tl-label-order">
+                <span className="ml-auto inline-flex gap-px">
                   <button
                     type="button"
                     className="tl-label-tool"
@@ -642,12 +643,12 @@ export function Timeline({
                 </span>
                 )}
               </div>
-              <div className="tl-label-actions">
+              <div className="flex items-center gap-0.5">
               {onSetTrackState && (
-                <span className="tl-label-tools">
+                <span className="inline-flex gap-0.5">
                   <button
                     type="button"
-                    className={track.muted ? "tl-label-tool on" : "tl-label-tool"}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.muted && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.muted ? t("trackUnmute") : t("trackMute")}
                     onClick={() => onSetTrackState(track.id, { muted: !track.muted })}
                   >
@@ -655,7 +656,7 @@ export function Timeline({
                   </button>
                   <button
                     type="button"
-                    className={track.solo ? "tl-label-tool on" : "tl-label-tool"}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.solo && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.solo ? t("trackUnsolo") : t("trackSolo")}
                     onClick={() => onSetTrackState(track.id, { solo: !track.solo })}
                   >
@@ -664,7 +665,7 @@ export function Timeline({
                   {track.kind === "audio" && (
                     <button
                       type="button"
-                      className={track.duck ? "tl-label-tool on" : "tl-label-tool"}
+                      className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.duck && "text-destructive opacity-100 enabled:hover:text-destructive")}
                       aria-label={track.duck ? t("trackUnduck") : t("trackDuck")}
                       onClick={() => onSetTrackState(track.id, { duck: !track.duck })}
                     >
@@ -673,7 +674,7 @@ export function Timeline({
                   )}
                   <button
                     type="button"
-                    className={track.locked ? "tl-label-tool on" : "tl-label-tool"}
+                    className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100", track.locked && "text-destructive opacity-100 enabled:hover:text-destructive")}
                     aria-label={track.locked ? t("trackUnlock") : t("trackLock")}
                     onClick={() => onSetTrackState(track.id, { locked: !track.locked })}
                   >
@@ -684,7 +685,7 @@ export function Timeline({
               {onRemoveTrack && (
                 <button
                   type="button"
-                  className="tl-label-remove"
+                  className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 hover:bg-destructive hover:text-white group-hover/label:opacity-100"
                   aria-label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   title={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   onClick={() => onRemoveTrack(track.id, (track.clips ?? []).length)}
@@ -697,16 +698,16 @@ export function Timeline({
           ))}
         </div>
         <div
-          className="tl-hscroll"
+          className="min-w-0 overflow-auto"
           ref={hscrollRef}
           onScroll={(event) => {
             // Mirror vertical scroll to the labels column so track rows stay aligned.
             if (labelsRef.current) labelsRef.current.scrollTop = event.currentTarget.scrollTop;
           }}
         >
-          <div className="tl-canvas" ref={canvasRef} style={{ width: contentWidth }}>
+          <div className="relative min-w-full" ref={canvasRef} style={{ width: contentWidth }}>
             <div
-              className="tl-ruler"
+              className="sticky top-0 z-[5] cursor-ew-resize touch-none overflow-hidden border-b border-border bg-[var(--ruler-bg)]"
               style={{ height: RULER_HEIGHT }}
               onPointerDown={handleRulerPointerDown}
               onPointerMove={handleRulerPointerMove}
@@ -714,7 +715,7 @@ export function Timeline({
               {ticks.map((tick) => (
                 <div
                   key={tick.time}
-                  className={tick.major ? "tl-tick major" : "tl-tick"}
+                  className={cn("absolute bottom-0 h-[5px] w-px bg-[var(--ruler-tick)]", tick.major && "h-[9px] [&_span]:absolute [&_span]:bottom-2 [&_span]:left-1 [&_span]:whitespace-nowrap [&_span]:text-[10px] [&_span]:text-[var(--ruler-text)]")}
                   style={{ left: timeToPx(tick.time, pxPerSecond) }}
                 >
                   {tick.major && <span className="timecode">{formatRulerLabel(tick.time)}</span>}
@@ -722,7 +723,7 @@ export function Timeline({
               ))}
             </div>
             {newLayerDrag && (
-              <div className="tl-newlayer-hint" style={{ top: RULER_HEIGHT }}>
+              <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-[5px] border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-[11px] font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
                 <Plus size={12} /> {t("dropNewLayer")}
               </div>
             )}
@@ -733,8 +734,8 @@ export function Timeline({
                   ((track.kind === "video" && draggingAsset.kind !== "audio") ||
                     (track.kind === "audio" && draggingAsset.kind === "audio")) &&
                   !track.locked
-                    ? "tl-lane droppable"
-                    : "tl-lane"
+                    ? "relative border-b border-[var(--track-lane-line)] bg-[color-mix(in_srgb,var(--accent)_55%,var(--track-lane))]"
+                    : "relative border-b border-[var(--track-lane-line)] bg-[var(--track-lane)]"
                 }
                 key={track.id}
                 style={{ height: TRACK_HEIGHT }}
@@ -747,7 +748,7 @@ export function Timeline({
               >
                 {dropGhost?.trackId === track.id && (
                   <div
-                    className="tl-drop-ghost"
+                    className="pointer-events-none absolute bottom-[5px] top-[5px] z-[2] rounded border-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_14%,transparent)]"
                     style={{
                       left: timeToPx(dropGhost.start, pxPerSecond),
                       width: Math.max(12, timeToPx(dropGhost.duration, pxPerSecond)),
@@ -841,7 +842,7 @@ export function Timeline({
                 if (trackIndex < 0) return null;
                 return (
                   <div
-                    className="tl-trim-hint"
+                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded border border-border-strong bg-popover px-[7px] py-px text-[10.5px] tabular-nums text-foreground"
                     style={{
                       left: timeToPx(edgeTime, pxPerSecond),
                       top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,
@@ -853,7 +854,7 @@ export function Timeline({
               })()}
             {marquee && (
               <div
-                className="tl-marquee"
+                className="pointer-events-none absolute z-30 rounded-sm border border-primary bg-[color-mix(in_oklab,var(--primary)_12%,transparent)]"
                 style={{
                   left: Math.min(marquee.x1, marquee.x2),
                   top: Math.min(marquee.y1, marquee.y2),
@@ -863,7 +864,7 @@ export function Timeline({
               />
             )}
             <TimelinePlayhead pxPerSecond={pxPerSecond}>
-              <div className="tl-playhead-cap" />
+              <div className="absolute left-[-4px] top-0 h-2.5 w-[9px] bg-[var(--playhead)] [clip-path:polygon(0_0,100%_0,100%_55%,50%_100%,0_55%)]" />
             </TimelinePlayhead>
           </div>
         </div>
@@ -877,7 +878,7 @@ export function Timeline({
 function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; children: React.ReactNode }) {
   const playhead = useEditorStore((state) => state.playhead);
   return (
-    <div className="tl-playhead" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+    <div className="pointer-events-none absolute bottom-0 top-0 z-[4] w-px bg-[var(--playhead)]" style={{ left: timeToPx(playhead, pxPerSecond) }}>
       {children}
     </div>
   );
@@ -886,7 +887,7 @@ function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; chil
 function PlayheadReadout({ total }: { total: number }) {
   const playhead = useEditorStore((state) => state.playhead);
   return (
-    <span className="timecode tl-readout">
+    <span className="timecode whitespace-nowrap text-xs font-semibold text-foreground [&_em]:not-italic [&_em]:text-muted-foreground">
       {formatTimecode(playhead)}
       <em> / {formatTimecode(total)}</em>
     </span>

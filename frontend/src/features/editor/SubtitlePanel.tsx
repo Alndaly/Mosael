@@ -17,6 +17,7 @@ import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
+import { cn } from "@/lib/utils";
 
 
 /**
@@ -70,7 +71,7 @@ export function SubtitlePanel({
   );
 
   return (
-    <div className="sub-panel">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
       {onSetStyle && (
         <SubtitleStyleControls
           style={style}
@@ -82,7 +83,7 @@ export function SubtitlePanel({
           onSetStyle={onSetStyle}
         />
       )}
-      <div className="sub-list">
+      <div className="grid content-start gap-1.5 overflow-y-auto p-1.5">
         {subtitles.length === 0 && (
           <div className="empty-inline">
             <Type size={16} />
@@ -92,11 +93,14 @@ export function SubtitlePanel({
         {subtitles.map((clip) => {
           const active = playhead >= clip.timeline_start && playhead < clipEnd(clip);
           return (
-            <div key={clip.id} className={active ? "sub-item active" : "sub-item"}>
-              <div className="sub-item-head">
+            <div key={clip.id} className={cn(
+              "grid gap-[5px] rounded-md border border-border bg-panel px-[9px] py-1.5",
+              active && "border-[color-mix(in_oklab,var(--primary)_50%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_5%,var(--panel))]",
+            )}>
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  className="ts-time timecode ts-time-btn"
+                  className="timecode cursor-pointer border-0 bg-transparent p-0 pt-0.5 text-[11px] text-muted-foreground"
                   title={t("seekToSubtitle")}
                   onClick={() => {
                     useEditorStore.getState().setPlayhead(clip.timeline_start);
@@ -107,7 +111,7 @@ export function SubtitlePanel({
                 </button>
                 <button
                   type="button"
-                  className="sub-delete"
+                  className="cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
                   title={t("deleteClip")}
                   aria-label={t("deleteClip")}
                   onClick={() => onDeleteClip(clip.id)}
@@ -117,7 +121,7 @@ export function SubtitlePanel({
               </div>
               <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
-                className="subtitle-input"
+                className="w-full resize-y rounded border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                 rows={2}
                 defaultValue={clip.text_override ?? ""}
                 onBlur={(event) => {
@@ -129,13 +133,13 @@ export function SubtitlePanel({
           );
         })}
       </div>
-      <div className="sub-footer">
+      <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
         {onGenerate && (
-          <button type="button" className="ts-tool" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
+          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
             {generating ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
           </button>
         )}
-        <button type="button" className="ts-tool" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
+        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
         {subtitles.length > 0 && onApplyTexts && (
@@ -201,13 +205,13 @@ function SubtitleTranslate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="ts-tool" title={t("subtitleTranslate")}>
+        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleTranslate")}>
           <Languages size={12} /> {t("subtitleTranslate")}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="sub-translate-pop" align="end">
+      <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-[12.5px]" align="end">
         <strong>{t("subtitleTranslate")}</strong>
-        <label className="sub-translate-row">
+        <label className="grid gap-1 text-xs text-muted-foreground">
           <span>{t("subtitleTranslateTo")}</span>
           <Select value={lang} onValueChange={setLang}>
             <SelectTrigger>
@@ -223,12 +227,12 @@ function SubtitleTranslate({
           </Select>
         </label>
         {selectedSubtitles.length > 0 && (
-          <label className="sub-translate-toggle">
+          <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
             <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />
           </label>
         )}
-        <label className="sub-translate-toggle">
+        <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{t("subtitleTranslateBilingual")}</span>
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
@@ -239,7 +243,7 @@ function SubtitleTranslate({
             String(targets.length),
           )}
         </Button>
-        <small className="sub-translate-note">
+        <small className="text-[11px] leading-[1.4] text-muted-foreground">
           {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}
         </small>
       </PopoverContent>
@@ -277,13 +281,13 @@ function SubtitleStyleControls({
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="sub-style">
-      <button type="button" className="sub-style-head" onClick={() => setOpen((v) => !v)}>
+    <div className="border-b border-border">
+      <button type="button" className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-2.5 py-[7px] text-xs font-semibold text-muted-foreground" onClick={() => setOpen((v) => !v)}>
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {t("subtitleStyle")}
       </button>
       {open && (
-        <div className="sub-style-body">
-          <label className="sub-style-row">
+        <div className="grid gap-2 px-2.5 pb-2.5 pt-1">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subFont")}</span>
             <Select
               value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
@@ -319,7 +323,7 @@ function SubtitleStyleControls({
             </Select>
           </label>
           {onUploadFont && (
-            <div className="sub-style-row sub-font-actions">
+            <div className="grid grid-cols-[42px_auto_auto_minmax(0,1fr)] items-center gap-1 text-xs text-foreground [&>span:first-child]:text-muted-foreground">
               <span />
               <Button variant="ghost" size="sm" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
                 {uploadingFont ? <Loader2 size={12} className="spin" /> : <Upload size={12} />} {t("subFontUpload")}
@@ -352,7 +356,7 @@ function SubtitleStyleControls({
               />
             </div>
           )}
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subFontSize")}</span>
             <Slider
               min={10}
@@ -364,11 +368,11 @@ function SubtitleStyleControls({
             />
             <em>{Math.round(s.font_size)}</em>
           </label>
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subColor")}</span>
             <input type="color" value={s.color} onChange={(e) => patch({ color: e.target.value })} />
           </label>
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subBg")}</span>
             <input type="color" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
             <Slider
@@ -380,11 +384,11 @@ function SubtitleStyleControls({
               onValueCommit={([v]) => patch({ bg_opacity: v })}
             />
           </label>
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subBold")}</span>
             <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
           </label>
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subPosition")}</span>
             <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
               <SelectTrigger>
@@ -397,7 +401,7 @@ function SubtitleStyleControls({
               </SelectContent>
             </Select>
           </label>
-          <label className="sub-style-row">
+          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
             <span>{t("subOffset")}</span>
             <Slider
               min={0}

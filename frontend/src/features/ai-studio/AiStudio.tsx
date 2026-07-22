@@ -242,12 +242,12 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className="seg" role="tablist">
+    <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
       <button
         type="button"
         role="tab"
         aria-selected={tab === "chat"}
-        className={tab === "chat" ? "seg-btn active" : "seg-btn"}
+        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "chat" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
         onClick={() => setTab("chat")}
       >
         {t("aiTabChat")}
@@ -256,7 +256,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
         type="button"
         role="tab"
         aria-selected={tab === "generate"}
-        className={tab === "generate" ? "seg-btn active" : "seg-btn"}
+        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "generate" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
         onClick={() => setTab("generate")}
       >
         {t("aiTabGenerate")}

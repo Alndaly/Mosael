@@ -53,13 +53,13 @@ export function LutPicker({
   const selectValue = value && items.some((l) => l.id === value) ? value : NONE;
 
   return (
-    <div className="lut-picker">
-      <div className="lut-row">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         <Select
           value={selectValue}
           onValueChange={(next) => onChange(next === NONE ? undefined : next)}
         >
-          <SelectTrigger className="lut-select" aria-label={t("gradeGroupLut")}>
+          <SelectTrigger className="min-w-0 flex-1" aria-label={t("gradeGroupLut")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -73,7 +73,7 @@ export function LutPicker({
         </Select>
         <button
           type="button"
-          className="grade-icon-btn"
+          className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
           title={t("lutUpload")}
           aria-label={t("lutUpload")}
           disabled={upload.isPending}
@@ -84,7 +84,7 @@ export function LutPicker({
         {selectValue !== NONE && (
           <button
             type="button"
-            className="grade-icon-btn"
+            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             title={t("lutDelete")}
             aria-label={t("lutDelete")}
             onClick={() => remove.mutate(selectValue)}
@@ -104,7 +104,7 @@ export function LutPicker({
           event.target.value = ""; // 允许再次选同名文件
         }}
       />
-      <p className="lut-hint">{t("lutHint")}</p>
+      <p className="m-0 text-[10.5px] leading-normal text-muted-foreground">{t("lutHint")}</p>
     </div>
   );
 }

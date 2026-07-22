@@ -63,6 +63,7 @@ import { SubtitlePanel } from "./SubtitlePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
+import { cn } from "@/lib/utils";
 
 export function EditorView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
@@ -761,7 +762,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   return (
     <div
-      className="editor-grid"
+      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-1.5 p-2.5"
       style={{
         gridTemplateColumns: inspectorInGrid
           ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`
@@ -791,19 +792,19 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           monitor's left edge, resized the panel instead. Stop them at the panels row: grid
           padding + timeline height + row gap. */}
       <div
-        className="panel-resizer col"
+        className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
         style={{ left: leftWidth + 12 + 4 - 3, bottom: panelsRowBottom }}
         onPointerDown={startPanelDrag("left")}
       />
       {inspectorInGrid && (
         <div
-          className="panel-resizer col right"
+          className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
           style={{ right: panels.right + 12 + 4 - 3, bottom: panelsRowBottom }}
           onPointerDown={startPanelDrag("right")}
         />
       )}
       <div
-        className="panel-resizer row"
+        className="absolute left-3 right-3 z-10 h-[7px] cursor-row-resize touch-none before:absolute before:inset-0 before:m-auto before:h-0.5 before:w-9 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
         style={{ bottom: panels.timeline + 12 + 4 - 3 }}
         onPointerDown={startPanelDrag("timeline")}
       />
@@ -818,7 +819,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       ) : leftTab === "voice" ? (
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
       ) : (
-        <section className="panel media-panel">
+        <section className="panel grid grid-rows-[auto_minmax(0,1fr)]">
           <div className="panel-head">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
@@ -854,7 +855,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="panel monitor">
+      <section className="panel bg-[var(--monitor-bg)]">
         <Monitor
           sequence={sequence}
           subtitleStyleOverride={styleDraft}
@@ -883,7 +884,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           );
           return compact ? <div className="inspector-drawer">{inspector}</div> : inspector;
         })()}
-      <section className="panel timeline">
+      <section className="panel col-span-full bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}
           assets={assets.data ?? []}
@@ -974,31 +975,31 @@ function LeftTabs({
 }) {
   const t = useI18n();
   return (
-    <div className="panel-tabs">
+    <div className="flex shrink-0 gap-0.5">
       <button
         type="button"
-        className={tab === "media" ? "panel-tab active" : "panel-tab"}
+        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "media" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("media")}
       >
         {t("media")}
       </button>
       <button
         type="button"
-        className={tab === "transcript" ? "panel-tab active" : "panel-tab"}
+        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "transcript" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("transcript")}
       >
         {t("transcriptTab")}
       </button>
       <button
         type="button"
-        className={tab === "subtitle" ? "panel-tab active" : "panel-tab"}
+        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "subtitle" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("subtitle")}
       >
         {t("subtitleTab")}
       </button>
       <button
         type="button"
-        className={tab === "voice" ? "panel-tab active" : "panel-tab"}
+        className={cn("cursor-pointer whitespace-nowrap rounded border-0 bg-transparent px-[7px] py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "voice" && "bg-secondary text-foreground hover:bg-secondary")}
         onClick={() => onChange("voice")}
       >
         {t("voiceTab")}
@@ -1045,17 +1046,17 @@ function ExportControl({
   const busy = startExport.isPending || status === "queued" || status === "running";
 
   return (
-    <span className="export-control">
+    <span className="mr-2 inline-flex items-center gap-1.5">
       {status === "running" && (
-        <span className="export-status timecode">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
+        <span className="timecode inline-flex items-center gap-1 text-[11px] text-muted-foreground">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
       )}
       {status === "succeeded" && (
-        <span className="export-status done">
+        <span className="inline-flex items-center gap-1 text-[11px] text-[var(--track-audio-text)]">
           <CircleCheck size={13} /> {t("exportDone")}
         </span>
       )}
       {status === "failed" && (
-        <span className="export-status failed" title={job.data?.error ?? undefined}>
+        <span className="inline-flex items-center gap-1 text-[11px] text-destructive" title={job.data?.error ?? undefined}>
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}

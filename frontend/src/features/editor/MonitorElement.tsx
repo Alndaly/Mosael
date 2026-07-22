@@ -71,9 +71,9 @@ export function MonitorElement({
         </svg>
       )}
       {isImage ? (
-        <img className="monitor-video" src={assetFileUrl(asset.id)} alt="" style={style} />
+        <img className="absolute inset-0 z-[1] h-full w-full bg-black object-contain" src={assetFileUrl(asset.id)} alt="" style={style} />
       ) : (
-        <video ref={videoRef} className="monitor-video" style={style} muted playsInline preload="auto" />
+        <video ref={videoRef} className="absolute inset-0 z-[1] h-full w-full bg-black object-contain" style={style} muted playsInline preload="auto" />
       )}
     </>
   );

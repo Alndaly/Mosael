@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TRANSLATE_LANGS } from "@/features/editor/subtitleStyle";
 import { useEditorStore } from "@/stores/editorStore";
+import { cn } from "@/lib/utils";
 
 type TranscriptOut = components["schemas"]["TranscriptOut"];
 
@@ -169,7 +170,7 @@ export function TranscriptPanel({
   const transcribeButton = firstAssetId && (
     <button
       type="button"
-      className="ts-tool"
+      className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums"
       disabled={asrRunning}
       onClick={() => startAsr.mutate(firstAssetId)}
     >
@@ -361,41 +362,41 @@ export function TranscriptPanel({
 
   if (projected.length === 0) {
     return (
-      <div className="ts-empty">
+      <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.55] [&>button]:mt-1">
         <MessageSquareText size={18} />
         <p>{t("transcriptEmpty")}</p>
-        <p className="ts-flow-hint">{t("transcriptFlowHint")}</p>
+        <p className="max-w-[220px] text-[11.5px] leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
         {transcribeButton}
-        {asrError && <p className="ts-asr-error">{asrError}</p>}
+        {asrError && <p className="max-w-[220px] text-xs text-destructive">{asrError}</p>}
       </div>
     );
   }
 
   return (
-    <div className="ts-wrap">
-      <div className="ts-tools">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-wrap gap-1.5 border-b border-border px-2 py-1.5">
         {transcribeButton}
         <button
           type="button"
-          className={showSilences ? "ts-tool on" : "ts-tool"}
+          className={cn("inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums", showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
           title={t("silencesHint")}
           onClick={() => setShowSilences((value) => !value)}
         >
           <AudioLines size={12} /> {t("silences")}
           {showSilences && silences.length > 0 && <em>{silences.length}</em>}
         </button>
-        <button type="button" className="ts-tool" title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
+        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
           <Sparkles size={12} /> {t("fillers")}
           {fillerCount > 0 && <em>{fillerCount}</em>}
         </button>
         {onSplitPoints && (
           <>
-            <button type="button" className="ts-tool" title={t("splitBySentenceHint")} onClick={splitBySentence}>
+            <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("splitBySentenceHint")} onClick={splitBySentence}>
               <Split size={12} /> {t("splitBySentence")}
             </button>
             <button
               type="button"
-              className="ts-tool"
+              className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums"
               title={t("splitAtWordHint")}
               onClick={splitAtPlayhead}
               disabled={!activeSrc}
@@ -407,7 +408,7 @@ export function TranscriptPanel({
         {onTranslateToSubtitles && (
           <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
             <PopoverTrigger asChild>
-              <button type="button" className="ts-tool" disabled={translating} title={t("transcriptTranslateNote")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" disabled={translating} title={t("transcriptTranslateNote")}>
                 {translating ? <Loader2 size={12} className="spin" /> : <Languages size={12} />}
                 {t("transcriptTranslateToSubtitles")}
               </button>
@@ -444,20 +445,20 @@ export function TranscriptPanel({
           </Popover>
         )}
         {showSilences && silences.length > 0 && (
-          <button type="button" className="ts-tool" title={t("removeAllSilences")} onClick={selectAllSilences}>
+          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("removeAllSilences")} onClick={selectAllSilences}>
             {t("selectAllSilences")}
           </button>
         )}
-        <span className="ts-stats">
+        <span className="ml-auto self-center whitespace-nowrap text-[11px] text-muted-foreground">
           {t("transcriptStats")
             .replace("{n}", String(projected.length))
             .replace("{c}", String(projected.reduce((sum, item) => sum + item.text.length, 0)))}
         </span>
       </div>
 
-      <p className="tsd-usage">{t("transcriptUsage")}</p>
+      <p className="m-0 px-3 pt-1.5 text-[11px] text-muted-foreground">{t("transcriptUsage")}</p>
       <div
-        className="tsd-doc"
+        className="flex min-h-0 flex-1 select-none flex-col gap-2 overflow-y-auto px-2.5 pb-3 pt-2.5"
         onPointerOver={(event) => {
           if (!(event.buttons & 1) || !dragRef.current) return;
           const el = (event.target as HTMLElement).closest("[data-flat]");
@@ -472,7 +473,10 @@ export function TranscriptPanel({
               <button
                 key={gapKey}
                 type="button"
-                className={selected.has(gapKey) ? "tsd-gap cut" : "tsd-gap"}
+                className={cn(
+                  "ml-[46px] inline-flex cursor-pointer items-center gap-1 self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive",
+                  selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
+                )}
                 title={t("silenceGapHint")}
                 onClick={() => toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
               >
@@ -487,12 +491,15 @@ export function TranscriptPanel({
             <div
               key={key}
               ref={active ? activeSentenceRef : undefined}
-              className={active ? "tsd-sentence active" : "tsd-sentence"}
+              className={cn(
+                "group/sentence relative grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-1.5 rounded-sm border-l-2 border-transparent pl-1.5 pr-[22px] transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_3%,transparent)]",
+                active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
+              )}
             >
-              <div className="tsd-gutter">
+              <div className="grid justify-items-start gap-0.5">
                 <button
                   type="button"
-                  className="tsd-time timecode"
+                  className="timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-[10.5px] leading-normal text-muted-foreground hover:text-primary"
                   title={t("seekToSentence")}
                   onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
                 >
@@ -502,7 +509,7 @@ export function TranscriptPanel({
               {onSplitPoints && (
                 <button
                   type="button"
-                  className="tsd-split"
+                  className="absolute top-[3px] cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
                   title={t("splitSentenceOutHint")}
                   aria-label={t("splitSentenceOut")}
                   onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -512,17 +519,17 @@ export function TranscriptPanel({
               )}
               <button
                 type="button"
-                className="tsd-drop"
+                className="absolute top-[3px] cursor-pointer rounded-[3px] border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
                 title={t("cutSentenceHint")}
                 aria-label={t("cutSentence")}
                 onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
               >
                 <X size={11} />
               </button>
-              <p className="tsd-text">
+              <p className="m-0 text-[13px] leading-[1.9] [word-break:break-word]">
                 {sentence.speaker && (
                   <em
-                    className="tsd-speaker"
+                    className="mr-1.5 whitespace-nowrap rounded-full px-[7px] py-px align-[1px] text-[10px] font-semibold not-italic"
                     style={{
                       background: `oklch(0.94 0.05 ${speakerHue(sentence.speaker)})`,
                       color: `oklch(0.45 0.12 ${speakerHue(sentence.speaker)})`,
@@ -539,14 +546,13 @@ export function TranscriptPanel({
                         activeSrc?.clipId === sentence.clipId &&
                         activeSrc.src >= token.start_time &&
                         activeSrc.src < token.end_time;
-                      const classes = [
-                        "tsd-word",
-                        selected.has(tokenKey) ? "cut" : "",
-                        isFillerToken(token.text) ? "filler" : "",
-                        current ? "current" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ");
+                      const classes = cn(
+                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-foreground [font:inherit] hover:bg-accent",
+                        isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_18%,transparent)]",
+                        current && "bg-[color-mix(in_oklab,var(--primary)_22%,transparent)] shadow-[0_1px_0_var(--primary)]",
+                        selected.has(tokenKey) &&
+                          "bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                      );
                       return (
                         <button
                           key={tokenKey}
@@ -565,7 +571,11 @@ export function TranscriptPanel({
                   : (
                       <button
                         type="button"
-                        className={selected.has(`${key}:all`) ? "tsd-word block cut" : "tsd-word block"}
+                        className={cn(
+                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-left text-foreground [font:inherit] hover:bg-accent",
+                          selected.has(`${key}:all`) &&
+                            "bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                        )}
                         title={t("markSentenceHint")}
                         onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
                         onDoubleClick={() => toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -580,14 +590,14 @@ export function TranscriptPanel({
       </div>
 
       {selected.size > 0 && (
-        <div className="tsd-bar">
-          <span className="tsd-bar-info">
+        <div className="flex items-center gap-1.5 border-t border-border bg-panel px-2.5 py-1.5">
+          <span className="flex-1 text-xs tabular-nums text-muted-foreground">
             {t("selectedWordsInfo").replace("{n}", String(selected.size)).replace("{s}", selectedSeconds.toFixed(1))}
           </span>
-          <button type="button" className="ts-tool" onClick={() => setSelected(new Map())}>
+          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" onClick={() => setSelected(new Map())}>
             {t("clearSelection")}
           </button>
-          <button type="button" className="ts-tool danger" onClick={applySelected}>
+          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums border-[color-mix(in_oklab,var(--destructive)_35%,var(--border))] text-destructive enabled:hover:border-destructive enabled:hover:bg-[color-mix(in_oklab,var(--destructive)_8%,var(--background))] enabled:hover:text-destructive" onClick={applySelected}>
             <Trash2 size={12} /> {t("removeSelectedWords")}
           </button>
         </div>

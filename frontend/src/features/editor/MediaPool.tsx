@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
+import { cn } from "@/lib/utils";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
@@ -76,7 +77,7 @@ export function MediaPool({
     <section className="panel media-panel">
       <div className="panel-head">
         {tabs ?? <h2>{t("media")}</h2>}
-        <div className="panel-head-actions">
+        <div className="flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
           <Button asChild variant="outline" size="icon" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
@@ -105,8 +106,8 @@ export function MediaPool({
         </div>
       </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={onImportFile} />
-      <div className="pool-filterbar">
-        <div className="pool-search">
+      <div className="grid gap-1.5 border-b border-border p-1.5">
+        <div className="relative grid [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-2 [&_svg]:top-1/2 [&_svg]:z-[1] [&_svg]:-translate-y-1/2 [&_svg]:text-muted-foreground [&_input]:h-7 [&_input]:pl-7 [&_input]:text-xs">
           <Search size={13} />
           <Input
             value={search}
@@ -115,12 +116,12 @@ export function MediaPool({
             aria-label={t("searchAssets")}
           />
         </div>
-        <div className="seg pool-kind-filter" role="group" aria-label={t("mediaKindGroup")}>
+        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
             <button
               key={kind}
               type="button"
-              className={kindFilter === kind ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setKindFilter(kind)}
             >
               {kindLabel[kind]}
@@ -128,7 +129,7 @@ export function MediaPool({
           ))}
         </div>
       </div>
-      <div className="pool-list">
+      <div className="grid content-start gap-1.5 overflow-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
         {visibleAssets.map((asset) => (
           <ContextMenu key={asset.id}>
             <ContextMenuTrigger asChild>
@@ -183,7 +184,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
   const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
   return (
     <div
-      className="pool-item"
+      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded border border-border bg-panel p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-mibu-asset", asset.id);
@@ -199,7 +200,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
       <div
-        className={asset.kind === "image" ? "pool-thumb is-previewable" : "pool-thumb"}
+        className={cn("grid aspect-video place-items-center overflow-hidden rounded-[3px] bg-panel-inset text-muted-foreground [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
         onClick={(event) => {
           if (asset.kind !== "image") return;
           event.stopPropagation();
@@ -208,13 +209,13 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
-      <div className="pool-meta">
+      <div className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-xs [&_strong]:font-semibold">
         <strong>{asset.name}</strong>
         <small className="timecode">{duration != null ? formatTimecode(duration) : asset.kind}</small>
       </div>
       <button
         type="button"
-        className="pool-add"
+        className="absolute right-2 top-1/2 grid h-[22px] w-[22px] -translate-y-1/2 cursor-pointer place-items-center rounded border border-border bg-background text-muted-foreground opacity-0 transition-[opacity,color,border-color] duration-100 hover:border-primary hover:text-primary group-hover/pool:opacity-100"
         title={t("addToTimeline")}
         aria-label={t("addToTimeline")}
         onClick={(event) => {

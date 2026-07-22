@@ -1,6 +1,7 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 
 type ScopeMode = "histogram" | "waveform";
 
@@ -105,14 +106,14 @@ export function Scopes({
   }, [videoRef]);
 
   return (
-    <div className="scopes">
-      <div className="scopes-head">
-        <div className="seg scopes-seg" role="tablist">
+    <div className="flex flex-col gap-1.5">
+      <div className="flex">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-6 flex-1" role="tablist">
           <button
             type="button"
             role="tab"
             aria-selected={mode === "histogram"}
-            className={mode === "histogram" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "histogram" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setMode("histogram")}
           >
             {t("scopeHistogram")}
@@ -121,16 +122,16 @@ export function Scopes({
             type="button"
             role="tab"
             aria-selected={mode === "waveform"}
-            className={mode === "waveform" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "waveform" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setMode("waveform")}
           >
             {t("scopeWaveform")}
           </button>
         </div>
       </div>
-      <div className="scopes-canvas-wrap">
-        <canvas ref={displayRef} width={256} height={128} className="scopes-canvas" />
-        {blocked && <p className="scopes-blocked">{t("scopeUnavailable")}</p>}
+      <div className="relative">
+        <canvas ref={displayRef} width={256} height={128} className="block h-auto w-full rounded bg-[#0b0b0d]" />
+        {blocked && <p className="absolute inset-0 m-0 flex items-center justify-center p-2 text-center text-[10.5px] leading-normal text-[rgb(255_255_255/0.7)]">{t("scopeUnavailable")}</p>}
       </div>
     </div>
   );

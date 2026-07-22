@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
+import { cn } from "@/lib/utils";
 
 type Source = "screen" | "camera" | "mic";
 
@@ -101,14 +102,14 @@ export function Recorder({
 
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={t("recordTitle")} className="w-[520px]">
-      <div className="recorder">
-        <div className="seg recorder-sources" role="group" aria-label={t("recordTitle")}>
+      <div className="grid w-full gap-2.5">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border w-fit justify-self-start" role="group" aria-label={t("recordTitle")}>
           {(["screen", "camera", "mic"] as Source[]).map((s) => (
             <button
               key={s}
               type="button"
               disabled={recording}
-              className={source === s ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", source === s && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setSource(s)}
             >
               {s === "screen" ? <ScreenIcon size={13} /> : s === "camera" ? <Video size={13} /> : <Mic size={13} />}{" "}
@@ -116,35 +117,35 @@ export function Recorder({
             </button>
           ))}
         </div>
-        <div className={recording ? "recorder-stage recording" : "recorder-stage"}>
+        <div className={cn("relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset", recording && "bg-black")}>
           {/* Video stays mounted for screen/camera so the ref is stable when start() attaches
               the stream; the idle placeholder covers it until recording begins. */}
-          {source !== "mic" && <video ref={videoRef} className="recorder-preview" muted playsInline />}
+          {source !== "mic" && <video ref={videoRef} className="h-full w-full bg-black object-contain" muted playsInline />}
           {recording && source === "mic" && (
-            <div className="recorder-mic">
+            <div className="text-[color-mix(in_oklab,var(--primary)_70%,#fff)]">
               <Mic size={30} />
             </div>
           )}
           {!recording && (
-            <div className="recorder-idle">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-panel-inset text-xs text-muted-foreground">
               {source === "screen" ? <ScreenIcon size={24} /> : source === "camera" ? <Video size={24} /> : <Mic size={24} />}
               <span>{t(`record_${source}_placeholder` as never) as string}</span>
             </div>
           )}
-          {recording && <span className="recorder-dot" aria-hidden />}
-          <span className="recorder-time timecode">{fmt(secs)}</span>
+          {recording && <span className="absolute left-2.5 top-2.5 h-2.5 w-2.5 animate-recorder-blink rounded-full bg-destructive" aria-hidden />}
+          <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">{fmt(secs)}</span>
         </div>
-        <div className="recorder-actions">
+        <div className="flex items-center gap-2.5">
           {!recording ? (
             <Button size="sm" onClick={start}>
-              <Circle size={11} className="recorder-rec" /> {t("recordStart")}
+              <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
             </Button>
           ) : (
             <Button size="sm" variant="destructive" onClick={stop}>
               <Square size={11} /> {t("recordStop")}
             </Button>
           )}
-          <span className="recorder-hint">{t(`record_${source}_hint` as never) as string}</span>
+          <span className="text-[11.5px] text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
         </div>
       </div>
     </ModalShell>

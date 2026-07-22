@@ -102,7 +102,7 @@ export function TransformOverlay({
 
   return (
     <div
-      className="tf-box"
+      className="absolute box-border cursor-move touch-none border-[1.5px] border-primary shadow-[0_0_0_1px_rgb(0_0_0/0.35)] [pointer-events:auto]"
       style={{
         left: `${leftPct}%`,
         top: `${topPct}%`,
@@ -112,8 +112,8 @@ export function TransformOverlay({
       }}
       onPointerDown={(event) => event.button === 0 && startDrag(event, "move")}
     >
-      <div className="tf-rotate-stem" />
-      <div className="tf-handle tf-rotate" onPointerDown={(event) => event.button === 0 && startDrag(event, "rotate")} />
+      <div className="pointer-events-none absolute left-1/2 top-0 h-5 w-[1.5px] -translate-x-1/2 -translate-y-full bg-primary" />
+      <div className="absolute left-1/2 top-[-20px] h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-[1.5px] border-primary bg-white [pointer-events:auto]" onPointerDown={(event) => event.button === 0 && startDrag(event, "rotate")} />
       {HANDLES.map(([id, hx, hy]) => (
         <div
           key={id}

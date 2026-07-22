@@ -5,6 +5,7 @@ import { API_BASE, DEFAULT_API_BASE, isCustomServer, setServerUrl } from "@/api/
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 /** 后端服务器入口(本地/团队)。必须先于登录:hasUsers 探测与 login 都打向 API_BASE,
  *  而 API_BASE 在模块加载时从 localStorage 解析一次——切服务器 = 写 localStorage + 整页重载
@@ -61,10 +62,10 @@ export function ServerPicker() {
 
   return (
     <div className="flex w-full flex-col gap-2.5 text-left [&_input]:w-full">
-      <div className="seg h-[30px] w-full [&_.seg-btn]:flex-1 [&_.seg-btn]:justify-center">
+      <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-[30px] w-full [&>button]:flex-1 [&>button]:justify-center">
         <button
           type="button"
-          className={mode === "local" ? "seg-btn active" : "seg-btn"}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "local" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => {
             setMode("local");
             setFailed(null);
@@ -74,7 +75,7 @@ export function ServerPicker() {
         </button>
         <button
           type="button"
-          className={mode === "remote" ? "seg-btn active" : "seg-btn"}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "remote" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => {
             setMode("remote");
             setFailed(null);

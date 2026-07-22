@@ -4,6 +4,7 @@ import { AudioLines, Copy, Scissors, Trash2, Waves } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
+import { cn } from "@/lib/utils";
 
 export function TimelineClip({
   trackKind,
@@ -39,14 +40,16 @@ export function TimelineClip({
   onDetachAudio?: () => void;
 }) {
   const t = useI18n();
-  const className = [
-    "tl-clip",
-    `tl-clip-${trackKind}`,
-    selected ? "selected" : "",
-    dragging ? "dragging" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const className = cn(
+    // 视频片段:音频波形只贴底部一条(PR/DaVinci 式),不铺满色块,标签保持可读。
+    "group/clip absolute bottom-[5px] top-[5px] flex cursor-grab touch-none select-none items-center overflow-hidden rounded border border-[var(--track-video-border)] bg-[var(--track-video-bg)] text-[var(--track-video-text)] [[data-tool=blade]_&]:cursor-crosshair",
+    trackKind === "video" && "[&_svg]:inset-auto [&_svg]:bottom-0.5 [&_svg]:left-px [&_svg]:right-px [&_svg]:h-[42%]",
+    trackKind === "audio" && "border-[var(--track-audio-border)] bg-[var(--track-audio-bg)] text-[var(--track-audio-text)]",
+    trackKind === "subtitle" &&
+      "border-[color-mix(in_oklab,#a855f7_45%,var(--border))] bg-[color-mix(in_oklab,#a855f7_18%,var(--panel))] text-[var(--track-subtitle-text)]",
+    selected && "z-[2] border-primary shadow-[0_0_0_1px_var(--primary)]",
+    dragging && "z-[3] cursor-grabbing opacity-[0.92] shadow-[var(--shadow-raised)]",
+  );
 
   const clip = (
     <div
@@ -58,24 +61,25 @@ export function TimelineClip({
         onPointerDown(event);
       }}
       onContextMenu={onSelect}
+      data-selected={selected || undefined}
       role="button"
       tabIndex={-1}
       title={name}
     >
       {peaks && peaks.length > 0 && (
-        <svg className="tl-clip-wave" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+        <svg className="pointer-events-none absolute inset-x-px inset-y-0.5 h-[calc(100%-4px)] w-[calc(100%-2px)] [&_polygon]:fill-current [&_polygon]:opacity-30" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
           <polygon points={waveformPolygonPoints(peaks)} />
         </svg>
       )}
       <span
-        className="tl-clip-handle left"
+        className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden left-0 rounded-l after:left-[3px]"
         onPointerDown={(event) => {
           if (event.button === 0) onTrimPointerDown(event, "start");
         }}
       />
-      <span className="tl-clip-name">{name}</span>
+      <span className="pointer-events-none relative z-[1] flex-1 truncate px-1.5 text-[11px] font-semibold">{name}</span>
       <span
-        className="tl-clip-handle right"
+        className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r after:right-[3px]"
         onPointerDown={(event) => {
           if (event.button === 0) onTrimPointerDown(event, "end");
         }}

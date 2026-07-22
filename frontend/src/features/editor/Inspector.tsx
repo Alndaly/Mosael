@@ -12,6 +12,7 @@ import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
 import { useColorHistory } from "@/features/editor/useColorHistory";
 import { LutPicker } from "@/features/editor/LutPicker";
+import { cn } from "@/lib/utils";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
   { key: "↖", x: 0.05, y: 0.06 },
@@ -118,15 +119,15 @@ export function Inspector({
   }, [selectedClip?.id, isTextClip]);
 
   return (
-    <section className="panel inspector">
+    <section className="panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="panel-head">
         {selectedClip && !isTextClip ? (
-          <div className="seg" role="tablist">
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             <button
               type="button"
               role="tab"
               aria-selected={tab === "props"}
-              className={tab === "props" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "props" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setTab("props")}
             >
               {t("inspectorProps")}
@@ -135,7 +136,7 @@ export function Inspector({
               type="button"
               role="tab"
               aria-selected={tab === "color"}
-              className={tab === "color" ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "color" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setTab("color")}
             >
               {t("colorGrade")}
@@ -144,11 +145,11 @@ export function Inspector({
         ) : (
           <h2>{t("inspector")}</h2>
         )}
-        <div className="inspector-head-tools">
+        <div className="flex items-center gap-0.5">
           {selectedClip && (
             <button
               type="button"
-              className="inspector-delete"
+              className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
               title={t("deleteClip")}
               aria-label={t("deleteClip")}
               onClick={() => onDeleteClip(selectedClip.id)}
@@ -159,7 +160,7 @@ export function Inspector({
           {onClose && (
             <button
               type="button"
-              className="inspector-delete inspector-close"
+              className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
               title={t("close")}
               aria-label={t("close")}
               onClick={onClose}
@@ -179,10 +180,10 @@ export function Inspector({
             onSetEffects={onSetEffects}
           />
         ) : (
-          <div className="inspector-body">
+          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
             <dl>
               <dt>{t("asset")}</dt>
-              <dd className="inspector-ellipsis" title={asset?.name}>
+              <dd className="truncate" title={asset?.name}>
                 {asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? t("subtitleText")}
               </dd>
               <dt>{t("timelineRange")}</dt>
@@ -199,11 +200,11 @@ export function Inspector({
               <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
             </dl>
             {isTextClip && onSetText && (
-              <div className="pip-controls">
-                <span className="pip-label">{t("subtitleText")}</span>
+              <div className="grid gap-1.5 border-t border-border pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
-                  className="subtitle-input"
+                  className="w-full resize-y rounded border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                   rows={3}
                   defaultValue={selectedClip.text_override ?? ""}
                   onBlur={(event) => {
@@ -214,14 +215,14 @@ export function Inspector({
               </div>
             )}
             {!isTextClip && onSetSpeed && (
-              <div className="pip-controls">
-                <span className="pip-label">{t("speed")}</span>
-                <div className="pip-row">
+              <div className="grid gap-1.5 border-t border-border pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("speed")}</span>
+                <div className="flex flex-wrap gap-1">
                   {SPEED_OPTIONS.map((option) => (
                     <button
                       key={option}
                       type="button"
-                      className={Math.abs(selectedClip.speed - option) < 0.001 ? "pip-btn active" : "pip-btn"}
+                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(selectedClip.speed - option) < 0.001 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onSetSpeed(selectedClip.id, option)}
                     >
                       {option}x
@@ -232,12 +233,12 @@ export function Inspector({
             )}
             {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. */}
             {!isTextClip && onSetGain && (
-              <div className="pip-controls">
+              <div className="grid gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="pip-label">{t("clipAudio")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
                   <button
                     type="button"
-                    className={selectedClip.muted ? "pip-btn active" : "pip-btn"}
+                    className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                     onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
                   >
                     {selectedClip.muted ? t("clipMuted") : t("clipMute")}
@@ -259,12 +260,12 @@ export function Inspector({
               </div>
             )}
             {!isTextClip && (
-              <div className="pip-controls">
-                <span className="pip-label">{t("videoFade")}</span>
-                <div className="pip-row">
+              <div className="grid gap-1.5 border-t border-border pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("videoFade")}</span>
+                <div className="flex flex-wrap gap-1">
                   <Input
                     key={`vfi-${selectedClip.id}`}
-                    className="fade-input"
+                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -274,7 +275,7 @@ export function Inspector({
                   />
                   <Input
                     key={`vfo-${selectedClip.id}`}
-                    className="fade-input"
+                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -283,11 +284,11 @@ export function Inspector({
                     aria-label={t("fadeOut")}
                   />
                 </div>
-                <span className="pip-label">{t("audioFade")}</span>
-                <div className="pip-row">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("audioFade")}</span>
+                <div className="flex flex-wrap gap-1">
                   <Input
                     key={`fi-${selectedClip.id}`}
-                    className="fade-input"
+                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -297,7 +298,7 @@ export function Inspector({
                   />
                   <Input
                     key={`fo-${selectedClip.id}`}
-                    className="fade-input"
+                    className="h-[26px] w-full rounded border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -309,9 +310,9 @@ export function Inspector({
               </div>
             )}
             {!isTextClip && onSetTransform && (
-              <div className="pip-controls flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="pip-label">{t("transformTitle")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("transformTitle")}</span>
                   {!isIdentityTransform && (
                     <button
                       type="button"
@@ -348,9 +349,9 @@ export function Inspector({
               </div>
             )}
             {isOverlayClip && (
-              <div className="pip-controls">
-                <span className="pip-label">{t("pipPosition")}</span>
-                <div className="pip-row">
+              <div className="grid gap-1.5 border-t border-border pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("pipPosition")}</span>
+                <div className="flex flex-wrap gap-1">
                   {PIP_POSITIONS.map((position) => (
                     <button
                       key={position.key}
@@ -366,13 +367,13 @@ export function Inspector({
                     </button>
                   ))}
                 </div>
-                <span className="pip-label">{t("pipSize")}</span>
-                <div className="pip-row">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("pipSize")}</span>
+                <div className="flex flex-wrap gap-1">
                   {PIP_SIZES.map((size) => (
                     <button
                       key={size}
                       type="button"
-                      className={Math.abs(pip.scale - size) < 0.01 ? "pip-btn active" : "pip-btn"}
+                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(pip.scale - size) < 0.01 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => applyPip({ scale: size })}
                     >
                       {Math.round(size * 100)}%
@@ -384,7 +385,7 @@ export function Inspector({
           </div>
         )
       ) : (
-        <div className="inspector-body">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
           <dl>
             <dt>{t("sequence")}</dt>
             <dd>{sequence.name}</dd>
@@ -396,9 +397,9 @@ export function Inspector({
             </dd>
           </dl>
           {onReframe && (
-            <div className="pip-controls">
-              <span className="pip-label">{t("reframeTitle")}</span>
-              <div className="pip-row">
+            <div className="grid gap-1.5 border-t border-border pt-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeTitle")}</span>
+              <div className="flex flex-wrap gap-1">
                 {(
                   [
                     { label: "16:9", w: 1920, h: 1080 },
@@ -412,7 +413,7 @@ export function Inspector({
                     <button
                       key={preset.label}
                       type="button"
-                      className={sequence.width === preset.w && sequence.height === preset.h ? "pip-btn active" : "pip-btn"}
+                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", sequence.width === preset.w && sequence.height === preset.h && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onReframe(preset.w, preset.h, fill)}
                     >
                       {preset.label}
@@ -420,8 +421,8 @@ export function Inspector({
                   );
                 })}
               </div>
-              <span className="pip-label">{t("reframeFill")}</span>
-              <div className="pip-row">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeFill")}</span>
+              <div className="flex flex-wrap gap-1">
                 {(
                   [
                     { key: "cover", label: t("fillCover") },
@@ -434,7 +435,7 @@ export function Inspector({
                     <button
                       key={mode.key}
                       type="button"
-                      className={fill === mode.key ? "pip-btn active" : "pip-btn"}
+                      className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", fill === mode.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
                       onClick={() => onReframe(sequence.width, sequence.height, mode.key)}
                     >
                       {mode.label}
@@ -444,7 +445,7 @@ export function Inspector({
               </div>
             </div>
           )}
-          <p className="inspector-hint">{t("noSelection")}</p>
+          <p className="m-0 border-t border-border pt-2.5 text-xs text-muted-foreground">{t("noSelection")}</p>
         </div>
       )}
     </section>
@@ -520,14 +521,14 @@ function ColorGradePanel({
   };
 
   return (
-    <div className="inspector-body color-panel">
-      <div className="color-target">
+    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5">
+      <div className="flex items-center gap-1.5 border-b border-border pb-0.5 text-xs text-muted-foreground [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:font-semibold [&_strong]:text-foreground">
         <span>{t("colorTarget")}</span>
         <strong title={targetName}>{targetName}</strong>
-        <div className="color-actions">
+        <div className="inline-flex items-center gap-1">
           <button
             type="button"
-            className="grade-icon-btn"
+            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             onClick={history.undo}
             disabled={!history.canUndo}
             title={t("colorUndo")}
@@ -537,7 +538,7 @@ function ColorGradePanel({
           </button>
           <button
             type="button"
-            className="grade-icon-btn"
+            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             onClick={history.redo}
             disabled={!history.canRedo}
             title={t("colorRedo")}
@@ -546,18 +547,18 @@ function ColorGradePanel({
             <Redo2 size={12} />
           </button>
           {hasGrade && (
-            <button type="button" className="grade-reset" onClick={resetAll} title={t("gradeResetAllHint")}>
+            <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-destructive" onClick={resetAll} title={t("gradeResetAllHint")}>
               <RotateCcw size={11} /> {t("gradeReset")}
             </button>
           )}
         </div>
       </div>
-      <div className="pip-controls">
-        <span className="pip-label">{t("stylePresets")}</span>
-        <div className="pip-row color-presets">
+      <div className="grid gap-1.5 border-t border-border pt-2.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("stylePresets")}</span>
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
-            className={isCleanColor ? "pip-btn active" : "pip-btn"}
+            className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", isCleanColor && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
             title={t("colorPresetHint")}
             onClick={() => applyPreset(null)}
           >
@@ -567,7 +568,7 @@ function ColorGradePanel({
             <button
               key={preset.key}
               type="button"
-              className={activePreset === preset.key ? "pip-btn active" : "pip-btn"}
+              className={cn("min-w-[34px] cursor-pointer rounded border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", activePreset === preset.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
               title={t("colorPresetHint")}
               onClick={() => applyPreset(presetColorPayload(preset))}
             >
@@ -577,10 +578,10 @@ function ColorGradePanel({
         </div>
       </div>
       {GRADE_GROUPS.map((group) => (
-        <div className="pip-controls" key={group.label}>
-          <span className="pip-label">{t(group.label as never)}</span>
+        <div className="grid gap-1.5 border-t border-border pt-2.5" key={group.label}>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t(group.label as never)}</span>
           {group.keys.map((key) => (
-            <div className="grade-slider" key={`${key}-${clip.id}`}>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_30px] items-center gap-1.5 text-[11.5px] text-muted-foreground [&_em]:text-right [&_em]:text-[10.5px] [&_em]:not-italic" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
               <Slider
                 // 值入 key:套预设后重挂,让非受控滑杆的滑块跳到预设值。
@@ -597,8 +598,8 @@ function ColorGradePanel({
           ))}
         </div>
       ))}
-      <div className="pip-controls">
-        <span className="pip-label">{t("gradeGroupCurves")}</span>
+      <div className="grid gap-1.5 border-t border-border pt-2.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupCurves")}</span>
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
@@ -608,11 +609,11 @@ function ColorGradePanel({
           }
         />
       </div>
-      <div className="pip-controls">
-        <span className="pip-label">{t("gradeGroupLut")}</span>
+      <div className="grid gap-1.5 border-t border-border pt-2.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupLut")}</span>
         <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
       </div>
-      <p className="color-hint">{t("colorScopeHint")}</p>
+      <p className="mb-0 mt-1 text-[11px] leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 import {
   IDENTITY_CURVE,
   IDENTITY_CURVES,
@@ -164,26 +165,29 @@ export function CurveEditor({
   const active = CHANNELS.find((c) => c.key === channel)!;
 
   return (
-    <div className="curve-editor">
-      <div className="curve-tabs">
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1">
         {CHANNELS.map((c) => (
           <button
             key={c.key}
             type="button"
-            className={channel === c.key ? "curve-tab active" : "curve-tab"}
+            className={cn(
+            "flex-1 cursor-pointer rounded border border-border bg-panel py-0.5 text-[11px] font-semibold text-muted-foreground transition-[border-color,color] duration-100",
+            channel === c.key && "bg-[color-mix(in_srgb,currentColor_8%,transparent)]",
+          )}
             style={channel === c.key ? { color: c.stroke, borderColor: c.stroke } : undefined}
             onClick={() => setChannel(c.key)}
           >
             {c.label}
           </button>
         ))}
-        <button type="button" className="curve-reset" onClick={resetChannel} title={t("curveResetChannel")}>
+        <button type="button" className="cursor-pointer border-0 bg-transparent px-1 py-0 text-[10.5px] text-muted-foreground hover:text-foreground" onClick={resetChannel} title={t("curveResetChannel")}>
           {t("gradeReset")}
         </button>
       </div>
       <svg
         ref={svgRef}
-        className="curve-plot"
+        className="block h-auto w-full cursor-crosshair touch-none rounded-md border border-border bg-panel-inset"
         viewBox={`0 0 ${W} ${H}`}
         onPointerDown={addPointAndDrag}
         onPointerMove={onMove}
@@ -193,19 +197,19 @@ export function CurveEditor({
         {/* 网格 + identity 参考对角线 */}
         {[0.25, 0.5, 0.75].map((g) => (
           <React.Fragment key={g}>
-            <line x1={sx(g)} y1={sy(0)} x2={sx(g)} y2={sy(1)} className="curve-grid" />
-            <line x1={sx(0)} y1={sy(g)} x2={sx(1)} y2={sy(g)} className="curve-grid" />
+            <line x1={sx(g)} y1={sy(0)} x2={sx(g)} y2={sy(1)} className="stroke-border [stroke-width:0.4] [vector-effect:non-scaling-stroke]" />
+            <line x1={sx(0)} y1={sy(g)} x2={sx(1)} y2={sy(g)} className="stroke-border [stroke-width:0.4] [vector-effect:non-scaling-stroke]" />
           </React.Fragment>
         ))}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(1)} y2={sy(1)} className="curve-diagonal" />
-        <path d={pathFor(points)} className="curve-line" style={{ stroke: active.stroke }} />
+        <line x1={sx(0)} y1={sy(0)} x2={sx(1)} y2={sy(1)} className="stroke-border-strong [stroke-dasharray:2_2] [stroke-width:0.5] [vector-effect:non-scaling-stroke]" />
+        <path d={pathFor(points)} className="fill-none [stroke-width:1.5] [vector-effect:non-scaling-stroke]" style={{ stroke: active.stroke }} />
         {points.map(([px, py], i) => (
           <circle
             key={i}
             cx={sx(px)}
             cy={sy(py)}
             r={4}
-            className="curve-point"
+            className="cursor-grab stroke-panel [stroke-width:1] [vector-effect:non-scaling-stroke] active:cursor-grabbing"
             style={{ fill: active.stroke }}
             onPointerDown={(event) => onPointDown(event, i)}
             onContextMenu={(event) => removePoint(event, i)}
@@ -213,7 +217,7 @@ export function CurveEditor({
           />
         ))}
       </svg>
-      <p className="curve-hint">{t("curveHint")}</p>
+      <p className="m-0 text-[10.5px] leading-normal text-muted-foreground">{t("curveHint")}</p>
     </div>
   );
 }

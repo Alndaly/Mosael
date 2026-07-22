@@ -117,17 +117,17 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   const seg = (
     <div className="flex items-center justify-between">
-      <div className="seg">
+      <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
         <button
           type="button"
-          className={tab === "records" ? "seg-btn active" : "seg-btn"}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "records" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => setTab("records")}
         >
           <Rocket size={13} /> {t("publishTabRecords")}
         </button>
         <button
           type="button"
-          className={tab === "accounts" ? "seg-btn active" : "seg-btn"}
+          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "accounts" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
           onClick={() => setTab("accounts")}
         >
           <Users size={13} /> {t("publishTabAccounts")}

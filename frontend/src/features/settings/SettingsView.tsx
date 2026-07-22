@@ -431,24 +431,24 @@ function AppearanceSection() {
   return (
     <SettingsGroup title={t("settingsAppearance")} description={t("settingsAppearanceDesc")}>
       <SettingsRow label={t("settingsTheme")} description={t("settingsThemeDesc")}>
-        <div className="seg">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           <button
             type="button"
-            className={theme === "light" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "light" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setTheme("light")}
           >
             <Sun size={13} /> {t("themeLight")}
           </button>
           <button
             type="button"
-            className={theme === "dark" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "dark" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setTheme("dark")}
           >
             <Moon size={13} /> {t("themeDark")}
           </button>
           <button
             type="button"
-            className={theme === "system" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "system" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setTheme("system")}
           >
             <MonitorCog size={13} /> {t("themeSystem")}
@@ -456,17 +456,17 @@ function AppearanceSection() {
         </div>
       </SettingsRow>
       <SettingsRow label={t("settingsLanguage")} description={t("settingsLanguageDesc")}>
-        <div className="seg">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           <button
             type="button"
-            className={locale === "zh-CN" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", locale === "zh-CN" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setLocale("zh-CN")}
           >
             {t("languageZh")}
           </button>
           <button
             type="button"
-            className={locale === "en-US" ? "seg-btn active" : "seg-btn"}
+            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", locale === "en-US" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
             onClick={() => setLocale("en-US")}
           >
             {t("languageEn")}
@@ -521,12 +521,12 @@ function BackgroundSection() {
   return (
     <SettingsGroup title={t("appearanceBgTitle")} description={t("appearanceBgDesc")}>
       <SettingsRow label={t("appearanceBgSource")} description={t("appearanceBgSourceDesc")}>
-        <div className="seg">
+        <div className="inline-flex h-7 items-stretch overflow-hidden rounded border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
           {(["none", "preset", "image"] as BackgroundKind[]).map((kind) => (
             <button
               key={kind}
               type="button"
-              className={appearance.kind === kind ? "seg-btn active" : "seg-btn"}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", appearance.kind === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => chooseKind(kind)}
             >
               {kind === "none" ? t("appearanceBgNone") : kind === "preset" ? t("appearanceBgPreset") : t("appearanceBgImage")}

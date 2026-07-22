@@ -392,7 +392,7 @@ export function Monitor({
   };
 
   return (
-    <div className="monitor-stack">
+    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_38px]">
       {/* Scopes as a draggable floating window (position: fixed), never covering the picture. */}
       {showScopes && <ScopesFloat videoRef={videoRef} filter={cssFilter} onClose={() => setShowScopes(false)} />}
       {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
@@ -425,14 +425,14 @@ export function Monitor({
           </filter>
         </svg>
       )}
-      <div className="monitor-stage" ref={monitorStageRef}>
-        <div className="monitor-frame-wrap" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
+      <div className="grid min-h-0 place-items-center p-3 [container-type:size] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-black [&:fullscreen::backdrop]:bg-black" ref={monitorStageRef}>
+        <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-[3px] bg-black [container-type:inline-size] w-[min(100cqw,calc(100cqh*var(--frame-ar,1.7778)))] [:fullscreen_&]:rounded-none" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
           {fillMode === "blur" && activeClip && (
-            <div className="monitor-blur-bg" aria-hidden>
+            <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden>
               {isImage && activeAsset ? (
-                <img className="monitor-blur-media" src={assetFileUrl(activeAsset.id)} alt="" />
+                <img className="h-full w-full scale-[1.15] object-cover [filter:blur(28px)_brightness(0.75)]" src={assetFileUrl(activeAsset.id)} alt="" />
               ) : (
-                <video ref={bgVideoRef} className="monitor-blur-media" muted playsInline preload="auto" />
+                <video ref={bgVideoRef} className="h-full w-full scale-[1.15] object-cover [filter:blur(28px)_brightness(0.75)]" muted playsInline preload="auto" />
               )}
             </div>
           )}
@@ -440,7 +440,7 @@ export function Monitor({
               mounted so it still carries preview audio until WebAudio mixing lands in S3. */}
           <video
             ref={videoRef}
-            className="monitor-video"
+            className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
             style={{
               display: activeClip && !isImage ? "block" : "none",
               opacity: compositorActive ? 0 : undefined,
@@ -454,7 +454,7 @@ export function Monitor({
           />
           {activeClip && isImage && activeAsset && !compositorActive && (
             <img
-              className="monitor-video"
+              className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
               src={assetFileUrl(activeAsset.id)}
               alt=""
               style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
@@ -467,24 +467,24 @@ export function Monitor({
               width={sequence.width}
               height={sequence.height}
               fillMode={fillMode}
-              className="monitor-video"
+              className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
               style={fitStyle}
             />
           )}
           {!activeClip && (
-            <div className="monitor-blank">
-              <span className="monitor-blank-hint">{t("monitorBlankHint")}</span>
+            <div className="grid h-full w-full place-items-center bg-black object-contain">
+              <span className="px-5 text-center text-[12.5px] text-[rgb(255_255_255/0.4)]">{t("monitorBlankHint")}</span>
             </div>
           )}
           {vignette > 0 && (
             <div
-              className="monitor-vignette"
+              className="pointer-events-none absolute inset-0 z-[2]"
               style={{ boxShadow: `inset 0 0 ${60 + vignette * 120}px ${vignette * 60}px rgba(0,0,0,${0.35 + vignette * 0.4})` }}
             />
           )}
           {activeSubtitle?.text_override && (
             <div
-              className="monitor-subtitle"
+              className="pointer-events-none absolute bottom-[7%] left-1/2 z-[3] max-w-[86%] -translate-x-1/2 whitespace-pre-wrap rounded bg-[rgb(0_0_0/0.62)] px-2.5 py-[3px] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
               style={subtitleCss(
                 readSubtitleStyle(
                   (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,
@@ -513,7 +513,7 @@ export function Monitor({
               );
             })}
           {selectedActive && onSetTransform && (
-            <div className="monitor-tf-layer" onClick={(event) => event.stopPropagation()}>
+            <div className="pointer-events-none absolute inset-0 z-[4]" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
                 frameRef={stageRef}
                 transform={draft ?? readTransform(selectedActive.transform)}
@@ -532,26 +532,26 @@ export function Monitor({
         </div>
       </div>
       <div
-        className="monitor-scrub"
+        className="group/scrub relative mx-2.5 flex h-3.5 cursor-pointer touch-none items-center before:absolute before:inset-x-0 before:h-[3px] before:rounded-sm before:bg-[rgb(255_255_255/0.16)] before:content-['']"
         ref={scrubRef}
         onPointerDown={handleScrub}
         onPointerMove={(event) => event.buttons & 1 && seekFromScrub(event.clientX)}
       >
         <div
-          className="monitor-scrub-fill"
+          className="pointer-events-none relative h-[3px] rounded-sm bg-primary after:absolute after:-right-[5px] after:top-1/2 after:h-2.5 after:w-2.5 after:-translate-y-1/2 after:rounded-full after:bg-white after:opacity-0 after:transition-opacity after:duration-100 after:content-[''] group-hover/scrub:after:opacity-100"
           style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
         />
       </div>
-      <div className="monitor-transport">
-        <div className="monitor-buttons">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-2 pb-[5px] pt-[3px] [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+        <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
-          <Button variant="secondary" size="icon" className="monitor-play" onClick={playToggle} aria-label={t("playPause")}>
-            {playing ? <Pause size={14} /> : <Play size={14} className="monitor-play-icon" />}
+          <Button variant="secondary" size="icon" className="h-7 w-7 rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
+            {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
             <StepForward size={14} />
@@ -562,25 +562,25 @@ export function Monitor({
           <Button
             variant="ghost"
             size="icon"
-            className={loop ? "monitor-active" : undefined}
+            className={loop ? "bg-[rgb(255_255_255/0.1)]! text-primary!" : undefined}
             onClick={toggleLoop}
             aria-label={t("monLoop")}
           >
             <Repeat size={13} />
           </Button>
-          <button type="button" className="monitor-rate timecode" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
+          <button type="button" className="timecode cursor-pointer rounded border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-[11px] text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
             {playbackRate}x
           </button>
         </div>
-        <div className="monitor-timecode timecode">
+        <div className="timecode text-xs text-[#e8eaed]">
           {formatTimecode(playhead)}
-          <span className="monitor-total"> / {formatTimecode(totalDuration)}</span>
+          <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
         </div>
-        <div className="monitor-buttons">
+        <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon"
-            className={showScopes ? "monitor-active" : undefined}
+            className={showScopes ? "bg-[rgb(255_255_255/0.1)]! text-primary!" : undefined}
             onClick={() => setShowScopes((on) => !on)}
             aria-label={t("scopes")}
             title={t("scopes")}
@@ -591,7 +591,7 @@ export function Monitor({
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
           <Slider
-            className="monitor-volume"
+            className="w-[68px] flex-none [--slider-range:rgba(255,255,255,0.75)] [--slider-thumb:#ffffff] [--slider-track:rgba(255,255,255,0.22)]"
             min={0}
             max={1}
             step={0.05}
