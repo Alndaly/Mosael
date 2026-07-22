@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type Source = "screen" | "camera" | "mic";
@@ -30,13 +31,82 @@ export function Recorder({
   const streamRef = React.useRef<MediaStream | null>(null);
   const timerRef = React.useRef<number | null>(null);
 
+  // 输入设备选择:默认设备可能是不出数据的虚拟/连续互通设备(录了半天 0.6s 就是
+  // 这么来的),必须能换。选择记进 localStorage,下次直接沿用。
+  const [mics, setMics] = React.useState<MediaDeviceInfo[]>([]);
+  const [cameras, setCameras] = React.useState<MediaDeviceInfo[]>([]);
+  const [micId, setMicId] = React.useState<string>(() => localStorage.getItem("mibu.recorder.mic") ?? "");
+  const [cameraId, setCameraId] = React.useState<string>(() => localStorage.getItem("mibu.recorder.camera") ?? "");
+  const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+  const levelRafRef = React.useRef<number | null>(null);
+
+  // 枚举设备:label 需要权限,弹窗打开时先请求一次再列(拿到即释放)。
+  React.useEffect(() => {
+    if (!open) return;
+    let disposed = false;
+    const enumerate = async () => {
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).catch(() =>
+          navigator.mediaDevices.getUserMedia({ audio: true }),
+        );
+        probe?.getTracks().forEach((track) => track.stop());
+      } catch {
+        /* 权限被拒:仍尝试枚举(可能只有无 label 的条目) */
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (disposed) return;
+        setMics(devices.filter((d) => d.kind === "audioinput" && d.deviceId));
+        setCameras(devices.filter((d) => d.kind === "videoinput" && d.deviceId));
+      } catch {
+        /* 枚举失败:退回默认设备 */
+      }
+    };
+    void enumerate();
+    return () => {
+      disposed = true;
+    };
+  }, [open]);
+
+  const stopLevelMeter = React.useCallback(() => {
+    if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+    levelRafRef.current = null;
+    void audioCtxRef.current?.close().catch(() => undefined);
+    audioCtxRef.current = null;
+    setLevel(0);
+  }, []);
+
+  const startLevelMeter = React.useCallback((stream: MediaStream) => {
+    if (stream.getAudioTracks().length === 0) return;
+    try {
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      audioCtxRef.current = ctx;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let peak = 0;
+        for (const value of data) peak = Math.max(peak, Math.abs(value - 128) / 128);
+        setLevel(peak);
+        levelRafRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch {
+      /* 电平表纯属提示,失败不影响录制 */
+    }
+  }, []);
+
   const cleanup = React.useCallback(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
+    stopLevelMeter();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
-  }, []);
+  }, [stopLevelMeter]);
 
   const stop = React.useCallback(() => {
     recorderRef.current?.stop(); // onstop emits the file + cleans up
@@ -62,13 +132,17 @@ export function Recorder({
   const start = async () => {
     try {
       const media = navigator.mediaDevices;
+      // exact 而不是 ideal:用户点名选的设备拿不到就该报错,而不是静默换一个继续录。
+      const audioConstraint: MediaTrackConstraints | boolean = micId ? { deviceId: { exact: micId } } : true;
+      const videoConstraint: MediaTrackConstraints | boolean = cameraId ? { deviceId: { exact: cameraId } } : true;
       const stream =
         source === "screen"
           ? await media.getDisplayMedia({ video: true, audio: true })
           : source === "camera"
-            ? await media.getUserMedia({ video: true, audio: true })
-            : await media.getUserMedia({ audio: true });
+            ? await media.getUserMedia({ video: videoConstraint, audio: audioConstraint })
+            : await media.getUserMedia({ audio: audioConstraint });
       streamRef.current = stream;
+      startLevelMeter(stream);
       if (videoRef.current && source !== "mic") {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => undefined);
@@ -147,6 +221,73 @@ export function Recorder({
           {recording && <span className="absolute left-2.5 top-2.5 h-2.5 w-2.5 animate-recorder-blink rounded-full bg-destructive" aria-hidden />}
           <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">{fmt(secs)}</span>
         </div>
+
+        {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,
+            哑设备(录了 0 秒那种)当场现形。录制中锁定选择。 */}
+        {source !== "screen" && (
+          <div className="grid gap-1.5">
+            <div className={cn("grid gap-1.5", source === "camera" && "grid-cols-2 max-[560px]:grid-cols-1")}>
+              {source === "camera" && (
+                <Select
+                  value={cameraId || "default"}
+                  onValueChange={(next) => {
+                    const id = next === "default" ? "" : next;
+                    setCameraId(id);
+                    localStorage.setItem("mibu.recorder.camera", id);
+                  }}
+                  disabled={recording}
+                >
+                  <SelectTrigger className="h-8" title={t("recordCamera")} aria-label={t("recordCamera")}>
+                    <Video size={12} className="shrink-0 text-muted-foreground" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">{t("recordDeviceDefault")}</SelectItem>
+                    {cameras.map((device) => (
+                      <SelectItem key={device.deviceId} value={device.deviceId}>
+                        {device.label || t("recordDeviceUnnamed")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select
+                value={micId || "default"}
+                onValueChange={(next) => {
+                  const id = next === "default" ? "" : next;
+                  setMicId(id);
+                  localStorage.setItem("mibu.recorder.mic", id);
+                }}
+                disabled={recording}
+              >
+                <SelectTrigger className="h-8" title={t("recordMic")} aria-label={t("recordMic")}>
+                  <Mic size={12} className="shrink-0 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">{t("recordDeviceDefault")}</SelectItem>
+                  {mics.map((device) => (
+                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                      {device.label || t("recordDeviceUnnamed")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {recording && (
+              <div className="flex items-center gap-2" title={t("recordLevel")}>
+                <Mic size={11} className="shrink-0 text-muted-foreground" />
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
+                  <div
+                    className={cn("h-full rounded-full transition-[width] duration-75", level > 0.02 ? "bg-[var(--success)]" : "bg-border-strong")}
+                    style={{ width: `${Math.min(100, Math.round(level * 130))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-2.5">
           {!recording ? (
             <Button size="sm" onClick={start}>
