@@ -80,7 +80,8 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn("space-y-2", className)} {...props} />
+      {/* 6px 标签→控件:贴齐全站手写表单的紧凑刻度(shadcn 默认 8px 偏松)。 */}
+      <div ref={ref} className={cn("space-y-1.5", className)} {...props} />
     </FormItemContext.Provider>
   )
 })

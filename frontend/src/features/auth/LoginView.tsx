@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ServerPicker } from "@/components/layout/ServerPicker";
+import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
 
 type LoginValues = { username: string; displayName: string; password: string; confirm: string };
@@ -35,6 +36,7 @@ export function LoginView() {
   const t = useI18n();
   const { hasUsers, login, register } = useAuth();
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
+  const [legalDoc, setLegalDoc] = React.useState<LegalDoc | null>(null);
 
   const schema = React.useMemo(() => {
     const base = z.object({
@@ -159,6 +161,15 @@ export function LoginView() {
               <Button type="submit" className="mt-1.5" disabled={form.formState.isSubmitting}>
                 {mode === "login" ? t("signIn") : t("createAccount")}
               </Button>
+              {mode === "register" && (
+                <p className="m-0 text-[11.5px] leading-[1.6] text-muted-foreground [&_button]:cursor-pointer [&_button]:border-0 [&_button]:bg-transparent [&_button]:p-0 [&_button]:text-[length:inherit] [&_button]:text-foreground [&_button]:underline [&_button]:underline-offset-2 [&_button:hover]:text-primary">
+                  {t("authConsentPrefix")}
+                  <button type="button" onClick={() => setLegalDoc("terms")}>{t("legalTerms")}</button>
+                  {t("authConsentAnd")}
+                  <button type="button" onClick={() => setLegalDoc("privacy")}>{t("legalPrivacy")}</button>
+                  {t("authConsentSuffix")}
+                </p>
+              )}
             </form>
           </Form>
 
@@ -170,6 +181,7 @@ export function LoginView() {
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
         </div>
+        <LegalDialog doc={legalDoc} onClose={() => setLegalDoc(null)} />
 
         {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
         <div className="flex w-[min(340px,100%)] justify-start border-t border-border pt-4">
