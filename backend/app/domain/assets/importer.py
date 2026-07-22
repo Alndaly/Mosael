@@ -8,10 +8,19 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key
-from app.media.probe import guess_kind, probe_media
+from app.media.probe import guess_kind, probe_media, remux_in_place
 from app.media.proxy import start_proxy_job
 from app.media.thumbnails import generate_thumbnail
 from app.media.waveform import generate_waveform
+
+
+def _probe_with_duration_repair(target: Path, kind: str) -> dict:
+    """探测媒体信息;时长缺失的音视频(MediaRecorder 直录 webm 的已知形态)
+    先无损 remux 补容器头再重探,后续缩略图/波形/剪辑都依赖时长。"""
+    media_info = probe_media(target)
+    if kind != "image" and media_info.get("duration") is None and remux_in_place(target):
+        media_info = probe_media(target)
+    return media_info
 
 
 def register_file_asset(
@@ -31,7 +40,7 @@ def register_file_asset(
     shutil.copy2(source_path, target)
 
     kind = guess_kind(target)
-    media_info = probe_media(target)
+    media_info = _probe_with_duration_repair(target, kind)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}
     if generate_waveform(target, kind, target_dir) is not None:
@@ -71,7 +80,7 @@ def import_uploaded_asset(
         shutil.copyfileobj(upload.file, out)
 
     kind = guess_kind(target, upload.content_type)
-    media_info = probe_media(target)
+    media_info = _probe_with_duration_repair(target, kind)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}
     if generate_waveform(target, kind, target_dir) is not None:

@@ -15,12 +15,17 @@ def generate_thumbnail(source: Path, kind: str, asset_directory: Path) -> Path |
     if kind == "audio":
         return None
     target = thumbnail_path(asset_directory)
-    args = ["ffmpeg", "-y", "-v", "error"]
-    if kind == "video":
-        args += ["-ss", "0.5"]
-    args += ["-i", str(source), "-frames:v", "1", "-vf", "scale=320:-2", str(target)]
-    try:
-        subprocess.run(args, check=True, capture_output=True, timeout=30)
-    except Exception:
-        return None
-    return target if target.exists() else None
+    # 0.5s 跳过片头黑场;超短片段 seek 会落在片尾之后取不到帧,退回首帧再试。
+    seeks = ["0.5", None] if kind == "video" else [None]
+    for seek in seeks:
+        args = ["ffmpeg", "-y", "-v", "error"]
+        if seek is not None:
+            args += ["-ss", seek]
+        args += ["-i", str(source), "-frames:v", "1", "-vf", "scale=320:-2", str(target)]
+        try:
+            subprocess.run(args, check=True, capture_output=True, timeout=30)
+        except Exception:
+            continue
+        if target.exists() and target.stat().st_size > 0:
+            return target
+    return None

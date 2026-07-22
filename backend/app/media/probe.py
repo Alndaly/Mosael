@@ -65,6 +65,37 @@ def probe_media(path: Path) -> dict[str, Any]:
     return {k: v for k, v in info.items() if v is not None}
 
 
+def remux_in_place(path: Path) -> bool:
+    """Lossless remux (`-c copy`) that rewrites the container header in place.
+
+    MediaRecorder 直录的 webm 是流式写出的,Chromium 不回填 Duration 头,
+    ffprobe 探不到时长、按时长定位的操作全部失灵。整文件无损重封装一遍,
+    由 ffmpeg 写出完整的头,再重探即可。失败时保留原文件。
+
+    .webm 后缀会推导出只收 VP8/VP9/AV1 的严格 WebM muxer;装着别的编码的
+    "webm" 文件(改过扩展名等)换通用 matroska muxer 再试一次。"""
+    tmp = path.with_name(path.stem + ".remux" + path.suffix)
+    attempts: list[list[str]] = [[]]
+    if path.suffix.lower() in {".webm", ".mkv"}:
+        attempts.append(["-f", "matroska"])
+    for extra in attempts:
+        try:
+            subprocess.run(
+                [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-c", "copy", *extra, str(tmp)],
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            continue
+        if tmp.exists() and tmp.stat().st_size > 0:
+            tmp.replace(path)
+            return True
+        tmp.unlink(missing_ok=True)
+    return False
+
+
 # ffprobe is cheap but not free; a long timeline should not fork one per source at once.
 _MAX_PARALLEL_PROBES = 8
 
