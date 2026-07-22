@@ -10,6 +10,7 @@ import {
 } from "d3-force";
 
 import type { components } from "@/api/generated/schema";
+import { cn } from "@/lib/utils";
 
 type GraphNode = components["schemas"]["KbGraphNode"];
 type GraphEdge = components["schemas"]["KbGraphEdge"];
@@ -95,7 +96,7 @@ export function KbGraphCanvas({ nodes, edges }: { nodes: GraphNode[]; edges: Gra
   return (
     <svg
       ref={svgRef}
-      className="kb-graph-svg"
+      className="min-h-0 w-full flex-1 cursor-grab touch-none rounded-lg border border-border bg-panel-inset active:cursor-grabbing"
       viewBox={`0 0 ${W} ${H}`}
       onPointerDown={(event) => {
         (event.target as Element).setPointerCapture?.(event.pointerId);
@@ -121,7 +122,7 @@ export function KbGraphCanvas({ nodes, edges }: { nodes: GraphNode[]; edges: Gra
           return (
             <line
               key={i}
-              className="kb-graph-edge"
+              className="stroke-border-strong stroke-1"
               x1={s.x}
               y1={s.y}
               x2={t.x}
@@ -136,7 +137,10 @@ export function KbGraphCanvas({ nodes, edges }: { nodes: GraphNode[]; edges: Gra
             <g
               key={node.id}
               transform={`translate(${node.x} ${node.y})`}
-              className={`kb-graph-node kind-${node.kind}`}
+              className={cn(
+                "cursor-pointer transition-opacity duration-[120ms] [&_circle]:stroke-card [&_circle]:[stroke-width:1.5] [&_text]:pointer-events-none [&_text]:fill-foreground [&_text]:text-[10px]",
+                node.kind === "document" ? "[&_circle]:fill-primary" : "[&_circle]:fill-[#d97706]",
+              )}
               opacity={isDim(node.id) ? 0.2 : 1}
               onPointerEnter={() => setHover(node.id)}
               onPointerLeave={() => setHover(null)}

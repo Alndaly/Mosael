@@ -169,7 +169,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
               title={t("publishEmptyTitle")}
               body={t("publishEmptyBody")}
               action={
-                <div className="kb-empty-actions">
+                <div className="flex items-center gap-1.5">
                   <Button onClick={() => setCreating(true)}>
                     <Plus size={15} /> {t("publishCreate")}
                   </Button>
@@ -486,15 +486,15 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         title={task.title || task.asset_name}
         description={`${task.account_name} · ${task.platform} · ${t(`batchStatus_${task.status}` as never)}`}
         actions={
-          <div className="sched-actions">
+          <div className="flex items-center gap-1.5">
             {ACTIVE.has(task.status) ? (
               <Loader2 size={14} className="spin" />
             ) : ok ? (
-              <CheckCircle2 size={14} className="inv-ok" />
+              <CheckCircle2 size={14} className="text-[#16a34a]" />
             ) : BLOCKED.has(task.status) ? (
               <CircleAlert size={14} className="publish-blocked-icon" />
             ) : (
-              <CircleAlert size={14} className="inv-bad" />
+              <CircleAlert size={14} className="text-destructive" />
             )}
             {isBrowser && window.mibuPublish && (
               <Button
@@ -509,7 +509,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
                 <ExternalLink size={13} /> {t("publishOpenPage")}
               </Button>
             )}
-            <Button size="sm" variant="outline" className="sched-delete" onClick={onDelete}>
+            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
               <Trash2 size={13} /> {t("delete")}
             </Button>
           </div>

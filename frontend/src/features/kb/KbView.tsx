@@ -160,7 +160,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
                     className={selected?.id === ds.id ? "plugins-item active" : "plugins-item"}
                     onClick={() => setDatasetId(ds.id)}
                   >
-                    <span className="kb-item-icon">
+                    <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground">
                       <BookOpen size={14} />
                     </span>
                     <span className="plugins-item-text">
@@ -180,7 +180,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail kb-detail">
+        <div className="plugins-detail min-h-0">
           {selected ? (
             <DatasetDetail key={selected.id} dataset={selected} workspace={workspace} />
           ) : (
@@ -216,10 +216,10 @@ export function KbView({ workspace }: { workspace: Workspace }) {
 function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: Workspace }) {
   const t = useI18n();
   return (
-    <div className="kb-dataset">
-      <div className="kb-dataset-head">
-        <div className="kb-dataset-head-main">
-          <span className="kb-dataset-avatar">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="[&_h2]:text-[15px] [&_h2]:font-[650] [&_p]:mt-px [&_p]:truncate [&_p]:text-xs [&_p]:text-muted-foreground">
+        <div className="flex items-center gap-2.5 [&>div]:min-w-0 [&>div]:flex-1">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-primary">
             <BookOpen size={16} />
           </span>
           <div>
@@ -229,7 +229,7 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
           <Badge variant="secondary">{t("kbDocCount").replace("{n}", String(dataset.document_count))}</Badge>
         </div>
       </div>
-      <Tabs defaultValue="docs" className="kb-tabs">
+      <Tabs defaultValue="docs" className="min-h-0 flex-1 gap-3">
         <TabsList>
           <TabsTrigger value="docs">
             <FileText size={13} /> {t("kbTabDocs")}
@@ -342,8 +342,8 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
 
   const docs = documents.data ?? [];
   return (
-    <div className="kb-docs">
-      <div className="kb-docs-actions">
+    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto">
+      <div className="flex flex-wrap gap-1.5">
         <Button size="sm" variant="outline" onClick={() => createNote.mutate()} disabled={createNote.isPending}>
           <NotebookPen size={13} /> {t("kbNewNote")}
         </Button>
@@ -366,28 +366,28 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
           </label>
         </Button>
       </div>
-      {importFile.isError && <p className="kb-inline-error">{errText(importFile.error)}</p>}
+      {importFile.isError && <p className="text-xs text-destructive">{errText(importFile.error)}</p>}
 
       {docs.length === 0 ? (
         <EmptyState icon={<FileText size={20} />} title={t("kbNoDocsTitle")} body={t("kbNoDocsBody")} />
       ) : (
-        <div className="kb-doc-rows">
+        <div className="flex flex-col gap-1">
           {docs.map((doc) => (
-            <div key={doc.id} className="kb-doc-row">
-              <button type="button" className="kb-doc-open" onClick={() => setOpenDocId(doc.id)}>
-                <span className="kb-doc-title">{doc.title}</span>
-                <span className="kb-doc-meta">
+            <div key={doc.id} className="flex items-center gap-1.5 rounded-md border border-border bg-card py-1 pl-2.5 pr-1.5 transition-[border-color] duration-100 hover:border-border-strong">
+              <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent px-0 py-1 text-left" onClick={() => setOpenDocId(doc.id)}>
+                <span className="truncate text-[13px] font-semibold">{doc.title}</span>
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
                   <Badge
                     variant={STATUS_VARIANT[doc.status] ?? "default"}
-                    className={doc.status === "error" ? "kb-badge-error" : undefined}
+                    className={doc.status === "error" ? "border-destructive text-destructive" : undefined}
                   >
                     {t(`kbStatus_${doc.status}` as never)}
                   </Badge>
-                  <span className="kb-doc-chunks timecode">{t("kbChunksN").replace("{n}", String(doc.chunk_count))}</span>
-                  {doc.status === "error" && doc.error && <span className="kb-doc-errhint">{doc.error}</span>}
+                  <span className="timecode text-[11px]">{t("kbChunksN").replace("{n}", String(doc.chunk_count))}</span>
+                  {doc.status === "error" && doc.error && <span className="max-w-[220px] truncate text-[11px] text-destructive">{doc.error}</span>}
                 </span>
               </button>
-              <div className="kb-doc-row-tools">
+              <div className="flex shrink-0 gap-0.5">
                 {doc.status === "error" && (
                   <Button size="icon" variant="ghost" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
                     <RotateCw size={13} />
@@ -459,8 +459,8 @@ function DocumentDetail({
   if (!doc.data) return null;
 
   return (
-    <div className="kb-doc-detail">
-      <div className="kb-doc-detail-head">
+    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto">
+      <div className="flex items-center justify-between">
         <Button size="sm" variant="ghost" onClick={onBack}>
           ← {t("back")}
         </Button>
@@ -469,11 +469,11 @@ function DocumentDetail({
             {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSave")}
           </Button>
         ) : (
-          <span className="kb-saved-hint">{t("kbSaved")}</span>
+          <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>
         )}
       </div>
       <Input
-        className="kb-title-input"
+        className="min-w-0 rounded-[3px] border-0 bg-transparent p-0 text-lg font-[650] text-foreground outline-none focus-visible:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]"
         value={title}
         onChange={(event) => {
           setTitle(event.target.value);
@@ -488,14 +488,14 @@ function DocumentDetail({
           setDirty(true);
         }}
       />
-      <div className="kb-chunks">
+      <div className="[&_h3]:mb-1.5 [&_h3]:mt-1 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:uppercase [&_h3]:tracking-[0.03em] [&_h3]:text-muted-foreground">
         <h3>{t("kbChunksTitle").replace("{n}", String((chunks.data ?? []).length))}</h3>
-        <div className="kb-chunk-list">
+        <div className="flex flex-col gap-1.5">
           {(chunks.data ?? []).map((chunk) => (
-            <div key={chunk.id} className="kb-chunk">
-              <span className="kb-chunk-idx timecode">#{chunk.chunk_index + 1}</span>
+            <div key={chunk.id} className="grid grid-cols-[32px_1fr_auto] gap-2 rounded-md border border-border bg-panel-inset px-2.5 py-2 [&_p]:whitespace-pre-wrap [&_p]:text-[12.5px] [&_p]:leading-[1.6] [&_p]:[word-break:break-word]">
+              <span className="timecode text-[11px] text-muted-foreground">#{chunk.chunk_index + 1}</span>
               <p>{chunk.text}</p>
-              <span className="kb-chunk-len timecode">{chunk.char_count}</span>
+              <span className="timecode text-[10.5px] text-muted-foreground">{chunk.char_count}</span>
             </div>
           ))}
         </div>
@@ -516,9 +516,9 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
   });
 
   return (
-    <div className="kb-recall">
+    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto">
       <form
-        className="kb-recall-bar"
+        className="flex gap-1.5 [&>:first-child]:flex-1"
         onSubmit={(event) => {
           event.preventDefault();
           if (query.trim()) run.mutate(query.trim());
@@ -529,18 +529,18 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
           {run.isPending ? <Loader2 size={13} className="spin" /> : <Search size={13} />} {t("kbRecallRun")}
         </Button>
       </form>
-      <p className="kb-recall-hint">{t("kbRecallHint")}</p>
+      <p className="text-[11.5px] text-muted-foreground">{t("kbRecallHint")}</p>
       {run.isSuccess && (run.data ?? []).length === 0 && (
         <div className="empty-inline">
           <Search size={14} /> {t("kbNoResults")}
         </div>
       )}
-      <div className="kb-recall-results">
+      <div className="flex flex-col gap-2">
         {(run.data ?? []).map((hit, i) => (
-          <div key={`${hit.document_id}-${hit.chunk_index}-${i}`} className="kb-recall-hit">
-            <div className="kb-recall-hit-head">
+          <div key={`${hit.document_id}-${hit.chunk_index}-${i}`} className="rounded-md border border-border bg-card px-2.5 py-2 [&_p]:text-xs [&_p]:leading-[1.55] [&_p]:text-muted-foreground">
+            <div className="mb-1 flex items-center gap-2 [&_strong]:truncate [&_strong]:text-[12.5px]">
               <strong>{hit.title}</strong>
-              <span className="kb-recall-score timecode">{hit.score.toFixed(4)}</span>
+              <span className="timecode ml-auto text-[11px] text-primary">{hit.score.toFixed(4)}</span>
               {hit.from_graph && <Badge variant="secondary">{t("kbFromGraph")}</Badge>}
             </div>
             <p>{hit.snippet}</p>
@@ -557,7 +557,7 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
     queryKey: ["kb-graph", dataset.id],
     queryFn: () => api<KbGraph>(`/api/kb/datasets/${dataset.id}/graph`),
   });
-  if (graph.isLoading) return <div className="kb-graph-state"><Loader2 size={16} className="spin" /></div>;
+  if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="spin" /></div>;
   if (!graph.data?.enabled) {
     return (
       <EmptyState
@@ -572,15 +572,15 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
   }
   const entityCount = (graph.data.nodes ?? []).filter((n) => n.kind === "entity").length;
   return (
-    <div className="kb-graph">
-      <div className="kb-graph-legend">
-        <span className="kb-graph-key kind-document">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="flex items-center gap-3.5 text-[11.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-[5px] [&_i]:h-[9px] [&_i]:w-[9px] [&_i]:rounded-full [&_i]:bg-primary">
           <i /> {t("kbGraphDoc")}
         </span>
-        <span className="kb-graph-key kind-entity">
+        <span className="inline-flex items-center gap-[5px] [&_i]:h-[9px] [&_i]:w-[9px] [&_i]:rounded-full [&_i]:bg-[#d97706]">
           <i /> {t("kbGraphEntity")}
         </span>
-        <span className="kb-graph-count">{t("kbGraphEntities").replace("{n}", String(entityCount))}</span>
+        <span className="ml-auto">{t("kbGraphEntities").replace("{n}", String(entityCount))}</span>
       </div>
       <KbGraphCanvas nodes={graph.data.nodes ?? []} edges={graph.data.edges ?? []} />
     </div>
@@ -612,9 +612,9 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
     setForm((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className="kb-settings">
-      <section className="kb-set-group">
-        <div className="kb-set-group-title">{t("kbSetBasic")}</div>
+    <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(300px,1fr))] content-start gap-3 overflow-y-auto">
+      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetBasic")}</div>
         <label className="wf-field">
           <span>{t("kbDatasetName")}</span>
           <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
@@ -625,9 +625,9 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
         </label>
       </section>
 
-      <section className="kb-set-group">
-        <div className="kb-set-group-title">{t("kbSetRetrieval")}</div>
-        <div className="kb-settings-row">
+      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetRetrieval")}</div>
+        <div className="grid grid-cols-2 gap-2.5">
           <div className="wf-field">
             <span>{t("kbRetrievalMode")}</span>
             <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
@@ -645,12 +645,12 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
             <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
           </label>
         </div>
-        {form.retrieval_mode === "hybrid" && <small className="kb-settings-note">{t("kbHybridNote")}</small>}
+        {form.retrieval_mode === "hybrid" && <small className="text-[11px] text-muted-foreground">{t("kbHybridNote")}</small>}
       </section>
 
-      <section className="kb-set-group">
-        <div className="kb-set-group-title">{t("kbSetChunk")}</div>
-        <div className="kb-settings-row">
+      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetChunk")}</div>
+        <div className="grid grid-cols-2 gap-2.5">
           <label className="wf-field">
             <span>{t("kbChunkSize")}</span>
             <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
@@ -660,12 +660,12 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
             <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
           </label>
         </div>
-        <small className="kb-settings-note">{t("kbChunkNote")}</small>
+        <small className="text-[11px] text-muted-foreground">{t("kbChunkNote")}</small>
       </section>
 
-      <section className="kb-set-group">
-        <div className="kb-set-group-title">{t("kbSetEnhance")}</div>
-        <label className="kb-switch-row">
+      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetEnhance")}</div>
+        <label className="flex items-center justify-between gap-3 rounded-md border border-border px-2.5 py-2 [&>span]:grid [&>span]:gap-0.5 [&_small]:text-[11.5px] [&_small]:text-muted-foreground">
           <span>
             <strong>{t("kbGraphEnabled")}</strong>
             <small>{t("kbGraphEnabledDesc")}</small>
@@ -674,11 +674,11 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
         </label>
       </section>
 
-      <div className="kb-settings-actions">
+      <div className="col-span-full mt-0.5 flex items-center gap-2.5">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSaveSettings")}
         </Button>
-        {save.isSuccess && <span className="kb-saved-hint">{t("kbSaved")}</span>}
+        {save.isSuccess && <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>}
       </div>
     </div>
   );

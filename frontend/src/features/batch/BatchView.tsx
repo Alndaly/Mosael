@@ -179,9 +179,9 @@ function BatchDetail({
         title={batch.name}
         description={`${t("wfBoundWorkflow")}: ${workflow?.name ?? batch.workflow_id} · ${succeeded}/${(batch.items ?? []).length} ${t("batchSucceededShort")}${failed ? ` · ${failed} ${t("batchFailedShort")}` : ""}`}
         actions={
-          <div className="sched-actions">
+          <div className="flex items-center gap-1.5">
             {ACTIVE.has(batch.status) && <Loader2 size={14} className="spin" />}
-            <Button size="sm" variant="outline" className="sched-delete" onClick={onDelete}>
+            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
               <Trash2 size={13} /> {t("delete")}
             </Button>
           </div>
@@ -219,9 +219,9 @@ function BatchItemRow({ item }: { item: BatchItem }) {
       </span>
       <span className="batch-item-status">
         {item.status === "succeeded" ? (
-          <CheckCircle2 size={13} className="inv-ok" />
+          <CheckCircle2 size={13} className="text-[#16a34a]" />
         ) : item.status === "failed" ? (
-          <CircleAlert size={13} className="inv-bad" />
+          <CircleAlert size={13} className="text-destructive" />
         ) : ACTIVE.has(item.status) ? (
           <Loader2 size={13} className="spin" />
         ) : null}

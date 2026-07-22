@@ -22,6 +22,7 @@ import {
 
 import { useI18n } from "@/app/preferences";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 /**
  * 知识库正文编辑器:tiptap(Revornix 同款技术栈的精简版)。
@@ -92,17 +93,20 @@ export function KbTiptap({
   ];
 
   return (
-    <div className="kb-tiptap">
-      <div className="kb-tiptap-toolbar" role="toolbar">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-1.5 py-[5px]" role="toolbar">
         {buttons.map((item, index) =>
           item === "sep" ? (
-            <span className="kb-tt-sep" key={`sep-${index}`} />
+            <span className="mx-1 h-4 w-px bg-border" key={`sep-${index}`} />
           ) : (
             <Tooltip key={item.key}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className={item.active ? "kb-tt-btn active" : "kb-tt-btn"}
+                  className={cn(
+                    "grid h-[26px] w-[26px] cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground disabled:cursor-default disabled:opacity-40",
+                    item.active && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
                   disabled={item.disabled}
                   aria-label={item.label}
                   onMouseDown={(event) => event.preventDefault()}
@@ -116,7 +120,7 @@ export function KbTiptap({
           ),
         )}
       </div>
-      <EditorContent editor={editor} className="kb-tiptap-content" />
+      <EditorContent editor={editor} className="min-h-0 overflow-y-auto [&_.ProseMirror]:min-h-full [&_.ProseMirror]:px-4 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-3 [&_.ProseMirror]:text-[13.5px] [&_.ProseMirror]:leading-[1.75] [&_.ProseMirror]:text-foreground [&_.ProseMirror]:outline-none [&_.ProseMirror>*+*]:mt-[0.6em] [&_.ProseMirror_:is(h1,h2,h3)]:mt-[1.1em] [&_.ProseMirror_:is(h1,h2,h3)]:font-bold [&_.ProseMirror_:is(h1,h2,h3)]:leading-[1.35] [&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h2]:text-[16.5px] [&_.ProseMirror_h3]:text-[14.5px] [&_.ProseMirror_:is(ul,ol)]:pl-[22px] [&_.ProseMirror_blockquote]:ml-0 [&_.ProseMirror_blockquote]:border-l-2 [&_.ProseMirror_blockquote]:border-border-strong [&_.ProseMirror_blockquote]:pl-3 [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_code]:rounded-[3px] [&_.ProseMirror_code]:bg-secondary [&_.ProseMirror_code]:px-[5px] [&_.ProseMirror_code]:py-px [&_.ProseMirror_code]:text-xs [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:border [&_.ProseMirror_pre]:border-border [&_.ProseMirror_pre]:bg-secondary [&_.ProseMirror_pre]:px-2.5 [&_.ProseMirror_pre]:py-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_hr]:my-3.5 [&_.ProseMirror_hr]:border-0 [&_.ProseMirror_hr]:border-t [&_.ProseMirror_hr]:border-border [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]" />
     </div>
   );
 }

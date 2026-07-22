@@ -161,7 +161,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         title={plugin.name}
         description={`${plugin.id} · v${plugin.version}`}
         actions={
-          <label className="switch-field">
+          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
             <span>{plugin.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={plugin.enabled} onCheckedChange={(checked) => togglePlugin.mutate(checked)} />
           </label>
@@ -170,7 +170,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         {(grants.data ?? []).length > 0 ? (
           (grants.data ?? []).map((grant) => (
             <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
-              <label className="switch-field">
+              <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
                 <span>{grant.granted ? t("granted") : t("denied")}</span>
                 <Switch
                   checked={grant.granted}
@@ -335,7 +335,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
     <div className="plugin-tool-card">
       <div className="inv-row-head">
         <button type="button" className="plugin-tool-head" onClick={() => setOpen((value) => !value)}>
-          {ok ? <CheckCircle2 size={14} className="inv-ok" /> : <CircleAlert size={14} className="inv-bad" />}
+          {ok ? <CheckCircle2 size={14} className="text-[#16a34a]" /> : <CircleAlert size={14} className="text-destructive" />}
           <div className="plugin-tool-title">
             <strong>{invocation.tool_name}</strong>
             <small>{invocation.status}</small>

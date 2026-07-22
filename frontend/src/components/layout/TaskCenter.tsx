@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -124,24 +125,24 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
             <Button
               variant="ghost"
               size="icon"
-              className="taskcenter-btn"
+              className="relative"
               aria-label={t("taskCenter")}
             >
               {active.length > 0 ? <Loader2 size={15} className="spin" /> : <Activity size={15} />}
-              {active.length > 0 && <em className="taskcenter-badge">{active.length}</em>}
+              {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-primary px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-primary-foreground">{active.length}</em>}
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>{t("taskCenter")}</TooltipContent>
       </Tooltip>
 
-      <PopoverContent className="taskcenter-pop" aria-label={t("taskCenter")}>
-        <div className="taskcenter-head">
+      <PopoverContent className="w-[340px] overflow-hidden" aria-label={t("taskCenter")}>
+        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-[12.5px]">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (
             <button
               type="button"
-              className="taskcenter-clear"
+              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-[11px] text-muted-foreground hover:text-destructive"
               disabled={clearFinished.isPending}
               onClick={() => clearFinished.mutate()}
             >
@@ -149,15 +150,15 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
             </button>
           )}
         </div>
-        <div className="taskcenter-list">
+        <div className="grid max-h-[380px] gap-1 overflow-y-auto p-1.5">
           {active.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
-          {active.length > 0 && finished.length > 0 && <div className="taskcenter-sep" />}
+          {active.length > 0 && finished.length > 0 && <div className="mx-1.5 my-1 h-px bg-border" />}
           {finished.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
           ))}
-          {all.length === 0 && <p className="taskcenter-empty">{t("noJobs")}</p>}
+          {all.length === 0 && <p className="m-0 px-3 py-[18px] text-center text-xs leading-[1.6] text-muted-foreground">{t("noJobs")}</p>}
         </div>
       </PopoverContent>
       <JobDetailDialog
@@ -201,9 +202,10 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
   const t = useI18n();
   const meta = KIND_META[job.kind] ?? { icon: <Activity size={13} />, labelKey: "jobKindOther" };
   const running = ACTIVE.has(job.status);
+  const failed = !running && job.status === "failed";
   return (
     <div
-      className={running ? "taskrow running clickable" : `taskrow ${job.status} clickable`}
+      className="grid cursor-pointer grid-cols-[26px_minmax(0,1fr)] items-start gap-1.5 rounded-md px-1.5 py-[7px] hover:bg-secondary"
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -211,22 +213,29 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
         if (event.key === "Enter") onOpen?.();
       }}
     >
-      <span className="taskrow-icon">{meta.icon}</span>
-      <div className="taskrow-body">
-        <div className="taskrow-title">
+      <span
+        className={cn(
+          "grid h-[26px] w-[26px] place-items-center rounded-md bg-accent text-accent-foreground",
+          failed && "bg-[color-mix(in_oklab,var(--destructive)_12%,var(--background))] text-destructive",
+        )}
+      >
+        {meta.icon}
+      </span>
+      <div className="grid min-w-0 gap-[3px]">
+        <div className="flex items-center justify-between gap-1.5 [&_strong]:text-xs [&_strong]:font-semibold">
           <strong>{t(meta.labelKey as never)}</strong>
-          <span className="taskrow-status">
+          <span className="inline-flex items-center text-[10.5px] tabular-nums text-muted-foreground">
             {job.status === "succeeded" ? (
-              <CheckCircle2 size={12} className="inv-ok" />
+              <CheckCircle2 size={12} className="text-[#16a34a]" />
             ) : job.status === "failed" ? (
-              <CircleAlert size={12} className="inv-bad" />
+              <CircleAlert size={12} className="text-destructive" />
             ) : (
               `${Math.round(job.progress * 100)}%`
             )}
             {running && onCancel && (
               <button
                 type="button"
-                className="taskrow-cancel"
+                className="ml-[3px] inline-grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-destructive"
                 title={t("jobCancel")}
                 aria-label={t("jobCancel")}
                 onClick={(event) => {
@@ -239,8 +248,8 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
             )}
           </span>
         </div>
-        {running && <Progress className="taskrow-progress" value={Math.round(job.progress * 100)} />}
-        <small className="taskrow-msg" title={job.error ?? job.message}>
+        {running && <Progress value={Math.round(job.progress * 100)} />}
+        <small className={cn("truncate text-[11px] text-muted-foreground", failed && "text-destructive")} title={job.error ?? job.message}>
           {job.status === "failed" ? (job.error ?? job.message) : job.message}
         </small>
       </div>

@@ -25,6 +25,7 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 /**
  * 定时任务页 = 主从布局(与插件页同一设计语言):左列任务列表,
@@ -389,11 +390,11 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         title={task.name}
         description={`${t(`taskKind_${task.kind}` as never)} · ${t(`trigger_${task.trigger_type}` as never)}`}
         actions={
-          <div className="sched-actions">
+          <div className="flex items-center gap-1.5">
             <Button size="sm" variant="outline" disabled={!task.enabled || runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}
             </Button>
-            <label className="switch-field">
+            <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
               <span>{task.enabled ? t("pluginOn") : t("pluginOff")}</span>
               <Switch checked={task.enabled} onCheckedChange={(checked) => toggleTask.mutate(checked)} />
             </label>
@@ -412,7 +413,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.last_run_at ?? "—"}</code>
         </SettingsRow>
         <SettingsRow label={t("deleteTask")} description={t("deleteTaskDesc")}>
-          <Button size="sm" variant="outline" className="sched-delete" onClick={() => setDeleting(true)}>
+          <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={() => setDeleting(true)}>
             <Trash2 size={13} /> {t("delete")}
           </Button>
         </SettingsRow>
@@ -420,7 +421,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
 
       <SettingsGroup title={t("taskRuns")} description={t("taskRunsDesc")}>
         <SettingsBlock>
-          <div className="run-list">
+          <div className="block">
             {(runs.data ?? []).map((run) => (
               <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
             ))}
@@ -458,8 +459,15 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
   const message = run.error ?? (running ? job?.message : null);
 
   return (
-    <div className="run-row">
-      <span className={`run-dot ${running ? "running" : run.status}`}>
+    <div className="flex items-center gap-2 py-[7px] [&+&]:border-t [&+&]:border-border">
+      <span
+        className={cn(
+          "grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border border-border text-muted-foreground",
+          running && "border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] text-primary",
+          !running && run.status === "succeeded" && "border-[color-mix(in_srgb,#16a34a_35%,var(--border))] bg-[color-mix(in_srgb,#16a34a_8%,transparent)] text-[#16a34a]",
+          !running && run.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] text-destructive",
+        )}
+      >
         {running ? (
           <Loader2 size={12} className="spin" />
         ) : run.status === "succeeded" ? (
@@ -468,21 +476,29 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
           <CircleAlert size={12} />
         )}
       </span>
-      <div className="run-body">
-        <div className="run-line">
+      <div className="grid min-w-0 flex-1 gap-px">
+        <div className="flex min-w-0 items-baseline gap-1.5 [&_strong]:whitespace-nowrap [&_strong]:text-[12.5px]">
           <strong>{run.started_at ? relativeTime(run.started_at, locale) : t(`runStatus_${run.status}` as never)}</strong>
           {run.started_at && (
-            <span className="run-abs timecode">{run.started_at.replace("T", " ").slice(5, 19)}</span>
+            <span className="timecode text-[11px] text-muted-foreground">{run.started_at.replace("T", " ").slice(5, 19)}</span>
           )}
         </div>
         {message && (
-          <small className="run-msg" title={message}>
+          <small className="truncate text-[11px] text-muted-foreground" title={message}>
             {message}
           </small>
         )}
       </div>
-      {durationText && <span className="run-duration timecode">{durationText}</span>}
-      <em className={`run-status s-${running ? "running" : run.status}`}>
+      {durationText && <span className="timecode shrink-0 text-[11px] text-muted-foreground">{durationText}</span>}
+      <em
+        className={cn(
+          "shrink-0 rounded-full bg-secondary px-2 text-[10.5px] not-italic leading-[18px] text-muted-foreground",
+          running && "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
+          !running && run.status === "succeeded" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+          !running && run.status === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
+          !running && run.status === "queued" && "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
+        )}
+      >
         {t(`runStatus_${running ? "running" : run.status}` as never)}
       </em>
     </div>
