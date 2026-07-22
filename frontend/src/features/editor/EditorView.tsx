@@ -265,6 +265,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         timeline_start: args.timelineStart,
         src_in: args.srcIn,
         src_out: args.srcOut,
+        // 插入模式下素材落轨与移动同语义:让位(必要时切开落点上的片段)而不是覆盖。
+        ripple: useEditorStore.getState().editMode === "insert",
       }),
     onSuccess: refreshSequences,
   });

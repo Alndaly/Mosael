@@ -132,19 +132,42 @@ def _has_edit_after(db: Session, sequence_id: str, revision: int) -> bool:
     return newer is not None
 
 
+def _undo_ripple_room(db: Session, payload: dict) -> None:
+    """撤销插入编辑的"让位":右移的片段归位;落点处若切开过跨越片段,
+    删掉切出的尾段、把原片段的 src_out 补回去。"""
+    for entry in payload.get("shifted", []):
+        other = _require_clip_row(db, entry["clip_id"])
+        other.timeline_start = entry["previous_timeline_start"]
+    split = payload.get("split")
+    if split:
+        _delete_clip_row(db, split["tail"]["clip_id"])
+        _require_clip_row(db, split["clip_id"]).src_out = split["previous_src_out"]
+
+
+def _redo_ripple_room(db: Session, sequence: Sequence, payload: dict) -> None:
+    """重做让位:先复原切割(收短原片段 + 原 id 重建尾段),再重放右移。"""
+    split = payload.get("split")
+    if split:
+        _require_clip_row(db, split["clip_id"]).src_out = split["tail"]["src_in"]
+        _restore_clip_row(db, sequence, split["tail"])
+        db.flush()  # 尾段也在 shifted 里,下面的 db.get 要能查到它
+    for entry in payload.get("shifted", []):
+        other = _require_clip_row(db, entry["clip_id"])
+        other.timeline_start = entry["timeline_start"]
+
+
 def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation) -> None:
     payload = operation.payload
     if operation.kind == "insert_clip":
         _delete_clip_row(db, payload["clip_id"])
+        _undo_ripple_room(db, payload)
     elif operation.kind == "delete_clip":
         _restore_clip_row(db, sequence, payload)
     elif operation.kind == "move_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["previous_timeline_start"]
         clip.track_id = payload.get("previous_track_id", clip.track_id)
-        for entry in payload.get("shifted", []):
-            other = _require_clip_row(db, entry["clip_id"])
-            other.timeline_start = entry["previous_timeline_start"]
+        _undo_ripple_room(db, payload)
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         previous = payload["previous"]
@@ -237,15 +260,14 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
     payload = operation.payload
     if operation.kind == "insert_clip":
         _restore_clip_row(db, sequence, payload)
+        _redo_ripple_room(db, sequence, payload)
     elif operation.kind == "delete_clip":
         _delete_clip_row(db, payload["clip_id"])
     elif operation.kind == "move_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]
         clip.track_id = payload["track_id"]
-        for entry in payload.get("shifted", []):
-            other = _require_clip_row(db, entry["clip_id"])
-            other.timeline_start = entry["timeline_start"]
+        _redo_ripple_room(db, sequence, payload)
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]

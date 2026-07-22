@@ -300,6 +300,7 @@ class InsertClipRequest(BaseModel):
     timeline_start: float = 0.0
     src_in: float = 0.0
     src_out: float
+    ripple: bool = False
 
 
 class MoveClipRequest(BaseModel):

@@ -291,7 +291,7 @@ export function fetchWaveform(assetId: string): Promise<WaveformData> {
 
 export function insertClip(
   sequenceId: string,
-  body: { track_id: string; asset_id: string; timeline_start: number; src_in: number; src_out: number },
+  body: { track_id: string; asset_id: string; timeline_start: number; src_in: number; src_out: number; ripple?: boolean },
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips`, { method: "POST", body: JSON.stringify(body) });
 }

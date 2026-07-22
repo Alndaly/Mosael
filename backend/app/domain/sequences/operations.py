@@ -20,6 +20,8 @@ class InsertClip:
     timeline_start: float
     src_in: float
     src_out: float
+    # Insert-edit:落点后的同轨片段右移让位(与 MoveClip.ripple 同语义)。
+    ripple: bool = False
     actor_id: str | None = None
 
 
@@ -64,6 +66,66 @@ class CutClipRange:
     actor_id: str | None = None
 
 
+def _ripple_make_room(
+    db: Session, sequence: Sequence, *, track_id: str, exclude_id: str, start: float, moved_end: float
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """插入编辑让位(move/insert 共用):
+    ① 落点若插进某个片段的身体里(它先于落点开始、又延伸过落点),先在落点处把它
+       切开 — 原片段收尾到落点,尾段作为新片段落在落点上。不切的话尾段会被压在
+       移入片段底下,"插入模式还是覆盖"就是这个洞。
+    ② 落点及之后的同轨片段(含刚切出的尾段)整体右移**实际重叠量**,间距保留;
+       无碰撞不动,避免轻轻一拖整条时间线炸开。
+    返回 (shifted, split) 供 payload 记录撤销信息;split 为 None 表示没切。"""
+    split: dict[str, Any] | None = None
+    straddler = next(
+        (
+            c
+            for c in db.scalars(select(Clip).where(Clip.track_id == track_id, Clip.id != exclude_id))
+            if c.timeline_start < start - 1e-9 and c.timeline_start + timeline_span(c) > start + 1e-9
+        ),
+        None,
+    )
+    if straddler is not None:
+        speed = straddler.speed or 1.0
+        cut_src = straddler.src_in + (start - straddler.timeline_start) * speed
+        # 与 split_clip 相同的最小余量保护:切点贴边就不切(留给重叠量右移处理)。
+        if straddler.src_in + MIN_CUT_REMAINDER < cut_src < straddler.src_out - MIN_CUT_REMAINDER:
+            previous_src_out = straddler.src_out
+            tail = Clip(
+                workspace_id=sequence.workspace_id,
+                sequence_id=sequence.id,
+                track_id=straddler.track_id,
+                asset_id=straddler.asset_id,
+                **_inherited(straddler),
+                timeline_start=start,
+                src_in=cut_src,
+                src_out=straddler.src_out,
+            )
+            straddler.src_out = cut_src
+            db.add(tail)
+            db.flush()
+            split = {"clip_id": straddler.id, "previous_src_out": previous_src_out, "tail": _clip_payload(tail)}
+    downstream = list(
+        db.scalars(
+            select(Clip).where(
+                Clip.track_id == track_id,
+                Clip.id != exclude_id,
+                Clip.timeline_start >= start - 1e-9,
+            )
+        )
+    )
+    shifted: list[dict[str, Any]] = []
+    overlap = moved_end - min((c.timeline_start for c in downstream), default=moved_end)
+    if downstream and overlap > 1e-9:
+        for other in downstream:  # 同量右移 → 片段间原有间距保留
+            new_start = other.timeline_start + overlap
+            shifted.append(
+                {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
+            )
+            other.timeline_start = new_start
+    return shifted, split
+
+
 def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
@@ -85,6 +147,19 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
     )
     db.add(clip)
     db.flush()  # materialize clip.id so the operation payload can invert
+
+    shifted: list[dict[str, Any]] = []
+    split: dict[str, Any] | None = None
+    if op.ripple:
+        shifted, split = _ripple_make_room(
+            db,
+            sequence,
+            track_id=track.id,
+            exclude_id=clip.id,
+            start=op.timeline_start,
+            moved_end=op.timeline_start + timeline_span(clip),
+        )
+
     _record_operation(
         db,
         sequence,
@@ -96,6 +171,8 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Sequence:
             "timeline_start": op.timeline_start,
             "src_in": op.src_in,
             "src_out": op.src_out,
+            "shifted": shifted,
+            "split": split,
         },
         summary={"operation": "insert_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
@@ -125,30 +202,16 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
     clip.timeline_start = op.timeline_start
 
     shifted: list[dict[str, Any]] = []
+    split: dict[str, Any] | None = None
     if op.ripple:
-        # Insert edit: make room for the clip at its new spot by pushing the
-        # downstream clips right — but only by the actual OVERLAP, and only when
-        # there is a real collision. Shifting everyone by the full clip duration
-        # (regardless of overlap) exploded the timeline on any nudge.
-        duration = timeline_span(clip)
-        moved_end = op.timeline_start + duration
-        downstream = list(
-            db.scalars(
-                select(Clip).where(
-                    Clip.track_id == clip.track_id,
-                    Clip.id != clip.id,
-                    Clip.timeline_start >= op.timeline_start - 1e-9,
-                )
-            )
+        shifted, split = _ripple_make_room(
+            db,
+            sequence,
+            track_id=clip.track_id,
+            exclude_id=clip.id,
+            start=op.timeline_start,
+            moved_end=op.timeline_start + timeline_span(clip),
         )
-        overlap = moved_end - min((c.timeline_start for c in downstream), default=moved_end)
-        if downstream and overlap > 1e-9:
-            for other in downstream:  # shift all downstream by the same amount → gaps preserved
-                new_start = other.timeline_start + overlap
-                shifted.append(
-                    {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
-                )
-                other.timeline_start = new_start
 
     _record_operation(
         db,
@@ -161,6 +224,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
             "previous_timeline_start": previous_start,
             "previous_track_id": previous_track_id,
             "shifted": shifted,
+            "split": split,
         },
         summary={"operation": "move_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
