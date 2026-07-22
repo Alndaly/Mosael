@@ -601,8 +601,8 @@ function GenerateWorkspace({
   };
 
   return (
-    <div className="gen-workspace">
-      <aside className="chat-sessions panel">
+    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
+      <aside className="chat-sessions panel max-[820px]:hidden">
         <div className="panel-head">
           <h2>{t("generationSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
@@ -658,10 +658,12 @@ function GenerateWorkspace({
         />
       </aside>
 
-      <section className="gen-main panel">
-        <div className="gen-thread" ref={threadRef}>
+      <section className="panel grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
+        <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
           {ordered.length === 0 && (
-            <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
+            <div className="m-auto">
+              <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
+            </div>
           )}
           {ordered.map((generation) => (
             <GenerationTurn
@@ -671,9 +673,13 @@ function GenerateWorkspace({
             />
           ))}
         </div>
-        <form className="gen-composer" onSubmit={submit}>
+        <form
+          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[18px] border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+          onSubmit={submit}
+        >
           <Textarea
             rows={2}
+            className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-[13.5px] leading-[1.55] shadow-none outline-none focus-visible:ring-0"
             value={prompt}
             placeholder={t("promptPlaceholder")}
             onChange={(event) => {
@@ -691,7 +697,11 @@ function GenerateWorkspace({
           <div className="chat-composer-bar">
             <div className="chat-composer-left">
               {switcher}
-              {selectedModel && <span className="composer-model">{selectedModel.label}</span>}
+              {selectedModel && (
+                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-[9px] py-0.5 text-[11.5px] text-muted-foreground">
+                  {selectedModel.label}
+                </span>
+              )}
             </div>
             <Button
               type="submit"
@@ -706,40 +716,45 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className="gen-settings panel">
-        <div className="panel-head">
-          <h2>{t("generationEngineSettings")}</h2>
+      <aside className="panel flex min-w-0 flex-col gap-[9px] overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
+        <div className="panel-head -mx-3 px-3 py-2.5 max-[1180px]:col-span-full">
+          <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
         </div>
         {selectedModel && selectedCapabilityMissing && (
           <ConfigNotice
             message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
             actionLabel={t("wfGoConfigure")}
             section={`providers:${selectedModel.kind}`}
+            className="items-center gap-[7px] rounded-[10px] px-[9px] py-2 text-[11.5px] leading-[1.45]"
+            textClassName="line-clamp-2"
+            actionClassName="self-center"
           />
         )}
         {selectedModel && !selectedAdapterAvailable && (
-          <div className="generation-engine-warning">
+          <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
             <CircleAlert size={13} />
             {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
           </div>
         )}
         {selectedModel && (
           <>
-            <label className="generation-setting">
+            <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
               <span>{t("wfModelPreset")}</span>
               <Select value={selectedModel.value} onValueChange={selectEngine}>
-                <SelectTrigger className="generation-config-select">
+                <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="generation-model-menu">
+                <SelectContent className="max-h-[min(320px,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] p-1.5">
                   {modelGroups.map((group) => (
                     <React.Fragment key={group.kind}>
-                      <div className="generation-model-select-group">{capabilityLabel(group.kind)}</div>
+                      <div className="px-2 pb-1 pt-[7px] text-[10.5px] font-bold leading-none text-muted-foreground">
+                        {capabilityLabel(group.kind)}
+                      </div>
                       {group.models.map((model) => (
-                        <SelectItem key={model.value} value={model.value} className="generation-model-option-item">
-                          <span className="generation-model-option">
+                        <SelectItem key={model.value} value={model.value} className="min-h-[30px] px-2 py-[5px]">
+                          <span className="flex w-full min-w-0 items-center gap-[7px] leading-none [&_svg]:block [&_svg]:shrink-0 [&_svg]:text-muted-foreground">
                             {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
-                            <span>{model.label}</span>
+                            <span className="truncate">{model.label}</span>
                           </span>
                         </SelectItem>
                       ))}
@@ -751,10 +766,10 @@ function GenerateWorkspace({
             {selectedModel.kind === "image" ? (
               <>
                 {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>
                     <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="generation-config-select">
+                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -768,10 +783,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "num_images") && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genNumImages")}</span>
                     <Input
-                      className="generation-config-input"
+                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       min={1}
                       max={maxImages(selectedModel)}
@@ -781,10 +796,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "seed") && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSeed")}</span>
                     <Input
-                      className="generation-config-input"
+                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       placeholder="auto"
                       value={generationConfig.seed}
@@ -793,17 +808,17 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsNegativePrompt && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genNegativePrompt")}</span>
                     <Input
-                      className="generation-config-input"
+                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       value={generationConfig.negativePrompt}
                       onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                     />
                   </label>
                 )}
                 {supportsReferenceImage && (
-                  <div className="generation-setting">
+                  <div className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genReferenceImage")}</span>
                     <input
                       ref={referenceImageInputRef}
@@ -816,12 +831,12 @@ function GenerateWorkspace({
                         if (file) uploadReferenceImage.mutate(file);
                       }}
                     />
-                    <div className="generation-reference-actions">
+                    <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="generation-first-frame-upload"
+                        className="w-full justify-center"
                         onClick={() => referenceImageInputRef.current?.click()}
                         disabled={uploadReferenceImage.isPending}
                       >
@@ -835,10 +850,10 @@ function GenerateWorkspace({
                       )}
                     </div>
                     {effectiveReferenceImageAssetId && (
-                      <div className="generation-first-frame-preview">
+                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-[10px] border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
                         <button
                           type="button"
-                          className="generation-first-frame-thumb"
+                          className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
                           onClick={() =>
                             openImagePreview({
                               src: assetFileUrl(effectiveReferenceImageAssetId),
@@ -846,9 +861,12 @@ function GenerateWorkspace({
                             })
                           }
                         >
-                          <img src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
+                          <img className="block h-full w-full object-cover" src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
                         </button>
-                        <span title={effectiveReferenceImageName || t("genReferenceImage")}>
+                        <span
+                          className="truncate text-xs font-semibold text-foreground"
+                          title={effectiveReferenceImageName || t("genReferenceImage")}
+                        >
                           {effectiveReferenceImageName || t("genReferenceImage")}
                         </span>
                         <Button type="button" variant="ghost" size="icon" onClick={clearReferenceImage} aria-label={t("delete")}>
@@ -862,11 +880,11 @@ function GenerateWorkspace({
             ) : (
               <>
                 {supportsParameter(selectedModel, "duration_seconds") && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genDuration")}</span>
                     {selectedDurations.length > 1 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
-                        <SelectTrigger className="generation-config-select">
+                        <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -879,7 +897,7 @@ function GenerateWorkspace({
                       </Select>
                     ) : (
                       <Input
-                        className="generation-config-input"
+                        className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
                         min={1}
                         max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
@@ -890,10 +908,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genResolution")}</span>
                     <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                      <SelectTrigger className="generation-config-select">
+                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -907,10 +925,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genAspectRatio")}</span>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="generation-config-select">
+                      <SelectTrigger className="h-8 w-full rounded-[9px] border-border bg-panel text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -924,7 +942,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsFirstFrame && (
-                  <div className="generation-setting">
+                  <div className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genFirstFrame")}</span>
                     <input
                       ref={firstFrameInputRef}
@@ -941,7 +959,7 @@ function GenerateWorkspace({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="generation-first-frame-upload"
+                      className="w-full justify-center"
                       onClick={() => firstFrameInputRef.current?.click()}
                       disabled={uploadFirstFrame.isPending}
                     >
@@ -949,10 +967,10 @@ function GenerateWorkspace({
                       {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
                     </Button>
                     {generationConfig.firstFrameAssetId && (
-                      <div className="generation-first-frame-preview">
+                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-[10px] border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
                         <button
                           type="button"
-                          className="generation-first-frame-thumb"
+                          className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
                           onClick={() =>
                             openImagePreview({
                               src: assetFileUrl(generationConfig.firstFrameAssetId),
@@ -960,9 +978,11 @@ function GenerateWorkspace({
                             })
                           }
                         >
-                          <img src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
+                          <img className="block h-full w-full object-cover" src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
                         </button>
-                        <span title={generationConfig.firstFrameAssetName}>{generationConfig.firstFrameAssetName}</span>
+                        <span className="truncate text-xs font-semibold text-foreground" title={generationConfig.firstFrameAssetName}>
+                          {generationConfig.firstFrameAssetName}
+                        </span>
                         <Button type="button" variant="ghost" size="icon" onClick={clearFirstFrameAsset} aria-label={t("delete")}>
                           <X size={13} />
                         </Button>
@@ -971,10 +991,10 @@ function GenerateWorkspace({
                   </div>
                 )}
                 {supportsFirstFrame && (
-                  <label className="generation-setting">
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genFirstFrameUrl")}</span>
                     <Input
-                      className="generation-config-input"
+                      className="h-8 w-full min-w-0 rounded-[9px] border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       placeholder="https://..."
                       value={generationConfig.firstFrameUrl}
                       onChange={(event) => setFirstFrameUrl(event.target.value)}
@@ -1009,19 +1029,21 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
       ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
       : "";
   return (
-    <article className="generation-turn-card">
-      <div className="generation-turn-prompt-stack">
-        <div className="generation-turn-prompt">{String(generation.request.prompt ?? "")}</div>
+    <article className="grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
+      <div className="grid justify-items-end gap-1">
+        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-[10px] rounded-br bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground">
+          {String(generation.request.prompt ?? "")}
+        </div>
         {timestamp ? (
-          <time className="generation-turn-time" dateTime={timestamp}>
+          <time className="text-[11px] leading-tight text-muted-foreground" dateTime={timestamp}>
             {timestampLabel}
           </time>
         ) : null}
       </div>
-      <div className="gen-turn">
+      <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
         {generation.result_asset_id && generation.kind === "video" ? (
           <video
-            className="gen-turn-video"
+            className="block max-h-[420px] w-full max-w-[min(560px,100%)] rounded-[10px] border border-border bg-[#05070a]"
             src={assetFileUrl(generation.result_asset_id)}
             poster={assetThumbnailUrl(generation.result_asset_id)}
             controls
@@ -1030,7 +1052,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
         ) : generation.result_asset_id ? (
           <button
             type="button"
-            className="gen-turn-image-button"
+            className="inline-block max-w-[min(560px,100%)] cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring"
             onClick={() =>
               openImagePreview({
                 src: assetFileUrl(generation.result_asset_id!),
@@ -1038,16 +1060,21 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
               })
             }
           >
-            <img className="gen-turn-image" src={assetThumbnailUrl(generation.result_asset_id)} alt="" loading="lazy" />
+            <img
+              className="block w-auto max-w-[min(560px,100%)] rounded-[10px] border border-border"
+              src={assetThumbnailUrl(generation.result_asset_id)}
+              alt=""
+              loading="lazy"
+            />
           </button>
         ) : status === "failed" ? (
           <GenerationFailureCard error={job?.error ?? ""} />
         ) : (
-          <span className="gen-turn-status">
+          <span className="inline-flex items-center gap-1.5 py-2 text-[12.5px] text-muted-foreground">
             <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
           </span>
         )}
-        <small className="gen-turn-meta">
+        <small className="flex flex-wrap items-center gap-2 justify-self-start text-[11.5px] text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
           <span>
             {generation.provider} · {generation.model}
           </span>
@@ -1070,21 +1097,27 @@ function GenerationFailureCard({ error }: { error: string }) {
   };
 
   return (
-    <div className="generation-error-card">
-      <div className="generation-error-head">
-        <CircleAlert size={14} />
-        <div>
-          <strong>{t("generationFailedTitle")}</strong>
-          <span>{summary}</span>
+    <div className="grid w-[min(560px,100%)] gap-2 rounded-[10px] border border-[color-mix(in_srgb,var(--destructive)_34%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_7%,var(--card))] px-3 py-2.5">
+      <div className="flex min-w-0 items-start gap-2 text-destructive">
+        <CircleAlert size={14} className="mt-0.5 shrink-0" />
+        <div className="grid min-w-0 gap-0.5">
+          <strong className="text-[12.5px] leading-[1.35] text-destructive">{t("generationFailedTitle")}</strong>
+          <span className="[overflow-wrap:anywhere] text-[12.5px] leading-[1.55] text-[color-mix(in_srgb,var(--destructive)_82%,var(--foreground))]">
+            {summary}
+          </span>
         </div>
       </div>
       {error ? (
-        <div className="generation-error-actions">
-          <details className="generation-error-detail">
-            <summary>{t("generationErrorDetail")}</summary>
-            <pre>{error}</pre>
+        <div className="flex items-start justify-between gap-2">
+          <details className="min-w-0 text-[11.5px] text-muted-foreground">
+            <summary className="w-fit cursor-pointer list-none after:ml-1 after:inline-block after:content-['›'] [&::-webkit-details-marker]:hidden">
+              {t("generationErrorDetail")}
+            </summary>
+            <pre className="mt-[7px] max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-[color-mix(in_srgb,var(--background)_72%,var(--card))] p-2 font-mono text-[11px] leading-normal text-muted-foreground">
+              {error}
+            </pre>
           </details>
-          <Button type="button" variant="ghost" size="sm" className="generation-error-copy" onClick={copy}>
+          <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-[7px] text-[11px]" onClick={copy}>
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {copied ? t("copied") : t("copyMessage")}
           </Button>
