@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KbGraphCanvas } from "@/features/kb/KbGraphCanvas";
 import { KbTiptap } from "@/features/kb/KbTiptap";
 import { cn } from "@/lib/utils";
+import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
 type KbDataset = components["schemas"]["KbDatasetOut"];
 type KbDocument = components["schemas"]["KbDocumentOut"];
@@ -613,73 +614,79 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
     setForm((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(300px,1fr))] content-start gap-3 overflow-y-auto">
-      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetBasic")}</div>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-          <span>{t("kbDatasetName")}</span>
-          <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
-        </label>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-          <span>{t("kbDatasetDesc")}</span>
-          <Input value={form.description} placeholder={t("kbDatasetDescPh")} onChange={(event) => set("description", event.target.value)} />
-        </label>
-      </section>
+    <div className="grid h-full min-h-0 content-start gap-5 overflow-y-auto px-0.5 pb-2.5 pt-1">
+      <SettingsGroup title={t("kbSetBasic")}>
+        <SettingsRow label={t("kbDatasetName")}>
+          <Input className="w-60" value={form.name} onChange={(event) => set("name", event.target.value)} />
+        </SettingsRow>
+        <SettingsRow label={t("kbDatasetDesc")}>
+          <Input
+            className="w-80 max-[880px]:w-60"
+            value={form.description}
+            placeholder={t("kbDatasetDescPh")}
+            onChange={(event) => set("description", event.target.value)}
+          />
+        </SettingsRow>
+      </SettingsGroup>
 
-      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetRetrieval")}</div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-            <span>{t("kbRetrievalMode")}</span>
-            <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fts">{t("kbModeFts")}</SelectItem>
-                <SelectItem value="hybrid">{t("kbModeHybrid")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-            <span>{t("kbTopK")}</span>
-            <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
-          </label>
-        </div>
-        {form.retrieval_mode === "hybrid" && <small className="text-[11px] text-muted-foreground">{t("kbHybridNote")}</small>}
-      </section>
+      <SettingsGroup title={t("kbSetRetrieval")}>
+        <SettingsRow label={t("kbRetrievalMode")} description={form.retrieval_mode === "hybrid" ? t("kbHybridNote") : undefined}>
+          <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fts">{t("kbModeFts")}</SelectItem>
+              <SelectItem value="hybrid">{t("kbModeHybrid")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow label={t("kbTopK")}>
+          <Input
+            className="w-24"
+            type="number"
+            min={1}
+            max={50}
+            value={form.top_k}
+            onChange={(event) => set("top_k", Number(event.target.value) || 5)}
+          />
+        </SettingsRow>
+      </SettingsGroup>
 
-      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetChunk")}</div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-            <span>{t("kbChunkSize")}</span>
-            <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
-          </label>
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-            <span>{t("kbChunkOverlap")}</span>
-            <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
-          </label>
-        </div>
-        <small className="text-[11px] text-muted-foreground">{t("kbChunkNote")}</small>
-      </section>
+      <SettingsGroup title={t("kbSetChunk")} description={t("kbChunkNote")}>
+        <SettingsRow label={t("kbChunkSize")}>
+          <Input
+            className="w-24"
+            type="number"
+            min={100}
+            max={4000}
+            value={form.chunk_size}
+            onChange={(event) => set("chunk_size", Number(event.target.value) || 500)}
+          />
+        </SettingsRow>
+        <SettingsRow label={t("kbChunkOverlap")}>
+          <Input
+            className="w-24"
+            type="number"
+            min={0}
+            max={1000}
+            value={form.chunk_overlap}
+            onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)}
+          />
+        </SettingsRow>
+      </SettingsGroup>
 
-      <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetEnhance")}</div>
-        <label className="flex items-center justify-between gap-3 rounded-md border border-border px-2.5 py-2 [&>span]:grid [&>span]:gap-0.5 [&_small]:text-[11.5px] [&_small]:text-muted-foreground">
-          <span>
-            <strong>{t("kbGraphEnabled")}</strong>
-            <small>{t("kbGraphEnabledDesc")}</small>
-          </span>
+      <SettingsGroup title={t("kbSetEnhance")}>
+        <SettingsRow label={t("kbGraphEnabled")} description={t("kbGraphEnabledDesc")}>
           <Switch checked={form.graph_enabled} onCheckedChange={(v) => set("graph_enabled", v)} />
-        </label>
-      </section>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <div className="col-span-full mt-0.5 flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSaveSettings")}
         </Button>
-        {save.isSuccess && <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>}
+        {save.isSuccess && !save.isPending && <span className="text-[11.5px] text-success">{t("kbSaved")}</span>}
       </div>
     </div>
   );
