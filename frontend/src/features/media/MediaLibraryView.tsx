@@ -1,8 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, CircleDot, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
 import { api, assetFileUrl, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { saveAssetToDisk } from "@/lib/download";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -351,6 +352,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
+                <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
+                  <Download /> {t("assetSaveLocal")}
+                </ContextMenuItem>
                 <ContextMenuItem onSelect={() => setRenaming(asset)}>
                   <Pencil /> {t("rename")}
                 </ContextMenuItem>

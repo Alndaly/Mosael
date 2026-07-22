@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CircleDot, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -13,6 +13,7 @@ import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
+import { saveAssetToDisk } from "@/lib/download";
 import { useDraggable } from "@dnd-kit/core";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
@@ -143,6 +144,9 @@ export function MediaPool({
             <ContextMenuContent>
               <ContextMenuItem onSelect={() => onAddToTimeline(asset)}>
                 <ListPlus /> {t("addToTimeline")}
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
+                <Download /> {t("assetSaveLocal")}
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => setRenaming(asset)}>
                 <Pencil /> {t("rename")}
