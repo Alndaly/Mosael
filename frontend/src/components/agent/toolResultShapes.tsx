@@ -82,15 +82,15 @@ function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: strin
     return (
       <button
         type="button"
-        className="tool-card-player-image"
+        className="block max-h-[200px] w-fit max-w-full cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0"
         onClick={() => openImagePreview({ src, title: name })}
       >
-        <img src={src} alt={name} loading="lazy" />
+        <img className="block max-h-[200px] w-auto max-w-full object-contain" src={src} alt={name} loading="lazy" />
       </button>
     );
   }
-  if (kind === "video") return <video className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
-  if (kind === "audio") return <audio className="tool-card-player" src={src} controls autoPlay preload="metadata" />;
+  if (kind === "video") return <video className="max-h-[260px] w-full rounded-md border border-border bg-black" src={src} controls autoPlay preload="metadata" />;
+  if (kind === "audio") return <audio className="h-8 w-full rounded-md" src={src} controls autoPlay preload="metadata" />;
   return null;
 }
 
@@ -114,29 +114,29 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
 
   const body = (
     <>
-      <span className="tool-card-thumb-wrap">
+      <span className="relative inline-flex shrink-0">
         {info?.has_thumbnail || shouldTryThumb ? (
           <img
-            className="tool-card-thumb"
+            className="h-[22px] w-[34px] shrink-0 rounded border border-border bg-muted object-cover"
             src={assetThumbnailUrl(id)}
             alt=""
             loading="lazy"
             onError={() => setThumbFailed(true)}
           />
         ) : (
-          <span className="tool-card-thumb tool-card-thumb-empty" data-kind={kind} />
+          <span className="h-[22px] w-[34px] shrink-0 rounded border border-border bg-muted object-cover" data-kind={kind} />
         )}
         {playable && (
-          <span className="tool-card-play" aria-hidden>
+          <span className="absolute inset-0 flex items-center justify-center rounded bg-[color-mix(in_srgb,var(--background)_45%,transparent)] text-foreground opacity-0 transition-opacity duration-[120ms] group-hover/play:opacity-100 group-focus-visible/play:opacity-100 group-aria-expanded/play:opacity-100" aria-hidden>
             {/* An image is opened, not played. */}
             {isImage ? <Maximize2 size={10} /> : <Play size={10} />}
           </span>
         )}
       </span>
-      <span className="tool-card-name" title={name}>
+      <span className="min-w-0 flex-1 truncate text-foreground" title={name}>
         {name}
       </span>
-      <span className="tool-card-meta">
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {kind}
         {duration != null && seconds(duration) ? ` · ${seconds(duration)}` : ""}
       </span>
@@ -144,11 +144,11 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
   );
 
   return (
-    <li className="tool-card-item">
+    <li className="grid gap-1">
       {playable ? (
         <button
           type="button"
-          className="tool-card-row is-playable"
+          className="group/play flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-[5px] border-0 bg-transparent p-0 text-left hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           onClick={() => {
             if (isImage) {
               openImagePreview({ src: assetFileUrl(id), title: name });
@@ -161,7 +161,7 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
           {body}
         </button>
       ) : (
-        <div className="tool-card-row">{body}</div>
+        <div className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">{body}</div>
       )}
       {open && playable && <AssetPlayer id={id} kind={kind} name={name} />}
     </li>
@@ -170,7 +170,7 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
 
 function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
         <AssetRow key={String(row.id ?? row.name ?? index)} row={row} />
       ))}
@@ -179,16 +179,16 @@ function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
 }
 
 function EmptyResult() {
-  return <div className="tool-card-empty">没有返回条目</div>;
+  return <div className="text-xs text-muted-foreground">没有返回条目</div>;
 }
 
 function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row) => (
-        <li className="tool-card-row" key={String(row.id)}>
-          <span className="tool-card-name">{String(row.name ?? row.id)}</span>
-          {row.active_sequence_id ? <span className="tool-card-meta">有活动序列</span> : null}
+        <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id)}>
+          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.name ?? row.id)}</span>
+          {row.active_sequence_id ? <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">有活动序列</span> : null}
         </li>
       ))}
     </ul>
@@ -197,18 +197,18 @@ function ProjectList({ rows }: { rows: Record<string, unknown>[] }) {
 
 function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => {
         const title = String(row.name ?? row.title ?? row.label ?? row.tool_name ?? row.id ?? `条目 ${index + 1}`);
         const meta = String(row.kind ?? row.type ?? row.status ?? row.plugin_id ?? "");
         const snippet = String(row.description ?? row.snippet ?? row.summary ?? row.content ?? "");
         return (
-          <li className="tool-card-result" key={String(row.id ?? row.tool_name ?? row.title ?? index)}>
-            <span className="tool-card-row">
-              <span className="tool-card-name" title={title}>{title}</span>
-              {meta && <span className="tool-card-meta">{meta}</span>}
+          <li className="grid gap-0.5 text-xs" key={String(row.id ?? row.tool_name ?? row.title ?? index)}>
+            <span className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">
+              <span className="min-w-0 flex-1 truncate text-foreground" title={title}>{title}</span>
+              {meta && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{meta}</span>}
             </span>
-            {snippet && <span className="tool-card-snippet">{snippet}</span>}
+            {snippet && <span className="line-clamp-2 text-[11px] leading-[1.45] text-muted-foreground">{snippet}</span>}
           </li>
         );
       })}
@@ -219,10 +219,10 @@ function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
 function SequenceTree({ value }: { value: Record<string, unknown> }) {
   const tracks = Array.isArray(value.tracks) ? (value.tracks as Record<string, unknown>[]) : [];
   return (
-    <div className="tool-card-seq">
-      <div className="tool-card-seq-head">
+    <div className="grid gap-1.5 text-xs">
+      <div className="flex items-baseline justify-between gap-2">
         <strong>{String(value.name ?? "")}</strong>
-        <span className="tool-card-meta">
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
           {String(value.format ?? "")}
           {value.duration_seconds != null ? ` · ${seconds(value.duration_seconds)}` : ""}
         </span>
@@ -230,17 +230,17 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
       {tracks.map((track, index) => {
         const clips = Array.isArray(track.clips) ? (track.clips as Record<string, unknown>[]) : [];
         return (
-          <div className="tool-card-track" key={String(track.id ?? track.name ?? index)}>
-            <span className="tool-card-track-name">
+          <div className="flex min-w-0 items-center gap-2" key={String(track.id ?? track.name ?? index)}>
+            <span className="w-[76px] shrink-0 grow-0 basis-[76px] truncate text-[11px] text-muted-foreground">
               {String(track.name ?? track.kind ?? `轨道 ${index + 1}`)}
             </span>
-            <div className="tool-card-clips">
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
               {clips.map((clip, clipIndex) => (
-                <span className="tool-card-clip" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
+                <span className="max-w-[140px] shrink-0 truncate rounded border border-border bg-muted px-[7px] py-0.5 text-[11px]" key={String(clip.clip_id ?? clip.id ?? clipIndex)}>
                   {String(clip.asset ?? clip.asset_id ?? "片段")}
                 </span>
               ))}
-              {clips.length === 0 && <span className="tool-card-meta">空</span>}
+              {clips.length === 0 && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">空</span>}
             </div>
           </div>
         );
@@ -252,9 +252,9 @@ function SequenceTree({ value }: { value: Record<string, unknown> }) {
 function ConfirmationCard({ value }: { value: Record<string, unknown> }) {
   const status = String(value.status ?? "");
   return (
-    <div className="tool-card-confirm" data-status={status}>
-      <span className="tool-card-name">{String(value.summary ?? value.permission ?? "")}</span>
-      <span className="tool-card-meta">
+    <div className="flex items-center justify-between gap-2 text-xs" data-status={status}>
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.summary ?? value.permission ?? "")}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {status === "pending" ? "等待你确认" : status}
       </span>
     </div>
@@ -263,13 +263,13 @@ function ConfirmationCard({ value }: { value: Record<string, unknown> }) {
 
 function SearchResults({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
-        <li className="tool-card-result" key={String(row.url ?? index)}>
-          <a href={String(row.url)} target="_blank" rel="noreferrer noopener" className="tool-card-name">
+        <li className="grid gap-0.5 text-xs" key={String(row.url ?? index)}>
+          <a href={String(row.url)} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate text-foreground">
             {String(row.title ?? row.url)}
           </a>
-          <span className="tool-card-snippet">{String(row.snippet ?? "")}</span>
+          <span className="line-clamp-2 text-[11px] leading-[1.45] text-muted-foreground">{String(row.snippet ?? "")}</span>
         </li>
       ))}
     </ul>
@@ -278,11 +278,11 @@ function SearchResults({ rows }: { rows: Record<string, unknown>[] }) {
 
 function KbResults({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
-        <li className="tool-card-result" key={`${row.document_id}-${row.chunk_index ?? index}`}>
-          <span className="tool-card-name">{String(row.title ?? row.document_id)}</span>
-          <span className="tool-card-snippet">{String(row.snippet ?? "")}</span>
+        <li className="grid gap-0.5 text-xs" key={`${row.document_id}-${row.chunk_index ?? index}`}>
+          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.title ?? row.document_id)}</span>
+          <span className="line-clamp-2 text-[11px] leading-[1.45] text-muted-foreground">{String(row.snippet ?? "")}</span>
         </li>
       ))}
     </ul>
@@ -291,11 +291,11 @@ function KbResults({ rows }: { rows: Record<string, unknown>[] }) {
 
 function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <ul className="tool-card-list">
+    <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
-        <li className="tool-card-row" key={String(row.id ?? row.type ?? index)}>
-          <span className="tool-card-name">{String(row.name ?? row.label ?? row.type)}</span>
-          <span className="tool-card-snippet">{String(row.description ?? "")}</span>
+        <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id ?? row.type ?? index)}>
+          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.name ?? row.label ?? row.type)}</span>
+          <span className="line-clamp-2 text-[11px] leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</span>
         </li>
       ))}
     </ul>
@@ -307,17 +307,17 @@ function WorkflowCard({ value }: { value: Record<string, unknown> }) {
   const nodes = graph.nodes ?? [];
   const chips = nodes.slice(0, 8).map((node, index) => String(node.name ?? node.type ?? index));
   return (
-    <div className="tool-card-workflow">
-      <span className="tool-card-name">{String(value.name ?? "工作流")}</span>
-      <span className="tool-card-meta">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? "工作流")}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {nodes.length} 节点 · {(graph.edges ?? []).length} 连线
       </span>
       {chips.length > 0 && (
-        <span className="tool-card-chips">
+        <span className="flex min-w-0 flex-wrap gap-1">
           {chips.map((chip, index) => (
-            <span className="tool-card-chip" key={`${chip}-${index}`}>{chip}</span>
+            <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={`${chip}-${index}`}>{chip}</span>
           ))}
-          {nodes.length > 8 && <span className="tool-card-chip">+{nodes.length - 8}</span>}
+          {nodes.length > 8 && <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">+{nodes.length - 8}</span>}
         </span>
       )}
     </div>
@@ -327,12 +327,12 @@ function WorkflowCard({ value }: { value: Record<string, unknown> }) {
 function TaggedAsset({ value }: { value: Record<string, unknown> }) {
   const tags = (value.tags as unknown[]).map(String);
   return (
-    <div className="tool-card-workflow">
-      <span className="tool-card-name">{String(value.name ?? value.asset_id)}</span>
-      <span className="tool-card-chips">
-        {tags.length === 0 && <span className="tool-card-meta">已清空标签</span>}
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.asset_id)}</span>
+      <span className="flex min-w-0 flex-wrap gap-1">
+        {tags.length === 0 && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">已清空标签</span>}
         {tags.map((tag) => (
-          <span className="tool-card-chip" key={tag}>{tag}</span>
+          <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>{tag}</span>
         ))}
       </span>
     </div>
@@ -342,23 +342,23 @@ function TaggedAsset({ value }: { value: Record<string, unknown> }) {
 function UpdatedList({ value }: { value: Record<string, unknown> }) {
   const rows = (value.updated as Record<string, unknown>[]).filter(isRecord);
   return (
-    <div className="tool-card-stack">
-      <span className="tool-card-meta">已更新 {String(value.count ?? rows.length)} 项</span>
-      <ul className="tool-card-list">
+    <div className="grid min-w-0 gap-1.5">
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">已更新 {String(value.count ?? rows.length)} 项</span>
+      <ul className="m-0 grid list-none gap-1 p-0">
         {rows.map((row, index) => (
-          <li className="tool-card-row" key={String(row.id ?? index)}>
-            <span className="tool-card-name" title={String(row.name ?? row.id ?? "")}>
+          <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id ?? index)}>
+            <span className="min-w-0 flex-1 truncate text-foreground" title={String(row.name ?? row.id ?? "")}>
               {String(row.name ?? row.id ?? `条目 ${index + 1}`)}
             </span>
             {Array.isArray(row.tags) && (
-              <span className="tool-card-chips">
+              <span className="flex min-w-0 flex-wrap gap-1">
                 {row.tags.map((tag) => (
-                  <span className="tool-card-chip" key={String(tag)}>{String(tag)}</span>
+                  <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={String(tag)}>{String(tag)}</span>
                 ))}
               </span>
             )}
             {typeof row.project_id === "string" && row.project_id && (
-              <span className="tool-card-meta">项目 {row.project_id.slice(0, 8)}</span>
+              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">项目 {row.project_id.slice(0, 8)}</span>
             )}
           </li>
         ))}
@@ -373,9 +373,9 @@ function AssetBundle({ value }: { value: Record<string, unknown> }) {
     return <AssetList rows={rows} />;
   }
   return (
-    <div className="tool-card-workflow">
-      <span className="tool-card-name">素材集合</span>
-      <span className="tool-card-meta">{String(value.count ?? rows.length)} 项</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">素材集合</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{String(value.count ?? rows.length)} 项</span>
     </div>
   );
 }
@@ -383,11 +383,11 @@ function AssetBundle({ value }: { value: Record<string, unknown> }) {
 function AssetRef({ value }: { value: Record<string, unknown> }) {
   const id = String(value.asset_id ?? "");
   return (
-    <div className="tool-card-workflow">
-      <span className="tool-card-name">{String(value.name ?? value.title ?? "素材")}</span>
-      {id && <span className="tool-card-chip">{id.slice(0, 12)}</span>}
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "素材")}</span>
+      {id && <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground">{id.slice(0, 12)}</span>}
       {typeof value.generation_id === "string" && value.generation_id.trim() && (
-        <span className="tool-card-meta">生成任务 {value.generation_id.slice(0, 8)}</span>
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">生成任务 {value.generation_id.slice(0, 8)}</span>
       )}
     </div>
   );
@@ -402,14 +402,14 @@ function RefSummary({ value }: { value: Record<string, unknown> }) {
     ["generation_id", "生成"],
   ].filter(([key]) => typeof value[key] === "string" && String(value[key]).trim());
   return (
-    <div className="tool-card-workflow">
-      <span className="tool-card-name">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
       {refs.map(([key, label]) => (
-        <span className="tool-card-chip" key={key}>
+        <span className="max-w-[140px] truncate rounded border border-border bg-muted px-1.5 py-px text-[11px] text-muted-foreground" key={key}>
           {label} {String(value[key]).slice(0, 12)}
         </span>
       ))}
-      {value.nodes != null && <span className="tool-card-meta">{String(value.nodes)} 节点</span>}
+      {value.nodes != null && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{String(value.nodes)} 节点</span>}
     </div>
   );
 }
@@ -418,10 +418,10 @@ function PluginOutput({ value }: { value: Record<string, unknown> }) {
   const output = value.output;
   const error = value.error;
   return (
-    <div className="tool-card-stack">
-      <div className="tool-card-confirm" data-status={String(value.status ?? "")}>
-        <span className="tool-card-name">插件工具</span>
-        <span className="tool-card-meta">{String(value.status ?? "done")}</span>
+    <div className="grid min-w-0 gap-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs" data-status={String(value.status ?? "")}>
+        <span className="min-w-0 flex-1 truncate text-foreground">插件工具</span>
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{String(value.status ?? "done")}</span>
       </div>
       {error ? <LongText text={String(error)} /> : <ToolResultCard value={output} />}
     </div>
@@ -430,7 +430,7 @@ function PluginOutput({ value }: { value: Record<string, unknown> }) {
 
 function NestedResults({ value }: { value: Record<string, unknown> }) {
   return (
-    <div className="tool-card-stack">
+    <div className="grid min-w-0 gap-1.5">
       {typeof value.text === "string" && value.text.trim() && <LongText text={value.text} />}
       <ToolResultCard value={value.results} />
     </div>
@@ -439,15 +439,15 @@ function NestedResults({ value }: { value: Record<string, unknown> }) {
 
 function DocRef({ value }: { value: Record<string, unknown> }) {
   return (
-    <div className="tool-card-row">
-      <span className="tool-card-name">{String(value.title ?? value.document_id)}</span>
-      <span className="tool-card-meta">知识库笔记</span>
+    <div className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">
+      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.title ?? value.document_id)}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">知识库笔记</span>
     </div>
   );
 }
 
 function LongText({ text }: { text: string }) {
-  return <div className="tool-card-text">{text}</div>;
+  return <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap text-xs leading-[1.6] text-foreground">{text}</div>;
 }
 
 function valueLabel(value: unknown): string {
@@ -488,7 +488,7 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
     .slice(0, 8);
   if (entries.length === 0) return <EmptyResult />;
   return (
-    <dl className="tool-card-summary">
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:truncate [&_dd]:text-foreground [&_dt]:text-muted-foreground">
       {entries.map(([key, item]) => (
         <React.Fragment key={key}>
           <dt>{keyLabel(key)}</dt>

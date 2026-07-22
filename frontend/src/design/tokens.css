@@ -33,6 +33,18 @@
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 6px);
+
+  --animate-confirm-in: confirm-in 160ms ease-out;
+  @keyframes confirm-in {
+    from {
+      transform: translateY(-6px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
 }
 
 /*

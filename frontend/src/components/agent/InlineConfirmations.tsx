@@ -86,22 +86,22 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
   if (visible.length === 0) return null;
 
   return (
-    <div className="inline-confirms" role="region" aria-label={t("confirmTitle")}>
+    <div className="grid gap-2" role="region" aria-label={t("confirmTitle")}>
       {visible.map((item) => (
-        <div className="inline-confirm" key={item.id}>
-          <div className="inline-confirm-head">
-            <span className="inline-confirm-source">
+        <div className="grid gap-1.5 rounded-lg border border-border-strong border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-[12.5px]" key={item.id}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
               <ShieldAlert size={13} /> {item.summary}
             </span>
             <PermissionBadge permission={item.permission} />
           </div>
           {/* 载荷保持展开:这张卡是智能体写操作与执行之间唯一的闸,摘要不足以构成知情同意
               (例如 add_node 可能藏着一段任意本地 Python)。高度有界,大图滚动而不是把按钮挤走。 */}
-          <details className="confirm-payload" open>
-            <summary>{t("confirmPayload")}</summary>
-            <pre>{JSON.stringify(item.payload, null, 2)}</pre>
+          <details open>
+            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground">{t("confirmPayload")}</summary>
+            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
-          <div className="inline-confirm-actions">
+          <div className="flex flex-wrap gap-1.5">
             <Button size="sm" disabled={settle.isPending} onClick={() => settle.mutate({ id: item.id, action: "approve" })}>
               <Check size={13} /> {t("confirmAllowOnce")}
             </Button>
@@ -119,7 +119,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
             <Button
               size="sm"
               variant="outline"
-              className="inline-confirm-reject"
+              className="text-destructive"
               disabled={settle.isPending}
               onClick={() => settle.mutate({ id: item.id, action: "reject" })}
             >

@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import { ToolResultCard, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -77,39 +78,39 @@ function MediaPreview({ assetId }: { assetId: string }) {
   });
   if (asset.isLoading) {
     return (
-      <div className="agent-media loading">
+      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
         <Loader2 size={13} className="spin" />
       </div>
     );
   }
   if (asset.isError || !asset.data) {
     return (
-      <div className="agent-media missing">
+      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
         <FileWarning size={13} /> {t("agentMediaMissing")}
       </div>
     );
   }
   const src = assetFileUrl(asset.data.id);
   return (
-    <figure className="agent-media">
+    <figure className="m-0 flex max-w-[240px] flex-col gap-1">
       {asset.data.kind === "image" ? (
         <button
           type="button"
-          className="agent-media-image-button"
+          className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           onClick={() => openImagePreview({ src, title: asset.data.name })}
         >
-          <img src={src} alt={asset.data.name} loading="lazy" />
+          <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
         </button>
       ) : asset.data.kind === "video" ? (
-        <video src={src} controls preload="metadata" />
+        <video className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} controls preload="metadata" />
       ) : asset.data.kind === "audio" ? (
-        <audio src={src} controls preload="metadata" />
+        <audio className="w-[240px]" src={src} controls preload="metadata" />
       ) : (
-        <div className="agent-media missing">
+        <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
           <FileWarning size={13} /> {asset.data.name}
         </div>
       )}
-      <figcaption>{asset.data.name}</figcaption>
+      <figcaption className="truncate text-[11px] text-muted-foreground">{asset.data.name}</figcaption>
     </figure>
   );
 }
@@ -147,15 +148,27 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   );
 
   return (
-    <div className={`agent-tool ${tool.status}`}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border border-border bg-muted",
+        tool.status === "error" && "border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))]",
+      )}
+    >
       <button
         type="button"
-        className="agent-tool-head"
+        className="flex w-full items-center gap-1.5 px-[9px] py-1.5 text-left text-xs text-muted-foreground transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)]"
         onClick={() => hasBody && setOpen((value) => !value)}
         aria-expanded={hasBody ? open : undefined}
         disabled={!hasBody}
       >
-        <span className="agent-tool-glyph" aria-hidden>
+        <span
+          className={cn(
+            "inline-flex flex-none text-muted-foreground",
+            tool.status === "done" && "text-success",
+            tool.status === "error" && "text-destructive",
+          )}
+          aria-hidden
+        >
           {tool.status === "running" ? (
             <Loader2 size={12} className="spin" />
           ) : tool.status === "error" ? (
@@ -164,34 +177,40 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
             <Check size={12} />
           )}
         </span>
-        <Wrench size={11} className="agent-tool-icon" aria-hidden />
-        <span className="agent-tool-name">{tool.name}</span>
-        {preview && !open && <span className="agent-tool-preview">{preview}</span>}
-        <span className="agent-tool-status">
+        <Wrench size={11} className="flex-none text-muted-foreground" aria-hidden />
+        <span className="flex-none font-mono text-foreground">{tool.name}</span>
+        {preview && !open && <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-muted-foreground">{preview}</span>}
+        <span className={cn("ml-auto flex-none text-[11px] text-muted-foreground", tool.status === "error" && "text-destructive")}>
           {tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone")}
         </span>
-        {elapsed && <span className="agent-tool-usage">{t("usageDuration").replace("{t}", elapsed)}</span>}
-        {hasBody && <ChevronRight size={13} className={`agent-tool-chevron ${open ? "open" : ""}`} aria-hidden />}
+        {elapsed && <span className="flex-none text-[11px] text-muted-foreground">{t("usageDuration").replace("{t}", elapsed)}</span>}
+        {hasBody && (
+          <ChevronRight
+            size={13}
+            className={cn("flex-none text-muted-foreground transition-transform duration-[120ms]", open && "rotate-90")}
+            aria-hidden
+          />
+        )}
       </button>
-      {card && <div className="agent-tool-card">{card}</div>}
+      {card && <div className="border-t border-border px-2.5 py-2">{card}</div>}
       {open && hasBody && (
-        <div className="agent-tool-body">
+        <div className="flex flex-col gap-2 border-t border-border px-[9px] py-2">
           {argText && (
-            <div className="agent-tool-section">
-              <span className="agent-tool-label">{t("toolInput")}</span>
-              <pre>{argText}</pre>
+            <div className="flex flex-col gap-[3px]">
+              <span className="text-[10.5px] uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
+              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{argText}</pre>
             </div>
           )}
           {resultText && (
-            <div className="agent-tool-section">
-              <span className="agent-tool-label">{t("toolResult")}</span>
-              <pre>{resultText}</pre>
+            <div className="flex flex-col gap-[3px]">
+              <span className="text-[10.5px] uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
+              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{resultText}</pre>
             </div>
           )}
         </div>
       )}
       {assetIds.length > 0 && (
-        <div className="agent-media-grid">
+        <div className="flex flex-wrap gap-2 border-t border-border px-[9px] py-2">
           {assetIds.map((id) => (
             <MediaPreview key={id} assetId={id} />
           ))}
@@ -205,7 +224,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
   if (!tools || tools.length === 0) return null;
   return (
-    <div className="agent-tools">
+    <div className="mb-2 flex w-full flex-col gap-1 self-stretch">
       {tools.map((tool) => (
         <ToolCallCard key={tool.id} tool={tool} />
       ))}
@@ -258,17 +277,17 @@ export function AgentErrorCard({ content, error }: { content: string; error?: st
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   return (
-    <div className="agent-error">
-      <div className="agent-error-head">
+    <div className="flex flex-col gap-[5px] rounded-lg border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--muted))] px-2.5 py-2">
+      <div className="flex items-center gap-1.5 text-[12.5px] text-destructive">
         <CircleAlert size={14} />
         <span>{content || t("agentFailedTitle")}</span>
       </div>
       {error && (
         <>
-          <button type="button" className="agent-error-toggle" onClick={() => setOpen((value) => !value)}>
+          <button type="button" className="self-start text-[11px] text-muted-foreground underline" onClick={() => setOpen((value) => !value)}>
             {t("chatErrorDetail")}
           </button>
-          {open && <pre className="agent-error-detail">{error}</pre>}
+          {open && <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{error}</pre>}
         </>
       )}
     </div>
