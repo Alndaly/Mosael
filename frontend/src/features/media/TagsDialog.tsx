@@ -48,13 +48,17 @@ export function TagsDialog({
       {body && <p className="mb-3 text-[13px] text-muted-foreground">{body}</p>}
       <div className="grid gap-3">
         {tags.length > 0 && (
-          <div className="tag-editor-list">
+          <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <span className="tag-chip removable" key={tag}>
+              <span
+                className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors"
+                key={tag}
+              >
                 {tag}
                 <button
                   type="button"
                   aria-label={t("delete")}
+                  className="ml-px grid place-items-center border-0 bg-transparent p-0 text-inherit opacity-70 hover:opacity-100"
                   onClick={() => setTags((current) => current.filter((item) => item !== tag))}
                 >
                   <X size={10} />

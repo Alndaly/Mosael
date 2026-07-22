@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Recorder } from "@/features/editor/Recorder";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
+import { cn } from "@/lib/utils";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
@@ -201,15 +202,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <div className="feature-view">
-      <div className="feature-toolbar media-toolbar">
-        <div className="media-toolbar-left">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2.5 [&>*]:shrink-0">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Button asChild size="sm">
-            <label>
+            <label className="inline-flex cursor-pointer items-center gap-1.5">
               <input
                 type="file"
                 accept="video/*,audio/*,image/*"
-                className="hidden-input"
+                className="hidden"
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   if (file) uploadAsset.mutate(file);
@@ -222,12 +223,19 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
             <CircleDot size={13} /> {t("record")}
           </Button>
-          <div className="seg" role="group" aria-label={t("mediaKindGroup")}>
+          <div
+            className="inline-flex h-8 overflow-hidden rounded-md border border-border bg-panel text-xs"
+            role="group"
+            aria-label={t("mediaKindGroup")}
+          >
             {KIND_FILTERS.map((kind) => (
               <button
                 key={kind}
                 type="button"
-                className={kindFilter === kind ? "seg-btn active" : "seg-btn"}
+                className={cn(
+                  "border-r border-border px-3 text-muted-foreground transition-colors last:border-r-0 hover:bg-secondary hover:text-foreground",
+                  kindFilter === kind && "bg-accent text-accent-foreground",
+                )}
                 onClick={() => setKindFilter(kind)}
               >
                 {kindLabel[kind]}
@@ -235,13 +243,13 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
           <Input
-            className="toolbar-search"
+            className="h-8 w-44 border-border bg-panel px-[9px] text-xs focus-visible:border-primary focus-visible:ring-0"
             value={search}
             placeholder={t("searchAssets")}
             onChange={(event) => setSearch(event.target.value)}
           />
           <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-            <SelectTrigger aria-label={t("sortNewest")}>
+            <SelectTrigger className="h-8 min-w-32 bg-panel text-xs" aria-label={t("sortNewest")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -252,13 +260,20 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             </SelectContent>
           </Select>
           {allTags.length > 0 && (
-            <div className="tag-filter" role="group" aria-label={t("filterByTag")}>
+            <div
+              className="flex flex-wrap items-center gap-1 text-muted-foreground"
+              role="group"
+              aria-label={t("filterByTag")}
+            >
               <Tags size={13} />
               {allTags.map((tag) => (
                 <button
                   key={tag}
                   type="button"
-                  className={tagFilter === tag ? "tag-chip active" : "tag-chip"}
+                  className={cn(
+                    "inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
+                    tagFilter === tag && "border-primary bg-accent text-accent-foreground",
+                  )}
                   onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
                 >
                   {tag}
@@ -267,10 +282,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             </div>
           )}
         </div>
-        <div className="media-toolbar-right">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {selectMode ? (
             <>
-              <span className="media-selected-count">
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
                 {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
               </span>
               <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set(visible.map((a) => a.id)))}>
@@ -282,7 +297,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <Button
                 variant="outline"
                 size="sm"
-                className="danger-outline"
+                className="hover:border-destructive/50 hover:text-destructive"
                 disabled={selectedIds.size === 0}
                 onClick={() => setBatchDeleting(true)}
               >
@@ -304,12 +319,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       {(assets.data ?? []).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />
       ) : (
-        <div className="asset-grid">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2.5">
           {visible.map((asset) => (
             <ContextMenu key={asset.id}>
               <ContextMenuTrigger asChild>
                 <div
-                  className={selectMode && selectedIds.has(asset.id) ? "asset-cell selected" : "asset-cell"}
+                  className="relative"
                   onClick={() => {
                     if (selectMode) {
                       toggleSelected(asset.id);
@@ -320,9 +335,16 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                     }
                   }}
                 >
-                  <AssetTile asset={asset} />
+                  <AssetTile asset={asset} selected={selectMode && selectedIds.has(asset.id)} />
                   {selectMode && (
-                    <span className={selectedIds.has(asset.id) ? "asset-check on" : "asset-check"}>
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute left-2 top-2 z-[2] grid size-5 place-items-center rounded-full border",
+                        selectedIds.has(asset.id)
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border-strong bg-panel text-transparent",
+                      )}
+                    >
                       <Check size={12} />
                     </span>
                   )}
@@ -392,7 +414,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function AssetTile({ asset }: { asset: Asset }) {
+function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boolean }) {
   const t = useI18n();
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = asset.media_info.duration as number | undefined;
@@ -400,44 +422,59 @@ function AssetTile({ asset }: { asset: Asset }) {
   const fps = asset.media_info.fps as number | undefined;
   const hasThumb = asset.kind !== "audio" && !thumbFailed;
   return (
-    <article className="asset-tile">
-      <div className="asset-thumb" data-kind={asset.kind}>
+    <article
+      className={cn(
+        "cursor-pointer overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] transition-[border-color,box-shadow] duration-100 hover:border-border-strong hover:shadow-[var(--shadow-raised)]",
+        selected && "border-primary shadow-[0_0_0_1px_var(--primary)]",
+      )}
+    >
+      <div className="relative grid aspect-video place-items-center bg-panel-inset text-muted-foreground">
         {hasThumb ? (
           <img
             src={assetThumbnailUrl(asset.id)}
             alt=""
             loading="lazy"
+            className={cn("absolute inset-0 h-full w-full", asset.kind === "image" ? "object-contain" : "object-cover")}
             onError={() => setThumbFailed(true)}
           />
         ) : (
-          <span className="asset-thumb-fallback">{kindIcon(asset.kind)}</span>
+          <span>{kindIcon(asset.kind)}</span>
         )}
         {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
         {asset.kind !== "image" && duration != null && (
-          <span className="asset-duration timecode">{formatSeconds(duration)}</span>
+          <span className="absolute bottom-1.5 right-1.5 rounded-[3px] bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-[11px] tabular-nums text-[#e8eaed]">
+            {formatSeconds(duration)}
+          </span>
         )}
       </div>
-      <div className="asset-caption">
-        <strong title={asset.name}>{asset.name}</strong>
-        <div className="asset-meta">
+      <div className="grid gap-[5px] px-2 py-[9px]">
+        <strong className="truncate text-xs font-semibold" title={asset.name}>
+          {asset.name}
+        </strong>
+        <div className="flex items-center gap-1.5">
           <Badge variant="secondary">{asset.kind}</Badge>
-          <small>{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
+          <small className="text-[11px] text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
         {assetTags(asset).length > 0 && (
-          <div className="asset-tags">
+          <div className="flex flex-wrap gap-[3px]">
             {assetTags(asset)
               .slice(0, 3)
               .map((tag) => (
-                <span className="tag-chip readonly" key={tag}>
+                <span
+                  className="inline-flex cursor-default items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 py-0 text-[11px] text-muted-foreground"
+                  key={tag}
+                >
                   {tag}
                 </span>
               ))}
             {assetTags(asset).length > 3 && (
-              <span className="tag-chip readonly">+{assetTags(asset).length - 3}</span>
+              <span className="inline-flex cursor-default items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 py-0 text-[11px] text-muted-foreground">
+                +{assetTags(asset).length - 3}
+              </span>
             )}
           </div>
         )}
-        <span className="asset-specs timecode">
+        <span className="truncate font-mono text-[11px] tabular-nums text-muted-foreground">
           {width ? `${width}×${asset.media_info.height}` : "—"}
           {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
