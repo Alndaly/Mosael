@@ -310,8 +310,11 @@ function CreateTaskDialog({
                 </SelectContent>
               </Select>
               {schedKind === "daily" && (
+                // 原生 time 控件不吃继承字号、拨盘图标也不跟主题:字号/等宽数字压回
+                // 表单刻度,color-scheme 随昼夜让时钟图标同色,图标半透明 hover 提亮。
                 <Input
                   type="time"
+                  className="tabular-nums [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-datetime-edit]:text-[12.5px]"
                   value={dailyTime}
                   onChange={(event) => setDailyTime(event.target.value || "09:00")}
                 />

@@ -229,7 +229,9 @@ function WfNode({ data, selected }: NodeProps) {
         <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
       )}
       {showIo && (
-        <div className="flex justify-between gap-4 border-t border-border pt-1.5">
+        // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
+        // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
+        <div className="-mx-3 -mb-[9px] mt-0.5 flex justify-between gap-4 rounded-b-[9px] border-t border-border bg-panel-subtle px-3 py-[6px]">
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
@@ -240,7 +242,10 @@ function WfNode({ data, selected }: NodeProps) {
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
                   data-dtype={inputType(d.nodeType, key)}
                 />
-                <span className="whitespace-nowrap text-[10.5px] text-muted-foreground">{FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}</span>
+                {/* 有本地化标签走正文字体;裸标识符(如 items)与输出侧同用 mono,同卡不混排。 */}
+                <span className={cn("whitespace-nowrap text-[10.5px] text-muted-foreground", !FIELD_LABEL_KEYS[key] && "font-mono")}>
+                  {FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}
+                </span>
               </div>
             ))}
           </div>
