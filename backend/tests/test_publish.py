@@ -44,7 +44,8 @@ def test_folder_publish_flow(tmp_path: Path) -> None:
     asset = make_video_asset(client, ws["id"])
 
     platforms = client.get("/api/publish/platforms").json()
-    assert {item["platform"] for item in platforms} >= {"folder", "webhook", "mock"}
+    assert {item["platform"] for item in platforms} >= {"folder", "webhook"}
+    assert "mock" not in {item["platform"] for item in platforms}
 
     # 缺必填配置 → 422
     bad = client.post(
@@ -93,7 +94,12 @@ def test_workflow_publish_node(tmp_path: Path) -> None:
     asset = make_video_asset(client, ws["id"])
     account = client.post(
         "/api/publish/accounts",
-        json={"workspace_id": ws["id"], "platform": "mock", "name": "演示", "config": {}},
+        json={
+            "workspace_id": ws["id"],
+            "platform": "folder",
+            "name": "工作流交付",
+            "config": {"directory": str(tmp_path / "wf-out")},
+        },
     ).json()
 
     workflow = client.post(

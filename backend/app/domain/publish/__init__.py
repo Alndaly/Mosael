@@ -3,7 +3,7 @@
 
 平台适配器注册表数据驱动(publish_targets 扩展位):v1 内置
 folder(交付到本地目录 + 元数据 sidecar)、webhook(POST 给外部
-自动化)、mock(演示/测试)。真平台(抖音/B站等)按同一契约叠加。
+自动化)。真平台(抖音/B站等)按同一契约叠加。
 """
 
 from __future__ import annotations
@@ -52,14 +52,6 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {"url": {"type": "string", "required": True, "description": "接收 POST 的 URL"}},
         "executor": "local",
         "title_max": 300,
-        "short_title": False,
-    },
-    "mock": {
-        "label": "演示平台",
-        "description": "不做真实上传,直接返回成功。用于演示与测试。",
-        "config": {},
-        "executor": "local",
-        "title_max": 100,
         "short_title": False,
     },
     "douyin": {
@@ -277,14 +269,9 @@ def _publish_webhook(config: dict[str, Any], asset: Asset, task: PublishTask) ->
     return {"status_code": response.status_code, "response": response.text[:500]}
 
 
-def _publish_mock(config: dict[str, Any], asset: Asset, task: PublishTask) -> dict[str, Any]:
-    return {"mock": True, **_metadata(task, asset)}
-
-
 _ADAPTERS: dict[str, Callable[[dict[str, Any], Asset, PublishTask], dict[str, Any]]] = {
     "folder": _publish_folder,
     "webhook": _publish_webhook,
-    "mock": _publish_mock,
 }
 
 

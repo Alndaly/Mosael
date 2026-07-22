@@ -23,7 +23,7 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
         db.add(Workflow(workspace_id=ws, name="wf", graph={"nodes": [], "edges": []}))
         db.add(Job(workspace_id=ws, kind="render", status="running", payload={}))
         db.add(Job(workspace_id=ws, kind="render", status="succeeded", payload={}))
-        account = PublishAccount(workspace_id=ws, platform="mock", name="acc", config={})
+        account = PublishAccount(workspace_id=ws, platform="folder", name="acc", config={"directory": "/tmp/out"})
         db.add(account)
         db.flush()
         db.add(
@@ -45,7 +45,7 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
     assert summary["publish_accounts"] == 1
     assert summary["week_published"] == 1
     assert summary["publish_daily"][-1]["succeeded"] == 1
-    assert summary["publish_platforms"] == {"mock": 1}
+    assert summary["publish_platforms"] == {"folder": 1}
     assert summary["kb_document_count"] == 0
 
 

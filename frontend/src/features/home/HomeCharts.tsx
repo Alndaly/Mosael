@@ -311,7 +311,6 @@ const PLATFORM_COLORS = [
 const PLATFORM_LABELS: Record<string, { zh: string; en: string }> = {
   folder: { zh: "本地目录", en: "Folder" },
   webhook: { zh: "Webhook", en: "Webhook" },
-  mock: { zh: "演示平台", en: "Demo" },
   douyin: { zh: "抖音", en: "Douyin" },
   bilibili: { zh: "B站", en: "Bilibili" },
   xiaohongshu: { zh: "小红书", en: "Xiaohongshu" },
