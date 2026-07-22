@@ -535,7 +535,7 @@ export function Monitor({
         </div>
       </div>
       <div
-        className="group/scrub relative mx-2.5 flex h-3.5 cursor-pointer touch-none items-center before:absolute before:inset-x-0 before:h-[3px] before:rounded-sm before:bg-[rgb(255_255_255/0.16)] before:content-['']"
+        className="group/scrub relative mx-3 flex h-3.5 cursor-pointer touch-none items-center before:absolute before:inset-x-0 before:h-[3px] before:rounded-sm before:bg-[rgb(255_255_255/0.16)] before:content-['']"
         ref={scrubRef}
         onPointerDown={handleScrub}
         onPointerMove={(event) => event.buttons & 1 && seekFromScrub(event.clientX)}
@@ -545,7 +545,9 @@ export function Monitor({
           style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
         />
       </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-2 pb-[5px] pt-[3px] [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+      {/* 底部行:左右缩进与画面/进度条同一刻度(12px);不加上下 padding,
+          38px 行高靠 items-center 精确居中(原 3px/5px 不对称,内容偏高 1px)。 */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-3 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
         <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
