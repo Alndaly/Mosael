@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -268,18 +269,14 @@ function CreateTaskDialog({
         </div>
         <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("wfBoundWorkflow")}</span>
-          <Select value={workflowId ?? ""} onValueChange={setWorkflowId}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("wfPickWorkflow")} />
-            </SelectTrigger>
-            <SelectContent>
-              {(workflows.data ?? []).map((workflow: Workflow) => (
-                <SelectItem key={workflow.id} value={workflow.id}>
-                  {workflow.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={workflowId ?? ""}
+            options={(workflows.data ?? []).map((workflow: Workflow) => ({ value: workflow.id, label: workflow.name }))}
+            placeholder={t("wfPickWorkflow")}
+            emptyText={t("cmdkEmpty")}
+            className="w-full"
+            onValueChange={setWorkflowId}
+          />
           {(workflows.data ?? []).length === 0 && workflows.isSuccess && (
             <small>{t("noWorkflowHint")}</small>
           )}

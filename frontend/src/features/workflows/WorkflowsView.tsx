@@ -87,6 +87,7 @@ import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
@@ -2210,18 +2211,30 @@ function NodeInspector({
                   </Select>
                 </div>
               ) : options ? (
-                <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("wfPickOption")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                spec?.options ? (
+                  <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("wfPickOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
+                  <Combobox
+                    value={String(value ?? "")}
+                    options={options}
+                    placeholder={t("wfPickOption")}
+                    emptyText={t("cmdkEmpty")}
+                    className="w-full"
+                    onValueChange={(next) => setConfig(key, next)}
+                  />
+                )
               ) : isObject ? (
                 <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
               ) : spec?.type === "code" ? (

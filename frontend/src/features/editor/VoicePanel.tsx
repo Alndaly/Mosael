@@ -23,6 +23,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/app/combobox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -369,24 +370,17 @@ export function VoicePanel({
 
         {speakerOpen && (
           <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
-            <Select
+            <Combobox
               value={spAsset}
+              options={clipAssets.map((asset) => ({ value: asset.id, label: asset.name }))}
+              placeholder={t("voicePickAsset")}
+              emptyText={t("cmdkEmpty")}
+              className="w-full"
               onValueChange={(value) => {
                 setSpAsset(value);
                 setSpSpeaker("");
               }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("voicePickAsset")} />
-              </SelectTrigger>
-              <SelectContent>
-                {clipAssets.map((asset) => (
-                  <SelectItem key={asset.id} value={asset.id}>
-                    {asset.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             {spAsset &&
               (transcript.isError ? (
                 <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNoTranscript")}</p>

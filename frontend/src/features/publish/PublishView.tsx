@@ -25,6 +25,7 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
@@ -740,34 +741,26 @@ function CreatePublishDialog({
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAsset")}</span>
-          <Select value={assetId ?? ""} onValueChange={setAssetId}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("publishPickAsset")} />
-            </SelectTrigger>
-            <SelectContent>
-              {videos.map((asset) => (
-                <SelectItem key={asset.id} value={asset.id}>
-                  {asset.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={assetId ?? ""}
+            options={videos.map((asset) => ({ value: asset.id, label: asset.name }))}
+            placeholder={t("publishPickAsset")}
+            emptyText={t("cmdkEmpty")}
+            className="w-full"
+            onValueChange={setAssetId}
+          />
           {videos.length === 0 && assets.isSuccess && <small>{t("publishNoVideos")}</small>}
         </label>
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAccount")}</span>
-          <Select value={accountId ?? ""} onValueChange={setAccountId}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("publishPickAccount")} />
-            </SelectTrigger>
-            <SelectContent>
-              {(accounts.data ?? []).map((account: PublishAccount) => (
-                <SelectItem key={account.id} value={account.id}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={accountId ?? ""}
+            options={(accounts.data ?? []).map((account: PublishAccount) => ({ value: account.id, label: account.name }))}
+            placeholder={t("publishPickAccount")}
+            emptyText={t("cmdkEmpty")}
+            className="w-full"
+            onValueChange={setAccountId}
+          />
           {(accounts.data ?? []).length === 0 && accounts.isSuccess && (
             <small>
               {t("publishNoAccounts")}{" "}

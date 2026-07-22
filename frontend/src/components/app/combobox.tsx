@@ -83,7 +83,13 @@ export function Combobox({
             ) : null}
             <CommandEmpty>{emptyText}</CommandEmpty>
             {options.map((option) => (
-              <CommandItem key={option.value} value={option.value} onSelect={() => choose(option.value)}>
+              // cmdk 按 item 的 value 过滤:value 若只是 id(uuid),按名称搜索会一无所获。
+              // label 打头让搜索命中名称,拼上 id 保证唯一。
+              <CommandItem
+                key={option.value}
+                value={`${option.label ?? option.value} ${option.value}`}
+                onSelect={() => choose(option.value)}
+              >
                 <Check className={cn("size-4", option.value === value ? "opacity-100" : "opacity-0")} />
                 <span className="truncate">{option.label ?? option.value}</span>
               </CommandItem>
