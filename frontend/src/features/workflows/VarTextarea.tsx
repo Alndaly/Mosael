@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * 支持 Dify 式「/ 唤起变量弹窗」的 textarea:
@@ -106,7 +107,7 @@ export function VarTextarea({
   };
 
   return (
-    <div className="var-textarea-wrap">
+    <div className="relative [&_textarea]:w-full">
       <textarea
         ref={(el) => {
           innerRef.current = el;
@@ -140,14 +141,17 @@ export function VarTextarea({
         onBlur={() => window.setTimeout(() => setMenu(null), 150)}
       />
       {menu && matches.length > 0 && (
-        <div className="var-menu" style={{ top: menu.top, left: menu.left }} role="listbox">
+        <div className="absolute z-40 flex min-w-[180px] max-w-[280px] flex-col rounded-md border border-border bg-panel p-[3px]" style={{ top: menu.top, left: menu.left }} role="listbox">
           {matches.map((ref, index) => (
             <button
               key={ref}
               type="button"
               role="option"
               aria-selected={index === menu.index}
-              className={index === menu.index ? "var-menu-item active" : "var-menu-item"}
+              className={cn(
+                "block cursor-pointer truncate rounded border-0 bg-transparent px-1.5 py-1 text-left font-mono text-[11px]",
+                index === menu.index && "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary",
+              )}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => insert(ref)}
               onMouseEnter={() => setMenu((current) => (current ? { ...current, index } : current))}

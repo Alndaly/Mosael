@@ -98,6 +98,7 @@ import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor"
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
+import { cn } from "@/lib/utils";
 import {
   analyzeWorkflow,
   extractRefs,
@@ -110,6 +111,19 @@ import {
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
+
+/** 节点类型语义色(与轨道颜色同属内容色,不算点缀):
+    开始=绿 / LLM=紫 / 检索=蓝 / 插件=琥珀 / 转写=青 / 导出=玫红 / 生成=品红;
+    其余类型走 --wf-node-color 的 primary 兜底。 */
+const WF_NODE_COLORS: Record<string, string> = {
+  start: "#16a34a",
+  llm: "#7c3aed",
+  kb_search: "#2563eb",
+  plugin_tool: "#d97706",
+  transcribe_asset: "#0891b2",
+  export_sequence: "#e11d48",
+  ai_generate: "#c026d3",
+};
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -164,64 +178,76 @@ function WfNode({ data, selected }: NodeProps) {
   const showIo = !isCondition && (inputs.length > 0 || outputs.length > 0);
   return (
     <div
-      className={`wf-node${showIo ? " has-io" : ""}${selected ? " selected" : ""}${
-        badge ? ` has-issue is-${badge.severity}` : ""
-      }`}
+      className={cn(
+        "group/node relative flex min-w-[172px] flex-col gap-1.5 rounded-lg border border-border bg-panel px-3 py-[9px] transition-[border-color] duration-100 hover:border-border-strong",
+        showIo && "min-w-[210px]",
+        badge && !selected && (badge.severity === "error"
+          ? "border-[color-mix(in_srgb,var(--destructive)_60%,var(--border))]"
+          : "border-[color-mix(in_srgb,#d97706_55%,var(--border))]"),
+        selected && "border-primary shadow-[0_0_0_1px_var(--primary)] hover:border-primary",
+      )}
       data-node-type={d.nodeType}
     >
       {/* 控制入(左上) */}
       {d.nodeType !== "start" && (
-        <Handle type="target" position={Position.Left} className="wf-handle wf-ctrl" style={{ top: 22 }} />
+        <Handle type="target" position={Position.Left} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
       )}
-      <div className="wf-node-header">
-        <span className={`wf-node-icon wf-icon-${d.nodeType}`}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
-        <span className="wf-node-text">
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[d.nodeType] } as React.CSSProperties}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
+        <span className="grid min-w-0 gap-px [&_small]:text-[10.5px] [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-[12.5px]">
           <strong>{d.label}</strong>
           {/* 未改名时 label 就是类型名,别再重复显示一行类型。 */}
           {d.label !== d.typeLabel && <small>{d.typeLabel}</small>}
         </span>
       </div>
       {badge && (
-        <span className={`wf-node-badge is-${badge.severity}`} title={badge.title} aria-label={badge.title}>
+        <span
+          className={cn(
+            "absolute -right-[7px] -top-[7px] inline-flex h-4 min-w-4 items-center gap-0.5 rounded-full px-1 text-[10px] font-bold leading-none text-white",
+            badge.severity === "error" ? "bg-destructive" : "bg-[#d97706]",
+          )}
+          title={badge.title}
+          aria-label={badge.title}
+        >
           <AlertTriangle size={11} />
           {badge.count > 1 ? badge.count : null}
         </span>
       )}
       {isCondition ? (
         <>
-          <Handle id="true" type="source" position={Position.Right} className="wf-handle wf-handle-true" style={{ top: "32%" }} />
-          <Handle id="false" type="source" position={Position.Right} className="wf-handle wf-handle-false" style={{ top: "68%" }} />
-          <span className="wf-branch-label true">真</span>
-          <span className="wf-branch-label false">假</span>
+          <Handle id="true" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#16a34a]!", selected && "border-primary!")} style={{ top: "32%" }} />
+          <Handle id="false" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#e11d48]!", selected && "border-primary!")} style={{ top: "68%" }} />
+          <span className="pointer-events-none absolute -right-5 top-[calc(32%-7px)] text-[9px] font-semibold text-[#16a34a]">真</span>
+          <span className="pointer-events-none absolute -right-5 top-[calc(68%-7px)] text-[9px] font-semibold text-[#e11d48]">假</span>
         </>
       ) : (
-        <Handle type="source" position={Position.Right} className="wf-handle wf-ctrl" style={{ top: 22 }} />
+        <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
       )}
       {showIo && (
-        <div className="wf-node-io">
-          <div className="wf-io-col in">
+        <div className="flex justify-between gap-4 border-t border-border pt-1.5">
+          <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
-              <div className="wf-io-row" key={key}>
+              <div className="relative flex min-h-4 items-center" key={key}>
                 <Handle
                   id={`in:${key}`}
                   type="target"
                   position={Position.Left}
-                  className="wf-socket"
+                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
                   data-dtype={inputType(d.nodeType, key)}
                 />
-                <span className="wf-io-label">{FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}</span>
+                <span className="whitespace-nowrap text-[10.5px] text-muted-foreground">{FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}</span>
               </div>
             ))}
           </div>
-          <div className="wf-io-col out">
+          <div className="flex min-w-0 flex-col gap-[3px]">
             {outputs.map((output) => (
-              <div className="wf-io-row" key={output}>
-                <span className="wf-io-label">{output}</span>
+              <div className="relative flex min-h-4 items-center justify-end" key={output}>
+                <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground">{output}</span>
                 <Handle
                   id={`out:${output}`}
                   type="source"
                   position={Position.Right}
-                  className="wf-socket"
+                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! right-[-12px]!"
                   data-dtype={outputType(d.nodeType, output)}
                 />
               </div>
@@ -406,7 +432,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail wf-detail">
+        <div className="plugins-detail grid">
           {selected && nodeTypes.data ? (
             <WorkflowEditor
               key={selected.id}
@@ -946,21 +972,21 @@ function WorkflowEditor({
   );
 
   return (
-    <div className="wf-editor">
-      <div className="wf-toolbar">
-        <button type="button" className="wf-title" onClick={() => setRenaming(true)} title={t("rename")}>
-          <span className="wf-title-icon">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5 pb-2 pt-0.5">
+        <button type="button" className="inline-flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent py-[3px] pl-[3px] pr-1.5 text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
             <WorkflowIcon size={14} />
           </span>
-          <span className="wf-title-text">
+          <span className="grid leading-[1.3] [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[13px]">
             <strong>{workflow.name}</strong>
             {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
                 拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
           </span>
         </button>
-        <div className="wf-toolbar-actions">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Select onValueChange={addNode} value="">
-            <SelectTrigger className="wf-add-node" aria-label={t("wfAddNode")}>
+            <SelectTrigger className="rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
               <Plus size={12} />
               <span>{t("wfAddNode")}</span>
             </SelectTrigger>
@@ -980,7 +1006,7 @@ function WorkflowEditor({
           <Button variant="ghost" size="icon" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
             <Redo2 size={14} />
           </Button>
-          <div className="wf-toolbar-sep" />
+          <div className="mx-1 h-[18px] w-px bg-border" />
           <Button
             variant={agentOpen ? "secondary" : "outline"}
             size="sm"
@@ -1003,18 +1029,18 @@ function WorkflowEditor({
                 <Search size={14} />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="wf-nodesearch-pop">
-              <div className="wf-nodesearch-field">
+            <PopoverContent align="end" className="w-[280px] p-1.5">
+              <div className="flex h-8 items-center gap-1.5 rounded-md border border-input px-2 text-muted-foreground">
                 <Search size={13} />
                 <Input
                   autoFocus
-                  className="wf-nodesearch-input"
+                  className="min-w-0 flex-1 border-0 bg-transparent text-[12.5px] text-foreground outline-none"
                   value={nodeSearch}
                   onChange={(event) => setNodeSearch(event.target.value)}
                   placeholder={t("wfNodeSearchPlaceholder")}
                 />
               </div>
-              <div className="wf-nodesearch-list">
+              <div className="mt-1.5 flex max-h-80 flex-col gap-0.5 overflow-auto">
                 {(() => {
                   const query = nodeSearch.trim().toLowerCase();
                   const matches = graph.nodes.filter((node) => {
@@ -1027,7 +1053,7 @@ function WorkflowEditor({
                     );
                   });
                   if (matches.length === 0)
-                    return <div className="wf-nodesearch-empty">{t("wfNodeSearchEmpty")}</div>;
+                    return <div className="px-2 py-2.5 text-center text-xs text-muted-foreground">{t("wfNodeSearchEmpty")}</div>;
                   return matches.map((node) => {
                     const label = registry.get(node.type)?.label ?? node.type;
                     // 未改名时 name 就是类型标签,再补一列类型纯属重复 → 仅改过名才显示类型。
@@ -1036,15 +1062,18 @@ function WorkflowEditor({
                       <button
                         key={node.id}
                         type="button"
-                        className={`wf-nodesearch-row${node.id === selectedNodeId ? " is-active" : ""}`}
+                        className={cn(
+                          "flex cursor-pointer items-baseline justify-between gap-2.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
+                          node.id === selectedNodeId && "bg-accent hover:bg-accent",
+                        )}
                         onClick={() => {
                           focusNode(node.id);
                           setNodeSearchOpen(false);
                           setNodeSearch("");
                         }}
                       >
-                        <span className="wf-nodesearch-name">{node.name || label}</span>
-                        {typeSub && <span className="wf-nodesearch-type">{typeSub}</span>}
+                        <span className="truncate text-[12.5px] font-semibold text-foreground">{node.name || label}</span>
+                        {typeSub && <span className="shrink-0 text-[11px] text-muted-foreground">{typeSub}</span>}
                       </button>
                     );
                   });
@@ -1056,42 +1085,50 @@ function WorkflowEditor({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className={`wf-checklist-btn${
-                  analysis.errorCount ? " has-error" : analysis.warnCount ? " has-warn" : " ok"
-                }`}
+                className={cn(
+                  "inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-panel px-2.5 text-xs font-[650] text-muted-foreground transition-[background,border-color,color] duration-[120ms] hover:border-border-strong hover:text-foreground",
+                  analysis.errorCount
+                    ? "border-[color-mix(in_srgb,var(--destructive)_45%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_10%,var(--panel))] text-destructive hover:text-destructive"
+                    : analysis.warnCount
+                      ? "border-[color-mix(in_srgb,#d97706_40%,var(--border))] bg-[color-mix(in_srgb,#f59e0b_10%,var(--panel))] text-[#f59e0b] hover:text-[#f59e0b]"
+                      : "border-[color-mix(in_srgb,#22c55e_30%,var(--border))] bg-[color-mix(in_srgb,#22c55e_8%,var(--panel))] text-[#22c55e] hover:text-[#22c55e]",
+                )}
                 aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
                 title={checklistLabel}
               >
                 {analysis.errorCount || analysis.warnCount ? <AlertTriangle size={13} /> : <CircleCheck size={13} />}
                 <span>{checklistCount > 0 ? t("wfChecklist") : t("wfChecklistReadyShort")}</span>
-                {checklistCount > 0 && <em className="wf-checklist-count">{checklistCount}</em>}
+                {checklistCount > 0 && <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full border border-[color-mix(in_srgb,currentColor_35%,transparent)] bg-[color-mix(in_srgb,currentColor_14%,transparent)] px-1 text-[10px] font-bold not-italic leading-none text-current">{checklistCount}</em>}
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="wf-checklist-pop">
+            <PopoverContent align="end" className="w-80 p-1.5">
               {analysis.issues.length === 0 ? (
-                <div className="wf-checklist-ok">
+                <div className="flex items-center gap-1.5 p-2 text-[12.5px] text-[#16a34a]">
                   <CircleCheck size={14} /> {t("wfChecklistReady")}
                 </div>
               ) : (
                 <>
-                  <div className="wf-checklist-head">
+                  <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
                     {analysis.errorCount
                       ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
                       : t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))}
                   </div>
-                  <div className="wf-checklist-list">
+                  <div className="flex max-h-80 flex-col gap-0.5 overflow-auto">
                     {[...analysis.issues]
                       .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1))
                       .map((issue, i) => (
                         <button
                           key={`${issue.nodeId}-${issue.code}-${i}`}
                           type="button"
-                          className={`wf-checklist-row is-${issue.severity}`}
+                          className={cn(
+                            "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
+                            issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-[#d97706]",
+                          )}
                           onClick={() => setSelectedNodeId(issue.nodeId)}
                         >
                           <AlertTriangle size={12} />
-                          <span className="wf-checklist-node">{issue.nodeName}</span>
-                          <span className="wf-checklist-msg">{issueText(t, issue)}</span>
+                          <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
+                          <span className="truncate text-[11.5px] text-muted-foreground">{issueText(t, issue)}</span>
                         </button>
                       ))}
                   </div>
@@ -1100,7 +1137,13 @@ function WorkflowEditor({
             </PopoverContent>
           </Popover>
           {showSaveStatus && (
-            <span className={`wf-save-status${save.isPending ? " is-saving" : " is-dirty"}`} aria-live="polite">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] text-muted-foreground",
+                !save.isPending && "text-[#f59e0b]",
+              )}
+              aria-live="polite"
+            >
               {save.isPending ? (
                 <>
                   <Loader2 size={12} className="spin" /> {t("wfSaving")}
@@ -1118,13 +1161,13 @@ function WorkflowEditor({
           >
             <Play size={13} /> {t("wfRun")}
           </Button>
-          <div className="wf-toolbar-sep" />
+          <div className="mx-1 h-[18px] w-px bg-border" />
           <Button
             variant="ghost"
             size="icon"
             aria-label={t("wfHistory")}
             title={t("wfHistory")}
-            className={showHistory ? "wf-active" : undefined}
+            className={undefined}
             onClick={() => setShowHistory((v) => !v)}
           >
             <History size={14} />
@@ -1135,8 +1178,11 @@ function WorkflowEditor({
         </div>
       </div>
 
-      <div className={agentOpen && agentMode === "docked" ? "wf-canvas-wrap has-docked-agent" : "wf-canvas-wrap"}>
-        <div className="wf-canvas">
+      <div className={cn(
+        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-[#16a34a] [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-[#e11d48] [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-[#d97706] [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
+        agentOpen && agentMode === "docked" && "grid-cols-[minmax(0,1fr)_minmax(360px,420px)]",
+      )}>
+        <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
             nodes={displayNodes}
             edges={edges}
@@ -1339,12 +1385,12 @@ function CodeField({
     <>
       <CodeEditor ref={handle} value={value} language="python" minHeight={140} onChange={onChange} />
       {variables.length > 0 && (
-        <div className="wf-var-chips">
+        <div className="flex flex-wrap gap-[3px]">
           {variables.map((ref) => (
             <button
               key={ref}
               type="button"
-              className="wf-var-chip"
+              className="cursor-pointer rounded border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
               title={t("wfInsertVar")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => handle.current?.insertAtCursor(ref)}
@@ -1503,16 +1549,16 @@ function LoopBodyEditor({
   const selectedNode = selectedId ? (body.nodes.find((node) => node.id === selectedId) ?? null) : null;
 
   return (
-    <div className="wf-loop-overlay">
-      <div className="wf-loop-head">
-        <button type="button" className="wf-loop-back" onClick={onClose}>
+    <div className="absolute inset-0 z-30 grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="flex items-center gap-2.5 border-b border-border bg-card px-2 py-1.5">
+        <button type="button" className="inline-flex items-center gap-[5px] rounded-md border border-input bg-card px-2 py-1 text-xs text-foreground hover:bg-muted" onClick={onClose}>
           <ArrowLeft size={14} /> {t("wfLoopBack")}
         </button>
-        <span className="wf-loop-crumb">
+        <span className="inline-flex items-center gap-[5px] text-[12.5px] font-semibold text-foreground">
           <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
         </span>
         <Select onValueChange={addNode} value="">
-          <SelectTrigger className="wf-add-node" aria-label={t("wfAddNode")}>
+          <SelectTrigger className="ml-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
             <Plus size={12} />
             <span>{t("wfAddNode")}</span>
           </SelectTrigger>
@@ -1527,7 +1573,7 @@ function LoopBodyEditor({
           </SelectContent>
         </Select>
       </div>
-      <div className="wf-loop-canvas">
+      <div className="relative min-h-0">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1544,7 +1590,7 @@ function LoopBodyEditor({
           <Background gap={20} size={1.2} />
           <Controls showInteractive={false} position="bottom-left" />
         </ReactFlow>
-        {body.nodes.length === 0 && <div className="wf-loop-empty">{t("wfLoopEmptyHint")}</div>}
+        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t("wfLoopEmptyHint")}</div>}
         {selectedNode && (
           <NodeInspector
             node={selectedNode}
@@ -1839,15 +1885,15 @@ function NodeInspector({
   };
 
   return (
-    <aside className="wf-inspector panel" aria-label={node.name || meta?.label || node.type}>
-      <div className="panel-head wf-inspector-head">
-        <span className={`wf-node-icon wf-icon-${node.type} wf-inspector-icon`}>
+    <aside className="panel absolute bottom-2 right-2 top-2 z-30 grid min-h-0 w-[min(300px,calc(100%-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel" aria-label={node.name || meta?.label || node.type}>
+      <div className="panel-head flex items-center gap-2">
+        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))] h-6 w-6" style={{ "--wf-node-color": WF_NODE_COLORS[node.type] } as React.CSSProperties}>
           {NODE_ICONS[node.type] ?? <Type size={13} />}
         </span>
-        <div className="wf-inspector-heading">
+        <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-[10.5px] [&_small]:text-muted-foreground">
           {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。 */}
           <Input
-            className="wf-inspector-name"
+            className="-ml-1 min-w-0 rounded border border-transparent bg-transparent px-1 py-px text-[13px] font-semibold text-foreground hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}
@@ -1867,8 +1913,8 @@ function NodeInspector({
           </button>
         )}
       </div>
-      <div className="wf-inspector-body">
-        {meta && <p className="wf-node-desc">{meta.description}</p>}
+      <div className="grid min-h-0 content-start gap-2 overflow-y-auto p-2.5">
+        {meta && <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{meta.description}</p>}
         {bindingNotice && (
           <ConfigNotice
             message={bindingNotice.message}
@@ -1878,25 +1924,25 @@ function NodeInspector({
           />
         )}
         {staleRefs.length > 0 && (
-          <div className="wf-stale-refs">
-            <span className="wf-stale-title">
+          <div className="flex flex-col gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-2.5 py-2">
+            <span className="flex items-center gap-[5px] text-[11px] font-semibold text-destructive">
               <AlertTriangle size={12} /> {t("wfStaleRefsTitle")}
             </span>
             {staleRefs.map(({ key, ref }) => (
-              <div className="wf-stale-row" key={`${key}-${ref}`}>
-                <code className="wf-stale-chip">{ref}</code>
+              <div className="flex items-center justify-between gap-2" key={`${key}-${ref}`}>
+                <code className="rounded border border-[color-mix(in_srgb,var(--destructive)_45%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-px font-mono text-[10.5px] text-destructive line-through">{ref}</code>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button type="button" className="wf-stale-repoint">
+                    <button type="button" className="flex-none cursor-pointer rounded border border-border bg-panel px-2 py-0.5 text-[11px] text-foreground hover:border-border-strong">
                       {t("wfRepoint")}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="wf-repoint-pop">
+                  <PopoverContent align="end" className="flex w-[200px] flex-col gap-0.5 p-[5px]">
                     {variables.map((valid) => (
                       <button
                         key={valid}
                         type="button"
-                        className="wf-repoint-opt"
+                        className="cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1.5 text-left font-mono text-xs hover:bg-muted"
                         onClick={() => repoint(key, ref, valid)}
                       >
                         {valid.replace(/[{}]/g, "")}
@@ -1904,7 +1950,7 @@ function NodeInspector({
                     ))}
                     <button
                       type="button"
-                      className="wf-repoint-opt danger"
+                      className="cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
                       onClick={() => repoint(key, ref, "")}
                     >
                       {t("wfRemoveRef")}
@@ -1916,7 +1962,7 @@ function NodeInspector({
           </div>
         )}
         {node.type === "ai_generate" && (
-          <div className="wf-field">
+          <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("wfModelPreset")}</span>
             <Select
               value=""
@@ -1941,8 +1987,8 @@ function NodeInspector({
           </div>
         )}
         {node.type === "llm" && (
-          <div className="wf-llm-advanced">
-            <div className="wf-field">
+          <div className="grid gap-[9px] rounded-lg border border-border bg-[color-mix(in_srgb,var(--muted)_58%,transparent)] p-[9px]">
+            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
               <span>{t("wfLlmPreset")}</span>
               <Select
                 value={(config.preset as string) || "balanced"}
@@ -1965,7 +2011,7 @@ function NodeInspector({
                     : t("wfPresetBalancedHint")}
               </small>
             </div>
-            <div className="wf-field">
+            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
               <span>{t("wfLlmResponseFormat")}</span>
               <Select value={responseFormat} onValueChange={(next) => setConfig("response_format", next)}>
                 <SelectTrigger>
@@ -1978,8 +2024,8 @@ function NodeInspector({
                 </SelectContent>
               </Select>
             </div>
-            <div className="wf-llm-param-grid">
-              <div className="wf-field">
+            <div className="grid grid-cols-2 gap-2 max-[1180px]:grid-cols-1">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmTemperature")}</span>
                 <Input
                   type="number"
@@ -1991,7 +2037,7 @@ function NodeInspector({
                   onChange={setTextConfig("temperature")}
                 />
               </div>
-              <div className="wf-field">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmTopP")}</span>
                 <Input
                   type="number"
@@ -2003,7 +2049,7 @@ function NodeInspector({
                   onChange={setTextConfig("top_p")}
                 />
               </div>
-              <div className="wf-field">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmMaxTokens")}</span>
                 <Input
                   type="number"
@@ -2014,7 +2060,7 @@ function NodeInspector({
                   onChange={setTextConfig("max_tokens")}
                 />
               </div>
-              <div className="wf-field">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmSeed")}</span>
                 <Input
                   type="number"
@@ -2024,7 +2070,7 @@ function NodeInspector({
                   onChange={setTextConfig("seed")}
                 />
               </div>
-              <div className="wf-field">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmFrequencyPenalty")}</span>
                 <Input
                   type="number"
@@ -2036,7 +2082,7 @@ function NodeInspector({
                   onChange={setTextConfig("frequency_penalty")}
                 />
               </div>
-              <div className="wf-field">
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                 <span>{t("wfLlmPresencePenalty")}</span>
                 <Input
                   type="number"
@@ -2049,7 +2095,7 @@ function NodeInspector({
                 />
               </div>
             </div>
-            <div className="wf-field">
+            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
               <span>{t("wfLlmStop")}</span>
               <VarTextarea
                 rows={2}
@@ -2061,7 +2107,7 @@ function NodeInspector({
             </div>
             {responseFormat === "json_schema" && (
               <>
-                <div className="wf-field">
+                <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                   <span>{t("wfLlmJsonSchemaName")}</span>
                   <Input
                     value={String(config.json_schema_name ?? "")}
@@ -2069,7 +2115,7 @@ function NodeInspector({
                     onChange={setTextConfig("json_schema_name")}
                   />
                 </div>
-                <div className="wf-field">
+                <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                   <span>{t("wfLlmJsonStrict")}</span>
                   <Select
                     value={String(config.json_schema_strict ?? "true")}
@@ -2084,7 +2130,7 @@ function NodeInspector({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="wf-field">
+                <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
                   <span>{t("wfLlmJsonSchema")}</span>
                   <JsonField
                     value={config.json_schema ?? { type: "object", properties: {} }}
@@ -2102,9 +2148,9 @@ function NodeInspector({
           if (spec?.type === "graph") {
             const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
             return (
-              <div className="wf-field" key={key}>
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
                 <label>{t("wfLoopBody")}</label>
-                <div className="wf-body-summary">{t("wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
+                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-[11.5px] leading-normal text-muted-foreground">{t("wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
               </div>
             );
           }
@@ -2120,14 +2166,17 @@ function NodeInspector({
           const boundEdge = connected ? dataEdgeFor(key) : null;
           const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
           return (
-            <div className="wf-field" key={key}>
+            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
               <span>
                 {labelKey ? t(labelKey) : key}
-                {spec?.required ? <em className="wf-field-req">*</em> : null}
+                {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
                 {canConnect && (
                   <button
                     type="button"
-                    className={`wf-field-mode${connected ? " is-ref" : ""}`}
+                    className={cn(
+                      "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-[10px] font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
+                      connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
+                    )}
                     title={t("wfInputModeHint")}
                     onClick={(event) => {
                       event.preventDefault();
@@ -2140,7 +2189,7 @@ function NodeInspector({
                 )}
               </span>
               {connected ? (
-                <div className="wf-ref-slot">
+                <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
                   <Select
                     value={boundValue}
                     onValueChange={(next) => {
@@ -2189,12 +2238,12 @@ function NodeInspector({
                 />
               )}
               {!connected && spec?.type === "template" && variables.length > 0 && (
-                <div className="wf-var-chips">
+                <div className="flex flex-wrap gap-[3px]">
                   {variables.map((ref) => (
                     <button
                       key={ref}
                       type="button"
-                      className="wf-var-chip"
+                      className="cursor-pointer rounded border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
                       title={t("wfInsertVar")}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => insertVariable(key, ref)}
@@ -2209,16 +2258,16 @@ function NodeInspector({
           );
         })}
         {meta && (
-          <div className="wf-node-outputs">
+          <div className="grid gap-[5px] border-t border-border pt-2.5 [&>span]:text-[11px] [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>
-            <div className="wf-out-chips">
+            <div className="flex flex-wrap gap-1">
               {meta.outputs.map((output) => {
                 const ref = `{{${node.id}.${output}}}`;
                 return (
                   <button
                     key={output}
                     type="button"
-                    className="wf-out-chip"
+                    className="cursor-copy rounded border border-border bg-secondary px-[7px] py-0.5 font-mono text-[10.5px] text-foreground transition-[border-color] duration-100 hover:border-primary"
                     title={t("wfCopyRef")}
                     onClick={() => {
                       void navigator.clipboard.writeText(ref);

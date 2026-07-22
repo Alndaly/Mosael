@@ -24,10 +24,16 @@ export function ConfigNotice({
   actionClassName?: string;
 }) {
   return (
-    <div className={cn(tone === "error" ? "config-notice is-error" : "config-notice", className)}>
-      <AlertTriangle size={13} className="config-notice-icon" />
-      <span className={cn("config-notice-text", textClassName)}>{message}</span>
-      <button type="button" className={cn("config-notice-action", actionClassName)} onClick={() => gotoSettings(section)}>
+    <div className={cn(
+      "flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-[11.5px] leading-normal text-foreground",
+      tone === "error"
+        ? "border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)]"
+        : "border-[color-mix(in_oklab,#d97706_40%,var(--border))] bg-[color-mix(in_oklab,#d97706_10%,transparent)]",
+      className,
+    )}>
+      <AlertTriangle size={13} className={cn("mt-px flex-none", tone === "error" ? "text-destructive" : "text-[#d97706]")} />
+      <span className={cn("min-w-0 flex-1", textClassName)}>{message}</span>
+      <button type="button" className={cn("inline-flex flex-none cursor-pointer items-center gap-0.5 whitespace-nowrap border-0 bg-transparent p-0 text-[11.5px] font-semibold text-primary hover:underline", actionClassName)} onClick={() => gotoSettings(section)}>
         {actionLabel} <ArrowRight size={12} />
       </button>
     </div>

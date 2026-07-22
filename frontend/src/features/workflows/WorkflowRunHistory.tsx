@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronRight, CircleDashed, Clock, History, Loader2, Skip
 
 import { listJobEvents, listWorkflowRuns, type Job, type TaskEvent } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -50,9 +51,9 @@ function toSteps(events: TaskEvent[]): Step[] {
 }
 
 function RunIcon({ status }: { status: string }) {
-  if (status === "succeeded") return <CheckCircle2 size={13} className="wf-hist-ok" />;
-  if (status === "failed") return <XCircle size={13} className="wf-hist-err" />;
-  if (RUNNING.has(status)) return <Loader2 size={13} className="spin wf-hist-run" />;
+  if (status === "succeeded") return <CheckCircle2 size={13} className="text-[#3fb950]" />;
+  if (status === "failed") return <XCircle size={13} className="text-[#e5484d]" />;
+  if (RUNNING.has(status)) return <Loader2 size={13} className="spin text-primary" />;
   return <CircleDashed size={13} />;
 }
 
@@ -79,8 +80,8 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
 
   return (
-    <aside className="wf-history" role="dialog" aria-label={t("wfHistory")}>
-      <div className="wf-history-head">
+    <aside className="absolute bottom-2 right-2 top-2 z-40 flex w-[340px] flex-col overflow-hidden rounded-lg border border-border bg-[rgb(12_12_14/0.94)] backdrop-blur-[10px]" role="dialog" aria-label={t("wfHistory")}>
+      <div className="flex h-[34px] items-center border-b border-border pl-2.5 pr-1.5 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold">
         <h2>
           <History size={14} /> {t("wfHistory")}
         </h2>
@@ -88,55 +89,58 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
           <X size={13} />
         </button>
       </div>
-      <div className="wf-history-body">
-        <div className="wf-history-runs">
-          {runs.data && runs.data.length === 0 && <p className="wf-history-empty">{t("wfHistoryEmpty")}</p>}
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="overflow-y-auto border-b border-border p-1">
+          {runs.data && runs.data.length === 0 && <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryEmpty")}</p>}
           {(runs.data ?? []).map((run) => (
             <button
               key={run.id}
               type="button"
-              className={run.id === selectedId ? "wf-history-run active" : "wf-history-run"}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-[rgb(255_255_255/0.05)]",
+                run.id === selectedId && "bg-[rgb(255_255_255/0.08)] hover:bg-[rgb(255_255_255/0.08)]",
+              )}
               onClick={() => setSelectedId(run.id)}
             >
               <RunIcon status={run.status} />
-              <span className="wf-history-run-main">
-                <span className="wf-history-run-msg">{run.message || run.status}</span>
-                <span className="wf-history-run-meta timecode">
+              <span className="flex min-w-0 flex-1 flex-col gap-px">
+                <span className="truncate text-xs">{run.message || run.status}</span>
+                <span className="timecode text-[10.5px] text-muted-foreground">
                   {run.created_at ? relTime(run.created_at) : ""}
                   {run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
                 </span>
               </span>
-              <ChevronRight size={13} className="wf-history-run-chev" />
+              <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
             </button>
           ))}
         </div>
-        <div className="wf-history-detail">
+        <div className="overflow-y-auto px-2.5 py-2">
           {!selected ? (
-            <p className="wf-history-empty">{t("wfHistoryPick")}</p>
+            <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryPick")}</p>
           ) : (
             <>
-              {selected.error && <p className="wf-history-error">{selected.error}</p>}
-              <ol className="wf-history-steps">
+              {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-[11.5px] text-destructive">{selected.error}</p>}
+              <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => (
-                  <li key={s.nid} className={`wf-history-step ${s.status}`}>
+                  <li key={s.nid} className={cn("flex items-center gap-[7px] rounded-[5px] px-1.5 py-1 text-xs", s.status === "skipped" && "opacity-55")}>
                     {s.status === "done" ? (
-                      <CheckCircle2 size={12} className="wf-hist-ok" />
+                      <CheckCircle2 size={12} className="text-[#3fb950]" />
                     ) : s.status === "skipped" ? (
                       <SkipForward size={12} />
                     ) : (
-                      <Loader2 size={12} className="spin wf-hist-run" />
+                      <Loader2 size={12} className="spin text-primary" />
                     )}
-                    <span className="wf-history-step-name">{s.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{s.name}</span>
                     {s.status === "skipped" ? (
-                      <span className="wf-history-step-time timecode">{t("wfStepSkipped")}</span>
+                      <span className="timecode inline-flex items-center gap-[3px] text-[10.5px] text-muted-foreground">{t("wfStepSkipped")}</span>
                     ) : s.ms != null ? (
-                      <span className="wf-history-step-time timecode">
+                      <span className="timecode inline-flex items-center gap-[3px] text-[10.5px] text-muted-foreground">
                         <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
                       </span>
                     ) : null}
                   </li>
                 ))}
-                {steps.length === 0 && events.isFetched && <p className="wf-history-empty">{t("wfHistoryNoSteps")}</p>}
+                {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
               </ol>
             </>
           )}

@@ -29,6 +29,7 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -76,6 +77,18 @@ function loadRect(): FloatRect {
 
 /** 八向缩放:每个手柄声明它拉动哪几条边。 */
 const RESIZE_EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
+
+/* 八向缩放手柄:6px 隐形命中区骑在边框上;右下角给两道弧线的可见暗示 */
+const WF_AGENT_RS_CLASSES: Record<string, string> = {
+  n: "left-2.5 right-2.5 top-[-3px] h-1.5 cursor-ns-resize",
+  s: "bottom-[-3px] left-2.5 right-2.5 h-1.5 cursor-ns-resize",
+  e: "bottom-2.5 right-[-3px] top-2.5 w-1.5 cursor-ew-resize",
+  w: "bottom-2.5 left-[-3px] top-2.5 w-1.5 cursor-ew-resize",
+  ne: "right-[-3px] top-[-3px] h-3 w-3 cursor-nesw-resize",
+  sw: "bottom-[-3px] left-[-3px] h-3 w-3 cursor-nesw-resize",
+  nw: "left-[-3px] top-[-3px] h-3 w-3 cursor-nwse-resize",
+  se: "bottom-[-3px] right-[-3px] h-3 w-3 cursor-nwse-resize after:absolute after:bottom-1 after:right-1 after:h-[7px] after:w-[7px] after:rounded-br-[3px] after:border-b-2 after:border-r-2 after:border-border-strong after:opacity-70 after:content-['']",
+};
 type ResizeEdge = (typeof RESIZE_EDGES)[number];
 
 /**
@@ -443,42 +456,50 @@ export function WorkflowAgentChat({
   return (
     <aside
       ref={panelRef}
-      className={`wf-agent wf-agent-${mode}`}
+      className={cn(
+        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[10px] border border-border-strong bg-panel",
+        isFloating
+          ? "fixed z-[55] min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
+          : "relative z-[1] h-full w-full min-h-0 min-w-0 rounded-lg border-border shadow-none",
+      )}
       style={isFloating ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : undefined}
       role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfAgentTitle")}
     >
       {isFloating &&
         RESIZE_EDGES.map((edge) => (
-          <div key={edge} className={`wf-agent-rs wf-agent-rs-${edge}`} onPointerDown={startResize(edge)} />
+          <div key={edge} className={cn("absolute z-[2]", WF_AGENT_RS_CLASSES[edge])} onPointerDown={startResize(edge)} />
         ))}
-      <div className="wf-agent-head" onPointerDown={startDrag}>
-        <h2 className="wf-agent-title">
+      <div className={cn("flex cursor-default select-none touch-none items-center gap-1.5 border-b border-border py-1.5 pl-2.5 pr-2 [&_h2]:m-0 [&_h2]:text-[12.5px] [&_h2]:font-semibold", isFloating && "cursor-move")} onPointerDown={startDrag}>
+        <h2 className="inline-flex items-center gap-1.5">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
         {sessionList.length > 0 && sessionId && (
           <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
             <Popover open={sessionMenuOpen} onOpenChange={setSessionMenuOpen}>
               <PopoverTrigger asChild>
-                <button type="button" className="wf-agent-session-picker" aria-label={t("wfAgentSessions")}>
+                <button type="button" className="inline-flex h-6 min-w-0 max-w-[150px] cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-border bg-panel px-2 text-xs text-foreground hover:border-border-strong [&>span]:truncate [&_svg]:shrink-0 [&_svg]:text-muted-foreground" aria-label={t("wfAgentSessions")}>
                   <span>{activeSession?.title ?? t("wfAgentSessions")}</span>
                   <ChevronDown size={12} />
                 </button>
               </PopoverTrigger>
               <PopoverContent
                 align="start"
-                className="wf-agent-session-menu"
+                className="z-[120] max-h-[min(320px,var(--radix-popover-content-available-height))] w-[min(360px,calc(100vw-32px))] overflow-y-auto p-1.5 shadow-[var(--shadow-raised)]"
                 aria-label={t("wfAgentSessions")}
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 {sessionList.map((item) => (
                   <div
                     key={item.id}
-                    className={item.id === sessionId ? "wf-agent-session-row active" : "wf-agent-session-row"}
+                    className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-[7px] hover:bg-secondary",
+                    item.id === sessionId && "bg-secondary",
+                  )}
                   >
                     <button
                       type="button"
-                      className="wf-agent-session-main"
+                      className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-[13px] text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
                       onClick={() => {
                         setSessionMenuOpen(false);
                         switchSession(item.id);
@@ -489,7 +510,7 @@ export function WorkflowAgentChat({
                     </button>
                     <button
                       type="button"
-                      className="wf-agent-session-row-delete"
+                      className="inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
                       aria-label={t("delete")}
                       title={t("delete")}
                       disabled={deleteSession.isPending}
@@ -519,21 +540,27 @@ export function WorkflowAgentChat({
         </button>
         <button
           type="button"
-          className="inspector-delete wf-agent-mode-toggle"
+          className="inspector-delete ml-auto"
           aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </button>
-        {isFloating && <GripHorizontal size={13} className="wf-agent-grip" />}
+        {isFloating && <GripHorizontal size={13} className="text-muted-foreground opacity-60" />}
         <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>
-      <div className="wf-agent-thread" ref={threadRef}>
+      <div
+        className={cn(
+          "grid min-h-0 content-start gap-2 overflow-y-auto p-2.5",
+          (messages.data ?? []).length === 0 && !running && "content-center justify-items-center",
+        )}
+        ref={threadRef}
+      >
         {(messages.data ?? []).length === 0 && !running && (
-          <div className="wf-agent-empty">
+          <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground [&_svg]:text-primary [&_svg]:opacity-70">
             <Bot size={16} />
             <span>{t("wfAgentEmpty")}</span>
           </div>
@@ -547,8 +574,8 @@ export function WorkflowAgentChat({
               key={message.id}
               className={
                 message.role === "assistant"
-                  ? "wf-agent-msg relative w-full max-w-full text-[13.5px] leading-[1.65]"
-                  : "wf-agent-msg ml-auto mr-0 w-fit max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground"
+                  ? "relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]"
+                  : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
               }
             >
               {message.role === "assistant" ? (
@@ -571,7 +598,7 @@ export function WorkflowAgentChat({
           );
         })}
         {running && streamText && (
-          <div className="wf-agent-msg relative w-full max-w-full text-[13.5px] leading-[1.65]">
+          <div className="relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
               <Loader2 size={11} className="spin" />
@@ -582,9 +609,9 @@ export function WorkflowAgentChat({
           </div>
         )}
         {running && !streamText && (
-          <div className="wf-agent-msg relative flex w-full max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground">
+          <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
-            <span className="wf-agent-thinking-row">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <Loader2 size={12} className="spin" /> {t("chatThinking")}
               <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
@@ -622,11 +649,11 @@ export function WorkflowAgentChat({
         </div>
       ))}
       {attachments.length > 0 && (
-        <div className="wf-agent-attachments">
+        <div className="flex flex-wrap gap-1 px-3.5 pt-1">
           {attachments.map((file, i) => (
-            <span key={`${file.name}-${i}`} className="wf-agent-chip" title={file.name}>
+            <span key={`${file.name}-${i}`} className="inline-flex max-w-40 items-center gap-1 rounded-[5px] border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={file.name}>
               <Paperclip size={11} />
-              <span className="wf-agent-chip-name">{file.name}</span>
+              <span className="truncate">{file.name}</span>
               <button
                 type="button"
                 aria-label={t("close")}
@@ -638,7 +665,7 @@ export function WorkflowAgentChat({
           ))}
         </div>
       )}
-      <div className="wf-agent-composer">
+      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-2xl border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
           type="file"
@@ -661,11 +688,11 @@ export function WorkflowAgentChat({
             }
           }}
         />
-        <div className="wf-agent-actions">
+        <div className="flex items-center justify-between">
           <Button
             variant="ghost"
             size="icon"
-            className="wf-agent-attach"
+            className="rounded-full"
             aria-label={t("wfAgentAttach")}
             title={t("wfAgentAttach")}
             onClick={() => fileRef.current?.click()}
@@ -675,7 +702,7 @@ export function WorkflowAgentChat({
           {showStop ? (
             <Button
               size="icon"
-              className="wf-agent-send"
+              className="rounded-full"
               aria-label={t("chatStop")}
               onClick={() => stopTurn.mutate()}
             >
@@ -684,7 +711,7 @@ export function WorkflowAgentChat({
           ) : (
             <Button
               size="icon"
-              className="wf-agent-send"
+              className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
               disabled={(!draft.trim() && attachments.length === 0) || send.isPending}
               onClick={submit}
