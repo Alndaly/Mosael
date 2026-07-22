@@ -1025,7 +1025,7 @@ function WorkflowEditor({
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
                 <Search size={14} />
               </Button>
             </PopoverTrigger>
