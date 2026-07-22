@@ -14,7 +14,9 @@ import {
   sequenceDuration,
   snapCandidates,
   snapTime,
+  snapTimeTiered,
   timeToPx,
+  trackEdgeTimes,
 } from "./geometry";
 
 const clip = (id: string, start: number, srcIn: number, srcOut: number) => ({
@@ -89,16 +91,46 @@ describe("resolveMove", () => {
   const moving = clip("m", 0, 0, 2);
 
   it("snaps the leading edge to a neighbor's end", () => {
-    expect(resolveMove(moving, 3.05, [3], 40)).toBe(3);
+    expect(resolveMove(moving, 3.05, [3], [], 40)).toBe(3);
   });
 
   it("snaps the trailing edge when it is the closer match", () => {
     // end lands near 6 → start becomes 4
-    expect(resolveMove(moving, 3.9, [6], 40)).toBe(4);
+    expect(resolveMove(moving, 3.9, [6], [], 40)).toBe(4);
   });
 
   it("clamps to zero", () => {
-    expect(resolveMove(moving, -0.5, [], 40)).toBe(0);
+    expect(resolveMove(moving, -0.5, [], [], 40)).toBe(0);
+  });
+
+  it("same-track edge beats a nearer secondary candidate (the hijack bug)", () => {
+    // 复现:头边缘离同轨邻居 0.13s(阈值内),尾边缘离一个次级候选(播放头/
+    // 跨轨边缘)只有 0.025s。单池实现会让更近的次级候选赢 → 落点被劫持;
+    // 两级实现必须吸到同轨的 5.806。
+    const cam = clip("m", 0, 0, 5);
+    expect(resolveMove(cam, 5.937, [5.806], [10.912], 40)).toBe(5.806);
+  });
+
+  it("falls back to secondary candidates when no primary is in range", () => {
+    // 本轨无命中 → 播放头(次级)仍可吸附:end 5.95+2 → 8 附近无,start 5.95 → 6。
+    expect(resolveMove(moving, 5.95, [], [6], 40)).toBe(6);
+  });
+});
+
+describe("snapTimeTiered", () => {
+  it("primary hit wins even when secondary is nearer", () => {
+    expect(snapTimeTiered(5.1, [5], [5.08], 40)).toEqual({ time: 5, snapped: true });
+  });
+
+  it("uses secondary only when primary misses", () => {
+    expect(snapTimeTiered(5.1, [9], [5.05], 40)).toEqual({ time: 5.05, snapped: true });
+  });
+});
+
+describe("trackEdgeTimes", () => {
+  it("collects only clip edges (no zero/playhead anchors)", () => {
+    expect(trackEdgeTimes([clip("a", 2, 0, 3)], null)).toEqual([2, 5]);
+    expect(trackEdgeTimes([clip("a", 2, 0, 3)], "a")).toEqual([]);
   });
 });
 

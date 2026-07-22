@@ -64,11 +64,27 @@ export function rulerTicks(start: number, end: number, pxPerSecond: number, minL
   return ticks;
 }
 
-/* ---------- Snapping ---------- */
+/* ---------- Snapping ----------
+ *
+ * 吸附分两级:目标轨自身的片段边缘是第一优先级(用户拖动时肉眼在对齐的就是
+ * 它们),播放头/零点/其他轨道的边缘只在本轨无命中时才参与。单一候选池的老
+ * 实现里,字幕轨密密麻麻的 cue 边界和看不见的播放头会以更近的距离"抢走"
+ * 同轨对接 — 明明贴着邻居片段松手,落点却被劫持到别处("段落之间吸不上")。 */
 
 /** Edge times worth snapping to: clip boundaries, playhead, and zero. */
 export function snapCandidates(clips: ClipLike[], excludeClipId: string | null, playhead: number): number[] {
   const times = new Set<number>([0, playhead]);
+  for (const clip of clips) {
+    if (clip.id === excludeClipId) continue;
+    times.add(clip.timeline_start);
+    times.add(clipEnd(clip));
+  }
+  return [...times].sort((a, b) => a - b);
+}
+
+/** 单条轨道上的片段边缘(两级吸附的第一优先级)。 */
+export function trackEdgeTimes(clips: ClipLike[], excludeClipId: string | null): number[] {
+  const times = new Set<number>();
   for (const clip of clips) {
     if (clip.id === excludeClipId) continue;
     times.add(clip.timeline_start);
@@ -97,30 +113,56 @@ export function snapTime(
   return best === null ? { time, snapped: false } : { time: best, snapped: true };
 }
 
+/** 两级吸附:primary(目标轨片段边缘)命中即定,否则再试 secondary。 */
+export function snapTimeTiered(
+  time: number,
+  primary: number[],
+  secondary: number[],
+  pxPerSecond: number,
+  thresholdPx = 8,
+): { time: number; snapped: boolean } {
+  const first = snapTime(time, primary, pxPerSecond, thresholdPx);
+  if (first.snapped) return first;
+  return snapTime(time, secondary, pxPerSecond, thresholdPx);
+}
+
 /* ---------- Move ---------- */
 
-export function resolveMove(
+/** 对一组候选点做双边吸附:片段的头、尾各自找最近命中,双双命中时取更近的
+ *  一边。整组都没命中返回 null(好让上层降级到次级候选)。 */
+function resolveMoveAgainst(
   clip: ClipLike,
   rawStart: number,
   candidates: number[],
   pxPerSecond: number,
-  thresholdPx = 8,
-): number {
+  thresholdPx: number,
+): number | null {
   const duration = clipDuration(clip);
   const startSnap = snapTime(rawStart, candidates, pxPerSecond, thresholdPx);
   const endSnap = snapTime(rawStart + duration, candidates, pxPerSecond, thresholdPx);
-  let start = rawStart;
   if (startSnap.snapped && endSnap.snapped) {
     // Prefer whichever edge is closer to its candidate.
     const startDistance = Math.abs(startSnap.time - rawStart);
     const endDistance = Math.abs(endSnap.time - (rawStart + duration));
-    start = startDistance <= endDistance ? startSnap.time : endSnap.time - duration;
-  } else if (startSnap.snapped) {
-    start = startSnap.time;
-  } else if (endSnap.snapped) {
-    start = endSnap.time - duration;
+    return startDistance <= endDistance ? startSnap.time : endSnap.time - duration;
   }
-  return Math.max(0, start);
+  if (startSnap.snapped) return startSnap.time;
+  if (endSnap.snapped) return endSnap.time - duration;
+  return null;
+}
+
+export function resolveMove(
+  clip: ClipLike,
+  rawStart: number,
+  primary: number[],
+  secondary: number[],
+  pxPerSecond: number,
+  thresholdPx = 8,
+): number {
+  const first = resolveMoveAgainst(clip, rawStart, primary, pxPerSecond, thresholdPx);
+  if (first !== null) return Math.max(0, first);
+  const second = resolveMoveAgainst(clip, rawStart, secondary, pxPerSecond, thresholdPx);
+  return Math.max(0, second ?? rawStart);
 }
 
 /* ---------- Trim ---------- */

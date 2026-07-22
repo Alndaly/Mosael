@@ -16,9 +16,9 @@ import {
   resolveTrim,
   rulerTicks,
   sequenceDuration,
-  snapCandidates,
-  snapTime,
+  snapTimeTiered,
   timeToPx,
+  trackEdgeTimes,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
@@ -329,7 +329,20 @@ export function Timeline({
     if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
     const startX = event.clientX;
     const origin = { ...clip };
-    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, useEditorStore.getState().playhead) : [];
+    // 两级吸附候选在起手时算好:每条轨一份边缘表(拖到哪条 lane,哪条就是第一
+    // 优先级),播放头/零点与其余轨道的边缘降为次级 — 否则字幕轨的密集 cue 边界
+    // 或播放头会比同轨邻居更近,把肉眼可见的对接"抢走"。
+    const dragPlayhead = useEditorStore.getState().playhead;
+    const edgesByTrack = new Map(
+      snapEnabled ? tracks.map((t) => [t.id, trackEdgeTimes(t.clips ?? [], clip.id)] as const) : [],
+    );
+    const snapSetsFor = (laneId: string | null): { primary: number[]; secondary: number[] } => {
+      if (!snapEnabled) return { primary: [], secondary: [] };
+      const primary = (laneId && edgesByTrack.get(laneId)) || [];
+      const secondary = [0, dragPlayhead];
+      for (const [id, edges] of edgesByTrack) if (id !== laneId) secondary.push(...edges);
+      return { primary, secondary };
+    };
 
     // Listen on window, NOT the clip element: a cross-track drag hides the clip in its
     // source lane (it unmounts), which would sever element-bound listeners mid-drag and
@@ -337,8 +350,6 @@ export function Timeline({
     let wantNewLayer = false;
     const onMove = (moveEvent: PointerEvent) => {
       autoScrollLanes(moveEvent.clientY);
-      const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
-      const resolved = resolveMove(origin, rawStart, candidates, pxPerSecond);
       const rect = canvasRef.current?.getBoundingClientRect();
       // Dragged above the topmost lane → intent to spin up a new video layer.
       wantNewLayer = Boolean(
@@ -346,6 +357,9 @@ export function Timeline({
       );
       setNewLayerDrag(wantNewLayer);
       const lane = wantNewLayer ? null : laneTrackAt(moveEvent.clientY, track.kind);
+      const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
+      const sets = snapSetsFor(lane?.id ?? (wantNewLayer ? null : track.id));
+      const resolved = resolveMove(origin, rawStart, sets.primary, sets.secondary, pxPerSecond);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
         trackId: lane?.id ?? track.id,
@@ -391,13 +405,17 @@ export function Timeline({
     const origin = { ...clip };
     const asset = clip.asset_id ? assetById.get(clip.asset_id) : undefined;
     const assetDuration = typeof asset?.media_info.duration === "number" ? asset.media_info.duration : null;
-    const candidates = snapEnabled ? snapCandidates(allClips, clip.id, useEditorStore.getState().playhead) : [];
+    // 裁剪吸附与移动同级:本轨邻居边缘优先,播放头/零点/其他轨道次级。
+    const trimPrimary = snapEnabled ? trackEdgeTimes(track.clips ?? [], clip.id) : [];
+    const trimSecondary = snapEnabled
+      ? [0, useEditorStore.getState().playhead, ...tracks.filter((t) => t.id !== track.id).flatMap((t) => trackEdgeTimes(t.clips ?? [], clip.id))]
+      : [];
     const target = event.currentTarget as HTMLElement;
     capturePointer(target, event.pointerId);
 
     const onMove = (moveEvent: PointerEvent) => {
       let rawTime = timeAtPointer(moveEvent);
-      if (candidates.length > 0) rawTime = snapTime(rawTime, candidates, pxPerSecond).time;
+      if (snapEnabled) rawTime = snapTimeTiered(rawTime, trimPrimary, trimSecondary, pxPerSecond).time;
       const result = resolveTrim(origin, edge, rawTime, assetDuration);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
@@ -423,6 +441,14 @@ export function Timeline({
   // 素材拖入:dnd-kit 指针事件(原生 HTML5 DnD 在 Electron 下不可靠,已弃用)。
   const dndPointerX = (event: DragMoveEvent | DragEndEvent): number =>
     ((event.activatorEvent as PointerEvent).clientX ?? 0) + event.delta.x;
+  // 素材落轨的吸附:目标轨边缘优先,播放头/零点/其他轨道次级(与片段移动同级)。
+  const snapDropStart = (start: number, target: Track): number =>
+    snapTimeTiered(
+      start,
+      trackEdgeTimes(target.clips ?? [], null),
+      [0, useEditorStore.getState().playhead, ...tracks.filter((t) => t.id !== target.id).flatMap((t) => trackEdgeTimes(t.clips ?? [], null))],
+      pxPerSecond,
+    ).time;
   useDndMonitor({
     onDragMove(event) {
       const asset = event.active.data.current?.asset as Asset | undefined;
@@ -434,7 +460,7 @@ export function Timeline({
       }
       const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
       let start = timeAtPointer({ clientX: dndPointerX(event) });
-      if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
+      if (snapEnabled) start = snapDropStart(start, track);
       setDropGhost({ trackId: track.id, start, duration: assetDuration });
     },
     onDragEnd(event) {
@@ -444,7 +470,7 @@ export function Timeline({
       if (!asset || !track || !trackAcceptsAsset(track, asset) || track.locked) return;
       const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
       let start = timeAtPointer({ clientX: dndPointerX(event) });
-      if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
+      if (snapEnabled) start = snapDropStart(start, track);
       onInsertClip({
         trackId: track.id,
         assetId: asset.id,
