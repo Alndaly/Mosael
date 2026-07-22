@@ -186,18 +186,35 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - Full-width topbar with mac traffic lights inside it; `is-desktop`/`is-mac`/`is-win` classes; drag regions.
 - Local/team server picker on the **login screen** (must precede auth) and in Settings — health-probe before switch, force-connect fallback, reload to re-resolve `API_BASE`.
 
+### 2026-07 wave: full UI rebuild + team invitations + editor interaction parity
+
+- **Style system rebuilt**: every handwritten global class inlined as Tailwind v4 classes on JSX (`styles.css` 10.4k → ~40 lines of portal overrides); dual palettes redesigned (warm-paper light `#f6f4f0`+`#6a5cd8`, warm-sandalwood dark `#141218`+`#8a7bf0`, independently calibrated), `--radius: 8px` scale (sm6/md8/lg10/xl14), pill segmented controls, **no drop shadows anywhere** (hairline borders + surface steps), solid `--field` form fills, CVD-validated chart palettes.
+- **Team membership is invitation-based**: admins invite by username (`workspace_invitations`, Alembic 0028), invitees accept/decline from actionable notification cards; four roles + per-permission overrides remain. Admin-created accounts removed.
+- **Editor interaction parity with mibu-video**: pool→timeline drags on dnd-kit (native HTML5 DnD dead under Electron); transform-based clip drags with 200ms settle glide and animated insert-ripple parting; **two-tier snapping** (target-track edges beat playhead/cross-track candidates); true insert edits (a clip straddling the drop point splits, its tail ripples — move and pool-drop alike, undo/redo carries the split); vertical auto-scroll while dragging.
+- **Import hardening**: duration-less MediaRecorder webm (camera/screen/mic) losslessly remuxed at import + startup backfill for legacy assets; recorder rejects empty capture (<2KB) with a retry prompt instead of importing dead files.
+- **Login redesigned**: split-screen photo hero (`public/login-hero.jpg`, gradient fallback), labeled form fields, Terms of Service / Privacy Policy dialogs (`features/auth/legal.tsx`, zh/en) with an implicit-consent line on registration.
+- **Global search (⌘K) fixed**: palette does its own CJK/pinyin/server matching so cmdk's value-filter is disabled, manual empty state waits out in-flight searches, controlled first-item highlight restores Enter, deep links retry at 80/300/800ms.
+- **Long dynamic dropdowns are searchable** (shared Combobox): publish asset/account, batch & scheduler workflow pickers, dubbing target, workflow-node resource fields.
+- **Publish**: demo/mock platform removed from the registry (folder/webhook + real browser platforms remain).
+- **Workspace/project UX**: breadcrumb switcher always visible with a create-workspace entry; created workspaces/projects seed the query cache before navigation (kills the stale-list bounce-back); project creation jumps straight into its empty editor.
+
 ## Next
 
 - Transitions (转场) in the render plan and editor.
 - Plugin write-path tools via jobs + confirmation cards; scoped API token injection per granted permission.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
-- Team mode proper: multi-user workspaces, collaboration requests (notification `team` type already reserved).
+- Split the oversized feature files (WorkflowsView 2.3k lines, EditorView 1.1k, Timeline 1k) along canvas/inspector/node-form seams.
+- Publish adapter seam slices (see MAINTENANCE_HOTSPOTS.md).
 
 ## Frontend Rules
 
-- Use TailwindCSS and local shadcn/ui components for all interactive controls.
+- Use TailwindCSS classes inline on JSX and local shadcn/ui components for all interactive controls; no handwritten global classes or shared class-string files.
 - Do not use native browser dialogs such as `alert`, `confirm`, or `prompt`.
 - Keep all user-visible copy behind the i18n preference layer.
 - Preserve light and dark theme support for every new surface.
 - Timeline math lives in `domain/timeline/geometry.ts` as tested pure functions; components never inline geometry.
 - Server entities stay in React Query; Zustand holds only drafts and transient UI state.
+- No drop shadows; radii on the 8px scale; segmented controls are pills; form fills use `--field`.
+- Vertical stacks use grid/flex + `gap`, never `space-y` (Tailwind v4 puts it on the previous child's margin-bottom — a no-op for inline children like labels).
+- Elements positioned by inline styles must not also carry Tailwind translate/inset classes (v4's standalone `translate` property composes with inline `transform`).
+- Dynamic long-list dropdowns use the shared searchable Combobox; drag interactions use dnd-kit.

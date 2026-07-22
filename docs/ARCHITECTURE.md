@@ -46,7 +46,8 @@ TaskEvent 行只在总线创建。
 
 ### 数据模型要点
 
-SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(20 个迁移)。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离。
+SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
+团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝,四级角色 + 逐权限覆盖。
 每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
 (见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
 
@@ -65,14 +66,15 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(20 个迁移)。所有实体挂 `workspace
 
 ### 关键约定
 
-- **时间线几何**是纯函数(`domain/timeline/geometry.ts`,21 个测试),组件绝不内联几何计算。
-- **设计标尺**写在 `src/app/styles.css` 顶部的 Global rhythm 注释块:间距 4px 基准(容器 6/10、页面 10、面板间距 6、组间距 12),圆角 3/4/6/8/10/999,`--radius: 4px`(tokens.css)派生 Tailwind 侧。新样式必须落在刻度上。
-- **全平面无阴影**:分层靠发丝边框 + 底色层级(`--shadow-*` 解析为 none)。
-- **控件一律用 Radix/shadcn**(`components/ui/`),禁原生 `select`/`alert`/`confirm`/手写弹层。
-- **所有添加流程走弹窗表单**(ModalShell),不用内联展开式表单。
+- **时间线几何**是纯函数(`domain/timeline/geometry.ts`),组件绝不内联几何计算。吸附是**两级**的:目标轨片段边缘优先,播放头/零点/跨轨边缘只在本轨无命中时参与(单一候选池会让字幕 cue 边界劫持同轨对接)。
+- **样式全部内联为 TSX Tailwind 类**,`styles.css` 只剩 portal 覆盖(~40 行);禁手写全局 class、禁共享类字符串文件。刻度:昼「暖纸面」`#f6f4f0`+`#6a5cd8` / 夜「暖檀黑」`#141218`+`#8a7bf0`(独立调校非翻转),`--radius: 8px` 派生 sm=6/md=8/lg=10/xl=14,分段控件一律药丸形,表单填充用 `--field` 实底。
+- **全平面无阴影**:分层靠发丝边框 + 底色层级(`--shadow-*` 解析为 none);焦点环/inset 不算。
+- **控件一律用 Radix/shadcn**(`components/ui/`),禁原生 `select`/`alert`/`confirm`/手写弹层;**动态长列表下拉一律可搜索 Combobox**(`components/app/combobox.tsx`)。
+- **Tailwind v4 两个陷阱**(已踩实):`space-y` 落在前一子元素的 margin-bottom、对 inline 元素(如 Label)蒸发 → 纵向堆叠一律 grid/flex+gap;`translate-*` 类编译为独立 `translate` 属性、与行内 transform **叠加**而非覆盖 → 定位由行内样式负责的元素类里不得再写定位类。
+- **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
+- **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
-- **深链事件通道**:跨页面跳转用 `window.dispatchEvent(new CustomEvent("mibu:open-*", {detail}))`
-  (`mibu:open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task`)——因为 hash 路由会归一化 query 参数,靠 URL 传参不可靠。
+- **深链事件通道**:跨页面跳转用 `mibu:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
 
 ### 桌面适配
 

@@ -33,36 +33,28 @@
 2. 把 `PageDriver` 里的平台命名 helper 移回对应平台 Adapter,让 Driver 只保留导航、CSS/text 探测、输入事件、CDP 文件上传、截图、取消。
 3. 抽出 `runPublishTask(...)` Module: `worker.ts` 只留轮询/并发;单条任务的状态回报、截图、blocked 映射集中到一个测试 surface。
 
-## 2. 前端全局样式:视觉 Module ownership
+## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 
-**Files**
+原 10k 行 `styles.css` 已全部内联为 TSX Tailwind v4 类(仅剩 ~40 行 portal 覆盖)。
+Interface 从「全局 class 名 + cascade」变成了「设计刻度」——间距/圆角/色板约定见
+`docs/ARCHITECTURE.md` 的前端关键约定。遗留风险转移到下面第 3 条(Tailwind v4 行为陷阱)。
 
-- `frontend/src/app/styles.css`
-- `frontend/src/app/main.tsx`
-- feature views under `frontend/src/features/`
+## 3. Tailwind v4 行为陷阱(防回潮)
 
-**Problem**
+两个已踩实、已修、但**极易在新代码里复发**的坑:
 
-`styles.css` 接近 10k LOC,Interface 实际上是“所有全局 class 名 + cascade 顺序 + specificity”。
-这让它成为浅 Module:改发布页或工作流浮窗时,需要担心编辑器、设置、AI Studio 的全局选择器。
+- **`space-y` 对 inline 子元素是 no-op**:v4 把间距落在前一个子元素的 `margin-bottom` 上,
+  Label 等 inline 元素的竖向 margin 无布局效果(v3 落在下一个块级兄弟的 margin-top 上才碰巧能用)。
+  纵向堆叠一律 `grid gap-*` / `flex flex-col gap-*`。FormItem 已是 grid+gap。
+- **`translate-*` 类与行内 `transform` 叠加**:v4 把 translate 类编译成独立的 `translate` CSS 属性,
+  与行内 `transform` 是叠加关系而非覆盖 → 双重位移(字幕曾因此左漂半个画框)。
+  定位由行内样式负责的元素(subtitleCss、拖拽 transform 等),className 里不得再写任何 translate/inset 定位类。
 
-**Safe direction**
+## 4. 超大 feature 文件
 
-不要一次性移动大量 CSS。按 owned visual Module 迁移:
-
-1. app shell/chrome
-2. shared primitives/forms
-3. editor/monitor/timeline
-4. workflow canvas + workflow AI assistant
-5. publish
-6. agent/tool confirmation cards
-7. responsive/appearance overlays
-
-**Next slice**
-
-先给泛用表单布局换名。`.wf-field`、`.task-create-form` 已被 publish/scheduler/batch/settings 复用,
-名字却还像 workflow/task 私有 class。下一步应新增 generic alias,迁移一个非 workflow 调用方,
-旧 class 暂留一轮,避免视觉大震荡。
+`WorkflowsView.tsx`(2.3k 行)、`EditorView.tsx`(1.1k)、`Timeline.tsx`(1.0k)。
+功能与测试都健康,但改动 Locality 差。切分方向:画布 / 节点检查器 / 节点表单(Workflows),
+面板编排 / 变换与合成 / mutations(Editor)。低优先,顺手做,不专项大拆。
 
 ## Verification rule
 
