@@ -6,7 +6,6 @@ import { KeyRound, Link2, Loader2, MessageSquare, QrCode, RefreshCcw, Trash2 } f
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -110,6 +109,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     queryKey: ["feishu-bindings", bindBotId],
     enabled: Boolean(bindBotId),
     queryFn: () => api<Binding[]>(`/api/feishu/bots/${bindBotId}/bindings`),
+    // 弹窗开着就轮询:用户在飞书里发绑定码,回来这里应当实时看到绑定成功,不用手动刷新。
+    refetchInterval: 2000,
+    refetchOnWindowFocus: true,
   });
   const removeBinding = useMutation({
     mutationFn: (openId: string) => api(`/api/feishu/bots/${bindBotId}/bindings/${openId}`, { method: "DELETE" }),
@@ -149,24 +151,26 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         {hasBots && (
           <div className="grid gap-1.5">
             {(bots.data ?? []).map((bot) => (
-              <div className="grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5" key={bot.id}>
-                <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
-                  <MessageSquare size={14} />
+              <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-border bg-panel px-3 py-2" key={bot.id}>
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
+                  <MessageSquare size={15} />
                 </span>
-                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
-                  <strong>{bot.name}</strong>
-                  <small>
+                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:font-mono [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <strong>{bot.name}</strong>
+                    <StatusBadge status={bot.status} />
+                  </div>
+                  <small title={bot.status_detail || undefined}>
                     {bot.app_id}
                     {bot.status_detail ? ` · ${bot.status_detail}` : ""}
                   </small>
                 </div>
-                <StatusBadge status={bot.status} />
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   <Select
                     value={bot.capability}
                     onValueChange={(capability) => patchBot.mutate({ id: bot.id, body: { capability } })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 w-[104px]" title={t("feishuCapability")} aria-label={t("feishuCapability")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -181,14 +185,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="ghost" size="icon" onClick={() => issueCode.mutate(bot.id)} aria-label={t("feishuBind")}>
-                    <Link2 size={13} />
+                  <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => issueCode.mutate(bot.id)} title={t("feishuBind")} aria-label={t("feishuBind")}>
+                    <Link2 size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
-                    <RefreshCcw size={13} />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => restartBot.mutate(bot.id)} title={t("feishuRestart")} aria-label={t("feishuRestart")}>
+                    <RefreshCcw size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => removeBot.mutate(bot.id)} aria-label={t("feishuRemove")}>
-                    <Trash2 size={13} />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeBot.mutate(bot.id)} title={t("feishuRemove")} aria-label={t("feishuRemove")}>
+                    <Trash2 size={14} />
                   </Button>
                 </div>
               </div>
@@ -280,13 +285,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
               <small className="text-[12px] text-muted-foreground">{t("feishuBindNobody")}</small>
             ) : (
               (bindings.data ?? []).map((binding) => (
-                <div className="flex items-center justify-between gap-2 text-[13px]" key={binding.open_id}>
-                  <span>{binding.username}</span>
+                <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1 text-[13px]" key={binding.open_id}>
+                  <span className="truncate">{binding.username}</span>
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
                     onClick={() => removeBinding.mutate(binding.open_id)}
-                    aria-label={t("feishuRemove")}
+                    title={t("feishuUnbind")}
+                    aria-label={t("feishuUnbind")}
                   >
                     <Trash2 size={13} />
                   </Button>
@@ -310,5 +317,19 @@ function StatusBadge({ status }: { status: string }) {
         : status === "error"
           ? t("feishuStatusError")
           : t("feishuStatusOffline");
-  return <Badge variant={status === "online" ? "default" : "secondary"}>{label}</Badge>;
+  // 状态点 + 语义色淡底:在线绿 / 连接中主色 / 出错红 / 离线灰,不再用重色实心徽章。
+  const tone =
+    status === "online"
+      ? "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]"
+      : status === "connecting"
+        ? "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary"
+        : status === "error"
+          ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive"
+          : "bg-secondary text-muted-foreground";
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[10.5px] font-semibold ${tone}`}>
+      <i className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+      {label}
+    </span>
+  );
 }

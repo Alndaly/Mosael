@@ -99,6 +99,41 @@ def send_text(bot: FeishuBot, chat_id: str, text: str) -> None:
         raise FeishuError(f"飞书发消息失败: {data.get('msg') or data.get('code')}")
 
 
+# --- 反应(reaction)= 飞书的「对方正在输入」(老 mibu-video 同款) ----------------
+#
+# 飞书没有 Slack/iMessage 那种原生输入指示器;给用户发来的那条消息加 emoji_type="Typing"
+# 的反应,客户端会渲染成动画输入指示 —— 处理完删掉,失败换 "CrossMark"。全程 best-effort:
+# 缺个小徽章纯属装饰问题,绝不能反过来弄坏回复链路。
+
+REACTION_TYPING = "Typing"
+REACTION_FAILURE = "CrossMark"
+
+
+def add_reaction(bot: FeishuBot, message_id: str, emoji_type: str) -> str | None:
+    """Best-effort; returns the reaction_id needed to remove it later, or None."""
+    try:
+        data = _call_api(
+            bot, "POST", f"{SEND_URL}/{message_id}/reactions", {"reaction_type": {"emoji_type": emoji_type}}
+        )
+        if data.get("code") != 0:
+            logger.warning("feishu add_reaction %s on %s rejected: %s", emoji_type, message_id, data)
+            return None
+        return (data.get("data") or {}).get("reaction_id")
+    except Exception:  # noqa: BLE001
+        logger.warning("feishu add_reaction %s on %s failed", emoji_type, message_id, exc_info=True)
+        return None
+
+
+def remove_reaction(bot: FeishuBot, message_id: str, reaction_id: str) -> bool:
+    """Best-effort; never raises."""
+    try:
+        data = _call_api(bot, "DELETE", f"{SEND_URL}/{message_id}/reactions/{reaction_id}")
+        return data.get("code") == 0
+    except Exception:  # noqa: BLE001
+        logger.warning("feishu remove_reaction %s on %s failed", reaction_id, message_id, exc_info=True)
+        return False
+
+
 # --- inbound message handling ------------------------------------------------
 
 def extract_text(content_json: str) -> str:
@@ -179,6 +214,10 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
     system_prompt += "\n你正通过飞书对话,回复保持简短(几句话内),不用 markdown 标题。"
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
 
+    # 「码字中」指示:给用户那条消息贴 Typing 反应,飞书客户端渲染成动画输入指示。
+    # bot 对象来自已关闭的 session,但 id/app_id/app_secret 均已加载,REST 调用够用。
+    typing_reaction = add_reaction(bot, message_id, REACTION_TYPING)
+
     reply_text = ""
     error: str | None = None
     new_adapter_session: str | None = None
@@ -212,6 +251,11 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
             db.commit()
         bot = db.get(FeishuBot, bot_id)
         if bot is not None:
+            # 收尾指示:摘掉 Typing;出错时换成 CrossMark 让用户一眼看到这轮失败了。
+            if typing_reaction:
+                remove_reaction(bot, message_id, typing_reaction)
+            if error:
+                add_reaction(bot, message_id, REACTION_FAILURE)
             try:
                 send_text(bot, chat_id, reply_text)
             except FeishuError:
