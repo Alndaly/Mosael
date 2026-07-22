@@ -320,7 +320,7 @@ export function VoicePanel({
             )}
           </div>
           <Textarea
-            className="voice-synth-text"
+           
             placeholder={isPodcast ? t("voicePodcastPlaceholder") : t("voiceSynthPlaceholder")}
             value={text}
             rows={3}

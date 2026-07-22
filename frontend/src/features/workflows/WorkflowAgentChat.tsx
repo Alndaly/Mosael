@@ -530,7 +530,7 @@ export function WorkflowAgentChat({
         )}
         <button
           type="button"
-          className="inspector-delete"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           aria-label={t("wfAgentNewSession")}
           title={t("wfAgentNewSession")}
           disabled={newSession.isPending}
@@ -540,7 +540,7 @@ export function WorkflowAgentChat({
         </button>
         <button
           type="button"
-          className="inspector-delete ml-auto"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive ml-auto"
           aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
@@ -548,7 +548,7 @@ export function WorkflowAgentChat({
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </button>
         {isFloating && <GripHorizontal size={13} className="text-muted-foreground opacity-60" />}
-        <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
+        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>

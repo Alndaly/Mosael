@@ -413,9 +413,9 @@ export function TranscriptPanel({
                 {t("transcriptTranslateToSubtitles")}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="sub-translate-pop" align="start">
+            <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-[12.5px]" align="start">
               <strong>{t("transcriptTranslateToSubtitles")}</strong>
-              <label className="sub-translate-row">
+              <label className="grid gap-1 text-xs text-muted-foreground">
                 <span>{t("subtitleTranslateTo")}</span>
                 <Select value={lang} onValueChange={setLang}>
                   <SelectTrigger>
@@ -440,7 +440,7 @@ export function TranscriptPanel({
               >
                 <Languages size={13} /> {t("transcriptTranslateGo")}
               </Button>
-              <small className="sub-translate-note">{t("transcriptTranslateNote")}</small>
+              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("transcriptTranslateNote")}</small>
             </PopoverContent>
           </Popover>
         )}

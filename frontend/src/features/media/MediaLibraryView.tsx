@@ -249,7 +249,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             onChange={(event) => setSearch(event.target.value)}
           />
           <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-            <SelectTrigger className="h-8 min-w-32 bg-panel text-xs" aria-label={t("sortNewest")}>
+            <SelectTrigger className="h-8 w-auto min-w-32 bg-panel text-xs" aria-label={t("sortNewest")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

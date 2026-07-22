@@ -85,7 +85,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
         <h2>
           <History size={14} /> {t("wfHistory")}
         </h2>
-        <button type="button" className="inspector-delete" aria-label={t("close")} onClick={onClose}>
+        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>

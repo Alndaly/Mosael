@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
 export type Transform = { scale: number; x: number; y: number; rotation: number; opacity: number };
 
@@ -117,7 +118,10 @@ export function TransformOverlay({
       {HANDLES.map(([id, hx, hy]) => (
         <div
           key={id}
-          className={`tf-handle tf-corner tf-${id}`}
+          className={cn(
+            "absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize touch-none rounded-sm border-[1.5px] border-primary bg-white [pointer-events:auto]",
+            (id === "ne" || id === "sw") && "cursor-nesw-resize",
+          )}
           style={{ left: `${hx * 100}%`, top: `${hy * 100}%` }}
           onPointerDown={(event) => event.button === 0 && startDrag(event, "resize")}
         />

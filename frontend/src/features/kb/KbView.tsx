@@ -219,11 +219,11 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="[&_h2]:text-[15px] [&_h2]:font-[650] [&_p]:mt-px [&_p]:truncate [&_p]:text-xs [&_p]:text-muted-foreground">
-        <div className="flex items-center gap-2.5 [&>div]:min-w-0 [&>div]:flex-1">
+        <div className="flex items-center gap-2.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-primary">
             <BookOpen size={16} />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2>{dataset.name}</h2>
             {dataset.description && <p>{dataset.description}</p>}
           </div>
@@ -616,11 +616,11 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
     <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(300px,1fr))] content-start gap-3 overflow-y-auto">
       <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetBasic")}</div>
-        <label className="wf-field">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("kbDatasetName")}</span>
           <Input value={form.name} onChange={(event) => set("name", event.target.value)} />
         </label>
-        <label className="wf-field">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("kbDatasetDesc")}</span>
           <Input value={form.description} placeholder={t("kbDatasetDescPh")} onChange={(event) => set("description", event.target.value)} />
         </label>
@@ -629,7 +629,7 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
       <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetRetrieval")}</div>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="wf-field">
+          <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("kbRetrievalMode")}</span>
             <Select value={form.retrieval_mode} onValueChange={(v) => set("retrieval_mode", v)}>
               <SelectTrigger>
@@ -641,7 +641,7 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
               </SelectContent>
             </Select>
           </div>
-          <label className="wf-field">
+          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("kbTopK")}</span>
             <Input type="number" min={1} max={50} value={form.top_k} onChange={(event) => set("top_k", Number(event.target.value) || 5)} />
           </label>
@@ -652,11 +652,11 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
       <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("kbSetChunk")}</div>
         <div className="grid grid-cols-2 gap-2.5">
-          <label className="wf-field">
+          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("kbChunkSize")}</span>
             <Input type="number" min={100} max={4000} value={form.chunk_size} onChange={(event) => set("chunk_size", Number(event.target.value) || 500)} />
           </label>
-          <label className="wf-field">
+          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-panel [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("kbChunkOverlap")}</span>
             <Input type="number" min={0} max={1000} value={form.chunk_overlap} onChange={(event) => set("chunk_overlap", Number(event.target.value) || 0)} />
           </label>

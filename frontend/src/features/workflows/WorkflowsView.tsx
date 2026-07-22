@@ -986,7 +986,7 @@ function WorkflowEditor({
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
           <Select onValueChange={addNode} value="">
-            <SelectTrigger className="rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
+            <SelectTrigger className="w-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
               <Plus size={12} />
               <span>{t("wfAddNode")}</span>
             </SelectTrigger>
@@ -1558,7 +1558,7 @@ function LoopBodyEditor({
           <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
         </span>
         <Select onValueChange={addNode} value="">
-          <SelectTrigger className="ml-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
+          <SelectTrigger className="ml-auto w-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
             <Plus size={12} />
             <span>{t("wfAddNode")}</span>
           </SelectTrigger>
@@ -1903,12 +1903,12 @@ function NodeInspector({
           {node.name && node.name !== (meta?.label ?? node.type) && <small>{meta?.label ?? node.type}</small>}
         </div>
         {onDelete && (
-          <button type="button" className="inspector-delete" aria-label={t("delete")} onClick={onDelete}>
+          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
             <Trash2 size={13} />
           </button>
         )}
         {onClose && (
-          <button type="button" className="inspector-close" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
+          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
             <X size={14} />
           </button>
         )}

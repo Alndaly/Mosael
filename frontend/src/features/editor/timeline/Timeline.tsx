@@ -622,7 +622,7 @@ export function Timeline({
                 <span className="ml-auto inline-flex gap-px">
                   <button
                     type="button"
-                    className="tl-label-tool"
+                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     aria-label={t("trackMoveUp")}
                     title={t("trackMoveUp")}
                     disabled={trackIndex === 0}
@@ -632,7 +632,7 @@ export function Timeline({
                   </button>
                   <button
                     type="button"
-                    className="tl-label-tool"
+                    className="grid h-4 w-4 cursor-pointer place-items-center rounded-[3px] border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     aria-label={t("trackMoveDown")}
                     title={t("trackMoveDown")}
                     disabled={trackIndex === tracks.length - 1}
