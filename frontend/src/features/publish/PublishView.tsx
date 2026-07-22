@@ -165,7 +165,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
-          <div className="grid min-h-full place-items-center min-h-0 flex-1 overflow-y-auto">
+          {/* 高度由 flex-1 撑满剩余空间;不能再叠 min-h-full——那是「父容器整高」,
+              会把上方分段条的高度顶出去,整页多出一截可滚动。 */}
+          <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto">
             <EmptyState
               icon={<Rocket size={22} />}
               title={t("publishEmptyTitle")}
