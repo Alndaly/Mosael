@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 function fmtBytes(n: number): string {
   if (n <= 0) return "0 MB";
@@ -107,7 +108,7 @@ export function VoiceCloneSection() {
         )}
 
         <Form {...form}>
-          <form className="task-create-form" onSubmit={submit} noValidate>
+          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="engine"
@@ -193,7 +194,7 @@ export function VoiceCloneSection() {
                 />
               </>
             )}
-            <div className="task-create-actions">
+            <div className="mt-1 flex justify-end gap-1.5">
               <Button type="submit" size="sm" disabled={save.isPending}>
                 {t("save")}
               </Button>
@@ -203,7 +204,7 @@ export function VoiceCloneSection() {
       </SettingsBlock>
 
       <SettingsBlock>
-        <div className="asr-model-list">
+        <div className="grid gap-2">
           {models.data?.map((model) => (
             <EngineCard key={model.id} model={model} busy={busy} onDownload={() => download.mutate(model.id)} />
           ))}
@@ -218,16 +219,16 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
   const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
   const downloading = model.status === "downloading";
   return (
-    <div className={`asr-model asr-model-${model.status}`}>
-      <div className="asr-model-main">
-        <div className="asr-model-info">
-          <div className="asr-model-title">
+    <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-[3px]">
+          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
             <strong>{model.label}</strong>
-            <span className="asr-model-size">{fmtBytes(model.expected_bytes)}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
           </div>
-          <small className="asr-model-detail">{model.detail}</small>
+          <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
           {model.needs_source && (
-            <small className={model.source_ready ? "asr-model-source ok" : "asr-model-source"}>
+            <small className={cn("mt-[3px] inline-flex items-center gap-1 text-[11.5px] text-muted-foreground [&_code]:font-mono [&_code]:text-[11px] [&_code]:text-muted-foreground [&_code]:[overflow-wrap:anywhere]", model.source_ready && "text-success [&_code]:text-success")}>
               {model.source_ready ? (
                 <>
                   <CheckCircle2 size={11} /> {t("voiceCloneSourceReady")} <code>{model.source_dir}</code>
@@ -240,9 +241,9 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             </small>
           )}
         </div>
-        <div className="asr-model-action">
+        <div className="shrink-0">
           {model.status === "installed" && (
-            <span className="asr-model-ok">
+            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
               <CheckCircle2 size={14} /> {t("asrModelInstalled")}
             </span>
           )}
@@ -252,7 +253,7 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             </Button>
           )}
           {downloading && (
-            <span className="asr-model-progresslabel">
+            <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
               <Loader2 size={13} className="spin" /> {pct}%
             </span>
           )}
@@ -264,9 +265,9 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
         </div>
       </div>
       {downloading && (
-        <div className="asr-model-progress">
+        <div className="grid gap-[5px]">
           <Progress value={pct} />
-          <div className="asr-model-progressmeta">
+          <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
             <span>
               {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
             </span>
@@ -279,7 +280,7 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
         </div>
       )}
       {model.status === "failed" && (
-        <div className="asr-model-error">
+        <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
           <AlertCircle size={13} /> {model.message}
         </div>
       )}

@@ -111,10 +111,10 @@ export function KbEmbeddingSection() {
     <SettingsGroup title={t("kbEmbedTitle")} description={t("kbEmbedDesc")}>
       <SettingsBlock>
         {!ready ? null : enabledProfiles.length === 0 ? (
-          <p className="feishu-empty">{t("kbEmbedNoProvider")}</p>
+          <p className="m-0 text-xs text-muted-foreground">{t("kbEmbedNoProvider")}</p>
         ) : (
           <Form {...form}>
-            <div className="task-create-form">
+            <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
               <FormField
                 control={form.control}
                 name="provider_profile_id"
@@ -167,7 +167,7 @@ export function KbEmbeddingSection() {
                       />
                     </FormControl>
                     {dimChanged ? (
-                      <small className="kb-embed-warn">
+                      <small className="mt-1 inline-flex items-center gap-1 text-[color:var(--warning,#b45309)]">
                         <AlertTriangle size={12} /> {t("kbEmbedDimWarn")}
                       </small>
                     ) : (
@@ -176,9 +176,9 @@ export function KbEmbeddingSection() {
                   </FormItem>
                 )}
               />
-              <div className="task-create-actions">
-                <small className="kb-embed-note">{t("kbEmbedRebuildNote")}</small>
-                <small className="kb-embed-save-state">{save.isPending ? t("wfSaving") : t("wfSavedShort")}</small>
+              <div className="mt-1 flex justify-end gap-1.5">
+                <small className="flex-1 self-center text-muted-foreground">{t("kbEmbedRebuildNote")}</small>
+                <small className="self-center whitespace-nowrap text-[11.5px] text-muted-foreground">{save.isPending ? t("wfSaving") : t("wfSavedShort")}</small>
               </div>
             </div>
           </Form>

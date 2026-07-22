@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 function fmtBytes(n: number): string {
   if (n <= 0) return "0 MB";
@@ -42,7 +43,7 @@ export function AsrModelsSection() {
   return (
     <SettingsGroup title={t("asrModelsTitle")} description={t("asrModelsDesc")}>
       <SettingsBlock>
-        <div className="asr-model-list">
+        <div className="grid gap-2">
           {models.data?.map((model) => (
             <AsrModelCard
               key={model.id}
@@ -51,7 +52,7 @@ export function AsrModelsSection() {
               onDownload={() => download.mutate(model.id)}
             />
           ))}
-          {models.isLoading && <p className="asr-model-empty">{t("connecting")}</p>}
+          {models.isLoading && <p className="text-[12.5px] text-muted-foreground">{t("connecting")}</p>}
         </div>
       </SettingsBlock>
     </SettingsGroup>
@@ -72,19 +73,19 @@ function AsrModelCard({
   const downloading = model.status === "downloading";
 
   return (
-    <div className={`asr-model asr-model-${model.status}`}>
-      <div className="asr-model-main">
-        <div className="asr-model-info">
-          <div className="asr-model-title">
+    <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-[3px]">
+          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
             <strong>{model.label}</strong>
-            <span className="asr-model-engine">{model.engine}</span>
-            <span className="asr-model-size">{fmtBytes(model.expected_bytes)}</span>
+            <span className="rounded border border-border px-[5px] text-[10.5px] uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
           </div>
-          <small className="asr-model-detail">{model.detail}</small>
+          <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
         </div>
-        <div className="asr-model-action">
+        <div className="shrink-0">
           {model.status === "installed" && (
-            <span className="asr-model-ok">
+            <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
               <CheckCircle2 size={14} /> {t("asrModelInstalled")}
             </span>
           )}
@@ -94,7 +95,7 @@ function AsrModelCard({
             </Button>
           )}
           {downloading && (
-            <span className="asr-model-progresslabel">
+            <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
               <Loader2 size={13} className="spin" /> {pct}%
             </span>
           )}
@@ -106,9 +107,9 @@ function AsrModelCard({
         </div>
       </div>
       {downloading && (
-        <div className="asr-model-progress">
+        <div className="grid gap-[5px]">
           <Progress value={pct} />
-          <div className="asr-model-progressmeta">
+          <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
             <span>
               {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
             </span>
@@ -121,7 +122,7 @@ function AsrModelCard({
         </div>
       )}
       {model.status === "failed" && (
-        <div className="asr-model-error">
+        <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
           <AlertCircle size={13} /> {model.message}
         </div>
       )}

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
@@ -197,7 +198,7 @@ export function ProviderProfilesSection({
         title={editing ? t("providerEdit") : t("providerAdd")}
       >
         <Form {...form}>
-          <form className="task-create-form" onSubmit={submit} noValidate>
+          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="vendor"
@@ -224,7 +225,7 @@ export function ProviderProfilesSection({
                     </FormControl>
                   )}
                   {preset?.capabilities && (
-                    <FormDescription className="provider-caps">{preset.capabilities}</FormDescription>
+                    <FormDescription className="mt-0.5 leading-[1.4] text-muted-foreground">{preset.capabilities}</FormDescription>
                   )}
                 </FormItem>
               )}
@@ -249,10 +250,10 @@ export function ProviderProfilesSection({
                 name={`config.${spec.key}` as const}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="provider-key-label">
+                    <FormLabel className="flex items-center gap-2">
                       {spec.label}
                       {spec.storage === "api_key" && docsUrl && (
-                        <a className="provider-hint-link" href={docsUrl} target="_blank" rel="noreferrer noopener">
+                        <a className="ml-auto inline-flex items-center gap-[3px] text-[11px] font-medium text-primary no-underline hover:underline" href={docsUrl} target="_blank" rel="noreferrer noopener">
                           {t("providerGetKey")}
                           <ExternalLink size={11} />
                         </a>
@@ -276,7 +277,7 @@ export function ProviderProfilesSection({
                 )}
               />
             ))}
-            <div className="task-create-actions">
+            <div className="mt-1 flex justify-end gap-1.5">
               <Button type="button" variant="outline" size="sm" onClick={closeModal}>
                 {t("cancel")}
               </Button>
@@ -295,13 +296,13 @@ export function ProviderProfilesSection({
       </ModalShell>
 
       <SettingsBlock>
-        <div className="provider-list">
+        <div className="grid gap-1.5">
           {visibleProfiles.map((profile) => (
-            <div className={profile.enabled ? "provider-row" : "provider-row disabled"} key={profile.id}>
-              <span className="feishu-bot-icon">
+            <div className={cn("grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5", !profile.enabled && "opacity-55")} key={profile.id}>
+              <span className="grid h-7 w-7 place-items-center rounded bg-accent text-accent-foreground">
                 <KeyRound size={13} />
               </span>
-              <div className="feishu-bot-body">
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
                 <strong>{profile.name}</strong>
                 <small>
                   {vendorLabel(profile.vendor)} · {profile.key_hint}
@@ -310,7 +311,7 @@ export function ProviderProfilesSection({
                 </small>
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
-              <div className="feishu-bot-actions">
+              <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
                   <Pencil size={13} />
                 </Button>
@@ -324,7 +325,7 @@ export function ProviderProfilesSection({
             </div>
           ))}
           {profiles.data && visibleProfiles.length === 0 && (
-            <p className="feishu-empty">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
+            <p className="m-0 text-xs text-muted-foreground">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
           )}
         </div>
       </SettingsBlock>

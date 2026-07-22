@@ -147,13 +147,13 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         {beginScan.isError && <p className="login-error">{String((beginScan.error as Error).message)}</p>}
 
         {hasBots && (
-          <div className="feishu-bots">
+          <div className="grid gap-1.5">
             {(bots.data ?? []).map((bot) => (
-              <div className="feishu-bot" key={bot.id}>
-                <span className="feishu-bot-icon">
+              <div className="grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5" key={bot.id}>
+                <span className="grid h-7 w-7 place-items-center rounded bg-accent text-accent-foreground">
                   <MessageSquare size={14} />
                 </span>
-                <div className="feishu-bot-body">
+                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
                   <strong>{bot.name}</strong>
                   <small>
                     {bot.app_id}
@@ -161,7 +161,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   </small>
                 </div>
                 <StatusBadge status={bot.status} />
-                <div className="feishu-bot-actions">
+                <div className="flex items-center gap-1">
                   <Select
                     value={bot.capability}
                     onValueChange={(capability) => patchBot.mutate({ id: bot.id, body: { capability } })}
@@ -211,17 +211,17 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         }}
         title={t("feishuScanCreate")}
       >
-        <div className="feishu-qr">
+        <div className="flex items-center gap-3.5 [&_img]:rounded [&_img]:bg-white [&_img]:p-1 [&_p]:mb-1 [&_p]:mt-0 [&_p]:text-xs">
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="Feishu QR" />
           ) : (
-            <div className="feishu-qr-loading" aria-hidden>
+            <div className="flex h-[188px] w-[188px] shrink-0 items-center justify-center rounded-md bg-panel-inset text-muted-foreground" aria-hidden>
               <Loader2 size={20} className="spin" />
             </div>
           )}
           <div>
             <p>{t("feishuScanHint")}</p>
-            <p className="feishu-qr-status">
+            <p className="text-muted-foreground">
               {beginScan.isError
                 ? String((beginScan.error as Error).message)
                 : onboarding.data?.phase === "error"
@@ -273,14 +273,14 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       >
         <div className="grid gap-3">
           <p className="text-[13px] text-muted-foreground">{t("feishuBindHint")}</p>
-          <code className="feishu-bind-code">{bindCode?.code}</code>
+          <code className="block rounded-lg border border-border bg-background p-2.5 text-center text-[22px] font-semibold tracking-[0.22em] tabular-nums">{bindCode?.code}</code>
           <div className="grid gap-1.5">
             <small className="text-[12px] text-muted-foreground">{t("feishuBindMembers")}</small>
             {(bindings.data ?? []).length === 0 ? (
               <small className="text-[12px] text-muted-foreground">{t("feishuBindNobody")}</small>
             ) : (
               (bindings.data ?? []).map((binding) => (
-                <div className="feishu-binding-row" key={binding.open_id}>
+                <div className="flex items-center justify-between gap-2 text-[13px]" key={binding.open_id}>
                   <span>{binding.username}</span>
                   <Button
                     variant="ghost"

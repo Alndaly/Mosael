@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ServerPicker } from "@/components/layout/ServerPicker";
+import { cn } from "@/lib/utils";
 
 type KbStatus = components["schemas"]["KbStatusOut"];
 
@@ -123,13 +124,16 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="settings-shell">
-        <nav className="settings-nav" aria-label={t("settingsTitle")}>
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] items-stretch gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+        <nav className="grid content-start gap-0.5 rounded-lg border border-border bg-panel p-1.5 max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
           {nav.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={section === item.id ? "settings-nav-item active" : "settings-nav-item"}
+              className={cn(
+                "flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground max-[880px]:shrink-0 max-[880px]:gap-1.5 max-[880px]:whitespace-nowrap max-[880px]:rounded-none max-[880px]:px-2.5 max-[880px]:py-[5px] max-[880px]:text-[12.5px]",
+                section === item.id && "bg-accent font-[550] text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
               onClick={() => {
                 setFocusProviderCapability(null);
                 setSection(item.id);
@@ -139,7 +143,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             </button>
           ))}
         </nav>
-        <div className="settings-content">
+        <div className="grid min-w-0 content-start gap-5 overflow-y-auto px-0.5 pb-2.5 pt-1">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (
@@ -292,13 +296,20 @@ function AccountSection() {
       }
     >
       <SettingsBlock>
-        <div className="account-profile-head">
-          <span className="account-avatar">{initial}</span>
-          <div>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+          <span className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-accent font-bold text-accent-foreground shadow-[var(--shadow-panel)]">{initial}</span>
+          <div className="[&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-sm [&_strong]:font-[650]">
             <strong>{displayName}</strong>
             <small>@{profile.username || "account"}</small>
           </div>
-          <span className={`account-save-state ${saveState}`} aria-live="polite">
+          <span
+            className={cn(
+              "inline-flex items-center gap-[5px] whitespace-nowrap text-xs text-muted-foreground",
+              saveState === "saved" && "text-success",
+              saveState === "error" && "text-destructive",
+            )}
+            aria-live="polite"
+          >
             {saveState === "saving" ? (
               <>
                 <Loader2 size={12} className="spin" /> {t("profileSaving")}
@@ -314,8 +325,8 @@ function AccountSection() {
         </div>
       </SettingsBlock>
       <SettingsBlock>
-        <div className="account-form-grid">
-          <label className="account-field">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("settingsUsername")}</span>
             <small>{t("settingsUsernameDesc")}</small>
             <Input
@@ -324,7 +335,7 @@ function AccountSection() {
               onChange={(event) => setProfile((current) => ({ ...current, username: event.target.value }))}
             />
           </label>
-          <label className="account-field">
+          <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("displayName")}</span>
             <small>{t("displayNameDesc")}</small>
             <Input
@@ -333,10 +344,11 @@ function AccountSection() {
               onChange={(event) => setProfile((current) => ({ ...current, display_name: event.target.value }))}
             />
           </label>
-          <label className="account-field account-field-wide">
+          <label className="col-span-full grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("signature")}</span>
             <small>{t("signatureDesc")}</small>
             <Textarea
+              className="resize-y"
               rows={3}
               maxLength={500}
               value={profile.signature}
@@ -347,13 +359,13 @@ function AccountSection() {
         </div>
       </SettingsBlock>
       <SettingsBlock>
-        <div className="account-password-card">
-          <div className="account-password-head">
+        <div className="grid gap-3">
+          <div className="[&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-sm [&_strong]:font-[650]">
             <strong>{t("settingsPassword")}</strong>
             <small>{t("settingsPasswordDesc")}</small>
           </div>
-          <div className="account-form-grid">
-            <label className="account-field">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("currentPassword")}</span>
               <Input
                 type="password"
@@ -362,7 +374,7 @@ function AccountSection() {
                 onChange={(event) => setPasswords((current) => ({ ...current, current: event.target.value }))}
               />
             </label>
-            <label className="account-field">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("newPassword")}</span>
               <Input
                 type="password"
@@ -371,7 +383,7 @@ function AccountSection() {
                 onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
               />
             </label>
-            <label className="account-field">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("confirmPassword")}</span>
               <Input
                 type="password"
@@ -380,7 +392,7 @@ function AccountSection() {
                 onChange={(event) => setPasswords((current) => ({ ...current, confirm: event.target.value }))}
               />
             </label>
-            <div className="account-password-actions">
+            <div className="flex items-end justify-end">
               <Button size="sm" disabled={!canUpdatePassword} onClick={() => void submitPassword()}>
                 {passwordPending ? <Loader2 size={13} className="spin" /> : null} {t("updatePassword")}
               </Button>
@@ -535,12 +547,15 @@ function BackgroundSection() {
 
       {appearance.kind === "preset" && (
         <SettingsBlock>
-          <div className="bg-presets">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
             {BACKGROUND_PRESETS.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
-                className={appearance.preset === preset.id ? "bg-preset active" : "bg-preset"}
+                className={cn(
+                  "relative h-14 cursor-pointer overflow-hidden rounded-lg border border-border bg-cover bg-center transition-[box-shadow,transform] duration-[120ms] hover:-translate-y-px [&>span]:absolute [&>span]:bottom-1.5 [&>span]:left-[7px] [&>span]:text-[11px] [&>span]:font-semibold [&>span]:text-white [&>span]:[text-shadow:0_1px_3px_rgba(0,0,0,0.55)]",
+                  appearance.preset === preset.id && "border-primary shadow-[0_0_0_2px_var(--primary)]",
+                )}
                 style={{ backgroundImage: preset.css }}
                 onClick={() => appearance.update({ preset: preset.id })}
               >
@@ -553,15 +568,15 @@ function BackgroundSection() {
 
       {appearance.kind === "image" && (
         <SettingsBlock>
-          <div className="bg-image-row">
+          <div className="flex items-center gap-3">
             {appearance.image ? (
-              <div className="bg-image-preview" style={{ backgroundImage: `url(${appearance.image})` }} />
+              <div className="h-[72px] w-32 shrink-0 rounded-lg border border-border bg-cover bg-center" style={{ backgroundImage: `url(${appearance.image})` }} />
             ) : (
-              <div className="bg-image-empty">
+              <div className="flex h-[72px] w-32 shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-2.5 text-[11.5px] text-muted-foreground">
                 <ImageIcon size={16} /> {t("appearanceBgNoImage")}
               </div>
             )}
-            <div className="bg-image-actions">
+            <div className="flex flex-col items-start gap-1.5">
               <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
                 <Upload size={13} /> {appearance.image ? t("appearanceBgReplace") : t("appearanceBgUpload")}
               </Button>
@@ -635,9 +650,9 @@ function SliderRow({
 }) {
   return (
     <SettingsRow label={label}>
-      <div className="appearance-slider">
+      <div className="flex min-w-[220px] items-center gap-2.5">
         <Slider value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} />
-        <span className="appearance-slider-val">{format(value)}</span>
+        <span className="w-[42px] text-right text-xs tabular-nums text-muted-foreground">{format(value)}</span>
       </div>
     </SettingsRow>
   );
@@ -667,21 +682,21 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
       <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
         <ServerSwitchRow />
         <SettingsRow label={t("settingsEndpoint")} description={t("settingsEndpointDesc")}>
-          <code className="timecode sg-value">{API_BASE}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{API_BASE}</code>
         </SettingsRow>
         <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
-          <code className="timecode sg-value">{workspace.id}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{workspace.id}</code>
         </SettingsRow>
         <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
-          <code className="timecode sg-value">v{__APP_VERSION__}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">v{__APP_VERSION__}</code>
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>
         <SettingsRow label={t("kbStatusEngine")} description={t("kbStatusEngineDesc")}>
-          <code className="timecode sg-value">{kbStatus.data?.convert_engine ?? "…"}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{kbStatus.data?.convert_engine ?? "…"}</code>
         </SettingsRow>
         <SettingsRow label={t("kbStatusVector")} description={t("kbStatusVectorDesc")}>
-          {kbStatus.data?.embedding_model && <code className="timecode sg-value">{kbStatus.data.embedding_model}</code>}
+          {kbStatus.data?.embedding_model && <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{kbStatus.data.embedding_model}</code>}
           {tierBadge(kbStatus.data?.vector_enabled)}
         </SettingsRow>
         <SettingsRow label={t("kbStatusGraph")} description={t("kbStatusGraphDesc")}>

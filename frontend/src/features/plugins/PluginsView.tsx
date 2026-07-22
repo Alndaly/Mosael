@@ -194,7 +194,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
               runnable={plugin.enabled && allGranted && runnableNames.has(tool.name)}
             />
           ))}
-          {manifestTools.length === 0 && <p className="feishu-empty">{t("noTools")}</p>}
+          {manifestTools.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("noTools")}</p>}
         </SettingsBlock>
       </SettingsGroup>
 
@@ -217,7 +217,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
               onDelete={() => deleteInvocation.mutate(invocation.id)}
             />
           ))}
-          {invocations.data?.length === 0 && <p className="feishu-empty">{t("noInvocations")}</p>}
+          {invocations.data?.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("noInvocations")}</p>}
         </SettingsBlock>
       </SettingsGroup>
     </div>

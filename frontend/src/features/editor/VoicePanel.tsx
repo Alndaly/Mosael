@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 /** 声音克隆面板:上传参考音频 → 生成音色;选音色 + 输入文本 → 合成配音,
     结果作为音频素材落进素材库,可拖到时间线。 */
@@ -241,12 +242,12 @@ export function VoicePanel({
   return (
     <section className="panel media-panel voice-panel">
       <div className="panel-head">{tabs}</div>
-      <div className="voice-body">
-        <div className="voice-synth">
-          <label className="voice-synth-label">
+      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2.5">
+        <div className="grid gap-[7px] rounded-lg border border-border bg-panel p-2.5">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
             <Wand2 size={13} /> {t("voiceSynthTitle")}
           </label>
-          <div className="voice-synth-engine">
+          <div className="flex flex-wrap gap-1.5">
             <Select
               value={engine}
               onValueChange={(value) => {
@@ -257,7 +258,7 @@ export function VoicePanel({
                 setSpeakerB("");
               }}
             >
-              <SelectTrigger className="voice-synth-select" aria-label={t("voiceEngine")}>
+              <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voiceEngine")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -270,7 +271,7 @@ export function VoicePanel({
             </Select>
             {engine !== "clone" && voiceChoices.length > 0 && (
               <Select value={engineVoice || voiceChoices[0].value} onValueChange={setEngineVoice}>
-                <SelectTrigger className="voice-synth-select" aria-label={t("voiceEngineVoice")}>
+                <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voiceEngineVoice")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -285,7 +286,7 @@ export function VoicePanel({
             {isPodcast && voiceChoices.length > 0 && (
               <>
                 <Select value={speakerB || voiceChoices[1]?.value || ""} onValueChange={setSpeakerB}>
-                  <SelectTrigger className="voice-synth-select" aria-label={t("voicePodcastSpeakerB")}>
+                  <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voicePodcastSpeakerB")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,7 +298,7 @@ export function VoicePanel({
                   </SelectContent>
                 </Select>
                 <Select value={podcastMode} onValueChange={(value) => setPodcastMode(value as typeof podcastMode)}>
-                  <SelectTrigger className="voice-synth-select" aria-label={t("voicePodcastMode")}>
+                  <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voicePodcastMode")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -310,7 +311,7 @@ export function VoicePanel({
             )}
             {activeEngine?.needs_voice_id && voiceChoices.length === 0 && (
               <Input
-                className="voice-synth-select"
+                className="min-w-0 flex-[1_1_120px]"
                 value={engineVoice}
                 placeholder={t("voiceEngineVoiceIdHint")}
                 aria-label={t("voiceEngineVoiceId")}
@@ -326,23 +327,23 @@ export function VoicePanel({
             onChange={(event) => setText(event.target.value)}
           />
           <Button
-            className="voice-synth-go"
+            className="w-full"
             disabled={!text.trim() || synth.isPending || !engineReady}
             onClick={() => synth.mutate()}
           >
             {synth.isPending ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} {t("voiceGenerate")}
           </Button>
-          {engine === "clone" && !activeVoice && <p className="voice-hint">{t("voiceNeedVoice")}</p>}
+          {engine === "clone" && !activeVoice && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
-            <p className="voice-hint">{t("voiceNeedEngineVoice")}</p>
+            <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
           )}
-          {isPodcast && !engineReady && <p className="voice-hint">{t("voicePodcastNeedTwo")}</p>}
-          {engine !== "clone" && activeEngine?.note && <p className="voice-hint">{activeEngine.note}</p>}
+          {isPodcast && !engineReady && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voicePodcastNeedTwo")}</p>}
+          {engine !== "clone" && activeEngine?.note && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{activeEngine.note}</p>}
         </div>
 
-        <div className="voice-list-head">
+        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
           <span>{t("voiceLibrary")}</span>
-          <div className="voice-head-actions">
+          <div className="flex shrink-0 gap-1">
             <Button
               size="sm"
               variant="ghost"
@@ -367,7 +368,7 @@ export function VoicePanel({
         </div>
 
         {speakerOpen && (
-          <div className="voice-upload">
+          <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
             <Select
               value={spAsset}
               onValueChange={(value) => {
@@ -388,7 +389,7 @@ export function VoicePanel({
             </Select>
             {spAsset &&
               (transcript.isError ? (
-                <p className="voice-hint">{t("voiceNoTranscript")}</p>
+                <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNoTranscript")}</p>
               ) : speakers.length > 0 ? (
                 <Select value={spSpeaker} onValueChange={setSpSpeaker}>
                   <SelectTrigger>
@@ -403,11 +404,11 @@ export function VoicePanel({
                   </SelectContent>
                 </Select>
               ) : transcript.isLoading ? null : (
-                <p className="voice-hint">{t("voiceNoSpeakers")}</p>
+                <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNoSpeakers")}</p>
               ))}
             <Input placeholder={t("voiceName")} value={spName} onChange={(event) => setSpName(event.target.value)} />
-            <div className="voice-upload-actions">
-              <span className="voice-hint">{t("voiceFromSpeakerHint")}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceFromSpeakerHint")}</span>
               <Button
                 size="sm"
                 disabled={!spAsset || !spSpeaker || fromSpeaker.isPending}
@@ -420,7 +421,7 @@ export function VoicePanel({
         )}
 
         {uploadOpen && (
-          <div className="voice-upload">
+          <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
             <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} />
             <Textarea
               placeholder={t("voiceRefText")}
@@ -435,8 +436,8 @@ export function VoicePanel({
               className="hidden-input"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
-            <div className="voice-upload-actions">
-              <div className="voice-upload-source">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1">
                 <Button size="sm" variant="ghost" disabled={recording} onClick={() => fileRef.current?.click()}>
                   {file && !recording ? file.name.slice(0, 18) : t("voicePickFile")}
                 </Button>
@@ -458,27 +459,27 @@ export function VoicePanel({
                 {upload.isPending ? <Loader2 size={12} className="spin" /> : null} {t("confirm")}
               </Button>
             </div>
-            <p className="voice-hint">{recording ? t("voiceRecording") : t("voiceUploadHint")}</p>
+            <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{recording ? t("voiceRecording") : t("voiceUploadHint")}</p>
           </div>
         )}
 
-        <div className="voice-list">
+        <div className="grid gap-1.5">
           {list.map((voice) => (
             <div
               key={voice.id}
-              className={voice.id === activeVoice ? "voice-item active" : "voice-item"}
+              className={cn("flex cursor-pointer items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-2 transition-[border-color,background] duration-100 hover:bg-secondary", voice.id === activeVoice && "border-primary bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]")}
               role="button"
               tabIndex={0}
               onClick={() => setSelected(voice.id)}
             >
-              <div className="voice-item-main">
+              <div className="flex min-w-0 items-center gap-2 [&>svg]:shrink-0 [&>svg]:text-primary">
                 <Mic size={13} />
-                <div className="voice-item-text">
+                <div className="grid min-w-0 [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[12.5px]">
                   <strong>{voice.name}</strong>
                   {voice.reference_text && <small>{voice.reference_text}</small>}
                 </div>
               </div>
-              <div className="voice-item-actions">
+              <div className="flex shrink-0 gap-0.5 [&_button]:grid [&_button]:h-6 [&_button]:w-6 [&_button]:cursor-pointer [&_button]:place-items-center [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover]:bg-secondary [&_button:hover]:text-foreground">
                 <button
                   type="button"
                   title={t("voicePlay")}
@@ -502,7 +503,7 @@ export function VoicePanel({
               </div>
             </div>
           ))}
-          {list.length === 0 && !voices.isLoading && <p className="voice-empty">{t("voiceEmpty")}</p>}
+          {list.length === 0 && !voices.isLoading && <p className="m-0 px-2 py-4 text-center text-xs text-muted-foreground">{t("voiceEmpty")}</p>}
         </div>
       </div>
     </section>

@@ -168,7 +168,7 @@ function WebhookUrlRow({ task }: { task: ScheduledTask }) {
   return (
     <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
       <div className="webhook-url-cell">
-        <code className="timecode sg-value webhook-url" title={url}>
+        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground webhook-url" title={url}>
           {url}
         </code>
         <Button
@@ -260,7 +260,7 @@ function CreateTaskDialog({
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("createTask")}>
-      <div className="task-create-form">
+      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <div className="wf-field">
           <span>{t("taskNameLabel")}</span>
           <Input value={name} placeholder={selectedWorkflow?.name ?? ""} onChange={(event) => setName(event.target.value)} />
@@ -321,7 +321,7 @@ function CreateTaskDialog({
             </div>
           </div>
         )}
-        <div className="task-create-actions">
+        <div className="mt-1 flex justify-end gap-1.5">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
           </Button>
@@ -403,13 +403,13 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
         {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
         <SettingsRow label={t("taskSchedule")} description={t("taskScheduleDesc")}>
-          <code className="timecode sg-value">{scheduleLabel}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{scheduleLabel}</code>
         </SettingsRow>
         <SettingsRow label={t("taskNextRun")} description={t("taskNextRunDesc")}>
-          <code className="timecode sg-value">{task.next_run_at ?? t("manual")}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.next_run_at ?? t("manual")}</code>
         </SettingsRow>
         <SettingsRow label={t("taskLastRun")}>
-          <code className="timecode sg-value">{task.last_run_at ?? "—"}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.last_run_at ?? "—"}</code>
         </SettingsRow>
         <SettingsRow label={t("deleteTask")} description={t("deleteTaskDesc")}>
           <Button size="sm" variant="outline" className="sched-delete" onClick={() => setDeleting(true)}>
@@ -424,7 +424,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
             {(runs.data ?? []).map((run) => (
               <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
             ))}
-            {runs.data?.length === 0 && <p className="feishu-empty">{t("noRunsYet")}</p>}
+            {runs.data?.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("noRunsYet")}</p>}
           </div>
         </SettingsBlock>
       </SettingsGroup>

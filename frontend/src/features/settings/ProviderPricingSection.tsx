@@ -216,7 +216,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         title={editing ? t("pricingRuleEdit") : t("pricingRuleAdd")}
       >
         <form
-          className="task-create-form"
+          className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSubmit) return;
@@ -224,7 +224,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             else create.mutate();
           }}
         >
-          <label className="pricing-field">
+          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingCapability")}</span>
             <Select value={form.capability} onValueChange={(value) => setForm((current) => ({ ...current, capability: value }))}>
               <SelectTrigger>
@@ -239,7 +239,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </SelectContent>
             </Select>
           </label>
-          <label className="pricing-field">
+          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingProviderProfile")}</span>
             <Select
               value={form.providerProfileId}
@@ -265,7 +265,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </SelectContent>
             </Select>
           </label>
-          <label className="pricing-field">
+          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingModel")}</span>
             <Input
               value={form.model}
@@ -273,8 +273,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
             />
           </label>
-          <div className="pricing-form-grid">
-            <label className="pricing-field">
+          <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_96px] gap-2">
+            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               <span>{t("pricingBillingUnit")}</span>
               <Select value={form.billingUnit} onValueChange={(value) => setForm((current) => ({ ...current, billingUnit: value }))}>
                 <SelectTrigger>
@@ -289,7 +289,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 </SelectContent>
               </Select>
             </label>
-            <label className="pricing-field">
+            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               <span>{t("pricingUnitAmount")}</span>
               <Input
                 type="number"
@@ -300,7 +300,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 onChange={(event) => setForm((current) => ({ ...current, unitAmount: event.target.value }))}
               />
             </label>
-            <label className="pricing-field">
+            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               <span>{t("pricingCurrency")}</span>
               <Input
                 value={form.currency}
@@ -309,7 +309,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               />
             </label>
           </div>
-          <label className="pricing-field">
+          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingNotes")}</span>
             <Textarea
               rows={3}
@@ -318,7 +318,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
             />
           </label>
-          <div className="task-create-actions">
+          <div className="mt-1 flex justify-end gap-1.5">
             <Button type="button" variant="outline" size="sm" onClick={closeModal}>
               {t("cancel")}
             </Button>
@@ -330,13 +330,13 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       </ModalShell>
 
       <SettingsBlock>
-        <div className="provider-list">
+        <div className="grid gap-1.5">
           {(rules.data ?? []).map((rule) => (
-            <div className="provider-row pricing-rule-row" key={rule.id}>
-              <span className="feishu-bot-icon">
+            <div className="grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5" key={rule.id}>
+              <span className="grid h-7 w-7 place-items-center rounded bg-accent text-accent-foreground">
                 <ReceiptText size={13} />
               </span>
-              <div className="feishu-bot-body">
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
                 <strong>
                   {capabilityLabel(rule.capability)} · {profileLabel(rule.provider_profile_id, rule.provider)}
                 </strong>
@@ -345,8 +345,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                   {rule.notes ? ` · ${rule.notes}` : ""}
                 </small>
               </div>
-              <span className="pricing-rule-price">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
-              <div className="feishu-bot-actions">
+              <span className="whitespace-nowrap text-xs text-muted-foreground">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
+              <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
                   <Pencil size={13} />
                 </Button>
@@ -356,7 +356,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </div>
             </div>
           ))}
-          {rules.data && rules.data.length === 0 && <p className="feishu-empty">{t("pricingRulesEmpty")}</p>}
+          {rules.data && rules.data.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pricingRulesEmpty")}</p>}
         </div>
       </SettingsBlock>
     </SettingsGroup>

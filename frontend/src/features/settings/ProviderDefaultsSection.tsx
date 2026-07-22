@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -82,10 +83,14 @@ function DefaultRow({
   return (
     <SettingsRow
       id={`provider-default-${capability}`}
-      className={highlighted ? "provider-default-row is-highlighted" : "provider-default-row"}
+      className={cn(
+        "grid-cols-[140px_minmax(0,1fr)] py-2.5 transition-[background,box-shadow] duration-[160ms]",
+        highlighted && "bg-[color-mix(in_srgb,var(--primary)_3%,transparent)] shadow-[inset_2px_0_0_color-mix(in_srgb,var(--primary)_72%,transparent)]",
+      )}
+      controlClassName="w-full min-w-0 shrink"
       label={label}
     >
-      <div className="provider-default-controls">
+      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
         <Select
           key={`p-${providerId || "none"}`}
           value={providerId || NONE}
@@ -98,7 +103,7 @@ function DefaultRow({
             save.mutate({ provider_profile_id: nextProviderId || null, model: nextModel });
           }}
         >
-          <SelectTrigger className="provider-default-field">
+          <SelectTrigger className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45">
             <SelectValue placeholder={t("kbEmbedPickProvider")} />
           </SelectTrigger>
           <SelectContent>
@@ -119,7 +124,7 @@ function DefaultRow({
             emptyText={t("providerDefaultsNoModels")}
             allowCustomValue
             disabled={!providerId}
-            className="provider-default-field"
+            className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45"
             onValueChange={(nextModel) =>
               save.mutate({ provider_profile_id: providerId || null, model: nextModel.trim() })
             }
@@ -134,7 +139,7 @@ function DefaultRow({
             }
             disabled={!providerId || modelOptions.length === 0}
           >
-            <SelectTrigger className="provider-default-field">
+            <SelectTrigger className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45">
               <SelectValue
                 placeholder={
                   !providerId
@@ -208,7 +213,7 @@ export function ProviderDefaultsSection({
     <SettingsGroup title={t("providerDefaultsTitle")} description={t("providerDefaultsDesc")}>
       {enabled.length === 0 ? (
         <SettingsBlock>
-          <p className="feishu-empty">{t("kbEmbedNoProvider")}</p>
+          <p className="m-0 text-xs text-muted-foreground">{t("kbEmbedNoProvider")}</p>
         </SettingsBlock>
       ) : (
         <>

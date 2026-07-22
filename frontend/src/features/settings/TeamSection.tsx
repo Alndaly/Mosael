@@ -115,12 +115,12 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   return (
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
       <SettingsBlock>
-        <div className="team-ws">
-          <div className="team-ws-meta">
-            <span className="team-ws-name">{workspace.name}</span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-[13px] font-[550]">{workspace.name}</span>
             <Badge variant="outline">{roleLabel(myRole)}</Badge>
           </div>
-          <div className="team-ws-actions">
+          <div className="flex shrink-0 gap-1.5">
             {canManage && (
               <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)}>
                 <Pencil size={13} /> {t("rename")}
@@ -136,7 +136,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       </SettingsBlock>
 
       <SettingsBlock>
-        <div className="team-members">
+        <div className="grid gap-1.5">
           {members.data?.members.map((m) => (
             <MemberRow
               key={m.user_id}
@@ -223,19 +223,19 @@ function MemberRow({
   const canRemove = (isSelf || canManage) && member.role !== "owner";
 
   return (
-    <div className="team-member">
-      <div className="team-member-id">
-        <span className="team-avatar" aria-hidden>
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-2.5 py-[7px]">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))] text-xs font-semibold text-primary" aria-hidden>
           {memberName.slice(0, 1).toUpperCase()}
         </span>
-        <span className="team-member-name">{memberName}</span>
-        {memberName !== member.username && <span className="team-member-account">@{member.username}</span>}
+        <span className="truncate text-[13px]">{memberName}</span>
+        {memberName !== member.username && <span className="truncate text-xs text-muted-foreground">@{member.username}</span>}
         {isSelf && <Badge variant="secondary">{t("teamYou")}</Badge>}
       </div>
-      <div className="team-member-actions">
+      <div className="flex shrink-0 items-center gap-1.5">
         {canEditRole ? (
           <Select value={member.role} onValueChange={onRole}>
-            <SelectTrigger className="team-role-trigger">
+            <SelectTrigger className="h-[30px] w-[116px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -257,14 +257,14 @@ function MemberRow({
                 <SlidersHorizontal size={14} />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="team-perms" align="end">
-              <div className="team-perms-head">
+            <PopoverContent className="grid w-[270px] gap-px p-[7px]" align="end">
+              <div className="mb-[5px] flex items-center gap-1.5 border-b border-border px-1.5 pb-2 pt-px text-xs font-semibold text-foreground [&_svg]:text-primary">
                 <ShieldCheck size={13} /> {t("teamPermsFor").replace("{name}", member.username)}
               </div>
               {permKeys.map((perm) => (
-                <label className="team-perm-row" key={perm}>
-                  <span className="team-perm-label">
-                    <span className="team-perm-icon">{PERM_ICONS[perm] ?? <ShieldCheck size={13} />}</span>
+                <label className="flex cursor-pointer items-center justify-between gap-2.5 rounded-md px-1.5 py-[5px] text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary" key={perm}>
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <span className="inline-flex text-muted-foreground">{PERM_ICONS[perm] ?? <ShieldCheck size={13} />}</span>
                     {t(`perm_${perm}` as never) as string}
                   </span>
                   <Switch
@@ -280,7 +280,7 @@ function MemberRow({
                   />
                 </label>
               ))}
-              <p className="team-perms-hint">{t("teamPermsHint")}</p>
+              <p className="mb-0 mt-1.5 border-t border-border px-1.5 pb-0 pt-[7px] text-[11px] leading-[1.45] text-muted-foreground">{t("teamPermsHint")}</p>
             </PopoverContent>
           </Popover>
         )}
@@ -339,11 +339,11 @@ function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: 
 
   return (
     <Form {...form}>
-      <form className="team-add-form" onSubmit={submit} noValidate>
-        <div className="team-add-head">
+      <form className="grid gap-2.5" onSubmit={submit} noValidate>
+        <div className="flex items-center gap-1.5 text-xs font-[550] text-foreground">
           <UserPlus size={14} /> {t("teamAddMember")}
         </div>
-        <div className="team-add-grid">
+        <div className="grid grid-cols-[1.3fr_1fr_0.8fr] gap-2.5 max-[720px]:grid-cols-1">
           <FormField
             control={form.control}
             name="username"
@@ -392,11 +392,11 @@ function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: 
             )}
           />
         </div>
-        <div className="team-add-actions">
+        <div className="flex items-center gap-2.5">
           <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
             <UserPlus size={13} /> {t("teamAddMember")}
           </Button>
-          <span className="team-add-hint">{t("teamAddHint")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("teamAddHint")}</span>
         </div>
       </form>
     </Form>

@@ -353,7 +353,7 @@ function CreateBatchDialog({
             </Button>
           </div>
         )}
-        <div className="task-create-actions">
+        <div className="mt-1 flex justify-end gap-1.5">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
           </Button>

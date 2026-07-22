@@ -451,7 +451,7 @@ function ProxyDialog({
   }, [account]);
   return (
     <ModalShell open={account !== null} onOpenChange={(next) => !next && onClose()} title={t("publishProxySet")}>
-      <div className="task-create-form">
+      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="wf-field">
           <span>{t("publishProxy")}</span>
           <Input
@@ -463,7 +463,7 @@ function ProxyDialog({
           />
           <small>{t("publishProxyHint")}</small>
         </label>
-        <div className="task-create-actions">
+        <div className="mt-1 flex justify-end gap-1.5">
           <Button variant="ghost" onClick={onClose}>
             {t("cancel")}
           </Button>
@@ -516,7 +516,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         }
       >
         <SettingsRow label={t("publishAsset")} description={t("publishAssetDesc")}>
-          <code className="timecode sg-value">{task.asset_name}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.asset_name}</code>
         </SettingsRow>
         {task.description && (
           <SettingsRow label={t("publishDescription")}>
@@ -536,7 +536,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         )}
         {task.status === "succeeded" && task.result.target != null && (
           <SettingsRow label={t("publishResult")} description={t("publishResultDesc")}>
-            <code className="timecode sg-value publish-target" title={String(task.result.target)}>
+            <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground publish-target" title={String(task.result.target)}>
               <FolderOutput size={12} /> {String(task.result.target)}
             </code>
           </SettingsRow>
@@ -589,7 +589,7 @@ function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspa
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishAccountAdd")}>
-      <div className="task-create-form">
+      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="wf-field">
           <span>{t("publishPlatform")}</span>
           <Select
@@ -641,7 +641,7 @@ function AddAccountDialog({ open, workspace, onClose }: { open: boolean; workspa
             <small>{t("publishProxyHint")}</small>
           </label>
         )}
-        <div className="task-create-actions">
+        <div className="mt-1 flex justify-end gap-1.5">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("close")}
           </Button>
@@ -729,7 +729,7 @@ function CreatePublishDialog({
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishCreate")}>
-      <div className="task-create-form">
+      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="wf-field">
           <span>{t("publishAsset")}</span>
           <Select value={assetId ?? ""} onValueChange={setAssetId}>
