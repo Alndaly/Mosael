@@ -5,33 +5,25 @@ import { Check, ChevronDown } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
-let openNonModalSelects = 0;
+let pendingSelectOutsideInteraction = false;
 
-function hasOpenNonModalSelect() {
-  return openNonModalSelects > 0;
+function requestSelectOutsideInteractionSuppression() {
+  pendingSelectOutsideInteraction = true;
+  globalThis.setTimeout(() => {
+    pendingSelectOutsideInteraction = false;
+  }, 0);
 }
 
-function Select({ open, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  // In this app Select is used as a form control, often inside Dialog/AlertDialog.
-  // When a select is open, the first outside click should dismiss the select only;
-  // after it closes, the next outside click should dismiss the dialog in one step.
-  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(Boolean(defaultOpen));
-  const actualOpen = open ?? uncontrolledOpen;
+function consumeSelectOutsideInteractionSuppression() {
+  if (!pendingSelectOutsideInteraction) return false;
+  pendingSelectOutsideInteraction = false;
+  return true;
+}
 
-  React.useEffect(() => {
-    if (!actualOpen) return;
-    openNonModalSelects += 1;
-    return () => {
-      openNonModalSelects = Math.max(0, openNonModalSelects - 1);
-    };
-  }, [actualOpen]);
-
+function Select({ onOpenChange, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return (
     <SelectPrimitive.Root
-      open={open}
-      defaultOpen={defaultOpen}
       onOpenChange={(next) => {
-        if (open === undefined) setUncontrolledOpen(next);
         onOpenChange?.(next);
       }}
       {...props}
@@ -64,7 +56,12 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
   );
 }
 
-function SelectContent({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+function SelectContent({
+  className,
+  children,
+  onPointerDownOutside,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Content>) {
   const t = useI18n();
   // 没有任何可选项时给出空态提示,避免弹出一个空白盒子。
   const empty = React.Children.toArray(children).filter(Boolean).length === 0;
@@ -74,6 +71,10 @@ function SelectContent({ className, children, ...props }: React.ComponentProps<t
         data-mibu-select-content=""
         position="popper"
         sideOffset={4}
+        onPointerDownOutside={(event) => {
+          requestSelectOutsideInteractionSuppression();
+          onPointerDownOutside?.(event);
+        }}
         className={cn(
           "z-[120] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border-strong bg-popover p-1",
           "max-h-[min(280px,var(--radix-select-content-available-height))] overflow-y-auto",
@@ -111,4 +112,4 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
   );
 }
 
-export { hasOpenNonModalSelect, Select, SelectContent, SelectItem, SelectTrigger, SelectValue };
+export { consumeSelectOutsideInteractionSuppression, Select, SelectContent, SelectItem, SelectTrigger, SelectValue };

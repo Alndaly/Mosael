@@ -2,7 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
-import { hasOpenNonModalSelect } from "@/components/ui/select";
+import { consumeSelectOutsideInteractionSuppression } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
@@ -13,6 +13,10 @@ const DialogClose = DialogPrimitive.Close;
 function isSelectPortalInteraction(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(target.closest("[data-mibu-select-content]"));
+}
+
+function hasMountedSelectPortal() {
+  return Boolean(document.querySelector("[data-mibu-select-content]"));
 }
 
 function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
@@ -37,7 +41,11 @@ function DialogContent({
     // Select/Popover contents are portaled out of the dialog content tree.
     // They are still part of the same form interaction, so selecting an item
     // must not dismiss the parent dialog.
-    if (isSelectPortalInteraction(event.target) || hasOpenNonModalSelect()) {
+    if (
+      isSelectPortalInteraction(event.target) ||
+      consumeSelectOutsideInteractionSuppression() ||
+      hasMountedSelectPortal()
+    ) {
       event.preventDefault();
     }
     onInteractOutside?.(event);
