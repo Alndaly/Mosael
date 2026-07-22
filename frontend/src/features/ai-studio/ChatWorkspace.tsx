@@ -36,6 +36,7 @@ import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection"
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -373,8 +374,8 @@ export function ChatWorkspace({
   }, [usageEvents.data]);
 
   return (
-    <div className="chat-grid">
-      <aside className="chat-sessions panel">
+    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
+      <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
         <div className="panel-head">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
           <h2>{t("chatSessionsTitle")}</h2>
@@ -382,10 +383,15 @@ export function ChatWorkspace({
             <Plus size={13} /> {t("chatNewSession")}
           </Button>
         </div>
-        <div className="chat-session-list">
+        <div
+          className={cn(
+            "grid content-start gap-1 overflow-auto p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+            sessions.isSuccess && (sessions.data ?? []).length === 0 && "content-center justify-items-center",
+          )}
+        >
           {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <div className="chat-session-empty">
-              <MessageSquarePlus size={16} />
+            <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground">
+              <MessageSquarePlus size={16} className="text-primary opacity-70" />
               <span>{t("chatNoSessions")}</span>
             </div>
           )}
@@ -394,13 +400,16 @@ export function ChatWorkspace({
               <ContextMenuTrigger asChild>
                 <button
                   type="button"
-                  className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
+                  className={cn(
+                    "grid w-full cursor-pointer gap-px rounded border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+                    activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+                  )}
                   onClick={() => {
                     setSessionId(item.id);
                     window.localStorage.setItem(sessionKey, item.id);
                   }}
                 >
-                  <strong>{item.title}</strong>
+                  <strong className="truncate text-xs font-semibold">{item.title}</strong>
                 </button>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -432,38 +441,40 @@ export function ChatWorkspace({
         />
       </aside>
 
-      <section className="chat-main panel">
+      <section className="panel grid grid-rows-[minmax(0,1fr)_auto]">
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
         {
           <>
-            <div className="chat-thread" ref={threadRef}>
+            <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
               {visibleMessages.map((message) => (
                 <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
               ))}
               {running && streamText && (
-                <div className="chat-bubble assistant streaming">
+                <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <div className="chat-msg-meta live">
+                  <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
                     <Loader2 size={11} className="spin" />
-                    <span className="chat-msg-duration timecode">
+                    <span className="timecode text-[11px] text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
                   </div>
                 </div>
               )}
               {running && !streamText && (
-                <div className="chat-bubble assistant thinking">
+                <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <span className="chat-thinking-row">
+                  <span className="inline-flex items-center gap-1.5 self-start whitespace-nowrap">
                     <Loader2 size={13} className="spin" /> {t("chatThinking")}
-                    <span className="chat-msg-duration timecode">
+                    <span className="timecode ml-0.5 text-[11px] text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
                   </span>
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
-                <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
+                <div className="m-auto w-full max-w-[780px]">
+                  <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
+                </div>
               )}
               {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
             </div>
@@ -471,14 +482,17 @@ export function ChatWorkspace({
                 belong in the transcript. Each one can be steered into the running turn or
                 dropped — the Codex arrangement. */}
             {(queue.data ?? []).map((message) => (
-              <div className="chat-pending" key={message.id}>
-                <CornerDownRight size={12} className="chat-pending-icon" />
-                <span className="chat-pending-text" title={message.content}>
+              <div
+                className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-[7px] text-xs"
+                key={message.id}
+              >
+                <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-foreground" title={message.content}>
                   {message.content}
                 </span>
                 <button
                   type="button"
-                  className="chat-pending-action"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => steerQueued.mutate(message.id)}
                   title={t("chatSteerHint")}
                 >
@@ -486,7 +500,7 @@ export function ChatWorkspace({
                 </button>
                 <button
                   type="button"
-                  className="chat-pending-action"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => cancelQueued.mutate(message.id)}
                   aria-label={t("chatQueuedCancel")}
                 >
@@ -495,12 +509,16 @@ export function ChatWorkspace({
               </div>
             ))}
             {attachments.length > 0 && (
-              <div className="chat-attachments">
+              <div className="flex flex-wrap gap-1.5 px-2.5 pt-1.5">
                 {attachments.map((asset) => (
-                  <span className="chat-attachment" key={asset.id}>
+                  <span
+                    className="inline-flex items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-[9px] py-0.5 text-[11px]"
+                    key={asset.id}
+                  >
                     {asset.name}
                     <button
                       type="button"
+                      className="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-muted-foreground hover:text-destructive"
                       onClick={() => setAttachments((current) => current.filter((item) => item.id !== asset.id))}
                       aria-label={t("delete")}
                     >
@@ -510,9 +528,13 @@ export function ChatWorkspace({
                 ))}
               </div>
             )}
-            <form className="chat-composer" onSubmit={submit}>
+            <form
+              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[18px] border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+              onSubmit={submit}
+            >
               <Textarea
                 rows={2}
+                className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
                 value={draft}
                 placeholder={t("chatPlaceholder")}
                 onChange={(event) => {
@@ -527,8 +549,8 @@ export function ChatWorkspace({
                   }
                 }}
               />
-              <div className="chat-composer-bar">
-                <div className="chat-composer-left">
+              <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                <div className="flex items-center gap-1.5">
                   {switcher}
                   <Popover open={skillsOpen} onOpenChange={setSkillsOpen}>
                     <PopoverTrigger asChild>
@@ -541,13 +563,15 @@ export function ChatWorkspace({
                         <Sparkles size={14} />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="composer-skills" align="start" aria-label={t("skillsTitle")}>
-                      <strong>{t("skillsTitle")}</strong>
+                    <PopoverContent className="grid w-[300px] gap-0.5 p-2" align="start" aria-label={t("skillsTitle")}>
+                      <strong className="px-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                        {t("skillsTitle")}
+                      </strong>
                       {(skills.data ?? []).map((skill) => (
                         <button
                           key={skill.id}
                           type="button"
-                          className="composer-skill"
+                          className="grid cursor-pointer gap-px rounded border-0 bg-transparent p-1.5 text-left transition-colors duration-100 hover:bg-secondary"
                           onClick={() => {
                             setDraft((current) =>
                               current.trim()
@@ -557,12 +581,12 @@ export function ChatWorkspace({
                             setSkillsOpen(false);
                           }}
                         >
-                          <em>{skill.name}</em>
-                          <span>{skill.description}</span>
+                          <em className="text-[12.5px] font-semibold not-italic">{skill.name}</em>
+                          <span className="text-[11.5px] leading-[1.45] text-muted-foreground">{skill.description}</span>
                         </button>
                       ))}
                       {(skills.data ?? []).length === 0 && (
-                        <span className="composer-skill-empty">{t("skillsEmpty")}</span>
+                        <span className="px-1.5 py-1 text-xs text-muted-foreground">{t("skillsEmpty")}</span>
                       )}
                     </PopoverContent>
                   </Popover>
@@ -590,7 +614,7 @@ export function ChatWorkspace({
                   <Button
                     type="button"
                     size="icon"
-                    className="chat-send chat-stop"
+                    className="shrink-0 rounded-full"
                     aria-label={t("chatStop")}
                     onClick={() => stopTurn.mutate()}
                   >
@@ -600,7 +624,7 @@ export function ChatWorkspace({
                   <Button
                     type="submit"
                     size="icon"
-                    className="chat-send"
+                    className="shrink-0 rounded-full"
                     aria-label={running ? t("chatSteer") : t("chatSend")}
                     disabled={(!draft.trim() && attachments.length === 0) || sendMessage.isPending}
                   >
@@ -668,112 +692,137 @@ function ChatInspector({
       : status;
 
   return (
-    <aside className="chat-inspector panel" aria-label={t("agentInspectorTitle")}>
-      <div className="chat-inspector-head">
-        <h2>{t("agentInspectorTitle")}</h2>
-        <span className={`chat-inspector-status ${running ? "running" : ""}`}>
+    <aside
+      className="panel flex min-w-0 flex-col gap-2.5 overflow-y-auto px-2.5 pb-3 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-60 max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1"
+      aria-label={t("agentInspectorTitle")}
+    >
+      <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-border p-2.5 max-[1180px]:col-span-full">
+        <h2 className="m-0 text-xs font-bold">{t("agentInspectorTitle")}</h2>
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground",
+            running && "border-[color-mix(in_srgb,var(--primary)_42%,var(--border))] text-primary",
+          )}
+        >
           <CircleDot size={10} /> {statusLabel}
         </span>
       </div>
 
-      <section className="chat-inspector-section">
-        <h3>
+      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Database size={13} /> {t("agentInspectorContext")}
         </h3>
-        <dl className="chat-inspector-kv">
-          <div>
-            <dt>{t("agentWorkspace")}</dt>
-            <dd title={workspace.name}>{workspace.name}</dd>
+        <dl className="m-0 grid gap-[7px]">
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+            <dt className="truncate text-[11px] text-muted-foreground">{t("agentWorkspace")}</dt>
+            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={workspace.name}>{workspace.name}</dd>
           </div>
-          <div>
-            <dt>{t("agentSession")}</dt>
-            <dd title={session?.title ?? ""}>{session?.title ?? t("agentNoActiveSession")}</dd>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+            <dt className="truncate text-[11px] text-muted-foreground">{t("agentSession")}</dt>
+            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session?.title ?? ""}>{session?.title ?? t("agentNoActiveSession")}</dd>
           </div>
-          <div>
-            <dt>{t("agentModel")}</dt>
-            <dd title={session?.model ?? session?.adapter ?? ""}>{session?.model ?? session?.adapter ?? "—"}</dd>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+            <dt className="truncate text-[11px] text-muted-foreground">{t("agentModel")}</dt>
+            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session?.model ?? session?.adapter ?? ""}>{session?.model ?? session?.adapter ?? "—"}</dd>
           </div>
-          <div>
-            <dt>{t("agentUpdatedAt")}</dt>
-            <dd>{session ? formatInspectorTime(session.updated_at) : "—"}</dd>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+            <dt className="truncate text-[11px] text-muted-foreground">{t("agentUpdatedAt")}</dt>
+            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground">{session ? formatInspectorTime(session.updated_at) : "—"}</dd>
           </div>
         </dl>
       </section>
 
-      <section className="chat-inspector-section">
-        <h3>
+      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <FileText size={13} /> {t("agentInspectorThread")}
         </h3>
-        <div className="chat-inspector-metrics">
-          <span>
-            <strong>{messages.length}</strong>
+        <div className="grid grid-cols-2 gap-1.5">
+          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
+            <strong className="text-[15px] leading-none text-foreground">{messages.length}</strong>
             {t("agentMetricMessages")}
           </span>
-          <span>
-            <strong>{userCount}</strong>
+          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
+            <strong className="text-[15px] leading-none text-foreground">{userCount}</strong>
             {t("agentMetricUser")}
           </span>
-          <span>
-            <strong>{assistantCount}</strong>
+          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
+            <strong className="text-[15px] leading-none text-foreground">{assistantCount}</strong>
             {t("agentMetricAssistant")}
           </span>
-          <span>
-            <strong>{queue.length}</strong>
+          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
+            <strong className="text-[15px] leading-none text-foreground">{queue.length}</strong>
             {t("agentMetricQueue")}
           </span>
         </div>
         {failedCount > 0 && (
-          <p className="chat-inspector-warning">
+          <p className="m-0 text-[11.5px] leading-normal text-destructive">
             {t("agentFailedTurns").replace("{n}", String(failedCount))}
           </p>
         )}
       </section>
 
-      <section className="chat-inspector-section">
-        <h3>
+      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Wrench size={13} /> {t("agentInspectorRecentTools")}
         </h3>
         {recentTools.length > 0 ? (
-          <ul className="chat-inspector-tool-list">
+          <ul className="m-0 grid list-none gap-[5px] p-0">
             {recentTools.map((tool) => (
-              <li key={tool.key}>
-                <span className={`chat-inspector-dot ${tool.status}`} />
-                <span title={tool.name}>{tool.name}</span>
-                <em>{tool.status === "error" ? t("toolStatusFailed") : tool.status === "running" ? t("toolStatusRunning") : t("toolStatusDone")}</em>
+              <li key={tool.key} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-[11.5px]">
+                <span
+                  className={cn(
+                    "h-[7px] w-[7px] rounded-full bg-muted-foreground",
+                    tool.status === "done" && "bg-success",
+                    tool.status === "running" && "bg-primary",
+                    tool.status === "error" && "bg-destructive",
+                  )}
+                />
+                <span className="truncate" title={tool.name}>{tool.name}</span>
+                <em className="text-[10.5px] not-italic text-muted-foreground">
+                  {tool.status === "error" ? t("toolStatusFailed") : tool.status === "running" ? t("toolStatusRunning") : t("toolStatusDone")}
+                </em>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="chat-inspector-empty">{t("agentNoRecentTools")}</p>
+          <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{t("agentNoRecentTools")}</p>
         )}
       </section>
 
-      <section className="chat-inspector-section">
-        <h3>
+      <section className="grid gap-2 rounded-[10px] border border-border bg-panel-subtle p-2.5">
+        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
           <Sparkles size={13} /> {t("agentInspectorCapabilities")}
         </h3>
-        <div className="chat-inspector-cap-row">
-          <span>{t("skillsTitle")}</span>
-          <strong>{skills.length}</strong>
+        <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+          <span className="truncate text-[11px] text-muted-foreground">{t("skillsTitle")}</span>
+          <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{skills.length}</strong>
         </div>
-        <div className="chat-inspector-cap-row">
-          <span>{t("agentTools")}</span>
-          <strong>{tools.length}</strong>
+        <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+          <span className="truncate text-[11px] text-muted-foreground">{t("agentTools")}</span>
+          <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{tools.length}</strong>
         </div>
         {manifest && (
-          <div className="chat-inspector-cap-row">
-            <span>{manifest.app}</span>
-            <strong>{manifest.version}</strong>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+            <span className="truncate text-[11px] text-muted-foreground">{manifest.app}</span>
+            <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{manifest.version}</strong>
           </div>
         )}
-        <div className="chat-inspector-chips">
+        <div className="flex flex-wrap gap-[5px]">
           {skills.slice(0, 4).map((skill) => (
-            <span key={skill.id} title={skill.description}>
+            <span
+              className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
+              key={skill.id}
+              title={skill.description}
+            >
               {skill.name}
             </span>
           ))}
           {tools.slice(0, Math.max(0, 6 - Math.min(skills.length, 4))).map((tool) => (
-            <span key={tool.name} title={tool.description}>
+            <span
+              className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
+              key={tool.name}
+              title={tool.description}
+            >
               {tool.name}
             </span>
           ))}
@@ -931,7 +980,13 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
   };
 
   return (
-    <div className={`chat-bubble ${message.role}`}>
+    <div
+      className={
+        message.role === "assistant"
+          ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]"
+          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
+      }
+    >
       {message.role === "assistant" ? (
         message.error ? (
           <AgentErrorCard content={message.content} error={message.error} />
@@ -939,26 +994,31 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
           <AgentTurnContent timeline={payload?.timeline} />
         )
       ) : (
-        <div className="chat-bubble-content">{message.content}</div>
+        <div>{message.content}</div>
       )}
       {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
       {message.role === "assistant" && (
-        <div className="chat-msg-meta">
-          <button type="button" className="chat-msg-copy" title={t("copyMessage")} onClick={copy}>
+        <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100">
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-[3px] border-0 bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
+            title={t("copyMessage")}
+            onClick={copy}
+          >
             {copied ? <Check size={11} /> : <Copy size={11} />}
             {copied ? t("copied") : t("copyMessage")}
           </button>
           {typeof duration === "number" && (
-            <span className="chat-msg-duration timecode">
+            <span className="timecode text-[11px] text-muted-foreground">
               {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
             </span>
           )}
           {tokenLabel && (
-            <span className="chat-msg-usage" title={tokenTitle}>
+            <span className="text-[11px] text-muted-foreground" title={tokenTitle}>
               {tokenLabel}
             </span>
           )}
-          {costLabel && <span className="chat-msg-usage">{costLabel}</span>}
+          {costLabel && <span className="text-[11px] text-muted-foreground">{costLabel}</span>}
         </div>
       )}
     </div>

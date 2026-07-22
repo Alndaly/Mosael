@@ -44,6 +44,7 @@ import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -264,7 +265,8 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   );
 
   return (
-    <div className="feature-view ai-studio-view">
+    // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
+    <div className="feature-view flex flex-col gap-0 overflow-hidden">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
@@ -602,17 +604,22 @@ function GenerateWorkspace({
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-1.5 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
-      <aside className="chat-sessions panel max-[820px]:hidden">
+      <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
         <div className="panel-head">
           <h2>{t("generationSessionsTitle")}</h2>
           <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
             <Plus size={13} /> {t("generationNewSession")}
           </Button>
         </div>
-        <div className="chat-session-list">
+        <div
+          className={cn(
+            "grid content-start gap-1 overflow-auto p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+            sessions.isSuccess && (sessions.data ?? []).length === 0 && "content-center justify-items-center",
+          )}
+        >
           {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <div className="chat-session-empty">
-              <MessageSquarePlus size={16} />
+            <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground">
+              <MessageSquarePlus size={16} className="text-primary opacity-70" />
               <span>{t("generationNoSessions")}</span>
             </div>
           )}
@@ -621,13 +628,16 @@ function GenerateWorkspace({
               <ContextMenuTrigger asChild>
                 <button
                   type="button"
-                  className={activeSession?.id === item.id ? "chat-session active" : "chat-session"}
+                  className={cn(
+                    "grid w-full cursor-pointer gap-px rounded border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+                    activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+                  )}
                   onClick={() => {
                     setSessionId(item.id);
                     window.localStorage.setItem(sessionKey, item.id);
                   }}
                 >
-                  <strong>{item.title}</strong>
+                  <strong className="truncate text-xs font-semibold">{item.title}</strong>
                 </button>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -694,8 +704,8 @@ function GenerateWorkspace({
               }
             }}
           />
-          <div className="chat-composer-bar">
-            <div className="chat-composer-left">
+          <div className="flex items-center justify-between gap-1.5 pt-0.5">
+            <div className="flex items-center gap-1.5">
               {switcher}
               {selectedModel && (
                 <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-[9px] py-0.5 text-[11.5px] text-muted-foreground">
@@ -706,7 +716,7 @@ function GenerateWorkspace({
             <Button
               type="submit"
               size="icon"
-              className="chat-send"
+              className="shrink-0 rounded-full"
               aria-label={t("generate")}
               disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending}
             >

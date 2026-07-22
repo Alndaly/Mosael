@@ -543,7 +543,14 @@ export function WorkflowAgentChat({
           const duration = payload?.usage?.duration_seconds;
           if (queuedIds.has(message.id)) return null;
           return (
-            <div key={message.id} className={`wf-agent-msg chat-bubble ${message.role}`}>
+            <div
+              key={message.id}
+              className={
+                message.role === "assistant"
+                  ? "wf-agent-msg relative w-full max-w-full text-[13.5px] leading-[1.65]"
+                  : "wf-agent-msg ml-auto mr-0 w-fit max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-[10px] rounded-br-[4px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground"
+              }
+            >
               {message.role === "assistant" ? (
                 message.error ? (
                   <AgentErrorCard content={message.content} error={message.error} />
@@ -551,11 +558,11 @@ export function WorkflowAgentChat({
                   <AgentTurnContent timeline={payload?.timeline} />
                 )
               ) : (
-                <div className="chat-bubble-content">{message.content}</div>
+                <div>{message.content}</div>
               )}
               {message.role === "assistant" && typeof duration === "number" && (
-                <div className="chat-msg-meta live">
-                  <span className="chat-msg-duration timecode">
+                <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
+                  <span className="timecode text-[11px] text-muted-foreground">
                     {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
                   </span>
                 </div>
@@ -564,22 +571,22 @@ export function WorkflowAgentChat({
           );
         })}
         {running && streamText && (
-          <div className="wf-agent-msg chat-bubble assistant streaming">
+          <div className="wf-agent-msg relative w-full max-w-full text-[13.5px] leading-[1.65]">
             <AgentTurnContent timeline={streamTimeline} />
-            <div className="chat-msg-meta live">
+            <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
               <Loader2 size={11} className="spin" />
-              <span className="chat-msg-duration timecode">
+              <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
             </div>
           </div>
         )}
         {running && !streamText && (
-          <div className="wf-agent-msg chat-bubble assistant thinking">
+          <div className="wf-agent-msg relative flex w-full max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground">
             <AgentTurnContent timeline={streamTimeline} />
             <span className="wf-agent-thinking-row">
               <Loader2 size={12} className="spin" /> {t("chatThinking")}
-              <span className="chat-msg-duration timecode">
+              <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
             </span>
@@ -588,14 +595,17 @@ export function WorkflowAgentChat({
         {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}
       </div>
       {(queue.data ?? []).map((message) => (
-        <div className="chat-pending" key={message.id}>
-          <CornerDownRight size={12} className="chat-pending-icon" />
-          <span className="chat-pending-text" title={message.content}>
+        <div
+          className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-[7px] text-xs"
+          key={message.id}
+        >
+          <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-foreground" title={message.content}>
             {message.content}
           </span>
           <button
             type="button"
-            className="chat-pending-action"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => steerQueued.mutate(message.id)}
             title={t("chatSteerHint")}
           >
@@ -603,7 +613,7 @@ export function WorkflowAgentChat({
           </button>
           <button
             type="button"
-            className="chat-pending-action"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-[5px] border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => cancelQueued.mutate(message.id)}
             aria-label={t("chatQueuedCancel")}
           >

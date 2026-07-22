@@ -24,6 +24,9 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-panel: var(--panel);
+  --color-panel-subtle: var(--panel-subtle);
+  --color-panel-inset: var(--panel-inset);
+  --color-success: var(--success);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 2px);
@@ -59,6 +62,7 @@
   --accent: #e9effe;
   --accent-foreground: #1c48c8;
   --destructive: #d93025;
+  --success: #16a34a;
   --border: #e2e5ea;
   --input: #d3d8e0;
   --ring: #a8c0f5;
