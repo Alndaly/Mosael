@@ -1392,65 +1392,6 @@
   border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
 }
 
-/* ---------- Asset preview modal ---------- */
-
-.asset-preview-dialog {
-  width: min(960px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-}
-
-.preview-modal {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 12px;
-  width: 100%;
-}
-
-.preview-stage {
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: #000000;
-  min-height: 320px;
-  overflow: hidden;
-}
-
-.preview-stage video,
-.preview-stage img {
-  max-width: 100%;
-  max-height: 60vh;
-}
-
-.preview-stage audio {
-  width: 90%;
-}
-
-.preview-meta {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.preview-meta dt {
-  color: var(--muted-foreground);
-  font-size: 11px;
-}
-
-.preview-meta dd {
-  margin: 0 0 6px;
-}
-
-@media (max-width: 760px) {
-  .preview-modal {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-stage {
-    min-height: 220px;
-  }
-}
-
 /* ---------- AI Studio ---------- */
 
 .gen-compose {
