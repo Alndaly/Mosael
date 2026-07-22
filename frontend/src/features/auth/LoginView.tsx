@@ -184,7 +184,7 @@ export function LoginView() {
         <LegalDialog doc={legalDoc} onClose={() => setLegalDoc(null)} />
 
         {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
-        <div className="flex w-[min(340px,100%)] justify-start border-t border-border pt-4">
+        <div className="flex w-[min(340px,100%)] justify-center border-t border-border pt-4">
           <ServerPicker />
         </div>
       </main>
