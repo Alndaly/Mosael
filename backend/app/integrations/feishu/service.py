@@ -18,7 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, run_turn
-from app.ai.agent.host import SYSTEM_PROMPT_TEMPLATE, get_or_create_external_session, append_message
+from app.ai.agent.host import (
+    SYSTEM_PROMPT_TEMPLATE,
+    append_message,
+    get_or_create_external_session,
+    resolve_chat_provider,
+)
 from app.domain.agent.prompt_skills import skills_index_for_prompt
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -205,6 +210,18 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
         session_id, adapter, adapter_session_id, workspace_id, capability = (
             session.id, session.adapter, session.adapter_session_id, bot.workspace_id, bot.capability
         )
+        adapter_state = session.adapter_state  # pi 多轮记忆:与 AI Studio 同一套回环
+        # 供应商解析必须在这里做(与 AI Studio 同一助手):裸调 run_turn 不带 provider,
+        # pi 适配器会直接报「未配置可用的 AI 供应商」,哪怕设置里已配好。
+        try:
+            provider_dict, agent_model, _profile = resolve_chat_provider(
+                db, session.provider_profile_id, session.model or ""
+            )
+        except AdapterError as exc:
+            provider_dict, agent_model = None, None
+            provider_error = str(exc)
+        else:
+            provider_error = None
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         workspace_id=workspace_id,
@@ -221,7 +238,10 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
     reply_text = ""
     error: str | None = None
     new_adapter_session: str | None = None
+    new_adapter_state: object | None = None
     try:
+        if provider_error:
+            raise AdapterError(provider_error)
         result = run_turn(
             adapter,
             prompt=text,
@@ -229,15 +249,23 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
             api_base=api_base,
             token=token,
             adapter_session_id=adapter_session_id,
+            provider=provider_dict,
+            model=agent_model,
+            workspace_id=workspace_id,
+            adapter_state=adapter_state,
+            session_key=session_id,
         )
         reply_text = result.text or "(空回复)"
         new_adapter_session = result.adapter_session_id
+        new_adapter_state = result.adapter_state
     except AdapterError as exc:
-        reply_text = "智能体执行失败,请稍后再试。"
+        # 适配器错误本就是给人看的中文(没配供应商/缺模型/sidecar 未构建)——
+        # 原样带给用户,笼统的「稍后再试」只会让人反复重试同一个配置问题。
+        reply_text = f"智能体执行失败:{exc}"
         error = str(exc)[:800]
     except Exception as exc:  # the worker thread must never die silently
         logger.exception("feishu turn crashed bot=%s", bot_id)
-        reply_text = "智能体执行异常。"
+        reply_text = "智能体执行异常,请查看后端日志。"
         error = str(exc)[:800]
 
     with SessionLocal() as db:
@@ -246,6 +274,8 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
             append_message(db, session.id, role="assistant", content=reply_text, error=error)
             if new_adapter_session:
                 session.adapter_session_id = new_adapter_session
+            if new_adapter_state is not None:
+                session.adapter_state = new_adapter_state
             session.status = "idle"
             session.updated_at = now()
             db.commit()

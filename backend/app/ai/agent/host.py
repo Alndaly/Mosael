@@ -57,6 +57,39 @@ _streams_lock = threading.Lock()
 _streams: dict[str, dict] = {}
 
 
+def resolve_chat_provider(
+    db: Session, provider_profile_id: str | None, model: str
+) -> tuple[dict | None, str | None, object | None]:
+    """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
+    AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
+    永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
+    from app.domain.provider_defaults import resolve_default
+    from app.domain.providers import first_enabled_profile, resolve_profile
+
+    profile = None
+    if provider_profile_id:
+        profile = resolve_profile(db, "", provider_profile_id)
+    if profile is None:
+        default_profile, default_model = resolve_default(db, "chat")
+        if default_profile is not None:
+            profile = default_profile
+            model = model or default_model
+    if profile is None:
+        profile = first_enabled_profile(db)
+    if profile is None:
+        return None, None, None
+    agent_model = (model or profile.default_model or "").strip()
+    # A profile with no usable model would otherwise reach the sidecar as model=""
+    # and come back as a silent empty turn.
+    if not agent_model:
+        raise AdapterError(
+            f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
+            "或在对话框的模型选择器里选一个。"
+        )
+    provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
+    return provider_dict, agent_model, profile
+
+
 def get_stream_state(session_id: str) -> dict:
     with _streams_lock:
         state = _streams.get(session_id)
@@ -345,34 +378,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             provider_dict: dict | None = None
             agent_model: str | None = None
             if session.adapter == "pi":
-                from app.domain.provider_defaults import resolve_default
-                from app.domain.providers import first_enabled_profile, resolve_profile
-
-                # 解析顺序:会话选定 → 「对话」能力的默认供应商 → 第一个启用供应商
-                profile = None
-                model = session.model or ""
-                if session.provider_profile_id:
-                    profile = resolve_profile(db, "", session.provider_profile_id)
-                if profile is None:
-                    default_profile, default_model = resolve_default(db, "chat")
-                    if default_profile is not None:
-                        profile = default_profile
-                        model = model or default_model
-                if profile is None:
-                    profile = first_enabled_profile(db)
+                provider_dict, agent_model, profile = resolve_chat_provider(
+                    db, session.provider_profile_id, session.model or ""
+                )
                 if profile is not None:
-                    provider_dict = {"base_url": profile.base_url, "api_key": profile.api_key, "vendor": profile.vendor}
-                    agent_model = (model or profile.default_model or "").strip()
                     provider_profile_id = profile.id
                     provider_vendor = profile.vendor
-                    provider_model = agent_model
-                    # A profile with no usable model would otherwise reach the sidecar as model=""
-                    # and come back as a silent empty turn.
-                    if not agent_model:
-                        raise AdapterError(
-                            f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
-                            "或在对话框的模型选择器里选一个。"
-                        )
+                    provider_model = agent_model or ""
             result: TurnResult = run_turn(
                 session.adapter,
                 prompt=prompt,
