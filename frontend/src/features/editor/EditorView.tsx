@@ -64,6 +64,7 @@ import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { cn } from "@/lib/utils";
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 
 export function EditorView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
@@ -735,6 +736,24 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sequence?.id, splitAtPlayhead, duplicateClip, copyClip, cutClip, pasteClip, moveClipLayer]);
 
+  // 素材拖入时间线走 dnd-kit(指针传感器,移动 6px 才起手,不吃普通点击/右键菜单)。
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [dragOverlayAsset, setDragOverlayAsset] = React.useState<Asset | null>(null);
+  const onAssetDragStart = (event: DragStartEvent) => {
+    const asset = event.active.data.current?.asset as Asset | undefined;
+    if (!asset) return;
+    setDragOverlayAsset(asset);
+    useEditorStore.getState().setDraggingAsset({
+      id: asset.id,
+      kind: asset.kind,
+      duration: typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5,
+    });
+  };
+  const onAssetDragStop = () => {
+    setDragOverlayAsset(null);
+    useEditorStore.getState().setDraggingAsset(null);
+  };
+
   if (!sequence) {
     return (
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
@@ -761,6 +780,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const inspectorInGrid = showInspector && !compact;
 
   return (
+    <DndContext
+      sensors={dndSensors}
+      collisionDetection={pointerWithin}
+      onDragStart={onAssetDragStart}
+      onDragEnd={onAssetDragStop}
+      onDragCancel={onAssetDragStop}
+    >
     <div
       className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-3"
       style={{
@@ -963,6 +989,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         />
       </section>
     </div>
+    <DragOverlay dropAnimation={null}>
+      {dragOverlayAsset && (
+        <div className="pointer-events-none flex max-w-52 items-center gap-1.5 rounded-lg border border-primary bg-panel px-2.5 py-1.5 text-xs [&_span]:truncate">
+          <span>{dragOverlayAsset.name}</span>
+        </div>
+      )}
+    </DragOverlay>
+    </DndContext>
   );
 }
 

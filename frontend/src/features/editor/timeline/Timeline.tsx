@@ -24,6 +24,7 @@ import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
 import { cn } from "@/lib/utils";
+import { useDndMonitor, useDroppable, type DragEndEvent, type DragMoveEvent } from "@dnd-kit/core";
 
 const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 26;
@@ -370,38 +371,44 @@ export function Timeline({
     target.addEventListener("pointerup", onUp);
   };
 
-  const handleDragOver = (event: React.DragEvent, track: Track) => {
-    event.preventDefault();
-    if (!draggingAsset) return;
-    const accepts =
-      (track.kind === "video" && (draggingAsset.kind === "video" || draggingAsset.kind === "image")) ||
-      (track.kind === "audio" && draggingAsset.kind === "audio");
-    if (!accepts || track.locked) {
-      if (dropGhost?.trackId === track.id) setDropGhost(null);
-      return;
-    }
-    let start = timeAtPointer(event);
-    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
-    setDropGhost({ trackId: track.id, start, duration: draggingAsset.duration });
-  };
+  // 素材拖入:dnd-kit 指针事件(原生 HTML5 DnD 在 Electron 下不可靠,已弃用)。
+  const dndPointerX = (event: DragMoveEvent | DragEndEvent): number =>
+    ((event.activatorEvent as PointerEvent).clientX ?? 0) + event.delta.x;
+  useDndMonitor({
+    onDragMove(event) {
+      const asset = event.active.data.current?.asset as Asset | undefined;
+      if (!asset) return;
+      const track = event.over?.data.current?.track as Track | undefined;
+      if (!track || track.locked || !trackAcceptsAsset(track, asset)) {
+        setDropGhost(null);
+        return;
+      }
+      const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
+      let start = timeAtPointer({ clientX: dndPointerX(event) });
+      if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
+      setDropGhost({ trackId: track.id, start, duration: assetDuration });
+    },
+    onDragEnd(event) {
+      setDropGhost(null);
+      const asset = event.active.data.current?.asset as Asset | undefined;
+      const track = event.over?.data.current?.track as Track | undefined;
+      if (!asset || !track || !trackAcceptsAsset(track, asset) || track.locked) return;
+      const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
+      let start = timeAtPointer({ clientX: dndPointerX(event) });
+      if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
+      onInsertClip({
+        trackId: track.id,
+        assetId: asset.id,
+        timelineStart: start,
+        srcIn: 0,
+        srcOut: assetDuration,
+      });
+    },
+    onDragCancel() {
+      setDropGhost(null);
+    },
+  });
 
-  const handleDrop = (event: React.DragEvent, track: Track) => {
-    event.preventDefault();
-    setDropGhost(null);
-    const assetId = event.dataTransfer.getData("application/x-mibu-asset");
-    const asset = assetById.get(assetId);
-    if (!asset || !trackAcceptsAsset(track, asset) || track.locked) return;
-    const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
-    let start = timeAtPointer(event);
-    if (snapEnabled) start = snapTime(start, snapCandidates(allClips, null, useEditorStore.getState().playhead), pxPerSecond).time;
-    onInsertClip({
-      trackId: track.id,
-      assetId: asset.id,
-      timelineStart: start,
-      srcIn: 0,
-      srcOut: assetDuration,
-    });
-  };
 
   const handleWheel = (event: React.WheelEvent) => {
     if (event.ctrlKey || event.metaKey) {
@@ -728,20 +735,16 @@ export function Timeline({
               </div>
             )}
             {tracks.map((track) => (
-              <div
-                className={
+              <DroppableLane
+                accepting={Boolean(
                   draggingAsset &&
-                  ((track.kind === "video" && draggingAsset.kind !== "audio") ||
-                    (track.kind === "audio" && draggingAsset.kind === "audio")) &&
-                  !track.locked
-                    ? "relative border-b border-[var(--track-lane-line)] bg-[color-mix(in_srgb,var(--accent)_55%,var(--track-lane))]"
-                    : "relative border-b border-[var(--track-lane-line)] bg-[var(--track-lane)]"
-                }
+                    ((track.kind === "video" && draggingAsset.kind !== "audio") ||
+                      (track.kind === "audio" && draggingAsset.kind === "audio")) &&
+                    !track.locked,
+                )}
                 key={track.id}
+                track={track}
                 style={{ height: TRACK_HEIGHT }}
-                onDragOver={(event) => handleDragOver(event, track)}
-                onDragLeave={() => dropGhost?.trackId === track.id && setDropGhost(null)}
-                onDrop={(event) => handleDrop(event, track)}
                 onPointerDown={(event) => {
                   if (event.target === event.currentTarget && event.button === 0) startMarquee(event);
                 }}
@@ -827,7 +830,7 @@ export function Timeline({
                     />
                   );
                 })}
-              </div>
+              </DroppableLane>
             ))}
             {dragDraft &&
               (dragDraft.kind === "trim-start" || dragDraft.kind === "trim-end") &&
@@ -898,4 +901,35 @@ export function trackAcceptsAsset(track: Track, asset: Asset): boolean {
   if (track.kind === "video") return asset.kind === "video" || asset.kind === "image";
   if (track.kind === "audio") return asset.kind === "audio";
   return false;
+}
+
+/** 轨道格容器:dnd-kit droppable(素材拖入的命中区),接受态提亮底色。 */
+function DroppableLane({
+  track,
+  accepting,
+  style,
+  onPointerDown,
+  children,
+}: {
+  track: Track;
+  accepting: boolean;
+  style: React.CSSProperties;
+  onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id: `lane-${track.id}`, data: { track } });
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        accepting
+          ? "relative border-b border-[var(--track-lane-line)] bg-[color-mix(in_srgb,var(--accent)_55%,var(--track-lane))]"
+          : "relative border-b border-[var(--track-lane-line)] bg-[var(--track-lane)]"
+      }
+      style={style}
+      onPointerDown={onPointerDown}
+    >
+      {children}
+    </div>
+  );
 }

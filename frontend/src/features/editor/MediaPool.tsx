@@ -13,6 +13,7 @@ import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
+import { useDraggable } from "@dnd-kit/core";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
@@ -181,23 +182,17 @@ export function MediaPool({
 function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
+  // dnd-kit(指针驱动):原生 HTML5 拖拽在 Electron + Radix 包裹下不可靠,这里全面换掉。
+  const { setNodeRef, listeners, attributes } = useDraggable({ id: `asset-${asset.id}`, data: { asset } });
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : null;
   const hasThumb = Boolean(asset.media_info.has_thumbnail) && !thumbFailed;
   return (
     <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
       className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded-md border border-border bg-panel p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
-      draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData("application/x-mibu-asset", asset.id);
-        event.dataTransfer.effectAllowed = "copy";
-        useEditorStore.getState().setDraggingAsset({
-          id: asset.id,
-          kind: asset.kind,
-          duration: typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5,
-        });
-      }}
-      onDragEnd={() => useEditorStore.getState().setDraggingAsset(null)}
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
