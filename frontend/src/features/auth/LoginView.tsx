@@ -1,5 +1,5 @@
 import React from "react";
-import { CircleAlert, Film } from "lucide-react";
+import { CircleAlert, Film, Languages } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -37,6 +37,7 @@ function friendlyAuthError(raw: string, mode: "login" | "register", t: (key: Mes
 
 export function LoginView() {
   const t = useI18n();
+  const { locale, setLocale } = usePreferences();
   const { hasUsers, login, register } = useAuth();
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
   const [legalDoc, setLegalDoc] = React.useState<LegalDoc | null>(null);
@@ -80,8 +81,21 @@ export function LoginView() {
   });
 
   return (
-    <div className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="relative grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <LoginHero />
+
+      {/* 未登录也能换语言:与壳层同一偏好存储,登录后无缝延续。 */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground"
+        onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
+        title={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
+        aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
+      >
+        <Languages size={14} /> {locale === "zh-CN" ? "English" : "中文"}
+      </Button>
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
         <div className="grid w-[min(340px,100%)] content-center gap-6">
