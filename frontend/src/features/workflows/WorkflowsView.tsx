@@ -1097,11 +1097,13 @@ function WorkflowEditor({
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[280px] p-1.5">
-              <div className="flex h-8 items-center gap-1.5 rounded-md border border-input bg-field px-2 text-muted-foreground">
-                <Search size={13} />
+              {/* 单层输入框 + 内置图标(与素材搜索同款):此前外壳自带边框、内层 Input
+                  又画自己的边框和焦点环,聚焦时两层框套着一枚游离的放大镜。 */}
+              <div className="relative">
+                <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   autoFocus
-                  className="min-w-0 flex-1 border-0 bg-transparent text-[12.5px] text-foreground outline-none"
+                  className="h-8 pl-[30px] pr-2 text-[12.5px] focus-visible:border-primary focus-visible:ring-0"
                   value={nodeSearch}
                   onChange={(event) => setNodeSearch(event.target.value)}
                   placeholder={t("wfNodeSearchPlaceholder")}
@@ -1975,13 +1977,15 @@ function NodeInspector({
   return (
     <aside className="absolute bottom-2 right-2 top-2 z-30 grid min-h-0 w-[min(300px,calc(100%-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]" aria-label={node.name || meta?.label || node.type}>
       <div className="flex min-h-[38px] items-center justify-between gap-2 border-b border-border px-2.5">
-        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))] h-6 w-6" style={{ "--wf-node-color": WF_NODE_COLORS[node.type] } as React.CSSProperties}>
+        <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[node.type] } as React.CSSProperties}>
           {NODE_ICONS[node.type] ?? <Type size={13} />}
         </span>
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-[10.5px] [&_small]:text-muted-foreground">
-          {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。 */}
+          {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。
+              h-6 收掉 Input 基础款的 h-9:38px 头部里塞 36px 输入框会把整行撑満,
+              名字看着像一只大号表单框而不是可改的标题。 */}
           <Input
-            className="-ml-1 min-w-0 rounded-md border border-transparent bg-transparent px-1 py-px text-[13px] font-semibold text-foreground hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none"
+            className="-ml-1 h-6 min-w-0 rounded-md border border-transparent bg-transparent px-1 py-px text-[13px] font-semibold text-foreground shadow-none hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none focus-visible:ring-0"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}

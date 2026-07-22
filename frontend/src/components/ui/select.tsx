@@ -19,7 +19,9 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-sm  ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      // [&>span]:min-w-0:值 span 是 flex 子项,缺它长文本(如完整模型 id)不收缩,
+      // 会把触发器撑溢出、chevron 被挤出可视区;补上后正常截断出省略号。
+      "flex h-9 w-full items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-sm  ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:line-clamp-1",
       className
     )}
     {...props}

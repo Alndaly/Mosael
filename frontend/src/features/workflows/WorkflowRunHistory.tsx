@@ -91,7 +91,11 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
       </div>
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="overflow-y-auto border-b border-border p-1">
-          {runs.data && runs.data.length === 0 && <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryEmpty")}</p>}
+          {runs.data && runs.data.length === 0 && (
+            <div className="grid h-full place-items-center">
+              <p className="m-0 px-2 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryEmpty")}</p>
+            </div>
+          )}
           {(runs.data ?? []).map((run) => (
             <button
               key={run.id}
@@ -116,7 +120,9 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
         </div>
         <div className="overflow-y-auto px-2.5 py-2">
           {!selected ? (
-            <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryPick")}</p>
+            <div className="grid h-full place-items-center">
+              <p className="m-0 px-2 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryPick")}</p>
+            </div>
           ) : (
             <>
               {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-[11.5px] text-destructive">{selected.error}</p>}
