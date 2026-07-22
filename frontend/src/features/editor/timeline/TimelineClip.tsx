@@ -11,6 +11,8 @@ export function TimelineClip({
   name,
   left,
   width,
+  shiftPx = 0,
+  animate = false,
   selected,
   dragging,
   peaks,
@@ -27,6 +29,10 @@ export function TimelineClip({
   name: string;
   left: number;
   width: number;
+  /** 相对 left 的水平位移(px):拖拽中的本体与涟漪让位的邻居都走 transform。 */
+  shiftPx?: number;
+  /** 拖拽期间(含落位帧)开 200ms 过渡;平时关闭,缩放/刷新保持零动画。 */
+  animate?: boolean;
   selected: boolean;
   dragging: boolean;
   peaks?: number[];
@@ -47,14 +53,21 @@ export function TimelineClip({
     trackKind === "audio" && "border-[var(--track-audio-border)] bg-[var(--track-audio-bg)] text-[var(--track-audio-text)]",
     trackKind === "subtitle" &&
       "border-[color-mix(in_oklab,#a855f7_45%,var(--border))] bg-[color-mix(in_oklab,#a855f7_18%,var(--panel))] text-[var(--track-subtitle-text)]",
+    // 松手落位/涟漪让位由这组过渡完成;拖拽本体 duration-0 保证 1:1 跟手。
+    animate && "transition-[left,width,transform] duration-200 ease-out motion-reduce:transition-none",
     selected && "z-[2] border-primary shadow-[0_0_0_1px_var(--primary)]",
-    dragging && "z-[3] cursor-grabbing opacity-[0.92] shadow-[var(--shadow-raised)]",
+    dragging && "z-[3] cursor-grabbing opacity-[0.92] duration-0",
   );
 
   const clip = (
     <div
       className={className}
-      style={{ left, width }}
+      style={{
+        left,
+        width,
+        transform: shiftPx !== 0 ? `translate3d(${shiftPx}px, 0, 0)` : undefined,
+        willChange: dragging ? "transform" : undefined,
+      }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         onSelect();

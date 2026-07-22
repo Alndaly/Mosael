@@ -100,7 +100,7 @@ export function Timeline({
   // The moving playhead line and the toolbar readout are isolated in tiny subscriber
   // components below; handlers that need the current value read it via getState().
   const pxPerSecond = useEditorStore((state) => state.pxPerSecond);
-  const dragDraft = useEditorStore((state) => state.dragDraft);
+  const rawDragDraft = useEditorStore((state) => state.dragDraft);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const { setPlayhead, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
@@ -139,6 +139,35 @@ export function Timeline({
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
+
+  // 落位动画(老 mibu-video 同款):提交回包落进缓存、而 EditorView 的效应还没清草稿的
+  // 那一帧,缓存已是终值 — 把"追平了缓存的 settling 草稿"视作已清,片段在该帧带着
+  // 过渡从松手位置滑向终点;涟漪预览同帧归零,不会二次位移。草稿存活期间(含这一帧)
+  // 过渡类保持挂载,松手前的拖拽本体则以 duration-0 保证 1:1 跟手。
+  const dragDraft = React.useMemo(() => {
+    if (!rawDragDraft?.settling) return rawDragDraft;
+    const committed = allClips.find((item) => item.id === rawDragDraft.clipId);
+    if (!committed) return rawDragDraft;
+    const committedTrack = tracks.find((track) => (track.clips ?? []).some((c) => c.id === rawDragDraft.clipId));
+    const eq = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    const caughtUp =
+      committedTrack?.id === rawDragDraft.trackId &&
+      eq(committed.timeline_start, rawDragDraft.timeline_start) &&
+      eq(committed.src_in, rawDragDraft.src_in) &&
+      eq(committed.src_out, rawDragDraft.src_out);
+    return caughtUp ? null : rawDragDraft;
+  }, [rawDragDraft, allClips, tracks]);
+  // 有草稿在场才开过渡 — 平时缩放/刷新保持零动画。草稿清掉后再多挂 220ms:
+  // 落位滑行正在进行,过早摘掉过渡类会把动画掐断成瞬移。
+  const [animateClips, setAnimateClips] = React.useState(false);
+  React.useEffect(() => {
+    if (rawDragDraft) {
+      setAnimateClips(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setAnimateClips(false), 220);
+    return () => window.clearTimeout(timer);
+  }, [rawDragDraft]);
 
   // Insert mode: while dragging, downstream clips on the target track visibly part
   // to make room (DaVinci "段落挤开"). This is the timeline width of the dragged clip.
@@ -269,6 +298,18 @@ export function Timeline({
     window.addEventListener("pointerup", onUp);
   };
 
+  /** 拖片段贴近轨道区上下边缘时纵向自动滚动,滚出视口的目标轨也够得着(老版同款,
+   *  EDGE 28 / STEP 18)。只做纵向 — 横向自动滚动会让 viewport 相对的拖拽坐标漂移。 */
+  const autoScrollLanes = (clientY: number) => {
+    const el = hscrollRef.current;
+    if (!el || el.scrollHeight - el.clientHeight <= 1) return;
+    const rect = el.getBoundingClientRect();
+    const EDGE = 28;
+    const STEP = 18;
+    if (clientY < rect.top + EDGE) el.scrollTop = Math.max(0, el.scrollTop - STEP);
+    else if (clientY > rect.bottom - EDGE) el.scrollTop += STEP;
+  };
+
   const startClipDrag = (event: React.PointerEvent, track: Track, clipId: string) => {
     const clip = (track.clips ?? []).find((item) => item.id === clipId);
     if (!clip || track.locked) return;
@@ -295,6 +336,7 @@ export function Timeline({
     // freeze the drag with no pointerup. window survives the unmount. (Mirrors startMarquee.)
     let wantNewLayer = false;
     const onMove = (moveEvent: PointerEvent) => {
+      autoScrollLanes(moveEvent.clientY);
       const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
       const resolved = resolveMove(origin, rawStart, candidates, pxPerSecond);
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -319,6 +361,7 @@ export function Timeline({
       setNewLayerDrag(false);
       const draft = useEditorStore.getState().dragDraft;
       if (wantNewLayer && onMoveClipToNewLayer && draft && draft.clipId === clip.id) {
+        useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         onMoveClipToNewLayer(clip.id, draft.timeline_start);
       } else if (
         draft &&
@@ -327,6 +370,7 @@ export function Timeline({
       ) {
         // Insert mode ripples the destination track's downstream clips aside.
         const ripple = useEditorStore.getState().editMode === "insert";
+        useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple);
       } else {
         useEditorStore.getState().setDragDraft(null);
@@ -364,6 +408,7 @@ export function Timeline({
       target.removeEventListener("pointerup", onUp);
       const draft = useEditorStore.getState().dragDraft;
       if (draft && draft.clipId === clip.id) {
+        useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         onTrimClip(clip.id, { timeline_start: draft.timeline_start, src_in: draft.src_in, src_out: draft.src_out });
       }
     };
@@ -799,7 +844,11 @@ export function Timeline({
                     clip.timeline_start >= insertRipple.from - 1e-9
                       ? insertRipple.shift
                       : 0;
-                  const displayLeft = display.timeline_start + partingShift;
+                  // 位移一律走 transform、left 固定在已提交位置(老 mibu-video 手法):
+                  // 拖拽本体 duration-0 跟手,松手/涟漪让位则由过渡平滑滑入。
+                  const isMoveDraft = Boolean(draft && draft.kind === "move");
+                  const baseLeft = isMoveDraft ? clip.timeline_start : display.timeline_start;
+                  const shiftTime = isMoveDraft ? display.timeline_start - clip.timeline_start : partingShift;
                   const waveform =
                     (track.kind === "audio" || track.kind === "video") && clip.asset_id
                       ? waveformByAsset.get(clip.asset_id)
@@ -814,8 +863,10 @@ export function Timeline({
                       key={clip.id}
                       trackKind={track.kind}
                       name={clip.text_override ?? (clip.asset_id ? assetById.get(clip.asset_id)?.name ?? clip.asset_id.slice(0, 8) : "")}
-                      left={timeToPx(displayLeft, pxPerSecond)}
+                      left={timeToPx(baseLeft, pxPerSecond)}
+                      shiftPx={timeToPx(shiftTime, pxPerSecond)}
                       width={clipWidth}
+                      animate={animateClips}
                       selected={selectedClipIds.includes(clip.id)}
                       dragging={Boolean(draft)}
                       peaks={peaks}

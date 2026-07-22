@@ -12,6 +12,9 @@ export interface DragDraft {
   src_in: number;
   src_out: number;
   kind: "move" | "trim-start" | "trim-end";
+  /** 指针已松开、提交在途:草稿只为钉住落点等服务端回包,不再跟随指针。
+   *  缓存追平草稿的那一帧把它视作已清,落位动画由该帧的过渡完成。 */
+  settling?: boolean;
 }
 
 export const MIN_PX_PER_SECOND = 4;
