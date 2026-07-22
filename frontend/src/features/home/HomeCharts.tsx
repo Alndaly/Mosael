@@ -59,7 +59,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   const t = useI18n();
   const max = Math.max(...daily.map((day) => day.succeeded + day.failed));
   if (max === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyActivity")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyActivity")}</p>;
   }
   const config: ChartConfig = {
     succeeded: { ...activityConfig.succeeded, label: t("homeLegendSucceeded") },
@@ -68,9 +68,9 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   const data = daily.map((day) => ({ ...day, day: day.date.slice(5) }));
 
   return (
-    <ChartContainer config={config} className="home-chart-plot">
+    <ChartContainer config={config} className="h-[150px]">
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
-        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <CartesianGrid vertical={false} strokeDasharray="0" />
         <XAxis
           dataKey="day"
           tickLine={false}
@@ -83,7 +83,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
         {/* 堆叠:成功在下、失败在上;radius 只圆数据端(顶),基线端直角 */}
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {max}</span>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -103,20 +103,20 @@ export function UsageCostChart({
   const totalEvents = rows.reduce((sum, day) => sum + day.events, 0);
   const maxCost = Math.max(0, ...rows.map((day) => day.cost_micros));
   if (totalEvents === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyUsage")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyUsage")}</p>;
   }
   if (maxCost === 0 && unknown > 0) {
     return (
-      <div className="home-chart-empty">
+      <div className="m-0 py-6 text-center text-xs text-muted-foreground">
         <span>{t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}</span>
-        <button type="button" onClick={() => gotoSettings("provider-pricing")}>
+        <button type="button" className="ml-2 inline-flex cursor-pointer items-center border-0 bg-transparent text-primary hover:underline" onClick={() => gotoSettings("provider-pricing")}>
           {t("homeChartUsageConfigurePricing")}
         </button>
       </div>
     );
   }
   if (maxCost === 0) {
-    return <p className="home-chart-empty">{t("homeChartUsageZeroCost").replace("{n}", String(totalEvents))}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartUsageZeroCost").replace("{n}", String(totalEvents))}</p>;
   }
   const config: ChartConfig = {
     cost: { ...usageConfigBase.cost, label: t("homeLegendCost") },
@@ -128,9 +128,9 @@ export function UsageCostChart({
       : formatMicros(maxCost, currency);
 
   return (
-    <ChartContainer config={config} className="home-chart-plot">
+    <ChartContainer config={config} className="h-[150px]">
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
-        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <CartesianGrid vertical={false} strokeDasharray="0" />
         <XAxis
           dataKey="day"
           tickLine={false}
@@ -144,7 +144,7 @@ export function UsageCostChart({
           content={<ChartTooltipContent valueFormatter={(value) => formatMicros(Number(value), currency)} />}
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {maxLabel}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {maxLabel}</span>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -155,7 +155,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
   const rows = daily ?? [];
   const maxTokens = Math.max(0, ...rows.map((day) => day.total_tokens));
   if (maxTokens === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyTokens")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyTokens")}</p>;
   }
   const config: ChartConfig = {
     input: { ...tokenConfigBase.input, label: t("homeLegendInputTokens") },
@@ -173,9 +173,9 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
   });
 
   return (
-    <ChartContainer config={config} className="home-chart-plot">
+    <ChartContainer config={config} className="h-[150px]">
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
-        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <CartesianGrid vertical={false} strokeDasharray="0" />
         <XAxis
           dataKey="day"
           tickLine={false}
@@ -189,7 +189,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
         <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
         <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend
-          content={<ChartLegendContent extra={<span className="home-chart-max">max {formatCount(maxTokens)}</span>} />}
+          content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {formatCount(maxTokens)}</span>} />}
         />
       </BarChart>
     </ChartContainer>
@@ -210,7 +210,7 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
     .reduce((sum, [, count]) => sum + count, 0);
   const total = known.reduce((sum, entry) => sum + entry.count, 0) + other;
   if (total === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyAssets")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyAssets")}</p>;
   }
 
   const segments = [
@@ -224,8 +224,8 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
   );
 
   return (
-    <div className="home-chart-donut-row">
-      <ChartContainer config={config} className="home-chart-donut">
+    <div className="grid grid-cols-[auto_1fr] items-center gap-3.5">
+      <ChartContainer config={config} className="h-[120px] w-[120px]">
         <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <ChartTooltip content={<ChartTooltipContent hideLabel />} />
           <Pie
@@ -244,17 +244,17 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
           </Pie>
         </PieChart>
       </ChartContainer>
-      <div className="home-chart-donut-side">
-        <div className="home-chart-donut-total">
-          <strong>{total}</strong>
-          <span>{t("homeStatAssets")}</span>
+      <div className="grid min-w-0 gap-2">
+        <div className="flex items-baseline gap-1.5">
+          <strong className="text-xl tabular-nums">{total}</strong>
+          <span className="text-[11px] text-muted-foreground">{t("homeStatAssets")}</span>
         </div>
         {/* 直接标注计数:不用悬停就能读数 */}
-        <div className="home-chart-legend home-chart-donut-legend">
+        <div className="flex flex-col flex-wrap items-start gap-1 text-[11px] text-muted-foreground">
           {segments.map((segment) => (
-            <span key={segment.kind}>
-              <i className="home-chart-dot" style={{ background: segment.color }} /> {segment.name}{" "}
-              <em className="home-chart-count">{segment.count}</em>
+            <span className="inline-flex items-center gap-[5px]" key={segment.kind}>
+              <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} /> {segment.name}{" "}
+              <em className="not-italic tabular-nums text-foreground">{segment.count}</em>
             </span>
           ))}
         </div>
@@ -267,7 +267,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
   const t = useI18n();
   const max = Math.max(...daily.map((day) => day.succeeded + day.failed + day.active + day.blocked));
   if (max === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyPublishActivity")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyPublishActivity")}</p>;
   }
   const config: ChartConfig = {
     succeeded: { ...publishConfigBase.succeeded, label: t("homeLegendSucceeded") },
@@ -278,9 +278,9 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
   const data = daily.map((day) => ({ ...day, day: day.date.slice(5) }));
 
   return (
-    <ChartContainer config={config} className="home-chart-plot">
+    <ChartContainer config={config} className="h-[150px]">
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="30%">
-        <CartesianGrid vertical={false} strokeDasharray="0" className="mibu-chart-grid" />
+        <CartesianGrid vertical={false} strokeDasharray="0" />
         <XAxis
           dataKey="day"
           tickLine={false}
@@ -294,7 +294,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
         <Bar dataKey="active" stackId="publish" fill="var(--color-active)" maxBarSize={14} />
         <Bar dataKey="blocked" stackId="publish" fill="var(--color-blocked)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="publish" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="home-chart-max">max {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {max}</span>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -332,7 +332,7 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
     .sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((sum, [, count]) => sum + count, 0);
   if (total === 0) {
-    return <p className="home-chart-empty">{t("homeChartEmptyPublishPlatforms")}</p>;
+    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyPublishPlatforms")}</p>;
   }
 
   const segments = entries.map(([platform, count], index) => ({
@@ -346,8 +346,8 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
   );
 
   return (
-    <div className="home-chart-donut-row">
-      <ChartContainer config={config} className="home-chart-donut">
+    <div className="grid grid-cols-[auto_1fr] items-center gap-3.5">
+      <ChartContainer config={config} className="h-[120px] w-[120px]">
         <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <ChartTooltip content={<ChartTooltipContent hideLabel />} />
           <Pie
@@ -366,16 +366,16 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
           </Pie>
         </PieChart>
       </ChartContainer>
-      <div className="home-chart-donut-side">
-        <div className="home-chart-donut-total">
-          <strong>{total}</strong>
-          <span>{t("publishTabRecords")}</span>
+      <div className="grid min-w-0 gap-2">
+        <div className="flex items-baseline gap-1.5">
+          <strong className="text-xl tabular-nums">{total}</strong>
+          <span className="text-[11px] text-muted-foreground">{t("publishTabRecords")}</span>
         </div>
-        <div className="home-chart-legend home-chart-donut-legend">
+        <div className="flex flex-col flex-wrap items-start gap-1 text-[11px] text-muted-foreground">
           {segments.map((segment) => (
-            <span key={segment.platform}>
-              <i className="home-chart-dot" style={{ background: segment.color }} /> {segment.name}{" "}
-              <em className="home-chart-count">{segment.count}</em>
+            <span className="inline-flex items-center gap-[5px]" key={segment.platform}>
+              <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} /> {segment.name}{" "}
+              <em className="not-italic tabular-nums text-foreground">{segment.count}</em>
             </span>
           ))}
         </div>

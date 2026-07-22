@@ -45,7 +45,10 @@ function ChartContainer({
 
   return (
     <ChartContext.Provider value={{ config }}>
-      <div data-chart={chartId} className={cn("mibu-chart", className)} {...props}>
+      <div data-chart={chartId} className={cn(
+          "w-full [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-axis-tick_text]:text-[10px] [&_.recharts-cartesian-axis-tick_text]:tabular-nums [&_.recharts-cartesian-grid_line]:stroke-border",
+          className,
+        )} {...props}>
         <ChartStyle id={chartId} config={config} />
         <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
       </div>
@@ -94,18 +97,18 @@ function ChartTooltipContent({
   const { config } = useChart();
   if (!active || !payload?.length) return null;
   return (
-    <div className="mibu-chart-tooltip">
+    <div className="grid min-w-[130px] gap-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-[11px]">
       {!hideLabel && (
-        <div className="mibu-chart-tooltip-label">{labelFormatter ? labelFormatter(label) : String(label ?? "")}</div>
+        <div className="font-[650]">{labelFormatter ? labelFormatter(label) : String(label ?? "")}</div>
       )}
       {payload.map((item) => {
         const key = String(item.dataKey ?? item.name ?? "");
         const entry = config[key];
         return (
-          <div className="mibu-chart-tooltip-row" key={key}>
-            <span className="home-chart-dot" style={{ background: entry?.color ?? item.color }} />
-            <span className="mibu-chart-tooltip-name">{entry?.label ?? key}</span>
-            <span className="mibu-chart-tooltip-value">
+          <div className="flex items-center gap-1.5" key={key}>
+            <span className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: entry?.color ?? item.color }} />
+            <span className="text-muted-foreground">{entry?.label ?? key}</span>
+            <span className="ml-auto tabular-nums">
               {valueFormatter ? valueFormatter(item.value ?? 0) : item.value}
             </span>
           </div>
@@ -127,13 +130,13 @@ function ChartLegendContent({
   const { config } = useChart();
   if (!payload?.length) return null;
   return (
-    <div className="home-chart-legend mibu-chart-legend">
+    <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-muted-foreground">
       {payload.map((item) => {
         const key = String(item.dataKey ?? item.value ?? "");
         const entry = config[key];
         return (
-          <span key={key}>
-            <i className="home-chart-dot" style={{ background: entry?.color ?? item.color }} /> {entry?.label ?? key}
+          <span className="inline-flex items-center gap-[5px]" key={key}>
+            <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: entry?.color ?? item.color }} /> {entry?.label ?? key}
           </span>
         );
       })}

@@ -185,46 +185,46 @@ export function HomeView({
 
   return (
     <div className="feature-view">
-      <section className="home-hero">
-        <div className="home-hero-greeting">
-          <h1>{t(greetingKey)}</h1>
-          <small>{displayWorkspaceName(workspace.name, t)}</small>
+      <section className="mb-3 flex items-stretch justify-between gap-3 max-[880px]:flex-col">
+        <div className="flex min-w-0 flex-col justify-center gap-0.5">
+          <h1 className="m-0 text-xl font-[650] tracking-[-0.01em]">{t(greetingKey)}</h1>
+          <small className="text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>
         </div>
-        <figure className="home-poem" aria-live="polite">
-          <BookText size={13} className="home-poem-icon" />
+        <figure className="relative m-0 flex max-w-[46ch] flex-col justify-center gap-0.5 rounded-lg border border-border bg-panel py-2.5 pl-8 pr-[34px] max-[880px]:max-w-none" aria-live="polite">
+          <BookText size={13} className="absolute left-2.5 top-3 text-muted-foreground" />
           {poemSpins > 0 && poemSpins % 10 === 0 ? (
-            <blockquote>{t("homePoemEgg")}</blockquote>
+            <blockquote className="m-0 text-[13px] leading-normal">{t("homePoemEgg")}</blockquote>
           ) : (
             <>
-              <blockquote>{poem.text}</blockquote>
-              <figcaption>
+              <blockquote className="m-0 text-[13px] leading-normal">{poem.text}</blockquote>
+              <figcaption className="text-[11px] text-muted-foreground">
                 {poem.author} · 《{poem.source}》
               </figcaption>
             </>
           )}
-          <button type="button" className="home-poem-refresh" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
+          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
             <RefreshCcw size={12} />
           </button>
         </figure>
       </section>
 
       {statTiles.length > 0 && (
-        <section className="home-stats">
+        <section className="mb-3 grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2.5">
           {statTiles.map((tile) => (
             <button
               type="button"
-              className="home-stat"
+              className="grid cursor-pointer grid-cols-[auto_1fr] grid-rows-[auto_auto] items-center gap-x-2 rounded-lg border border-border bg-panel px-3 py-2 text-left hover:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
               key={tile.key}
               onClick={() => {
                 if ("goto" in tile && tile.goto) gotoRecord(tile.goto);
                 else if ("action" in tile && tile.action) tile.action();
               }}
             >
-              <span className="home-stat-icon">{tile.icon}</span>
-              <strong className="home-stat-value">{tile.value}</strong>
-              <span className="home-stat-label">
+              <span className="row-span-2 inline-flex text-muted-foreground">{tile.icon}</span>
+              <strong className="text-base font-[650] leading-[1.2] tabular-nums">{tile.value}</strong>
+              <span className="truncate text-[11px] text-muted-foreground">
                 {t(tile.key)}
-                {"extra" in tile && tile.extra ? <em className="home-stat-extra"> · {tile.extra}</em> : null}
+                {"extra" in tile && tile.extra ? <em className="not-italic text-destructive"> · {tile.extra}</em> : null}
               </span>
             </button>
           ))}
@@ -232,29 +232,29 @@ export function HomeView({
       )}
 
       {stats && (
-        <section className="home-charts">
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartActivity")}</h2>
+        <section className="mb-3 grid grid-cols-[2fr_1fr] gap-2.5 max-[880px]:grid-cols-1">
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartActivity")}</h2>
             <ActivityChart daily={stats.daily} />
           </div>
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartAssets")}</h2>
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartAssets")}</h2>
             <AssetKindsChart assetKinds={stats.asset_kinds} />
           </div>
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartPublishActivity")}</h2>
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishActivity")}</h2>
             <PublishActivityChart daily={stats.publish_daily} />
           </div>
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartPublishPlatforms")}</h2>
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishPlatforms")}</h2>
             <PublishPlatformsChart platforms={stats.publish_platforms} />
           </div>
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartUsage")}</h2>
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartUsage")}</h2>
             <UsageCostChart daily={stats.usage_daily} currency={stats.usage_currency} unknown={stats.usage_unknown_cost_events} />
           </div>
-          <div className="home-chart">
-            <h2 className="home-chart-title">{t("homeChartTokens")}</h2>
+          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
+            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartTokens")}</h2>
             <UsageTokensChart daily={stats.usage_token_daily} />
           </div>
         </section>
@@ -298,31 +298,31 @@ export function HomeView({
         />
       ) : (
         <>
-          <div className="project-grid">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
             {visible.map((project) => (
               <ContextMenu key={project.id}>
                 <ContextMenuTrigger asChild>
-                  <article className="project-card" onDoubleClick={() => onOpenProject(project.id)}>
-                    <div className="project-card-body">
-                      <strong>{project.name}</strong>
-                      <small>{displayWorkspaceName(workspace.name, t)}</small>
+                  <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]" onDoubleClick={() => onOpenProject(project.id)}>
+                    <div className="min-w-0">
+                      <strong className="block truncate text-[13px] font-semibold">{project.name}</strong>
+                      <small className="mt-0.5 block text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>
                     </div>
-                    <div className="project-card-stats">
-                      <span title={t("projectStatDuration")}>
+                    <div className="flex flex-wrap items-center gap-2.5 text-[11.5px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatDuration")}>
                         <Clock3 size={11} />
-                        <em className="timecode">{formatSeconds(project.timeline_duration ?? 0)}</em>
+                        <em className="timecode not-italic">{formatSeconds(project.timeline_duration ?? 0)}</em>
                       </span>
-                      <span title={t("projectStatAssets")}>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatAssets")}>
                         <Film size={11} />
                         {t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}
                       </span>
-                      <span title={t("projectStatSequences")}>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatSequences")}>
                         <Layers size={11} />
                         {t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}
                       </span>
                     </div>
-                    <div className="project-card-foot">
-                      <small className="project-card-updated">
+                    <div className="flex items-center justify-between gap-1.5 border-t border-border pt-2.5">
+                      <small className="m-0 min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                         {project.created_at && (
                           <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
                         )}
