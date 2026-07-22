@@ -91,7 +91,8 @@ export function LoginView() {
           </div>
 
           <Form {...form}>
-            <form className="grid gap-3" onSubmit={onSubmit} noValidate>
+            {/* 组间 16px 明显大于组内标签的 8px,字段归属一眼可辨。 */}
+            <form className="grid gap-4" onSubmit={onSubmit} noValidate>
               {form.formState.errors.root && (
                 <Alert variant="destructive">
                   <CircleAlert size={14} />

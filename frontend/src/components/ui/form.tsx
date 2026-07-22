@@ -80,8 +80,11 @@ const FormItem = React.forwardRef<
 
   return (
     <FormItemContext.Provider value={{ id }}>
-      {/* 6px 标签→控件:贴齐全站手写表单的紧凑刻度(shadcn 默认 8px 偏松)。 */}
-      <div ref={ref} className={cn("space-y-1.5", className)} {...props} />
+      {/* grid+gap 而非 space-y:Label 是 inline 元素,竖向 margin 对它无效 —
+          Tailwind v4 的 space-y 把间距落在前一个子元素的 margin-bottom 上,
+          8px 直接蒸发,标签贴死输入框。gap 不受 display 影响。
+          组与组的区分交给表单容器的 gap(应明显大于这里,如 16px+)。 */}
+      <div ref={ref} className={cn("grid gap-2", className)} {...props} />
     </FormItemContext.Provider>
   )
 })
