@@ -476,6 +476,7 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-7 w-7"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("splitAtPlayhead")}
@@ -492,6 +493,7 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-7 w-7"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onDuplicateClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("duplicateClip")}
@@ -508,6 +510,7 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-7 w-7"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))}
                   aria-label={t("rippleDelete")}
@@ -524,6 +527,7 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-7 w-7"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds.forEach((clipId) => onDeleteClip(clipId))}
                   aria-label={t("deleteClip")}
@@ -554,8 +558,9 @@ export function Timeline({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={snapEnabled ? "secondary" : "ghost"}
+                variant="ghost"
                 size="icon"
+                className={cn("h-7 w-7", snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 onClick={() => setSnapEnabled((value) => !value)}
                 aria-pressed={snapEnabled}
                 aria-label="Snap"
@@ -567,7 +572,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
                 <Minus size={14} />
               </Button>
             </TooltipTrigger>
@@ -575,7 +580,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
                 <Plus size={14} />
               </Button>
             </TooltipTrigger>
@@ -584,8 +589,9 @@ export function Timeline({
           <Popover open={helpOpen} onOpenChange={setHelpOpen}>
             <PopoverTrigger asChild>
               <Button
-                variant={helpOpen ? "secondary" : "ghost"}
+                variant="ghost"
                 size="icon"
+                className={cn("h-7 w-7", helpOpen && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-label={t("shortcutsHelp")}
               >
                 <CircleHelp size={14} />

@@ -946,6 +946,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7"
                     disabled={!sequence.can_undo || undoMutation.isPending}
                     onClick={() => undoMutation.mutate()}
                     aria-label={t("undo")}
@@ -960,6 +961,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7"
                     disabled={!sequence.can_redo || redoMutation.isPending}
                     onClick={() => redoMutation.mutate()}
                     aria-label={t("redoAction")}
@@ -974,6 +976,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7"
                     disabled={addSubtitleMutation.isPending}
                     onClick={() => addSubtitleMutation.mutate()}
                     aria-label={t("addSubtitleAtPlayhead")}
@@ -1094,7 +1097,7 @@ function ExportControl({
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
-      <Button size="sm" variant="outline" disabled={busy} onClick={() => startExport.mutate()}>
+      <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => startExport.mutate()}>
         {busy ? <Loader2 size={13} className="animate-mibu-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
