@@ -74,7 +74,8 @@ export function MediaPool({
     onError: (error) => setDeleteError(String((error as Error).message)),
   });
   return (
-    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)]">
+    // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
+    <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
       <div className="flex min-h-[38px] items-center justify-between border-b border-border px-2.5 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="flex shrink-0 gap-1">
