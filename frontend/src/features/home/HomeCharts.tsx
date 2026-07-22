@@ -224,40 +224,48 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
   );
 
   return (
-    <div className="grid grid-cols-[auto_1fr] items-center gap-3.5">
-      <ChartContainer config={config} className="h-[120px] w-[120px]">
-        <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-          <Pie
-            data={segments}
-            dataKey="count"
-            nameKey="kind"
-            innerRadius="62%"
-            outerRadius="92%"
-            paddingAngle={2}
-            strokeWidth={0}
-            isAnimationActive={false}
-          >
-            {segments.map((segment) => (
-              <Cell key={segment.kind} fill={`var(--color-${segment.kind})`} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ChartContainer>
-      <div className="grid min-w-0 gap-2">
-        <div className="flex items-baseline gap-1.5">
-          <strong className="text-xl tabular-nums">{total}</strong>
-          <span className="text-[11px] text-muted-foreground">{t("homeStatAssets")}</span>
+    // 总数进环心、图例行撑满余宽(名称左、计数+占比右):宽卡片上内容占满整行,
+    // 不再是环图+一小撮文字挤在左边、右边一大片空白。
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-5">
+      <div className="relative">
+        <ChartContainer config={config} className="h-[120px] w-[120px]">
+          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+            <Pie
+              data={segments}
+              dataKey="count"
+              nameKey="kind"
+              innerRadius="62%"
+              outerRadius="92%"
+              paddingAngle={2}
+              strokeWidth={0}
+              isAnimationActive={false}
+            >
+              {segments.map((segment) => (
+                <Cell key={segment.kind} fill={`var(--color-${segment.kind})`} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ChartContainer>
+        <div className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-0">
+          <strong className="text-lg leading-tight tabular-nums">{total}</strong>
+          <span className="text-[10px] text-muted-foreground">{t("homeStatAssets")}</span>
         </div>
-        {/* 直接标注计数:不用悬停就能读数 */}
-        <div className="flex flex-col flex-wrap items-start gap-1 text-[11px] text-muted-foreground">
-          {segments.map((segment) => (
-            <span className="inline-flex items-center gap-[5px]" key={segment.kind}>
-              <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} /> {segment.name}{" "}
-              <em className="not-italic tabular-nums text-foreground">{segment.count}</em>
+      </div>
+      {/* 直接标注计数与占比:不用悬停就能读数 */}
+      <div className="grid content-center gap-1.5">
+        {segments.map((segment) => (
+          <div className="flex items-center gap-2 text-[11.5px]" key={segment.kind}>
+            <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} />
+            <span className="truncate text-muted-foreground">{segment.name}</span>
+            <span className="ml-auto flex-none tabular-nums">
+              <em className="not-italic text-foreground">{segment.count}</em>
+              <em className="ml-1.5 not-italic text-[10.5px] text-muted-foreground">
+                {Math.round((segment.count / total) * 100)}%
+              </em>
             </span>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
