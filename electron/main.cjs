@@ -291,7 +291,7 @@ app.whenReady().then(async () => {
     dialog.showErrorBox(
       "Mibu backend failed to start",
       `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
-        "Check that the port is free and see logs in ~/.mibu-new/logs if available.",
+        "Check that the port is free and see logs in ~/.mibu-video/logs if available.",
     );
     app.quit();
     return;

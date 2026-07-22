@@ -33,7 +33,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - RenderPlan kernel: pure, hashable clip/gap segment plans with unit tests; overlaps and missing files rejected.
 - RenderExecutor: single-invocation FFmpeg render (segments normalized to output format, gaps as black+silence, concat, x264/aac) with -progress reporting.
-- Export flow: export button in the timeline toolbar → render job with live progress → mp4 in ~/.mibu-new/exports/ → result registered as an exported asset (thumbnail included) that appears in the media pool and library.
+- Export flow: export button in the timeline toolbar → render job with live progress → mp4 in ~/.mibu-video/exports/ → result registered as an exported asset (thumbnail included) that appears in the media pool and library.
 - Test isolation: tests run in a temp MIBU_DATA_DIR (conftest) so the suite never touches the live database.
 
 ### Undo / Redo (plan §10.2)

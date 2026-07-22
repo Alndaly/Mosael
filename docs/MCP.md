@@ -47,7 +47,7 @@ MIBU_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
 Register with an MCP client, e.g. Claude Code:
 
 ```bash
-claude mcp add mibu -- /path/to/mibu-new/backend/.venv/bin/python /path/to/mibu-new/backend/mcp_server.py
+claude mcp add mibu -- /path/to/mibu-video/backend/.venv/bin/python /path/to/mibu-video/backend/mcp_server.py
 ```
 
 ## Roadmap

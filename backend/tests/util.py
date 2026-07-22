@@ -19,7 +19,7 @@ def _assert_disposable_data_dir() -> None:
 
     conftest.py points MIBU_DATA_DIR at a mkdtemp() before anything imports settings — but
     conftest only loads under pytest. Calling these helpers directly (e.g. `python -c "from
-    tests.util import fresh_client"`) would otherwise resolve to the REAL ~/.mibu-new and
+    tests.util import fresh_client"`) would otherwise resolve to the REAL ~/.mibu-video and
     drop every table in the user's live database. Fail loudly instead of silently wiping it.
     """
     data_dir = Path(settings.data_dir).resolve()

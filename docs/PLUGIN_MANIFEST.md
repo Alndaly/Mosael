@@ -1,6 +1,6 @@
 # Plugin Manifest
 
-Mibu plugins are local directories under `~/.mibu-new/plugins/<plugin-folder>`.
+Mibu plugins are local directories under `~/.mibu-video/plugins/<plugin-folder>`.
 Each plugin must contain `mibu.plugin.json` or `plugin.json`.
 
 ## Minimal Example

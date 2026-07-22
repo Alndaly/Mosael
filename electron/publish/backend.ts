@@ -31,7 +31,7 @@ interface BackendTask {
 function readWorkerKey(): string {
   const dir =
     process.env.MIBU_DATA_DIR ||
-    join(homedir(), ".mibu-new");
+    join(homedir(), ".mibu-video");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
   } catch {

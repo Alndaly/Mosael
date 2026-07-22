@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MIBU_", env_file=".env", extra="ignore")
 
-    data_dir: Path = Path.home() / ".mibu-new"
+    data_dir: Path = Path.home() / ".mibu-video"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8800
     scheduler_enabled: bool = True
@@ -83,3 +83,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 项目更名(mibu-new → mibu-video)的数据目录迁移:老目录还在、新目录未建时整体
+# 平移(同卷 rename,原子且瞬时,SQLite/媒体一并带走)。仅对默认路径做——
+# MIBU_DATA_DIR 显式指过别处的部署不动。
+_legacy_data_dir = Path.home() / ".mibu-new"
+if (
+    settings.data_dir == Path.home() / ".mibu-video"
+    and _legacy_data_dir.is_dir()
+    and not settings.data_dir.exists()
+):
+    _legacy_data_dir.rename(settings.data_dir)

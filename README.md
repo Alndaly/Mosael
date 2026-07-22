@@ -90,9 +90,9 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.mibu-new/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
-| `~/.mibu-new/media/` | 导入与导出的媒体文件 |
-| `~/.mibu-new/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
+| `~/.mibu-video/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
+| `~/.mibu-video/media/` | 导入与导出的媒体文件 |
+| `~/.mibu-video/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
 | `~/Library/Application Support/mibu/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
 | `~/Library/Application Support/mibu/logs/backend.log` | 打包版后端 stdout/stderr |
 | `~/Library/Application Support/mibu/Partitions/` | 各发布账号的持久登录会话 |
