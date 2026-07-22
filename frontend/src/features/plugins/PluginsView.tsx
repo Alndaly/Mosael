@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 /**
  * 插件页 = 主从布局(VS Code 扩展页形态):左侧插件列表,右侧选中
@@ -56,8 +57,8 @@ export function PluginsView() {
 
   return (
     <div className="feature-view">
-      <div className="plugins-shell">
-        <aside className="plugins-list panel">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="panel-head">
             <h2>{t("installed")}</h2>
             <Button
@@ -69,16 +70,16 @@ export function PluginsView() {
               <RefreshCcw size={13} /> {t("scanPlugins")}
             </Button>
           </div>
-          <div className="plugins-list-body">
+          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(plugins.data ?? []).map((plugin) => (
               <button
                 key={plugin.id}
                 type="button"
-                className={selected?.id === plugin.id ? "plugins-item active" : "plugins-item"}
+                className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === plugin.id && "bg-accent hover:bg-accent")}
                 onClick={() => setSelectedId(plugin.id)}
               >
-                <span className={plugin.enabled ? "plugins-dot on" : "plugins-dot"} />
-                <span className="plugins-item-text">
+                <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", plugin.enabled && "bg-[#22c55e]")} />
+                <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                   <strong>{plugin.name}</strong>
                   <small>v{plugin.version}</small>
                 </span>
@@ -86,7 +87,7 @@ export function PluginsView() {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail">
+        <div className="grid min-w-0 overflow-y-auto">
           {selected ? (
             // Keyed so switching plugin remounts: ToolCard is keyed by tool NAME, so without
             // this the next plugin's identically-named tool inherited the previous one's
@@ -156,7 +157,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
   const allGranted = (grants.data ?? []).every((grant) => grant.granted);
 
   return (
-    <div className="plugins-detail-body">
+    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
       <SettingsGroup
         title={plugin.name}
         description={`${plugin.id} · v${plugin.version}`}
@@ -283,20 +284,20 @@ function ToolCard({
   const missingRequired = [...required].some((key) => !(values[key] ?? "").trim());
 
   return (
-    <div className="plugin-tool-card">
-      <button type="button" className="plugin-tool-head" onClick={() => setOpen((value) => !value)}>
+    <div className="overflow-hidden rounded-md border border-border bg-panel">
+      <button type="button" className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-[9px] text-left hover:bg-secondary" onClick={() => setOpen((value) => !value)}>
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         <Terminal size={14} />
-        <div className="plugin-tool-title">
+        <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-[12.5px] [&_strong]:font-semibold">
           <strong>{tool.name}</strong>
           <small>{tool.description ?? ""}</small>
         </div>
-        {!runnable && <small className="plugin-tool-blocked">{t("toolBlockedHint")}</small>}
+        {!runnable && <small className="ml-auto whitespace-nowrap text-[10.5px] text-muted-foreground">{t("toolBlockedHint")}</small>}
       </button>
       {open && (
-        <div className="plugin-tool-body">
+        <div className="grid gap-1.5 border-t border-border p-2">
           {fields.map(([key, spec]) => (
-            <label className="plugin-field" key={key}>
+            <label className="grid gap-1 [&>span]:text-[11.5px] [&>span]:text-muted-foreground [&_em]:not-italic [&_em]:text-destructive" key={key}>
               <span>
                 {key}
                 {required.has(key) && <em>*</em>}
@@ -309,13 +310,13 @@ function ToolCard({
               />
             </label>
           ))}
-          <div className="plugin-tool-actions">
+          <div className="flex justify-end">
             <Button size="sm" disabled={!runnable || missingRequired || invoke.isPending} onClick={() => invoke.mutate()}>
               <Play size={13} /> {t("runTool")}
             </Button>
           </div>
           {result && (
-            <pre className={result.status === "succeeded" ? "plugin-result ok" : "plugin-result bad"}>
+            <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", result.status === "succeeded" ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
               {result.status === "succeeded"
                 ? JSON.stringify(result.output, null, 2)
                 : result.error ?? result.status}
@@ -332,21 +333,21 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
   const [open, setOpen] = React.useState(false);
   const ok = invocation.status === "succeeded";
   return (
-    <div className="plugin-tool-card">
-      <div className="inv-row-head">
-        <button type="button" className="plugin-tool-head" onClick={() => setOpen((value) => !value)}>
+    <div className="overflow-hidden rounded-md border border-border bg-panel">
+      <div className="flex items-stretch [&>button:first-child]:min-w-0 [&>button:first-child]:flex-1">
+        <button type="button" className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-[9px] text-left hover:bg-secondary" onClick={() => setOpen((value) => !value)}>
           {ok ? <CheckCircle2 size={14} className="text-[#16a34a]" /> : <CircleAlert size={14} className="text-destructive" />}
-          <div className="plugin-tool-title">
+          <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-[12.5px] [&_strong]:font-semibold">
             <strong>{invocation.tool_name}</strong>
             <small>{invocation.status}</small>
           </div>
         </button>
-        <button type="button" className="inv-row-delete" aria-label={t("delete")} onClick={onDelete}>
+        <button type="button" className="grid w-8 flex-none cursor-pointer place-items-center border-0 bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
           <Trash2 size={13} />
         </button>
       </div>
       {open && (
-        <pre className={ok ? "plugin-result ok" : "plugin-result bad"}>
+        <pre className={cn("m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]", ok ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]" : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive")}>
           {JSON.stringify(ok ? invocation.output : { input: invocation.input, error: invocation.error }, null, 2)}
         </pre>
       )}

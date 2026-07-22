@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -100,15 +101,15 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="plugins-shell">
-        <aside className="plugins-list panel">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="panel-head">
             <h2>{t("batchListTitle")}</h2>
             <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
               <Plus size={13} /> {t("batchCreate")}
             </Button>
           </div>
-          <div className="plugins-list-body">
+          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(batches.data ?? []).map((batch) => {
               const done = (batch.items ?? []).filter((item) => !ACTIVE.has(item.status) && item.status !== "pending").length;
               return (
@@ -116,11 +117,11 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
                   <ContextMenuTrigger asChild>
                     <button
                       type="button"
-                      className={selected?.id === batch.id ? "plugins-item active" : "plugins-item"}
+                      className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === batch.id && "bg-accent hover:bg-accent")}
                       onClick={() => setSelectedId(batch.id)}
                     >
-                      <span className={ACTIVE.has(batch.status) ? "plugins-dot on" : "plugins-dot"} />
-                      <span className="plugins-item-text">
+                      <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", ACTIVE.has(batch.status) && "bg-[#22c55e]")} />
+                      <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                         <strong>{batch.name}</strong>
                         <small>
                           {done}/{(batch.items ?? []).length} · {t(`batchStatus_${batch.status}` as never)}
@@ -138,7 +139,7 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
             })}
           </div>
         </aside>
-        <div className="plugins-detail">
+        <div className="grid min-w-0 overflow-y-auto">
           {selected ? (
             <BatchDetail key={selected.id} batch={selected} workspaceId={workspace.id} onDelete={() => setDeleting(selected)} />
           ) : (
@@ -174,7 +175,7 @@ function BatchDetail({
   const failed = (batch.items ?? []).filter((item) => item.status === "failed").length;
 
   return (
-    <div className="plugins-detail-body">
+    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
       <SettingsGroup
         title={batch.name}
         description={`${t("wfBoundWorkflow")}: ${workflow?.name ?? batch.workflow_id} · ${succeeded}/${(batch.items ?? []).length} ${t("batchSucceededShort")}${failed ? ` · ${failed} ${t("batchFailedShort")}` : ""}`}

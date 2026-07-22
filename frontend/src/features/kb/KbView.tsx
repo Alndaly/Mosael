@@ -34,6 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KbGraphCanvas } from "@/features/kb/KbGraphCanvas";
 import { KbTiptap } from "@/features/kb/KbTiptap";
+import { cn } from "@/lib/utils";
 
 type KbDataset = components["schemas"]["KbDatasetOut"];
 type KbDocument = components["schemas"]["KbDocumentOut"];
@@ -143,27 +144,27 @@ export function KbView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="plugins-shell">
-        <aside className="plugins-list kb-list panel">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="panel flex flex-col gap-1.5 max-[880px]:flex-row max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="panel-head">
             <h2>{t("kbTitle")}</h2>
             <Button size="icon" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
               <Plus size={14} />
             </Button>
           </div>
-          <div className="plugins-list-body">
+          <div className="min-h-0 flex-1 grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-2 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {listed.map((ds) => (
               <ContextMenu key={ds.id}>
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={selected?.id === ds.id ? "plugins-item active" : "plugins-item"}
+                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === ds.id && "bg-accent hover:bg-accent")}
                     onClick={() => setDatasetId(ds.id)}
                   >
                     <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded border border-border bg-background text-muted-foreground">
                       <BookOpen size={14} />
                     </span>
-                    <span className="plugins-item-text">
+                    <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                       <strong>{ds.name}</strong>
                       <small>{t("kbDocCount").replace("{n}", String(ds.document_count))}</small>
                     </span>
@@ -180,7 +181,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail min-h-0">
+        <div className="grid min-w-0 overflow-y-auto min-h-0">
           {selected ? (
             <DatasetDetail key={selected.id} dataset={selected} workspace={workspace} />
           ) : (

@@ -391,24 +391,24 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="plugins-shell">
-        <aside className="plugins-list panel">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="panel-head">
             <h2>{t("navWorkflows")}</h2>
             <Button variant="outline" size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
               <Plus size={13} /> {t("wfCreate")}
             </Button>
           </div>
-          <div className="plugins-list-body">
+          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(workflows.data ?? []).map((workflow) => (
               <ContextMenu key={workflow.id}>
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={selected?.id === workflow.id ? "plugins-item active" : "plugins-item"}
+                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === workflow.id && "bg-accent hover:bg-accent")}
                     onClick={() => setSelectedId(workflow.id)}
                   >
-                    <span className="plugins-item-text">
+                    <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                       <strong>{workflow.name}</strong>
                       <small>
                         {t("wfNodeCount").replace("{n}", String((workflow.graph as unknown as WorkflowGraph).nodes?.length ?? 0))}
@@ -432,7 +432,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail grid">
+        <div className="grid min-w-0 overflow-y-auto">
           {selected && nodeTypes.data ? (
             <WorkflowEditor
               key={selected.id}

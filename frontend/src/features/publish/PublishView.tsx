@@ -191,22 +191,22 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     <div className="feature-view">
       <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
-      <div className="plugins-shell min-h-0 flex-1 overflow-y-auto">
-        <aside className="plugins-list panel">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-1.5 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)] overflow-y-auto">
+        <aside className="panel grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="panel-head">
             <h2>{t("publishListTitle")}</h2>
           </div>
-          <div className="plugins-list-body">
+          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(tasks.data ?? []).map((task) => (
               <ContextMenu key={task.id}>
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={selected?.id === task.id ? "plugins-item active" : "plugins-item"}
+                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
                     onClick={() => setSelectedId(task.id)}
                   >
-                    <span className={ACTIVE.has(task.status) ? "plugins-dot on" : "plugins-dot"} />
-                    <span className="plugins-item-text">
+                    <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", ACTIVE.has(task.status) && "bg-[#22c55e]")} />
+                    <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                       <strong>{task.title || task.asset_name}</strong>
                       <small>
                         {task.account_name} · {t(`batchStatus_${task.status}` as never)}
@@ -223,7 +223,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         </aside>
-        <div className="plugins-detail">
+        <div className="grid min-w-0 overflow-y-auto">
           {selected ? (
             <PublishDetail key={selected.id} task={selected} onDelete={() => setDeleting(selected)} />
           ) : (
@@ -489,7 +489,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
     (platforms.data ?? []).find((item) => item.platform === task.platform)?.executor === "browser";
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
-    <div className="plugins-detail-body">
+    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
       <SettingsGroup
         title={task.title || task.asset_name}
         description={`${task.account_name} · ${task.platform} · ${t(`batchStatus_${task.status}` as never)}`}
