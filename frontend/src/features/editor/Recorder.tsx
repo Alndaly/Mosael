@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 
 type Source = "screen" | "camera" | "mic";
 

@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -408,7 +408,7 @@ export function ChatWorkspace({
                   <Pencil /> {t("rename")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem destructive onSelect={() => setDeletingSession(item)}>
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
                   <Trash2 /> {t("delete")}
                 </ContextMenuItem>
               </ContextMenuContent>
@@ -535,7 +535,7 @@ export function ChatWorkspace({
                       <Button
                         type="button"
                         variant={skillsOpen ? "secondary" : "ghost"}
-                        size="icon-sm"
+                        size="icon"
                         aria-label={t("skillsTitle")}
                       >
                         <Sparkles size={14} />
@@ -566,7 +566,7 @@ export function ChatWorkspace({
                       )}
                     </PopoverContent>
                   </Popover>
-                  <Button asChild variant="ghost" size="icon-sm" aria-label={t("attachFile")} disabled={uploadAttachment.isPending}>
+                  <Button asChild variant="ghost" size="icon" aria-label={t("attachFile")} disabled={uploadAttachment.isPending}>
                     <label>
                       <input
                         type="file"

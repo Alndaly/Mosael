@@ -6,8 +6,8 @@ import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, type Asset }
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
-import { useImagePreview } from "@/components/ui/image-preview";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
 import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -78,7 +78,7 @@ export function MediaPool({
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="panel-head-actions">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
-          <Button asChild variant="outline" size="icon-sm" disabled={uploading} title={t("import")} aria-label={t("import")}>
+          <Button asChild variant="outline" size="icon" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
               <input
                 type="file"
@@ -95,7 +95,7 @@ export function MediaPool({
           </Button>
           <Button
             variant="outline"
-            size="icon-sm"
+            size="icon"
             onClick={() => setRecorderOpen(true)}
             title={t("record")}
             aria-label={t("record")}
@@ -144,7 +144,7 @@ export function MediaPool({
                 <Pencil /> {t("rename")}
               </ContextMenuItem>
               <ContextMenuSeparator />
-              <ContextMenuItem destructive onSelect={() => setDeleting(asset)}>
+              <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
                 <Trash2 /> {t("delete")}
               </ContextMenuItem>
             </ContextMenuContent>

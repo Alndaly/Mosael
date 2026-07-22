@@ -144,7 +144,7 @@ export function AppShell({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
                 aria-label={t("settingsTheme")}
               >
@@ -159,7 +159,7 @@ export function AppShell({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
                 aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
               >

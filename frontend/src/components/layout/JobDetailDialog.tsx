@@ -5,7 +5,7 @@ import { CheckCircle2, CircleAlert, Loader2, ExternalLink } from "lucide-react";
 import { getJob, listJobEvents, type Job } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 import { Progress } from "@/components/ui/progress";
 import { relativeTime } from "@/lib/time";
 

@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -132,7 +132,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                     <Power /> {task.enabled ? t("pluginOff") : t("pluginOn")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem destructive onSelect={() => setMenuDeleting(task)}>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(task)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -172,7 +172,7 @@ function WebhookUrlRow({ task }: { task: ScheduledTask }) {
           {url}
         </code>
         <Button
-          size="icon-sm"
+          size="icon"
           variant="ghost"
           aria-label={t("copy")}
           onClick={() => {

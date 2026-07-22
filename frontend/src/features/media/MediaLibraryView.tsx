@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
-import { useImagePreview } from "@/components/ui/image-preview";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { useImagePreview } from "@/components/app/image-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Recorder } from "@/features/editor/Recorder";
@@ -336,7 +336,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <Tag /> {t("editTags")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem destructive onSelect={() => setDeleting(asset)}>
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
                   <Trash2 /> {t("delete")}
                 </ContextMenuItem>
               </ContextMenuContent>

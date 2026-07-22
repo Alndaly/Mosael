@@ -467,7 +467,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("splitAtPlayhead")}
@@ -483,7 +483,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onDuplicateClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("duplicateClip")}
@@ -499,7 +499,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))}
                   aria-label={t("rippleDelete")}
@@ -515,7 +515,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds.forEach((clipId) => onDeleteClip(clipId))}
                   aria-label={t("deleteClip")}
@@ -547,7 +547,7 @@ export function Timeline({
             <TooltipTrigger asChild>
               <Button
                 variant={snapEnabled ? "secondary" : "ghost"}
-                size="icon-sm"
+                size="icon"
                 onClick={() => setSnapEnabled((value) => !value)}
                 aria-pressed={snapEnabled}
                 aria-label="Snap"
@@ -559,7 +559,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
+              <Button variant="ghost" size="icon" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
                 <Minus size={14} />
               </Button>
             </TooltipTrigger>
@@ -567,7 +567,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
+              <Button variant="ghost" size="icon" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
                 <Plus size={14} />
               </Button>
             </TooltipTrigger>
@@ -577,7 +577,7 @@ export function Timeline({
             <PopoverTrigger asChild>
               <Button
                 variant={helpOpen ? "secondary" : "ghost"}
-                size="icon-sm"
+                size="icon"
                 aria-label={t("shortcutsHelp")}
               >
                 <CircleHelp size={14} />

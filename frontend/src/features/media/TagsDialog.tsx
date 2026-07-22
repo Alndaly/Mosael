@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 
 /** 标签编辑器:芯片列表 + 回车追加;既用于单素材编辑,也用于批量追加。 */
 export function TagsDialog({

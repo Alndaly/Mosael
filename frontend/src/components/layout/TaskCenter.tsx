@@ -123,7 +123,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               className="taskcenter-btn"
               aria-label={t("taskCenter")}
             >

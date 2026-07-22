@@ -35,7 +35,7 @@ import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -253,7 +253,7 @@ function MemberRow({
         {canOverride && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t("teamPerms")}>
+              <Button variant="ghost" size="icon" aria-label={t("teamPerms")}>
                 <SlidersHorizontal size={14} />
               </Button>
             </PopoverTrigger>
@@ -289,7 +289,7 @@ function MemberRow({
           <>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={() => setConfirmOpen(true)}
               aria-label={isSelf ? t("teamLeave") : t("teamRemove")}
             >

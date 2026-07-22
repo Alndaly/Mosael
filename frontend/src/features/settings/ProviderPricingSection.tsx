@@ -8,7 +8,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -347,10 +347,10 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </div>
               <span className="pricing-rule-price">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
               <div className="feishu-bot-actions">
-                <Button variant="ghost" size="icon-sm" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
+                <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
                   <Pencil size={13} />
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
+                <Button variant="ghost" size="icon" onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
                   <Trash2 size={13} />
                 </Button>
               </div>

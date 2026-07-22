@@ -104,11 +104,11 @@ export function TimelineClip({
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem destructive onSelect={onDelete}>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
           <Trash2 /> {t("deleteClip")}
         </ContextMenuItem>
         {onRippleDelete && (
-          <ContextMenuItem destructive onSelect={onRippleDelete}>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onRippleDelete}>
             <Waves /> {t("rippleDelete")}
           </ContextMenuItem>
         )}

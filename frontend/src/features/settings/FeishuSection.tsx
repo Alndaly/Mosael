@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
@@ -181,13 +181,13 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="ghost" size="icon-sm" onClick={() => issueCode.mutate(bot.id)} aria-label={t("feishuBind")}>
+                  <Button variant="ghost" size="icon" onClick={() => issueCode.mutate(bot.id)} aria-label={t("feishuBind")}>
                     <Link2 size={13} />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
+                  <Button variant="ghost" size="icon" onClick={() => restartBot.mutate(bot.id)} aria-label={t("feishuRestart")}>
                     <RefreshCcw size={13} />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => removeBot.mutate(bot.id)} aria-label={t("feishuRemove")}>
+                  <Button variant="ghost" size="icon" onClick={() => removeBot.mutate(bot.id)} aria-label={t("feishuRemove")}>
                     <Trash2 size={13} />
                   </Button>
                 </div>
@@ -284,7 +284,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   <span>{binding.username}</span>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     onClick={() => removeBinding.mutate(binding.open_id)}
                     aria-label={t("feishuRemove")}
                   >

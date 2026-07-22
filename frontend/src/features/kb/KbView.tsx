@@ -28,7 +28,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -147,7 +147,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
         <aside className="plugins-list kb-list panel">
           <div className="panel-head">
             <h2>{t("kbTitle")}</h2>
-            <Button size="icon-sm" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
+            <Button size="icon" variant="ghost" title={t("kbNewDataset")} onClick={() => setCreating(true)}>
               <Plus size={14} />
             </Button>
           </div>
@@ -172,7 +172,7 @@ export function KbView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuContent>
                   <ContextMenuItem onSelect={() => setRenaming(ds)}>{t("rename")}</ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem destructive onSelect={() => setDeleting(ds)}>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(ds)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -389,11 +389,11 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
               </button>
               <div className="kb-doc-row-tools">
                 {doc.status === "error" && (
-                  <Button size="icon-sm" variant="ghost" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
+                  <Button size="icon" variant="ghost" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
                     <RotateCw size={13} />
                   </Button>
                 )}
-                <Button size="icon-sm" variant="ghost" title={t("delete")} onClick={() => removeDoc.mutate(doc.id)}>
+                <Button size="icon" variant="ghost" title={t("delete")} onClick={() => removeDoc.mutate(doc.id)}>
                   <Trash2 size={13} />
                 </Button>
               </div>

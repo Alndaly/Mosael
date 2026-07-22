@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
-import { ConfirmDialog } from "@/components/ui/modals";
+import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
 
@@ -654,7 +654,7 @@ export function WorkflowAgentChat({
         <div className="wf-agent-actions">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             className="wf-agent-attach"
             aria-label={t("wfAgentAttach")}
             title={t("wfAgentAttach")}
@@ -664,7 +664,7 @@ export function WorkflowAgentChat({
           </Button>
           {showStop ? (
             <Button
-              size="icon-sm"
+              size="icon"
               className="wf-agent-send"
               aria-label={t("chatStop")}
               onClick={() => stopTurn.mutate()}
@@ -673,7 +673,7 @@ export function WorkflowAgentChat({
             </Button>
           ) : (
             <Button
-              size="icon-sm"
+              size="icon"
               className="wf-agent-send"
               aria-label={running ? t("chatSteer") : t("chatSend")}
               disabled={(!draft.trim() && attachments.length === 0) || send.isPending}

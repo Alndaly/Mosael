@@ -5,7 +5,7 @@ import { Streamdown } from "streamdown";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { useImagePreview } from "@/components/ui/image-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { ToolResultCard, toolResultData } from "./toolResultShapes";

@@ -10,7 +10,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@/components/app/chart";
 import { gotoSettings } from "@/lib/deepLink";
 
 /**

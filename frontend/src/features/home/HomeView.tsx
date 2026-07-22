@@ -34,7 +34,7 @@ import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
@@ -342,7 +342,7 @@ export function HomeView({
                     <Pencil /> {t("rename")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem destructive onSelect={() => setDeleting(project)}>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(project)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>

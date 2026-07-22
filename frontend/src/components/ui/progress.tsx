@@ -1,22 +1,28 @@
-import * as React from "react";
-import * as ProgressPrimitive from "@radix-ui/react-progress";
+"use client"
 
-import { cn } from "@/lib/utils";
+import * as React from "react"
+import * as ProgressPrimitive from "@radix-ui/react-progress"
 
-/** 2px 细进度条,value ∈ [0,100];颜色随 currentColor 语境。 */
-function Progress({ className, value, ...props }: React.ComponentProps<typeof ProgressPrimitive.Root>) {
-  return (
-    <ProgressPrimitive.Root
-      className={cn("relative h-[3px] w-full overflow-hidden rounded-full bg-secondary", className)}
-      value={value}
-      {...props}
-    >
-      <ProgressPrimitive.Indicator
-        className="h-full rounded-full bg-primary transition-transform duration-300"
-        style={{ transform: `translateX(-${100 - Math.max(3, value ?? 0)}%)` }}
-      />
-    </ProgressPrimitive.Root>
-  );
-}
+import { cn } from "@/lib/utils"
 
-export { Progress };
+const Progress = React.forwardRef<
+  React.ElementRef<typeof ProgressPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
+>(({ className, value, ...props }, ref) => (
+  <ProgressPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative h-2 w-full overflow-hidden rounded-full bg-primary/20",
+      className
+    )}
+    {...props}
+  >
+    <ProgressPrimitive.Indicator
+      className="h-full w-full flex-1 bg-primary transition-all"
+      style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+    />
+  </ProgressPrimitive.Root>
+))
+Progress.displayName = ProgressPrimitive.Root.displayName
+
+export { Progress }

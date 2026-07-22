@@ -25,7 +25,7 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -214,7 +214,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem destructive onSelect={() => setDeleting(task)}>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(task)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -401,7 +401,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
                   <Bug /> {t("publishInspect")}
                 </ContextMenuItem>
               )}
-              <ContextMenuItem destructive onSelect={() => setRemoving(account)}>
+              <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(account)}>
                 <Trash2 /> {t("delete")}
               </ContextMenuItem>
             </ContextMenuContent>

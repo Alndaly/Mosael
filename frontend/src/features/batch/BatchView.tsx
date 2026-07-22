@@ -16,7 +16,7 @@ import {
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell } from "@/components/ui/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -129,7 +129,7 @@ export function BatchView({ workspace }: { workspace: Workspace }) {
                     </button>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
-                    <ContextMenuItem destructive onSelect={() => setDeleting(batch)}>
+                    <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(batch)}>
                       <Trash2 /> {t("delete")}
                     </ContextMenuItem>
                   </ContextMenuContent>
@@ -338,7 +338,7 @@ function CreateBatchDialog({
                   )}
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     aria-label={t("delete")}
                     disabled={rows.length <= 1}
                     onClick={() => setRows((current) => current.filter((_item, index) => index !== rowIndex))}

@@ -54,7 +54,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { useEditorStore } from "@/stores/editorStore";
-import { ConfirmDialog } from "@/components/ui/modals";
+import { ConfirmDialog } from "@/components/app/modals";
 import { FontFaces } from "@/features/editor/FontFaces";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
@@ -918,7 +918,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     disabled={!sequence.can_undo || undoMutation.isPending}
                     onClick={() => undoMutation.mutate()}
                     aria-label={t("undo")}
@@ -932,7 +932,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     disabled={!sequence.can_redo || redoMutation.isPending}
                     onClick={() => redoMutation.mutate()}
                     aria-label={t("redoAction")}
@@ -946,7 +946,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     disabled={addSubtitleMutation.isPending}
                     onClick={() => addSubtitleMutation.mutate()}
                     aria-label={t("addSubtitleAtPlayhead")}

@@ -544,24 +544,24 @@ export function Monitor({
       </div>
       <div className="monitor-transport">
         <div className="monitor-buttons">
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
+          <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
+          <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
-          <Button variant="secondary" size="icon-sm" className="monitor-play" onClick={playToggle} aria-label={t("playPause")}>
+          <Button variant="secondary" size="icon" className="monitor-play" onClick={playToggle} aria-label={t("playPause")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="monitor-play-icon" />}
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
+          <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
             <StepForward size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
+          <Button variant="ghost" size="icon" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
             <SkipForward size={14} />
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             className={loop ? "monitor-active" : undefined}
             onClick={toggleLoop}
             aria-label={t("monLoop")}
@@ -579,7 +579,7 @@ export function Monitor({
         <div className="monitor-buttons">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             className={showScopes ? "monitor-active" : undefined}
             onClick={() => setShowScopes((on) => !on)}
             aria-label={t("scopes")}
@@ -587,7 +587,7 @@ export function Monitor({
           >
             <Activity size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
+          <Button variant="ghost" size="icon" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
           <Slider
@@ -599,7 +599,7 @@ export function Monitor({
             onValueChange={([value]) => setVolume(value)}
             aria-label={t("monVolume")}
           />
-          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
+          <Button variant="ghost" size="icon" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
             <Maximize2 size={13} />
           </Button>
         </div>

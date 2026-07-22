@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/ui/modals";
+import { ModalShell } from "@/components/app/modals";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -311,13 +311,13 @@ export function ProviderProfilesSection({
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="feishu-bot-actions">
-                <Button variant="ghost" size="icon-sm" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
+                <Button variant="ghost" size="icon" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
                   <Pencil size={13} />
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => toggle.mutate(profile)} aria-label="toggle">
+                <Button variant="ghost" size="icon" onClick={() => toggle.mutate(profile)} aria-label="toggle">
                   <Power size={13} />
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => remove.mutate(profile.id)} aria-label={t("delete")}>
+                <Button variant="ghost" size="icon" onClick={() => remove.mutate(profile.id)} aria-label={t("delete")}>
                   <Trash2 size={13} />
                 </Button>
               </div>

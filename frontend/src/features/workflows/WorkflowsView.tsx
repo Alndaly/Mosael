@@ -87,14 +87,14 @@ import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
-import { CodeEditor, type CodeEditorHandle } from "@/components/ui/code-editor";
+import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
@@ -398,7 +398,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                     <Pencil /> {t("rename")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem destructive onSelect={() => setMenuDeleting(workflow)}>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
@@ -974,10 +974,10 @@ function WorkflowEditor({
                 ))}
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
+          <Button variant="ghost" size="icon" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
+          <Button variant="ghost" size="icon" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
             <Redo2 size={14} />
           </Button>
           <div className="wf-toolbar-sep" />
@@ -999,7 +999,7 @@ function WorkflowEditor({
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon-sm" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
+              <Button variant="outline" size="icon" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
                 <Search size={14} />
               </Button>
             </PopoverTrigger>
@@ -1121,7 +1121,7 @@ function WorkflowEditor({
           <div className="wf-toolbar-sep" />
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             aria-label={t("wfHistory")}
             title={t("wfHistory")}
             className={showHistory ? "wf-active" : undefined}
@@ -1129,7 +1129,7 @@ function WorkflowEditor({
           >
             <History size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
+          <Button variant="ghost" size="icon" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>
         </div>

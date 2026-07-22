@@ -3,7 +3,7 @@ import React from "react";
 import { Maximize2, Play } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
-import { useImagePreview } from "@/components/ui/image-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing

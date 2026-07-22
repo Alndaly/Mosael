@@ -67,7 +67,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon-sm" className="notif-btn" aria-label={t("notifTitle")}>
+            <Button variant="ghost" size="icon" className="notif-btn" aria-label={t("notifTitle")}>
               <Bell size={15} />
               {unread > 0 && <em className="taskcenter-badge">{unread > 99 ? "99+" : unread}</em>}
             </Button>

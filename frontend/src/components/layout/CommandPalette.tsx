@@ -155,7 +155,7 @@ export function CommandPalette({
   const hasAnyResult = navMatches.length > 0 || projectMatches.length > 0 || assetMatches.length > 0 || kbUnique.length > 0;
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} label={t("cmdkTitle")} shouldFilter={false}>
+    <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput
         value={input}
         onValueChange={setInput}

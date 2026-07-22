@@ -37,9 +37,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/ui/modals";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useImagePreview } from "@/components/ui/image-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime } from "@/lib/time";
@@ -635,7 +635,7 @@ function GenerateWorkspace({
                   <Pencil /> {t("rename")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem destructive onSelect={() => setDeletingSession(item)}>
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
                   <Trash2 /> {t("delete")}
                 </ContextMenuItem>
               </ContextMenuContent>
