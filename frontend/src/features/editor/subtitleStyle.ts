@@ -80,6 +80,9 @@ export function subtitleCss(style: SubtitleStyle, frameWidth: number): React.CSS
     fontWeight: style.bold ? 700 : 400,
     background: style.bg_opacity > 0 ? hexToRgba(style.bg_color, style.bg_opacity) : "transparent",
     left: "50%",
+    // 绝对定位 + left:50% 的收缩适配宽度只有画框的一半,长句会提前折行;
+    // 按内容定宽(max-w 类仍封顶 86%),translateX(-50%) 再居中。
+    width: "max-content",
   };
   if (style.position === "top") {
     css.top = `${style.offset}%`;

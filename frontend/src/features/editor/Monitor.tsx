@@ -483,8 +483,11 @@ export function Monitor({
             />
           )}
           {activeSubtitle?.text_override && (
+            // 定位(left/top/bottom/transform)全部来自 subtitleCss 的行内样式,类里不要再写
+            // 定位类:Tailwind v4 的 -translate-x-1/2 编译成独立的 translate 属性,会和行内
+            // transform 叠加成双重位移(字幕整体左偏半个画框宽,曾以此形态返场过一次)。
             <div
-              className="pointer-events-none absolute bottom-[7%] left-1/2 z-[3] max-w-[86%] -translate-x-1/2 whitespace-pre-wrap rounded-md bg-[rgb(0_0_0/0.62)] px-2.5 py-[3px] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
+              className="pointer-events-none absolute z-[3] max-w-[86%] whitespace-pre-wrap rounded-md bg-[rgb(0_0_0/0.62)] px-2.5 py-[3px] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.7)]"
               style={subtitleCss(
                 readSubtitleStyle(
                   (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,
