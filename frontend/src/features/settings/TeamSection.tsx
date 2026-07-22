@@ -116,9 +116,19 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
       <SettingsBlock>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="text-[13px] font-[550]">{workspace.name}</span>
-            <Badge variant="outline">{roleLabel(myRole)}</Badge>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[15px] font-bold text-primary" aria-hidden>
+              {workspace.name.slice(0, 1).toUpperCase()}
+            </span>
+            <div className="grid min-w-0 gap-0.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-[13.5px] font-[600]">{workspace.name}</span>
+                <Badge variant="outline">{roleLabel(myRole)}</Badge>
+              </div>
+              <span className="text-[11.5px] text-muted-foreground">
+                {t("workspaceMemberCount").replace("{n}", String(members.data?.members.length ?? "…"))}
+              </span>
+            </div>
           </div>
           <div className="flex shrink-0 gap-1.5">
             {canManage && (
@@ -127,7 +137,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
               </Button>
             )}
             {isOwner && (
-              <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
                 <Trash2 size={13} /> {t("deleteWorkspace")}
               </Button>
             )}

@@ -84,6 +84,9 @@ export function setMemberPerms(workspaceId: string, userId: string, perms: Recor
 export function removeMember(workspaceId: string, userId: string): Promise<void> {
   return api<void>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
 }
+export function createWorkspace(name: string): Promise<Workspace> {
+  return api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name }) });
+}
 export function renameWorkspace(workspaceId: string, name: string): Promise<{ id: string; name: string }> {
   return api(`/api/workspaces/${workspaceId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }

@@ -221,6 +221,8 @@ function WorkspaceGate() {
   const createWorkspace = useMutation({
     mutationFn: () => api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name: t("workspaceDefault") }) }),
     onSuccess: (created) => {
+      // 先塞缓存再选中,避免下方兜底效应在列表刷新前把选择弹回 list[0]。
+      qc.setQueryData<Workspace[]>(["workspaces"], (old) => (old ? [created, ...old] : [created]));
       persistWorkspaceId(created.id);
       setActiveId(created.id);
       qc.invalidateQueries({ queryKey: ["workspaces"] });

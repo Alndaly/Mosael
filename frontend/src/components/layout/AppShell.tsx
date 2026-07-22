@@ -1,4 +1,5 @@
 import React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
@@ -6,6 +7,7 @@ import {
   Check,
   ChevronsUpDown,
   FolderOpen,
+  FolderPlus,
   Home,
   Languages,
   Layers,
@@ -20,8 +22,9 @@ import {
   Sun,
   Workflow,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import type { Workspace } from "@/api/client";
+import { createWorkspace, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -29,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
 import { BrandMark } from "@/components/layout/BrandMark";
+import { RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
@@ -204,8 +208,8 @@ export function AppShell({
   );
 }
 
-/** 面包屑首段的工作区切换器。单一工作区时退化为纯文本(无多余下拉);
-    多工作区时给一个 Popover 列表——这样任务/项目落在非首个工作区里也能被切回去。 */
+/** 面包屑首段的工作区切换器:始终是可点的下拉(单工作区也要有「能切换/能新建」
+    的可见线索,否则没人知道工作区可以换),列表底部带「新建工作区」入口。 */
 function WorkspaceSwitcher({
   workspaceId,
   workspaceName,
@@ -218,41 +222,79 @@ function WorkspaceSwitcher({
   onSelectWorkspace?: (id: string) => void;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+  const createMut = useMutation({
+    mutationFn: createWorkspace,
+    onSuccess: (created) => {
+      // 先把新工作区塞进缓存再选中:否则选中时列表里还没有它,
+      // WorkspaceGate 的兜底(找不到 → 退回 list[0])会把选择弹回去。
+      qc.setQueryData<Workspace[]>(["workspaces"], (old) => (old ? [created, ...old] : [created]));
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(t("workspaceCreated").replace("{name}", created.name));
+      onSelectWorkspace?.(created.id);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
-  if (workspaces.length < 2 || !onSelectWorkspace) {
+  if (!onSelectWorkspace) {
     return <span className="shrink-0">{displayWorkspaceName(workspaceName, t)}</span>;
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
-          {displayWorkspaceName(workspaceName, t)}
-          <ChevronsUpDown size={12} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
-        <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
-        {workspaces.map((ws) => (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
+            {displayWorkspaceName(workspaceName, t)}
+            <ChevronsUpDown size={12} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
+          <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
+          {workspaces.map((ws) => (
+            <button
+              key={ws.id}
+              type="button"
+              className={cn(
+              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+              ws.id === workspaceId && "font-semibold text-primary",
+            )}
+              onClick={() => {
+                setOpen(false);
+                if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
+              }}
+            >
+              <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
+              {ws.id === workspaceId && <Check size={13} />}
+            </button>
+          ))}
+          <div className="mx-0.5 my-1 h-px bg-border" />
           <button
-            key={ws.id}
             type="button"
-            className={cn(
-            "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
-            ws.id === workspaceId && "font-semibold text-primary",
-          )}
+            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground [&_svg]:shrink-0"
             onClick={() => {
               setOpen(false);
-              if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
+              setCreating(true);
             }}
           >
-            <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
-            {ws.id === workspaceId && <Check size={13} />}
+            <FolderPlus size={13} />
+            {t("workspaceNew")}
           </button>
-        ))}
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+      <RenameDialog
+        open={creating}
+        title={t("workspaceNew")}
+        initialValue=""
+        onCancel={() => setCreating(false)}
+        onSubmit={(name) => {
+          setCreating(false);
+          createMut.mutate(name);
+        }}
+      />
+    </>
   );
 }
 
