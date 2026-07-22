@@ -39,6 +39,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 
+const HOME_LIVE_REFRESH_MS = 5_000;
+
 export function HomeView({
   workspace,
   projects,
@@ -75,8 +77,16 @@ export function HomeView({
   const summary = useQuery({
     queryKey: ["workspace-summary", workspace.id],
     queryFn: () => workspaceSummary(workspace.id),
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchInterval: HOME_LIVE_REFRESH_MS,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  React.useEffect(() => {
+    void qc.invalidateQueries({ queryKey: ["workspace-summary", workspace.id] });
+    void qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
+  }, [qc, workspace.id]);
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();

@@ -319,6 +319,10 @@ function Studio({
   const projects = useQuery({
     queryKey: ["projects", workspace.id],
     queryFn: () => api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
+    staleTime: 0,
+    refetchInterval: view === "home" ? 5_000 : false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
   const project = projects.data?.find((item) => item.id === projectId) ?? projects.data?.[0] ?? null;
 
