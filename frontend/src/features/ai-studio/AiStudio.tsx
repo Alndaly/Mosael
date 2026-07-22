@@ -720,7 +720,7 @@ function GenerateWorkspace({
               aria-label={t("generate")}
               disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending}
             >
-              {createGeneration.isPending ? <Loader2 size={15} className="spin" /> : <Send size={15} />}
+              {createGeneration.isPending ? <Loader2 size={15} className="animate-mibu-spin" /> : <Send size={15} />}
             </Button>
           </div>
         </form>
@@ -850,7 +850,7 @@ function GenerateWorkspace({
                         onClick={() => referenceImageInputRef.current?.click()}
                         disabled={uploadReferenceImage.isPending}
                       >
-                        {uploadReferenceImage.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                        {uploadReferenceImage.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Upload size={13} />}
                         {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
                       </Button>
                       {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
@@ -973,7 +973,7 @@ function GenerateWorkspace({
                       onClick={() => firstFrameInputRef.current?.click()}
                       disabled={uploadFirstFrame.isPending}
                     >
-                      {uploadFirstFrame.isPending ? <Loader2 size={13} className="spin" /> : <Upload size={13} />}
+                      {uploadFirstFrame.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Upload size={13} />}
                       {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
                     </Button>
                     {generationConfig.firstFrameAssetId && (
@@ -1081,7 +1081,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
           <GenerationFailureCard error={job?.error ?? ""} />
         ) : (
           <span className="inline-flex items-center gap-1.5 py-2 text-[12.5px] text-muted-foreground">
-            <Loader2 size={13} className="spin" /> {status === "running" ? t("generating") : t("genQueued")}
+            <Loader2 size={13} className="animate-mibu-spin" /> {status === "running" ? t("generating") : t("genQueued")}
           </span>
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-[11.5px] text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">

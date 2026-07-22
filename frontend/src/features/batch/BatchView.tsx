@@ -181,7 +181,7 @@ function BatchDetail({
         description={`${t("wfBoundWorkflow")}: ${workflow?.name ?? batch.workflow_id} · ${succeeded}/${(batch.items ?? []).length} ${t("batchSucceededShort")}${failed ? ` · ${failed} ${t("batchFailedShort")}` : ""}`}
         actions={
           <div className="flex items-center gap-1.5">
-            {ACTIVE.has(batch.status) && <Loader2 size={14} className="spin" />}
+            {ACTIVE.has(batch.status) && <Loader2 size={14} className="animate-mibu-spin" />}
             <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
               <Trash2 size={13} /> {t("delete")}
             </Button>
@@ -224,7 +224,7 @@ function BatchItemRow({ item }: { item: BatchItem }) {
         ) : item.status === "failed" ? (
           <CircleAlert size={13} className="text-destructive" />
         ) : ACTIVE.has(item.status) ? (
-          <Loader2 size={13} className="spin" />
+          <Loader2 size={13} className="animate-mibu-spin" />
         ) : null}
         {t(`batchStatus_${item.status}` as never)}
       </span>
@@ -359,7 +359,7 @@ function CreateBatchDialog({
             {t("cancel")}
           </Button>
           <Button size="sm" disabled={!workflowId || rows.length === 0 || create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? <Loader2 size={13} className="spin" /> : <Layers size={13} />} {t("batchStart")}
+            {create.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Layers size={13} />} {t("batchStart")}
           </Button>
         </div>
       </div>

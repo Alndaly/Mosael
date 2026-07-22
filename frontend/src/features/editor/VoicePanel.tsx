@@ -331,7 +331,7 @@ export function VoicePanel({
             disabled={!text.trim() || synth.isPending || !engineReady}
             onClick={() => synth.mutate()}
           >
-            {synth.isPending ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />} {t("voiceGenerate")}
+            {synth.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Wand2 size={13} />} {t("voiceGenerate")}
           </Button>
           {engine === "clone" && !activeVoice && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
@@ -414,7 +414,7 @@ export function VoicePanel({
                 disabled={!spAsset || !spSpeaker || fromSpeaker.isPending}
                 onClick={() => fromSpeaker.mutate()}
               >
-                {fromSpeaker.isPending ? <Loader2 size={12} className="spin" /> : null} {t("voiceDoClone")}
+                {fromSpeaker.isPending ? <Loader2 size={12} className="animate-mibu-spin" /> : null} {t("voiceDoClone")}
               </Button>
             </div>
           </div>
@@ -433,7 +433,7 @@ export function VoicePanel({
               ref={fileRef}
               type="file"
               accept="audio/*,video/*"
-              className="hidden-input"
+              className="hidden"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             <div className="flex items-center justify-between gap-2">
@@ -456,7 +456,7 @@ export function VoicePanel({
                 disabled={!name.trim() || !file || recording || upload.isPending}
                 onClick={() => upload.mutate()}
               >
-                {upload.isPending ? <Loader2 size={12} className="spin" /> : null} {t("confirm")}
+                {upload.isPending ? <Loader2 size={12} className="animate-mibu-spin" /> : null} {t("confirm")}
               </Button>
             </div>
             <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{recording ? t("voiceRecording") : t("voiceUploadHint")}</p>

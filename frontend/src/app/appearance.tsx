@@ -115,7 +115,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <AppearanceContext.Provider value={value}>
-      <div className="app-bg" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 z-[-1] bg-cover bg-center bg-no-repeat [background-image:var(--app-bg-image,none)] after:absolute after:inset-0 after:bg-[rgb(0_0_0/var(--app-bg-dim,0))] after:content-[''] [:root:not([data-appearance=glass])_&]:hidden" aria-hidden />
       {children}
     </AppearanceContext.Provider>
   );

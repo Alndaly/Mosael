@@ -496,7 +496,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         actions={
           <div className="flex items-center gap-1.5">
             {ACTIVE.has(task.status) ? (
-              <Loader2 size={14} className="spin" />
+              <Loader2 size={14} className="animate-mibu-spin" />
             ) : ok ? (
               <CheckCircle2 size={14} className="text-[#16a34a]" />
             ) : BLOCKED.has(task.status) ? (
@@ -809,7 +809,7 @@ function CreatePublishDialog({
         </label>
         <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={aiCopy.isPending || !assetId} onClick={() => aiCopy.mutate()}>
-            {aiCopy.isPending ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
+            {aiCopy.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
           </Button>
           <span className="flex-1" />
           <Button variant="outline" size="sm" onClick={onClose}>

@@ -34,6 +34,18 @@
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 6px);
 
+  --animate-mibu-spin: mibu-spin 0.9s linear infinite;
+  @keyframes mibu-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  --animate-recorder-blink: recorder-blink 1s steps(2, start) infinite;
+  @keyframes recorder-blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
   --animate-confirm-in: confirm-in 160ms ease-out;
   --animate-wf-dash: wf-dash 0.6s linear infinite;
   @keyframes wf-dash {

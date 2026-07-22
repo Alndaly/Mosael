@@ -120,7 +120,7 @@ function PublishViewBar() {
 
   return (
     <div className="fixed inset-x-0 top-0 z-[200] flex h-12 items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[84px]">
-      <div className="titlebar-no-drag inline-flex items-center gap-0.5">
+      <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <button
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
@@ -151,8 +151,8 @@ function PublishViewBar() {
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
         </button>
       </div>
-      <form className="titlebar-no-drag flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none" onSubmit={submit}>
-        {state.loading && <Loader2 size={13} className="flex-none animate-[mibu-spin_0.9s_linear_infinite] text-muted-foreground" />}
+      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none" onSubmit={submit}>
+        {state.loading && <Loader2 size={13} className="flex-none animate-mibu-spin text-muted-foreground" />}
         <Input
           value={address}
           spellCheck={false}
@@ -170,7 +170,7 @@ function PublishViewBar() {
       </form>
       <button
         type="button"
-        className="titlebar-no-drag inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-[12.5px] text-foreground hover:border-border-strong hover:bg-secondary"
+        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-[12.5px] text-foreground hover:border-border-strong hover:bg-secondary"
         onClick={() => void window.mibuPublish?.hideView()}
       >
         <ArrowLeft size={14} /> {t("publishBackToMibu")}

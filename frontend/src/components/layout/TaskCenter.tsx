@@ -128,7 +128,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               className="relative"
               aria-label={t("taskCenter")}
             >
-              {active.length > 0 ? <Loader2 size={15} className="spin" /> : <Activity size={15} />}
+              {active.length > 0 ? <Loader2 size={15} className="animate-mibu-spin" /> : <Activity size={15} />}
               {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-primary px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-primary-foreground">{active.length}</em>}
             </Button>
           </PopoverTrigger>

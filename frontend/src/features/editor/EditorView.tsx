@@ -1061,7 +1061,7 @@ function ExportControl({
         </span>
       )}
       <Button size="sm" variant="outline" disabled={busy} onClick={() => startExport.mutate()}>
-        {busy ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+        {busy ? <Loader2 size={13} className="animate-mibu-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
     </span>

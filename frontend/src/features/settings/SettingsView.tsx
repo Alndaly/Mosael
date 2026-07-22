@@ -312,7 +312,7 @@ function AccountSection() {
           >
             {saveState === "saving" ? (
               <>
-                <Loader2 size={12} className="spin" /> {t("profileSaving")}
+                <Loader2 size={12} className="animate-mibu-spin" /> {t("profileSaving")}
               </>
             ) : saveState === "error" ? (
               t("profileSaveFailed")
@@ -394,7 +394,7 @@ function AccountSection() {
             </label>
             <div className="flex items-end justify-end">
               <Button size="sm" disabled={!canUpdatePassword} onClick={() => void submitPassword()}>
-                {passwordPending ? <Loader2 size={13} className="spin" /> : null} {t("updatePassword")}
+                {passwordPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("updatePassword")}
               </Button>
             </div>
           </div>
@@ -536,7 +536,7 @@ function BackgroundSection() {
             ref={fileRef}
             type="file"
             accept="image/*"
-            className="hidden-input"
+            className="hidden"
             onChange={(event) => {
               void pickImage(event.target.files?.[0]);
               event.target.value = "";

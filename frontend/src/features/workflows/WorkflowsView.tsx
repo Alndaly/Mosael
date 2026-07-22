@@ -1146,7 +1146,7 @@ function WorkflowEditor({
             >
               {save.isPending ? (
                 <>
-                  <Loader2 size={12} className="spin" /> {t("wfSaving")}
+                  <Loader2 size={12} className="animate-mibu-spin" /> {t("wfSaving")}
                 </>
               ) : (
                 t("wfUnsaved")

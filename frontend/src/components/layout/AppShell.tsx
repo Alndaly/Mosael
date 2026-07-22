@@ -31,6 +31,7 @@ import { TaskCenter } from "@/components/layout/TaskCenter";
 import { BrandMark } from "@/components/layout/BrandMark";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
+import { cn } from "@/lib/utils";
 
 export type StudioView =
   | "home"
@@ -94,8 +95,8 @@ export function AppShell({
   const { theme, setTheme, locale, setLocale } = usePreferences();
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
+    <div className="grid h-screen grid-cols-[56px_minmax(0,1fr)] grid-rows-[44px_minmax(0,1fr)]">
+      <header className="col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag] [.is-desktop.is-mac_&]:pl-[76px] [.is-desktop.is-mac.is-fullscreen_&]:pl-2.5 [.is-desktop.is-win_&]:pr-[148px] [.is-desktop.is-win.is-fullscreen_&]:pr-2.5">
         {(() => {
           // 面包屑必须始终暴露"当前页面";项目语境的页面再把项目名接成第三段。
           // 早先的写法在 media/editor/ai 无项目时只显示"还没有项目",页面身份被抹掉
@@ -105,33 +106,33 @@ export function AppShell({
           );
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
-            <div className="topbar-crumb">
+            <div className="flex min-w-0 items-center gap-[7px] text-[13px] text-muted-foreground">
               <WorkspaceSwitcher
                 workspaceId={workspaceId}
                 workspaceName={workspaceName}
                 workspaces={workspaces}
                 onSelectWorkspace={onSelectWorkspace}
               />
-              <span className="topbar-sep">/</span>
-              <h1 className={scoped ? "topbar-crumb-page muted" : "topbar-crumb-page"}>{pageLabel}</h1>
+              <span className="text-border-strong">/</span>
+              <h1 className={cn("m-0 shrink-0 text-[13px] font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
               {scoped && (
                 <>
-                  <span className="topbar-sep">/</span>
+                  <span className="text-border-strong">/</span>
                   {projectName ? (
-                    <strong className="topbar-crumb-leaf">{projectName}</strong>
+                    <strong className="truncate font-semibold text-foreground">{projectName}</strong>
                   ) : (
-                    <span className="topbar-crumb-hint">{t("crumbNoProject")}</span>
+                    <span className="italic text-muted-foreground">{t("crumbNoProject")}</span>
                   )}
                 </>
               )}
             </div>
           );
         })()}
-        <div className="topbar-actions">
+        <div className="flex items-center gap-1">
           {actions}
           <button
             type="button"
-            className="topbar-search"
+            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-[3px] [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-[10px] [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
             onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
           >
             <Search size={13} />
@@ -170,8 +171,8 @@ export function AppShell({
           </Tooltip>
         </div>
       </header>
-      <aside className="rail">
-        <div className="rail-brand" aria-hidden>
+      <aside className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
+        <div className="mb-2.5 grid h-[30px] w-[30px] select-none place-items-center rounded-md bg-primary text-[15px] font-bold text-primary-foreground" aria-hidden>
           <BrandMark size={22} />
         </div>
         {PRIMARY_NAV.map((item) => (
@@ -184,7 +185,7 @@ export function AppShell({
             {item.icon}
           </RailButton>
         ))}
-        <div className="rail-divider" />
+        <div className="my-2 h-px w-6 bg-border" />
         {SECONDARY_NAV.map((item) => (
           <RailButton
             key={item.view}
@@ -195,10 +196,10 @@ export function AppShell({
             {item.icon}
           </RailButton>
         ))}
-        <div className="rail-spacer" />
+        <div className="flex-1" />
         <RailUserMenu onOpenSettings={() => onViewChange("settings")} />
       </aside>
-      <main className="shell-content">{children}</main>
+      <main className="col-start-2 row-start-2 h-full min-h-0 min-w-0 overflow-hidden bg-background supports-[backdrop-filter]:[[data-appearance=glass]_&]:m-2 supports-[backdrop-filter]:[[data-appearance=glass]_&]:h-auto supports-[backdrop-filter]:[[data-appearance=glass]_&]:rounded-xl supports-[backdrop-filter]:[[data-appearance=glass]_&]:border supports-[backdrop-filter]:[[data-appearance=glass]_&]:border-border supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.3)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.3)]">{children}</main>
     </div>
   );
 }
@@ -220,30 +221,33 @@ function WorkspaceSwitcher({
   const [open, setOpen] = React.useState(false);
 
   if (workspaces.length < 2 || !onSelectWorkspace) {
-    return <span className="topbar-crumb-ws">{displayWorkspaceName(workspaceName, t)}</span>;
+    return <span className="shrink-0">{displayWorkspaceName(workspaceName, t)}</span>;
   }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="topbar-crumb-ws topbar-ws-trigger" aria-label={t("workspaceSwitch")}>
+        <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
           {displayWorkspaceName(workspaceName, t)}
           <ChevronsUpDown size={12} />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="topbar-ws-pop" align="start" sideOffset={8}>
-        <div className="topbar-ws-head">{t("workspaceSwitch")}</div>
+      <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
+        <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
         {workspaces.map((ws) => (
           <button
             key={ws.id}
             type="button"
-            className={ws.id === workspaceId ? "topbar-ws-item active" : "topbar-ws-item"}
+            className={cn(
+            "flex cursor-pointer items-center justify-between gap-2 rounded border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+            ws.id === workspaceId && "font-semibold text-primary",
+          )}
             onClick={() => {
               setOpen(false);
               if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
             }}
           >
-            <span className="topbar-ws-name">{displayWorkspaceName(ws.name, t)}</span>
+            <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
             {ws.id === workspaceId && <Check size={13} />}
           </button>
         ))}
@@ -263,19 +267,19 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="rail-user" aria-label={displayName}>
+        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-full border border-border bg-secondary text-[13px] font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
           {initial}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="rail-user-pop" side="right" align="end" sideOffset={10}>
-        <div className="rail-user-head">
-          <span className="rail-user-avatar">{initial}</span>
-          <div className="rail-user-names">
+      <PopoverContent className="grid w-[220px] gap-1.5 p-2" side="right" align="end" sideOffset={10}>
+        <div className="flex items-center gap-2 px-1 py-0.5">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[13px] font-bold text-primary">{initial}</span>
+          <div className="grid [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[13px]">
             <strong>{displayName}</strong>
             <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>
           </div>
         </div>
-        <div className="rail-user-actions">
+        <div className="grid gap-0.5 border-t border-border pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-[12.5px] [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
           <button
             type="button"
             onClick={() => {
@@ -287,7 +291,7 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
           </button>
           <button
             type="button"
-            className="danger"
+            className="text-destructive! hover:bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)]!"
             onClick={() => {
               setOpen(false);
               void logout();
@@ -296,7 +300,7 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             <LogOut size={13} /> {t("signOut")}
           </button>
         </div>
-        <div className="rail-user-version">Mibu v{__APP_VERSION__}</div>
+        <div className="border-t border-border pt-2 text-center text-[10.5px] tabular-nums text-muted-foreground">Mibu v{__APP_VERSION__}</div>
       </PopoverContent>
     </Popover>
   );
@@ -318,7 +322,11 @@ function RailButton({
       <TooltipTrigger asChild>
         <button
           type="button"
-          className={active ? "rail-btn active" : "rail-btn"}
+          className={cn(
+          "relative grid h-9 w-9 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[background-color,color] duration-100 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+          active &&
+            "bg-accent text-accent-foreground before:absolute before:-left-2.5 before:bottom-[9px] before:top-[9px] before:w-[2.5px] before:rounded-full before:bg-primary before:content-[''] hover:bg-accent hover:text-accent-foreground",
+        )}
           onClick={onClick}
           aria-label={label}
           aria-current={active ? "page" : undefined}

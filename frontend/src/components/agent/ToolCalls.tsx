@@ -79,7 +79,7 @@ function MediaPreview({ assetId }: { assetId: string }) {
   if (asset.isLoading) {
     return (
       <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
-        <Loader2 size={13} className="spin" />
+        <Loader2 size={13} className="animate-mibu-spin" />
       </div>
     );
   }
@@ -170,7 +170,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           aria-hidden
         >
           {tool.status === "running" ? (
-            <Loader2 size={12} className="spin" />
+            <Loader2 size={12} className="animate-mibu-spin" />
           ) : tool.status === "error" ? (
             <CircleAlert size={12} />
           ) : (

@@ -65,7 +65,7 @@ export const CodeEditor = React.forwardRef<
   );
 
   return (
-    <div className="code-editor">
+    <div className="overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono">
       <CodeMirror
         ref={cmRef}
         value={value}

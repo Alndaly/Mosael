@@ -356,14 +356,14 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
             <input
               type="file"
               accept=".md,.txt,.markdown,.pdf,.docx,.doc,.pptx,.xlsx,.xls,.html,.htm,.csv,.epub"
-              className="hidden-input"
+              className="hidden"
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 if (file) importFile.mutate(file);
                 event.currentTarget.value = "";
               }}
             />
-            {importFile.isPending ? <Loader2 size={13} className="spin" /> : <FileUp size={13} />} {t("kbImportFile")}
+            {importFile.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <FileUp size={13} />} {t("kbImportFile")}
           </label>
         </Button>
       </div>
@@ -467,7 +467,7 @@ function DocumentDetail({
         </Button>
         {dirty ? (
           <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ title: title.trim() || doc.data!.title, content })}>
-            {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSave")}
+            {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSave")}
           </Button>
         ) : (
           <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>
@@ -527,7 +527,7 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
       >
         <Input value={query} placeholder={t("kbRecallPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
         <Button type="submit" size="sm" disabled={!query.trim() || run.isPending}>
-          {run.isPending ? <Loader2 size={13} className="spin" /> : <Search size={13} />} {t("kbRecallRun")}
+          {run.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Search size={13} />} {t("kbRecallRun")}
         </Button>
       </form>
       <p className="text-[11.5px] text-muted-foreground">{t("kbRecallHint")}</p>
@@ -558,7 +558,7 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
     queryKey: ["kb-graph", dataset.id],
     queryFn: () => api<KbGraph>(`/api/kb/datasets/${dataset.id}/graph`),
   });
-  if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="spin" /></div>;
+  if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="animate-mibu-spin" /></div>;
   if (!graph.data?.enabled) {
     return (
       <EmptyState
@@ -677,7 +677,7 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
 
       <div className="col-span-full mt-0.5 flex items-center gap-2.5">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? <Loader2 size={13} className="spin" /> : null} {t("kbSaveSettings")}
+          {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSaveSettings")}
         </Button>
         {save.isSuccess && <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>}
       </div>
@@ -741,7 +741,7 @@ function CreateDatasetDialog({
               {t("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? <Loader2 size={13} className="spin" /> : null} {t("create")}
+              {pending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("create")}
             </Button>
           </div>
         </form>
@@ -799,7 +799,7 @@ function KbUrlDialog({
               {t("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? <Loader2 size={13} className="spin" /> : null} {t("kbImport")}
+              {pending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbImport")}
             </Button>
           </div>
         </form>

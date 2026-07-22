@@ -84,7 +84,7 @@ export function MediaPool({
               <input
                 type="file"
                 accept="video/*,audio/*,image/*"
-                className="hidden-input"
+                className="hidden"
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   if (file) onImportFile(file);

@@ -601,7 +601,7 @@ export function WorkflowAgentChat({
           <div className="relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-              <Loader2 size={11} className="spin" />
+              <Loader2 size={11} className="animate-mibu-spin" />
               <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
@@ -612,7 +612,7 @@ export function WorkflowAgentChat({
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <Loader2 size={12} className="spin" /> {t("chatThinking")}
+              <Loader2 size={12} className="animate-mibu-spin" /> {t("chatThinking")}
               <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
