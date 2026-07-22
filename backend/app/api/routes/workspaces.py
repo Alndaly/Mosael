@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
-    AddMemberRequest,
+    InviteMemberRequest,
     DailyActivityOut,
     DailyPublishOut,
     MembersOut,
@@ -14,6 +14,8 @@ from app.api.schemas import (
     SetRoleRequest,
     WorkspaceMemberOut,
     WorkspaceSummaryOut,
+    InvitationOut,
+    InvitationListOut,
 )
 from app.core.permissions import (
     effective_member_perms,
@@ -101,19 +103,72 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
     )
 
 
-@router.post("/workspaces/{workspace_id}/members", response_model=WorkspaceMemberOut)
-def add_member(workspace_id: str, body: AddMemberRequest, db: DbSession, user: CurrentUser) -> WorkspaceMemberOut:
+@router.post("/workspaces/{workspace_id}/invitations", response_model=InvitationOut)
+def invite_member(workspace_id: str, body: InviteMemberRequest, db: DbSession, user: CurrentUser) -> InvitationOut:
+    """邀请制:只对已注册用户名发邀请,对方在通知里接受后才建成员行。"""
     ensure_workspace_perm(db, user, workspace_id, "members")
     try:
-        member_user, member = members_svc.add_member(db, workspace_id, body.username, body.password, body.role)
+        invitee, invitation = members_svc.invite_member(db, workspace_id, user, body.username, body.role)
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return WorkspaceMemberOut(
-        user_id=member_user.id,
-        username=member_user.username,
-        display_name=member_user.display_name,
-        role=member.role,
-        perms=effective_member_perms(db, workspace_id, member_user.id, member.role),
+    workspace = db.get(Workspace, workspace_id)
+    return InvitationOut(
+        id=invitation.id,
+        workspace_id=workspace_id,
+        workspace_name=workspace.name if workspace else workspace_id,
+        inviter_name=user.display_name,
+        invitee_name=invitee.display_name,
+        role=invitation.role,
+        status=invitation.status,
+        created_at=invitation.created_at,
+    )
+
+
+@router.get("/invitations", response_model=InvitationListOut)
+def my_invitations(db: DbSession, user: CurrentUser) -> InvitationListOut:
+    """当前用户的待处理邀请(供通知中心渲染 接受/拒绝)。"""
+    items = [
+        InvitationOut(
+            id=inv.id,
+            workspace_id=ws.id,
+            workspace_name=ws.name,
+            inviter_name=inviter.display_name,
+            invitee_name=user.display_name,
+            role=inv.role,
+            status=inv.status,
+            created_at=inv.created_at,
+        )
+        for inv, ws, inviter in members_svc.pending_invitations(db, user.id)
+    ]
+    return InvitationListOut(invitations=items)
+
+
+@router.post("/invitations/{invitation_id}/accept", response_model=InvitationOut)
+def accept_invitation(invitation_id: str, db: DbSession, user: CurrentUser) -> InvitationOut:
+    return _respond(db, invitation_id, user, accept=True)
+
+
+@router.post("/invitations/{invitation_id}/decline", response_model=InvitationOut)
+def decline_invitation(invitation_id: str, db: DbSession, user: CurrentUser) -> InvitationOut:
+    return _respond(db, invitation_id, user, accept=False)
+
+
+def _respond(db, invitation_id: str, user, *, accept: bool) -> InvitationOut:
+    try:
+        invitation = members_svc.respond_invitation(db, invitation_id, user, accept)
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    workspace = db.get(Workspace, invitation.workspace_id)
+    inviter = db.get(User, invitation.inviter_id)
+    return InvitationOut(
+        id=invitation.id,
+        workspace_id=invitation.workspace_id,
+        workspace_name=workspace.name if workspace else invitation.workspace_id,
+        inviter_name=inviter.display_name if inviter else invitation.inviter_id,
+        invitee_name=user.display_name,
+        role=invitation.role,
+        status=invitation.status,
+        created_at=invitation.created_at,
     )
 
 

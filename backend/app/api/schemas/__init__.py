@@ -71,11 +71,26 @@ class MembersOut(BaseModel):
     role_defaults: dict[str, dict[str, bool]]  # role → its default perm set
 
 
-class AddMemberRequest(BaseModel):
+class InviteMemberRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)
-    # Required only when creating a brand-new account; ignored when adding an existing user.
-    password: str = Field(default="", max_length=200)
     role: str = Field(default="editor", pattern="^(admin|editor|viewer)$")
+
+
+class InvitationOut(BaseModel):
+    id: str
+    workspace_id: str
+    workspace_name: str
+    inviter_name: str
+    invitee_name: str
+    role: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvitationListOut(BaseModel):
+    invitations: list[InvitationOut]
 
 
 class SetRoleRequest(BaseModel):

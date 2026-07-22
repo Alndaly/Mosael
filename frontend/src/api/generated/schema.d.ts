@@ -420,8 +420,81 @@ export interface paths {
         /** List Members */
         get: operations["list_members_api_workspaces__workspace_id__members_get"];
         put?: never;
-        /** Add Member */
-        post: operations["add_member_api_workspaces__workspace_id__members_post"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite Member
+         * @description 邀请制:只对已注册用户名发邀请,对方在通知里接受后才建成员行。
+         */
+        post: operations["invite_member_api_workspaces__workspace_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Invitations
+         * @description 当前用户的待处理邀请(供通知中心渲染 接受/拒绝)。
+         */
+        get: operations["my_invitations_api_invitations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invitations/{invitation_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Invitation */
+        post: operations["accept_invitation_api_invitations__invitation_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invitations/{invitation_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline Invitation */
+        post: operations["decline_invitation_api_invitations__invitation_id__decline_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2974,6 +3047,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/usage-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Usage Events */
+        get: operations["list_agent_usage_events_api_agent_sessions__session_id__usage_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -3225,21 +3315,6 @@ export interface components {
             last_error?: string | null;
             /** Profile Name */
             profile_name?: string | null;
-        };
-        /** AddMemberRequest */
-        AddMemberRequest: {
-            /** Username */
-            username: string;
-            /**
-             * Password
-             * @default
-             */
-            password: string;
-            /**
-             * Role
-             * @default editor
-             */
-            role: string;
         };
         /** AddTrackRequest */
         AddTrackRequest: {
@@ -4087,6 +4162,43 @@ export interface components {
              */
             duration: number;
         };
+        /** InvitationListOut */
+        InvitationListOut: {
+            /** Invitations */
+            invitations: components["schemas"]["InvitationOut"][];
+        };
+        /** InvitationOut */
+        InvitationOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+            /** Inviter Name */
+            inviter_name: string;
+            /** Invitee Name */
+            invitee_name: string;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InviteMemberRequest */
+        InviteMemberRequest: {
+            /** Username */
+            username: string;
+            /**
+             * Role
+             * @default editor
+             */
+            role: string;
+        };
         /** JobOut */
         JobOut: {
             /** Id */
@@ -4886,6 +4998,56 @@ export interface components {
             } | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /** ProviderUsageEventOut */
+        ProviderUsageEventOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Capability */
+            capability: string;
+            /** Operation */
+            operation: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Id */
+            source_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Agent Message Id */
+            agent_message_id?: string | null;
+            /** Status */
+            status: string;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Units */
+            units: {
+                [key: string]: unknown;
+            };
+            /** Raw Usage */
+            raw_usage: {
+                [key: string]: unknown;
+            };
+            /** Cost Micros */
+            cost_micros?: number | null;
+            /** Currency */
+            currency: string;
+            /** Cost Confidence */
+            cost_confidence: string;
+            /** Pricing Rule Id */
+            pricing_rule_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** PublishAccountCreate */
         PublishAccountCreate: {
@@ -7024,7 +7186,7 @@ export interface operations {
             };
         };
     };
-    add_member_api_workspaces__workspace_id__members_post: {
+    invite_member_api_workspaces__workspace_id__invitations_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7035,7 +7197,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AddMemberRequest"];
+                "application/json": components["schemas"]["InviteMemberRequest"];
             };
         };
         responses: {
@@ -7045,7 +7207,98 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkspaceMemberOut"];
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_invitations_api_invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_api_invitations__invitation_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_invitation_api_invitations__invitation_id__decline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
                 };
             };
             /** @description Validation Error */
@@ -12973,6 +13226,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_usage_events_api_agent_sessions__session_id__usage_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderUsageEventOut"][];
                 };
             };
             /** @description Validation Error */

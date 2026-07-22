@@ -18,6 +18,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "AuthSession": ("app/api/routes/auth.py", "app/core/"),
     "WorkspaceMember": ("app/domain/members.py", "app/api/routes/auth.py"),
     "WorkspaceMemberPerm": ("app/domain/members.py",),
+    "WorkspaceInvitation": ("app/domain/members.py",),
     # 创作核心
     "Project": ("app/api/routes/projects.py", "app/domain/projects/", "app/domain/workflows/executors/content.py"),
     "Asset": ("app/domain/assets/",),

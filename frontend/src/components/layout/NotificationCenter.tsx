@@ -1,14 +1,17 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCheck, GitBranch, Layers, Send, Users } from "lucide-react";
+import { Bell, Check, CheckCheck, GitBranch, Layers, Send, Users, X } from "lucide-react";
 
 import {
   listNotifications,
+  myInvitations,
   readAllNotifications,
   readNotification,
+  respondInvitation,
   type AppNotification,
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -44,8 +47,30 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
     onSuccess: invalidate,
   });
 
+  // 待处理邀请:用户级接口(不受当前工作区限制),邀请卡置顶渲染 接受/拒绝。
+  const invitations = useQuery({
+    queryKey: ["my-invitations"],
+    queryFn: myInvitations,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+  const respond = useMutation({
+    mutationFn: ({ id, accept }: { id: string; accept: boolean }) => respondInvitation(id, accept),
+    onSuccess: (inv, vars) => {
+      toast.success(
+        vars.accept
+          ? t("notifInviteAccepted").replace("{ws}", inv.workspace_name)
+          : t("notifInviteDeclined"),
+      );
+      void qc.invalidateQueries({ queryKey: ["my-invitations"] });
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      invalidate();
+    },
+  });
+  const pendingInvites = invitations.data?.invitations ?? [];
+
   const items = query.data?.items ?? [];
-  const unread = query.data?.unread ?? 0;
+  const unread = (query.data?.unread ?? 0) + pendingInvites.length;
 
   // 点通知 → 跳业务页并打开那条记录(payload 里带记录 id,走 mibu:open-* 深链通道)。
   const openItem = (item: AppNotification) => {
@@ -92,6 +117,38 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
           )}
         </div>
         <div className="grid max-h-[380px] gap-1 overflow-y-auto p-1.5">
+          {pendingInvites.map((inv) => (
+            <div
+              key={inv.id}
+              className="grid gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--primary)_28%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] px-2.5 py-2"
+            >
+              <span className="text-xs font-semibold">
+                {t("notifInviteTitle").replace("{ws}", inv.workspace_name)}
+              </span>
+              <small className="text-[11px] text-muted-foreground">
+                {t("notifInviteBody").replace("{name}", inv.inviter_name).replace("{role}", t(`role_${inv.role}` as never))}
+              </small>
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  className="h-7"
+                  disabled={respond.isPending}
+                  onClick={() => respond.mutate({ id: inv.id, accept: true })}
+                >
+                  <Check size={12} /> {t("notifInviteAccept")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-muted-foreground"
+                  disabled={respond.isPending}
+                  onClick={() => respond.mutate({ id: inv.id, accept: false })}
+                >
+                  <X size={12} /> {t("notifInviteDecline")}
+                </Button>
+              </div>
+            </div>
+          ))}
           {items.map((item) => (
             <button
               key={item.id}
@@ -115,7 +172,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}
             </button>
           ))}
-          {items.length === 0 && <p className="m-0 px-3 py-[18px] text-center text-xs leading-[1.6] text-muted-foreground">{t("notifEmpty")}</p>}
+          {items.length === 0 && pendingInvites.length === 0 && <p className="m-0 px-3 py-[18px] text-center text-xs leading-[1.6] text-muted-foreground">{t("notifEmpty")}</p>}
         </div>
       </PopoverContent>
     </Popover>

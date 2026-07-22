@@ -62,8 +62,18 @@ export type MembersInfo = Omit<components["schemas"]["MembersOut"], "members"> &
 export function listMembers(workspaceId: string): Promise<MembersInfo> {
   return api<MembersInfo>(`/api/workspaces/${workspaceId}/members`);
 }
-export function addMember(workspaceId: string, body: { username: string; password?: string; role: string }): Promise<WorkspaceMember> {
-  return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members`, { method: "POST", body: JSON.stringify(body) });
+export type WorkspaceInvitation = components["schemas"]["InvitationOut"];
+
+export function inviteMember(workspaceId: string, body: { username: string; role: string }): Promise<WorkspaceInvitation> {
+  return api<WorkspaceInvitation>(`/api/workspaces/${workspaceId}/invitations`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function myInvitations(): Promise<{ invitations: WorkspaceInvitation[] }> {
+  return api<{ invitations: WorkspaceInvitation[] }>("/api/invitations");
+}
+
+export function respondInvitation(invitationId: string, accept: boolean): Promise<WorkspaceInvitation> {
+  return api<WorkspaceInvitation>(`/api/invitations/${invitationId}/${accept ? "accept" : "decline"}`, { method: "POST" });
 }
 export function setMemberRole(workspaceId: string, userId: string, role: string): Promise<WorkspaceMember> {
   return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });

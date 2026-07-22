@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 
 import {
-  addMember,
+  inviteMember,
   deleteWorkspace,
   listMembers,
   removeMember,
@@ -157,9 +157,9 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
 
       {canManage && (
         <SettingsBlock>
-          <AddMemberForm
-            onAdd={async (body) => {
-              await addMember(wid, body);
+          <InviteMemberForm
+            onInvite={async (body) => {
+              await inviteMember(wid, body);
               invalidate();
             }}
           />
@@ -312,26 +312,25 @@ function MemberRow({
   );
 }
 
-function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: string; role: string }) => Promise<void> }) {
+function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; role: string }) => Promise<void> }) {
   const t = useI18n();
   const schema = React.useMemo(
     () =>
       z.object({
         username: z.string().min(2, t("teamUsernameShort")),
-        password: z.string().min(4, t("teamPasswordShort")),
         role: z.string(),
       }),
     [t],
   );
-  const form = useForm<{ username: string; password: string; role: string }>({
+  const form = useForm<{ username: string; role: string }>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "", password: "", role: "editor" },
+    defaultValues: { username: "", role: "editor" },
   });
   const submit = form.handleSubmit(async (values) => {
     try {
-      await onAdd(values);
-      toast.success(t("teamMemberAdded").replace("{name}", values.username));
-      form.reset({ username: "", password: "", role: "editor" });
+      await onInvite(values);
+      toast.success(t("teamInviteSent").replace("{name}", values.username));
+      form.reset({ username: "", role: "editor" });
     } catch (error) {
       form.setError("username", { message: (error as Error).message });
     }
@@ -341,9 +340,9 @@ function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: 
     <Form {...form}>
       <form className="grid gap-2.5" onSubmit={submit} noValidate>
         <div className="flex items-center gap-1.5 text-xs font-[550] text-foreground">
-          <UserPlus size={14} /> {t("teamAddMember")}
+          <UserPlus size={14} /> {t("teamInvite")}
         </div>
-        <div className="grid grid-cols-[1.3fr_1fr_0.8fr] gap-2.5 max-[720px]:grid-cols-1">
+        <div className="grid grid-cols-[1.6fr_0.8fr] gap-2.5 max-[720px]:grid-cols-1">
           <FormField
             control={form.control}
             name="username"
@@ -351,19 +350,7 @@ function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: 
               <FormItem>
                 <FormLabel>{t("teamUsername")}</FormLabel>
                 <FormControl>
-                  <Input autoComplete="off" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("teamInitialPassword")}</FormLabel>
-                <FormControl>
-                  <Input type="password" autoComplete="new-password" {...field} />
+                  <Input autoComplete="off" placeholder={t("teamInvitePlaceholder")} {...field} />
                 </FormControl>
               </FormItem>
             )}
@@ -374,29 +361,27 @@ function AddMemberForm({ onAdd }: { onAdd: (body: { username: string; password: 
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t("teamRole")}</FormLabel>
-                <FormControl>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      {ASSIGNABLE.map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {t(`role_${role}` as never) as string}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="admin">{t("role_admin")}</SelectItem>
+                    <SelectItem value="editor">{t("role_editor")}</SelectItem>
+                    <SelectItem value="viewer">{t("role_viewer")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </FormItem>
             )}
           />
         </div>
         <div className="flex items-center gap-2.5">
           <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
-            <UserPlus size={13} /> {t("teamAddMember")}
+            <UserPlus size={13} /> {t("teamInvite")}
           </Button>
-          <span className="text-[11px] text-muted-foreground">{t("teamAddHint")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("teamInviteHint")}</span>
         </div>
       </form>
     </Form>

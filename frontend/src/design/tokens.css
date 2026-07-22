@@ -28,6 +28,7 @@
   --color-panel-inset: var(--panel-inset);
   --color-success: var(--success);
   --color-input: var(--input);
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
@@ -93,7 +94,8 @@
   --destructive: #d8544b;
   --success: #359460;
   --border: #e6e1d8;
-  --input: #d8d2c6;
+  --input: #ddd7cc;
+  --field: #f1eee8;
   --ring: #b7adf0;
 
   /* Panel system */
@@ -176,7 +178,8 @@
   --destructive: #e0645c;
   --success: #4cb87e;
   --border: #2b2836;
-  --input: #363044;
+  --input: #3a3448;
+  --field: #211e2b;
   --ring: #5f53b8;
 
   --panel: var(--card);

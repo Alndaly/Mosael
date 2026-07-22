@@ -121,7 +121,7 @@ export function SubtitlePanel({
               </div>
               <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
-                className="w-full resize-y rounded-md border border-border bg-secondary px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                 rows={2}
                 defaultValue={clip.text_override ?? ""}
                 onBlur={(event) => {

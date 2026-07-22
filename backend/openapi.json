@@ -1114,13 +1114,16 @@
             }
           }
         }
-      },
+      }
+    },
+    "/api/workspaces/{workspace_id}/invitations": {
       "post": {
         "tags": [
           "workspaces"
         ],
-        "summary": "Add Member",
-        "operationId": "add_member_api_workspaces__workspace_id__members_post",
+        "summary": "Invite Member",
+        "description": "邀请制:只对已注册用户名发邀请,对方在通知里接受后才建成员行。",
+        "operationId": "invite_member_api_workspaces__workspace_id__invitations_post",
         "parameters": [
           {
             "name": "workspace_id",
@@ -1137,7 +1140,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddMemberRequest"
+                "$ref": "#/components/schemas/InviteMemberRequest"
               }
             }
           }
@@ -1148,7 +1151,123 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceMemberOut"
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "My Invitations",
+        "description": "当前用户的待处理邀请(供通知中心渲染 接受/拒绝)。",
+        "operationId": "my_invitations_api_invitations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/{invitation_id}/accept": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Accept Invitation",
+        "operationId": "accept_invitation_api_invitations__invitation_id__accept_post",
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invitation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/{invitation_id}/decline": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Decline Invitation",
+        "operationId": "decline_invitation_api_invitations__invitation_id__decline_post",
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invitation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
                 }
               }
             }
@@ -9608,6 +9727,52 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/usage-events": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List Agent Usage Events",
+        "operationId": "list_agent_usage_events_api_agent_sessions__session_id__usage_events_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderUsageEventOut"
+                  },
+                  "title": "Response List Agent Usage Events Api Agent Sessions  Session Id  Usage Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -10266,33 +10431,6 @@
           "account_id"
         ],
         "title": "AccountPatchRequest"
-      },
-      "AddMemberRequest": {
-        "properties": {
-          "username": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 2,
-            "title": "Username"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 200,
-            "title": "Password",
-            "default": ""
-          },
-          "role": {
-            "type": "string",
-            "pattern": "^(admin|editor|viewer)$",
-            "title": "Role",
-            "default": "editor"
-          }
-        },
-        "type": "object",
-        "required": [
-          "username"
-        ],
-        "title": "AddMemberRequest"
       },
       "AddTrackRequest": {
         "properties": {
@@ -12547,6 +12685,92 @@
         ],
         "title": "InsertTextClipRequest"
       },
+      "InvitationListOut": {
+        "properties": {
+          "invitations": {
+            "items": {
+              "$ref": "#/components/schemas/InvitationOut"
+            },
+            "type": "array",
+            "title": "Invitations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "invitations"
+        ],
+        "title": "InvitationListOut"
+      },
+      "InvitationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          },
+          "inviter_name": {
+            "type": "string",
+            "title": "Inviter Name"
+          },
+          "invitee_name": {
+            "type": "string",
+            "title": "Invitee Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "workspace_name",
+          "inviter_name",
+          "invitee_name",
+          "role",
+          "status",
+          "created_at"
+        ],
+        "title": "InvitationOut"
+      },
+      "InviteMemberRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^(admin|editor|viewer)$",
+            "title": "Role",
+            "default": "editor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username"
+        ],
+        "title": "InviteMemberRequest"
+      },
       "JobOut": {
         "properties": {
           "id": {
@@ -14599,6 +14823,153 @@
         },
         "type": "object",
         "title": "ProviderProfileUpdate"
+      },
+      "ProviderUsageEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "agent_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Message Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "units": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Units"
+          },
+          "raw_usage": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Raw Usage"
+          },
+          "cost_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Micros"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "cost_confidence": {
+            "type": "string",
+            "title": "Cost Confidence"
+          },
+          "pricing_rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Rule Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "provider",
+          "model",
+          "capability",
+          "operation",
+          "source_type",
+          "source_id",
+          "status",
+          "units",
+          "raw_usage",
+          "currency",
+          "cost_confidence",
+          "created_at"
+        ],
+        "title": "ProviderUsageEventOut"
       },
       "PublishAccountCreate": {
         "properties": {

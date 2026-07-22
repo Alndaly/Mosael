@@ -13,8 +13,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.roles import PERMS
-from app.core.security import hash_password
-from app.db.models import User, WorkspaceMember, WorkspaceMemberPerm
+from app.db.models import User, Workspace, WorkspaceInvitation, WorkspaceMember, WorkspaceMemberPerm
+from app.domain import notifications as notifications_svc
 
 _lock = threading.RLock()
 
@@ -44,26 +44,90 @@ def list_members(db: Session, workspace_id: str) -> list[tuple[User, WorkspaceMe
     return [(user, member) for user, member in rows]
 
 
-def add_member(db: Session, workspace_id: str, username: str, password: str, role: str) -> tuple[User, WorkspaceMember]:
-    """Add a teammate. Creates the account when it doesn't exist yet (admin-builds-accounts
-    onboarding); adds an existing account otherwise. Raises if already a member."""
+def invite_member(db: Session, workspace_id: str, inviter: User, username: str, role: str) -> tuple[User, WorkspaceInvitation]:
+    """邀请制入口:按用户名邀请一个**已注册**账号,受邀人从通知里接受后才成为成员。
+
+    不再替队友建号(旧 add_member 已删):账号自助注册,管理员只发邀请——
+    密码从此不经过任何第三人之手。"""
     username = username.strip().lower()
     with _lock:
-        user = db.scalar(select(User).where(User.username == username))
-        if user is None:
-            if not password or len(password) < 4:
-                raise MemberError("New accounts need a password of at least 4 characters")
-            user = User(username=username, display_name=username, signature="", password_hash=hash_password(password))
-            db.add(user)
-            db.flush()
-        existing = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user.id})
-        if existing is not None:
-            raise MemberError("Already a member of this workspace")
-        member = WorkspaceMember(workspace_id=workspace_id, user_id=user.id, role=role)
-        db.add(member)
+        invitee = db.scalar(select(User).where(User.username == username))
+        if invitee is None:
+            raise MemberError("该用户名不存在;请对方先在登录页注册账号")
+        if invitee.id == inviter.id:
+            raise MemberError("不能邀请自己")
+        if db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": invitee.id}) is not None:
+            raise MemberError("对方已是本工作区成员")
+        pending = db.scalar(
+            select(WorkspaceInvitation).where(
+                WorkspaceInvitation.workspace_id == workspace_id,
+                WorkspaceInvitation.invitee_id == invitee.id,
+                WorkspaceInvitation.status == "pending",
+            )
+        )
+        if pending is not None:
+            raise MemberError("已有待处理的邀请")
+        invitation = WorkspaceInvitation(
+            workspace_id=workspace_id, inviter_id=inviter.id, invitee_id=invitee.id, role=role
+        )
+        db.add(invitation)
+        db.flush()
+        workspace = db.get(Workspace, workspace_id)
+        notifications_svc.notify(
+            db,
+            workspace_id,
+            type="team",
+            title=f"{inviter.display_name} 邀请你加入「{workspace.name if workspace else workspace_id}」",
+            body=f"角色:{role}。接受后即可访问该工作区。",
+            payload={"kind": "invite", "invitation_id": invitation.id, "role": role},
+            user_id=invitee.id,
+        )
         db.commit()
-        db.refresh(member)
-    return user, member
+        db.refresh(invitation)
+    return invitee, invitation
+
+
+def pending_invitations(db: Session, user_id: str) -> list[tuple[WorkspaceInvitation, Workspace, User]]:
+    """当前用户的待处理邀请(通知中心据此渲染 接受/拒绝)。"""
+    rows = db.execute(
+        select(WorkspaceInvitation, Workspace, User)
+        .join(Workspace, Workspace.id == WorkspaceInvitation.workspace_id)
+        .join(User, User.id == WorkspaceInvitation.inviter_id)
+        .where(WorkspaceInvitation.invitee_id == user_id, WorkspaceInvitation.status == "pending")
+        .order_by(WorkspaceInvitation.created_at.desc())
+    ).all()
+    return [(inv, ws, inviter) for inv, ws, inviter in rows]
+
+
+def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool) -> WorkspaceInvitation:
+    """受邀人应答。接受 → 建成员行(成员行仍只在本域创建);拒绝 → 仅记状态。
+    双向留痕:结果同样通知邀请人。"""
+    from app.db.models import now as _now
+
+    with _lock:
+        invitation = db.get(WorkspaceInvitation, invitation_id)
+        if invitation is None or invitation.invitee_id != user.id:
+            raise MemberError("邀请不存在")
+        if invitation.status != "pending":
+            raise MemberError("邀请已处理过")
+        invitation.status = "accepted" if accept else "declined"
+        invitation.responded_at = _now()
+        if accept and db.get(WorkspaceMember, {"workspace_id": invitation.workspace_id, "user_id": user.id}) is None:
+            db.add(WorkspaceMember(workspace_id=invitation.workspace_id, user_id=user.id, role=invitation.role))
+        workspace = db.get(Workspace, invitation.workspace_id)
+        ws_name = workspace.name if workspace else invitation.workspace_id
+        notifications_svc.notify(
+            db,
+            invitation.workspace_id,
+            type="team",
+            title=f"{user.display_name} {'接受' if accept else '婉拒'}了加入「{ws_name}」的邀请",
+            body="",
+            payload={"kind": "invite-result", "invitation_id": invitation.id, "accepted": accept},
+            user_id=invitation.inviter_id,
+        )
+        db.commit()
+        db.refresh(invitation)
+    return invitation
 
 
 def set_role(db: Session, workspace_id: str, user_id: str, role: str) -> WorkspaceMember:

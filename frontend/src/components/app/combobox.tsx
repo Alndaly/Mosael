@@ -64,7 +64,7 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn("justify-between", className)}
+          className={cn("justify-between rounded-md border-input bg-field font-normal hover:bg-field hover:text-foreground", className)}
         >
           <span className={cn("truncate", value ? "text-foreground" : "text-muted-foreground")}>
             {selected?.label ?? (value || placeholder)}

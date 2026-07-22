@@ -7,8 +7,10 @@ def _setup(role: str):
     """Owner workspace with a second member at `role`; returns (owner, ws, member_client)."""
     owner = fresh_client()
     ws = owner.post("/api/workspaces", json={"name": "W"}).json()
-    owner.post(f"/api/workspaces/{ws['id']}/members", json={"username": "mate", "password": "pass1234", "role": role})
     mate = second_client("mate")
+    owner.post(f"/api/workspaces/{ws['id']}/invitations", json={"username": "mate", "role": role})
+    inv = mate.get("/api/invitations").json()["invitations"][0]
+    mate.post(f"/api/invitations/{inv['id']}/accept")
     return owner, ws, mate
 
 

@@ -56,6 +56,22 @@ class WorkspaceMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class WorkspaceInvitation(Base):
+    """工作区邀请(邀请制):受邀人从通知里 接受/拒绝,接受才写成员行。"""
+
+    __tablename__ = "workspace_invitations"
+    __table_args__ = (Index("idx_ws_invitations_invitee_status", "invitee_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    inviter_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    invitee_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(40), nullable=False, default="editor")  # admin|editor|viewer
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending|accepted|declined
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class WorkspaceMemberPerm(Base):
     """Per-member fine-grained permission override. Absence of a row = fall back to the
     member's role default (see app/core/roles.py). Relational (one row per overridden
