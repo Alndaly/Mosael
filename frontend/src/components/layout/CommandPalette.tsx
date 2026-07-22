@@ -29,13 +29,13 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import type { StudioView } from "@/components/layout/AppShell";
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { emitOpenEvent } from "@/lib/deepLink";
 
 type KbSearchResult = components["schemas"]["KbSearchResultOut"];
 
@@ -152,10 +152,38 @@ export function CommandPalette({
     action();
   };
 
+  const searching = assets.isFetching || kbResults.isFetching || input.trim() !== query;
   const hasAnyResult = navMatches.length > 0 || projectMatches.length > 0 || assetMatches.length > 0 || kbUnique.length > 0;
 
+  // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
+  // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。
+  const firstValue =
+    q === ""
+      ? "action-new-project"
+      : navMatches.length > 0
+        ? `nav-${navMatches[0].view}`
+        : projectMatches.length > 0
+          ? `project-${projectMatches[0].id}`
+          : assetMatches.length > 0
+            ? `asset-${assetMatches[0].id}`
+            : kbUnique.length > 0
+              ? `kb-${kbUnique[0].document_id}`
+              : "";
+  const [highlighted, setHighlighted] = React.useState(firstValue);
+  React.useEffect(() => {
+    setHighlighted(firstValue);
+  }, [firstValue]);
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
+    // 面板自己做匹配(中文子串 + 拼音/英文关键词 + 服务端检索),item 的 value 是
+    // 不可读的稳定 id — 必须关掉 cmdk 的内建按 value 过滤,否则真命中反被藏起来。
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      shouldFilter={false}
+      value={highlighted}
+      onValueChange={setHighlighted}
+    >
       <CommandInput
         value={input}
         onValueChange={setInput}
@@ -163,16 +191,16 @@ export function CommandPalette({
         autoFocus
       />
       <CommandList>
-        {!hasAnyResult && (
-          <CommandEmpty>
-            <span className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-[11.5px] [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-[12.5px] [&_strong]:font-semibold [&_strong]:text-foreground">
-              <span className="mb-1 grid h-9 w-9 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
-                <SearchX size={17} />
-              </span>
-              <strong>{t("cmdkEmpty")}</strong>
-              <span>{t("cmdkEmptyHint")}</span>
+        {/* cmdk 的 <CommandEmpty> 依赖内建过滤计数,关掉过滤后永不触发 — 手工空态。
+            检索请求在途时不闪空态。 */}
+        {!hasAnyResult && !searching && (
+          <div className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-[11.5px] [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-[12.5px] [&_strong]:font-semibold [&_strong]:text-foreground">
+            <span className="mb-1 grid h-9 w-9 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
+              <SearchX size={17} />
             </span>
-          </CommandEmpty>
+            <strong>{t("cmdkEmpty")}</strong>
+            <span>{t("cmdkEmptyHint")}</span>
+          </div>
         )}
 
         {q === "" && (
@@ -237,10 +265,7 @@ export function CommandPalette({
                   run(() => {
                     onNavigate("media");
                     // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
-                    window.setTimeout(
-                      () => window.dispatchEvent(new CustomEvent("mibu:open-asset", { detail: asset.id })),
-                      80,
-                    );
+                    emitOpenEvent("mibu:open-asset", asset.id);
                   })
                 }
               >
@@ -261,10 +286,7 @@ export function CommandPalette({
                 onSelect={() =>
                   run(() => {
                     onNavigate("kb");
-                    window.setTimeout(
-                      () => window.dispatchEvent(new CustomEvent("mibu:open-kb-doc", { detail: result.document_id })),
-                      80,
-                    );
+                    emitOpenEvent("mibu:open-kb-doc", result.document_id);
                   })
                 }
               >
