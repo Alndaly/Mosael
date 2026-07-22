@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
+import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RefreshCw, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, type Workspace } from "@/api/client";
@@ -425,6 +425,41 @@ function profileKey(profile: { username: string; display_name: string; signature
   return `${profile.username}\n${profile.display_name}\n${profile.signature}`;
 }
 
+/** 检查更新(仅桌面端渲染):查 GitHub Releases 比对版本,发现新版给「查看」入口。
+ *  未签名的 mac 包装不了静默自动安装,这里是诚实的降级——提示 + 打开发布页。 */
+function UpdateCheckButton() {
+  const t = useI18n();
+  const [checking, setChecking] = React.useState(false);
+  const check = window.mibuDesktop?.checkUpdates;
+  if (!check) return null;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-7"
+      disabled={checking}
+      onClick={async () => {
+        setChecking(true);
+        try {
+          const info = await check();
+          if (info.error) toast.error(t("updateCheckFailed"));
+          else if (info.hasUpdate) {
+            toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
+              duration: 12000,
+              action: { label: t("updateView"), onClick: () => window.open(info.url, "_blank") },
+            });
+          } else toast.success(t("updateUpToDate"));
+        } finally {
+          setChecking(false);
+        }
+      }}
+    >
+      {checking ? <Loader2 size={13} className="animate-mibu-spin" /> : <RefreshCw size={13} />}
+      {t("updateCheck")}
+    </Button>
+  );
+}
+
 function AppearanceSection() {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
@@ -689,6 +724,7 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
         </SettingsRow>
         <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">v{__APP_VERSION__}</code>
+          <UpdateCheckButton />
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>

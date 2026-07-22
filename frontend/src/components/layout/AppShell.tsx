@@ -98,6 +98,17 @@ export function AppShell({
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
 
+  // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
+  React.useEffect(() => {
+    return window.mibuDesktop?.onUpdateAvailable?.((info) => {
+      if (!info?.hasUpdate) return;
+      toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
+        duration: 12000,
+        action: { label: t("updateView"), onClick: () => window.open(info.url, "_blank") },
+      });
+    });
+  }, [t]);
+
   return (
     <div className="grid h-screen grid-cols-[56px_minmax(0,1fr)] grid-rows-[44px_minmax(0,1fr)]">
       <header className="col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag] [.is-desktop.is-mac_&]:pl-[76px] [.is-desktop.is-mac.is-fullscreen_&]:pl-2.5 [.is-desktop.is-win_&]:pr-[148px] [.is-desktop.is-win.is-fullscreen_&]:pr-2.5">

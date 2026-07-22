@@ -998,6 +998,12 @@ export const messages = {
     exportQualityCompact: "压缩(文件较小)",
     exportStart: "开始导出",
     exportConfigHint: "导出完成后自动落为素材。",
+    updateCheck: "检查更新",
+    updateChecking: "检查中",
+    updateAvailable: "发现新版本 v{version}",
+    updateView: "查看",
+    updateUpToDate: "已是最新版本",
+    updateCheckFailed: "无法检查更新,请稍后再试",
 
     // AI Studio
     aiDescription: "统一管理图片、视频生成模型和生成任务。",
@@ -2313,6 +2319,12 @@ export const messages = {
     exportQualityCompact: "Compact (smaller file)",
     exportStart: "Start export",
     exportConfigHint: "The export lands in your media library when done.",
+    updateCheck: "Check for updates",
+    updateChecking: "Checking",
+    updateAvailable: "New version v{version} available",
+    updateView: "View",
+    updateUpToDate: "You're up to date",
+    updateCheckFailed: "Could not check for updates, try again later",
 
     // AI Studio
     aiDescription: "Manage image and video generation models and jobs.",

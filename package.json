@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mibu — AI video creative studio",
+  "repository": "https://github.com/Alndaly/mibu-video",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.15.0",
   "scripts": {
@@ -24,6 +25,13 @@
   "build": {
     "appId": "dev.mibu.studio",
     "productName": "Mibu",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Alndaly",
+        "repo": "mibu-video"
+      }
+    ],
     "directories": {
       "output": "release"
     },

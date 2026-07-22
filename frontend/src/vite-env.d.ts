@@ -27,11 +27,22 @@ interface MibuPublishBridge {
   onViewState: (callback: (state: PublishViewState) => void) => () => void;
 }
 
+/** 应用更新检查结果(Electron 主进程查 GitHub Releases)。 */
+interface MibuUpdateInfo {
+  current?: string;
+  latest?: string;
+  hasUpdate?: boolean;
+  url?: string;
+  error?: string;
+}
+
 interface Window {
   mibuPublish?: MibuPublishBridge;
   mibuDesktop?: {
     platform: string;
     setTitleOverlay?: (colors: { color: string; symbolColor: string }) => void;
     onFullscreen?: (callback: (fullscreen: boolean) => void) => () => void;
+    checkUpdates?: () => Promise<MibuUpdateInfo>;
+    onUpdateAvailable?: (callback: (info: MibuUpdateInfo) => void) => () => void;
   };
 }

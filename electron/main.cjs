@@ -111,6 +111,38 @@ function stopBackend() {
   }
 }
 
+// ---------------- 应用更新(检查-提示式) ----------------
+// macOS 未签名包装不上 Squirrel 自动安装(签名校验必失败),所以走「检查 + 提示 +
+// 打开发布页」的降级路线:GitHub Releases 比对版本号。日后具备 Developer ID 签名
+// 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
+const UPDATE_REPO = "Alndaly/mibu-video";
+
+function compareVersions(a, b) {
+  const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
+  const [pa, pb] = [parse(a), parse(b)];
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
+  const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "mibu-updater" },
+  });
+  if (!res.ok) throw new Error(`GitHub ${res.status}`);
+  const release = await res.json();
+  const latest = String(release.tag_name || "").replace(/^v/i, "");
+  const current = app.getVersion();
+  return {
+    current,
+    latest,
+    hasUpdate: Boolean(latest) && compareVersions(latest, current) > 0,
+    url: release.html_url || `https://github.com/${UPDATE_REPO}/releases`,
+  };
+}
+
 /** 应用菜单(中文标签 + 标准 role 行为/快捷键)。mac 是全局顶部菜单栏;
  *  Win/Linux 菜单栏默认隐藏(无边框自绘标题),Alt 唤起,快捷键始终生效。 */
 function buildAppMenu() {
@@ -322,6 +354,28 @@ app.whenReady().then(async () => {
       console.warn("[publish] exit 忽略:", e.message);
     }
   });
+
+  // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
+  // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
+  ipcMain.handle("mibu:check-updates", async () => {
+    try {
+      return await checkForUpdates();
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  if (app.isPackaged) {
+    setTimeout(async () => {
+      try {
+        const info = await checkForUpdates();
+        if (info.hasUpdate) {
+          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("mibu:update-available", info);
+        }
+      } catch {
+        /* 静默 */
+      }
+    }, 5000);
+  }
 
   buildAppMenu();
   // 关于面板信息(mac 标准关于弹窗)。

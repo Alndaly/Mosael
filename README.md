@@ -31,6 +31,18 @@ open release/mac-arm64/Mibu.app
 
 `pnpm dist:mac` 同流程但产出 `.dmg`(分发时用)。
 
+### 应用更新
+
+打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/mibu-video/releases)
+最新 tag 与当前版本,发现新版弹提示引导到发布页下载;设置 → 本地后端 → 版本 里也有
+「检查更新」按钮。发布新版:改 `package.json` 的 `version` → 打包 → 建 `v<版本号>` 的
+GitHub Release 挂上产物。
+
+> macOS 的**静默自动安装**需要 Developer ID 签名 + 公证(未签名包 Squirrel 校验必失败),
+> 所以当前是「检查 + 提示」的降级路线;`build.publish` 已配好 GitHub provider,签名具备后
+> 换 electron-updater 即可平滑升级为全自动安装,渲染层接口不变。仓库无 Release 或不可达时
+> 检查静默失败,不打扰使用。
+
 ⚠️ **改了前端就必须重新 `build:frontend`**(`build:mac` 已包含)。只跑 `build:publisher` 再打包会让前端停留在旧版本——这个坑踩过:CSS 改了却"没生效",查半天发现根本没进包。
 
 ### 构建脚本
