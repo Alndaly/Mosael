@@ -607,8 +607,8 @@ function GenerateWorkspace({
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
         <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2>{t("generationSessionsTitle")}</h2>
-          <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
-            <Plus size={13} /> {t("generationNewSession")}
+          <Button variant="outline" size="icon" className="h-7 w-7" title={t("generationNewSession")} aria-label={t("generationNewSession")} onClick={() => createSession.mutate()} disabled={createSession.isPending}>
+            <Plus size={14} />
           </Button>
         </div>
         <div

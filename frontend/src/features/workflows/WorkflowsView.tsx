@@ -396,8 +396,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("navWorkflows")}</h2>
-            <Button variant="outline" size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
-              <Plus size={13} /> {t("wfCreate")}
+            <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
+              <Plus size={14} />
             </Button>
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">

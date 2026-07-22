@@ -379,8 +379,8 @@ export function ChatWorkspace({
         <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
           <h2>{t("chatSessionsTitle")}</h2>
-          <Button variant="outline" size="sm" onClick={() => createSession.mutate()} disabled={createSession.isPending}>
-            <Plus size={13} /> {t("chatNewSession")}
+          <Button variant="outline" size="icon" className="h-7 w-7" title={t("chatNewSession")} aria-label={t("chatNewSession")} onClick={() => createSession.mutate()} disabled={createSession.isPending}>
+            <Plus size={14} />
           </Button>
         </div>
         <div
