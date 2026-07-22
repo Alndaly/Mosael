@@ -53,7 +53,8 @@ export function TimelineClip({
     trackKind === "audio" && "border-[var(--track-audio-border)] bg-[var(--track-audio-bg)] text-[var(--track-audio-text)]",
     trackKind === "subtitle" &&
       "border-[color-mix(in_oklab,#a855f7_45%,var(--border))] bg-[color-mix(in_oklab,#a855f7_18%,var(--panel))] text-[var(--track-subtitle-text)]",
-    // 松手落位/涟漪让位由这组过渡完成;拖拽本体 duration-0 保证 1:1 跟手。
+    // 松手落位/涟漪让位由这组过渡完成;拖拽本体靠下面的 duration-0 覆盖成 1:1 跟手
+    // (依赖 cn/tailwind-merge 的后者胜出,dragging 分支必须排在 animate 之后)。
     animate && "transition-[left,width,transform] duration-200 ease-out motion-reduce:transition-none",
     selected && "z-[2] border-primary shadow-[0_0_0_1px_var(--primary)]",
     dragging && "z-[3] cursor-grabbing opacity-[0.92] duration-0",
@@ -65,7 +66,10 @@ export function TimelineClip({
       style={{
         left,
         width,
+        // 位移归零时整个移除 transform(而不是写 translate3d(0)):过渡把 none 当
+        // 恒等值照常插值,且静止片段不留下多余的合成层。
         transform: shiftPx !== 0 ? `translate3d(${shiftPx}px, 0, 0)` : undefined,
+        // 只在拖拽中提示合成层 — 常驻 will-change 会让每个片段都吃一层显存。
         willChange: dragging ? "transform" : undefined,
       }}
       onPointerDown={(event) => {

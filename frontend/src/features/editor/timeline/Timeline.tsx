@@ -360,6 +360,9 @@ export function Timeline({
       window.removeEventListener("pointerup", onUp);
       setNewLayerDrag(false);
       const draft = useEditorStore.getState().dragDraft;
+      // 提交前先把草稿标成 settling(而不是清掉):回包在途的几十毫秒里草稿继续把
+      // 片段钉在松手位置,不闪回原位;顶部的 collapse memo 则靠这个标记区分
+      // "拖拽中经过原点"(不能折叠)和"提交已落缓存"(该折叠、放落位动画)。
       if (wantNewLayer && onMoveClipToNewLayer && draft && draft.clipId === clip.id) {
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         onMoveClipToNewLayer(clip.id, draft.timeline_start);
@@ -408,6 +411,7 @@ export function Timeline({
       target.removeEventListener("pointerup", onUp);
       const draft = useEditorStore.getState().dragDraft;
       if (draft && draft.clipId === clip.id) {
+        // 与移动同理:settling 草稿钉住裁剪结果等回包,缓存追平后由过渡完成落位。
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         onTrimClip(clip.id, { timeline_start: draft.timeline_start, src_in: draft.src_in, src_out: draft.src_out });
       }
@@ -846,6 +850,10 @@ export function Timeline({
                       : 0;
                   // 位移一律走 transform、left 固定在已提交位置(老 mibu-video 手法):
                   // 拖拽本体 duration-0 跟手,松手/涟漪让位则由过渡平滑滑入。
+                  // 落位帧的滑行原理:提交落缓存时 left 跳到终值、shift 同帧归零,
+                  // 两个属性各自做 200ms 过渡 → 视觉位置 = left+shift 从"松手点"
+                  // 平滑插值到"终点";服务端原样接受落点时两者恰好抵消,纹丝不动。
+                  // 裁剪草稿仍直接渲染 left/width(裁的是边缘,transform 表达不了)。
                   const isMoveDraft = Boolean(draft && draft.kind === "move");
                   const baseLeft = isMoveDraft ? clip.timeline_start : display.timeline_start;
                   const shiftTime = isMoveDraft ? display.timeline_start - clip.timeline_start : partingShift;

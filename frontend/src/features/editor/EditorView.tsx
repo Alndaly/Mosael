@@ -223,6 +223,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // deferred notification, so the clip flashes back to its old slot. Instead, arm this flag on
   // settle and let the effect below drop the draft on the render that actually shows the new
   // data. The draft pins the clip at its dropped spot the whole time → no flicker.
+  // 落位动画在 Timeline 侧:那边的 collapse memo 会在缓存追平 settling 草稿的同一帧
+  // 把它视作已清、让片段带过渡滑向终点;这里事后清草稿只是状态收尾,不参与动画时序。
   // Live subtitle-style preview. The sliders used to persist only on release, so the monitor
   // showed nothing until the round-trip landed and you were styling blind. Hold the in-progress
   // style here, render the monitor from it, and let the committed value clear it.
