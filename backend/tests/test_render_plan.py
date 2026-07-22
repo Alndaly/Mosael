@@ -90,3 +90,39 @@ def test_identity_curves_are_dropped():
     c = clip("c1", "a1", 0, 0, 5)
     c["effects"] = {"color": {"curves": {"luma": [[0, 0], [1, 1]]}}}
     assert make_plan([c]).video_segments[0].curves == ()
+
+
+def test_export_params_scale_output_and_encode():
+    from app.domain.render import resolve_export_output
+
+    style = {"font_size": 48.0, "position": "bottom"}
+    w, h, fps, out_style, crf, preset = resolve_export_output(
+        1920, 1080, 30.0, style, {"resolution": "720p", "fps": 24, "quality": "compact"}
+    )
+    assert (w, h, fps) == (1280, 720, 24.0)
+    assert out_style["font_size"] == 32.0  # 字幕字号随输出等比缩放
+    assert (crf, preset) == (26, "veryfast")
+
+    # 竖屏按短边对齐;original/未知档位不缩放;不升采样
+    assert resolve_export_output(1080, 1920, 30.0, {}, {"resolution": "720p"})[:2] == (720, 1280)
+    assert resolve_export_output(1920, 1080, 30.0, {}, {"resolution": "original"})[:2] == (1920, 1080)
+    assert resolve_export_output(640, 360, 30.0, {}, {"resolution": "1080p"})[:2] == (640, 360)
+
+    # 无参数 = 老行为(标准档)
+    assert resolve_export_output(1920, 1080, 30.0, {}, None) == (1920, 1080, 30.0, {}, 20, "veryfast")
+
+
+def test_plan_carries_encode_settings():
+    plan = build_render_plan(
+        sequence_id="seq1", revision=1, width=1280, height=720, fps=30.0,
+        clips=[clip("c1", "a1", 0, 0, 2)], assets={"a1": {"file_key": "media/a1.mp4"}},
+        crf=18, encode_preset="medium",
+    )
+    assert (plan.output.crf, plan.output.encode_preset) == (18, "medium")
+    # 非法值回退默认
+    fallback = build_render_plan(
+        sequence_id="seq1", revision=1, width=1280, height=720, fps=30.0,
+        clips=[clip("c1", "a1", 0, 0, 2)], assets={"a1": {"file_key": "media/a1.mp4"}},
+        crf=99, encode_preset="warp-speed",
+    )
+    assert (fallback.output.crf, fallback.output.encode_preset) == (51, "veryfast")

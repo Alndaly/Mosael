@@ -19,6 +19,7 @@ import {
   deleteClip,
   rippleDeleteClip,
   exportSequence,
+  type ExportParams,
   importAsset,
   insertClip,
   insertTextClip,
@@ -50,6 +51,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
@@ -990,7 +993,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 </TooltipTrigger>
                 <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
               </Tooltip>
-              <ExportControl workspaceId={workspace.id} projectId={project.id} sequenceId={sequence.id} />
+              <ExportControl workspaceId={workspace.id} projectId={project.id} sequence={sequence} />
             </>
           }
         />
@@ -1049,20 +1052,44 @@ function LeftTabs({
   );
 }
 
+const EXPORT_PARAMS_KEY = "mibu.export.params";
+
 function ExportControl({
   workspaceId,
   projectId,
-  sequenceId,
+  sequence,
 }: {
   workspaceId: string;
   projectId: string;
-  sequenceId: string;
+  sequence: Sequence;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const sequenceId = sequence.id;
   const [jobId, setJobId] = React.useState<string | null>(null);
+  const [configOpen, setConfigOpen] = React.useState(false);
+  // 参数记住上次选择:批量出片时不必每次重选。
+  const [params, setParams] = React.useState<ExportParams>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(EXPORT_PARAMS_KEY) ?? "{}") as Partial<ExportParams>;
+      return {
+        resolution: ["original", "1080p", "720p", "480p"].includes(saved.resolution ?? "") ? saved.resolution! : "original",
+        fps: typeof saved.fps === "number" ? saved.fps : null,
+        quality: ["high", "standard", "compact"].includes(saved.quality ?? "") ? saved.quality! : "standard",
+      };
+    } catch {
+      return { resolution: "original", fps: null, quality: "standard" };
+    }
+  });
+  const updateParams = (patch: Partial<ExportParams>) => {
+    setParams((current) => {
+      const next = { ...current, ...patch };
+      localStorage.setItem(EXPORT_PARAMS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
   const startExport = useMutation({
-    mutationFn: () => exportSequence(sequenceId),
+    mutationFn: (body: ExportParams) => exportSequence(sequenceId, body),
     onSuccess: (job) => setJobId(job.id),
   });
   const job = useQuery({
@@ -1101,10 +1128,64 @@ function ExportControl({
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
-      <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => startExport.mutate()}>
+      <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => setConfigOpen(true)}>
         {busy ? <Loader2 size={13} className="animate-mibu-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
+      <ModalShell open={configOpen} onOpenChange={setConfigOpen} title={t("exportConfigTitle")} className="w-[380px]">
+        <div className="grid w-full gap-3.5">
+          <div className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{t("exportResolution")}</span>
+            <Select value={params.resolution} onValueChange={(v) => updateParams({ resolution: v as ExportParams["resolution"] })}>
+              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="original">{t("exportResolutionOriginal")}({sequence.width}×{sequence.height})</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="480p">480p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{t("exportFps")}</span>
+            <Select
+              value={params.fps == null ? "follow" : String(params.fps)}
+              onValueChange={(v) => updateParams({ fps: v === "follow" ? null : Number(v) })}
+            >
+              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="follow">{t("exportFpsFollow")}({sequence.fps}fps)</SelectItem>
+                {[24, 25, 30, 50, 60].map((rate) => (
+                  <SelectItem key={rate} value={String(rate)}>{rate} fps</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{t("exportQuality")}</span>
+            <Select value={params.quality} onValueChange={(v) => updateParams({ quality: v as ExportParams["quality"] })}>
+              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">{t("exportQualityHigh")}</SelectItem>
+                <SelectItem value="standard">{t("exportQualityStandard")}</SelectItem>
+                <SelectItem value="compact">{t("exportQualityCompact")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Button
+              size="sm"
+              onClick={() => {
+                setConfigOpen(false);
+                startExport.mutate(params);
+              }}
+            >
+              <Download size={13} /> {t("exportStart")}
+            </Button>
+            <span className="text-[11.5px] text-muted-foreground">{t("exportConfigHint")}</span>
+          </div>
+        </div>
+      </ModalShell>
     </span>
   );
 }

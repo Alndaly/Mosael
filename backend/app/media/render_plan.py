@@ -84,6 +84,9 @@ class OutputSettings:
     height: int
     fps: float
     fill_mode: str = "cover"  # cover 裁剪 / contain 留黑边 / blur 模糊背景
+    # 编码参数(导出对话框可调):CRF 越小画质越高;preset 是 x264 速度档。
+    crf: int = 20
+    encode_preset: str = "veryfast"
 
 
 @dataclass(frozen=True)
@@ -225,6 +228,11 @@ FILTER_PRESETS = {
 }
 
 
+X264_PRESETS = frozenset(
+    {"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"}
+)
+
+
 def build_render_plan(
     *,
     sequence_id: str,
@@ -242,6 +250,8 @@ def build_render_plan(
     fill_mode: str = "cover",
     solo_active: bool = False,
     mute_base_audio: bool = False,
+    crf: int = 20,
+    encode_preset: str = "veryfast",
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out}] from the base video track.
@@ -382,7 +392,8 @@ def build_render_plan(
         timeline_duration=round(duration, 6),
         video_segments=tuple(segments),
         output=OutputSettings(
-            width=width, height=height, fps=fps, fill_mode=fill_mode if fill_mode in ("cover", "contain", "blur") else "cover"
+            width=width, height=height, fps=fps, fill_mode=fill_mode if fill_mode in ("cover", "contain", "blur") else "cover",
+            crf=max(0, min(51, int(crf))), encode_preset=encode_preset if encode_preset in X264_PRESETS else "veryfast"
         ),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),

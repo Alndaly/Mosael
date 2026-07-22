@@ -738,8 +738,17 @@ export function fetchJob(jobId: string): Promise<Job> {
   return api<Job>(`/api/jobs/${jobId}`);
 }
 
-export function exportSequence(sequenceId: string): Promise<Job> {
-  return api<Job>(`/api/sequences/${sequenceId}/export`, { method: "POST" });
+export type ExportParams = {
+  resolution: "original" | "1080p" | "720p" | "480p";
+  fps: number | null;
+  quality: "high" | "standard" | "compact";
+};
+
+export function exportSequence(sequenceId: string, params?: ExportParams): Promise<Job> {
+  return api<Job>(`/api/sequences/${sequenceId}/export`, {
+    method: "POST",
+    ...(params ? { body: JSON.stringify(params) } : {}),
+  });
 }
 
 export async function importAsset(params: {

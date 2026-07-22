@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -313,6 +314,14 @@ class TrimClipRequest(BaseModel):
     timeline_start: float
     src_in: float
     src_out: float
+
+
+class ExportRequest(BaseModel):
+    """导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。"""
+
+    resolution: Literal["original", "1080p", "720p", "480p"] = "original"
+    fps: float | None = Field(default=None, ge=1, le=120)
+    quality: Literal["high", "standard", "compact"] = "standard"
 
 
 class CutClipRangeRequest(BaseModel):

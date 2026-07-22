@@ -9,6 +9,7 @@ from app.api.schemas import (
     AddTrackRequest,
     CutClipRangeRequest,
     CutClipRangesRequest,
+    ExportRequest,
     InsertClipRequest,
     InsertTextClipRequest,
     JobOut,
@@ -386,11 +387,11 @@ def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Respons
 
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
-def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Job:
+def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser, body: ExportRequest | None = None) -> Job:
     sequence = require_sequence_access(db, user, sequence_id)
     ensure_workspace_perm(db, user, sequence.workspace_id, "export")
     try:
-        return start_export(db, sequence_id)
+        return start_export(db, sequence_id, body.model_dump() if body else None)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RenderPlanError as exc:

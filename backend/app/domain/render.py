@@ -14,7 +14,39 @@ from app.media.render_executor import RenderExecutionError, execute_render
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
 
 
-def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
+# 导出参数(对话框可调,全部可省略 → 维持原有行为):
+# resolution 是目标短边档位,只降不升;quality 映射 (CRF, x264 preset)。
+RESOLUTION_PRESETS = {"1080p": 1080, "720p": 720, "480p": 480}
+QUALITY_PRESETS = {"high": (18, "medium"), "standard": (20, "veryfast"), "compact": (26, "veryfast")}
+
+
+def resolve_export_output(
+    width: int, height: int, fps: float, subtitle_style: dict, export_params: dict | None
+) -> tuple[int, int, float, dict, int, str]:
+    """把导出参数落成输出设置:(width, height, fps, subtitle_style, crf, preset)。"""
+    crf, encode_preset = QUALITY_PRESETS["standard"]
+    if not export_params:
+        return width, height, fps, subtitle_style, crf, encode_preset
+    target_short = RESOLUTION_PRESETS.get(str(export_params.get("resolution") or ""))
+    short_side = min(width, height)
+    if target_short and target_short < short_side:
+        # 等比缩放到目标短边(偶数对齐);字幕字号是原生帧像素,必须一起缩,
+        # 否则 720p 导出里的字会比预览大出一截。
+        ratio = target_short / short_side
+        width = max(2, round(width * ratio / 2) * 2)
+        height = max(2, round(height * ratio / 2) * 2)
+        if subtitle_style.get("font_size"):
+            subtitle_style = {**subtitle_style, "font_size": round(float(subtitle_style["font_size"]) * ratio, 1)}
+    fps_override = export_params.get("fps")
+    if fps_override:
+        fps = max(1.0, min(120.0, float(fps_override)))
+    quality = QUALITY_PRESETS.get(str(export_params.get("quality") or ""))
+    if quality:
+        crf, encode_preset = quality
+    return width, height, fps, subtitle_style, crf, encode_preset
+
+
+def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict | None = None) -> RenderPlan:
     stmt = (
         select(Sequence)
         .where(Sequence.id == sequence_id)
@@ -86,22 +118,27 @@ def build_plan_for_sequence(db: Session, sequence_id: str) -> RenderPlan:
         lut.id: lut.file_key
         for lut in (db.scalars(select(Lut).where(Lut.id.in_(lut_ids))) if lut_ids else [])
     }
+    width, height, fps, subtitle_style, crf, encode_preset = resolve_export_output(
+        sequence.width, sequence.height, sequence.fps, _resolve_subtitle_font(db, sequence), export_params
+    )
     return build_render_plan(
         sequence_id=sequence.id,
         revision=sequence.revision,
-        width=sequence.width,
-        height=sequence.height,
-        fps=sequence.fps,
+        width=width,
+        height=height,
+        fps=fps,
         fill_mode=str((sequence.reframe or {}).get("fill_mode", "cover")),
         clips=base_clips,
         assets=assets,
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
-        subtitle_style=_resolve_subtitle_font(db, sequence),
+        subtitle_style=subtitle_style,
         luts=luts,
         solo_active=solo_active,
         mute_base_audio=mute_base_audio,
+        crf=crf,
+        encode_preset=encode_preset,
     )
 
 
@@ -127,9 +164,9 @@ def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
     return style
 
 
-def start_export(db: Session, sequence_id: str) -> Job:
+def start_export(db: Session, sequence_id: str, export_params: dict | None = None) -> Job:
     """Validate the plan, create the render job, and run FFmpeg off-thread."""
-    plan = build_plan_for_sequence(db, sequence_id)  # raises before job creation
+    plan = build_plan_for_sequence(db, sequence_id, export_params)  # raises before job creation
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None
     job = create_job(
@@ -140,6 +177,7 @@ def start_export(db: Session, sequence_id: str) -> Job:
             "sequence_id": sequence_id,
             "sequence_revision": plan.sequence_revision,
             "render_plan_hash": plan.render_plan_hash,
+            **({"export_params": export_params} if export_params else {}),
         },
         message="Export queued",
     )
