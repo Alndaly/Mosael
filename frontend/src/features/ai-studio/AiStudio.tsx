@@ -751,7 +751,7 @@ function GenerateWorkspace({
             <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
               <span>{t("wfModelPreset")}</span>
               <Select value={selectedModel.value} onValueChange={selectEngine}>
-                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
+                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-secondary text-[12.5px] font-medium text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[min(320px,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] p-1.5">
@@ -779,7 +779,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>
                     <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-secondary text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -894,7 +894,7 @@ function GenerateWorkspace({
                     <span>{t("genDuration")}</span>
                     {selectedDurations.length > 1 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
-                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
+                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-secondary text-[12.5px] font-medium text-foreground">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -921,7 +921,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genResolution")}</span>
                     <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-secondary text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -938,7 +938,7 @@ function GenerateWorkspace({
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genAspectRatio")}</span>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-panel text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-secondary text-[12.5px] font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

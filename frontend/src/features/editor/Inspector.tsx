@@ -204,7 +204,7 @@ export function Inspector({
                 <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
-                  className="w-full resize-y rounded-md border border-border bg-background px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                  className="w-full resize-y rounded-md border border-border bg-secondary px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                   rows={3}
                   defaultValue={selectedClip.text_override ?? ""}
                   onBlur={(event) => {
@@ -265,7 +265,7 @@ export function Inspector({
                 <div className="flex flex-wrap gap-1">
                   <Input
                     key={`vfi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-secondary px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -275,7 +275,7 @@ export function Inspector({
                   />
                   <Input
                     key={`vfo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-secondary px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -288,7 +288,7 @@ export function Inspector({
                 <div className="flex flex-wrap gap-1">
                   <Input
                     key={`fi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-secondary px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}
@@ -298,7 +298,7 @@ export function Inspector({
                   />
                   <Input
                     key={`fo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-background px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                    className="h-[26px] w-full rounded-md border border-border bg-secondary px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     type="number"
                     min={0}
                     step={0.1}

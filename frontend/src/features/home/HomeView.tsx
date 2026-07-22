@@ -264,13 +264,13 @@ export function HomeView({
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Input
             ref={searchRef}
-            className="h-8 w-48 rounded-md border border-border bg-panel px-2.5 text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
+            className="h-8 w-48 rounded-md border border-border bg-secondary px-2.5 text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
             value={search}
             placeholder={t("searchProjects")}
             onChange={(event) => setSearch(event.target.value)}
           />
           <Select value={sortKey} onValueChange={(value) => setSortKey(value as "updated" | "created" | "name")}>
-            <SelectTrigger className="h-8 w-auto min-w-32 bg-panel text-xs" aria-label={t("sortUpdated")}>
+            <SelectTrigger className="h-8 w-auto min-w-32 bg-secondary text-xs" aria-label={t("sortUpdated")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-w-none">
