@@ -659,7 +659,7 @@ export function Timeline({
                     aria-label={track.solo ? t("trackUnsolo") : t("trackSolo")}
                     onClick={() => onSetTrackState(track.id, { solo: !track.solo })}
                   >
-                    <span className="tl-label-badge">S</span>
+                    <span className="text-[9px] font-bold leading-none">S</span>
                   </button>
                   {track.kind === "audio" && (
                     <button
@@ -668,7 +668,7 @@ export function Timeline({
                       aria-label={track.duck ? t("trackUnduck") : t("trackDuck")}
                       onClick={() => onSetTrackState(track.id, { duck: !track.duck })}
                     >
-                      <span className="tl-label-badge">D</span>
+                      <span className="text-[9px] font-bold leading-none">D</span>
                     </button>
                   )}
                   <button

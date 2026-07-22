@@ -165,7 +165,7 @@ export function LoginView() {
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
           </button>
           {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
-          <div className="login-server">
+          <div className="mt-0.5 flex w-full justify-center border-t border-border pt-4">
             <ServerPicker />
           </div>
         </CardContent>

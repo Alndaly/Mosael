@@ -72,7 +72,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   return (
     // key 随 current 变化重挂,规避 Radix 对初始受控值不刷新显示文本的问题
     <Select key={current || "none"} value={current} onValueChange={(value) => setModel.mutate(value)}>
-      <SelectTrigger className="model-picker-trigger" aria-label={t("agentModelLabel")}>
+      <SelectTrigger className="h-7 w-auto min-w-0 max-w-[220px] gap-1 px-2 text-xs text-muted-foreground" aria-label={t("agentModelLabel")}>
         <SelectValue placeholder={t("agentModelPlaceholder")} />
       </SelectTrigger>
       <SelectContent>

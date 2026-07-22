@@ -165,8 +165,8 @@ export function CommandPalette({
       <CommandList>
         {!hasAnyResult && (
           <CommandEmpty>
-            <span className="cmdk-empty">
-              <span className="cmdk-empty-icon">
+            <span className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-[11.5px] [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-[12.5px] [&_strong]:font-semibold [&_strong]:text-foreground">
+              <span className="mb-1 grid h-9 w-9 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
                 <SearchX size={17} />
               </span>
               <strong>{t("cmdkEmpty")}</strong>

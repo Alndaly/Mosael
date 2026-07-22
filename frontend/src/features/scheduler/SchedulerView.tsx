@@ -168,8 +168,8 @@ function WebhookUrlRow({ task }: { task: ScheduledTask }) {
   const url = `${API_BASE}/api/hooks/scheduled-tasks/${task.id}?secret=${secret}`;
   return (
     <SettingsRow label={t("webhookUrlLabel")} description={t("webhookUrlDesc")}>
-      <div className="webhook-url-cell">
-        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground webhook-url" title={url}>
+      <div className="flex min-w-0 max-w-[420px] items-center gap-1">
+        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground" title={url}>
           {url}
         </code>
         <Button
@@ -302,7 +302,7 @@ function CreateTaskDialog({
         {trigger === "scheduled" && (
           <div className="wf-field">
             <span>{t("taskSchedFreq")}</span>
-            <div className="task-sched-config">
+            <div className="flex gap-1.5 [&>button]:min-w-0 [&>button]:flex-1 [&_input[type=time]]:w-[120px] [&_input[type=time]]:flex-none">
               <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
                 <SelectTrigger>
                   <SelectValue />

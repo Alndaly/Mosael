@@ -33,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
 // 受阻但可恢复(老版 BLOCKED_STATUSES):人工处理后可重试。
@@ -115,7 +116,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   );
 
   const seg = (
-    <div className="publish-head">
+    <div className="flex items-center justify-between">
       <div className="seg">
         <button
           type="button"
@@ -147,9 +148,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   if (tab === "accounts") {
     return (
       <div className="feature-view">
-        <div className="publish-col">
+        <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
-          <div className="publish-body">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <AccountsPanel workspace={workspace} onAdd={() => setManagingAccounts(true)} />
           </div>
         </div>
@@ -161,9 +162,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
       <div className="feature-view">
-        <div className="publish-col">
+        <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
-          <div className="publish-body empty-center">
+          <div className="empty-center min-h-0 flex-1 overflow-y-auto">
             <EmptyState
               icon={<Rocket size={22} />}
               title={t("publishEmptyTitle")}
@@ -188,9 +189,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="feature-view">
-      <div className="publish-col">
+      <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
-      <div className="publish-body plugins-shell">
+      <div className="plugins-shell min-h-0 flex-1 overflow-y-auto">
         <aside className="plugins-list panel">
           <div className="panel-head">
             <h2>{t("publishListTitle")}</h2>
@@ -309,31 +310,38 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
   }
 
   return (
-    <div className="acct-grid">
+    <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
       {items.map((account) => {
         const meta = (platforms.data ?? []).find((p) => p.platform === account.platform);
         const isBrowser = meta?.executor === "browser";
         return (
           <ContextMenu key={account.id}>
             <ContextMenuTrigger asChild>
-              <div className={account.enabled ? "acct-card panel" : "acct-card panel disabled"}>
-                <div className="acct-head">
-                  <span className="acct-platform">{meta?.label ?? account.platform}</span>
+              <div className={cn("panel flex min-h-32 flex-col gap-[3px] rounded-lg p-2.5", !account.enabled && "opacity-55")}>
+                <div className="flex items-center gap-1.5">
+                  <span className="mr-auto text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">{meta?.label ?? account.platform}</span>
                   {isBrowser && account.proxy && (
-                    <em className="acct-proxy" title={account.proxy}>
+                    <em className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-[10px] not-italic text-primary" title={account.proxy}>
                       <Globe size={10} /> {t("publishProxyOn")}
                     </em>
                   )}
                   {isBrowser ? (
-                    <em className={`publish-binding b-${account.binding_status}`}>
+                    <em
+                      className={cn(
+                        "ml-0 rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground",
+                        account.binding_status === "bound" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+                        ["login_required", "manual_required", "permission_required"].includes(account.binding_status) &&
+                          "bg-[color-mix(in_srgb,#d97706_12%,transparent)] text-[#d97706]",
+                      )}
+                    >
                       {t(`binding_${account.binding_status}` as never)}
                     </em>
                   ) : (
-                    <em className="publish-binding b-bound">{t("publishLocalExecutor")}</em>
+                    <em className="ml-0 rounded-full bg-[color-mix(in_srgb,#16a34a_12%,transparent)] px-1.5 text-[10px] not-italic text-[#16a34a]">{t("publishLocalExecutor")}</em>
                   )}
                 </div>
-                <strong className="acct-name">{account.name}</strong>
-                <small className="acct-meta">
+                <strong className="truncate text-[13px]">{account.name}</strong>
+                <small className="text-[11px] text-muted-foreground">
                   {isBrowser
                     ? `${account.profile_name ? `${account.profile_name} · ` : ""}${
                         account.last_checked_at
@@ -343,10 +351,10 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
                     : t("publishLocalHint")}
                 </small>
                 {/* 状态行恒占位:有错误显示错误,否则空占位,保证同排卡片行数一致。 */}
-                <small className={account.last_error ? "acct-error" : "acct-error placeholder"}>
+                <small className={cn("truncate text-[11px] text-destructive", !account.last_error && "invisible")}>
                   {account.last_error ?? " "}
                 </small>
-                <div className="acct-actions">
+                <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
                   {isBrowser && (
                     <Button
                       size="sm"
@@ -373,7 +381,7 @@ function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () =
                       <RefreshCcw size={13} /> {t("publishRecheck")}
                     </Button>
                   )}
-                  <span className="acct-spacer" />
+                  <span className="flex-1" />
                   <Switch
                     checked={account.enabled}
                     onCheckedChange={(next) => patch.mutate({ id: account.id, body: { enabled: next } })}
@@ -492,7 +500,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
             ) : ok ? (
               <CheckCircle2 size={14} className="text-[#16a34a]" />
             ) : BLOCKED.has(task.status) ? (
-              <CircleAlert size={14} className="publish-blocked-icon" />
+              <CircleAlert size={14} className="text-[#d97706]" />
             ) : (
               <CircleAlert size={14} className="text-destructive" />
             )}
@@ -520,12 +528,12 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         </SettingsRow>
         {task.description && (
           <SettingsRow label={t("publishDescription")}>
-            <span className="publish-desc">{task.description}</span>
+            <span className="max-w-[480px] whitespace-pre-wrap text-[12.5px] leading-[1.6] text-foreground">{task.description}</span>
           </SettingsRow>
         )}
         {task.tags.length > 0 && (
           <SettingsRow label={t("publishTags")}>
-            <span className="publish-tags">
+            <span className="flex flex-wrap gap-1">
               {task.tags.map((tag) => (
                 <span className="tag-chip readonly" key={tag}>
                   {tag}
@@ -536,14 +544,14 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         )}
         {task.status === "succeeded" && task.result.target != null && (
           <SettingsRow label={t("publishResult")} description={t("publishResultDesc")}>
-            <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground publish-target" title={String(task.result.target)}>
+            <code className="timecode inline-flex max-w-[420px] items-center gap-[5px] truncate text-xs text-muted-foreground" title={String(task.result.target)}>
               <FolderOutput size={12} /> {String(task.result.target)}
             </code>
           </SettingsRow>
         )}
         {task.status === "failed" && task.error && (
           <SettingsRow label={t("publishError")}>
-            <span className="publish-error">{task.error}</span>
+            <span className="max-w-[420px] text-xs text-destructive">{task.error}</span>
           </SettingsRow>
         )}
       </SettingsGroup>
@@ -763,7 +771,7 @@ function CreatePublishDialog({
           {(accounts.data ?? []).length === 0 && accounts.isSuccess && (
             <small>
               {t("publishNoAccounts")}{" "}
-              <button type="button" className="publish-inline-link" onClick={onManageAccounts}>
+              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={onManageAccounts}>
                 {t("publishAccounts")}
               </button>
             </small>
@@ -772,7 +780,10 @@ function CreatePublishDialog({
         <label className="wf-field">
           <span>
             {t("publishTitle")}
-            <em className={title.length > titleMax ? "publish-title-count over" : "publish-title-count"}>
+            <em className={cn(
+              "ml-2 font-normal normal-case not-italic tracking-normal text-muted-foreground",
+              title.length > titleMax && "font-semibold text-destructive",
+            )}>
               {title.length}/{titleMax}
             </em>
           </span>
@@ -796,11 +807,11 @@ function CreatePublishDialog({
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>
-        <div className="task-create-actions publish-create-actions">
+        <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={aiCopy.isPending || !assetId} onClick={() => aiCopy.mutate()}>
             {aiCopy.isPending ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
           </Button>
-          <span className="publish-actions-spacer" />
+          <span className="flex-1" />
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
           </Button>

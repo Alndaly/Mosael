@@ -49,19 +49,19 @@ export function ServerPicker() {
 
   if (!open) {
     return (
-      <button type="button" className="server-pick-toggle" onClick={() => setOpen(true)}>
+      <button type="button" className="inline-flex cursor-pointer items-center gap-[5px] border-0 bg-transparent p-0 text-xs text-muted-foreground transition-colors duration-100 hover:text-foreground [&_strong]:font-semibold [&_strong]:text-foreground" onClick={() => setOpen(true)}>
         <Server size={13} />
         {t("serverLabel")}
         <strong>{currentLabel}</strong>
-        <span className="server-pick-sep">·</span>
+        <span className="opacity-50">·</span>
         {t("serverSwitchShort")}
       </button>
     );
   }
 
   return (
-    <div className="server-pick">
-      <div className="seg server-pick-seg">
+    <div className="flex w-full flex-col gap-2.5 text-left [&_input]:w-full">
+      <div className="seg h-[30px] w-full [&_.seg-btn]:flex-1 [&_.seg-btn]:justify-center">
         <button
           type="button"
           className={mode === "local" ? "seg-btn active" : "seg-btn"}
@@ -94,16 +94,16 @@ export function ServerPicker() {
         />
       )}
       {failed && (
-        <p className="server-pick-error">
+        <p className="m-0 text-[11px] text-destructive">
           {t("serverTestFailed")}
           {failed ? ` — ${failed}` : ""}
         </p>
       )}
-      <div className="server-pick-actions">
+      <div className="flex items-center gap-1.5">
         <Button
           size="sm"
           variant="secondary"
-          className="server-pick-connect"
+          className="flex-1"
           disabled={testing || (mode === "remote" && !url.trim())}
           onClick={() => void apply(false)}
         >
@@ -119,7 +119,7 @@ export function ServerPicker() {
           {t("cancel")}
         </Button>
       </div>
-      <p className="server-pick-hint">{t("serverPickerHint")}</p>
+      <p className="m-0 text-[11px] leading-normal text-muted-foreground">{t("serverPickerHint")}</p>
     </div>
   );
 }

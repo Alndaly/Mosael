@@ -188,7 +188,7 @@ function BatchDetail({
         }
       >
         <SettingsRow label={t("batchProgress")} description={t("batchProgressDesc")}>
-          <div className="batch-progress-cell">
+          <div className="flex w-60 items-center gap-2 [&_.timecode]:text-[11px] [&_.timecode]:text-muted-foreground">
             <Progress value={Math.round(batch.progress * 100)} />
             <span className="timecode">{Math.round(batch.progress * 100)}%</span>
           </div>
@@ -212,12 +212,12 @@ function BatchItemRow({ item }: { item: BatchItem }) {
     .map(([key, value]) => `${key}=${String(value)}`)
     .join("  ") || "—";
   return (
-    <div className={`batch-item batch-${item.status}`}>
-      <span className="batch-item-index timecode">#{item.index + 1}</span>
-      <span className="batch-item-params" title={paramsSummary}>
+    <div className="flex items-center gap-2 border-b border-border px-2.5 py-1.5 text-[12.5px] last:border-b-0">
+      <span className="timecode w-[34px] flex-none text-[11px] text-muted-foreground">#{item.index + 1}</span>
+      <span className="min-w-0 flex-1 truncate" title={paramsSummary}>
         {paramsSummary}
       </span>
-      <span className="batch-item-status">
+      <span className="inline-flex flex-none items-center gap-[5px] text-[11.5px] text-muted-foreground">
         {item.status === "succeeded" ? (
           <CheckCircle2 size={13} className="text-[#16a34a]" />
         ) : item.status === "failed" ? (
@@ -228,7 +228,7 @@ function BatchItemRow({ item }: { item: BatchItem }) {
         {t(`batchStatus_${item.status}` as never)}
       </span>
       {item.error && (
-        <span className="batch-item-error" title={item.error}>
+        <span className="max-w-[260px] truncate text-[11px] text-destructive" title={item.error}>
           {item.error}
         </span>
       )}
@@ -283,7 +283,7 @@ function CreateBatchDialog({
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("batchCreate")}>
-      <div className="task-create-form batch-create-form">
+      <div className="grid min-w-0 gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-panel [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="wf-field">
           <span>{t("batchNameLabel")}</span>
           <Input value={name} onChange={(event) => setName(event.target.value)} />
@@ -314,10 +314,10 @@ function CreateBatchDialog({
             <span>
               {t("batchRows")} · {rows.length}
             </span>
-            <div className="batch-rows">
+            <div className="grid max-h-[260px] gap-1.5 overflow-y-auto">
               {rows.map((row, rowIndex) => (
-                <div className="batch-row" key={rowIndex}>
-                  <span className="timecode batch-row-index">#{rowIndex + 1}</span>
+                <div className="flex items-center gap-1.5" key={rowIndex}>
+                  <span className="timecode w-[26px] flex-none text-[10.5px] text-muted-foreground">#{rowIndex + 1}</span>
                   {paramKeys.length > 0 ? (
                     paramKeys.map((key) => (
                       <Input
@@ -334,7 +334,7 @@ function CreateBatchDialog({
                       />
                     ))
                   ) : (
-                    <span className="batch-row-noparams">{t("batchNoParams")}</span>
+                    <span className="flex-1 text-xs text-muted-foreground">{t("batchNoParams")}</span>
                   )}
                   <Button
                     variant="ghost"

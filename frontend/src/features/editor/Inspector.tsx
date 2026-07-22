@@ -233,7 +233,7 @@ export function Inspector({
             {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. */}
             {!isTextClip && onSetGain && (
               <div className="pip-controls">
-                <div className="transform-head">
+                <div className="flex items-center justify-between">
                   <span className="pip-label">{t("clipAudio")}</span>
                   <button
                     type="button"
@@ -243,8 +243,8 @@ export function Inspector({
                     {selectedClip.muted ? t("clipMuted") : t("clipMute")}
                   </button>
                 </div>
-                <div className="transform-row">
-                  <span className="transform-row-label">{t("gain")}</span>
+                <div className="grid grid-cols-[60px_1fr_40px] items-center gap-2 [&_input[type=range]]:w-full">
+                  <span className="text-[11px] text-muted-foreground">{t("gain")}</span>
                   <Slider
                     key={`gain-${selectedClip.id}-${selectedClip.gain}`}
                     min={0}
@@ -254,7 +254,7 @@ export function Inspector({
                     disabled={selectedClip.muted}
                     onValueCommit={([value]) => onSetGain(selectedClip.id, value, selectedClip.muted)}
                   />
-                  <span className="transform-row-value timecode">{Math.round(selectedClip.gain * 100)}%</span>
+                  <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(selectedClip.gain * 100)}%</span>
                 </div>
               </div>
             )}
@@ -309,13 +309,13 @@ export function Inspector({
               </div>
             )}
             {!isTextClip && onSetTransform && (
-              <div className="pip-controls transform-controls">
-                <div className="transform-head">
+              <div className="pip-controls flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
                   <span className="pip-label">{t("transformTitle")}</span>
                   {!isIdentityTransform && (
                     <button
                       type="button"
-                      className="transform-reset"
+                      className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-foreground"
                       onClick={() => applyTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
                     >
                       {t("transformReset")}
@@ -331,8 +331,8 @@ export function Inspector({
                     { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
                   ] as const
                 ).map((row) => (
-                  <div key={row.key} className="transform-row">
-                    <span className="transform-row-label">{row.label}</span>
+                  <div key={row.key} className="grid grid-cols-[60px_1fr_40px] items-center gap-2 [&_input[type=range]]:w-full">
+                    <span className="text-[11px] text-muted-foreground">{row.label}</span>
                     <Slider
                       // 值入 key:改画幅/重置后重挂,让非受控滑块跳到新值。
                       key={`${row.key}-${selectedClip.id}-${transform[row.key]}`}
@@ -342,7 +342,7 @@ export function Inspector({
                       defaultValue={[transform[row.key]]}
                       onValueCommit={([value]) => applyTransform({ [row.key]: value })}
                     />
-                    <span className="transform-row-value timecode">{row.fmt(transform[row.key])}</span>
+                    <span className="timecode text-right text-[11px] text-muted-foreground">{row.fmt(transform[row.key])}</span>
                   </div>
                 ))}
               </div>
