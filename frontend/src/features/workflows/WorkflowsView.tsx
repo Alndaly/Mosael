@@ -1251,6 +1251,7 @@ function WorkflowEditor({
       )}>
         <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
+            className="[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]"
             nodes={displayNodes}
             edges={edges}
             nodeTypes={NODE_COMPONENT_TYPES}
@@ -1279,8 +1280,23 @@ function WorkflowEditor({
             deleteKeyCode={["Backspace", "Delete"]}
           >
             <Background gap={20} size={1.2} />
-            <Controls showInteractive={false} position="bottom-left" />
-            <MiniMap pannable zoomable position="bottom-right" />
+            {/* 缩放钮/预览图不吃应用主题(xyflow 默认一律白底),把 --xy-* 变量
+                映射到设计令牌,昼夜两版都跟着色板走;投影按全局规范去掉。 */}
+            <Controls
+              showInteractive={false}
+              position="bottom-left"
+              className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
+            />
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              className="overflow-hidden rounded-md border border-border"
+              bgColor="var(--panel)"
+              maskColor="color-mix(in srgb, var(--background) 55%, transparent)"
+              nodeColor="var(--border-strong)"
+              nodeStrokeColor="transparent"
+            />
           </ReactFlow>
         </div>
         {agentOpen && (
@@ -1642,6 +1658,7 @@ function LoopBodyEditor({
       </div>
       <div className="relative min-h-0">
         <ReactFlow
+          className="[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]"
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_COMPONENT_TYPES}
@@ -1655,7 +1672,11 @@ function LoopBodyEditor({
           onInit={(instance) => requestAnimationFrame(() => instance.fitView({ padding: 0.3, maxZoom: 1 }))}
         >
           <Background gap={20} size={1.2} />
-          <Controls showInteractive={false} position="bottom-left" />
+          <Controls
+            showInteractive={false}
+            position="bottom-left"
+            className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
+          />
         </ReactFlow>
         {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t("wfLoopEmptyHint")}</div>}
         {selectedNode && (
