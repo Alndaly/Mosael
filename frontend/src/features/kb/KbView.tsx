@@ -236,7 +236,7 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
       {/* Radix Tabs Root 默认 display:block:必须自己上 flex 列,TabsContent 的
           flex-1 才有意义 — 否则文档编辑器拿不到高度,塌成一小条。 */}
       <Tabs defaultValue="docs" className="flex min-h-0 flex-1 flex-col">
-        <TabsList>
+        <TabsList className="self-start">
           <TabsTrigger value="docs">
             <FileText size={13} /> {t("kbTabDocs")}
           </TabsTrigger>
@@ -252,13 +252,13 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
         <TabsContent value="docs" className="min-h-0 flex-1">
           <DocumentsTab dataset={dataset} workspace={workspace} />
         </TabsContent>
-        <TabsContent value="recall">
+        <TabsContent value="recall" className="min-h-0 flex-1">
           <RecallTestTab dataset={dataset} />
         </TabsContent>
-        <TabsContent value="graph">
+        <TabsContent value="graph" className="min-h-0 flex-1">
           <GraphTab dataset={dataset} />
         </TabsContent>
-        <TabsContent value="settings">
+        <TabsContent value="settings" className="min-h-0 flex-1">
           <SettingsTab dataset={dataset} />
         </TabsContent>
       </Tabs>
@@ -611,15 +611,17 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
   if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="animate-mibu-spin" /></div>;
   if (!graph.data?.enabled) {
     return (
-      <EmptyState
-        icon={<Sparkles size={20} />}
-        title={t("kbGraphOffTitle")}
-        body={t("kbGraphOffBody")}
-      />
+      <div className="grid h-full place-items-center">
+        <EmptyState icon={<Sparkles size={20} />} title={t("kbGraphOffTitle")} body={t("kbGraphOffBody")} />
+      </div>
     );
   }
   if ((graph.data.nodes ?? []).length === 0) {
-    return <EmptyState icon={<Sparkles size={20} />} title={t("kbGraphEmptyTitle")} body={t("kbGraphEmptyBody")} />;
+    return (
+      <div className="grid h-full place-items-center">
+        <EmptyState icon={<Sparkles size={20} />} title={t("kbGraphEmptyTitle")} body={t("kbGraphEmptyBody")} />
+      </div>
+    );
   }
   const entityCount = (graph.data.nodes ?? []).filter((n) => n.kind === "entity").length;
   return (
