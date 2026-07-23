@@ -26,6 +26,10 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 ![AI Studio generate mode: results feed and engine parameters on the right](../../../../assets/screens/ai-generate.png)
 
+**Switch between chat and generate in one click** — describe the shot in the bottom input, tune engine parameters on the right; results can be sent straight to the media library:
+
+![Demo: switch to generate mode and type a prompt](../../../../assets/gifs/ai-studio.gif)
+
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
 

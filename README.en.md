@@ -7,6 +7,10 @@ An AI video creation studio = **NLE core + AI app center + creative agent workbe
 A local-first desktop app: one Electron shell running a FastAPI backend (SQLite), a React frontend, and an embedded-browser publishing executor.
 Import footage → transcript-based editing → export → publish to Douyin / Bilibili / Xiaohongshu / WeChat Channels, with workflows and scheduled triggers automating the whole chain.
 
+![Demo: drag clips onto the timeline, position the playhead, split in one keystroke](docs/media/timeline-edit.gif)
+
+> More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs site](docs-site/) guides.
+
 ---
 
 ## Quick start

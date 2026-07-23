@@ -11,6 +11,10 @@ The **Publish** page has two tabs (it remembers which one you were on): **Publis
 
 ![Publish page: publish records and account matrix tabs](../../../../assets/screens/publish.png)
 
+**Add accounts in the matrix and create a publish task** — pick a platform and a rendered video, fill in title / description / tags (per-platform title limits are validated up front), and "AI copy" can draft platform-fitting text for you:
+
+![Demo: add-account dialog in the account matrix and the new-publish dialog](../../../../assets/gifs/publishing.gif)
+
 ## Account matrix
 
 The account matrix manages accounts across platforms; login state is persisted by the desktop shell and survives restarts:

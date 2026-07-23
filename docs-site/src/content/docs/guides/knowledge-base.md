@@ -11,6 +11,10 @@ sidebar:
 
 ![知识库:数据集与文档列表(文档 / 召回测试 / 知识图谱 / 设置)](../../../assets/screens/kb.png)
 
+**新建知识库并导入第一篇文档**——支持 Markdown / PDF / Office 等格式,入库自动分块,状态变为「已就绪」即可被检索:
+
+![操作演示:新建知识库,导入 Markdown 文档并完成分块](../../../assets/gifs/knowledge-base.gif)
+
 左栏顶部三个入口:
 
 - **新建笔记**:直接在内置编辑器里写(tiptap 富文本)。

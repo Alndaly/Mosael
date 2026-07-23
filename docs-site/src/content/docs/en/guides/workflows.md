@@ -11,6 +11,10 @@ Workflows orchestrate a chain of actions (retrieval, generation, transcription, 
 
 ![Workflow canvas: retrieve style guide → write voiceover / titles → assemble copy → notify](../../../../assets/screens/workflows.png)
 
+**Build a workflow from scratch** — use "Add node" to drop in KB Search and LLM Generate, drag between ports to connect them, and configure each node in place; the built-in AI assistant can also build the graph for you:
+
+![Demo: add nodes, connect them, configure the LLM node](../../../../assets/gifs/workflows.gif)
+
 - The left column lists workflows; the rest is a React Flow canvas with a toolbar on top.
 - **Add node** from the toolbar. Types include: start, LLM, knowledge-base search, plugin tool, transcribe asset, export timeline, AI-generate asset, publish, condition, HTTP request, code, text template.
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.

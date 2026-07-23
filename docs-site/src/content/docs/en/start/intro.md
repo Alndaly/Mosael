@@ -14,6 +14,10 @@ Mibu is a **local-first desktop app** that folds the four legs of content creati
 
 ![Mibu home: workspace overview, 14-day task / publish / AI cost stats and project list](../../../../assets/screens/home.png)
 
+**Home to editor in one step** — "New project" drops you straight into the editor, no intermediate dialogs:
+
+![Demo: create a project from home and land in the editor](../../../../assets/gifs/home.gif)
+
 ## Architecture at a glance
 
 - **Frontend**: Vite + React + TypeScript single-page app, packaged into Electron.

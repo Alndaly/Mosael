@@ -11,6 +11,10 @@ The **Knowledge base** turns your material into searchable knowledge for the age
 
 ![Knowledge base: datasets and document list (documents / recall test / knowledge graph / settings)](../../../../assets/screens/kb.png)
 
+**Create a knowledge base and import your first document** — Markdown / PDF / Office formats are supported; documents are chunked automatically and become searchable once marked "ready":
+
+![Demo: create a knowledge base and import a Markdown document](../../../../assets/gifs/knowledge-base.gif)
+
 Three entry points at the top of the left column:
 
 - **New note**: write directly in the built-in editor (tiptap rich text).

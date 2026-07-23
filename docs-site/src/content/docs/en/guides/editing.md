@@ -9,6 +9,14 @@ The **Edit** page is a multi-track timeline editor: media / transcript / subtitl
 
 ![Editor: multi-track timeline, monitor, media panel](../../../../assets/screens/editor.png)
 
+**Create the main timeline and import media** — the Import button sits at the top right of the media pool; video / audio / images all work, with preview proxies and thumbnails generated automatically:
+
+![Demo: create the main timeline and import two clips](../../../../assets/gifs/editor-import.gif)
+
+**Drag clips onto the track, move the playhead, press S to split at the playhead**:
+
+![Demo: drag clips onto V1, position the playhead, split into segments](../../../../assets/gifs/timeline-edit.gif)
+
 ## Timeline
 
 - **Multiple tracks**: video, audio and subtitle tracks side by side; tracks can be muted / locked.

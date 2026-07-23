@@ -22,6 +22,10 @@ At the top of each section is the **default model**: the default provider and mo
 
 ![Settings → AI Image: default model + configured provider list](../../../../assets/screens/settings-models.png)
 
+**Configure providers per capability** — Chat / Image / Video / Audio each have their own section; after "Add provider" the UI renders exactly the fields that provider declares, and keys are stored locally:
+
+![Demo: provider configuration entries for AI Chat and AI Image](../../../../assets/gifs/providers.gif)
+
 ## Add a provider
 
 Click **Add provider** in the relevant section:
