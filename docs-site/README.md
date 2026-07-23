@@ -1,12 +1,12 @@
 # Mibu 文档站(docs-site)
 
-基于 [Astro Starlight](https://starlight.astro.build/) 的文档站。**一份产物两用**:
+基于 [Astro Starlight](https://starlight.astro.build/) 的文档站,双语(简体中文为默认,英文在 `src/content/docs/en/`)。
 
-- **App 内**:`pnpm build` 出纯静态 `dist/`,由 Electron 主进程的本地静态服务器托管,离线可看。
-- **独立部署**:同一份 `dist/` 丢到任意静态托管做 SEO(Vercel / Cloudflare Pages / Nginx / GitHub Pages)。
+> 注意:这是全部对外文档的**唯一**来源——用户手册、下载安装、各功能指南、项目信息都在
+> `src/content/docs/` 下(`start/`、`guides/`、`about/`)。仓库根 `README.md` 只是速览与直达入口。
 
-> 注意:这是全部对外文档的**唯一**来源——用户手册、架构、部署、发布、团队/云端等都在 `src/content/docs/` 下
-> (含 `dev/`、`about/` 里的工程/设计文档)。仓库根 `README.md` 只是速览与直达入口。
+产物是纯静态 `dist/`,当前用途是**独立部署做 SEO**;「App 内本地托管离线查看」在规划中,尚未接入
+(Electron 主进程目前没有文档服务,打包也不带 `docs-site/dist/`)。构建产物不入库(见本目录 `.gitignore`)。
 
 ## 本地开发
 
@@ -16,7 +16,11 @@ pnpm install
 pnpm dev          # http://localhost:4321
 ```
 
-内容在 `src/content/docs/`(Markdown / MDX)。侧边栏在 `astro.config.mjs` 里按目录 autogenerate。
+内容在 `src/content/docs/`(Markdown / MDX)。侧边栏在 `astro.config.mjs` 里按目录 autogenerate;
+英文页放在 `src/content/docs/en/` 下的镜像路径,缺失的英文页会自动回退到中文并提示。
+
+产品截图在 `src/assets/screens/`(1920 宽 PNG,来自真实界面)。更新截图时保持同名覆盖即可,
+中英文页共用同一批图。
 
 ## 构建
 
@@ -37,8 +41,3 @@ DOCS_SITE_URL="https://docs.你的域名.com" pnpm build
 - 子路径部署(如 GitHub Pages 项目站 `/repo/`):额外设 `DOCS_BASE="/repo/"`。
 
 把 `dist/` 作为静态站点部署即可;Starlight 已内置 sitemap 与语义化 HTML,SEO 友好。
-
-## 在 App 内托管
-
-Electron 主进程会用一个本地静态服务器托管本目录构建出的 `dist/`(见 `frontend/electron/main.cjs`
-的文档服务),用户可在应用内打开文档。打包脚本会把 `docs-site/dist/` 一并带进应用资源。

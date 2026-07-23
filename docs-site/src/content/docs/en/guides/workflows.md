@@ -1,0 +1,46 @@
+---
+title: Visual workflows
+description: Node-based orchestration — nodes, edges, variables, connected inputs, readiness checks, triggers, AI building.
+sidebar:
+  order: 4
+---
+
+Workflows orchestrate a chain of actions (retrieval, generation, transcription, export, publishing, …) into a **DAG**, triggered manually, on a schedule, or via webhook. The design takes cues from Dify / Coze.
+
+## Canvas & nodes
+
+![Workflow canvas: retrieve style guide → write voiceover / titles → assemble copy → notify](../../../../assets/screens/workflows.png)
+
+- The left column lists workflows; the rest is a React Flow canvas with a toolbar on top.
+- **Add node** from the toolbar. Types include: start, LLM, knowledge-base search, plugin tool, transcribe asset, export timeline, AI-generate asset, publish, condition, HTTP request, code, text template.
+- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
+- Click a node to open its **inspector** (icon + inline rename + type in the header).
+
+## Variables: wiring upstream outputs into downstream inputs
+
+After a node runs it writes results into the context; output variables look like `{{nodeId.output}}` (e.g. `{{llm-1.text}}`).
+
+Each field can switch between **two input modes** (the small pill at the right of the label row):
+
+- **Manual**: type a value / pick an option; template fields support `/` to insert variables, or click a variable chip to insert at the cursor.
+- **Connected**: the field becomes a port; pick one from the **upstream outputs** dropdown — equivalent to binding `{{upstream.output}}`. Switching back to manual keeps the previous value.
+
+## Readiness check / run gating
+
+The toolbar's **readiness check** aggregates all blockers: missing required fields, unconfigured models / providers, disconnected nodes, references to deleted nodes, and so on.
+
+- Problem nodes get a **warning badge** on the canvas (red = blocking, amber = advisory) with a tooltip listing the issues.
+- With errors present the **Run** button is disabled; each issue is clickable and jumps to the node.
+- After deleting an upstream node, fields referencing it are marked **stale** and can be re-pointed or cleared.
+
+## LLM generation style
+
+LLM nodes use a **generation style** (precise / balanced / creative) instead of a raw temperature, lowering the configuration bar.
+
+## Triggers
+
+Workflows can be bound to scheduled tasks: manual, cron, or webhook. Batch runs of the same workflow are supported.
+
+## Let AI build it
+
+The toolbar's **AI assistant** is a persistent session: describe the flow you want in natural language and it builds / edits nodes for you; changes go through confirmation cards.

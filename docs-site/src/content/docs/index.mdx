@@ -7,6 +7,10 @@ head:
     content: Mibu 使用文档 —— 剪辑 · AI 生成 · 工作流 · 一键分发
 ---
 
+import editorShot from "../../assets/screens/editor.png";
+import aiShot from "../../assets/screens/ai-generate.png";
+import workflowShot from "../../assets/screens/workflows.png";
+
 <div class="mibu-home">
   <section class="mibu-hero">
     <span class="mibu-eyebrow">本地优先 · AI 驱动 · 可编排 · 一键分发</span>
@@ -15,8 +19,14 @@ head:
     <div class="mibu-cta">
       <a class="mibu-btn primary" href={`${import.meta.env.BASE_URL}start/quickstart/`}>快速上手 →</a>
       <a class="mibu-btn ghost" href={`${import.meta.env.BASE_URL}start/intro/`}>了解它是什么</a>
+      <a class="mibu-btn ghost" href="https://github.com/Alndaly/mibu-cut">GitHub</a>
     </div>
     <p class="mibu-meta">macOS(Apple Silicon)· Windows 10/11 x64 · 本地优先,离线可用</p>
+  </section>
+
+  <section class="mibu-shot">
+    <img src={editorShot.src} alt="Mibu 剪辑页:多轨时间线、双监看器、素材与逐字稿面板" loading="eager" />
+    <p class="mibu-shot-cap">剪辑页 —— 多轨时间线 · 逐字稿驱动剪辑 · 调色 · 字幕 · 一键导出</p>
   </section>
 
   <section class="mibu-features">
@@ -50,5 +60,16 @@ head:
       <h3>插件扩展</h3>
       <p>本地信任沙箱里的纯函数工具,自动暴露给智能体与工作流,权限逐项授权。</p>
     </div>
+  </section>
+
+  <section class="mibu-shotgrid">
+    <figure>
+      <img src={aiShot.src} alt="AI 工作台生成模式:文生图结果流与引擎参数" loading="lazy" />
+      <figcaption>AI 工作台 —— 文生图 / 文生视频,结果直接进素材库</figcaption>
+    </figure>
+    <figure>
+      <img src={workflowShot.src} alt="可视化工作流画布:检索 → 生成 → 拼装 → 通知" loading="lazy" />
+      <figcaption>可视化工作流 —— 节点编排,定时 / Webhook 触发</figcaption>
+    </figure>
   </section>
 </div>

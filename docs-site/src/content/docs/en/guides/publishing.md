@@ -1,0 +1,35 @@
+---
+title: Publishing & account matrix
+description: One-click distribution to local folders / webhooks / social platforms, with persistent multi-account logins and proxies.
+sidebar:
+  order: 7
+---
+
+The **Publish** page has two tabs (it remembers which one you were on): **Publish records** and **Account matrix**.
+
+## The page at a glance
+
+![Publish page: publish records and account matrix tabs](../../../../assets/screens/publish.png)
+
+## Account matrix
+
+The account matrix manages accounts across platforms; login state is persisted by the desktop shell and survives restarts:
+
+- **Add account**: pick a platform (Douyin / RedNote / WeChat Channels / Bilibili, …), sign in once and it stays.
+- **Re-check / sign in / switch**: re-verify login state anytime; sign in again if it expires.
+- **Per-account proxy**: assign a proxy to a single account (right-click → Proxy).
+- **DevTools / inspect**: open devtools for one account when troubleshooting.
+
+Logins run in an embedded browser view with an address bar / back / forward / reload and a "Back to Mibu" button.
+
+## New publish
+
+Pick a finished cut, set title, description and tags, choose targets:
+
+- **Local folder** / **Webhook** / signed-in **social accounts**.
+- Copy can be **AI-written**.
+- The workflow **publish** node automates the same thing.
+
+## Publish records
+
+Every publish job is tracked under **Publish records** — view details, open the resulting page, delete. Status changes flow into the notification / task centers and click through to the record.

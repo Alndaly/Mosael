@@ -300,6 +300,40 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   color: var(--sl-color-gray-3);
 }
 
+/* 首页双列小截图(特性区下方) */
+.mibu-home .mibu-shotgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 22px;
+}
+.mibu-home .mibu-shotgrid figure {
+  margin: 0;
+}
+.mibu-home .mibu-shotgrid img {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--sl-color-gray-5);
+}
+.mibu-home .mibu-shotgrid figcaption {
+  margin-top: 0.5rem;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--sl-color-gray-3);
+}
+@media (max-width: 640px) {
+  .mibu-home .mibu-shotgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 内容页产品截图:统一圆角细边框(区别于图标类小图) */
+.sl-markdown-content img[src*="screens"] {
+  border-radius: 12px;
+  border: 1px solid var(--sl-color-gray-5);
+}
+
 /* 3) 文档内容页 ------------------------------------------------ */
 /* Expressive Code 代码块本身无下边距(块间距靠后一个兄弟的 margin-top);但在有序/无序列表项内,
    后续段落或 inline code 的上边距被压得很小,超宽命令触发的横向滚动条(约 17px)会几乎贴住下方

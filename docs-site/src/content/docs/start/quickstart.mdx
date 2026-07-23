@@ -1,9 +1,13 @@
 ---
 title: 快速上手
 description: 从登录到剪出并发布第一条成片的最短路径。
+sidebar:
+  order: 3
 ---
 
 import { Steps } from "@astrojs/starlight/components";
+import loginShot from "../../../assets/screens/login.png";
+import editorShot from "../../../assets/screens/editor.png";
 
 <Steps>
 
@@ -11,9 +15,11 @@ import { Steps } from "@astrojs/starlight/components";
 
    首次打开 Mibu 会让你登录或注册一个本地账号(数据都在本机)。也可以切到团队服务器。
 
+   <img src={loginShot.src} alt="Mibu 登录页" />
+
 2. **配置模型服务商(用到 AI 时)**
 
-   进「设置 → AI 供应商 → 添加供应商」,选服务商、贴 API Key。每个字段旁有「获取 API Key」直达控制台。
+   进「设置」,在 **AI 对话 / AI 绘图 / AI 视频 / AI 音频** 各分区里「添加供应商」,选服务商、贴 API Key。
    详见[配置模型服务商](/guides/providers/)。
 
 3. **新建项目、导入或生成素材**
@@ -23,6 +29,8 @@ import { Steps } from "@astrojs/starlight/components";
 4. **在时间线上剪辑**
 
    「剪辑」页把素材拖到轨道上;用逐字稿删句删词、涟漪删除、变速、调色、字幕滤镜把成片打磨好,一键导出。
+
+   <img src={editorShot.src} alt="Mibu 剪辑页:多轨时间线" />
 
 5. **一键分发(可选)**
 

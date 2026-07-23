@@ -1,16 +1,29 @@
 ---
 title: 下载与安装
-description: 系统要求、运行方式、数据放在哪。
+description: 下载渠道、系统要求、安装注意事项、数据放在哪。
+sidebar:
+  order: 2
 ---
 
 Mibu 是本地优先的桌面应用:剪辑、导出、工作流全程可离线;AI 能力(大模型 / 配音 / 生成)需在设置里配好各自的 API Key。
 
-## 系统要求
+## 下载
 
-| 平台 | 说明 |
-| --- | --- |
-| macOS | Apple Silicon(M 系列) |
-| Windows | Windows 10 / 11(x64) |
+安装包统一发布在 **[GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)**:
+
+| 平台 | 产物 | 说明 |
+| --- | --- | --- |
+| macOS | `Mibu-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
+| Windows | `Mibu Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
+
+应用启动后会静默比对 Releases 最新版本,发现新版会提示前往下载;设置 → 本地后端 → 版本 里也有「检查更新」按钮。
+
+:::note[未签名安装包提示]
+当前安装包**未做代码签名**:
+
+- **macOS**:首次打开若提示「无法验证开发者」,在 App 上**右键 → 打开**,或执行 `xattr -cr /Applications/Mibu.app` 后再打开。
+- **Windows**:SmartScreen 提示时点「更多信息 → 仍要运行」。
+:::
 
 - 内置后端引擎与 ffmpeg,开箱即用。
 - 本地转写 / 声音克隆模型首次使用时按需下载(数百 MB 至数 GB),建议预留 **10GB+** 磁盘。
@@ -27,11 +40,11 @@ pnpm dev          # 起后端 + 前端 + Electron
 打包桌面版:
 
 ```bash
-pnpm build:backend      # PyInstaller 打后端
-pnpm build:publisher    # 打发布执行器 bundle
-pnpm --dir frontend build
-pnpm dist               # electron-builder 出 mac/win 安装包
+pnpm build:mac    # 前端 + 边车 + 发布器 + 后端(PyInstaller)+ .app
+pnpm dist:mac     # 同流程,产出 .dmg(分发时用)
 ```
+
+正式发版由 CI 完成:维护者推送 `v*` tag,GitHub Actions 自动打包 mac / win 双平台并挂到 Releases(详见仓库 README)。
 
 ## 数据在哪
 

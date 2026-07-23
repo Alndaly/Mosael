@@ -3,7 +3,7 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 
-// Mibu 使用文档(Astro Starlight)。一份静态产物两用:App 内本地托管(离线可看)+ 独立部署做 SEO。
+// Mibu 使用文档(Astro Starlight)。静态产物可独立部署做 SEO,也可日后由 App 内托管离线查看。
 // Starlight 自带 Pagefind 本地搜索(构建期生成索引,纯前端离线可用)。
 export default defineConfig({
   site: process.env.DOCS_SITE_URL || "https://mibu.studio",
@@ -11,10 +11,16 @@ export default defineConfig({
   vite: { plugins: [tailwindcss()] },
   integrations: [
     starlight({
-      title: "Mibu 使用文档",
+      title: {
+        "zh-CN": "Mibu 使用文档",
+        en: "Mibu Docs",
+      },
       description: "桌面级视频剪辑 + AI 智能体 + 工作流 + 一键社媒分发 · 使用文档",
       logo: { src: "./src/assets/logo.svg", alt: "Mibu" },
       favicon: "/favicon.svg",
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/Alndaly/mibu-cut" },
+      ],
       // 自托管字体(打进 dist,离线可用;严禁 CDN)。
       customCss: [
         "./src/styles/tailwind.css",
@@ -26,10 +32,24 @@ export default defineConfig({
       defaultLocale: "root",
       locales: {
         root: { label: "简体中文", lang: "zh-CN" },
+        en: { label: "English", lang: "en" },
       },
       sidebar: [
-        { label: "开始", autogenerate: { directory: "start" } },
-        { label: "使用指南", autogenerate: { directory: "guides" } },
+        {
+          label: "开始",
+          translations: { en: "Get started" },
+          autogenerate: { directory: "start" },
+        },
+        {
+          label: "使用指南",
+          translations: { en: "Guides" },
+          autogenerate: { directory: "guides" },
+        },
+        {
+          label: "关于",
+          translations: { en: "About" },
+          autogenerate: { directory: "about" },
+        },
       ],
     }),
   ],
