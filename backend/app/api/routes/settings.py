@@ -206,7 +206,24 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     ensure_instance_admin(db, user, "credentials")
     profile = ProviderProfile(name=body.name, vendor=body.vendor)
-    _apply_profile_config(profile, _config_from_body(body), creating=True)
+    # 服务端凭据复制:同一把 Key 要配到另一能力的独立档案时,密钥从既有档案
+    # 直接拷进新行,不经前端往返(设置接口对密钥只回打码提示,前端本就拿不到)。
+    # 先注入 secret 字段,再走常规配置应用 —— 显式传入的值仍可覆盖,必填校验共用。
+    incoming = _config_from_body(body)
+    if body.copy_credentials_from:
+        source = db.get(ProviderProfile, body.copy_credentials_from)
+        if source is None:
+            raise HTTPException(status_code=404, detail="复制来源档案不存在")
+        for spec in _field_specs(body.vendor):
+            if not spec.get("secret"):
+                continue
+            key = str(spec.get("key", ""))
+            if incoming.get(key, "").strip():
+                continue  # 显式提供的密钥优先
+            copied = _read_config_field(source, spec)
+            if copied:
+                incoming[key] = copied
+    _apply_profile_config(profile, incoming, creating=True)
     db.add(profile)
     db.commit()
     db.refresh(profile)

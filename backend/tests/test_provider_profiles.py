@@ -125,3 +125,38 @@ def test_kb_embedding_config_put_get() -> None:
         "/api/settings/kb-embedding",
         json={"provider_profile_id": "does-not-exist", "model": "m", "dim": 8},
     ).status_code == 404
+
+
+def test_create_profile_copies_credentials_server_side() -> None:
+    """同一把 Key 配到另一能力的独立档案:copy_credentials_from 服务端复制,
+    密钥不经前端往返;两个档案随后各自独立(改一个不动另一个)。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    video = client.post(
+        "/api/settings/providers",
+        json={"name": "火山视频", "vendor": "bytedance", "config": {"api_key": "ark-secret-9876"}},
+    ).json()
+
+    image = client.post(
+        "/api/settings/providers",
+        json={"name": "火山生图", "vendor": "bytedance-image", "config": {}, "copy_credentials_from": video["id"]},
+    ).json()
+    assert image["vendor"] == "bytedance-image"
+    assert image["key_hint"] == "…9876"  # 密钥拷到了,响应仍只有打码提示
+    assert image["base_url"] == "https://ark.cn-beijing.volces.com/api/v3"
+    assert image["default_model"] == "doubao-seedream-4-0-250828"
+
+    # 独立性:改视频档案的 key 不影响生图档案
+    client.patch(f"/api/settings/providers/{video['id']}", json={"config": {"api_key": "ark-new-0000"}})
+    listed = {p["id"]: p for p in client.get("/api/settings/providers").json()}
+    assert listed[video["id"]]["key_hint"] == "…0000"
+    assert listed[image["id"]]["key_hint"] == "…9876"
+
+    # 来源不存在 → 404;显式给了 key 则不复制
+    assert (
+        client.post(
+            "/api/settings/providers",
+            json={"name": "x", "vendor": "bytedance-image", "config": {}, "copy_credentials_from": "nope"},
+        ).status_code
+        == 404
+    )
