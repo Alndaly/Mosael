@@ -1,0 +1,39 @@
+Mibu (mibu-cut) 专有许可 / Proprietary License
+
+版权所有 (c) 2026 Kinda Hall(Alndaly)。保留一切权利。
+Copyright (c) 2026 Kinda Hall (Alndaly). All rights reserved.
+
+【中文】
+
+1. 授权范围:仅允许出于评估、学习与个人非商业用途,查看本仓库源代码并在
+   本地构建运行。
+2. 禁止行为:未经版权人事先书面授权,不得——
+   a) 将本软件或其任何部分用于任何商业用途(包括但不限于售卖、租赁、
+      提供付费服务、SaaS 托管、集成进商业产品);
+   b) 再分发本软件的源代码或构建产物(包括修改后的版本);
+   c) 移除或修改版权声明与本许可文本。
+3. 贡献:向本仓库提交的贡献视为授予版权人不可撤销的、可再许可的使用权。
+4. 免责声明:本软件按「现状」提供,不含任何明示或默示担保;在适用法律
+   允许的最大范围内,版权人不对任何因使用本软件产生的损失承担责任。
+5. 商业授权:如需商业使用或再分发,请联系版权人另行取得书面许可。
+
+[English]
+
+1. Grant: You may view the source code of this repository and build/run it
+   locally solely for evaluation, learning, and personal non-commercial use.
+2. Restrictions: Without prior written permission from the copyright holder,
+   you may NOT —
+   a) use this software or any part of it for any commercial purpose
+      (including but not limited to selling, renting, offering paid services,
+      SaaS hosting, or bundling into commercial products);
+   b) redistribute the source code or build artifacts of this software,
+      including modified versions;
+   c) remove or alter copyright notices or this license text.
+3. Contributions: By submitting a contribution to this repository you grant
+   the copyright holder an irrevocable, sublicensable right to use it.
+4. Disclaimer: THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE
+   LAW, THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING
+   FROM THE USE OF THE SOFTWARE.
+5. Commercial licensing: For commercial use or redistribution, contact the
+   copyright holder for a separate written license.
