@@ -70,7 +70,7 @@ def extract_image_url(response_payload: dict[str, Any]) -> str:
 
 
 class SeedreamProvider(GenerationProvider):
-    name = "bytedance"
+    name = "bytedance-image"
     kind = "image"
 
     def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:

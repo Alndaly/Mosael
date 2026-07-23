@@ -54,7 +54,8 @@ def test_vendor_presets_listed() -> None:
     assert "moonshot" in presets and "minimax" in presets
     assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
     assert presets["alibaba"]["capability_ids"] == ["image"]
-    assert presets["bytedance"]["capability_ids"] == ["image", "video"]  # 同一 ARK key:Seedream 图像 + Seedance 视频
+    assert presets["bytedance"]["capability_ids"] == ["video"]
+    assert presets["bytedance-image"]["capability_ids"] == ["image"]  # Seedream 独立厂商项:各配各的档案
     assert presets["bytedance"]["default_model"] == "doubao-seedance-2-0-260128"
     assert presets["openai-tts"]["capability_ids"] == ["tts"]
     assert presets["openai-tts"]["default_model"] == "gpt-4o-mini-tts"

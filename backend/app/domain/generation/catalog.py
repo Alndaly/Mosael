@@ -124,15 +124,15 @@ BUILTIN_MODELS = [
         "capabilities": QWEN_TEXT_IMAGE_CAPABILITIES,
     },
     {
-        "id": "bytedance:doubao-seedream-4-0-250828:image",
-        "provider": "bytedance",
+        "id": "bytedance-image:doubao-seedream-4-0-250828:image",
+        "provider": "bytedance-image",
         "kind": "image",
         "model": "doubao-seedream-4-0-250828",
         "capabilities": SEEDREAM_4_IMAGE_CAPABILITIES,
     },
     {
-        "id": "bytedance:doubao-seedream-3-0-t2i-250415:image",
-        "provider": "bytedance",
+        "id": "bytedance-image:doubao-seedream-3-0-t2i-250415:image",
+        "provider": "bytedance-image",
         "kind": "image",
         "model": "doubao-seedream-3-0-t2i-250415",
         "capabilities": SEEDREAM_3_IMAGE_CAPABILITIES,
@@ -215,6 +215,9 @@ BUILTIN_MODELS = [
 
 REMOVED_BUILTIN_MODEL_IDS = {
     "bytedance:seedance:video",
+    # seedream 图像改挂独立厂商 bytedance-image(独立档案,互不牵连)
+    "bytedance:doubao-seedream-4-0-250828:image",
+    "bytedance:doubao-seedream-3-0-t2i-250415:image",
 }
 
 

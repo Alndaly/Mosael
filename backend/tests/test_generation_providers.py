@@ -374,7 +374,7 @@ def test_provider_http_error_includes_safe_response_body() -> None:
 def test_seedream_registry_and_payload_shape(tmp_path) -> None:
     from app.ai.providers.seedream import build_image_payload, extract_image_url
 
-    assert get_provider("bytedance", "image") is not None
+    assert get_provider("bytedance-image", "image") is not None
 
     # 4.x:参考图走 image 数组;尺寸统一成 x 分隔
     ref = tmp_path / "ref.png"
