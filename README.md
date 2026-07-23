@@ -1,5 +1,7 @@
 # Mibu
 
+**简体中文** | [English](README.en.md)
+
 AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体工作台 + 自媒体矩阵发布**。
 
 本地优先的桌面应用:一个 Electron 壳里跑着 FastAPI 后端(SQLite)、React 前端和一个内嵌浏览器发布执行器。
