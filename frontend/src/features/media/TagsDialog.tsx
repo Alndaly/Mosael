@@ -73,7 +73,7 @@ export function TagsDialog({
           placeholder={t("tagInputPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
               event.preventDefault();
               commitDraft();
             }

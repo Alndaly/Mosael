@@ -129,7 +129,7 @@ export function VarTextarea({
             setMenu((current) =>
               current ? { ...current, index: (current.index + delta + matches.length) % matches.length } : current,
             );
-          } else if (event.key === "Enter" || event.key === "Tab") {
+          } else if ((event.key === "Enter" || event.key === "Tab") && !event.nativeEvent.isComposing) {
             event.preventDefault();
             insert(matches[menu.index] ?? matches[0]);
           } else if (event.key === "Escape") {

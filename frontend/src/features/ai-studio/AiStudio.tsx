@@ -710,7 +710,7 @@ function GenerateWorkspace({
               event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 submit(event);
               }
