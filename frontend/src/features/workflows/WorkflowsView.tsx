@@ -1060,8 +1060,9 @@ function WorkflowEditor({
           </span>
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
+          {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
           <Select onValueChange={addNode} value="">
-            <SelectTrigger className="w-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
+            <SelectTrigger className="h-8 w-auto rounded-full border-input bg-card px-3 text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
               <Plus size={12} />
               <span>{t("wfAddNode")}</span>
             </SelectTrigger>
@@ -1075,10 +1076,10 @@ function WorkflowEditor({
                 ))}
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
-          <Button variant="ghost" size="icon" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
             <Redo2 size={14} />
           </Button>
           <div className="mx-1 h-[18px] w-px bg-border" />
@@ -1100,7 +1101,7 @@ function WorkflowEditor({
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
                 <Search size={14} />
               </Button>
             </PopoverTrigger>
@@ -1163,7 +1164,7 @@ function WorkflowEditor({
               <button
                 type="button"
                 className={cn(
-                  "inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-panel px-2.5 text-xs font-[650] text-muted-foreground transition-[background,border-color,color] duration-[120ms] hover:border-border-strong hover:text-foreground",
+                  "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-panel px-3 text-xs font-[650] text-muted-foreground transition-[background,border-color,color] duration-[120ms] hover:border-border-strong hover:text-foreground",
                   analysis.errorCount
                     ? "border-[color-mix(in_srgb,var(--destructive)_45%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_10%,var(--panel))] text-destructive hover:text-destructive"
                     : analysis.warnCount
@@ -1244,12 +1245,12 @@ function WorkflowEditor({
             size="icon"
             aria-label={t("wfHistory")}
             title={t("wfHistory")}
-            className={undefined}
+            className="h-8 w-8"
             onClick={() => setShowHistory((v) => !v)}
           >
             <History size={14} />
           </Button>
-          <Button variant="ghost" size="icon" aria-label={t("delete")} onClick={() => setDeleting(true)}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>
         </div>
@@ -1651,7 +1652,7 @@ function LoopBodyEditor({
           <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
         </span>
         <Select onValueChange={addNode} value="">
-          <SelectTrigger className="ml-auto w-auto rounded-md border-input bg-card text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
+          <SelectTrigger className="ml-auto h-8 w-auto rounded-full border-input bg-card px-3 text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
             <Plus size={12} />
             <span>{t("wfAddNode")}</span>
           </SelectTrigger>
