@@ -1,3 +1,17 @@
+import * as React from "react";
+
+/** 每 intervalMs 走一拍的「当前时刻」。计时器/相对时间戳的取值都来自 Date.now(),
+ *  但组件只有重渲才会重新取 —— react-query 轮询若回包无变化(structural sharing)
+ *  不触发重渲,「运行中 12s」就冻住不走。用这枚 state 时钟强制按节拍刷新。 */
+export function useNow(intervalMs: number): Date {
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
 /** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再算相对时间。 */
 export function relativeTime(iso: string, locale: string): string {
   const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;

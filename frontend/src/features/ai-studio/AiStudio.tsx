@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime } from "@/lib/time";
+import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -1028,11 +1028,14 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
   // 有产物即成功、无产物即失败;仅当 job_id 还在而列表未拉到时才视作排队中。
   const status = job?.status ?? (generation.result_asset_id ? "succeeded" : generation.job_id ? "queued" : "failed");
   const timestamp = generation.created_at ?? job?.created_at ?? null;
-  const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
   const isRunning = status === "running";
   const isFinished = status === "succeeded" || status === "failed";
+  // 节拍时钟:运行中每秒刷计时;空闲 30s 一拍让「x 分钟前」不冻住。
+  // (轮询回包无变化时 react-query 不触发重渲,光靠轮询计时会停走。)
+  const now = useNow(isRunning ? 1000 : 30_000);
+  const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
   const durationSeconds = isRunning
-    ? elapsedSecondsBetween(timestamp, new Date())
+    ? elapsedSecondsBetween(timestamp, now)
     : isFinished
       ? elapsedSecondsBetween(timestamp, job?.updated_at ?? generation.updated_at)
       : null;
