@@ -35,6 +35,6 @@ pnpm dist               # electron-builder 出 mac/win 安装包
 
 ## 数据在哪
 
-所有数据(账号 / 项目 / 素材 / 配置)都在**你自己机器**的 `~/.mibu-video`(Windows:`C:\Users\<你>\.mibu-video`),app 本体之外——升级 / 重装不丢数据。
+所有数据(账号 / 项目 / 素材 / 配置)都在**你自己机器**的 `~/.mibu-cut`(Windows:`C:\Users\<你>\.mibu-cut`),app 本体之外——升级 / 重装不丢数据。
 
 下一步:[快速上手](/start/quickstart/)。

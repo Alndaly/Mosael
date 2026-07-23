@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mibu — AI video creative studio",
-  "repository": "https://github.com/Alndaly/mibu-video",
+  "repository": "https://github.com/Alndaly/mibu-cut",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.15.0",
   "scripts": {
@@ -29,7 +29,7 @@
       {
         "provider": "github",
         "owner": "Alndaly",
-        "repo": "mibu-video"
+        "repo": "mibu-cut"
       }
     ],
     "directories": {

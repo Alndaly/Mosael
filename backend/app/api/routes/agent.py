@@ -221,7 +221,7 @@ def get_prompt_skill(skill_id: str, user: CurrentUser) -> dict:
 @router.get("/agent/manifest", response_model=AgentManifestOut)
 def get_agent_manifest(db: DbSession) -> AgentManifestOut:
     return AgentManifestOut(
-        app="mibu-video",
+        app="mibu-cut",
         version="0.1.0",
         openapi_url="/openapi.json",
         skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db)],

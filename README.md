@@ -33,7 +33,7 @@ open release/mac-arm64/Mibu.app
 
 ### 应用更新
 
-打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/mibu-video/releases)
+打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)
 最新 tag 与当前版本,发现新版弹提示引导到发布页下载;设置 → 本地后端 → 版本 里也有
 「检查更新」按钮。发布新版:改 `package.json` 的 `version` → 打包 → 建 `v<版本号>` 的
 GitHub Release 挂上产物。
@@ -102,9 +102,9 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.mibu-video/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
-| `~/.mibu-video/media/` | 导入与导出的媒体文件 |
-| `~/.mibu-video/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
+| `~/.mibu-cut/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
+| `~/.mibu-cut/media/` | 导入与导出的媒体文件 |
+| `~/.mibu-cut/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
 | `~/Library/Application Support/mibu/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
 | `~/Library/Application Support/mibu/logs/backend.log` | 打包版后端 stdout/stderr |
 | `~/Library/Application Support/mibu/Partitions/` | 各发布账号的持久登录会话 |

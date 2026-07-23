@@ -1,4 +1,4 @@
-// 发布执行器 ↔ mibu-video 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
+// 发布执行器 ↔ mibu-cut 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
 // 认领待办、回报状态、更新账号登录态,都走这里。本地默认 owner,后端 publish 权限门放行本地。
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -31,7 +31,7 @@ interface BackendTask {
 function readWorkerKey(): string {
   const dir =
     process.env.MIBU_DATA_DIR ||
-    join(homedir(), ".mibu-video");
+    join(homedir(), ".mibu-cut");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
   } catch {

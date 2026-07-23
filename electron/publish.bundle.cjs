@@ -2287,7 +2287,7 @@ var import_node_os = require("node:os");
 var import_node_path3 = require("node:path");
 var BASE = process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
 function readWorkerKey() {
-  const dir = process.env.MIBU_DATA_DIR || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".mibu-video");
+  const dir = process.env.MIBU_DATA_DIR || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".mibu-cut");
   try {
     return (0, import_node_fs2.readFileSync)((0, import_node_path3.join)(dir, "publish-worker.key"), "utf8").trim();
   } catch {

@@ -115,7 +115,7 @@ function stopBackend() {
 // macOS 未签名包装不上 Squirrel 自动安装(签名校验必失败),所以走「检查 + 提示 +
 // 打开发布页」的降级路线:GitHub Releases 比对版本号。日后具备 Developer ID 签名
 // 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
-const UPDATE_REPO = "Alndaly/mibu-video";
+const UPDATE_REPO = "Alndaly/mibu-cut";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -323,7 +323,7 @@ app.whenReady().then(async () => {
     dialog.showErrorBox(
       "Mibu backend failed to start",
       `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
-        "Check that the port is free and see logs in ~/.mibu-video/logs if available.",
+        "Check that the port is free and see logs in ~/.mibu-cut/logs if available.",
     );
     app.quit();
     return;
