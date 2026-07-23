@@ -47,6 +47,19 @@ export type User = components["schemas"]["UserOut"] & {
 };
 export type AuthOut = Omit<components["schemas"]["AuthOut"], "user"> & { user: User };
 
+export function uploadAvatar(file: File): Promise<User> {
+  const form = new FormData();
+  form.set("file", file);
+  return api<User>("/api/auth/me/avatar", { method: "POST", body: form });
+}
+
+/** 头像 URL:<img> 带不了请求头,与素材文件同款 ?token= 鉴权;avatar_key 作 ?v= 破缓存。 */
+export function userAvatarUrl(userId: string, avatarKey: string | null | undefined): string {
+  if (!avatarKey) return "";
+  const suffix = authToken ? `&token=${authToken}` : "";
+  return `${API_BASE}/api/auth/users/${userId}/avatar?v=${encodeURIComponent(avatarKey)}${suffix}`;
+}
+
 export function updateMe(body: { username: string; display_name: string; signature: string }): Promise<User> {
   return api<User>("/api/auth/me", { method: "PATCH", body: JSON.stringify(body) });
 }

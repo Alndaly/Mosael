@@ -143,3 +143,43 @@ def test_media_endpoints_accept_query_token() -> None:
     assert bare.get(f"/api/assets/{asset['id']}/file").status_code == 401
     ok = bare.get(f"/api/assets/{asset['id']}/file?token={token}")
     assert ok.status_code == 200
+
+
+def test_avatar_upload_replace_and_serve(tmp_path) -> None:
+    """头像:上传 → me 带 avatar_key → 可取图;重传换 key(破缓存)且旧文件被清;
+    坏类型/超限被拒。"""
+    from app.core.config import settings
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+    up = client.post("/api/auth/me/avatar", files={"file": ("a.png", png, "image/png")})
+    assert up.status_code == 200
+    key1 = up.json()["avatar_key"]
+    assert key1.startswith("avatars/") and key1.endswith(".png")
+    assert (settings.data_dir / key1).is_file()
+
+    me = client.get("/api/auth/me").json()
+    assert me["avatar_key"] == key1
+
+    got = client.get(f"/api/auth/users/{me['id']}/avatar")
+    assert got.status_code == 200 and got.content == png
+
+    # 重传:key 变化(时间戳)、旧文件删除
+    import time as _time
+
+    _time.sleep(1.1)
+    up2 = client.post("/api/auth/me/avatar", files={"file": ("b.webp", b"RIFF0000WEBP", "image/webp")})
+    key2 = up2.json()["avatar_key"]
+    assert key2 != key1 and key2.endswith(".webp")
+    assert not (settings.data_dir / key1).exists()
+    assert (settings.data_dir / key2).is_file()
+
+    # 类型/大小校验
+    assert client.post("/api/auth/me/avatar", files={"file": ("x.gif", b"GIF89a", "image/gif")}).status_code == 415
+    big = b"0" * (4 * 1024 * 1024 + 1)
+    assert client.post("/api/auth/me/avatar", files={"file": ("big.png", big, "image/png")}).status_code == 413
+
+    # 无头像用户 → 404
+    assert client.get("/api/auth/users/does-not-exist/avatar").status_code == 404

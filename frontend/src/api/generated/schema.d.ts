@@ -77,6 +77,47 @@ export interface paths {
         patch: operations["update_me_api_auth_me_patch"];
         trace?: never;
     };
+    "/api/auth/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Avatar
+         * @description 上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。
+         */
+        post: operations["upload_avatar_api_auth_me_avatar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users/{user_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User Avatar
+         * @description 任何已登录用户可取(团队页/成员列表要显示彼此头像)。<img> 带不了请求头,
+         *     走与素材文件同款的 ?token= 查询参数鉴权(CurrentUser 依赖两者都认)。
+         */
+        get: operations["get_user_avatar_api_auth_users__user_id__avatar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me/password": {
         parameters: {
             query?: never;
@@ -125,6 +166,75 @@ export interface paths {
         get: operations["bootstrap_api_auth_bootstrap_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oauth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Providers */
+        get: operations["list_providers_api_auth_oauth_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oauth/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start */
+        post: operations["start_api_auth_oauth__provider__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oauth/pending/{pending_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll Pending */
+        get: operations["poll_pending_api_auth_oauth_pending__pending_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oauth/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Callback Get */
+        get: operations["callback_get_api_auth_oauth__provider__callback_get"];
+        put?: never;
+        /** Callback Post */
+        post: operations["callback_post_api_auth_oauth__provider__callback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2235,6 +2345,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export One */
+        get: operations["export_one_api_workflows__workflow_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import One */
+        post: operations["import_one_api_workflows_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}": {
         parameters: {
             query?: never;
@@ -3639,6 +3783,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_avatar_api_auth_me_avatar_post */
+        Body_upload_avatar_api_auth_me_avatar_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_font_api_fonts_post */
         Body_upload_font_api_fonts_post: {
             /** Workspace Id */
@@ -3867,6 +4016,26 @@ export interface components {
             /** Project Id */
             project_id?: string | null;
         };
+        /**
+         * ExportRequest
+         * @description 导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。
+         */
+        ExportRequest: {
+            /**
+             * Resolution
+             * @default original
+             * @enum {string}
+             */
+            resolution: "original" | "1080p" | "720p" | "480p";
+            /** Fps */
+            fps?: number | null;
+            /**
+             * Quality
+             * @default standard
+             * @enum {string}
+             */
+            quality: "high" | "standard" | "compact";
+        };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
             /** Code */
@@ -4017,7 +4186,7 @@ export interface components {
             /** Session Id */
             session_id?: string | null;
             /** Job Id */
-            job_id: string;
+            job_id?: string | null;
             /** Provider Profile Id */
             provider_profile_id?: string | null;
             /** Provider */
@@ -4144,6 +4313,11 @@ export interface components {
             src_in: number;
             /** Src Out */
             src_out: number;
+            /**
+             * Ripple
+             * @default false
+             */
+            ripple: boolean;
         };
         /** InsertTextClipRequest */
         InsertTextClipRequest: {
@@ -4952,6 +5126,8 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
+            /** Copy Credentials From */
+            copy_credentials_from?: string | null;
         };
         /** ProviderProfileOut */
         ProviderProfileOut: {
@@ -5516,6 +5692,13 @@ export interface components {
             /** Src Time */
             src_time: number;
         };
+        /** StartOut */
+        StartOut: {
+            /** Pending Id */
+            pending_id: string;
+            /** Url */
+            url: string;
+        };
         /** SubtitleCueInput */
         SubtitleCueInput: {
             /** Text */
@@ -5886,6 +6069,11 @@ export interface components {
             display_name: string;
             /** Signature */
             signature: string;
+            /**
+             * Avatar Key
+             * @default
+             */
+            avatar_key: string;
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -6052,6 +6240,18 @@ export interface components {
             graph?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * WorkflowImportRequest
+         * @description 导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。
+         */
+        WorkflowImportRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
         };
         /** WorkflowNodeTypeOut */
         WorkflowNodeTypeOut: {
@@ -6445,6 +6645,70 @@ export interface operations {
             };
         };
     };
+    upload_avatar_api_auth_me_avatar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_avatar_api_auth_me_avatar_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_avatar_api_auth_users__user_id__avatar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_password_api_auth_me_password_post: {
         parameters: {
             query?: never;
@@ -6529,6 +6793,154 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    list_providers_api_auth_oauth_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    start_api_auth_oauth__provider__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poll_pending_api_auth_oauth_pending__pending_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pending_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callback_get_api_auth_oauth__provider__callback_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callback_post_api_auth_oauth__provider__callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9757,7 +10169,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -11132,6 +11548,70 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_one_api_workflows__workflow_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_one_api_workflows_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowImportRequest"];
             };
         };
         responses: {

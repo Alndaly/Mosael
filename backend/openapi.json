@@ -195,6 +195,89 @@
         }
       }
     },
+    "/api/auth/me/avatar": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Upload Avatar",
+        "description": "上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。",
+        "operationId": "upload_avatar_api_auth_me_avatar_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_avatar_api_auth_me_avatar_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users/{user_id}/avatar": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get User Avatar",
+        "description": "任何已登录用户可取(团队页/成员列表要显示彼此头像)。<img> 带不了请求头,\n走与素材文件同款的 ?token= 查询参数鉴权(CurrentUser 依赖两者都认)。",
+        "operationId": "get_user_avatar_api_auth_users__user_id__avatar_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/me/password": {
       "post": {
         "tags": [
@@ -288,6 +371,193 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Bootstrap Api Auth Bootstrap Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/providers": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "List Providers",
+        "operationId": "list_providers_api_auth_oauth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Providers Api Auth Oauth Providers Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/{provider}/start": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Start",
+        "operationId": "start_api_auth_oauth__provider__start_post",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/pending/{pending_id}": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Poll Pending",
+        "operationId": "poll_pending_api_auth_oauth_pending__pending_id__get",
+        "parameters": [
+          {
+            "name": "pending_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pending Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Poll Pending Api Auth Oauth Pending  Pending Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/{provider}/callback": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Callback Get",
+        "operationId": "callback_get_api_auth_oauth__provider__callback_get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Callback Post",
+        "operationId": "callback_post_api_auth_oauth__provider__callback_post",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -4868,6 +5138,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ExportRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6850,6 +7137,87 @@
               }
             }
           }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}/export": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Export One",
+        "operationId": "export_one_api_workflows__workflow_id__export_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/import": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Import One",
+        "operationId": "import_one_api_workflows_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowImportRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -11326,6 +11694,20 @@
         ],
         "title": "Body_import_file_api_kb_datasets__dataset_id__documents_import_file_post"
       },
+      "Body_upload_avatar_api_auth_me_avatar_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_avatar_api_auth_me_avatar_post"
+      },
       "Body_upload_font_api_fonts_post": {
         "properties": {
           "workspace_id": {
@@ -11872,6 +12254,47 @@
         "title": "EngineSynthesizeRequest",
         "description": "Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."
       },
+      "ExportRequest": {
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "original",
+              "1080p",
+              "720p",
+              "480p"
+            ],
+            "title": "Resolution",
+            "default": "original"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 120.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "high",
+              "standard",
+              "compact"
+            ],
+            "title": "Quality",
+            "default": "standard"
+          }
+        },
+        "type": "object",
+        "title": "ExportRequest",
+        "description": "导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。"
+      },
       "FeishuBindCodeOut": {
         "properties": {
           "code": {
@@ -12300,7 +12723,14 @@
             "title": "Session Id"
           },
           "job_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Job Id"
           },
           "provider_profile_id": {
@@ -12357,7 +12787,6 @@
         "required": [
           "id",
           "workspace_id",
-          "job_id",
           "provider",
           "model",
           "kind",
@@ -12644,6 +13073,11 @@
           "src_out": {
             "type": "number",
             "title": "Src Out"
+          },
+          "ripple": {
+            "type": "boolean",
+            "title": "Ripple",
+            "default": false
           }
         },
         "type": "object",
@@ -14701,6 +15135,17 @@
             },
             "type": "object",
             "title": "Config"
+          },
+          "copy_credentials_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copy Credentials From"
           }
         },
         "type": "object",
@@ -16173,6 +16618,24 @@
         ],
         "title": "SplitClipRequest"
       },
+      "StartOut": {
+        "properties": {
+          "pending_id": {
+            "type": "string",
+            "title": "Pending Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending_id",
+          "url"
+        ],
+        "title": "StartOut"
+      },
       "SubtitleCueInput": {
         "properties": {
           "text": {
@@ -16897,6 +17360,11 @@
           "signature": {
             "type": "string",
             "title": "Signature"
+          },
+          "avatar_key": {
+            "type": "string",
+            "title": "Avatar Key",
+            "default": ""
           }
         },
         "type": "object",
@@ -17240,6 +17708,26 @@
           "name"
         ],
         "title": "WorkflowCreate"
+      },
+      "WorkflowImportRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "data"
+        ],
+        "title": "WorkflowImportRequest",
+        "description": "导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。"
       },
       "WorkflowNodeTypeOut": {
         "properties": {

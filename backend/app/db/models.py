@@ -34,6 +34,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     signature: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # 头像文件相对 data_dir 的 key(avatars/<uid>-<ts>.<ext>);空 = 未设置,前端回退首字母。
+    avatar_key: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     password_hash: Mapped[str] = mapped_column(String(240), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 

@@ -332,7 +332,7 @@ function GenerateWorkspace({
       const activeJobIds = new Set(
         (jobs.data ?? []).filter((job) => job.status === "queued" || job.status === "running").map((job) => job.id),
       );
-      return query.state.data?.some((generation) => activeJobIds.has(generation.job_id)) ? 1000 : false;
+      return query.state.data?.some((generation) => generation.job_id && activeJobIds.has(generation.job_id)) ? 1000 : false;
     },
     refetchOnWindowFocus: true,
   });

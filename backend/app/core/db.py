@@ -141,6 +141,8 @@ def _migrate_user_profile() -> None:
             conn.execute(text("UPDATE users SET display_name = username WHERE display_name = ''"))
         if "signature" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN signature TEXT NOT NULL DEFAULT ''"))
+        if "avatar_key" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN avatar_key VARCHAR(200) NOT NULL DEFAULT ''"))
 
 
 def _migrate_generation_sessions() -> None:

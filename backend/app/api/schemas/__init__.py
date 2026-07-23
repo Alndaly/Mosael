@@ -24,6 +24,8 @@ class UserOut(OrmModel):
     username: str
     display_name: str
     signature: str
+    #: 空 = 未设置头像;非空时前端以 /api/auth/users/{id}/avatar?v=<key> 取图并借 key 破缓存。
+    avatar_key: str = ""
 
 
 class AuthOut(BaseModel):

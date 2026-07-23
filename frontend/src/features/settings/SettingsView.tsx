@@ -1,9 +1,9 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RefreshCw, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
+import { AudioLines, Camera, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RefreshCw, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, api, type Workspace } from "@/api/client";
+import { API_BASE, api, userAvatarUrl, type Workspace } from "@/api/client";
 import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -219,7 +219,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
 function AccountSection() {
   const t = useI18n();
-  const { user, updateProfile, changePassword, logout } = useAuth();
+  const { user, updateProfile, changePassword, updateAvatar, logout } = useAuth();
   const [profile, setProfile] = React.useState(() => profileFromUser(user));
   const [saveState, setSaveState] = React.useState<"saved" | "saving" | "error">("saved");
   const [passwords, setPasswords] = React.useState({ current: "", next: "", confirm: "" });
@@ -284,6 +284,20 @@ function AccountSection() {
 
   const displayName = profile.display_name || profile.username || "M";
   const initial = displayName.slice(0, 1).toUpperCase();
+  const avatarSrc = user?.avatar_key && user.id ? userAvatarUrl(user.id, user.avatar_key) : "";
+  const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [avatarPending, setAvatarPending] = React.useState(false);
+  const pickAvatar = async (file: File) => {
+    setAvatarPending(true);
+    try {
+      await updateAvatar(file);
+      toast.success(t("avatarUpdated"));
+    } catch (error) {
+      toast.error(t("avatarUpdateFailed"), { description: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setAvatarPending(false);
+    }
+  };
 
   return (
     <SettingsGroup
@@ -297,7 +311,30 @@ function AccountSection() {
     >
       <SettingsBlock>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-          <span className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-accent font-bold text-accent-foreground shadow-[var(--shadow-panel)]">{initial}</span>
+          <button
+            type="button"
+            className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
+            title={t("avatarChange")}
+            aria-label={t("avatarChange")}
+            disabled={avatarPending}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+            <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
+              {avatarPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Camera size={13} />}
+            </span>
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void pickAvatar(file);
+            }}
+          />
           <div className="[&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-sm [&_strong]:font-[650]">
             <strong>{displayName}</strong>
             <small>@{profile.username || "account"}</small>

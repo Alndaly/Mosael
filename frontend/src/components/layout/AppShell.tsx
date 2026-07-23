@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createWorkspace, type Workspace } from "@/api/client";
+import { createWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -316,17 +316,20 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [open, setOpen] = React.useState(false);
   const displayName = user?.display_name || user?.username || "user";
   const initial = displayName.slice(0, 1).toUpperCase();
+  const avatarSrc = user?.avatar_key && user.id ? userAvatarUrl(user.id, user.avatar_key) : "";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center rounded-full border border-border bg-secondary text-[13px] font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
-          {initial}
+        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center overflow-hidden rounded-full border border-border bg-secondary text-[13px] font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
+          {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
         </button>
       </PopoverTrigger>
       <PopoverContent className="grid w-[220px] gap-1.5 p-2" side="right" align="end" sideOffset={10}>
         <div className="flex items-center gap-2 px-1 py-0.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[13px] font-bold text-primary">{initial}</span>
+          <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[13px] font-bold text-primary">
+            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+          </span>
           <div className="grid [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[13px]">
             <strong>{displayName}</strong>
             <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>

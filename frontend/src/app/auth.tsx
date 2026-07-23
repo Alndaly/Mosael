@@ -8,6 +8,7 @@ import {
   setUnauthorizedHandler,
   updateMe,
   updatePassword,
+  uploadAvatar,
   type AuthOut,
   type User,
 } from "@/api/client";
@@ -22,6 +23,7 @@ type AuthState = {
   adoptAuth: (auth: { token: string; user: User }) => void;
   updateProfile: (profile: { username: string; display_name: string; signature: string }) => Promise<User>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateAvatar: (file: File) => Promise<User>;
   logout: () => Promise<void>;
 };
 
@@ -90,6 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await updatePassword({ current_password: currentPassword, new_password: newPassword });
   }, []);
 
+  const updateAvatar = React.useCallback(async (file: File) => {
+    const next = await uploadAvatar(file);
+    setUser(next);
+    return next;
+  }, []);
+
   const value: AuthState = {
     status,
     user,
@@ -108,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     adoptAuth: (auth) => applyAuth(auth as AuthOut),
     updateProfile,
     changePassword,
+    updateAvatar,
     logout: async () => {
       try {
         await api("/api/auth/logout", { method: "POST" });
