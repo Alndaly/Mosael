@@ -41,6 +41,27 @@ QWEN_EDIT_IMAGE_CAPABILITIES = {
     "max_num_images": 1,
 }
 
+SEEDREAM_4_IMAGE_CAPABILITIES = {
+    "modes": ["text-to-image", "image-to-image"],
+    "endpoint": "ark",
+    "max_prompt_chars": 8000,
+    "parameter_keys": ["size", "reference_image"],
+    # 4.x 约束:总像素落在 [1280x720, 4096x4096] 区间,故不提供 1024 档。
+    "sizes": ["2048x2048", "2304x1728", "1728x2304", "2560x1440", "1440x2560"],
+    "default_size": "2048x2048",
+    "max_num_images": 1,
+}
+
+SEEDREAM_3_IMAGE_CAPABILITIES = {
+    "modes": ["text-to-image"],
+    "endpoint": "ark",
+    "max_prompt_chars": 8000,
+    "parameter_keys": ["size", "seed"],
+    "sizes": ["1024x1024", "864x1152", "1152x864", "1280x720", "720x1280", "1248x832", "832x1248"],
+    "default_size": "1024x1024",
+    "max_num_images": 1,
+}
+
 SEEDANCE_2_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video"],
     "endpoint": "ark",
@@ -101,6 +122,20 @@ BUILTIN_MODELS = [
         "kind": "image",
         "model": "qwen-image",
         "capabilities": QWEN_TEXT_IMAGE_CAPABILITIES,
+    },
+    {
+        "id": "bytedance:doubao-seedream-4-0-250828:image",
+        "provider": "bytedance",
+        "kind": "image",
+        "model": "doubao-seedream-4-0-250828",
+        "capabilities": SEEDREAM_4_IMAGE_CAPABILITIES,
+    },
+    {
+        "id": "bytedance:doubao-seedream-3-0-t2i-250415:image",
+        "provider": "bytedance",
+        "kind": "image",
+        "model": "doubao-seedream-3-0-t2i-250415",
+        "capabilities": SEEDREAM_3_IMAGE_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-2-0-260128:video",

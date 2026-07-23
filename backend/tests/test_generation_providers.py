@@ -369,3 +369,43 @@ def test_provider_http_error_includes_safe_response_body() -> None:
     assert "body:" in message
     assert "unsupported" in message
     assert "sk-abc123" not in message
+
+
+def test_seedream_registry_and_payload_shape(tmp_path) -> None:
+    from app.ai.providers.seedream import build_image_payload, extract_image_url
+
+    assert get_provider("bytedance", "image") is not None
+
+    # 4.x:参考图走 image 数组;尺寸统一成 x 分隔
+    ref = tmp_path / "ref.png"
+    ref.write_bytes(b"\x89PNG\r\n\x1a\n0000")
+    payload = build_image_payload(
+        GenerationRequest(
+            kind="image",
+            model="doubao-seedream-4-0-250828",
+            prompt="蓝调海边",
+            parameters={"size": "2048*2048"},
+            source_files=(ref,),
+        )
+    )
+    assert payload["model"] == "doubao-seedream-4-0-250828"
+    assert payload["size"] == "2048x2048"
+    assert payload["watermark"] is False
+    assert isinstance(payload["image"], list) and payload["image"][0].startswith("data:image/png;base64,")
+    assert "seed" not in payload
+
+    # 3.x t2i:无参考图、支持 seed
+    payload3 = build_image_payload(
+        GenerationRequest(
+            kind="image",
+            model="doubao-seedream-3-0-t2i-250415",
+            prompt="蓝调海边",
+            parameters={"size": "1024x1024", "seed": 42},
+        )
+    )
+    assert payload3["seed"] == 42
+    assert "image" not in payload3
+
+    assert extract_image_url({"data": [{"url": "https://cdn/x.png"}]}) == "https://cdn/x.png"
+    with pytest.raises(ProviderError):
+        extract_image_url({"data": []})
