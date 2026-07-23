@@ -194,3 +194,80 @@ def test_scheduled_task_run_creates_job(tmp_path: Path) -> None:
     assert payload["run"]["scheduled_task_id"] == task["id"]
     assert payload["job"]["kind"] == "render"
     assert payload["job"]["payload"]["scheduled_task_id"] == task["id"]
+
+
+def test_clearing_finished_jobs_keeps_generation_history() -> None:
+    """生成记录是创作历史:任务中心「清空已完成」删 job 后,记录必须还在
+    (job_id 置空),会话列表接口也仍要返回它。曾因 CASCADE 全部丢失。"""
+    from app.domain.jobs import create_job
+    from app.db.models import GenerationSession
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    with SessionLocal() as db:
+        session = GenerationSession(workspace_id=ws["id"], title="夜景素材")
+        db.add(session)
+        db.flush()
+        job = create_job(db, workspace_id=ws["id"], kind="ai_generation", payload={}, message="done")
+        job.status = "succeeded"
+        generation = GenerationJob(
+            workspace_id=ws["id"], session_id=session.id, job_id=job.id,
+            provider="volcengine", model="doubao-seedance", kind="video", request={"prompt": "海边"},
+        )
+        db.add(generation)
+        db.commit()
+        session_id, generation_id = session.id, generation.id
+
+    removed = client.delete(f"/api/jobs/finished?workspace_id={ws['id']}").json()
+    assert removed["removed"] >= 1
+
+    listed = client.get(f"/api/generation/jobs?workspace_id={ws['id']}&session_id={session_id}").json()
+    assert [g["id"] for g in listed] == [generation_id]
+    assert listed[0]["job_id"] is None  # job 没了,记录还在
+
+
+def test_generation_job_detach_migration_rebuilds_old_table() -> None:
+    """存量库(job_id NOT NULL + CASCADE)启动时整表重建为 SET NULL,数据原样保留。"""
+    from app.core.db import _migrate_generation_job_detach
+
+    fresh_client()
+    with engine.connect() as conn:
+        raw = conn.connection.dbapi_connection
+        raw.execute("PRAGMA foreign_keys=OFF")  # 造旧结构 + 悬空引用的存量数据
+        conn.exec_driver_sql("DROP TABLE generation_jobs")
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE generation_jobs (
+                id VARCHAR(64) NOT NULL PRIMARY KEY,
+                workspace_id VARCHAR NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                session_id VARCHAR(64) REFERENCES generation_sessions(id) ON DELETE CASCADE,
+                job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+                provider_profile_id VARCHAR(64) REFERENCES provider_profiles(id) ON DELETE SET NULL,
+                provider VARCHAR(80) NOT NULL,
+                model VARCHAR(120) NOT NULL,
+                kind VARCHAR(24) NOT NULL,
+                request JSON NOT NULL,
+                result_asset_id VARCHAR REFERENCES assets(id) ON DELETE SET NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO generation_jobs VALUES ('g1', 'w1', NULL, 'j1', NULL, 'p', 'm', 'image', '{}', NULL,"
+            " '2026-07-01 00:00:00', '2026-07-01 00:00:00')"
+        )
+        conn.commit()
+        raw.execute("PRAGMA foreign_keys=ON")
+
+    _migrate_generation_job_detach()
+
+    with engine.connect() as conn:
+        fk = next(r for r in conn.exec_driver_sql("PRAGMA foreign_key_list(generation_jobs)").fetchall() if r[3] == "job_id")
+        assert str(fk[6]).upper() == "SET NULL"
+        rows = conn.exec_driver_sql("SELECT id, job_id FROM generation_jobs").fetchall()
+        assert rows == [("g1", "j1")]
+        # 幂等:再跑一遍不动
+        _migrate_generation_job_detach()
+        assert conn.exec_driver_sql("SELECT count(*) FROM generation_jobs").fetchone()[0] == 1

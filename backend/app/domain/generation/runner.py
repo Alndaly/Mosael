@@ -37,7 +37,7 @@ def start_generation_thread(generation_id: str) -> None:
 def _run_generation(generation_id: str) -> None:
     with SessionLocal() as db:
         generation = db.get(GenerationJob, generation_id)
-        if generation is None:
+        if generation is None or not generation.job_id:
             return
         job = db.get(Job, generation.job_id)
         if job is None:

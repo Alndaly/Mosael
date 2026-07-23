@@ -77,7 +77,7 @@ def update_generation_session(
 def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
     session = _require_generation_session(db, user, session_id)
     generations = list(db.scalars(select(GenerationJob).where(GenerationJob.session_id == session.id)))
-    job_ids = [generation.job_id for generation in generations]
+    job_ids = [generation.job_id for generation in generations if generation.job_id]
     db.execute(delete(GenerationJob).where(GenerationJob.session_id == session.id))
     if job_ids:
         db.execute(delete(Job).where(Job.id.in_(job_ids)))
@@ -128,7 +128,9 @@ def list_generation_jobs(
         stmt = stmt.where(GenerationJob.session_id == session_id)
     if kind:
         stmt = stmt.where(GenerationJob.kind == kind)
-    stmt = stmt.join(Job, GenerationJob.job_id == Job.id).order_by(Job.created_at.asc(), GenerationJob.id.asc())
+    # 按记录自身时间排序,不 join jobs:job 被任务中心清掉后(job_id 置空)
+    # 记录仍要出现在会话历史里 —— inner join 会把它们整个吞掉。
+    stmt = stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
     return list(db.scalars(stmt))
 
 

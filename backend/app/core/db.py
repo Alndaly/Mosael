@@ -41,6 +41,57 @@ def _migrate_kb_schema() -> None:
                 conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 
+def _migrate_generation_job_detach() -> None:
+    """generation_jobs.job_id 从 CASCADE 改 SET NULL + 可空。
+
+    生成记录是创作历史;此前挂在 job 上级联,任务中心「清空已完成」一删 job,
+    整段生成历史跟着蒸发(真丢过)。SQLite 改不了既有外键,整表重建搬运。
+    pragma foreign_keys 在事务内改无效,走底层 DBAPI 连接手动收发事务。"""
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        fks = conn.exec_driver_sql("PRAGMA foreign_key_list(generation_jobs)").fetchall()
+        # 行结构: (id, seq, table, from, to, on_update, on_delete, match)
+        job_fk = next((fk for fk in fks if fk[3] == "job_id"), None)
+        if job_fk is None or str(job_fk[6]).upper() == "SET NULL":
+            return
+        raw = conn.connection.dbapi_connection
+        raw.execute("PRAGMA foreign_keys=OFF")
+        try:
+            raw.execute("BEGIN")
+            raw.execute(
+                """
+                CREATE TABLE generation_jobs_new (
+                    id VARCHAR(64) NOT NULL PRIMARY KEY,
+                    workspace_id VARCHAR NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                    session_id VARCHAR(64) REFERENCES generation_sessions(id) ON DELETE CASCADE,
+                    job_id VARCHAR REFERENCES jobs(id) ON DELETE SET NULL,
+                    provider_profile_id VARCHAR(64) REFERENCES provider_profiles(id) ON DELETE SET NULL,
+                    provider VARCHAR(80) NOT NULL,
+                    model VARCHAR(120) NOT NULL,
+                    kind VARCHAR(24) NOT NULL,
+                    request JSON NOT NULL,
+                    result_asset_id VARCHAR REFERENCES assets(id) ON DELETE SET NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+            raw.execute(
+                "INSERT INTO generation_jobs_new SELECT id, workspace_id, session_id, job_id, provider_profile_id,"
+                " provider, model, kind, request, result_asset_id, created_at, updated_at FROM generation_jobs"
+            )
+            raw.execute("DROP TABLE generation_jobs")
+            raw.execute("ALTER TABLE generation_jobs_new RENAME TO generation_jobs")
+            raw.execute("COMMIT")
+        except Exception:
+            raw.execute("ROLLBACK")
+            raise
+        finally:
+            raw.execute("PRAGMA foreign_keys=ON")
+
+
 def _migrate_agent_sessions() -> None:
     """加列迁移(保留对话历史):agent_sessions 增加 provider_profile_id / model。"""
     inspector = inspect(engine)
@@ -66,6 +117,7 @@ def init_db() -> None:
     _migrate_kb_schema()
     _migrate_agent_sessions()
     _migrate_generation_sessions()
+    _migrate_generation_job_detach()
     _migrate_clip_transform()
     _migrate_tts_config()
     _migrate_provider_extra()

@@ -57,7 +57,7 @@ import {
   Trash2,
   X,
   Type,
-  Import,
+  FileUp,
   Wand2,
   Workflow as WorkflowIcon,
   Wrench,
@@ -422,7 +422,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 <Plus size={15} /> {t("wfCreate")}
               </Button>
               <Button variant="outline" disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <Import size={15} /> {t("wfImport")}
+                <FileUp size={15} /> {t("wfImport")}
               </Button>
               <input
                 ref={importInputRef}
@@ -450,7 +450,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             <h2>{t("navWorkflows")}</h2>
             <span className="inline-flex items-center gap-1">
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <Import size={14} />}
+                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <FileUp size={14} />}
               </Button>
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
                 <Plus size={14} />
@@ -496,7 +496,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                     <Download /> {t("wfExport")}
                   </ContextMenuItem>
                   <ContextMenuItem onSelect={() => importInputRef.current?.click()}>
-                    <Import /> {t("wfImport")}
+                    <FileUp /> {t("wfImport")}
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
@@ -1029,8 +1029,6 @@ function WorkflowEditor({
     : analysis.warnCount
       ? t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))
       : t("wfChecklistReady");
-  const showSaveStatus = save.isPending || dirty;
-
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
   const displayNodes = React.useMemo(
     () =>
@@ -1214,23 +1212,8 @@ function WorkflowEditor({
               )}
             </PopoverContent>
           </Popover>
-          {showSaveStatus && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] text-muted-foreground",
-                !save.isPending && "text-[#f59e0b]",
-              )}
-              aria-live="polite"
-            >
-              {save.isPending ? (
-                <>
-                  <Loader2 size={12} className="animate-mibu-spin" /> {t("wfSaving")}
-                </>
-              ) : (
-                t("wfUnsaved")
-              )}
-            </span>
-          )}
+          {/* 不再挂「未保存/保存中」文案:自动保存本就静默,状态条只会闪来闪去制造焦虑;
+              脏状态期间运行按钮自会禁用并带「保存中」提示,足够了。 */}
           <Button
             size="sm"
             disabled={run.isPending || dirty || !analysis.runnable}

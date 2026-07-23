@@ -774,7 +774,8 @@ class GenerationJobOut(OrmModel):
     id: str
     workspace_id: str
     session_id: str | None = None
-    job_id: str
+    # 任务中心清理已完成 job 后置空(记录本身长存,状态由 result_asset_id 兜底)。
+    job_id: str | None = None
     provider_profile_id: str | None = None
     provider: str
     model: str

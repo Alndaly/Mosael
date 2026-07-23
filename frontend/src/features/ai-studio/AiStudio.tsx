@@ -1024,7 +1024,9 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
   const t = useI18n();
   const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
-  const status = job?.status ?? "queued";
+  // job 行可能已被任务中心「清空已完成」删掉(记录长存、job_id 置空):
+  // 有产物即成功、无产物即失败;仅当 job_id 还在而列表未拉到时才视作排队中。
+  const status = job?.status ?? (generation.result_asset_id ? "succeeded" : generation.job_id ? "queued" : "failed");
   const timestamp = generation.created_at ?? job?.created_at ?? null;
   const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
   const isRunning = status === "running";
