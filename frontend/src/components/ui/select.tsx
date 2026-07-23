@@ -19,9 +19,10 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      // [&>span]:min-w-0:值 span 是 flex 子项,缺它长文本(如完整模型 id)不收缩,
-      // 会把触发器撑溢出、chevron 被挤出可视区;补上后正常截断出省略号。
-      "flex h-9 w-full items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-sm  ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:line-clamp-1",
+      // 两级 min-w-0 缺一不可:值 span 是 flex 子项,触发器自身又常是 grid/flex 子项
+      // (min-width:auto 会把它钉在内容最小宽,长模型 id 直接把面板顶穿)。都归零后
+      // w-full 才真正生效,长文本在 span 上截断出省略号。
+      "flex h-9 w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-sm  ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate",
       className
     )}
     {...props}
