@@ -676,8 +676,10 @@ export function WorkflowAgentChat({
             event.target.value = "";
           }}
         />
+        {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
         <Textarea
           rows={1}
+          className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
           value={draft}
           placeholder={t("wfAgentPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}
