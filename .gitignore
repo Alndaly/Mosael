@@ -24,3 +24,4 @@ backend/dist/
 
 # esbuild 产物(build:publisher / watch:publisher 现生成)
 electron/publish.bundle.cjs
+.claude/
