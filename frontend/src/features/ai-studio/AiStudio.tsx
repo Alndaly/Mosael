@@ -460,6 +460,17 @@ function GenerateWorkspace({
     },
   });
   const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
+  // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
+  const sessionGallery = React.useMemo(
+    () =>
+      ordered
+        .filter((generation) => generation.kind === "image" && generation.result_asset_id)
+        .map((generation) => ({
+          src: assetFileUrl(generation.result_asset_id!),
+          title: String(generation.request.prompt ?? generation.model),
+        })),
+    [ordered],
+  );
   const latestImageResult = React.useMemo(
     () => [...ordered].reverse().find((generation) => generation.kind === "image" && generation.result_asset_id) ?? null,
     [ordered],
@@ -680,6 +691,7 @@ function GenerateWorkspace({
               key={generation.id}
               generation={generation}
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
+              gallery={sessionGallery}
             />
           ))}
         </div>
@@ -1020,7 +1032,15 @@ function GenerateWorkspace({
   );
 }
 
-function GenerationTurn({ generation, job }: { generation: GenerationJob; job: Job | null }) {
+function GenerationTurn({
+  generation,
+  job,
+  gallery,
+}: {
+  generation: GenerationJob;
+  job: Job | null;
+  gallery?: Array<{ src: string; title?: string }>;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
@@ -1072,6 +1092,7 @@ function GenerationTurn({ generation, job }: { generation: GenerationJob; job: J
               openImagePreview({
                 src: assetFileUrl(generation.result_asset_id!),
                 title: String(generation.request.prompt ?? generation.model),
+                gallery,
               })
             }
           >

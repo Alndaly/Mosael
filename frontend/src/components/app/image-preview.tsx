@@ -5,9 +5,15 @@ import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
 
-type ImagePreviewState = {
+type ImagePreviewImage = {
   src: string;
   title?: string;
+};
+
+type ImagePreviewState = ImagePreviewImage & {
+  /** 画廊:同场景的全部图片(如生成会话里所有产出)。点开的 src 决定初始位置,
+   *  PhotoSlider 自带左右翻页/计数。省略 = 单张预览,老调用方不变。 */
+  gallery?: ImagePreviewImage[];
 };
 
 type ImagePreviewContextValue = {
@@ -18,15 +24,19 @@ const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>
 
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const t = useI18n();
-  const [image, setImage] = React.useState<ImagePreviewState | null>(null);
+  const [images, setImages] = React.useState<ImagePreviewImage[]>([]);
+  const [index, setIndex] = React.useState(0);
   const [visible, setVisible] = React.useState(false);
 
   const openImagePreview = React.useCallback((next: ImagePreviewState) => {
-    setImage(next);
+    const list = next.gallery?.length ? next.gallery : [{ src: next.src, title: next.title }];
+    const at = list.findIndex((item) => item.src === next.src);
+    setImages(list);
+    setIndex(at >= 0 ? at : 0);
     setVisible(true);
   }, []);
   const close = React.useCallback(() => setVisible(false), []);
-  const reset = React.useCallback(() => setImage(null), []);
+  const reset = React.useCallback(() => setImages([]), []);
 
   const value = React.useMemo<ImagePreviewContextValue>(() => ({ openImagePreview }), [openImagePreview]);
 
@@ -34,18 +44,14 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
     <ImagePreviewContext.Provider value={value}>
       {children}
       <PhotoSlider
-        images={
-          image
-            ? [
-                {
-                  key: image.src,
-                  src: image.src,
-                  overlay: image.title ?? t("imagePreviewTitle"),
-                },
-              ]
-            : []
-        }
-        visible={visible && image !== null}
+        images={images.map((item) => ({
+          key: item.src,
+          src: item.src,
+          overlay: item.title ?? t("imagePreviewTitle"),
+        }))}
+        index={index}
+        onIndexChange={setIndex}
+        visible={visible && images.length > 0}
         onClose={close}
         afterClose={reset}
         // react-photo-view 自带样式不在 cascade layer 里,会压过 utilities layer——覆盖其内部结构一律加 `!`。
