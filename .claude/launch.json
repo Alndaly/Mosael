@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "/Users/kinda/Developer/mibu-new/backend/.venv/bin/uvicorn",
+      "runtimeExecutable": "/Users/kinda/Developer/mibu-cut/backend/.venv/bin/uvicorn",
       "runtimeArgs": [
         "app.main:app",
         "--host",
@@ -12,7 +12,7 @@
         "8800",
         "--reload"
       ],
-      "cwd": "/Users/kinda/Developer/mibu-new/backend",
+      "cwd": "/Users/kinda/Developer/mibu-cut/backend",
       "port": 8800
     },
     {
@@ -21,7 +21,7 @@
       "runtimeArgs": [
         "dev"
       ],
-      "cwd": "/Users/kinda/Developer/mibu-new/frontend",
+      "cwd": "/Users/kinda/Developer/mibu-cut/frontend",
       "port": 5173
     }
   ]

@@ -39,7 +39,18 @@ Five seconds after launch, the packaged app silently compares the latest
 [GitHub Release](https://github.com/Alndaly/mibu-cut/releases) tag with the current version and
 shows a prompt linking to the release page when a new version exists. There is also a
 "Check for updates" button under Settings → Local backend → Version.
-To ship a release: bump `version` in `package.json` → build → create a `v<version>` GitHub Release with the artifacts.
+**Shipping a release is just pushing a tag**:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+CI (`.github/workflows/release.yml`) builds the macOS `.dmg` (arm64) and the Windows
+installer (NSIS), attaches them to a GitHub Release with auto-generated notes, and only
+publishes the release once both platforms succeed. The app version is taken from the tag —
+no need to bump `package.json` first. Build artifacts go to Releases only, **never into the
+repository**. Triggering the same workflow manually from the Actions page is a dry run
+(workflow artifacts only, Releases untouched).
 
 > Silent auto-install on macOS requires a Developer ID signature + notarization (Squirrel's
 > signature check always fails on unsigned builds), so the current behavior is check-and-prompt.

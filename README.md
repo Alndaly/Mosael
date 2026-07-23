@@ -37,8 +37,19 @@ open release/mac-arm64/Mibu.app
 
 打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)
 最新 tag 与当前版本,发现新版弹提示引导到发布页下载;设置 → 本地后端 → 版本 里也有
-「检查更新」按钮。发布新版:改 `package.json` 的 `version` → 打包 → 建 `v<版本号>` 的
-GitHub Release 挂上产物。
+「检查更新」按钮。
+
+**发布新版只需打 tag**:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+CI(`.github/workflows/release.yml`)会自动打包 macOS `.dmg`(arm64)与 Windows
+安装包(NSIS),挂到自动生成变更说明的 GitHub Release 上,两个平台都成功后才转正。
+版本号在 CI 里直接取自 tag,不需要先改 `package.json`。构建产物只进 Releases,
+**永远不进仓库**。在 Actions 页手动触发同一工作流则是试打包(只出 workflow
+artifact,不碰 Releases)。
 
 > macOS 的**静默自动安装**需要 Developer ID 签名 + 公证(未签名包 Squirrel 校验必失败),
 > 所以当前是「检查 + 提示」的降级路线;`build.publish` 已配好 GitHub provider,签名具备后
