@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
+  ChevronRight,
   FileText,
   FileUp,
   Link2,
@@ -20,7 +21,8 @@ import { z } from "zod";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { relativeTime } from "@/lib/time";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -231,7 +233,9 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
           <Badge variant="secondary">{t("kbDocCount").replace("{n}", String(dataset.document_count))}</Badge>
         </div>
       </div>
-      <Tabs defaultValue="docs" className="min-h-0 flex-1 gap-3">
+      {/* Radix Tabs Root 默认 display:block:必须自己上 flex 列,TabsContent 的
+          flex-1 才有意义 — 否则文档编辑器拿不到高度,塌成一小条。 */}
+      <Tabs defaultValue="docs" className="flex min-h-0 flex-1 flex-col">
         <TabsList>
           <TabsTrigger value="docs">
             <FileText size={13} /> {t("kbTabDocs")}
@@ -244,7 +248,8 @@ function DatasetDetail({ dataset, workspace }: { dataset: KbDataset; workspace: 
           </TabsTrigger>
           <TabsTrigger value="settings">{t("kbTabSettings")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="docs">
+        {/* min-h-0 flex-1:文档编辑器要吃满剩余高度(内部滚动),不能让内容把页面撑开。 */}
+        <TabsContent value="docs" className="min-h-0 flex-1">
           <DocumentsTab dataset={dataset} workspace={workspace} />
         </TabsContent>
         <TabsContent value="recall">
@@ -270,6 +275,7 @@ const STATUS_VARIANT: Record<string, "secondary" | "default" | "outline"> = {
 
 function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: Workspace }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const [openDocId, setOpenDocId] = React.useState<string | null>(null);
 
@@ -326,10 +332,12 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
     },
     onSuccess: () => refresh(),
   });
+  const [deletingDoc, setDeletingDoc] = React.useState<KbDocument | null>(null);
   const removeDoc = useMutation({
     mutationFn: (id: string) => api(`/api/kb/documents/${id}`, { method: "DELETE" }),
     onSuccess: (_d, id) => {
       if (openDocId === id) setOpenDocId(null);
+      setDeletingDoc(null);
       refresh();
     },
   });
@@ -386,16 +394,17 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
                     {t(`kbStatus_${doc.status}` as never)}
                   </Badge>
                   <span className="timecode text-[11px]">{t("kbChunksN").replace("{n}", String(doc.chunk_count))}</span>
+                  <span className="timecode text-[11px]">{relativeTime(doc.updated_at, locale)}</span>
                   {doc.status === "error" && doc.error && <span className="max-w-[220px] truncate text-[11px] text-destructive">{doc.error}</span>}
                 </span>
               </button>
               <div className="flex shrink-0 gap-0.5">
                 {doc.status === "error" && (
-                  <Button size="icon" variant="ghost" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
                     <RotateCw size={13} />
                   </Button>
                 )}
-                <Button size="icon" variant="ghost" title={t("delete")} onClick={() => removeDoc.mutate(doc.id)}>
+                <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-destructive" title={t("delete")} onClick={() => setDeletingDoc(doc)}>
                   <Trash2 size={13} />
                 </Button>
               </div>
@@ -403,6 +412,15 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
           ))}
         </div>
       )}
+
+      {/* 删除是不可逆的整篇内容销毁,必须确认 — 此前点垃圾桶直接删。 */}
+      <ConfirmDialog
+        open={deletingDoc !== null}
+        title={t("kbDeleteDocTitle")}
+        body={t("kbDeleteDocBody").replace("{title}", deletingDoc?.title ?? "")}
+        onCancel={() => setDeletingDoc(null)}
+        onConfirm={() => deletingDoc && removeDoc.mutate(deletingDoc.id)}
+      />
 
       <KbUrlDialog
         open={urlOpen}
@@ -429,6 +447,7 @@ function DocumentDetail({
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [dirty, setDirty] = React.useState(false);
+  const [chunksOpen, setChunksOpen] = React.useState(false);
 
   const doc = useQuery({
     queryKey: ["kb-document", documentId],
@@ -460,47 +479,77 @@ function DocumentDetail({
 
   if (!doc.data) return null;
 
+  const doSave = () => {
+    if (dirty && !save.isPending) save.mutate({ title: title.trim() || doc.data!.title, content });
+  };
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto">
-      <div className="flex items-center justify-between">
+    // 编辑器占满剩余高度(内部滚动),分块收成可折叠条 — 此前编辑区随内容塌缩成
+    // 一小条,页面下方大片留白,长文还得整页滚。
+    <div className="flex h-full min-h-0 flex-col gap-2" onKeyDown={(event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        doSave();
+      }
+    }}>
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <Button size="sm" variant="ghost" onClick={onBack}>
           ← {t("back")}
         </Button>
-        {dirty ? (
-          <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ title: title.trim() || doc.data!.title, content })}>
+        {/* 保存钮常驻(干净时禁用),状态文字在旁边 — 不再让整块头部在两种形态间跳动。 */}
+        <span className="flex items-center gap-2">
+          <span className={cn("text-[11.5px]", dirty ? "text-[#f59e0b]" : "text-muted-foreground")}>
+            {dirty ? t("kbUnsavedHint") : t("kbSaved")}
+          </span>
+          <Button size="sm" disabled={!dirty || save.isPending} title={t("kbSaveShortcut")} onClick={doSave}>
             {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSave")}
           </Button>
-        ) : (
-          <span className="text-[11.5px] text-muted-foreground">{t("kbSaved")}</span>
-        )}
+        </span>
       </div>
       <Input
-        className="min-w-0 rounded-sm border-0 bg-transparent p-0 text-lg font-[650] text-foreground outline-none focus-visible:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]"
+        className="h-auto shrink-0 rounded-none border-0 bg-transparent p-0 text-lg font-[650] text-foreground shadow-none outline-none focus-visible:ring-0"
         value={title}
+        placeholder={t("kbUntitled")}
+        aria-label={t("kbUntitled")}
         onChange={(event) => {
           setTitle(event.target.value);
           setDirty(true);
         }}
       />
-      <KbTiptap
-        key={doc.data.id}
-        initialMarkdown={doc.data.content ?? ""}
-        onChange={(markdown) => {
-          setContent(markdown);
-          setDirty(true);
-        }}
-      />
-      <div className="[&_h3]:mb-1.5 [&_h3]:mt-1 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:uppercase [&_h3]:tracking-[0.03em] [&_h3]:text-muted-foreground">
-        <h3>{t("kbChunksTitle").replace("{n}", String((chunks.data ?? []).length))}</h3>
-        <div className="flex flex-col gap-1.5">
-          {(chunks.data ?? []).map((chunk) => (
-            <div key={chunk.id} className="grid grid-cols-[32px_1fr_auto] gap-2 rounded-md border border-border bg-panel-inset px-2.5 py-2 [&_p]:whitespace-pre-wrap [&_p]:text-[12.5px] [&_p]:leading-[1.6] [&_p]:[word-break:break-word]">
-              <span className="timecode text-[11px] text-muted-foreground">#{chunk.chunk_index + 1}</span>
-              <p>{chunk.text}</p>
-              <span className="timecode text-[10.5px] text-muted-foreground">{chunk.char_count}</span>
-            </div>
-          ))}
-        </div>
+      <div className="min-h-0 flex-1">
+        <KbTiptap
+          key={doc.data.id}
+          initialMarkdown={doc.data.content ?? ""}
+          onChange={(markdown) => {
+            setContent(markdown);
+            setDirty(true);
+          }}
+        />
+      </div>
+      <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-panel">
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2.5 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors duration-100 hover:text-foreground"
+          aria-expanded={chunksOpen}
+          onClick={() => setChunksOpen((value) => !value)}
+        >
+          <ChevronRight size={13} className={cn("transition-transform duration-150", chunksOpen && "rotate-90")} />
+          {t("kbChunksTitle").replace("{n}", String((chunks.data ?? []).length))}
+          <span className="timecode ml-auto text-[10.5px] font-normal">
+            {(chunks.data ?? []).reduce((sum, chunk) => sum + chunk.char_count, 0)}
+          </span>
+        </button>
+        {chunksOpen && (
+          <div className="grid max-h-[240px] gap-1.5 overflow-y-auto border-t border-border p-1.5">
+            {(chunks.data ?? []).map((chunk) => (
+              <div key={chunk.id} className="grid grid-cols-[32px_1fr_auto] gap-2 rounded-md border border-border bg-panel-inset px-2.5 py-2 [&_p]:m-0 [&_p]:whitespace-pre-wrap [&_p]:text-[12.5px] [&_p]:leading-[1.6] [&_p]:[word-break:break-word]">
+                <span className="timecode text-[11px] text-muted-foreground">#{chunk.chunk_index + 1}</span>
+                <p>{chunk.text}</p>
+                <span className="timecode text-[10.5px] text-muted-foreground">{chunk.char_count}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

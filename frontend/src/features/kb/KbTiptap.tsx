@@ -93,7 +93,7 @@ export function KbTiptap({
   ];
 
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-1.5 py-[5px]" role="toolbar">
         {buttons.map((item, index) =>
           item === "sep" ? (
