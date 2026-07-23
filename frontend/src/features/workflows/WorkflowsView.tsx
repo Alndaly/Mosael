@@ -702,6 +702,8 @@ function WorkflowEditor({
   // Drill-in: double-click a loop node to edit its nested body sub-graph in an overlay canvas.
   const [editingLoopId, setEditingLoopId] = React.useState<string | null>(null);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
+  // 首次 fitView 前隐藏画布(挂载首帧节点在默认视口的错误位置,直接可见会闪一下)
+  const [viewReady, setViewReady] = React.useState(false);
 
   /**
    * 把视口居中到某坐标上。x 方向右移半个检查器宽度(约 150px),让节点落在被检查器
@@ -1245,7 +1247,7 @@ function WorkflowEditor({
       )}>
         <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
-            className="[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]"
+            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !viewReady && "opacity-0")}
             nodes={displayNodes}
             edges={edges}
             nodeTypes={NODE_COMPONENT_TYPES}
@@ -1253,7 +1255,11 @@ function WorkflowEditor({
               rfRef.current = instance as unknown as ReactFlowInstance;
               // 只在挂载时 fit 一次(切换工作流会因 key 重挂而重跑)。用命令式而非声明式
               // fitView 属性:后者会在每次新增未测量节点时重新 fit,把手动聚焦覆盖掉。
-              requestAnimationFrame(() => instance.fitView({ padding: 0.25, maxZoom: 1 }));
+              // fit 完成前画布不可见:首帧按默认视口渲染会让所有节点在错位处闪一下。
+              requestAnimationFrame(() => {
+                instance.fitView({ padding: 0.25, maxZoom: 1 });
+                setViewReady(true);
+              });
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -1500,6 +1506,7 @@ function LoopBodyEditor({
   onClose: () => void;
 }) {
   const t = useI18n();
+  const [bodyViewReady, setBodyViewReady] = React.useState(false);
   // config.body may be missing, or "" (addNode seeds unknown field types with an empty string) —
   // anything not shaped like a graph must become an empty one, or body.nodes.length blows up the
   // whole app on open.
@@ -1652,7 +1659,7 @@ function LoopBodyEditor({
       </div>
       <div className="relative min-h-0">
         <ReactFlow
-          className="[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]"
+          className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !bodyViewReady && "opacity-0")}
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_COMPONENT_TYPES}
@@ -1663,7 +1670,12 @@ function LoopBodyEditor({
           onPaneClick={() => setSelectedId(null)}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           deleteKeyCode={["Backspace", "Delete"]}
-          onInit={(instance) => requestAnimationFrame(() => instance.fitView({ padding: 0.3, maxZoom: 1 }))}
+          onInit={(instance) =>
+            requestAnimationFrame(() => {
+              instance.fitView({ padding: 0.3, maxZoom: 1 });
+              setBodyViewReady(true);
+            })
+          }
         >
           <Background gap={20} size={1.2} />
           <Controls

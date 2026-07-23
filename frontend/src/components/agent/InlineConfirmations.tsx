@@ -86,7 +86,8 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
   if (visible.length === 0) return null;
 
   return (
-    <div className="grid gap-2" role="region" aria-label={t("confirmTitle")}>
+    // 与消息内容列同宽(780px 居中):此前裸 grid 吃满整个滚动区,确认卡横跨全屏。
+    <div className="mx-auto grid w-full max-w-[780px] gap-2" role="region" aria-label={t("confirmTitle")}>
       {visible.map((item) => (
         <div className="grid gap-1.5 rounded-lg border border-border-strong border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-[12.5px]" key={item.id}>
           <div className="flex items-center justify-between gap-2">
