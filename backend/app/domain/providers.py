@@ -34,23 +34,25 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         ],
     },
     "bytedance": {
-        "label": "火山 Seedance 视频生成",
+        "label": "火山方舟 (Seedance/Seedream)",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "default_model": "doubao-seedance-2-0-260128",
-        "capabilities": "视频生成(Seedance)。2.x 走 ARK;1.x 在默认端点下由 Adapter 切到 LAS。",
-        "capability_ids": ["video"],
+        "capabilities": "视频生成(Seedance)+ 图像生成(Seedream),同一个方舟 Key。视频 2.x 走 ARK;1.x 在默认端点下由 Adapter 切到 LAS。",
+        # 同一个 ARK key 同时服务视频与图像:能力挂两项,档案在 AI 绘图/AI 视频
+        # 两个分区都可见、图像默认模型也能选到它。
+        "capability_ids": ["image", "video"],
         "fields": [
             {"key": "api_key", "label": "方舟 API Key", "storage": "api_key", "secret": True, "required": True},
             {
                 "key": "base_url",
-                "label": "Seedance 2.x Endpoint",
+                "label": "ARK Endpoint",
                 "storage": "base_url",
                 "default": "https://ark.cn-beijing.volces.com/api/v3",
-                "hint": "通常保持默认。Seedance 1.x 模型会自动使用 LAS Endpoint。",
+                "hint": "通常保持默认。Seedance 1.x 视频模型会自动使用 LAS Endpoint。",
             },
             {
                 "key": "default_model",
-                "label": "视频模型",
+                "label": "默认模型",
                 "storage": "default_model",
                 "default": "doubao-seedance-2-0-260128",
             },
