@@ -311,3 +311,33 @@ def test_prompt_skills_seed_list_and_load(tmp_path, monkeypatch) -> None:
 
     index = prompt_skills.skills_index_for_prompt()
     assert "transcript-rough-cut" in index and "my-skill" in index
+
+
+def test_reconcile_orphaned_agent_sessions() -> None:
+    """重启把 running 会话线程杀死 → 启动时拨回 idle 并补中断说明,idle 会话不动。"""
+    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.db.models import AgentMessage, AgentSession
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        stuck = AgentSession(workspace_id=ws["id"], title="卡住的", status="running")
+        fine = AgentSession(workspace_id=ws["id"], title="好好的", status="idle")
+        db.add_all([stuck, fine])
+        db.commit()
+        stuck_id, fine_id = stuck.id, fine.id
+
+        assert reconcile_orphaned_agent_sessions(db) == 1
+
+        db.refresh(stuck)
+        db.refresh(fine)
+        assert stuck.status == "idle"
+        assert fine.status == "idle"
+        from sqlalchemy import select
+        notes = db.scalars(select(AgentMessage).where(AgentMessage.session_id == stuck_id)).all()
+        assert len(notes) == 1 and "中断" in notes[0].content and notes[0].error
+        assert db.scalars(select(AgentMessage).where(AgentMessage.session_id == fine_id)).all() == []
+
+        # 幂等
+        assert reconcile_orphaned_agent_sessions(db) == 0

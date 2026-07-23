@@ -45,6 +45,7 @@ from app.core.db import SessionLocal, init_db
 from app.core.permissions import get_current_user
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.generation import ensure_builtin_generation_models
+from app.ai.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
 from app.media.proxy import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
@@ -66,6 +67,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # A restart kills every in-process worker thread — fail the jobs they
         # were running so they don't linger frozen in the task center.
         reconcile_orphaned_jobs(db)
+        # 同理:卡在 running 的智能体会话拨回 idle,否则前端永远「思考中」。
+        reconcile_orphaned_agent_sessions(db)
         # Backfill preview proxies for any videos missing one (best-effort).
         reconcile_missing_proxies(db)
         # 修复 remux 上线前导入的坏素材(直录 webm 缺时长/缩略图/波形)。

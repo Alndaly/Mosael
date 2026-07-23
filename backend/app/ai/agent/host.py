@@ -585,6 +585,29 @@ def _drain_queue_locked(session_id: str) -> None:
     threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True).start()
 
 
+def reconcile_orphaned_agent_sessions(db: Session) -> int:
+    """把重启前卡在 running 的会话拨回 idle(与 reconcile_orphaned_jobs 同理)。
+
+    turn 跑在进程内的 daemon 线程 + sidecar 子进程上,后端一重启(开发 --reload
+    尤其频繁)线程即死,_run_turn_thread 的 finally 永远执行不到 —— 会话从此
+    永远「思考中」,前端只是如实转述。启动时统一拨回,并补一条可见的中断说明,
+    否则那轮用户消息看起来石沉大海。"""
+    stale = db.scalars(select(AgentSession).where(AgentSession.status == "running")).all()
+    for session in stale:
+        session.status = "idle"
+        db.add(
+            AgentMessage(
+                session_id=session.id,
+                role="assistant",
+                content="上一轮对话因后端重启而中断,请重新发送。",
+                error="backend restarted mid-turn",
+            )
+        )
+    if stale:
+        db.commit()
+    return len(stale)
+
+
 def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -> list[str]:
     """Drop a message that has not run yet."""
     message = db.get(AgentMessage, message_id)
