@@ -21,3 +21,6 @@ backend/dist/
 /build/*
 !/build/icon.png
 !/build/icon.icns
+
+# esbuild 产物(build:publisher / watch:publisher 现生成)
+electron/publish.bundle.cjs
