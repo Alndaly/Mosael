@@ -178,6 +178,7 @@ class TextStyleSpec:
     italic: bool = False
     align: str = "center"  # left | center | right —— 单点定位时的锚点对齐
     font_family: str = ""
+    font_id: str = ""  # 上传字体 id;导出侧据此解析真实字族名与 fontsdir
     font_dir: str = ""
 
 
@@ -550,6 +551,7 @@ def _read_text_style(raw: dict | None) -> TextStyleSpec:
         italic=bool(raw.get("italic", d.italic)),
         align=align if align in ("left", "center", "right") else d.align,
         font_family=str(raw.get("font_family", d.font_family) or "")[:200],
+        font_id=str(raw.get("font_id", d.font_id) or "")[:64],
         font_dir=str(raw.get("font_dir", d.font_dir) or "")[:500],
     )
 

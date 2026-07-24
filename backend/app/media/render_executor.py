@@ -566,7 +566,10 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         out_label = "[vsub]"
         # fontsdir lets libass find a font that is uploaded rather than installed; without it the
         # family in the Style: line resolves to nothing and the burn silently uses a default face.
-        fonts_dir = plan.subtitle_style.font_dir
+        # 字幕或任一花字用了上传字体都要给 fontsdir(都指向同一个 workspace 字体根,libass 递归扫描)。
+        fonts_dir = plan.subtitle_style.font_dir or next(
+            (item.style.font_dir for item in plan.text_overlays if item.style.font_dir), ""
+        )
         fonts_arg = f":fontsdir='{_escape_filter_path(Path(fonts_dir))}'" if fonts_dir else ""
         filters.append(
             f"{video_label}subtitles=filename='{_escape_filter_path(ass_path)}'{fonts_arg}{out_label}"

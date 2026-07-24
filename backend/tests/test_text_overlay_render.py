@@ -130,3 +130,23 @@ def test_text_overlay_triggers_ass_burn(tmp_path: Path) -> None:
     graph = " ".join(build_ffmpeg_command(plan, lambda k: tmp_path / k, tmp_path / "o.mp4"))
     assert "subtitles=filename=" in graph
     assert (tmp_path / "o.ass").exists()  # ASS 已落盘
+
+
+def test_read_text_style_keeps_font_id() -> None:
+    assert _read_text_style({"font_id": "f1", "font_family": "Foo"}).font_id == "f1"
+    assert _read_text_style({}).font_id == ""
+
+
+def test_fontsdir_falls_back_to_title_font(tmp_path: Path) -> None:
+    """字幕无上传字体、花字有 → subtitles 的 fontsdir 用花字解析出的 workspace 字体根目录。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=640, height=360, fps=30,
+        clips=[{"id": "b", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 2}],
+        assets={"a": {"file_key": "a"}},
+        text_overlays=[{
+            "id": "t", "asset_id": None, "timeline_start": 0, "src_in": 0, "src_out": 2,
+            "text_override": "x", "effects": {"text_style": {"font_family": "Foo", "font_dir": str(tmp_path)}},
+        }],
+    )
+    graph = " ".join(build_ffmpeg_command(plan, lambda k: tmp_path / k, tmp_path / "o.mp4"))
+    assert ":fontsdir='" in graph  # 花字上传字体让 fontsdir 出现(字幕本身没有字体)

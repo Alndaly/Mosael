@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
+from app.db.models import Asset, Clip, Font, Project, Sequence, Track, Workspace
 from app.domain.render import build_plan_for_sequence
+from app.media.paths import font_key
 from app.domain.sequences.history import undo
 from app.domain.sequences.operations import (
     DetachClipAudio,
@@ -88,6 +90,37 @@ def test_export_plan_carries_clip_transform() -> None:
         segment = plan.video_segments[0]
         assert segment.transform.scale == 1.5
         assert segment.transform.keyed("x") == ((0.0, -1.0), (1.0, 1.0))
+
+
+def test_uploaded_font_resolves_for_title_export() -> None:
+    """花字选了上传字体:导出计划把 font_id 解析成真实字族名 + workspace 字体根(给 ASS \\fn/fontsdir)。"""
+    fresh_client()
+    with SessionLocal() as db:
+        seq, base_clip = _seq_with_clip(db)
+        asset = Asset(workspace_id=seq.workspace_id, kind="video", name="v", file_key="media/v.mp4")
+        db.add(asset)
+        db.flush()
+        base_clip.asset_id = asset.id
+        font = Font(workspace_id=seq.workspace_id, family="MyBrandFont", original_filename="f.ttf", file_key="")
+        db.add(font)
+        db.flush()
+        font.file_key = font_key(seq.workspace_id, font.id, "f.ttf")
+        path = settings.data_dir / font.file_key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fake-font-bytes")
+        video_track = next(t for t in seq.tracks if t.kind == "video")
+        db.add(Clip(
+            workspace_id=seq.workspace_id, sequence_id=seq.id, track_id=video_track.id,
+            timeline_start=0, src_in=0, src_out=3, asset_id=None, text_override="标题",
+            effects={"text_style": {"font_id": font.id, "font_family": "placeholder"}},
+        ))
+        db.commit()
+
+        plan = build_plan_for_sequence(db, seq.id)
+        assert len(plan.text_overlays) == 1
+        style = plan.text_overlays[0].style
+        assert style.font_family == "MyBrandFont"  # 解析成真实字族名,而非前端占位栈
+        assert style.font_dir.endswith(f"fonts/{seq.workspace_id}")  # workspace 字体根(fontsdir 递归)
 
 
 def test_set_clip_transform_and_undo() -> None:

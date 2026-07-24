@@ -99,6 +99,14 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     text_overlays = [
         clip_dict(clip) for track in video_tracks if not track.muted for clip in text_clips(track)
     ]
+    # 花字若选了上传字体,把 font_id 解析成真实字族名(给 ASS \fn)+ workspace 字体根(fontsdir),
+    # 使成片与预览用同一字体;内置字体栈无 font_id、走系统 fontconfig,不受影响。
+    for clip in text_overlays:
+        style = dict((clip.get("effects") or {}).get("text_style") or {})
+        resolved = _resolve_font(db, sequence.workspace_id, str(style.get("font_id") or "").strip())
+        if resolved:
+            style["font_family"], style["font_dir"] = resolved
+            clip["effects"] = {**(clip.get("effects") or {}), "text_style": style}
     # Audio to mix over the base: every audio-track clip PLUS every overlay video-track clip's
     # own audio (so a video on an upper track sounds, not just the base track — matching the
     # preview). Attach each clip's track solo/duck so the plan can mix (solo silences non-soloed
@@ -158,25 +166,28 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     )
 
 
-def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
-    """Turn a subtitle_style referencing an uploaded font into one the renderer can use.
-
-    The preview picks the font by id and loads it over HTTP; libass instead matches a family
-    name inside a directory. Resolve the id here — where we still have a session — into the
-    font's real family plus its directory, so the burn-in uses the same file you previewed.
-    A font from another workspace is ignored rather than honoured."""
-    style = dict(sequence.subtitle_style or {})
-    font_id = str(style.get("font_id") or "").strip()
+def _resolve_font(db: Session, workspace_id: str, font_id: str) -> tuple[str, str] | None:
+    """上传字体 id → (真实字族名, workspace 字体根目录)。字体存在 media/fonts/{ws}/{font_id}/,
+    返回根目录 media/fonts/{ws}/——libass 对 fontsdir 递归扫描,一个目录即可覆盖字幕与所有花字
+    用到的上传字体。跨工作区或文件缺失则返回 None。"""
     if not font_id:
-        return style
+        return None
     font = db.get(Font, font_id)
-    if font is None or font.workspace_id != sequence.workspace_id:
-        return style
+    if font is None or font.workspace_id != workspace_id:
+        return None
     path = resolve_key(font.file_key)
     if not path.is_file():
-        return style
-    style["font_family"] = font.family
-    style["font_dir"] = str(path.parent)
+        return None
+    return font.family, str(path.parent.parent)
+
+
+def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
+    """Turn a subtitle_style referencing an uploaded font into one the renderer can use: the
+    preview picks the font by id over HTTP, libass matches a family name inside a directory."""
+    style = dict(sequence.subtitle_style or {})
+    resolved = _resolve_font(db, sequence.workspace_id, str(style.get("font_id") or "").strip())
+    if resolved:
+        style["font_family"], style["font_dir"] = resolved
     return style
 
 
