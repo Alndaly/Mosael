@@ -400,7 +400,8 @@ def _synthesize_remote(
         base_url=(profile.base_url if profile else "") or "",
     )
     with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
-        out = Path(tmp) / ("speech.mp3" if engine == "volcano" else "speech.wav")
+        # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
+        out = Path(tmp) / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
         provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
         job.progress = 0.85
         db.commit()

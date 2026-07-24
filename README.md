@@ -109,7 +109,7 @@ pnpm dev            # 仓库根目录;等价于 frontend 的 pnpm electron:dev
 ### 测试与检查
 
 ```bash
-cd backend  && uv run pytest -q          # 534 用例
+cd backend  && uv run pytest -q          # 553 用例
 cd frontend && pnpm vitest run           # 130 用例
 cd frontend && pnpm exec tsc -b --noEmit # 类型检查(必须在 frontend 目录下跑)
 cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 类型
