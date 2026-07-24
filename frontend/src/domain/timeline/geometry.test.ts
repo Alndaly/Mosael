@@ -158,6 +158,11 @@ describe("resolveTrim", () => {
   it("end-trim clamps to asset duration", () => {
     expect(resolveTrim(base, "end", 20, 6)).toEqual({ timeline_start: 4, src_in: 1, src_out: 6 });
   });
+
+  it("end-trim is unbounded when assetDuration is null (images have no fixed length)", () => {
+    // A still image can be stretched to any length — no source-duration ceiling.
+    expect(resolveTrim(base, "end", 20, null)).toEqual({ timeline_start: 4, src_in: 1, src_out: 17 });
+  });
 });
 
 describe("overlapsAny", () => {

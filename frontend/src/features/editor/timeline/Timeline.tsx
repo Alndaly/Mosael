@@ -423,7 +423,10 @@ export function Timeline({
     selectClip(clip.id);
     const origin = { ...clip };
     const asset = clip.asset_id ? assetById.get(clip.asset_id) : undefined;
-    const assetDuration = typeof asset?.media_info.duration === "number" ? asset.media_info.duration : null;
+    // 图片是静态帧,没有固有时长——可自由拉伸到任意长度(渲染时按该时长定格显示);
+    // 视频/音频有真实源帧,裁剪受源时长上限约束。null = 上限无限。
+    const assetDuration =
+      asset?.kind === "image" ? null : typeof asset?.media_info.duration === "number" ? asset.media_info.duration : null;
     // 裁剪吸附与移动同级:本轨邻居边缘优先,播放头/零点/其他轨道次级。
     const trimPrimary = snapEnabled ? trackEdgeTimes(track.clips ?? [], clip.id) : [];
     const trimSecondary = snapEnabled
