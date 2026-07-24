@@ -1,6 +1,7 @@
 import React from "react";
 
 import { assetFileUrl, type Clip } from "@/api/client";
+import { clipProgress, sampleGain, type GainKeyframe } from "@/features/editor/keyframes";
 
 /**
  * One audio-track clip as its own self-syncing `<audio>`, so multiple audio tracks play at
@@ -39,12 +40,18 @@ export function AudioElement({
     const desired = clip.src_in + (playhead - clip.timeline_start) * speed;
     if (Math.abs(audio.currentTime - desired) > 0.18) audio.currentTime = desired;
     audio.playbackRate = playbackRate * speed;
-    audio.volume = Math.min(1, Math.max(0, clip.gain ?? 1)) * (masterMuted ? 0 : volume);
+    // 音量关键帧:按播放头在片段内的进度采样增益,预览随之实时变化(与导出的 volume 表达式一致)。
+    const gainKfs = (clip.effects as { gain_keyframes?: GainKeyframe[] } | undefined)?.gain_keyframes;
+    const gain =
+      Array.isArray(gainKfs) && gainKfs.length > 0
+        ? sampleGain(gainKfs, clip.gain ?? 1, clipProgress(clip, playhead))
+        : (clip.gain ?? 1);
+    audio.volume = Math.min(1, Math.max(0, gain)) * (masterMuted ? 0 : volume);
     audio.muted = Boolean(clip.muted) || trackMuted;
     if (playing && audio.paused) audio.play().catch(() => undefined);
     else if (!playing && !audio.paused) audio.pause();
   }, [
-    clip.asset_id, clip.src_in, clip.timeline_start, clip.speed, clip.gain, clip.muted,
+    clip.asset_id, clip.src_in, clip.timeline_start, clip.speed, clip.gain, clip.muted, clip.effects,
     playing, playhead, playbackRate, volume, masterMuted, trackMuted,
   ]);
 

@@ -16,7 +16,7 @@ import { compositorSupported, useCompositorEnabled } from "@/features/editor/pla
 import { ScopesFloat } from "@/features/editor/ScopesFloat";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
-import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, sampleTransform, type GainKeyframe } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -303,6 +303,7 @@ export function Monitor({
         list.push({
           key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
           timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
+          gainKeyframes: (clip.effects as { gain_keyframes?: GainKeyframe[] } | undefined)?.gain_keyframes,
           muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
         });
       }
@@ -313,6 +314,7 @@ export function Monitor({
         list.push({
           key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
           timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
+          gainKeyframes: (clip.effects as { gain_keyframes?: GainKeyframe[] } | undefined)?.gain_keyframes,
           muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
         });
       }

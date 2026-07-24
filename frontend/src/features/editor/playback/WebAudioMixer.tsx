@@ -1,6 +1,7 @@
 import React from "react";
 
 import { assetFileUrl } from "@/api/client";
+import { sampleGain, type GainKeyframe } from "@/features/editor/keyframes";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -23,6 +24,7 @@ export interface AudioSourceSpec {
   timelineStart: number;
   speed: number;
   gain: number;
+  gainKeyframes?: GainKeyframe[]; // 音量关键帧;有则按播放头采样,否则用静态 gain
   muted: boolean;
   trackMuted: boolean;
 }
@@ -64,9 +66,19 @@ export function WebAudioMixer({
     let hasSession = false;
 
     const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
-    // Effective linear gain: clip gain × master volume, zeroed by any mute.
-    const gainValue = (s: AudioSourceSpec, volume: number, masterMuted: boolean) =>
-      s.muted || s.trackMuted || masterMuted ? 0 : Math.min(1, Math.max(0, s.gain ?? 1)) * volume;
+    // Effective linear gain: clip gain × master volume, zeroed by any mute. 音量关键帧存在时,
+    // 按播放头在片段内的进度采样增益(与 AudioElement 和导出的 volume 表达式一致)。
+    const gainValue = (s: AudioSourceSpec, volume: number, masterMuted: boolean, playhead: number) => {
+      if (s.muted || s.trackMuted || masterMuted) return 0;
+      let g = s.gain ?? 1;
+      const kfs = s.gainKeyframes;
+      if (Array.isArray(kfs) && kfs.length > 0) {
+        const dur = (s.srcOut - s.srcIn) / (s.speed || 1);
+        const p = dur > 1e-9 ? Math.max(0, Math.min(1, (playhead - s.timelineStart) / dur)) : 0;
+        g = sampleGain(kfs, s.gain ?? 1, p);
+      }
+      return Math.min(1, Math.max(0, g)) * volume;
+    };
 
     const stopAll = () => {
       for (const { node } of active.values()) {
@@ -105,7 +117,7 @@ export function WebAudioMixer({
       node.buffer = buffer;
       node.playbackRate.value = rate * speed;
       const gain = ctx.createGain();
-      gain.gain.value = gainValue(s, volume, masterMuted);
+      gain.gain.value = gainValue(s, volume, masterMuted, playhead);
       node.connect(gain).connect(master);
       // Pass the clip's remaining buffer span as duration so the node self-terminates at its
       // trim-out (srcOut) even if the reconcile tick is throttled (backgrounded tab), instead
@@ -124,7 +136,7 @@ export function WebAudioMixer({
         wanted.add(s.key);
         const existing = active.get(s.key);
         if (existing) {
-          existing.gain.gain.value = gainValue(s, volume, masterMuted);
+          existing.gain.gain.value = gainValue(s, volume, masterMuted, playhead);
           existing.node.playbackRate.value = rate * (s.speed || 1);
         } else {
           scheduleClip(s, playhead, rate, volume, masterMuted);
