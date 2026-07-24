@@ -96,6 +96,21 @@ def list_generation_models(db: DbSession, kind: str | None = None) -> list[Gener
     return [_generation_model_out(model) for model in db.scalars(stmt)]
 
 
+@router.get("/generation/comfyui/workflows")
+def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | None = None) -> list[dict]:
+    """列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
+    这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。"""
+    from app.ai.providers.comfyui_client import ComfyUIClient
+    from app.domain.providers import resolve_profile
+
+    profile = resolve_profile(db, "comfyui", profile_id)
+    base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
+    try:
+        return ComfyUIClient(base).list_workflows()
+    except Exception as exc:  # noqa: BLE001 — 网络/解析失败都回可读 502
+        raise HTTPException(status_code=502, detail=f"连接 ComfyUI 失败({base}):{exc}") from exc
+
+
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")

@@ -19,6 +19,7 @@ from app.ai.providers.base import (
     ProviderError,
     metering_from_request,
 )
+from app.ai.providers.comfyui_client import ComfyUIClient, inject_generation_params
 
 """
 ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential image/video
@@ -144,8 +145,7 @@ class ComfyUIProvider(GenerationProvider):
         }
         try:
             with httpx.Client(base_url=base, timeout=SUBMIT_TIMEOUT) as client:
-                graph = self._resolve_template(client, context)
-                graph = substitute_placeholders(graph, values)
+                graph = self._resolve_graph(client, context, request, values, base)
                 prompt_id = self._submit(client, graph)
                 entry = self._wait(client, prompt_id, callbacks)
                 files = collect_output_files(entry)
@@ -179,6 +179,34 @@ class ComfyUIProvider(GenerationProvider):
                 if Path(item["filename"]).suffix.lower() in (".mp4", ".webm", ".mov", ".gif", ".webp"):
                     return item
         return files[0]
+
+    def _resolve_graph(
+        self,
+        client: httpx.Client,
+        context: ProviderContext,
+        request: GenerationRequest,
+        values: dict[str, Any],
+        base: str,
+    ) -> dict[str, Any]:
+        """决定这次生成用哪张图并填好参数,分三条路:
+        1) 生成时选了 ComfyUI 里保存的工作流(parameters.workflow=文件路径)→ 拉取 + UI→API 转换
+           + 自动识别注入提示词/种子/尺寸(ComfyUI 知识都在 comfyui_client)。
+        2) 档案里粘贴了自定义 API 模板 → 走 {{占位符}} 替换(现状)。
+        3) 都没有 → 内置 txt2img。
+        末尾统一再跑一次 substitute,让路 1 里用户手动标的 {{prompt}} 占位符也能兜底。"""
+        workflow = str(request.parameters.get("workflow") or "").strip()
+        if workflow and workflow not in ("builtin", "custom"):
+            try:
+                api_prompt = ComfyUIClient(base).workflow_to_api_prompt(workflow)
+            except Exception as exc:  # noqa: BLE001 — 任何拉取/转换失败都回报可读错误
+                raise ProviderError(
+                    f"拉取或转换 ComfyUI 工作流「{workflow}」失败:{exc}。"
+                    "可在生成时改选其它工作流、内置文生图,或在档案里粘贴自定义 API 模板。"
+                ) from exc
+            graph = inject_generation_params(api_prompt, values)
+            return substitute_placeholders(graph, values)
+        template = self._resolve_template(client, context)
+        return substitute_placeholders(template, values)
 
     def _resolve_template(self, client: httpx.Client, context: ProviderContext) -> dict[str, Any]:
         raw = str((context.extra or {}).get("workflow_template") or "").strip()
