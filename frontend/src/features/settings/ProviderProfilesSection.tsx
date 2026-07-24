@@ -14,6 +14,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
+import { CodeEditor } from "@/components/app/code-editor";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +75,9 @@ export function ProviderProfilesSection({
       .object({
         vendor: z.string(),
         name: z.string().trim().min(1, t("fieldRequired")),
-        config: z.record(z.string(), z.string()),
+        // 可选字段留空时值是 undefined,z.string() 会在 superRefine 之前就报「expected string」;
+        // .catch("") 把缺失/非串值归一成空串,可选字段才真能留空(必填仍由下方 superRefine 校验)。
+        config: z.record(z.string(), z.string().catch("")),
       })
       .superRefine((data, ctx) => {
         const preset = (vendors.data ?? []).find((item) => item.vendor === data.vendor);
@@ -261,11 +264,14 @@ export function ProviderProfilesSection({
                     </FormLabel>
                     <FormControl>
                       {spec.multiline ? (
-                        <textarea
-                          rows={5}
-                          placeholder={spec.default || ""}
-                          {...field}
+                        <CodeEditor
+                          language="json"
                           value={field.value ?? ""}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          placeholder={spec.default || ""}
+                          minHeight={140}
+                          maxHeight={320}
                         />
                       ) : (
                         <Input
