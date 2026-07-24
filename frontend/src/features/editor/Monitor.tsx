@@ -611,7 +611,7 @@ export function Monitor({
             <div className="pointer-events-none absolute inset-0 z-[4]" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
                 frameRef={stageRef}
-                transform={draft ?? readTransform(selectedActive.transform)}
+                transform={draft ?? sampleTransform(readTransform(selectedActive.transform), clipProgress(selectedActive, playhead))}
                 onChange={(tf) => {
                   tfInteractRef.current = performance.now();
                   setDraft(tf);
