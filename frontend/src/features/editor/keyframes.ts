@@ -129,3 +129,56 @@ export function applyTransformCommit(base: Transform, progress: number, next: Tr
   for (const prop of keyed) result[prop] = base[prop]; // keyed 属性走关键帧,基值不动
   return result;
 }
+
+/**
+ * 音量(增益)关键帧:与 transform 关键帧同为分段线性、端点保持,但属于音频域、独立成轨——
+ * 存在 clip.effects.gain_keyframes([{t,gain}]),不混进视觉 transform。后端编译成 volume 时间表达式。
+ */
+export type GainKeyframe = { t: number; gain: number };
+
+const gainPoints = (kfs: GainKeyframe[] | undefined): Array<[number, number]> =>
+  (kfs ?? [])
+    .filter((k) => typeof k.gain === "number")
+    .map((k) => [k.t, k.gain] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+
+/** gain 在 progress 处的插值(端点外保持端点值);无关键帧时取基值。 */
+export function sampleGain(kfs: GainKeyframe[] | undefined, base: number, progress: number): number {
+  const pts = gainPoints(kfs);
+  if (pts.length === 0) return base;
+  if (pts.length === 1) return pts[0][1];
+  if (progress <= pts[0][0]) return pts[0][1];
+  if (progress >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [t0, v0] = pts[i];
+    const [t1, v1] = pts[i + 1];
+    if (progress >= t0 && progress <= t1) {
+      const f = t1 > t0 ? (progress - t0) / (t1 - t0) : 0;
+      return v0 + (v1 - v0) * f;
+    }
+  }
+  return base;
+}
+
+export function gainKeyTimes(kfs: GainKeyframe[] | undefined): number[] {
+  return gainPoints(kfs).map((p) => p[0]);
+}
+
+export function hasGainAt(kfs: GainKeyframe[] | undefined, t: number, eps = EPS): boolean {
+  return (kfs ?? []).some((k) => Math.abs(k.t - t) <= eps);
+}
+
+/** 在进度 t 写入/更新一个 gain 关键帧(合并同 t 点),返回排序后的新轨。 */
+export function upsertGainKeyframe(kfs: GainKeyframe[] | undefined, t: number, gain: number): GainKeyframe[] {
+  const snapped = Math.max(0, Math.min(1, t));
+  const rest = (kfs ?? []).filter((k) => Math.abs(k.t - snapped) > 1e-3);
+  return [...rest, { t: snapped, gain }].sort((a, b) => a.t - b.t);
+}
+
+/** toggle:进度 t 有点则删,无则以 gain 打点。 */
+export function toggleGainKeyframe(kfs: GainKeyframe[] | undefined, t: number, gain: number): GainKeyframe[] {
+  const snapped = Math.max(0, Math.min(1, t));
+  return hasGainAt(kfs, snapped)
+    ? (kfs ?? []).filter((k) => Math.abs(k.t - snapped) > EPS)
+    : upsertGainKeyframe(kfs, snapped, gain);
+}

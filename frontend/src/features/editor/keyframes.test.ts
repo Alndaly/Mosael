@@ -1,9 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import type { Transform } from "@/features/editor/TransformOverlay";
-import { applyTransformCommit, clipProgress, hasActiveKeyframes, hasPropAt, propTimes, removePropKeyframe, sampleProp, sampleTransform, togglePropKeyframe, upsertKeyframe } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, hasActiveKeyframes, hasPropAt, propTimes, removePropKeyframe, sampleGain, sampleProp, sampleTransform, togglePropKeyframe, toggleGainKeyframe, upsertKeyframe } from "@/features/editor/keyframes";
 
 const base: Transform = { scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 };
+
+describe("gain keyframes", () => {
+  it("samples piecewise-linear with endpoint hold", () => {
+    const kfs = [{ t: 0, gain: 0 }, { t: 1, gain: 1 }];
+    expect(sampleGain(kfs, 0.5, 0)).toBe(0);
+    expect(sampleGain(kfs, 0.5, 0.5)).toBeCloseTo(0.5);
+    expect(sampleGain(kfs, 0.5, 1)).toBe(1);
+    expect(sampleGain([], 0.7, 0.5)).toBe(0.7); // 无关键帧 → 基值
+  });
+
+  it("toggle adds then removes at the same progress", () => {
+    const added = toggleGainKeyframe([], 0.5, 0.8);
+    expect(added).toEqual([{ t: 0.5, gain: 0.8 }]);
+    expect(toggleGainKeyframe(added, 0.5, 0.8)).toEqual([]);
+  });
+});
 
 describe("applyTransformCommit", () => {
   const tf = (over: Partial<Transform> = {}): Transform => ({ ...base, ...over });

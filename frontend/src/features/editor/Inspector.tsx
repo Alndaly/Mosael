@@ -9,7 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
-import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
+import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, sampleGain, gainKeyTimes, toggleGainKeyframe, upsertGainKeyframe, type GainKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
 import { readTextStyle, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
@@ -282,34 +282,56 @@ export function Inspector({
                 </div>
               </div>
             )}
-            {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. */}
-            {!isTextClip && onSetGain && (
-              <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
-                  <button
-                    type="button"
-                    className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                    onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
-                  >
-                    {selectedClip.muted ? t("clipMuted") : t("clipMute")}
-                  </button>
-                </div>
-                <div className="grid grid-cols-[60px_1fr_40px] items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground">{t("gain")}</span>
-                  <Slider
-                    key={`gain-${selectedClip.id}-${selectedClip.gain}`}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    defaultValue={[selectedClip.gain]}
-                    disabled={selectedClip.muted}
-                    onValueCommit={([value]) => onSetGain(selectedClip.id, value, selectedClip.muted)}
-                  />
-                  <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(selectedClip.gain * 100)}%</span>
-                </div>
-              </div>
-            )}
+            {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. 音量可打关键帧。 */}
+            {!isTextClip && onSetGain &&
+              (() => {
+                const gainKfs: GainKeyframe[] = Array.isArray((effects as { gain_keyframes?: unknown }).gain_keyframes)
+                  ? ((effects as { gain_keyframes?: GainKeyframe[] }).gain_keyframes ?? [])
+                  : [];
+                const gainKeyed = gainKfs.length > 0;
+                const shownGain = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, progress) : selectedClip.gain;
+                const onGainKf = gainKeyed && gainKeyTimes(gainKfs).some((tt) => Math.abs(tt - progress) < 0.02);
+                return (
+                  <div className="grid gap-1.5 border-t border-border pt-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
+                      <button
+                        type="button"
+                        className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                        onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
+                      >
+                        {selectedClip.muted ? t("clipMuted") : t("clipMute")}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">{t("gain")}</span>
+                      <Slider
+                        key={`gain-${selectedClip.id}-${shownGain.toFixed(3)}-${gainKfs.length}`}
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        defaultValue={[shownGain]}
+                        disabled={selectedClip.muted}
+                        onValueCommit={([value]) => {
+                          if (gainKeyed) onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: upsertGainKeyframe(gainKfs, progress, value) });
+                          else onSetGain(selectedClip.id, value, selectedClip.muted);
+                        }}
+                      />
+                      <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(shownGain * 100)}%</span>
+                      <button
+                        type="button"
+                        title={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
+                        aria-label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
+                        disabled={selectedClip.muted}
+                        className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent disabled:cursor-default disabled:opacity-40", onGainKf ? "text-primary" : gainKeyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
+                        onClick={() => onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: toggleGainKeyframe(gainKfs, progress, shownGain) })}
+                      >
+                        <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             {!isTextClip && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
                 {(
