@@ -31,7 +31,8 @@
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   /* 浮层:Radix popover/select/dropdown/context-menu(都挂在 popper 包裹层下)、
      对话框/命令面板/画布浮层(role=dialog)、Sonner toast。 */
-  [data-radix-popper-content-wrapper] > *,
+  /* tooltip 豁免:小标签要实底 primary(否则日间模式白字配浅玻璃底不可读) */
+  [data-radix-popper-content-wrapper] > *:not([data-tooltip]),
   [data-radix-menu-content],
   [role="dialog"] {
     background: var(--glass-bg);
