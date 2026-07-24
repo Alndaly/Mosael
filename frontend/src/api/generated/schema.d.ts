@@ -6134,6 +6134,11 @@ export interface components {
              * @default
              */
             hint: string;
+            /**
+             * Multiline
+             * @default false
+             */
+            multiline: boolean;
         };
         /** VendorPresetOut */
         VendorPresetOut: {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.ai.providers.base import GenerationProvider, GenerationRequest, GenerationResult, ProviderContext, ProviderError
+from app.ai.providers.comfyui import ComfyUIProvider
 from app.ai.providers.kling import KlingProvider
 from app.ai.providers.openai_image import OpenAIImageProvider
 from app.ai.providers.qwen_image import QwenImageProvider
@@ -24,6 +25,7 @@ _register(VeoProvider())
 _register(KlingProvider())
 _register(OpenAIImageProvider("openai"))
 _register(OpenAIImageProvider("openai-compatible"))
+_register(ComfyUIProvider())
 
 
 def get_provider(name: str, kind: str) -> GenerationProvider | None:

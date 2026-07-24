@@ -260,12 +260,21 @@ export function ProviderProfilesSection({
                       )}
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type={spec.secret ? "password" : "text"}
-                        placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
-                        {...field}
-                        value={field.value ?? ""}
-                      />
+                      {spec.multiline ? (
+                        <textarea
+                          rows={5}
+                          placeholder={spec.default || ""}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      ) : (
+                        <Input
+                          type={spec.secret ? "password" : "text"}
+                          placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      )}
                     </FormControl>
                     {(spec.hint || spec.default) && (
                       <FormDescription>

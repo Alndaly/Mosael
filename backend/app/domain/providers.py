@@ -191,6 +191,31 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "appid", "label": "App ID", "storage": "extra", "secret": False, "required": True, "hint": "语音技术控制台的 App ID"},
         ],
     },
+    "comfyui": {
+        "label": "ComfyUI(本地)",
+        "base_url": "http://127.0.0.1:8188",
+        # 免密钥:本地(或局域网 GPU 机器)的 ComfyUI 实例。工作流模板是接缝——
+        # 任意 ComfyUI 图经 {{prompt}} 等占位符适配成"提示词 → 图"契约;留空用内置
+        # txt2img(checkpoint 从 /object_info 现场发现)。
+        "capabilities": "图像生成(本地 ComfyUI,免密钥;可粘贴自定义工作流模板)",
+        "capability_ids": ["image"],
+        "fields": [
+            {
+                "key": "base_url",
+                "label": "ComfyUI 地址",
+                "storage": "base_url",
+                "default": "http://127.0.0.1:8188",
+                "hint": "本机默认 8188;填局域网地址即可用远程 GPU 机器",
+            },
+            {
+                "key": "workflow_template",
+                "label": "工作流模板(可选,API 格式 JSON)",
+                "storage": "extra",
+                "multiline": True,
+                "hint": "ComfyUI 里「导出 (API)」后粘贴;支持 {{prompt}} {{negative}} {{seed}} {{width}} {{height}} {{steps}} 占位符。留空用内置文生图。",
+            },
+        ],
+    },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",

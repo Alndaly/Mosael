@@ -500,6 +500,8 @@ class VendorFieldOut(BaseModel):
     required: bool = False
     default: str = ""
     hint: str = ""
+    #: 长文本字段(如 ComfyUI 工作流模板 JSON)渲染为多行输入
+    multiline: bool = False
 
 
 class ProviderProfileOut(OrmModel):

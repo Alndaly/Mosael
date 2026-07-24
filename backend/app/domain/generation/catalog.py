@@ -87,7 +87,24 @@ SEEDANCE_1_VIDEO_CAPABILITIES = {
 }
 
 
+COMFYUI_IMAGE_CAPABILITIES = {
+    "modes": ["text-to-image"],
+    "max_prompt_chars": 8000,
+    "parameter_keys": ["size", "seed", "steps", "negative_prompt"],
+    # 本地生成没有服务端尺寸白名单;这里是常用档,模板可自带任意尺寸。
+    "sizes": ["1024x1024", "832x1216", "1216x832", "1280x720", "720x1280"],
+    "default_size": "1024x1024",
+    "max_num_images": 1,
+}
+
 BUILTIN_MODELS = [
+    {
+        "id": "comfyui:workflow:image",
+        "provider": "comfyui",
+        "kind": "image",
+        "model": "workflow",
+        "capabilities": COMFYUI_IMAGE_CAPABILITIES,
+    },
     {
         "id": "openai:gpt-image-2:image",
         "provider": "openai",
