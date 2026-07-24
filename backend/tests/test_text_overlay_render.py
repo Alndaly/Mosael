@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.media.render_executor import _text_overlay_dialogue, build_ffmpeg_command
+from app.media.render_executor import _text_overlay_dialogues, build_ffmpeg_command
 from app.media.render_plan import (
     DEFAULT_TEXT_STYLE,
     TextOverlayItem,
@@ -75,8 +75,8 @@ class TestDialogue:
             start=1.0, duration=2.0, text="Hi",
             style=TextStyleSpec(font_size=64, color="#ff0000", stroke_color="#000000", stroke_width=3, bold=True),
         )
-        # transform 默认恒等 → 画面正中
-        line = _text_overlay_dialogue(item, 1920, 1080)
+        # transform 默认恒等 → 画面正中,静态时单条 Dialogue
+        (line,) = _text_overlay_dialogues(item, 1920, 1080)
         assert "\\an5" in line
         assert "\\pos(960.0,540.0)" in line  # 恒等 transform → 画面中心
         assert "\\fs64" in line
@@ -91,11 +91,35 @@ class TestDialogue:
             start=0.0, duration=1.0, text="x",
             transform=Transform(x=1.0, y=-1.0, scale=2.0, rotation=90.0, opacity=0.5),
         )
-        line = _text_overlay_dialogue(item, 1000, 500)
+        (line,) = _text_overlay_dialogues(item, 1000, 500)
         assert "\\pos(1000.0,0.0)" in line  # x=1→右缘, y=-1→上缘
         assert "\\frz-90.00" in line  # 顺时针 90° → ASS -90
         assert "\\fscx200.0\\fscy200.0" in line
         assert "\\alpha&H80&" in line  # opacity .5 → alpha 128
+
+    def test_keyframed_text_compiles_to_move_and_t(self) -> None:
+        """打了关键帧的花字:位置用 \\move 线性,缩放用 \\t 渐变,与预览分段线性一致。"""
+        from app.media.render_plan import Transform
+        item = TextOverlayItem(
+            start=0.0, duration=2.0, text="hi",
+            transform=Transform(keyframes=((0.0, "x", -1.0), (1.0, "x", 1.0), (0.0, "scale", 1.0), (1.0, "scale", 2.0))),
+        )
+        lines = _text_overlay_dialogues(item, 1000, 500)
+        assert len(lines) == 1  # 时间点只有 0 和 1 → 单段
+        assert "\\move(0.0,250.0,1000.0,250.0)" in lines[0]  # x:-1→0px 到 1→1000px,y=0→250
+        assert "\\t(0,2000," in lines[0] and "\\fscx200.0" in lines[0]  # scale 1→2 用 \t 渐变
+
+    def test_multi_keyframe_text_splits_into_segments(self) -> None:
+        """三个位置关键帧 → 两段 \\move,拼成分段线性。"""
+        from app.media.render_plan import Transform
+        item = TextOverlayItem(
+            start=0.0, duration=3.0, text="hi",
+            transform=Transform(keyframes=((0.0, "x", -1.0), (0.5, "x", 0.0), (1.0, "x", 1.0))),
+        )
+        lines = _text_overlay_dialogues(item, 1000, 500)
+        assert len(lines) == 2  # 时间点 0/0.5/1 → 两段
+        assert "\\move(0.0,250.0,500.0,250.0)" in lines[0]  # 段1: x -1→0
+        assert "\\move(500.0,250.0,1000.0,250.0)" in lines[1]  # 段2: x 0→1
 
 
 def test_text_overlay_triggers_ass_burn(tmp_path: Path) -> None:

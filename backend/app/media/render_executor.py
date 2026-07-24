@@ -300,38 +300,97 @@ def _ass_bgr(hex_color: str) -> str:
     return f"&H{b:02X}{g:02X}{r:02X}&"
 
 
-def _text_overlay_dialogue(item: "TextOverlayItem", w: int, h: int) -> str:
-    """一条花字 → 带内联覆盖标签的 ASS Dialogue:用 \\pos 把文字中心(\\an5)放到 transform 位置,
-    \\frz 旋转(ASS 逆时针为正,与我们顺时针相反,取负)、\\fscx/\\fscy 缩放、\\alpha 透明度,再叠加
-    每条自带的字号/颜色/描边(\\bord+\\3c)/阴影(\\shad)/粗斜/字体。语义与预览的 transform 一致。"""
-    tf, st = item.transform, item.style
-    cx = (0.5 + tf.x * 0.5) * w
-    cy = (0.5 + tf.y * 0.5) * h
-    tags = ["\\an5", f"\\pos({cx:.1f},{cy:.1f})"]
-    if abs(tf.rotation) > 0.01:
-        tags.append(f"\\frz{-tf.rotation:.2f}")
-    if abs(tf.scale - 1.0) > 0.001:
-        tags.append(f"\\fscx{tf.scale * 100:.1f}\\fscy{tf.scale * 100:.1f}")
-    tags.append(f"\\fs{st.font_size:g}")
-    tags.append(f"\\1c{_ass_bgr(st.color)}")
+def _text_style_tags(st) -> list[str]:
+    """花字外观标签(字号/颜色/描边/阴影/粗斜/字体),不含位置/缩放/旋转/透明度。"""
+    tags = [f"\\fs{st.font_size:g}", f"\\1c{_ass_bgr(st.color)}"]
     if st.stroke_width > 0:
         tags.append(f"\\bord{st.stroke_width:g}\\3c{_ass_bgr(st.stroke_color)}")
     else:
         tags.append("\\bord0")
     if st.shadow > 0:
         tags.append(f"\\shad{st.shadow:g}")
-    if tf.opacity < 1.0:
-        tags.append(f"\\alpha&H{round((1.0 - tf.opacity) * 255):02X}&")
     tags.append(f"\\b{1 if st.bold else 0}")
     if st.italic:
         tags.append("\\i1")
     if st.font_family:
         tags.append(f"\\fn{_resolve_font_stack(st.font_family)}")
-    override = "{" + "".join(tags) + "}"
-    return (
-        f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
-        f"Default,,0,0,0,,{override}{_ass_text(item.text)}"
-    )
+    return tags
+
+
+def _kf_sample(points: tuple[tuple[float, float], ...], base: float, t: float) -> float:
+    """分段线性采样、端点保持——与前端 sampleProp 同语义(points 已按 t 排序)。"""
+    if not points:
+        return base
+    if len(points) == 1:
+        return points[0][1]
+    if t <= points[0][0]:
+        return points[0][1]
+    if t >= points[-1][0]:
+        return points[-1][1]
+    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+        if t0 <= t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return v0 + (v1 - v0) * f
+    return base
+
+
+def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str]:
+    """一条花字 → 一条或多条 ASS Dialogue。静态时 \\an5+\\pos 单条;打了关键帧时按所有属性的
+    关键帧时间点切段,每段一条:位置用 \\move 线性,缩放/旋转/透明度取段首值再用 \\t 渐变到段末,
+    拼接成分段线性动画——与预览 sampleTransform(同为分段线性、端点保持)锁步一致。"""
+    tf, st = item.transform, item.style
+    x_pts, y_pts = tf.keyed("x"), tf.keyed("y")
+    s_pts, r_pts, o_pts = tf.keyed("scale"), tf.keyed("rotation"), tf.keyed("opacity")
+    base_tags = _text_style_tags(st)
+    text = _ass_text(item.text)
+
+    if not any(len(p) >= 2 for p in (x_pts, y_pts, s_pts, r_pts, o_pts)):
+        cx, cy = (0.5 + tf.x * 0.5) * w, (0.5 + tf.y * 0.5) * h
+        tags = ["\\an5", f"\\pos({cx:.1f},{cy:.1f})"]
+        if abs(tf.rotation) > 0.01:
+            tags.append(f"\\frz{-tf.rotation:.2f}")
+        if abs(tf.scale - 1.0) > 0.001:
+            tags.append(f"\\fscx{tf.scale * 100:.1f}\\fscy{tf.scale * 100:.1f}")
+        if tf.opacity < 1.0:
+            tags.append(f"\\alpha&H{round((1.0 - tf.opacity) * 255):02X}&")
+        override = "{" + "".join(tags + base_tags) + "}"
+        return [
+            f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
+            f"Default,,0,0,0,,{override}{text}"
+        ]
+
+    stops = sorted({0.0, 1.0} | {p[0] for pts in (x_pts, y_pts, s_pts, r_pts, o_pts) for p in pts})
+    lines: list[str] = []
+    for a, b in zip(stops, stops[1:]):
+        if b - a < 1e-6:
+            continue
+        cxa, cya = (0.5 + _kf_sample(x_pts, tf.x, a) * 0.5) * w, (0.5 + _kf_sample(y_pts, tf.y, a) * 0.5) * h
+        cxb, cyb = (0.5 + _kf_sample(x_pts, tf.x, b) * 0.5) * w, (0.5 + _kf_sample(y_pts, tf.y, b) * 0.5) * h
+        sa, sb = _kf_sample(s_pts, tf.scale, a), _kf_sample(s_pts, tf.scale, b)
+        ra, rb = _kf_sample(r_pts, tf.rotation, a), _kf_sample(r_pts, tf.rotation, b)
+        oa, ob = _kf_sample(o_pts, tf.opacity, a), _kf_sample(o_pts, tf.opacity, b)
+        seg_ms = int(round((b - a) * item.duration * 1000))
+        tags = [
+            "\\an5",
+            f"\\move({cxa:.1f},{cya:.1f},{cxb:.1f},{cyb:.1f})",
+            f"\\fscx{sa * 100:.1f}\\fscy{sa * 100:.1f}",
+            f"\\frz{-ra:.2f}",
+            f"\\alpha&H{round((1.0 - oa) * 255):02X}&",
+        ]
+        parts: list[str] = []
+        if abs(sb - sa) > 1e-4:
+            parts.append(f"\\fscx{sb * 100:.1f}\\fscy{sb * 100:.1f}")
+        if abs(rb - ra) > 1e-4:
+            parts.append(f"\\frz{-rb:.2f}")
+        if abs(ob - oa) > 1e-4:
+            parts.append(f"\\alpha&H{round((1.0 - ob) * 255):02X}&")
+        anim = f"\\t(0,{seg_ms},{''.join(parts)})" if parts else ""
+        override = "{" + "".join(tags + base_tags) + anim + "}"
+        seg_start, seg_end = item.start + a * item.duration, item.start + b * item.duration
+        lines.append(
+            f"Dialogue: 0,{_ass_timestamp(seg_start)},{_ass_timestamp(seg_end)},Default,,0,0,0,,{override}{text}"
+        )
+    return lines
 
 
 def _build_ass(plan: RenderPlan) -> str:
@@ -371,7 +430,7 @@ def _build_ass(plan: RenderPlan) -> str:
         f"Default,,0,0,0,,{_ass_text(item.text)}"
         for item in plan.subtitles
     ]
-    lines += [_text_overlay_dialogue(item, w, h) for item in plan.text_overlays]
+    lines += [line for item in plan.text_overlays for line in _text_overlay_dialogues(item, w, h)]
     return header + "\n".join(lines) + "\n"
 
 
