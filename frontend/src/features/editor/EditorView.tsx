@@ -483,7 +483,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: refreshSequences,
   });
   const setTransformMutation = useMutation({
-    mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, number> }) =>
+    mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, unknown> }) =>
       setClipTransform(sequence!.id, clipId, transform),
     // Apply the returned sequence straight to the cache (no refetch gap) so the resized clip
     // lands at its final transform in the same tick the Monitor drops its drag draft.
@@ -557,16 +557,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
+  // 撤销/重做后,只有当选中的片段确实不存在了(如撤销一次"插入片段")才清空选中。
+  // 之前无条件 selectClip(null) 会让调完属性再 ⌘Z 时 Inspector 直接关闭 —— 看起来像"关窗口
+  // 而不是撤销",实则撤销发生了、只是选中被清了。属性/transform 撤销时片段还在,保留选中。
+  const keepSelectionIfPresent = (updated: Sequence) => {
+    applySequence(updated);
+    const sel = useEditorStore.getState().selectedClipId;
+    const stillThere = sel != null && (updated.tracks ?? []).some((tr) => (tr.clips ?? []).some((c) => c.id === sel));
+    if (sel != null && !stillThere) useEditorStore.getState().selectClip(null);
+  };
   const undoMutation = useMutation({
     mutationFn: () => undoSequence(sequence!.id),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+    onSuccess: keepSelectionIfPresent,
   });
   const redoMutation = useMutation({
     mutationFn: () => redoSequence(sequence!.id),
-    onSuccess: refreshSequences,
+    onSuccess: keepSelectionIfPresent,
   });
 
   const allClips = React.useMemo(

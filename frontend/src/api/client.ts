@@ -391,7 +391,8 @@ export function detachClipAudio(sequenceId: string, clipId: string): Promise<Seq
 export function setClipTransform(
   sequenceId: string,
   clipId: string,
-  transform: Record<string, number>,
+  // number scalars(scale/x/y/rotation/opacity)+ 可选 keyframes 数组;后端按字段读取校验。
+  transform: Record<string, unknown>,
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/transform`, {
     method: "PATCH",

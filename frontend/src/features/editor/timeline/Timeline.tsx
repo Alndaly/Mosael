@@ -1032,8 +1032,14 @@ export function Timeline({
  *  not the whole Timeline (see the note at the top of Timeline). */
 function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; children: React.ReactNode }) {
   const playhead = useEditorStore((state) => state.playhead);
+  // z-[6] 高于刻度尺(z-5),否则竖线在刻度尺区被 ruler 背景盖住——之前刻度尺上看不到播放头。
   return (
-    <div className="pointer-events-none absolute bottom-0 top-0 z-[4] w-px bg-[var(--playhead)]" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+    <div className="pointer-events-none absolute bottom-0 top-0 z-[6] w-px bg-[var(--playhead)]" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+      {/* 刻度尺上的把手:五边形(顶宽下尖)标出播放头位置,像 PR/剪映的播放头头部 */}
+      <div
+        className="absolute top-0 left-1/2 h-[13px] w-[13px] -translate-x-1/2 bg-[var(--playhead)]"
+        style={{ clipPath: "polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%)" }}
+      />
       {children}
     </div>
   );

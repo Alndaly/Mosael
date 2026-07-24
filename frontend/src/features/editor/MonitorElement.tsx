@@ -2,6 +2,7 @@ import React from "react";
 
 import { assetFileUrl, type Asset, type Clip } from "@/api/client";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
+import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 
 /**
@@ -27,7 +28,9 @@ export function MonitorElement({
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const loadedRef = React.useRef<string | null>(null);
   const isImage = asset.kind === "image";
-  const tf = transformOverride ?? readTransform(clip.transform);
+  // 关键帧激活时,transform 随 playhead 在片段内的进度插值——预览里"动起来";
+  // 拖拽手柄期间 transformOverride 优先(直接操纵先于动画)。
+  const tf = transformOverride ?? sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
   const { cssFilter, curveTables } = computeFilters((clip.effects ?? {}) as ClipEffects);
   const filterId = `mel-curves-${clip.id}`;
   const filter = [cssFilter, curveTables ? `url(#${filterId})` : ""].filter(Boolean).join(" ") || undefined;
