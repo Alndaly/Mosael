@@ -73,7 +73,9 @@ export function clipProgress(clip: Pick<Clip, "timeline_start" | "src_in" | "src
   return Math.max(0, Math.min(1, (playhead - clip.timeline_start) / duration));
 }
 
-/** 在给定进度处写入/更新一个关键帧(合并同 t 的点),返回排序后的新轨。 */
+const EPS = 0.02;
+
+/** 在给定进度处写入/更新关键帧属性(合并同 t 的点),返回排序后的新轨。 */
 export function upsertKeyframe(keyframes: Keyframe[] | undefined, t: number, patch: Partial<Record<KfProp, number>>): Keyframe[] {
   const snapped = Math.max(0, Math.min(1, t));
   const rest = (keyframes ?? []).filter((k) => Math.abs(k.t - snapped) > 1e-3);
@@ -81,13 +83,31 @@ export function upsertKeyframe(keyframes: Keyframe[] | undefined, t: number, pat
   return [...rest, { ...(existing ?? {}), t: snapped, ...patch }].sort((a, b) => a.t - b.t);
 }
 
-/** 删除最接近给定进度的关键帧。 */
-export function removeKeyframe(keyframes: Keyframe[] | undefined, t: number): Keyframe[] {
-  const kfs = keyframes ?? [];
-  if (kfs.length === 0) return kfs;
-  let nearest = 0;
-  for (let i = 1; i < kfs.length; i++) {
-    if (Math.abs(kfs[i].t - t) < Math.abs(kfs[nearest].t - t)) nearest = i;
-  }
-  return kfs.filter((_, i) => i !== nearest);
+/** 某属性的关键帧时间点(升序)。每个属性一条独立轨,这是它自己的点。 */
+export function propTimes(keyframes: Keyframe[] | undefined, prop: KfProp): number[] {
+  return (keyframes ?? []).filter((k) => typeof k[prop] === "number").map((k) => k.t).sort((a, b) => a - b);
+}
+
+/** 某属性在进度 t 附近是否已有关键帧。 */
+export function hasPropAt(keyframes: Keyframe[] | undefined, prop: KfProp, t: number, eps = EPS): boolean {
+  return (keyframes ?? []).some((k) => typeof k[prop] === "number" && Math.abs(k.t - t) <= eps);
+}
+
+/** 删除某属性在进度 t 附近的关键帧点(只删该属性;若该点因此空了,整点移除)。 */
+export function removePropKeyframe(keyframes: Keyframe[] | undefined, prop: KfProp, t: number, eps = EPS): Keyframe[] {
+  return (keyframes ?? [])
+    .map((k) => {
+      if (Math.abs(k.t - t) > eps) return k;
+      const { [prop]: _drop, ...rest } = k;
+      return rest as Keyframe;
+    })
+    .filter((k) => Object.keys(k).some((key) => key !== "t")); // 只剩时间戳 → 删点
+}
+
+/** toggle:该属性在进度 t 有点则删,无则以 value 打点。返回新轨。 */
+export function togglePropKeyframe(keyframes: Keyframe[] | undefined, prop: KfProp, t: number, value: number): Keyframe[] {
+  const snapped = Math.max(0, Math.min(1, t));
+  return hasPropAt(keyframes, prop, snapped)
+    ? removePropKeyframe(keyframes, prop, snapped)
+    : upsertKeyframe(keyframes, snapped, { [prop]: value });
 }

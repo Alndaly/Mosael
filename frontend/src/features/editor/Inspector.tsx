@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
-import { clipProgress, hasActiveKeyframes, removeKeyframe, sampleTransform, upsertKeyframe, type Keyframe } from "@/features/editor/keyframes";
+import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
 import { useEditorStore } from "@/stores/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
@@ -110,43 +110,33 @@ export function Inspector({
     opacity: typeof rawTransform.opacity === "number" ? rawTransform.opacity : 1,
     keyframes,
   };
-  // 关键帧编辑:滑块作用于 playhead 所在的片段进度点。有关键帧时改的是该进度的关键帧,
-  // 否则改静态基值——所以移动播放头 + 调滑块 = 一路打点做动画,不移动则等价改静态值。
+  // 关键帧按属性独立成轨(AE/PR 风):每个属性有自己的关键帧点,互不绑定。滑块作用于 playhead
+  // 所在的片段进度——该属性已有关键帧时写该进度点,否则改静态基值;钻石按钮在该属性上打/删点。
   const playhead = useEditorStore((s) => s.playhead);
   const setPlayhead = useEditorStore((s) => s.setPlayhead);
-  const kfActive = keyframes.length > 0;
   const progress = selectedClip ? clipProgress(selectedClip, playhead) : 0;
   const clipDuration = selectedClip ? (selectedClip.src_out - selectedClip.src_in) / (selectedClip.speed || 1) : 0;
-  // 滑块显示的是"当前进度采样值"(有关键帧时随播放头变),而非固定基值。
-  const shownTransform = kfActive ? sampleTransform(transform, progress) : transform;
   const commitTransform = (next: Record<string, unknown>) => {
     if (!selectedClip || !onSetTransform) return;
     onSetTransform(selectedClip.id, next);
   };
-  const applyTransform = (patch: Partial<Record<"scale" | "x" | "y" | "rotation" | "opacity", number>>) => {
-    if (!selectedClip || !onSetTransform) return;
-    if (kfActive && ("scale" in patch || "x" in patch || "y" in patch || "opacity" in patch)) {
-      // rotation 不做关键帧,单独落基值;其余属性写入当前进度的关键帧点。
-      const { rotation, ...kfPatch } = patch;
-      const next: Record<string, unknown> = { ...transform, ...(rotation != null ? { rotation } : {}) };
-      if (Object.keys(kfPatch).length > 0) next.keyframes = upsertKeyframe(keyframes, progress, kfPatch);
-      commitTransform(next);
-    } else {
-      commitTransform({ ...transform, ...patch });
-    }
+  const propKeyed = (prop: KfProp) => propTimes(keyframes, prop).length > 0;
+  // 某属性当前显示值:有关键帧→按进度采样(随播放头动),否则基值。
+  const shownProp = (prop: KfProp): number => (propKeyed(prop) ? sampleProp(keyframes, prop, transform[prop], progress) : transform[prop]);
+  const shown = { scale: shownProp("scale"), rotation: transform.rotation, opacity: shownProp("opacity"), x: shownProp("x"), y: shownProp("y") } as const;
+  // 调某属性:该属性有关键帧则写当前进度点,否则改基值。
+  const setProp = (prop: KfProp, value: number) => {
+    if (propKeyed(prop)) commitTransform({ ...transform, keyframes: upsertKeyframe(keyframes, progress, { [prop]: value }) });
+    else commitTransform({ ...transform, [prop]: value });
   };
-  const addKeyframe = () => {
-    if (!selectedClip) return;
-    const at = kfActive ? sampleTransform(transform, progress) : transform;
-    commitTransform({ ...transform, keyframes: upsertKeyframe(keyframes, progress, { scale: at.scale, x: at.x, y: at.y, opacity: at.opacity }) });
-  };
-  const deleteKeyframeHere = () => commitTransform({ ...transform, keyframes: removeKeyframe(keyframes, progress) });
+  const setRotation = (value: number) => commitTransform({ ...transform, rotation: value }); // rotation 不做关键帧
+  const toggleProp = (prop: KfProp) => commitTransform({ ...transform, keyframes: togglePropKeyframe(keyframes, prop, progress, shownProp(prop)) });
   const clearKeyframes = () => commitTransform({ scale: transform.scale, x: transform.x, y: transform.y, rotation: transform.rotation, opacity: transform.opacity });
   const seekToKeyframe = (t: number) => selectedClip && setPlayhead(selectedClip.timeline_start + t * clipDuration);
-  const onKeyframeHere = keyframes.some((k) => Math.abs(k.t - progress) < 0.02);
+  const anyKeyframes = keyframes.length > 0;
   const animated = hasActiveKeyframes(transform);
   const isIdentityTransform =
-    !kfActive && transform.scale === 1 && transform.x === 0 && transform.y === 0 && transform.rotation === 0 && transform.opacity === 1;
+    !anyKeyframes && transform.scale === 1 && transform.x === 0 && transform.y === 0 && transform.rotation === 0 && transform.opacity === 1;
 
   // 字幕片段没有调色;切换选中对象时回到属性页。
   React.useEffect(() => {
@@ -347,82 +337,87 @@ export function Inspector({
             {!isTextClip && onSetTransform && (
               <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("transformTitle")}</span>
-                  {!isIdentityTransform && (
-                    <button
-                      type="button"
-                      className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-foreground"
-                      onClick={() => applyTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
-                    >
-                      {t("transformReset")}
-                    </button>
-                  )}
-                </div>
-                {(
-                  [
-                    { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%` },
-                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°` },
-                    { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%` },
-                    { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
-                    { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2) },
-                  ] as const
-                ).map((row) => (
-                  <div key={row.key} className="grid grid-cols-[60px_1fr_40px] items-center gap-2">
-                    <span className="text-[11px] text-muted-foreground">{row.label}</span>
-                    <Slider
-                      // 值/进度入 key:改画幅、重置、或移动播放头(采样值变)后重挂非受控滑块。
-                      key={`${row.key}-${selectedClip.id}-${shownTransform[row.key].toFixed(3)}-${keyframes.length}`}
-                      min={row.min}
-                      max={row.max}
-                      step={row.step}
-                      defaultValue={[shownTransform[row.key]]}
-                      onValueCommit={([value]) => applyTransform({ [row.key]: value })}
-                    />
-                    <span className="timecode text-right text-[11px] text-muted-foreground">{row.fmt(shownTransform[row.key])}</span>
-                  </div>
-                ))}
-                {/* 关键帧:位置/缩放/透明度随时间插值。滑块作用于播放头所在的进度点。 */}
-                <div className="mt-1 flex flex-col gap-1.5 rounded-md border border-border bg-[color-mix(in_oklab,var(--muted)_30%,transparent)] p-2">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
-                      <Diamond size={11} className={animated ? "text-primary" : "text-muted-foreground"} fill={animated ? "currentColor" : "none"} />
-                      {t("kfTitle")}
-                    </span>
-                    {kfActive && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    {t("transformTitle")}
+                    {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {anyKeyframes && (
                       <button type="button" className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
                         {t("kfClear")}
                       </button>
                     )}
+                    {!isIdentityTransform && (
+                      <button
+                        type="button"
+                        className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-foreground"
+                        onClick={() => commitTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
+                      >
+                        {t("transformReset")}
+                      </button>
+                    )}
                   </div>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="flex-1 cursor-pointer rounded border border-border bg-panel px-2 py-1 text-[11px] font-medium text-foreground hover:border-primary hover:text-primary"
-                      onClick={onKeyframeHere ? deleteKeyframeHere : addKeyframe}
-                    >
-                      {onKeyframeHere ? t("kfRemoveHere") : t("kfAddHere")}
-                    </button>
-                  </div>
-                  {kfActive && (
-                    <div className="flex flex-wrap gap-1">
-                      {keyframes.map((k) => {
-                        const near = Math.abs(k.t - progress) < 0.02;
-                        return (
-                          <button
-                            key={k.t}
-                            type="button"
-                            title={`${Math.round(k.t * 100)}%`}
-                            className={cn("timecode cursor-pointer rounded-full border px-2 py-0.5 text-[10px]", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
-                            onClick={() => seekToKeyframe(k.t)}
-                          >
-                            {Math.round(k.t * 100)}%
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <span className="text-[10.5px] leading-[1.4] text-muted-foreground">{kfActive ? t("kfHintActive") : t("kfHintEmpty")}</span>
                 </div>
+                {(
+                  [
+                    { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
+                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°`, kf: false },
+                    { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
+                    { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
+                    { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
+                  ] as const
+                ).map((row) => {
+                  const keyed = row.kf && propKeyed(row.key as KfProp);
+                  const onKf = keyed && hasActiveKeyframes(transform) && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
+                  return (
+                    <div key={row.key} className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">{row.label}</span>
+                      <Slider
+                        // 值/进度入 key:改画幅、重置、或移动播放头(采样值变)后重挂非受控滑块。
+                        key={`${row.key}-${selectedClip.id}-${shown[row.key].toFixed(3)}-${keyframes.length}`}
+                        min={row.min}
+                        max={row.max}
+                        step={row.step}
+                        defaultValue={[shown[row.key]]}
+                        onValueCommit={([value]) => (row.key === "rotation" ? setRotation(value) : setProp(row.key as KfProp, value))}
+                      />
+                      <span className="timecode text-right text-[11px] text-muted-foreground">{row.fmt(shown[row.key])}</span>
+                      {row.kf ? (
+                        <button
+                          type="button"
+                          title={onKf ? t("kfRemoveHere") : t("kfAddHere")}
+                          aria-label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
+                          className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent", onKf ? "text-primary" : keyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
+                          onClick={() => toggleProp(row.key as KfProp)}
+                        >
+                          <Diamond size={11} fill={onKf ? "currentColor" : "none"} />
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                    </div>
+                  );
+                })}
+                {/* 关键帧点总览:合并所有属性的时间点,点击跳转;每属性自己的钻石在上面各行。 */}
+                {anyKeyframes && (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                    {[...new Set(keyframes.map((k) => k.t))].sort((a, b) => a - b).map((tt) => {
+                      const near = Math.abs(tt - progress) < 0.02;
+                      return (
+                        <button
+                          key={tt}
+                          type="button"
+                          title={`${Math.round(tt * 100)}%`}
+                          className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-[10px]", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
+                          onClick={() => seekToKeyframe(tt)}
+                        >
+                          {Math.round(tt * 100)}%
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <span className="text-[10.5px] leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
               </div>
             )}
             {isOverlayClip && (

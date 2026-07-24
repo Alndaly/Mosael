@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Transform } from "@/features/editor/TransformOverlay";
-import { clipProgress, hasActiveKeyframes, removeKeyframe, sampleProp, sampleTransform, upsertKeyframe } from "@/features/editor/keyframes";
+import { clipProgress, hasActiveKeyframes, hasPropAt, propTimes, removePropKeyframe, sampleProp, sampleTransform, togglePropKeyframe, upsertKeyframe } from "@/features/editor/keyframes";
 
 const base: Transform = { scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 };
 
@@ -75,7 +75,7 @@ describe("clipProgress", () => {
   });
 });
 
-describe("upsert / remove", () => {
+describe("upsert / merge", () => {
   it("adds a keyframe and keeps the track sorted by t", () => {
     const kfs = upsertKeyframe([{ t: 0.8, x: 1 }], 0.2, { x: -1 });
     expect(kfs.map((k) => k.t)).toEqual([0.2, 0.8]);
@@ -85,8 +85,45 @@ describe("upsert / remove", () => {
     expect(kfs).toHaveLength(1);
     expect(kfs[0]).toEqual({ t: 0.5, x: 1, opacity: 0.3 });
   });
-  it("removes the nearest keyframe", () => {
-    const kfs = removeKeyframe([{ t: 0.1, x: 0 }, { t: 0.6, x: 1 }], 0.55);
-    expect(kfs.map((k) => k.t)).toEqual([0.1]);
+});
+
+describe("per-property keyframes (each property is an independent track)", () => {
+  const kfs = [{ t: 0.2, x: 1, opacity: 0.5 }, { t: 0.8, x: -1 }];
+
+  it("propTimes lists only the points that carry that property", () => {
+    expect(propTimes(kfs, "x")).toEqual([0.2, 0.8]);
+    expect(propTimes(kfs, "opacity")).toEqual([0.2]);
+    expect(propTimes(kfs, "scale")).toEqual([]);
+  });
+
+  it("hasPropAt is per-property, not per-point", () => {
+    expect(hasPropAt(kfs, "opacity", 0.2)).toBe(true);
+    expect(hasPropAt(kfs, "opacity", 0.8)).toBe(false); // that point has no opacity
+    expect(hasPropAt(kfs, "x", 0.8)).toBe(true);
+  });
+
+  it("removePropKeyframe drops only that property, keeping the point if others remain", () => {
+    const next = removePropKeyframe(kfs, "opacity", 0.2);
+    expect(next.find((k) => k.t === 0.2)).toEqual({ t: 0.2, x: 1 }); // opacity gone, x stays
+  });
+
+  it("removePropKeyframe deletes the whole point when it becomes empty", () => {
+    const next = removePropKeyframe(kfs, "x", 0.8);
+    expect(next.some((k) => k.t === 0.8)).toBe(false); // point had only x → gone
+  });
+
+  it("togglePropKeyframe adds then removes that property alone", () => {
+    const added = togglePropKeyframe([], "scale", 0.5, 1.3);
+    expect(added).toEqual([{ t: 0.5, scale: 1.3 }]);
+    const removed = togglePropKeyframe(added, "scale", 0.5, 1.3);
+    expect(removed).toEqual([]);
+  });
+
+  it("toggling one property does not disturb another at the same time", () => {
+    const start = [{ t: 0.5, x: 1 }];
+    const withOpacity = togglePropKeyframe(start, "opacity", 0.5, 0.2);
+    expect(withOpacity).toEqual([{ t: 0.5, x: 1, opacity: 0.2 }]);
+    const back = togglePropKeyframe(withOpacity, "opacity", 0.5, 0.2);
+    expect(back).toEqual([{ t: 0.5, x: 1 }]); // x survives
   });
 });
