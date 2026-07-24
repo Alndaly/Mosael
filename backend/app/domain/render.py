@@ -68,6 +68,9 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
             "muted": clip.muted,
             "effects": clip.effects,
             "text_override": clip.text_override,
+            # transform(缩放/位置/旋转/透明度 + 关键帧)必须带上,否则导出侧一律回落成恒等变换——
+            # 画面变换、关键帧动画、花字定位全部丢失,成片与预览严重不一致。
+            "transform": clip.transform,
         }
 
     video_tracks = sorted(

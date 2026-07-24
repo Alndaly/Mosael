@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
+from app.domain.render import build_plan_for_sequence
 from app.domain.sequences.history import undo
 from app.domain.sequences.operations import (
     DetachClipAudio,
@@ -66,6 +67,27 @@ def test_set_clip_transform_persists_keyframes_roundtrip() -> None:
         ))
         db.refresh(clip)
         assert clip.transform["keyframes"] == [{"t": 0.0, "x": -1.0}, {"t": 1.0, "x": 1.0}]
+
+
+def test_export_plan_carries_clip_transform() -> None:
+    """回归:导出计划必须带上 clip 的 transform(含关键帧)。clip_dict 曾漏掉 transform,
+    导致导出侧一律回落成恒等变换——画面变换、关键帧动画、花字定位全丢,成片与预览严重不符。"""
+    fresh_client()
+    with SessionLocal() as db:
+        seq, clip = _seq_with_clip(db)
+        asset = Asset(workspace_id=seq.workspace_id, kind="video", name="v", file_key="media/v.mp4")
+        db.add(asset)
+        db.flush()
+        clip.asset_id = asset.id
+        db.commit()
+        set_clip_transform(
+            db, seq.id,
+            SetClipTransform(clip_id=clip.id, transform={"scale": 1.5, "keyframes": [{"t": 0, "x": -1}, {"t": 1, "x": 1}]}),
+        )
+        plan = build_plan_for_sequence(db, seq.id)
+        segment = plan.video_segments[0]
+        assert segment.transform.scale == 1.5
+        assert segment.transform.keyed("x") == ((0.0, -1.0), (1.0, 1.0))
 
 
 def test_set_clip_transform_and_undo() -> None:
