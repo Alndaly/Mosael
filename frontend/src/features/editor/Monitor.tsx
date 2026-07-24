@@ -528,7 +528,8 @@ export function Monitor({
           )}
           {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
           {activeTextClips.map((clip) => {
-            const tf = sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
+            // 拖外框(TransformOverlay)时 draft 实时驱动,花字与手柄同步动;否则按关键帧采样。
+            const tf = draftFor(clip.id) ?? sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
             const elStyle = textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width);
             if (editingTextId === clip.id) {
               // 就地编辑:独立 key 重挂 + ref 一次性写入内容(无 React children),避免每帧重渲染覆盖输入。
