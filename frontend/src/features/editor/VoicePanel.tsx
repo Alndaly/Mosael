@@ -29,6 +29,61 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+/** 带小标签的紧凑表单格:配音面板的下拉全长一个样,没有标签就分不清
+    「音色」「语速」「发音人 B」谁是谁 —— 标签贴在控件上方而不是靠占位符。 */
+function VoiceField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 content-start gap-1">
+      <span className="text-[10.5px] font-medium leading-none text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function VoicePicker({
+  value,
+  onChange,
+  choices,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  choices: { value: string; label: string }[];
+  ariaLabel: string;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full min-w-0" aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {choices.map((voice) => (
+          <SelectItem key={voice.value} value={voice.value}>
+            {voice.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function SpeedPicker({ value, onChange, ariaLabel }: { value: number; onChange: (value: number) => void; ariaLabel: string }) {
+  return (
+    <Select value={String(value)} onValueChange={(next) => onChange(Number(next))}>
+      <SelectTrigger className="w-full min-w-0" aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {[0.75, 1, 1.25, 1.5, 2].map((option) => (
+          <SelectItem key={option} value={String(option)}>
+            {option}×
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 /** 声音克隆面板:上传参考音频 → 生成音色;选音色 + 输入文本 → 合成配音,
     结果作为音频素材落进素材库,可拖到时间线。 */
 export function VoicePanel({
@@ -256,90 +311,91 @@ export function VoicePanel({
           <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
             <Wand2 size={13} /> {t("voiceSynthTitle")}
           </label>
-          <div className="flex flex-wrap gap-1.5">
-            <Select
-              value={engine}
-              onValueChange={(value) => {
-                setEngine(value);
-                // Voice ids do not carry across engines — "alloy" means nothing to 火山 — and
-                // the new engine's list arrives asynchronously, so clear rather than guess.
-                setEngineVoice("");
-                setSpeakerB("");
-              }}
-            >
-              <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voiceEngine")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(engines.data ?? []).map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {engine !== "clone" && voiceChoices.length > 0 && (
-              <Select value={engineVoice || voiceChoices[0].value} onValueChange={setEngineVoice}>
-                <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voiceEngineVoice")}>
+          <div className="grid gap-1.5">
+            <VoiceField label={t("voiceEngine")}>
+              <Select
+                value={engine}
+                onValueChange={(value) => {
+                  setEngine(value);
+                  // Voice ids do not carry across engines — "alloy" means nothing to 火山 — and
+                  // the new engine's list arrives asynchronously, so clear rather than guess.
+                  setEngineVoice("");
+                  setSpeakerB("");
+                }}
+              >
+                <SelectTrigger className="w-full min-w-0" aria-label={t("voiceEngine")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {voiceChoices.map((voice) => (
-                    <SelectItem key={voice.value} value={voice.value}>
-                      {voice.label}
+                  {(engines.data ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </VoiceField>
+            {/* 单人远程引擎:音色 + 语速 同行,标签说明谁是谁 */}
+            {engine !== "clone" && !isPodcast && voiceChoices.length > 0 && (
+              <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
+                <VoiceField label={t("voiceEngineVoice")}>
+                  <VoicePicker value={engineVoice || voiceChoices[0].value} onChange={setEngineVoice} choices={voiceChoices} ariaLabel={t("voiceEngineVoice")} />
+                </VoiceField>
+                <VoiceField label={t("voiceSpeed")}>
+                  <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                </VoiceField>
+              </div>
             )}
-            {engine !== "clone" && (
-              <Select value={String(speed)} onValueChange={(value) => setSpeed(Number(value))}>
-                <SelectTrigger className="min-w-0 flex-[0_1_96px]" aria-label={t("voiceSpeed")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[0.75, 1, 1.25, 1.5, 2].map((value) => (
-                    <SelectItem key={value} value={String(value)}>
-                      {value}×
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            {/* 播客:两个发音人一行(A/B 一目了然),对话方式 + 语速一行 */}
             {isPodcast && voiceChoices.length > 0 && (
               <>
-                <Select value={speakerB || voiceChoices[1]?.value || ""} onValueChange={setSpeakerB}>
-                  <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voicePodcastSpeakerB")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {voiceChoices.map((voice) => (
-                      <SelectItem key={voice.value} value={voice.value}>
-                        {voice.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={podcastMode} onValueChange={(value) => setPodcastMode(value as typeof podcastMode)}>
-                  <SelectTrigger className="min-w-0 flex-[1_1_120px]" aria-label={t("voicePodcastMode")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="summarize">{t("voicePodcastSummarize")}</SelectItem>
-                    <SelectItem value="read">{t("voicePodcastRead")}</SelectItem>
-                    <SelectItem value="research">{t("voicePodcastResearch")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <VoiceField label={t("voicePodcastSpeakerA")}>
+                    <VoicePicker value={engineVoice || voiceChoices[0]?.value || ""} onChange={setEngineVoice} choices={voiceChoices} ariaLabel={t("voicePodcastSpeakerA")} />
+                  </VoiceField>
+                  <VoiceField label={t("voicePodcastSpeakerB")}>
+                    <VoicePicker value={speakerB || voiceChoices[1]?.value || ""} onChange={setSpeakerB} choices={voiceChoices} ariaLabel={t("voicePodcastSpeakerB")} />
+                  </VoiceField>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
+                  <VoiceField label={t("voicePodcastMode")}>
+                    <Select value={podcastMode} onValueChange={(value) => setPodcastMode(value as typeof podcastMode)}>
+                      <SelectTrigger className="w-full min-w-0" aria-label={t("voicePodcastMode")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="summarize">{t("voicePodcastSummarize")}</SelectItem>
+                        <SelectItem value="read">{t("voicePodcastRead")}</SelectItem>
+                        <SelectItem value="research">{t("voicePodcastResearch")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </VoiceField>
+                  <VoiceField label={t("voiceSpeed")}>
+                    <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                  </VoiceField>
+                </div>
               </>
             )}
-            {activeEngine?.needs_voice_id && voiceChoices.length === 0 && (
-              <Input
-                className="min-w-0 flex-[1_1_120px]"
-                value={engineVoice}
-                placeholder={t("voiceEngineVoiceIdHint")}
-                aria-label={t("voiceEngineVoiceId")}
-                onChange={(event) => setEngineVoice(event.target.value)}
-              />
+            {/* 目录拉不到、需要手填音色 id 的引擎:输入框 + 语速 */}
+            {engine !== "clone" && !isPodcast && voiceChoices.length === 0 && (
+              <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
+                {activeEngine?.needs_voice_id ? (
+                  <VoiceField label={t("voiceEngineVoiceId")}>
+                    <Input
+                      className="min-w-0"
+                      value={engineVoice}
+                      placeholder={t("voiceEngineVoiceIdHint")}
+                      aria-label={t("voiceEngineVoiceId")}
+                      onChange={(event) => setEngineVoice(event.target.value)}
+                    />
+                  </VoiceField>
+                ) : (
+                  <div />
+                )}
+                <VoiceField label={t("voiceSpeed")}>
+                  <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                </VoiceField>
+              </div>
             )}
           </div>
           <Textarea
