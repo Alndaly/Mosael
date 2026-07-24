@@ -356,7 +356,8 @@ export function Inspector({
                   ] as const
                 ).map((row) => {
                   const keyed = row.kf && propKeyed(row.key as KfProp);
-                  const onKf = keyed && hasActiveKeyframes(transform) && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
+                  // 该属性在当前播放头进度处是否已有关键帧点——打下第一个点就点亮,不必等到两个点。
+                  const onKf = keyed && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
                   return (
                     <div key={row.key} className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
                       <span className="text-[11px] text-muted-foreground">{row.label}</span>

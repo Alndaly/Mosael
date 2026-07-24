@@ -38,6 +38,36 @@ def test_clean_transform_fills_defaults_and_clamps() -> None:
     assert clamped["scale"] == 4.0 and clamped["opacity"] == 1.0 and clamped["rotation"] == -180.0
 
 
+def test_clean_transform_keeps_and_sanitises_keyframes() -> None:
+    """打关键帧后 keyframes 必须被保留(否则前端点了钻石像没反应):钳值、丢空点/非法点、按 t 排序。"""
+    out = clean_transform({
+        "keyframes": [
+            {"t": 1.0, "scale": 99},       # 值超界 → 钳到 4.0
+            {"t": -0.5, "opacity": 0.3},   # t 超界 → 钳到 0.0
+            {"t": 0.5},                     # 纯 t、无属性 → 丢弃
+            {"scale": 1.2},                 # 缺 t → 丢弃
+            "nope",                         # 非 dict → 丢弃
+        ],
+    })
+    assert out["keyframes"] == [{"t": 0.0, "opacity": 0.3}, {"t": 1.0, "scale": 4.0}]
+
+
+def test_clean_transform_omits_empty_keyframes() -> None:
+    assert "keyframes" not in clean_transform({"scale": 1.2})
+
+
+def test_set_clip_transform_persists_keyframes_roundtrip() -> None:
+    fresh_client()
+    with SessionLocal() as db:
+        seq, clip = _seq_with_clip(db)
+        set_clip_transform(db, seq.id, SetClipTransform(
+            clip_id=clip.id,
+            transform={"scale": 1.0, "keyframes": [{"t": 1, "x": 1}, {"t": 0, "x": -1}]},
+        ))
+        db.refresh(clip)
+        assert clip.transform["keyframes"] == [{"t": 0.0, "x": -1.0}, {"t": 1.0, "x": 1.0}]
+
+
 def test_set_clip_transform_and_undo() -> None:
     fresh_client()
     with SessionLocal() as db:

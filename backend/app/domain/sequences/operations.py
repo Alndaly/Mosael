@@ -775,9 +775,40 @@ _TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
 }
 
 
-def clean_transform(raw: dict[str, Any]) -> dict[str, float]:
-    """归一化片段变换:补默认、转 float、按范围钳制。"""
-    out: dict[str, float] = {}
+def _clean_keyframes(raw: Any) -> list[dict[str, float]]:
+    """清洗关键帧轨:每点 t 钳到 [0,1],各属性按 transform 范围钳制,丢弃空点,按 t 升序。
+
+    每个属性独立成轨——一个点只携带它打了的属性,缺的属性从静态基值取。非 dict 的点、t 缺失
+    或非数字的点直接剔除;某属性值非数字则跳过该属性。存下来的形态与 render_plan 侧的读取语义
+    一致,保证「打了就能导出、导出即所见」。"""
+    if not isinstance(raw, list):
+        return []
+    cleaned: list[dict[str, float]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            t = float(item["t"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        point: dict[str, float] = {"t": max(0.0, min(1.0, t))}
+        for key, (lo, hi) in _TRANSFORM_BOUNDS.items():
+            if key not in item:
+                continue
+            try:
+                value = float(item[key])
+            except (TypeError, ValueError):
+                continue
+            point[key] = max(lo, min(hi, value))
+        if len(point) > 1:  # 除 t 外至少携带一个属性,才是有效关键帧
+            cleaned.append(point)
+    cleaned.sort(key=lambda p: p["t"])
+    return cleaned
+
+
+def clean_transform(raw: dict[str, Any]) -> dict[str, Any]:
+    """归一化片段变换:补默认、转 float、按范围钳制;保留并清洗关键帧轨。"""
+    out: dict[str, Any] = {}
     for key, default in _TRANSFORM_DEFAULTS.items():
         try:
             value = float(raw.get(key, default))
@@ -785,6 +816,9 @@ def clean_transform(raw: dict[str, Any]) -> dict[str, float]:
             raise SequenceDomainError(f"transform.{key} 必须是数字") from exc
         lo, hi = _TRANSFORM_BOUNDS[key]
         out[key] = max(lo, min(hi, value))
+    keyframes = _clean_keyframes(raw.get("keyframes"))
+    if keyframes:
+        out["keyframes"] = keyframes
     return out
 
 
