@@ -352,9 +352,12 @@ def generate_image(
     This creates a confirmation card because it may spend AI budget; after
     approval get_confirmation returns the job_id and the finished image appears
     in the media pool. Leave provider/model empty only when the user wants the
-    configured image-generation default. Do NOT use to analyze an existing asset
-    (analyze_asset), tag an asset (update_asset_tags), search the KB (search_kb),
-    or edit a workflow/timeline.
+    configured image-generation default. When the user names an engine (e.g.
+    "用 ComfyUI 画"), call list_generation_models to see valid provider/model
+    pairs; local ComfyUI is provider="comfyui", model="workflow" and needs no
+    API key. Do NOT use to analyze an existing asset (analyze_asset), tag an
+    asset (update_asset_tags), search the KB (search_kb), or edit a
+    workflow/timeline.
     """
     confirmation = _post(
         "/api/confirmations",
@@ -375,6 +378,21 @@ def generate_image(
 
 
 @mcp.tool()
+def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
+    """List the AI generation engines available to generate_image / generate_video.
+
+    Read-only, no confirmation. Returns provider/model pairs (e.g. provider="comfyui",
+    model="workflow" is the local ComfyUI instance — free, no API key, works whenever
+    ComfyUI is running). Call this before generate_image/generate_video when the user
+    names a specific engine or asks what is available. kind filters to "image" or
+    "video"; empty returns both.
+    """
+    params = {"kind": kind} if kind in ("image", "video") else None
+    models = _get("/api/generation/models", params)
+    return [{"provider": m["provider"], "model": m["model"], "kind": m["kind"]} for m in models]
+
+
+@mcp.tool()
 def generate_video(prompt: str, model: str = "", provider: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
 
@@ -382,7 +400,8 @@ def generate_video(prompt: str, model: str = "", provider: str = "", workspace_i
     asset. This does not place the video onto a timeline; after approval the
     generated asset lands in the media pool and can later be inserted with
     edit_timeline. Leave provider/model empty only when the configured
-    video-generation default should be used. Do NOT use for exporting an existing sequence
+    video-generation default should be used; list_generation_models shows the
+    valid provider/model pairs. Do NOT use for exporting an existing sequence
     (render_sequence), running a workflow (run_workflow), or editing
     workflow nodes (edit_workflow).
     """

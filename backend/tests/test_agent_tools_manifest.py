@@ -261,3 +261,36 @@ def test_requested_by_reaches_the_confirmation_card(monkeypatch) -> None:
 
     card = client.get(f"/api/confirmations/{result['confirmation_id']}").json()
     assert card["requested_by"] == "pi-agent"
+
+
+def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
+    """The agent can only pick provider="comfyui" if something tells it that pair exists —
+    list_generation_models is that something, read-only and confirmation-free."""
+    import mcp_server
+
+    client = fresh_client()
+
+    def fake_get(path: str, params: dict | None = None) -> object:
+        res = client.get(path, params=params)
+        assert res.status_code < 300, res.text
+        return res.json()
+
+    monkeypatch.setattr(mcp_server, "_get", fake_get)
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    # 内建模型目录随 generation 首次使用落库;这里显式确保,贴近真实启动路径
+    from app.core.db import SessionLocal
+    from app.domain.generation import ensure_builtin_generation_models
+
+    with SessionLocal() as db:
+        ensure_builtin_generation_models(db)
+
+    manifest = {tool["name"]: tool for tool in _manifest(client)}
+    assert manifest["list_generation_models"]["confirmation"] is False
+    res = client.post(
+        "/api/agent/tools/list_generation_models",
+        json={"arguments": {"kind": "image"}, "requested_by": "pi-agent"},
+    )
+    assert res.status_code == 200, res.text
+    pairs = {(m["provider"], m["model"]) for m in res.json()["result"]}
+    assert ("comfyui", "workflow") in pairs
+    assert workspace_id  # workspace 仅为初始化,断言防未用警告
