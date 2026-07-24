@@ -5,11 +5,30 @@
    ============================================================ */
 
 /* 0) 全站字体与底色 ------------------------------------------- */
-/* 字体:Outfit(标题/英数,几何感)+ Noto Sans SC(中文)+ JetBrains Mono(代码),
-   全部自托管(astro.config customCss 引入 fontsource),离线内嵌可用。 */
+/* 字体分两层:
+   正文 = Outfit + Noto Sans SC(可读性优先,不动);
+   展示 = Fraunces(艺术衬线英数)+ 霞鹜文楷(中文楷体,与 App 剪辑器同源)——
+   只用于标题/站名/首页 hero,给单色体系一点人文笔触而不牺牲正文阅读。
+   全部自托管(astro.config customCss 引入),离线内嵌可用。 */
 :root {
   --sl-font: "Outfit Variable", "Noto Sans SC Variable", ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --sl-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --mibu-font-display: "Fraunces Variable", "LXGW WenKai Screen", "Outfit Variable", "Noto Sans SC Variable", serif;
+}
+/* 展示字体落点:文档标题层级、站名、首页 hero 与卡片标题。
+   衬线/楷体天生比几何无衬线"大一号",字距回正、不再用负 tracking。 */
+.sl-markdown-content :is(h1, h2, h3, h4),
+.content-panel h1,
+.site-title span,
+.mibu-home .mibu-hero h1,
+.mibu-feat h3,
+.mibu-doc .txt b,
+.link-title {
+  font-family: var(--mibu-font-display);
+  letter-spacing: 0;
+}
+.sl-markdown-content :is(h1, h2) {
+  font-weight: 650;
 }
 /* 底色:中性近黑(参考 Revornix 的 rgb(17,17,17)),去掉 Starlight 默认的蓝灰调 */
 :root {
@@ -105,11 +124,11 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
 }
 /* .mibu-home 前缀提高优先级,压过 Starlight 的 .sl-markdown-content h1 颜色(否则浅色主题下变暗) */
 .mibu-home .mibu-hero h1 {
-  font-family: var(--font);
-  font-weight: 800;
+  font-family: var(--mibu-font-display);
+  font-weight: 640;
   font-size: clamp(2.4rem, 6vw, 4rem);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
+  line-height: 1.12;
+  letter-spacing: 0;
   margin: 0.9rem auto 0;
   color: var(--sl-color-white);
 }

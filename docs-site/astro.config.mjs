@@ -20,13 +20,27 @@ export default defineConfig({
       favicon: "/favicon.svg",
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/Alndaly/mibu-cut" },
+        { icon: "email", label: "邮件联系", href: "mailto:lucky.always.h@gmail.com" },
       ],
-      // 自托管字体(打进 dist,离线可用;严禁 CDN)。
+      // 字体策略:正文字体自托管(打进 dist,离线可用);展示层的霞鹜文楷是唯一例外——
+      // 它有上百个中文子集文件,打包会显著增肥 dist,故走 CDN,离线/CDN 不可达时
+      // 按 --mibu-font-display 字体链回退到 Outfit/Noto,不影响可读性。
+      head: [
+        { tag: "link", attrs: { rel: "preconnect", href: "https://cdn.jsdelivr.net", crossorigin: true } },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/lxgwwenkaigbscreen.css",
+          },
+        },
+      ],
       customCss: [
         "./src/styles/tailwind.css",
         "@fontsource-variable/outfit",
         "@fontsource-variable/noto-sans-sc",
         "@fontsource-variable/jetbrains-mono",
+        "@fontsource-variable/fraunces",
         "./src/styles/custom.css",
       ],
       defaultLocale: "root",
