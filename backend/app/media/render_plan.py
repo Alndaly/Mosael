@@ -26,17 +26,32 @@ class Transform:
     """A video clip's free-element placement, mirroring the preview compositor's CSS
     ``translate(x·50%, y·50%) scale(s) rotate(r)`` + opacity over a cover-filled frame box.
     x/y are center offsets in half-frame units (x=1 → center shifted right by half the frame);
-    scale multiplies the frame-sized element; rotation is degrees; opacity is 0..1."""
+    scale multiplies the frame-sized element; rotation is degrees; opacity is 0..1.
+
+    keyframes animates scale/x/y/opacity over the clip: a flat, hashable tuple of
+    (t, prop, value) where t is the clip's normalized progress 0..1 — the same per-property
+    model the editor keys and previews, compiled to FFmpeg time expressions at render (see
+    render_executor). Empty tuple → the static scalars above hold for the whole clip."""
 
     scale: float = 1.0
     x: float = 0.0
     y: float = 0.0
     rotation: float = 0.0
     opacity: float = 1.0
+    keyframes: tuple[tuple[float, str, float], ...] = ()
 
     @property
     def is_identity(self) -> bool:
-        return (self.scale, self.x, self.y, self.rotation, self.opacity) == (1.0, 0.0, 0.0, 0.0, 1.0)
+        return not self.keyframes and (self.scale, self.x, self.y, self.rotation, self.opacity) == (1.0, 0.0, 0.0, 0.0, 1.0)
+
+    def keyed(self, prop: str) -> tuple[tuple[float, float], ...]:
+        """Sorted (t, value) points for one property — empty if it isn't animated."""
+        pts = sorted((t, v) for t, p, v in self.keyframes if p == prop)
+        return tuple(pts)
+
+    @property
+    def animates(self) -> bool:
+        return any(len(self.keyed(p)) >= 2 for p in ("scale", "x", "y", "opacity"))
 
 
 IDENTITY_TRANSFORM = Transform()
@@ -472,7 +487,34 @@ def _read_transform(clip: dict) -> Transform:
         y=max(-4.0, min(4.0, num("y", 0.0))),
         rotation=num("rotation", 0.0) % 360.0,
         opacity=max(0.0, min(1.0, num("opacity", 1.0))),
+        keyframes=_read_keyframes(raw.get("keyframes")),
     )
+
+
+_KF_RANGES = {"scale": (0.01, 10.0), "x": (-4.0, 4.0), "y": (-4.0, 4.0), "opacity": (0.0, 1.0), "rotation": (-3600.0, 3600.0)}
+
+
+def _read_keyframes(raw: object) -> tuple[tuple[float, str, float], ...]:
+    """[{t, scale?, x?, y?, opacity?}] → flat, clamped, sorted (t, prop, value) tuple.
+
+    Flattened per-property so the executor can pull one property's track and compile it to a
+    time expression; clamped to the same ranges as the static scalars so a hostile payload
+    can't inject wild values (rotation is intentionally not keyframable)."""
+    if not isinstance(raw, list):
+        return ()
+    out: list[tuple[float, str, float]] = []
+    for kf in raw:
+        if not isinstance(kf, dict):
+            continue
+        try:
+            t = max(0.0, min(1.0, float(kf.get("t"))))
+        except (TypeError, ValueError):
+            continue
+        for prop, (lo, hi) in _KF_RANGES.items():
+            value = kf.get(prop)
+            if isinstance(value, (int, float)):
+                out.append((round(t, 6), prop, max(lo, min(hi, float(value)))))
+    return tuple(sorted(out))
 
 
 def _grade_value(grade: dict, key: str) -> float:

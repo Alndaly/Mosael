@@ -153,7 +153,7 @@ def test_transform_geometry_in_command() -> None:
     fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
     graph = fc[fc.index("-filter_complex") + 1]
     assert "scale=160:90" in graph  # 0.5 · (320×180)
-    assert "overlay=x=80:y=45" in graph  # centred: 160−80, 90−45
+    assert "overlay=x='80':y='45'" in graph  # centred: 160−80, 90−45
 
 
 def test_offset_transform_geometry() -> None:
@@ -169,7 +169,7 @@ def test_offset_transform_geometry() -> None:
     )
     fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
     graph = fc[fc.index("-filter_complex") + 1]
-    assert "overlay=x=240:y=45" in graph  # cx=(0.5+0.5)·320=320 → 320−80
+    assert "overlay=x='240':y='45'" in graph  # cx=(0.5+0.5)·320=320 → 320−80
 
 
 def setup_project(client: TestClient) -> tuple[dict, dict, dict]:

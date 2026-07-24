@@ -123,13 +123,12 @@ export function Inspector({
   const propKeyed = (prop: KfProp) => propTimes(keyframes, prop).length > 0;
   // 某属性当前显示值:有关键帧→按进度采样(随播放头动),否则基值。
   const shownProp = (prop: KfProp): number => (propKeyed(prop) ? sampleProp(keyframes, prop, transform[prop], progress) : transform[prop]);
-  const shown = { scale: shownProp("scale"), rotation: transform.rotation, opacity: shownProp("opacity"), x: shownProp("x"), y: shownProp("y") } as const;
+  const shown = { scale: shownProp("scale"), rotation: shownProp("rotation"), opacity: shownProp("opacity"), x: shownProp("x"), y: shownProp("y") } as const;
   // 调某属性:该属性有关键帧则写当前进度点,否则改基值。
   const setProp = (prop: KfProp, value: number) => {
     if (propKeyed(prop)) commitTransform({ ...transform, keyframes: upsertKeyframe(keyframes, progress, { [prop]: value }) });
     else commitTransform({ ...transform, [prop]: value });
   };
-  const setRotation = (value: number) => commitTransform({ ...transform, rotation: value }); // rotation 不做关键帧
   const toggleProp = (prop: KfProp) => commitTransform({ ...transform, keyframes: togglePropKeyframe(keyframes, prop, progress, shownProp(prop)) });
   const clearKeyframes = () => commitTransform({ scale: transform.scale, x: transform.x, y: transform.y, rotation: transform.rotation, opacity: transform.opacity });
   const seekToKeyframe = (t: number) => selectedClip && setPlayhead(selectedClip.timeline_start + t * clipDuration);
@@ -286,52 +285,41 @@ export function Inspector({
             )}
             {!isTextClip && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("videoFade")}</span>
-                <div className="flex flex-wrap gap-1">
-                  <Input
-                    key={`vfi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-field px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    defaultValue={effects.video_fade_in ?? 0}
-                    onBlur={(event) => applyFade("video_fade_in", event.target.value)}
-                    aria-label={t("fadeIn")}
-                  />
-                  <Input
-                    key={`vfo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-field px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    defaultValue={effects.video_fade_out ?? 0}
-                    onBlur={(event) => applyFade("video_fade_out", event.target.value)}
-                    aria-label={t("fadeOut")}
-                  />
-                </div>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("audioFade")}</span>
-                <div className="flex flex-wrap gap-1">
-                  <Input
-                    key={`fi-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-field px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    defaultValue={effects.fade_in ?? 0}
-                    onBlur={(event) => applyFade("fade_in", event.target.value)}
-                    aria-label={t("fadeIn")}
-                  />
-                  <Input
-                    key={`fo-${selectedClip.id}`}
-                    className="h-[26px] w-full rounded-md border border-border bg-field px-1.5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    defaultValue={effects.fade_out ?? 0}
-                    onBlur={(event) => applyFade("fade_out", event.target.value)}
-                    aria-label={t("fadeOut")}
-                  />
-                </div>
+                {(
+                  [
+                    { title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out },
+                    { title: t("audioFade"), inKey: "fade_in", outKey: "fade_out", inV: effects.fade_in, outV: effects.fade_out },
+                  ] as const
+                ).map((grp) => (
+                  <div key={grp.title} className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{grp.title}</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(
+                        [
+                          { key: grp.inKey, label: t("fadeIn"), value: grp.inV },
+                          { key: grp.outKey, label: t("fadeOut"), value: grp.outV },
+                        ] as const
+                      ).map((f) => (
+                        <label key={f.key} className="grid grid-cols-[auto_1fr] items-center gap-1.5">
+                          <span className="text-[11px] text-muted-foreground">{f.label}</span>
+                          <div className="relative">
+                            <Input
+                              key={`${f.key}-${selectedClip.id}`}
+                              className="h-[26px] w-full rounded-md border border-border bg-field pl-1.5 pr-5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                              type="number"
+                              min={0}
+                              step={0.1}
+                              defaultValue={f.value ?? 0}
+                              onBlur={(event) => applyFade(f.key, event.target.value)}
+                              aria-label={`${grp.title} · ${f.label}`}
+                            />
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">s</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             {!isTextClip && onSetTransform && (
@@ -361,7 +349,7 @@ export function Inspector({
                 {(
                   [
                     { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
-                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°`, kf: false },
+                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°`, kf: true },
                     { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
                     { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
                     { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
@@ -379,7 +367,7 @@ export function Inspector({
                         max={row.max}
                         step={row.step}
                         defaultValue={[shown[row.key]]}
-                        onValueCommit={([value]) => (row.key === "rotation" ? setRotation(value) : setProp(row.key as KfProp, value))}
+                        onValueCommit={([value]) => setProp(row.key as KfProp, value)}
                       />
                       <span className="timecode text-right text-[11px] text-muted-foreground">{row.fmt(shown[row.key])}</span>
                       {row.kf ? (

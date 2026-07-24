@@ -13,10 +13,10 @@ import type { Transform } from "@/features/editor/TransformOverlay";
  * 保证所见即所得。
  */
 
-export type KfProp = "scale" | "x" | "y" | "opacity";
+export type KfProp = "scale" | "x" | "y" | "opacity" | "rotation";
 export type Keyframe = { t: number } & Partial<Record<KfProp, number>>;
 
-const PROPS: KfProp[] = ["scale", "x", "y", "opacity"];
+const PROPS: KfProp[] = ["scale", "x", "y", "opacity", "rotation"];
 
 /** 某属性在 progress 处的值:只在定义了该属性的关键帧间线性插值,端点外保持端点值(hold)。 */
 export function sampleProp(keyframes: Keyframe[], prop: KfProp, base: number, progress: number): number {
@@ -52,7 +52,7 @@ export function hasActiveKeyframes(tf: Transform): boolean {
   });
 }
 
-/** 静态 transform + 关键帧轨 → 在 clip 进度 progress(0..1)处的插值 transform。rotation 不做关键帧。 */
+/** 静态 transform + 关键帧轨 → 在 clip 进度 progress(0..1)处的插值 transform。 */
 export function sampleTransform(tf: Transform, progress: number): Transform {
   if (!hasActiveKeyframes(tf)) return tf;
   const kfs = tf.keyframes as Keyframe[];
@@ -62,6 +62,7 @@ export function sampleTransform(tf: Transform, progress: number): Transform {
     x: sampleProp(kfs, "x", tf.x, progress),
     y: sampleProp(kfs, "y", tf.y, progress),
     opacity: sampleProp(kfs, "opacity", tf.opacity, progress),
+    rotation: sampleProp(kfs, "rotation", tf.rotation, progress),
   };
 }
 

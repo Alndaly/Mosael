@@ -118,43 +118,124 @@ def _even(value: float) -> int:
     return rounded if rounded % 2 == 0 else rounded + 1
 
 
+def _kf_expr(points: tuple[tuple[float, float], ...], prog: str) -> str:
+    """Piecewise-linear FFmpeg expression for a property's keyframes over normalized progress.
+
+    `points` are sorted (t, value) with t∈[0,1]; `prog` is an expression giving the current
+    normalized progress (e.g. "(t)/3.2"). Outside the first/last keyframe the value holds
+    (no extrapolation), matching the frontend's sampleProp. One point → a constant."""
+    if not points:
+        return "0"
+    if len(points) == 1:
+        return f"{points[0][1]:.5f}"
+    expr = f"{points[-1][1]:.5f}"  # progress ≥ last t → last value
+    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+        span = t1 - t0
+        if span > 1e-6:
+            seg = f"({v0:.5f}+({v1 - v0:.5f})*(clip(({prog})-{t0:.6f},0,{span:.6f}))/{span:.6f})"
+        else:
+            seg = f"{v1:.5f}"
+        expr = f"if(lt(({prog}),{t1:.6f}),{seg},{expr})"
+    return f"if(lt(({prog}),{points[0][0]:.6f}),{points[0][1]:.5f},{expr})"
+
+
 def _element_transform(
-    in_label: str, tf: Transform, width: int, height: int, prefix: str
-) -> tuple[list[str], str, int, int]:
+    in_label: str, tf: Transform, width: int, height: int, prefix: str, *, start: float = 0.0, duration: float = 1.0
+) -> tuple[list[str], str, str, str]:
     """Turn a frame-sized (WxH, cover-filled) element [in_label] into a scaled/rotated/faded
     element ready to overlay, matching the preview's ``translate(x·50%,y·50%) scale rotate`` +
-    opacity. Returns (filters, out_label, overlay_x, overlay_y). Geometry is precomputed here
-    (W/H/scale are known) so the overlay position is a plain integer, not an FFmpeg expression.
+    opacity. Returns (filters, out_label, overlay_x, overlay_y) — x/y are FFmpeg overlay-position
+    strings (plain integers when the whole transform is static, time expressions when anything is
+    keyframed).
 
-    The rotated case pads the scaled element to a square of its diagonal before rotating so the
-    corners aren't clipped and the element's centre stays put — the overlay offset is then just
-    centre − box/2."""
+    Every keyframable property compiles to a per-frame FFmpeg expression so the export tracks the
+    preview's sampleTransform exactly: scale via ``scale=eval=frame`` (element size follows the
+    curve), opacity via a ``geq`` on the alpha plane, rotation via a ``rotate`` angle expression,
+    and position via the overlay offset. Filters that expose frame time as ``t`` (scale/rotate/
+    overlay) use progress over ``t``; ``geq`` exposes it as ``T``, so opacity uses progress over
+    ``T``. ``start``/``duration`` place that progress: the base element is reset to t=0 (start=0),
+    an upper-track element keeps timeline time (start=its timeline start).
+
+    When the element's size is animated (scale keyframes), centring can't use a fixed pixel size,
+    so the overlay offset is written with overlay's own ``W/H`` (canvas) and ``w/h`` (element)
+    variables — the element stays centred on its target as it grows/shrinks. The static, un-keyed
+    case keeps the old fast path: a plain-integer overlay offset, no per-frame expression."""
+
+    def prog(var: str) -> str:
+        d = max(duration, 1e-6)
+        return f"({var}-{start:.6f})/{d:.6f}" if start else f"({var})/{d:.6f}"
+
+    prog_t = prog("t")  # scale / rotate / overlay expose frame time as `t`
+    prog_T = prog("T")  # geq exposes it as `T`
+
     filters: list[str] = []
-    scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
-    filters.append(f"[{in_label}]scale={scaled_w}:{scaled_h}[{prefix}s]")
+    scale_pts = tf.keyed("scale")
+    animate_scale = len(scale_pts) >= 2
+    if animate_scale:
+        s_expr = _kf_expr(scale_pts, prog_t)
+        # eval=frame re-evaluates w/h each frame; iw/ih are the cover-filled frame (WxH).
+        filters.append(f"[{in_label}]scale=w='iw*({s_expr})':h='ih*({s_expr})':eval=frame[{prefix}s]")
+    else:
+        scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
+        filters.append(f"[{in_label}]scale={scaled_w}:{scaled_h}[{prefix}s]")
     label = f"{prefix}s"
 
-    needs_alpha = tf.opacity < 1.0 or tf.rotation != 0
+    op_pts = tf.keyed("opacity")
+    animate_op = len(op_pts) >= 2
+    rot_pts = tf.keyed("rotation")
+    animate_rot = len(rot_pts) >= 2
+
+    needs_alpha = tf.opacity < 1.0 or animate_op or tf.rotation != 0 or animate_rot
     if needs_alpha:
         filters.append(f"[{label}]format=yuva420p[{prefix}a]")
         label = f"{prefix}a"
-    if tf.opacity < 1.0:
+    if animate_op:
+        # Scale the source alpha by the opacity curve; luma/chroma pass through untouched.
+        o_expr = _kf_expr(op_pts, prog_T)
+        filters.append(
+            f"[{label}]geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*clip(({o_expr}),0,1)'[{prefix}o]"
+        )
+        label = f"{prefix}o"
+    elif tf.opacity < 1.0:
         filters.append(f"[{label}]colorchannelmixer=aa={tf.opacity:.4f}[{prefix}o]")
         label = f"{prefix}o"
 
-    # Element centre in output pixels: frame centre + x·half-frame (matches transformCss).
+    if tf.rotation != 0 or animate_rot:
+        angle = f"(({_kf_expr(rot_pts, prog_t)})*PI/180)" if animate_rot else f"{math.radians(tf.rotation):.6f}"
+        if animate_scale:
+            # Element size varies per frame → rotate onto a per-frame diagonal square (rotate centres
+            # the input in the larger ow×oh canvas), so no angle clips the corners.
+            filters.append(f"[{label}]rotate='{angle}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none[{prefix}r]")
+        else:
+            # Fixed size → pad to the diagonal square before rotating; box is angle-independent, so an
+            # animated angle is just a time expression over the same box.
+            scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
+            box = max(2, _even(math.hypot(scaled_w, scaled_h)))
+            pad_x, pad_y = (box - scaled_w) // 2, (box - scaled_h) // 2
+            filters.append(f"[{label}]pad={box}:{box}:{pad_x}:{pad_y}:color=black@0[{prefix}p]")
+            filters.append(f"[{prefix}p]rotate='{angle}':ow={box}:oh={box}:c=none[{prefix}r]")
+        label = f"{prefix}r"
+
+    x_pts, y_pts = tf.keyed("x"), tf.keyed("y")
+    animate_pos = len(x_pts) >= 2 or len(y_pts) >= 2
+    if animate_pos or animate_scale:
+        # Centre in output px = frame centre + offset·half-frame; overlay origin = centre − element/2.
+        # W/H are the canvas, w/h the (possibly animated) element size — so centring holds as it scales.
+        x_expr = _kf_expr(x_pts, prog_t) if x_pts else f"{tf.x:.5f}"
+        y_expr = _kf_expr(y_pts, prog_t) if y_pts else f"{tf.y:.5f}"
+        ox = f"(0.5+({x_expr})*0.5)*W-w/2"
+        oy = f"(0.5+({y_expr})*0.5)*H-h/2"
+        return filters, label, ox, oy
+
+    # Fully static position and size → plain-integer overlay offset (no per-frame expression).
+    if tf.rotation != 0:
+        scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
+        ow = oh = max(2, _even(math.hypot(scaled_w, scaled_h)))
+    else:
+        ow, oh = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
     cx = (0.5 + tf.x * 0.5) * width
     cy = (0.5 + tf.y * 0.5) * height
-    if tf.rotation != 0:
-        box = max(2, _even(math.hypot(scaled_w, scaled_h)))
-        pad_x, pad_y = (box - scaled_w) // 2, (box - scaled_h) // 2
-        filters.append(f"[{label}]pad={box}:{box}:{pad_x}:{pad_y}:color=black@0[{prefix}p]")
-        filters.append(
-            f"[{prefix}p]rotate={math.radians(tf.rotation):.6f}:ow={box}:oh={box}:c=none[{prefix}r]"
-        )
-        label = f"{prefix}r"
-        return filters, label, int(round(cx - box / 2)), int(round(cy - box / 2))
-    return filters, label, int(round(cx - scaled_w / 2)), int(round(cy - scaled_h / 2))
+    return filters, label, str(int(round(cx - ow / 2))), str(int(round(cy - oh / 2)))
 
 
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
@@ -316,11 +397,14 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                     f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
                     f"{preset}{video_fades},fps={fps},setsar=1[elt{i}]"
                 )
-                tfilters, tlabel, ox, oy = _element_transform(f"elt{i}", segment.transform, width, height, f"bt{i}")
+                # setpts reset the segment to t=0, so progress runs over start=0..duration.
+                tfilters, tlabel, ox, oy = _element_transform(
+                    f"elt{i}", segment.transform, width, height, f"bt{i}", start=0.0, duration=segment.duration
+                )
                 filters += tfilters
                 filters.append(
                     f"color=black:s={width}x{height}:r={fps}[bg{i}];"
-                    f"[bg{i}][{tlabel}]overlay={ox}:{oy},format=yuv420p,setsar=1[v{i}]"
+                    f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]"
                 )
             if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
                 tempo = _atempo_chain(segment.speed)
@@ -359,11 +443,14 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
             f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[oelt{i}]"
         )
-        tfilters, tlabel, ox, oy = _element_transform(f"oelt{i}", overlay.transform, width, height, f"ot{i}")
+        # Overlay lives on the main timeline; progress runs over its start..start+duration.
+        tfilters, tlabel, ox, oy = _element_transform(
+            f"oelt{i}", overlay.transform, width, height, f"ot{i}", start=overlay.start, duration=overlay.duration
+        )
         filters += tfilters
         out_label = f"[vov{i}]"
         filters.append(
-            f"{video_label}[{tlabel}]overlay=x={ox}:y={oy}:eof_action=pass:"
+            f"{video_label}[{tlabel}]overlay=x='{ox}':y='{oy}':eof_action=pass:"
             f"enable='between(t,{overlay.start},{overlay.start + overlay.duration})'{out_label}"
         )
         video_label = out_label
