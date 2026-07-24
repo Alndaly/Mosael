@@ -22,6 +22,7 @@ import {
   assetFileUrl,
   assetThumbnailUrl,
   importAsset,
+  listComfyuiWorkflows,
   type Asset,
   type GenerationCreateResponse,
   type GenerationJob,
@@ -69,6 +70,7 @@ type GenerationConfig = {
   referenceImageAssetId: string;
   referenceImageAssetName: string;
   usePreviousImage: boolean;
+  workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
 
 type GenerationEngineOption = GenerationModel & {
@@ -153,6 +155,7 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     referenceImageAssetId: "",
     referenceImageAssetName: "",
     usePreviousImage: true,
+    workflow: "",
   };
 }
 
@@ -162,6 +165,7 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
     if (supportsParameter(model, "size") && config.size) params.size = config.size;
     if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
     if (supportsParameter(model, "seed") && config.seed.trim()) params.seed = Number(config.seed);
+    if (model.provider === "comfyui" && config.workflow) params.workflow = config.workflow;
     return params;
   }
   const params: Record<string, string | number> = {};
@@ -363,6 +367,15 @@ function GenerateWorkspace({
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   const supportsReferenceImage = selectedModel?.kind === "image" && supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
+  // ComfyUI:拉取该实例保存的工作流,生成时可直接选一个(自动转换 + 注入提示词)。
+  const isComfyui = selectedModel?.provider === "comfyui";
+  const comfyWorkflows = useQuery({
+    queryKey: ["comfyui-workflows", selectedModel?.provider_profile_id],
+    queryFn: () => listComfyuiWorkflows(selectedModel?.provider_profile_id),
+    enabled: Boolean(isComfyui && selectedModel?.provider_profile_id),
+    staleTime: 60_000,
+    retry: false,
+  });
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
@@ -787,6 +800,34 @@ function GenerateWorkspace({
             </label>
             {selectedModel.kind === "image" ? (
               <>
+                {isComfyui && (
+                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                    <span>{t("comfyWorkflow")}</span>
+                    <Select
+                      value={generationConfig.workflow || "__default__"}
+                      onValueChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">{t("comfyWorkflowDefault")}</SelectItem>
+                        {(comfyWorkflows.data ?? []).map((wf) => (
+                          <SelectItem key={wf.path} value={wf.path}>
+                            {wf.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[10.5px] font-normal text-muted-foreground">
+                      {comfyWorkflows.isError
+                        ? t("comfyWorkflowError")
+                        : comfyWorkflows.data && comfyWorkflows.data.length === 0
+                          ? t("comfyWorkflowEmpty")
+                          : t("comfyWorkflowHint")}
+                    </span>
+                  </label>
+                )}
                 {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>

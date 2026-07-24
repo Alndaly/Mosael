@@ -741,6 +741,13 @@ export function listAssets(workspaceId: string, projectId?: string): Promise<Ass
   return api<Asset[]>(`/api/assets?${params.toString()}`);
 }
 
+export type ComfyWorkflow = { path: string; name: string; modified: number | null };
+/** 拉取某 ComfyUI 档案实例里保存的工作流,供生成时下拉选择。 */
+export function listComfyuiWorkflows(profileId?: string): Promise<ComfyWorkflow[]> {
+  const q = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
+  return api<ComfyWorkflow[]>(`/api/generation/comfyui/workflows${q}`);
+}
+
 export function renameAsset(assetId: string, name: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }
