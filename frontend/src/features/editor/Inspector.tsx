@@ -225,7 +225,7 @@ export function Inspector({
             <dl>
               <dt>{t("asset")}</dt>
               <dd className="truncate" title={asset?.name}>
-                {asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? t("subtitleText")}
+                {asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
               </dd>
               <dt>{t("timelineRange")}</dt>
               <dd className="timecode">
@@ -242,7 +242,7 @@ export function Inspector({
             </dl>
             {isTextClip && onSetText && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("subtitleText")}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
                   className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
