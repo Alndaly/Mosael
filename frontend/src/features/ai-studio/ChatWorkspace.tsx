@@ -157,11 +157,17 @@ export function ChatWorkspace({
         // invalidating on the way out would refetch for a view that may be gone.
         if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
           streamingRef.current = null;
+          // 临时流式气泡的显示条件是 running(来自 agent-session 状态)&& streamText。要消除「回答
+          // 完成那一刻整页闪烁」,得让 running 转 false(气泡消失)与正式消息出现落在同一帧:一起
+          // await messages + session 的 refetch,两者同时 settle → React 批处理同帧重渲染,正式气泡
+          // 就位的同刻临时气泡消失,无空白也无重复。之后再清 streamText 只是收尾(气泡已因 running 消失)。
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] }),
+            qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] }),
+          ]);
           setStreamText("");
           setStreamTimeline([]);
-          void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
-          void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
         }
       }
     },
