@@ -238,6 +238,18 @@ def _element_transform(
     return filters, label, str(int(round(cx - ow / 2))), str(int(round(cy - oh / 2)))
 
 
+def _volume_expr(gain: float, keyframes: tuple[tuple[float, float], ...], duration: float) -> str:
+    """音量 filter 片段(带尾逗号,可为空):≥2 个关键帧 → volume 时间表达式(段内进度,eval=frame),
+    与视频关键帧同一插值内核;否则静态 volume(gain≈1 时省略)。音频经 asetpts 重置到 0,故进度为
+    t/duration。"""
+    if len(keyframes) >= 2:
+        prog = f"(t)/{max(duration, 1e-6):.6f}"
+        return f"volume='{_kf_expr(keyframes, prog)}':eval=frame,"
+    if abs(gain - 1.0) > 0.001:
+        return f"volume={gain},"
+    return ""
+
+
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
     """Leading-comma filter suffix for edge fades in segment-local output time."""
     name = "afade" if audio else "fade"
@@ -511,7 +523,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                 tempo = _atempo_chain(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
-                gain = f"volume={segment.gain}," if abs(segment.gain - 1.0) > 0.001 else ""
+                gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
                 filters.append(
                     f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,{tempo}"
                     f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
@@ -598,7 +610,8 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
                 duck = f",volume=enable='{enable}':volume={DUCK_GAIN}"
             filters.append(
                 f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
-                f"volume={item.gain},aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
+                f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
+                f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
                 f"adelay={delay_ms}:all=1{duck}[aov{i}]"
             )
             mix_inputs.append(f"[aov{i}]")

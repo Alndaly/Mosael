@@ -91,6 +91,8 @@ class Segment:
     # Free-element placement over the frame (Canvas Phase 1b). Identity → the clip fills
     # the frame per fill_mode (fast path); otherwise it's composited over black.
     transform: Transform = IDENTITY_TRANSFORM
+    # 音量关键帧:(t, gain) 归一化时间点,让片段自带音频的增益随时间插值(volume 时间表达式)。
+    gain_keyframes: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,8 @@ class AudioItem:
     # From an overlay video track: its source may have no audio stream (silent video / image),
     # so the executor probes and skips it. Audio-track clips (optional=False) are always mixed.
     optional: bool = False
+    # 音量关键帧:(t, gain) 归一化时间点,让这条音频的增益随时间插值(volume 时间表达式)。
+    gain_keyframes: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -357,6 +361,7 @@ def build_render_plan(
                 video_fade_in=video_fade_in,
                 video_fade_out=video_fade_out,
                 gain=float(clip.get("gain", 1.0)),
+                gain_keyframes=_read_gain_keyframes(effects),
                 muted=bool(clip.get("muted")),
                 filter=preset,
                 grade=tuple(
@@ -416,6 +421,7 @@ def build_render_plan(
                 duration=round(clip_duration, 6),
                 source=source,
                 gain=float(clip.get("gain", 1.0)),
+                gain_keyframes=_read_gain_keyframes(clip.get("effects") or {}),
                 fade_in=fade_in,
                 fade_out=fade_out,
                 duck_windows=windows,
@@ -554,6 +560,25 @@ def _read_text_style(raw: dict | None) -> TextStyleSpec:
         font_id=str(raw.get("font_id", d.font_id) or "")[:64],
         font_dir=str(raw.get("font_dir", d.font_dir) or "")[:500],
     )
+
+
+def _read_gain_keyframes(effects: dict) -> tuple[tuple[float, float], ...]:
+    """clip.effects.gain_keyframes([{t,gain}]) → 排序、钳制的 (t, gain) 轨(t∈[0,1], gain∈[0,4])。
+    单点或空视作无动画,由调用方走静态 gain。"""
+    raw = (effects or {}).get("gain_keyframes")
+    if not isinstance(raw, list):
+        return ()
+    pts: list[tuple[float, float]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            t = max(0.0, min(1.0, float(item["t"])))
+            g = max(0.0, min(4.0, float(item["gain"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+        pts.append((t, g))
+    return tuple(sorted(pts))
 
 
 def _read_transform(clip: dict) -> Transform:
