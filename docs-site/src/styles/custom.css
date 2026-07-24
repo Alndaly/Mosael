@@ -30,39 +30,54 @@
 .sl-markdown-content :is(h1, h2) {
   font-weight: 650;
 }
-/* 底色:中性近黑(参考 Revornix 的 rgb(17,17,17)),去掉 Starlight 默认的蓝灰调 */
+/* 品牌色板(参考「AI 视频剪辑社区」设计稿):暖黑底 + 珊瑚橙主色 + 橙金渐变 + 青色点缀。
+   珊瑚橙是绝对主色,橙金渐变用于强调/CTA,青色是唯二的冷色点缀(节点/链接活性)。 */
 :root {
-  --sl-color-white: #fafafa;
-  --sl-color-gray-1: #ededed;
-  --sl-color-gray-2: #d4d4d4;
-  --sl-color-gray-3: #a3a3a3;
-  --sl-color-gray-4: #525252;
-  --sl-color-gray-5: #2c2c2c;
-  --sl-color-gray-6: #171717;
-  --sl-color-black: #111111;
-}
-:root[data-theme="light"] {
-  --sl-color-white: #171717;
-  --sl-color-gray-1: #262626;
-  --sl-color-gray-2: #404040;
-  --sl-color-gray-3: #6f6f6f;
-  --sl-color-gray-4: #a3a3a3;
-  --sl-color-gray-5: #dcdcdc;
-  --sl-color-gray-6: #f3f3f3;
-  --sl-color-gray-7: #f8f8f8;
-  --sl-color-black: #fcfcfc;
+  --mibu-coral: #ff5a3c; /* 主色 */
+  --mibu-orange: #ff9f1c;
+  --mibu-gold: #ffd54a;
+  --mibu-cyan: #22d3ee; /* 冷色点缀 */
+  --mibu-mint: #34e89e;
+  --mibu-grad: linear-gradient(135deg, #ff5a3c, #ff9f1c);
+  --mibu-grad-gold: linear-gradient(135deg, #ffd54a, #ff9f1c);
+  --mibu-glow: rgba(255, 90, 60, 0.16);
 }
 
-/* 1) 全站强调色(侧边栏 / 链接 / 选中)—— 单色:靠亮度分层,不引入色相 */
+/* 底色:暖调近黑(#0e0c0b 页底 / #17140f 面板),不是冷灰——去掉 Starlight 默认蓝灰调 */
 :root {
-  --sl-color-accent-low: #262626;
-  --sl-color-accent: #8a8a8a;
-  --sl-color-accent-high: #fafafa;
+  --sl-color-white: #faf6f0;
+  --sl-color-gray-1: #e8e2d8;
+  --sl-color-gray-2: #c9c3ba;
+  --sl-color-gray-3: #9c968c;
+  --sl-color-gray-4: #5f5a52;
+  --sl-color-gray-5: #2a2521;
+  --sl-color-gray-6: #17140f;
+  --sl-color-black: #0e0c0b;
 }
 :root[data-theme="light"] {
-  --sl-color-accent-low: #e8e8e8;
-  --sl-color-accent: #6f6f6f;
-  --sl-color-accent-high: #111111;
+  /* 浅色:暖纸(#f3ede3 面板 / #fdfbf6 页底),与设计稿浅色区一致 */
+  --sl-color-white: #1c1913;
+  --sl-color-gray-1: #2c2620;
+  --sl-color-gray-2: #4a443b;
+  --sl-color-gray-3: #847e74;
+  --sl-color-gray-4: #b0a798;
+  --sl-color-gray-5: #e4dccd;
+  --sl-color-gray-6: #f3ede3;
+  --sl-color-gray-7: #f8f3ea;
+  --sl-color-black: #fdfbf6;
+  --mibu-glow: rgba(255, 90, 60, 0.1);
+}
+
+/* 1) 全站强调色(侧边栏 / 链接 / 选中)—— 珊瑚橙,冷灰单色时代结束 */
+:root {
+  --sl-color-accent-low: #3a1e16;
+  --sl-color-accent: #ff5a3c;
+  --sl-color-accent-high: #ffb59f;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #ffe4db;
+  --sl-color-accent: #e5482c;
+  --sl-color-accent-high: #b8371d;
 }
 /* 正文链接:单色下靠下划线提供可点性 */
 .sl-markdown-content a:not(.mibu-btn):not(.mibu-doc) {
@@ -119,8 +134,27 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fb7185;
-  box-shadow: 0 0 10px 1px #fb7185;
+  background: var(--mibu-coral);
+  box-shadow: 0 0 12px 2px var(--mibu-coral);
+}
+/* HERO 氛围:暖点阵网格 + 顶部珊瑚橙光晕(呼应设计稿的节点画布) */
+.mibu-home .mibu-hero {
+  position: relative;
+  isolation: isolate;
+}
+.mibu-home .mibu-hero::before {
+  content: "";
+  position: absolute;
+  inset: -10% -20% 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 0%, var(--mibu-glow), transparent 70%),
+    radial-gradient(var(--sl-color-gray-5) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 20%, #000 40%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 80% at 50% 20%, #000 40%, transparent 75%);
+  opacity: 0.6;
+  pointer-events: none;
 }
 /* .mibu-home 前缀提高优先级,压过 Starlight 的 .sl-markdown-content h1 颜色(否则浅色主题下变暗) */
 .mibu-home .mibu-hero h1 {
@@ -132,9 +166,13 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   margin: 0.9rem auto 0;
   color: var(--sl-color-white);
 }
-/* 第二行降灰:单色体系里用亮度做主副层次,替代原渐变字 */
+/* 第二行:橙金渐变字,呼应设计稿的 linear-gradient(135deg,#ff5a3c,#ff9f1c) */
 .mibu-hero h1 .g {
-  color: var(--sl-color-gray-4);
+  background: var(--mibu-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .mibu-sub {
   margin: 1.1rem auto 0;
@@ -172,21 +210,24 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
     border-color 0.15s ease;
 }
 .mibu-btn.primary {
-  background: var(--sl-color-white);
-  color: var(--sl-color-black);
+  background: var(--mibu-grad);
+  color: #fff;
+  box-shadow: 0 8px 24px -10px var(--mibu-coral);
 }
 .mibu-btn.ghost {
   color: var(--sl-color-white);
   border: 1px solid var(--sl-color-gray-5);
+  background: color-mix(in srgb, var(--sl-color-gray-6) 60%, transparent);
 }
 .mibu-btn:hover {
   transform: translateY(-2px);
 }
 .mibu-btn.primary:hover {
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 14px 34px -10px var(--mibu-coral);
 }
 .mibu-btn.ghost:hover {
-  border-color: var(--sl-color-gray-3);
+  border-color: var(--mibu-coral);
+  color: var(--mibu-coral);
 }
 
 /* ---- 特性区(随主题自适应)---- */
@@ -213,13 +254,30 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
 }
 .mibu-feat:hover {
   transform: translateY(-3px);
-  border-color: var(--sl-color-gray-4);
+  border-color: color-mix(in srgb, var(--mibu-coral) 55%, var(--sl-color-gray-5));
+  box-shadow: 0 18px 46px -24px var(--mibu-coral);
 }
 .mibu-feat .lab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: var(--mono);
   font-size: 0.68rem;
   letter-spacing: 0.16em;
   color: var(--sl-color-gray-3);
+}
+/* 节点状态灯:呼应设计稿的圆点,珊瑚 / 青交替,给单调标签一点活性 */
+.mibu-feat .lab::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mibu-coral);
+  box-shadow: 0 0 8px var(--mibu-coral);
+}
+.mibu-feat:nth-child(even) .lab::before {
+  background: var(--mibu-cyan);
+  box-shadow: 0 0 8px var(--mibu-cyan);
 }
 .mibu-feat h3 {
   margin: 0.5rem 0 0.4rem;
