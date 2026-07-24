@@ -516,8 +516,9 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
         raise SequenceDomainError("Track not found")
-    if track.kind != "subtitle":
-        raise SequenceDomainError("Text clips can only be placed on subtitle tracks")
+    # 字幕轨 = 序列级统一样式的底部字幕;video 轨 = 花字(每条自带样式、transform 定位)。
+    if track.kind not in ("subtitle", "video"):
+        raise SequenceDomainError("Text clips can only be placed on subtitle or video tracks")
     if not op.text.strip():
         raise SequenceDomainError("Text must not be empty")
     if op.duration <= 0:

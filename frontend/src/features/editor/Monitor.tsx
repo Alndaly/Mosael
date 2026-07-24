@@ -15,6 +15,8 @@ import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/
 import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
 import { ScopesFloat } from "@/features/editor/ScopesFloat";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
+import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
+import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -94,6 +96,19 @@ export function Monitor({
         .filter((item) => item.kind === "subtitle" && !item.muted)
         .flatMap((track) => track.clips ?? []),
     [sequence],
+  );
+  // 花字:video 轨上无 asset 的文本片段。作为最上层 DOM 叠加渲染(与 compositor/element 视频路径
+  // 解耦,和字幕同理),用 transform 定位、随关键帧动画,匹配后端 ASS 烧录。
+  const textOverlayClips = React.useMemo(
+    () =>
+      videoTracks
+        .filter((track) => !track.muted)
+        .flatMap((track) => (track.clips ?? []).filter((clip) => !clip.asset_id && clip.text_override)),
+    [videoTracks],
+  );
+  const activeTextClips = React.useMemo(
+    () => textOverlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
+    [textOverlayClips, playhead],
   );
   const totalDuration = React.useMemo(
     () => sequenceDuration((sequence.tracks ?? []).flatMap((track) => track.clips ?? [])),
@@ -203,9 +218,16 @@ export function Monitor({
   }, [sequence]);
   const draftFor = (clipId: string | undefined) => (draft && selectedActive?.id === clipId ? draft : null);
   const clipTransformStyle = React.useMemo<React.CSSProperties>(
-    () => transformCss(draftFor(activeClip?.id) ?? readTransform(activeClip?.transform)),
+    () =>
+      transformCss(
+        draftFor(activeClip?.id) ??
+          (activeClip
+            ? sampleTransform(readTransform(activeClip.transform), clipProgress(activeClip, playhead))
+            : readTransform(undefined)),
+      ),
+    // 关键帧:base 轨 clip 的预览 transform 也要随播放头插值,故 playhead 入依赖。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft, selectedActive?.id, activeClip?.id, activeClip?.transform],
+    [draft, selectedActive?.id, activeClip?.id, activeClip?.transform, playhead],
   );
 
   // Active video/image clips in z-order (base first = bottom, overlays bottom→top) as
@@ -498,6 +520,19 @@ export function Monitor({
               {activeSubtitle.text_override}
             </div>
           )}
+          {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
+          {activeTextClips.map((clip) => {
+            const tf = sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
+            return (
+              <div
+                key={clip.id}
+                className="pointer-events-none absolute z-[3]"
+                style={textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width)}
+              >
+                {clip.text_override}
+              </div>
+            );
+          })}
           {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}
           {!compositorActive &&
             activeOverlayClips.map((clip) => {

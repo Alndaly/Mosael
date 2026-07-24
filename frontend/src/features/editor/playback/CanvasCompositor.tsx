@@ -6,6 +6,7 @@ import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilte
 import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
 import { evictions } from "@/features/editor/playback/sourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
+import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { useEditorStore } from "@/stores/editorStore";
 
 export interface CompositorLayer {
@@ -205,7 +206,8 @@ export function CanvasCompositor({
         if (!media) continue;
         const { source: img, w: mw, h: mh } = media;
 
-        const tf = layer.transformOverride ?? readTransform(layer.clip.transform);
+        // 关键帧:按播放头在片段内的进度插值,画布合成才随预览动起来(拖拽手柄时 override 优先)。
+        const tf = layer.transformOverride ?? sampleTransform(readTransform(layer.clip.transform), clipProgress(layer.clip, playhead));
         // Only the base layer (index 0) follows the sequence fill mode; overlays always cover.
         // "blur" paints a full-frame blurred cover backdrop, then the sharp contain-fit picture.
         const contain = i === 0 && fill !== "cover";

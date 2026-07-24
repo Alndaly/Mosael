@@ -93,13 +93,28 @@ def test_subtitle_style_is_undoable() -> None:
     assert any(t["kind"] == "subtitle" for t in undone["tracks"])  # the earlier track edit untouched
 
 
-def test_text_clip_rejected_on_video_track() -> None:
+def test_text_clip_allowed_on_video_track_as_title() -> None:
+    """花字:video 轨接受文本片段(每条自带样式、transform 定位),区别于字幕轨的统一底部字幕。"""
     client = fresh_client()
     sequence = setup_sequence(client)
     video = next(t for t in sequence["tracks"] if t["kind"] == "video")
     res = client.post(
         f"/api/sequences/{sequence['id']}/text-clips",
-        json={"track_id": video["id"], "text": "x", "timeline_start": 0, "duration": 1},
+        json={"track_id": video["id"], "text": "标题", "timeline_start": 0, "duration": 1},
+    )
+    assert res.status_code == 200
+    updated = res.json()
+    clip = next(c for t in updated["tracks"] if t["id"] == video["id"] for c in t["clips"])
+    assert clip["text_override"] == "标题" and clip["asset_id"] is None
+
+
+def test_text_clip_rejected_on_audio_track() -> None:
+    client = fresh_client()
+    sequence = setup_sequence(client)
+    audio = next(t for t in sequence["tracks"] if t["kind"] == "audio")
+    res = client.post(
+        f"/api/sequences/{sequence['id']}/text-clips",
+        json={"track_id": audio["id"], "text": "x", "timeline_start": 0, "duration": 1},
     )
     assert res.status_code == 422
 

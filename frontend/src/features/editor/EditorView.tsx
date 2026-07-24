@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Type, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -371,6 +371,31 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
     onSuccess: refreshSequences,
   });
+  // 加花字:放到专用图层——复用一条没有画面素材的 video 轨(纯花字/空轨),没有则新建一条,
+  // 避免与 base 视频在同轨重叠。花字每条自带样式、用 transform 定位,区别于底部统一字幕。
+  const addTextMutation = useMutation({
+    mutationFn: async () => {
+      let track = (sequence!.tracks ?? []).find(
+        (item) => item.kind === "video" && !item.locked && (item.clips ?? []).every((c) => !c.asset_id),
+      );
+      if (!track) {
+        const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
+        const updated = await addTrack(sequence!.id, "video");
+        track = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
+      }
+      if (!track) return undefined;
+      return insertTextClip(sequence!.id, {
+        track_id: track.id,
+        text: t("textDefaultText"),
+        timeline_start: useEditorStore.getState().playhead,
+        duration: 3,
+      });
+    },
+    onSuccess: (updated) => {
+      if (updated) applySequence(updated);
+      refreshSequences();
+    },
+  });
   // 一键从逐字稿生成字幕:拉齐所有视频/音频片段的转写,投影到时间线句子,批量插到字幕轨。
   // One pipeline, two entry points. Passing a target language inserts a translation step
   // between projecting the transcript and writing the cues — "翻译成字幕" is the same job as
@@ -587,6 +612,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       .sort((a, b) => a.position - b.position);
     // Base = bottom-most video track (see Monitor z-order); every track above it is an overlay.
     return videoTracks.slice(0, -1).some((track) => track.id === selectedClip.track_id);
+  }, [selectedClip, sequence]);
+  // 花字 = video 轨上的文本片段(无 asset、有 text_override)。它复用画面元素的 transform(定位/
+  // 缩放/旋转/透明度 + 关键帧);而字幕轨的文本走序列级统一样式,不做 per-clip transform。
+  const isTitleText = React.useMemo(() => {
+    if (!selectedClip || !sequence) return false;
+    if (selectedClip.asset_id || selectedClip.text_override == null) return false;
+    return (sequence.tracks ?? []).find((track) => track.id === selectedClip.track_id)?.kind === "video";
   }, [selectedClip, sequence]);
 
   const splitAtPlayhead = React.useCallback(
@@ -911,6 +943,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               selectedClip={selectedClip}
               assets={assets.data ?? []}
               isOverlayClip={isOverlayClip}
+              isTitleText={isTitleText}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
               onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
@@ -998,6 +1031,21 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    disabled={addTextMutation.isPending}
+                    onClick={() => addTextMutation.mutate()}
+                    aria-label={t("addTextAtPlayhead")}
+                  >
+                    <Sparkles size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("addTextAtPlayhead")}</TooltipContent>
               </Tooltip>
               <ExportControl workspaceId={workspace.id} projectId={project.id} sequence={sequence} />
             </>

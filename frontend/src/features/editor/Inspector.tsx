@@ -44,6 +44,7 @@ export function Inspector({
   selectedClip,
   assets,
   isOverlayClip,
+  isTitleText,
   onDeleteClip,
   onSetEffects,
   onSetTransform,
@@ -58,6 +59,8 @@ export function Inspector({
   selectedClip: Clip | null;
   assets: Asset[];
   isOverlayClip: boolean;
+  /** 花字(video 轨上的文本元素):复用画面元素的 transform 面板(定位/缩放/旋转 + 关键帧)。 */
+  isTitleText?: boolean;
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
   onSetTransform?: (clipId: string, transform: Record<string, unknown>) => void;
@@ -322,7 +325,7 @@ export function Inspector({
                 ))}
               </div>
             )}
-            {!isTextClip && onSetTransform && (
+            {(!isTextClip || isTitleText) && onSetTransform && (
               <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
