@@ -205,6 +205,10 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                     outputs = future.result()
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     error = exc
+                    # 不发终态事件的话,这个节点在执行历史里会永远停在"运行中"转圈——
+                    # 外层只有 workflow.failed,定位不到是哪个节点、因为什么失败。
+                    emit_job_event(db, job.id, "workflow.node.failed", {"node_id": nid, "name": node_label(nid), "error": str(exc)[:500]})
+                    db.commit()
                     break
                 with lock:
                     context[nid] = outputs
