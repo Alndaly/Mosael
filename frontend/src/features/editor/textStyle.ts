@@ -16,7 +16,8 @@ export type TextStyle = {
   bold: boolean;
   italic: boolean;
   align: "left" | "center" | "right";
-  font_family: string;
+  font_family: string; // CSS 字体栈;上传字体时为 uploadedFontStack(family)
+  font_id: string; // 上传字体 id;"" = 内置字体栈(与字幕 font_id 同源)
 };
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
@@ -29,18 +30,8 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   italic: false,
   align: "center",
   font_family: "",
+  font_id: "",
 };
-
-/** 花字可选字体:value 是 CSS 字体栈(预览直接用),导出侧 _resolve_font_stack 取首个具体字族给 ASS \\fn。 */
-export const FONT_OPTIONS: Array<{ label: string; value: string }> = [
-  { label: "默认", value: "" },
-  { label: "黑体", value: '"PingFang SC", "Microsoft YaHei", sans-serif' },
-  { label: "宋体", value: '"Songti SC", SimSun, serif' },
-  { label: "楷体", value: '"Kaiti SC", KaiTi, serif' },
-  { label: "圆体", value: '"Yuanti SC", YouYuan, sans-serif' },
-  { label: "无衬线", value: "sans-serif" },
-  { label: "衬线", value: "serif" },
-];
 
 /** 一键花字预设:只覆盖外观字段(颜色/描边/阴影/粗细),不动字体与字号,方便在任意字体上套风格。 */
 export const TEXT_PRESETS: Array<{ key: string; label: string; style: Partial<TextStyle> }> = [
@@ -76,6 +67,7 @@ export function readTextStyle(raw: unknown): TextStyle {
     italic: Boolean(r.italic ?? d.italic),
     align: align === "left" || align === "right" ? align : "center",
     font_family: String(r.font_family ?? "") || "",
+    font_id: String(r.font_id ?? "") || "",
   };
 }
 

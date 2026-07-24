@@ -28,6 +28,11 @@ describe("readTextStyle", () => {
     expect(st.italic).toBe(true);
     expect(st.align).toBe("left");
   });
+
+  it("keeps font_id for uploaded fonts", () => {
+    expect(readTextStyle({ font_id: "f123" }).font_id).toBe("f123");
+    expect(readTextStyle({}).font_id).toBe("");
+  });
 });
 
 describe("textStyleCss", () => {

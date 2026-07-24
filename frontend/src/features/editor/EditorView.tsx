@@ -952,6 +952,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
               onSetGain={(clipId, gain, muted) => setGainMutation.mutate({ clipId, gain, muted })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+              fonts={fonts.data ?? []}
+              onUploadFont={(file) => uploadFontMutation.mutate(file)}
+              onDeleteFont={(fontId) => deleteFontMutation.mutate(fontId)}
+              uploadingFont={uploadFontMutation.isPending}
               onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );

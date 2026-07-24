@@ -1,14 +1,18 @@
 import React from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, Redo2, RotateCcw, Trash2, Undo2, Upload, X } from "lucide-react";
 
-import type { Asset, Clip, Sequence } from "@/api/client";
+import type { Asset, Clip, Font, Sequence } from "@/api/client";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
-import { readTextStyle, FONT_OPTIONS, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
+import { readTextStyle, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
+import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
+import { uploadedFontStack } from "@/features/editor/FontFaces";
 import { useEditorStore } from "@/stores/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
@@ -53,6 +57,10 @@ export function Inspector({
   onSetSpeed,
   onSetGain,
   onSetText,
+  fonts,
+  onUploadFont,
+  onDeleteFont,
+  uploadingFont,
   onClose,
 }: {
   sequence: Sequence;
@@ -69,6 +77,11 @@ export function Inspector({
   onSetSpeed?: (clipId: string, speed: number) => void;
   onSetGain?: (clipId: string, gain: number, muted: boolean) => void;
   onSetText?: (clipId: string, text: string) => void;
+  /** 花字字体:工作区上传字体列表 + 上传/删除(与字幕共用一套基础设施)。 */
+  fonts?: Font[];
+  onUploadFont?: (file: File) => void;
+  onDeleteFont?: (fontId: string) => void;
+  uploadingFont?: boolean;
   /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
   onClose?: () => void;
 }) {
@@ -243,7 +256,14 @@ export function Inspector({
               </div>
             )}
             {isTitleText && (
-              <TextStylePanel clip={selectedClip} onSetEffects={onSetEffects} />
+              <TextStylePanel
+                clip={selectedClip}
+                onSetEffects={onSetEffects}
+                fonts={fonts ?? []}
+                onUploadFont={onUploadFont}
+                onDeleteFont={onDeleteFont}
+                uploadingFont={uploadingFont}
+              />
             )}
             {!isTextClip && onSetSpeed && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
@@ -686,55 +706,120 @@ function ColorGradePanel({
   );
 }
 
+/** 上传字体与内置字体栈在同一个 Select 里的区分前缀(与字幕同源)。 */
+const FONT_UPLOAD_PREFIX = "upload:";
+
 /**
- * 花字文字样式面板:字体、字号、颜色/描边、阴影、粗斜、对齐,以及一键花字预设。写入
- * clip.effects.text_style(经 onSetEffects 提交),与预览的 textStyleCss、导出的 ASS 锁步同一套字段。
+ * 花字文字样式面板:字体(内置栈 + 上传字体,shadcn Select)、字号、颜色/描边、阴影、粗斜、对齐,
+ * 以及一键花字预设。写入 clip.effects.text_style,与预览 textStyleCss、导出 ASS 锁步同一套字段。
+ * 字体机制复用字幕:内置 SUBTITLE_FONTS + 工作区上传字体(font_id),预览由 FontFaces 注入 @font-face。
  */
 function TextStylePanel({
   clip,
   onSetEffects,
+  fonts,
+  onUploadFont,
+  onDeleteFont,
+  uploadingFont,
 }: {
   clip: Clip;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
+  fonts: Font[];
+  onUploadFont?: (file: File) => void;
+  onDeleteFont?: (fontId: string) => void;
+  uploadingFont?: boolean;
 }) {
+  const t = useI18n();
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
   const style = readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style);
   const set = (patch: Partial<TextStyle>) =>
     onSetEffects(clip.id, { ...clip.effects, text_style: { ...style, ...patch } });
-  const btn = (active: boolean) =>
+  const iconBtn = (active: boolean) =>
     cn(
       "grid h-6 min-w-[30px] cursor-pointer place-items-center rounded-md border border-border bg-panel px-1.5 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground",
       active && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
     );
+  const swatch =
+    "h-6 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0";
   const bars: Array<{ key: "stroke_width" | "shadow"; label: string }> = [
-    { key: "stroke_width", label: "描边" },
-    { key: "shadow", label: "阴影" },
+    { key: "stroke_width", label: t("textStroke") },
+    { key: "shadow", label: t("textShadow") },
   ];
   return (
-    <div className="grid gap-1.5 border-t border-border pt-2.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">文字样式</span>
+    <div className="grid gap-2 border-t border-border pt-2.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("textStyleTitle")}</span>
       <div className="flex flex-wrap gap-1">
         {TEXT_PRESETS.map((preset) => (
-          <button key={preset.key} type="button" className={btn(false)} onClick={() => set(preset.style)}>
+          <button key={preset.key} type="button" className={iconBtn(false)} onClick={() => set(preset.style)}>
             {preset.label}
           </button>
         ))}
       </div>
       <div className="grid grid-cols-[40px_1fr] items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">字体</span>
-        <select
-          className="h-[26px] w-full cursor-pointer rounded-md border border-border bg-field px-1.5 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-          value={style.font_family}
-          onChange={(event) => set({ font_family: event.target.value })}
+        <span className="text-[11px] text-muted-foreground">{t("textFont")}</span>
+        <Select
+          value={style.font_id ? `${FONT_UPLOAD_PREFIX}${style.font_id}` : style.font_family}
+          onValueChange={(value) => {
+            if (!value.startsWith(FONT_UPLOAD_PREFIX)) {
+              set({ font_family: value, font_id: "" });
+              return;
+            }
+            const id = value.slice(FONT_UPLOAD_PREFIX.length);
+            const picked = fonts.find((font) => font.id === id);
+            if (picked) set({ font_id: id, font_family: uploadedFontStack(picked.family) });
+          }}
         >
-          {FONT_OPTIONS.map((font) => (
-            <option key={font.label} value={font.value}>
-              {font.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-[26px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SUBTITLE_FONTS.map((font) => (
+              <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                {t(font.labelKey as Parameters<typeof t>[0])}
+              </SelectItem>
+            ))}
+            {fonts.map((font) => (
+              <SelectItem key={font.id} value={`${FONT_UPLOAD_PREFIX}${font.id}`} style={{ fontFamily: uploadedFontStack(font.family) }}>
+                {font.family}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+      {onUploadFont && (
+        <div className="flex items-center gap-1 pl-[48px]">
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
+            {uploadingFont ? <Loader2 size={12} className="animate-mibu-spin" /> : <Upload size={12} />} {t("subFontUpload")}
+          </Button>
+          {style.font_id && onDeleteFont && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              onClick={() => {
+                const removing = style.font_id;
+                set({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
+                onDeleteFont(removing);
+              }}
+            >
+              <Trash2 size={12} /> {t("subFontRemove")}
+            </Button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".ttf,.otf,.ttc,.otc"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUploadFont(file);
+              event.target.value = "";
+            }}
+          />
+        </div>
+      )}
       <div className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">字号</span>
+        <span className="text-[11px] text-muted-foreground">{t("textSize")}</span>
         <Slider
           key={`fs-${clip.id}-${Math.round(style.font_size)}`}
           min={12}
@@ -746,13 +831,13 @@ function TextStylePanel({
         <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(style.font_size)}</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          文字
-          <input type="color" className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent" value={style.color} onChange={(event) => set({ color: event.target.value })} />
+        <label className="flex items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
+          {t("textColor")}
+          <input type="color" className={swatch} value={style.color} onChange={(event) => set({ color: event.target.value })} />
         </label>
-        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          描边色
-          <input type="color" className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent" value={style.stroke_color} onChange={(event) => set({ stroke_color: event.target.value })} />
+        <label className="flex items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
+          {t("textStrokeColor")}
+          <input type="color" className={swatch} value={style.stroke_color} onChange={(event) => set({ stroke_color: event.target.value })} />
         </label>
       </div>
       {bars.map((bar) => (
@@ -770,15 +855,15 @@ function TextStylePanel({
         </div>
       ))}
       <div className="flex items-center gap-1">
-        <button type="button" className={btn(style.bold)} onClick={() => set({ bold: !style.bold })} aria-label="加粗">
+        <button type="button" className={iconBtn(style.bold)} onClick={() => set({ bold: !style.bold })} aria-label={t("textBold")}>
           <Bold size={13} />
         </button>
-        <button type="button" className={btn(style.italic)} onClick={() => set({ italic: !style.italic })} aria-label="斜体">
+        <button type="button" className={iconBtn(style.italic)} onClick={() => set({ italic: !style.italic })} aria-label={t("textItalic")}>
           <Italic size={13} />
         </button>
         <span className="mx-0.5 h-4 w-px bg-border" />
         {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([align, Icon]) => (
-          <button key={align} type="button" className={btn(style.align === align)} onClick={() => set({ align })} aria-label={`对齐-${align}`}>
+          <button key={align} type="button" className={iconBtn(style.align === align)} onClick={() => set({ align })} aria-label={`align-${align}`}>
             <Icon size={13} />
           </button>
         ))}
