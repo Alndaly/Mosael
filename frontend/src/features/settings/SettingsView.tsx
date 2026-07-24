@@ -19,6 +19,7 @@ import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
+import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -194,6 +195,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-audio" && (
             <>
+              <BuiltinTtsSection onOpenVoiceClone={() => setSection("voice")} />
               <ProviderProfilesSection
                 capability="tts"
                 title={t("providerTtsTitle")}

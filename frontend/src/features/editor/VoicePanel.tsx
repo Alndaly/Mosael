@@ -50,6 +50,10 @@ export function VoicePanel({
   // endpoints — see the synth mutation below.
   const [engine, setEngine] = React.useState("clone");
   const [engineVoice, setEngineVoice] = React.useState("");
+  // Remote engines take a speed multiplier (the engine paces itself — better prosody than
+  // stretching the waveform afterwards). The local clone worker has no speed input, so the
+  // control only renders for remote engines and the value only rides on their requests.
+  const [speed, setSpeed] = React.useState(1);
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: Infinity });
   const activeEngine = engines.data?.find((item) => item.id === engine);
   // Fetched per engine rather than bundled with the engine list: 火山's catalogue depends on
@@ -65,7 +69,7 @@ export function VoicePanel({
   const isPodcast = engine === "volcano-podcast";
   const [podcastMode, setPodcastMode] = React.useState<"summarize" | "read" | "research">("summarize");
   const [speakerB, setSpeakerB] = React.useState("");
-  const chosenVoice = voiceChoices.find((item) => item.value === engineVoice);
+  const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [refText, setRefText] = React.useState("");
@@ -143,6 +147,7 @@ export function VoicePanel({
             text: podcastMode === "research" ? "" : text,
             topic: podcastMode === "research" ? text : "",
             speakers: [engineVoice || voiceChoices[0]?.value || "", speakerB].filter(Boolean),
+            speed,
           })
         : engine === "clone"
         ? synthesizeVoice(activeVoice as string, { text, project_id: project.id })
@@ -150,9 +155,12 @@ export function VoicePanel({
             workspace_id: workspace.id,
             text,
             engine,
-            engine_voice: engineVoice,
+            // The dropdown *displays* the first voice when nothing is picked — submit the same
+            // thing, or the engine silently falls back to its own default.
+            engine_voice: engineVoice || voiceChoices[0]?.value || "",
             // The family only the listing knows; without it 火山 answers 55000000.
             engine_voice_resource: chosenVoice?.resource_id ?? "",
+            speed,
             project_id: project.id,
           }),
     onSuccess: (job) => {
@@ -279,6 +287,20 @@ export function VoicePanel({
                   {voiceChoices.map((voice) => (
                     <SelectItem key={voice.value} value={voice.value}>
                       {voice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {engine !== "clone" && (
+              <Select value={String(speed)} onValueChange={(value) => setSpeed(Number(value))}>
+                <SelectTrigger className="min-w-0 flex-[0_1_96px]" aria-label={t("voiceSpeed")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[0.75, 1, 1.25, 1.5, 2].map((value) => (
+                    <SelectItem key={value} value={String(value)}>
+                      {value}×
                     </SelectItem>
                   ))}
                 </SelectContent>
