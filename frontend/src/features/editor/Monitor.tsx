@@ -16,7 +16,7 @@ import { compositorSupported, useCompositorEnabled } from "@/features/editor/pla
 import { ScopesFloat } from "@/features/editor/ScopesFloat";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
-import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -39,12 +39,15 @@ export function Monitor({
   subtitleStyleOverride,
   assets,
   onSetTransform,
+  onSetText,
 }: {
   sequence: Sequence;
   /** In-progress style from the subtitle panel, so dragging a slider previews live. */
   subtitleStyleOverride?: Record<string, unknown> | null;
   assets: Asset[];
   onSetTransform?: (clipId: string, transform: Transform) => void;
+  /** 双击花字在画布上就地编辑文字后提交。 */
+  onSetText?: (clipId: string, text: string) => void;
 }) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
@@ -136,6 +139,9 @@ export function Monitor({
   // saved transform so the media tracks the box live; committed on release via onSetTransform.
   // (selectedActive + clipTransformStyle are derived below, after the overlay elements.)
   const [draft, setDraft] = React.useState<Transform | null>(null);
+  // 双击花字进入就地编辑;编辑态用独立 key 重挂 + ref 初始化内容,避免每帧重渲染覆盖用户输入。
+  const [editingTextId, setEditingTextId] = React.useState<string | null>(null);
+  const cancelEditRef = React.useRef(false); // Esc 取消编辑时跳过 onBlur 的提交
   // Time of the last transform-drag movement — the click that *ends* a drag would otherwise
   // bubble to the frame's click-to-play; ignore clicks within a short window after a drag.
   const tfInteractRef = React.useRef(0);
@@ -523,11 +529,61 @@ export function Monitor({
           {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
           {activeTextClips.map((clip) => {
             const tf = sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
+            const elStyle = textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width);
+            if (editingTextId === clip.id) {
+              // 就地编辑:独立 key 重挂 + ref 一次性写入内容(无 React children),避免每帧重渲染覆盖输入。
+              return (
+                <div
+                  key={`${clip.id}-edit`}
+                  className="pointer-events-auto absolute z-[5] cursor-text outline outline-2 outline-primary"
+                  style={elStyle}
+                  contentEditable
+                  suppressContentEditableWarning
+                  ref={(el) => {
+                    if (el && !el.dataset.init) {
+                      el.dataset.init = "1";
+                      el.textContent = clip.text_override ?? "";
+                      el.focus();
+                      const range = document.createRange();
+                      range.selectNodeContents(el);
+                      const sel = window.getSelection();
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    }
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      cancelEditRef.current = true;
+                      event.currentTarget.blur();
+                    } else if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  onBlur={(event) => {
+                    const text = (event.currentTarget.textContent ?? "").trim();
+                    setEditingTextId(null);
+                    if (!cancelEditRef.current && text && text !== clip.text_override) onSetText?.(clip.id, text);
+                    cancelEditRef.current = false;
+                  }}
+                />
+              );
+            }
             return (
               <div
                 key={clip.id}
-                className="pointer-events-none absolute z-[3]"
-                style={textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width)}
+                className="pointer-events-auto absolute z-[3] cursor-move"
+                style={elStyle}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  useEditorStore.getState().selectClip(clip.id);
+                }}
+                onDoubleClick={(event) => {
+                  event.stopPropagation();
+                  useEditorStore.getState().selectClip(clip.id);
+                  setEditingTextId(clip.id);
+                }}
               >
                 {clip.text_override}
               </div>
@@ -562,7 +618,11 @@ export function Monitor({
                 onCommit={(next) => {
                   tfInteractRef.current = performance.now();
                   tfSettleRef.current = true; // hold the draft until the fresh sequence arrives
-                  onSetTransform(selectedActive.id, next);
+                  // 关键帧模式:拖拽结果写到当前进度的关键帧(已打点的属性),而不是覆盖基值。
+                  onSetTransform(
+                    selectedActive.id,
+                    applyTransformCommit(readTransform(selectedActive.transform), clipProgress(selectedActive, playhead), next),
+                  );
                 }}
               />
             </div>

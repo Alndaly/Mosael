@@ -31,6 +31,26 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   font_family: "",
 };
 
+/** 花字可选字体:value 是 CSS 字体栈(预览直接用),导出侧 _resolve_font_stack 取首个具体字族给 ASS \\fn。 */
+export const FONT_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: "默认", value: "" },
+  { label: "黑体", value: '"PingFang SC", "Microsoft YaHei", sans-serif' },
+  { label: "宋体", value: '"Songti SC", SimSun, serif' },
+  { label: "楷体", value: '"Kaiti SC", KaiTi, serif' },
+  { label: "圆体", value: '"Yuanti SC", YouYuan, sans-serif' },
+  { label: "无衬线", value: "sans-serif" },
+  { label: "衬线", value: "serif" },
+];
+
+/** 一键花字预设:只覆盖外观字段(颜色/描边/阴影/粗细),不动字体与字号,方便在任意字体上套风格。 */
+export const TEXT_PRESETS: Array<{ key: string; label: string; style: Partial<TextStyle> }> = [
+  { key: "plain", label: "简白", style: { color: "#ffffff", stroke_width: 0, shadow: 0, bold: true } },
+  { key: "outline", label: "描边", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 4, shadow: 0, bold: true } },
+  { key: "variety", label: "综艺", style: { color: "#ffe14d", stroke_color: "#3a2a00", stroke_width: 6, shadow: 3, bold: true } },
+  { key: "shadow", label: "投影", style: { color: "#ffffff", stroke_color: "#000000", stroke_width: 0, shadow: 6, bold: true } },
+  { key: "candy", label: "糖果", style: { color: "#ff6fa5", stroke_color: "#ffffff", stroke_width: 4, shadow: 2, bold: true } },
+];
+
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** clip.effects.text_style → 归一化后的样式,逐字段回落默认(与后端 _read_text_style 对齐)。 */

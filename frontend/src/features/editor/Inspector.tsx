@@ -1,5 +1,5 @@
 import React from "react";
-import { Diamond, Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Redo2, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 
 import type { Asset, Clip, Sequence } from "@/api/client";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
+import { readTextStyle, FONT_OPTIONS, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { useEditorStore } from "@/stores/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
@@ -240,6 +241,9 @@ export function Inspector({
                   }}
                 />
               </div>
+            )}
+            {isTitleText && (
+              <TextStylePanel clip={selectedClip} onSetEffects={onSetEffects} />
             )}
             {!isTextClip && onSetSpeed && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
@@ -678,6 +682,107 @@ function ColorGradePanel({
         <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
       </div>
       <p className="mb-0 mt-1 text-[11px] leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
+    </div>
+  );
+}
+
+/**
+ * 花字文字样式面板:字体、字号、颜色/描边、阴影、粗斜、对齐,以及一键花字预设。写入
+ * clip.effects.text_style(经 onSetEffects 提交),与预览的 textStyleCss、导出的 ASS 锁步同一套字段。
+ */
+function TextStylePanel({
+  clip,
+  onSetEffects,
+}: {
+  clip: Clip;
+  onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
+}) {
+  const style = readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style);
+  const set = (patch: Partial<TextStyle>) =>
+    onSetEffects(clip.id, { ...clip.effects, text_style: { ...style, ...patch } });
+  const btn = (active: boolean) =>
+    cn(
+      "grid h-6 min-w-[30px] cursor-pointer place-items-center rounded-md border border-border bg-panel px-1.5 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground",
+      active && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
+    );
+  const bars: Array<{ key: "stroke_width" | "shadow"; label: string }> = [
+    { key: "stroke_width", label: "描边" },
+    { key: "shadow", label: "阴影" },
+  ];
+  return (
+    <div className="grid gap-1.5 border-t border-border pt-2.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">文字样式</span>
+      <div className="flex flex-wrap gap-1">
+        {TEXT_PRESETS.map((preset) => (
+          <button key={preset.key} type="button" className={btn(false)} onClick={() => set(preset.style)}>
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-[40px_1fr] items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">字体</span>
+        <select
+          className="h-[26px] w-full cursor-pointer rounded-md border border-border bg-field px-1.5 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+          value={style.font_family}
+          onChange={(event) => set({ font_family: event.target.value })}
+        >
+          {FONT_OPTIONS.map((font) => (
+            <option key={font.label} value={font.value}>
+              {font.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">字号</span>
+        <Slider
+          key={`fs-${clip.id}-${Math.round(style.font_size)}`}
+          min={12}
+          max={200}
+          step={2}
+          defaultValue={[style.font_size]}
+          onValueCommit={([value]) => set({ font_size: value })}
+        />
+        <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(style.font_size)}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          文字
+          <input type="color" className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent" value={style.color} onChange={(event) => set({ color: event.target.value })} />
+        </label>
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          描边色
+          <input type="color" className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent" value={style.stroke_color} onChange={(event) => set({ stroke_color: event.target.value })} />
+        </label>
+      </div>
+      {bars.map((bar) => (
+        <div key={bar.key} className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">{bar.label}</span>
+          <Slider
+            key={`${bar.key}-${clip.id}-${style[bar.key]}`}
+            min={0}
+            max={20}
+            step={1}
+            defaultValue={[style[bar.key]]}
+            onValueCommit={([value]) => set({ [bar.key]: value } as Partial<TextStyle>)}
+          />
+          <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(style[bar.key])}</span>
+        </div>
+      ))}
+      <div className="flex items-center gap-1">
+        <button type="button" className={btn(style.bold)} onClick={() => set({ bold: !style.bold })} aria-label="加粗">
+          <Bold size={13} />
+        </button>
+        <button type="button" className={btn(style.italic)} onClick={() => set({ italic: !style.italic })} aria-label="斜体">
+          <Italic size={13} />
+        </button>
+        <span className="mx-0.5 h-4 w-px bg-border" />
+        {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([align, Icon]) => (
+          <button key={align} type="button" className={btn(style.align === align)} onClick={() => set({ align })} aria-label={`对齐-${align}`}>
+            <Icon size={13} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

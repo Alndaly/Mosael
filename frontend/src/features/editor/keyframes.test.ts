@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import type { Transform } from "@/features/editor/TransformOverlay";
-import { clipProgress, hasActiveKeyframes, hasPropAt, propTimes, removePropKeyframe, sampleProp, sampleTransform, togglePropKeyframe, upsertKeyframe } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, hasActiveKeyframes, hasPropAt, propTimes, removePropKeyframe, sampleProp, sampleTransform, togglePropKeyframe, upsertKeyframe } from "@/features/editor/keyframes";
 
 const base: Transform = { scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 };
+
+describe("applyTransformCommit", () => {
+  const tf = (over: Partial<Transform> = {}): Transform => ({ ...base, ...over });
+
+  it("no keyframes → commits to base values (drag edits statics)", () => {
+    const r = applyTransformCommit(tf(), 0.5, tf({ x: 0.4, scale: 1.5 }));
+    expect(r.x).toBe(0.4);
+    expect(r.scale).toBe(1.5);
+    expect(r.keyframes ?? []).toEqual([]);
+  });
+
+  it("keyed property → auto-keys at progress, base value untouched", () => {
+    const b = tf({ keyframes: [{ t: 0, x: -1 }, { t: 1, x: 1 }] });
+    const r = applyTransformCommit(b, 0.5, tf({ x: 0.3, y: 0.2 }));
+    expect(r.x).toBe(0); // x is keyed → base stays, animation drives it
+    expect((r.keyframes ?? []).find((k) => Math.abs(k.t - 0.5) < 1e-6)?.x).toBe(0.3);
+    expect(r.y).toBe(0.2); // y not keyed → base updated by the drag
+  });
+});
 
 describe("sampleProp", () => {
   it("holds the endpoint value outside the keyframe range", () => {

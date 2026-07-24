@@ -112,3 +112,20 @@ export function togglePropKeyframe(keyframes: Keyframe[] | undefined, prop: KfPr
     ? removePropKeyframe(keyframes, prop, snapped)
     : upsertKeyframe(keyframes, snapped, { [prop]: value });
 }
+
+/**
+ * 提交一个完整 transform(画布拖拽手柄的结果):已打了关键帧的属性写到当前进度的关键帧点、
+ * 基值保持不动;其余属性直接改基值。没有任何关键帧时退化为改基值(原行为)。
+ * 让"拖动预览元素"与 Inspector 滑块一致——在关键帧模式下自动打下一帧,不必回填数值。
+ */
+export function applyTransformCommit(base: Transform, progress: number, next: Transform): Transform {
+  const vals: Record<KfProp, number> = { scale: next.scale, x: next.x, y: next.y, rotation: next.rotation, opacity: next.opacity };
+  const kfs = base.keyframes ?? [];
+  const keyed = PROPS.filter((prop) => propTimes(kfs, prop).length > 0);
+  if (keyed.length === 0) return { ...base, ...vals };
+  const patch: Partial<Record<KfProp, number>> = {};
+  for (const prop of keyed) patch[prop] = vals[prop];
+  const result: Transform = { ...base, ...vals, keyframes: upsertKeyframe(kfs, progress, patch) };
+  for (const prop of keyed) result[prop] = base[prop]; // keyed 属性走关键帧,基值不动
+  return result;
+}
