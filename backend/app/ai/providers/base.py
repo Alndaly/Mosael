@@ -54,9 +54,26 @@ class ProviderContext:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class GenerationCallbacks:
+    """Optional live channel from a provider's poll loop back to the job.
+
+    on_progress reports a coarse fraction (0..1) plus a user-facing message; is_cancelled
+    is checked between provider round-trips so a user cancel can stop the remote work
+    (e.g. ComfyUI /interrupt) instead of merely abandoning it. Providers that opt in set
+    supports_callbacks and accept the keyword; everyone else keeps the old signature —
+    the runner only passes callbacks where they are understood.
+    """
+
+    on_progress: Any  # Callable[[float, str], None]
+    is_cancelled: Any  # Callable[[], bool]
+
+
 class GenerationProvider(ABC):
     name: str
     kind: str
+    #: Providers that accept generate(..., callbacks=...) set this True.
+    supports_callbacks: bool = False
 
     def requires_credentials(self) -> bool:
         return True

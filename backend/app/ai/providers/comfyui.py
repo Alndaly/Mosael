@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.ai.providers.base import (
+    GenerationCallbacks,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -20,16 +21,24 @@ from app.ai.providers.base import (
 )
 
 """
-ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential image
-provider. POST /prompt submits an API-format workflow graph, /history/{id} is polled
-until the graph finishes, and each SaveImage output is fetched via /view.
+ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential image/video
+provider. POST /prompt submits an API-format workflow graph, /history/{id} is polled until
+the graph finishes, outputs are fetched via /view.
 
-The seam that makes arbitrary ComfyUI graphs fit Mibu's prompt→image contract is a
+The seam that makes arbitrary ComfyUI graphs fit Mibu's prompt→media contract is a
 *template with placeholders*: the profile may carry a workflow exported from ComfyUI
-(设置 → 生成 → ComfyUI → 工作流模板, API format), in which `{{prompt}}` `{{negative}}`
-`{{seed}}` `{{width}}` `{{height}}` `{{steps}}` are substituted per request. Without a
-template a built-in txt2img graph is used, with the checkpoint discovered live from
-/object_info — so a stock ComfyUI works before anything is configured.
+(API format) in which `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}`
+`{{steps}}` `{{duration_seconds}}` are substituted per request. Images fall back to a
+built-in txt2img graph (checkpoint discovered live from /object_info) so a stock ComfyUI
+works unconfigured; video always needs a pasted template — there is no stock video graph
+that works without extra custom nodes, so pretending otherwise would only defer the error.
+
+Multiple templates = multiple provider profiles: the profile picker already selects among
+them per generation session, so template management needs no parallel store.
+
+Cancel/progress ride on GenerationCallbacks: each poll tick reports coarse progress
+(queue position, elapsed) and checks for user cancel, which maps to POST /interrupt for
+the running prompt plus a queue delete for a pending one.
 """
 
 DEFAULT_BASE = "http://127.0.0.1:8188"
@@ -37,6 +46,9 @@ SUBMIT_TIMEOUT = 30
 #: Generation itself can be minutes on a modest GPU; polling is cheap, the ceiling generous.
 POLL_TIMEOUT_SECONDS = 600
 POLL_INTERVAL_SECONDS = 1.0
+#: Keys ComfyUI output nodes file media under: SaveImage → images, VHS/AnimateDiff → gifs,
+#: newer video-combine nodes → videos. Scanned in this order.
+OUTPUT_KEYS = ("images", "gifs", "videos")
 
 #: Minimal txt2img in ComfyUI API format. `ckpt_name` is filled from /object_info at run
 #: time — hardcoding a checkpoint filename would break on every install but the author's.
@@ -80,14 +92,15 @@ def substitute_placeholders(graph: dict[str, Any], values: dict[str, Any]) -> di
     return fill(copy.deepcopy(graph))
 
 
-def collect_output_images(history_entry: dict[str, Any]) -> list[dict[str, Any]]:
-    """The image refs a finished graph produced, in node order."""
-    images: list[dict[str, Any]] = []
+def collect_output_files(history_entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every media file a finished graph produced (images/gifs/videos), previews excluded."""
+    files: list[dict[str, Any]] = []
     for node_output in (history_entry.get("outputs") or {}).values():
-        for image in node_output.get("images") or []:
-            if image.get("filename") and image.get("type") != "temp":
-                images.append(image)
-    return images
+        for key in OUTPUT_KEYS:
+            for item in node_output.get(key) or []:
+                if item.get("filename") and item.get("type") != "temp":
+                    files.append(item)
+    return files
 
 
 def _size_from_request(request: GenerationRequest) -> tuple[int, int]:
@@ -103,12 +116,21 @@ def _size_from_request(request: GenerationRequest) -> tuple[int, int]:
 
 class ComfyUIProvider(GenerationProvider):
     name = "comfyui"
-    kind = "image"
+    supports_callbacks = True
+
+    def __init__(self, kind: str = "image") -> None:
+        self.kind = kind
 
     def requires_credentials(self) -> bool:
         return False  # 本地服务,无密钥;可达性在 generate 里用可读错误报告
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(
+        self,
+        request: GenerationRequest,
+        context: ProviderContext,
+        output_dir: Path,
+        callbacks: GenerationCallbacks | None = None,
+    ) -> GenerationResult:
         base = (context.base_url or DEFAULT_BASE).rstrip("/")
         width, height = _size_from_request(request)
         values: dict[str, Any] = {
@@ -118,22 +140,27 @@ class ComfyUIProvider(GenerationProvider):
             "steps": int(request.parameters.get("steps") or 20),
             "width": width,
             "height": height,
+            "duration_seconds": float(request.parameters.get("duration_seconds", 5)),
         }
         try:
             with httpx.Client(base_url=base, timeout=SUBMIT_TIMEOUT) as client:
                 graph = self._resolve_template(client, context)
                 graph = substitute_placeholders(graph, values)
                 prompt_id = self._submit(client, graph)
-                entry = self._wait(client, prompt_id)
-                images = collect_output_images(entry)
-                if not images:
-                    raise ProviderError("ComfyUI 完成了执行但没有产出图片——工作流模板里需要一个 SaveImage 节点")
+                entry = self._wait(client, prompt_id, callbacks)
+                files = collect_output_files(entry)
+                if not files:
+                    raise ProviderError(
+                        "ComfyUI 完成了执行但没有产出文件——工作流模板里需要 SaveImage(图)或视频合成输出节点(视频)"
+                    )
                 output_dir.mkdir(parents=True, exist_ok=True)
-                target = output_dir / f"comfyui-{prompt_id[:8]}{Path(images[0]['filename']).suffix or '.png'}"
+                chosen = self._pick_output(files)
+                suffix = Path(chosen["filename"]).suffix or (".mp4" if self.kind == "video" else ".png")
+                target = output_dir / f"comfyui-{prompt_id[:8]}{suffix}"
                 download = client.get("/view", params={
-                    "filename": images[0]["filename"],
-                    "subfolder": images[0].get("subfolder", ""),
-                    "type": images[0].get("type", "output"),
+                    "filename": chosen["filename"],
+                    "subfolder": chosen.get("subfolder", ""),
+                    "type": chosen.get("type", "output"),
                 })
                 download.raise_for_status()
                 target.write_bytes(download.content)
@@ -142,10 +169,17 @@ class ComfyUIProvider(GenerationProvider):
                 f"连接 ComfyUI 失败({base}):{exc}。请确认 ComfyUI 正在运行,地址在设置 → AI 绘图 → ComfyUI 里可改。"
             ) from exc
         usage = metering_from_request(request)
-        usage["images"] = 1
         return GenerationResult(output_path=target, usage=usage, raw_usage={"prompt_id": prompt_id})
 
     # ------------------------------------------------------------------
+    def _pick_output(self, files: list[dict[str, Any]]) -> dict[str, Any]:
+        if self.kind == "video":
+            # 视频图里常同时有帧图与合成视频;优先真正的视频容器
+            for item in files:
+                if Path(item["filename"]).suffix.lower() in (".mp4", ".webm", ".mov", ".gif", ".webp"):
+                    return item
+        return files[0]
+
     def _resolve_template(self, client: httpx.Client, context: ProviderContext) -> dict[str, Any]:
         raw = str((context.extra or {}).get("workflow_template") or "").strip()
         if raw:
@@ -156,6 +190,13 @@ class ComfyUIProvider(GenerationProvider):
             if not isinstance(graph, dict) or not graph:
                 raise ProviderError("ComfyUI 工作流模板为空——需要 API 格式(节点 id → {class_type, inputs})")
             return graph
+        if self.kind == "video":
+            # 没有"到处都能跑"的内置视频图(AnimateDiff/SVD/WAN 都要装节点),
+            # 硬造一个只会把错误推迟到执行期 —— 不如立刻说清楚缺什么。
+            raise ProviderError(
+                "ComfyUI 视频生成需要工作流模板:在 ComfyUI 里搭好视频工作流(如 AnimateDiff / WAN),"
+                "「导出 (API)」后粘贴到该档案的模板字段,提示词位置写 {{prompt}}"
+            )
         # 无模板 → 内置 txt2img,checkpoint 现场发现
         response = client.get("/object_info/CheckpointLoaderSimple")
         response.raise_for_status()
@@ -187,9 +228,15 @@ class ComfyUIProvider(GenerationProvider):
             raise ProviderError("ComfyUI 未返回 prompt_id")
         return prompt_id
 
-    def _wait(self, client: httpx.Client, prompt_id: str) -> dict[str, Any]:
-        deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
+    def _wait(self, client: httpx.Client, prompt_id: str, callbacks: GenerationCallbacks | None) -> dict[str, Any]:
+        started = time.monotonic()
+        deadline = started + POLL_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
+            if callbacks is not None and callbacks.is_cancelled():
+                self._interrupt(client, prompt_id)
+                raise ProviderError("已取消")
+            if callbacks is not None:
+                callbacks.on_progress(*self._progress(client, prompt_id, started))
             response = client.get(f"/history/{prompt_id}")
             response.raise_for_status()
             entry = response.json().get(prompt_id)
@@ -201,6 +248,37 @@ class ComfyUIProvider(GenerationProvider):
                     return entry
             time.sleep(POLL_INTERVAL_SECONDS)
         raise ProviderError(f"ComfyUI 生成超时({POLL_TIMEOUT_SECONDS}s)——工作流可能仍在排队,可在 ComfyUI 界面查看")
+
+    def _progress(self, client: httpx.Client, prompt_id: str, started: float) -> tuple[float, str]:
+        """Coarse progress from the queue: position while pending, elapsed while running.
+
+        ComfyUI's fine-grained progress lives on a WebSocket; the queue poll costs one GET
+        we are already paying and never lies about state. 0.95 is the runner's ceiling —
+        1.0 belongs to asset registration.
+        """
+        elapsed = int(time.monotonic() - started)
+        try:
+            queue = client.get("/queue").json()
+            pending = [item[1] for item in queue.get("queue_pending") or [] if len(item) > 1]
+            if prompt_id in pending:
+                position = pending.index(prompt_id) + 1
+                return 0.05, f"ComfyUI 排队中(第 {position} 位)"
+        except Exception:  # noqa: BLE001 — 进度是装饰,拿不到队列绝不影响生成
+            pass
+        fraction = min(0.9, 0.15 + elapsed / 120.0)  # 无真实进度时按时间爬坡,封顶 0.9
+        return fraction, f"ComfyUI 生成中…(已用 {elapsed}s)"
+
+    def _interrupt(self, client: httpx.Client, prompt_id: str) -> None:
+        """Best-effort stop: interrupt the running prompt AND drop it from the queue —
+        which one applies depends on timing we cannot observe atomically."""
+        for call in (
+            lambda: client.post("/interrupt"),
+            lambda: client.post("/queue", json={"delete": [prompt_id]}),
+        ):
+            try:
+                call()
+            except httpx.HTTPError:
+                pass
 
 
 def _error_from_status(status: dict[str, Any]) -> str:

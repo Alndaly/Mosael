@@ -80,7 +80,10 @@ def _run_generation(generation_id: str) -> None:
                 source_files=_source_files_for_generation(db, generation),
             )
             provider.validate_request(request)
-            result = provider.generate(request, context, workdir)
+            if getattr(provider, "supports_callbacks", False):
+                result = provider.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
+            else:
+                result = provider.generate(request, context, workdir)
             asset = register_file_asset(
                 db,
                 workspace_id=job.workspace_id,
@@ -110,13 +113,37 @@ def _run_generation(generation_id: str) -> None:
         except ProviderError as exc:
             if request is not None:
                 _record_generation_usage(db, generation, job, request, context, None, started, "failed")
-            _fail(db, job, str(exc))
+            # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
+            # 泛化的 Generation failed,取消看起来就像出了错。
+            if job.status in ("queued", "running"):
+                _fail(db, job, str(exc))
+            else:
+                db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
             if request is not None:
                 _record_generation_usage(db, generation, job, request, context, None, started, "failed")
             _fail(db, job, sanitize_provider_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _job_callbacks(db, job: Job):
+    """Bridge a provider's poll loop to the job row: progress writes through (capped below
+    1.0 — completion belongs to asset registration), cancellation reads the row back so a
+    user cancel reaches the provider between round-trips."""
+    from app.ai.providers import GenerationCallbacks
+
+    def on_progress(fraction: float, message: str) -> None:
+        job.progress = min(0.95, max(float(job.progress or 0.0), float(fraction)))
+        if message:
+            job.message = message[:200]
+        db.commit()
+
+    def is_cancelled() -> bool:
+        db.refresh(job)
+        return job.status not in ("queued", "running")
+
+    return GenerationCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
 
 
 def _fail(db, job: Job, message: str) -> None:

@@ -97,6 +97,19 @@ COMFYUI_IMAGE_CAPABILITIES = {
     "max_num_images": 1,
 }
 
+COMFYUI_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video"],
+    "max_prompt_chars": 8000,
+    "parameter_keys": ["duration_seconds", "seed", "steps", "negative_prompt", "size"],
+    "duration_seconds": [3, 5, 10],
+    "default_duration_seconds": 5,
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "max_duration_seconds": 10,
+    # 视频没有内置图:必须在 ComfyUI 档案里粘贴 API 格式的视频工作流模板
+    "requires_workflow_template": True,
+}
+
 BUILTIN_MODELS = [
     {
         "id": "comfyui:workflow:image",
@@ -104,6 +117,13 @@ BUILTIN_MODELS = [
         "kind": "image",
         "model": "workflow",
         "capabilities": COMFYUI_IMAGE_CAPABILITIES,
+    },
+    {
+        "id": "comfyui:workflow:video",
+        "provider": "comfyui",
+        "kind": "video",
+        "model": "workflow",
+        "capabilities": COMFYUI_VIDEO_CAPABILITIES,
     },
     {
         "id": "openai:gpt-image-2:image",

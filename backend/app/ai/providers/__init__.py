@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from app.ai.providers.base import GenerationProvider, GenerationRequest, GenerationResult, ProviderContext, ProviderError
+from app.ai.providers.base import (
+    GenerationCallbacks,
+    GenerationProvider,
+    GenerationRequest,
+    GenerationResult,
+    ProviderContext,
+    ProviderError,
+)
 from app.ai.providers.comfyui import ComfyUIProvider
 from app.ai.providers.kling import KlingProvider
 from app.ai.providers.openai_image import OpenAIImageProvider
@@ -25,11 +32,20 @@ _register(VeoProvider())
 _register(KlingProvider())
 _register(OpenAIImageProvider("openai"))
 _register(OpenAIImageProvider("openai-compatible"))
-_register(ComfyUIProvider())
+_register(ComfyUIProvider("image"))
+_register(ComfyUIProvider("video"))
 
 
 def get_provider(name: str, kind: str) -> GenerationProvider | None:
     return _PROVIDERS.get((name, kind))
 
 
-__all__ = ["GenerationProvider", "GenerationRequest", "GenerationResult", "ProviderContext", "ProviderError", "get_provider"]
+__all__ = [
+    "GenerationCallbacks",
+    "GenerationProvider",
+    "GenerationRequest",
+    "GenerationResult",
+    "ProviderContext",
+    "ProviderError",
+    "get_provider",
+]

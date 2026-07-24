@@ -197,8 +197,8 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         # 免密钥:本地(或局域网 GPU 机器)的 ComfyUI 实例。工作流模板是接缝——
         # 任意 ComfyUI 图经 {{prompt}} 等占位符适配成"提示词 → 图"契约;留空用内置
         # txt2img(checkpoint 从 /object_info 现场发现)。
-        "capabilities": "图像生成(本地 ComfyUI,免密钥;可粘贴自定义工作流模板)",
-        "capability_ids": ["image"],
+        "capabilities": "图像与视频生成(本地 ComfyUI,免密钥;图像可开箱即用,视频需粘贴工作流模板)",
+        "capability_ids": ["image", "video"],
         "fields": [
             {
                 "key": "base_url",

@@ -19,7 +19,7 @@ from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderEr
 from app.ai.providers.comfyui import (
     DEFAULT_TEMPLATE,
     ComfyUIProvider,
-    collect_output_images,
+    collect_output_files,
     substitute_placeholders,
 )
 from app.domain.generation.catalog import BUILTIN_MODELS
@@ -75,12 +75,12 @@ class TestPlaceholders:
         assert DEFAULT_TEMPLATE["4"]["inputs"]["ckpt_name"] == "{{checkpoint}}"
 
 
-def test_collect_output_images_skips_temp_previews() -> None:
+def test_collect_output_files_skips_temp_previews() -> None:
     entry = {"outputs": {
         "9": {"images": [{"filename": "a.png", "type": "output", "subfolder": ""}]},
         "12": {"images": [{"filename": "p.png", "type": "temp", "subfolder": ""}]},
     }}
-    assert [i["filename"] for i in collect_output_images(entry)] == ["a.png"]
+    assert [i["filename"] for i in collect_output_files(entry)] == ["a.png"]
 
 
 def _mock_comfy(monkeypatch, handler) -> None:
@@ -200,3 +200,134 @@ class TestReadableFailures:
         _mock_comfy(monkeypatch, handler)
         with pytest.raises(ProviderError, match="CUDA out of memory"):
             ComfyUIProvider().generate(req(), ctx(), tmp_path)
+
+
+# ---------------------------------------------------------------- Phase 2: video + 进度/取消
+
+
+def vreq(**params) -> GenerationRequest:
+    return GenerationRequest(kind="video", model="workflow", prompt="海边延时", parameters=params)
+
+
+def test_video_kind_is_registered_and_keyless() -> None:
+    provider = get_provider("comfyui", "video")
+    assert provider is not None
+    assert provider.requires_credentials() is False
+    assert provider.supports_callbacks is True
+
+
+def test_video_catalog_entry_exists() -> None:
+    assert any(m["id"] == "comfyui:workflow:video" for m in BUILTIN_MODELS)
+
+
+def test_video_without_template_fails_before_any_submit(monkeypatch, tmp_path) -> None:
+    """There is no stock video graph that works everywhere — say so immediately, do not
+    submit a graph that will fail later inside ComfyUI."""
+    calls: list[str] = []
+    _mock_comfy(monkeypatch, lambda r: (calls.append(r.url.path), httpx.Response(404))[1])
+    with pytest.raises(ProviderError, match="模板"):
+        ComfyUIProvider("video").generate(vreq(), ctx(), tmp_path)
+    assert "/prompt" not in calls
+
+
+def test_video_prefers_the_video_container_output(monkeypatch, tmp_path) -> None:
+    """AnimateDiff graphs emit per-frame images AND the combined video — the asset must be
+    the video, not frame one."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "v1"})
+        if request.url.path == "/history/v1":
+            return httpx.Response(200, json={"v1": {
+                "status": {"status_str": "success", "completed": True},
+                "outputs": {
+                    "8": {"images": [{"filename": "frame_00001.png", "subfolder": "", "type": "output"}]},
+                    "12": {"gifs": [{"filename": "out.mp4", "subfolder": "video", "type": "output"}]},
+                },
+            }})
+        if request.url.path == "/view":
+            return httpx.Response(200, content=b"mp4-bytes")
+        return httpx.Response(404)
+
+    _mock_comfy(monkeypatch, handler)
+    template = json.dumps({"1": {"class_type": "X", "inputs": {"text": "{{prompt}}", "frames": "{{duration_seconds}}"}}})
+    result = ComfyUIProvider("video").generate(vreq(duration_seconds=5), ctx({"workflow_template": template}), tmp_path)
+    assert result.output_path.suffix == ".mp4"
+    assert result.output_path.read_bytes() == b"mp4-bytes"
+
+
+class _Callbacks:
+    def __init__(self, cancel_after: int = 10**9) -> None:
+        self.progress: list[tuple[float, str]] = []
+        self._checks = 0
+        self._cancel_after = cancel_after
+
+    def on_progress(self, fraction: float, message: str) -> None:
+        self.progress.append((fraction, message))
+
+    def is_cancelled(self) -> bool:
+        self._checks += 1
+        return self._checks > self._cancel_after
+
+
+def test_progress_is_reported_while_waiting(monkeypatch, tmp_path) -> None:
+    from app.ai.providers.base import GenerationCallbacks
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/object_info/CheckpointLoaderSimple":
+            return httpx.Response(200, json={"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["m.ckpt"], {}]}}}})
+        if path == "/prompt":
+            return httpx.Response(200, json={"prompt_id": "pg"})
+        if path == "/queue":
+            return httpx.Response(200, json={"queue_pending": [], "queue_running": []})
+        if path == "/history/pg":
+            return httpx.Response(200, json={"pg": {
+                "status": {"status_str": "success", "completed": True},
+                "outputs": {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}},
+            }})
+        if path == "/view":
+            return httpx.Response(200, content=b"img")
+        return httpx.Response(404)
+
+    _mock_comfy(monkeypatch, handler)
+    recorder = _Callbacks()
+    callbacks = GenerationCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
+    ComfyUIProvider("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
+    assert recorder.progress, "at least one progress tick must reach the job"
+    assert "ComfyUI" in recorder.progress[0][1]
+
+
+def test_cancel_interrupts_and_dequeues(monkeypatch, tmp_path) -> None:
+    """A user cancel must stop the remote work, not merely abandon the poll loop."""
+    from app.ai.providers.base import GenerationCallbacks
+
+    stopped: list[tuple[str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/object_info/CheckpointLoaderSimple":
+            return httpx.Response(200, json={"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["m.ckpt"], {}]}}}})
+        if path == "/prompt" and request.method == "POST":
+            return httpx.Response(200, json={"prompt_id": "pc"})
+        if path in ("/interrupt", "/queue") and request.method == "POST":
+            stopped.append((path, request.content))
+            return httpx.Response(200, json={})
+        if path == "/history/pc":
+            return httpx.Response(200, json={})  # 永不完成 —— 取消先到
+        return httpx.Response(404)
+
+    _mock_comfy(monkeypatch, handler)
+    recorder = _Callbacks(cancel_after=0)  # 第一次检查即已取消
+    callbacks = GenerationCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
+    with pytest.raises(ProviderError, match="已取消"):
+        ComfyUIProvider("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
+    paths = [p for p, _ in stopped]
+    assert "/interrupt" in paths, "the running prompt must be interrupted"
+    assert any(p == "/queue" and b"pc" in body for p, body in stopped), "a pending prompt must be dequeued"
+
+
+def test_other_providers_do_not_claim_callbacks() -> None:
+    """The runner passes callbacks only where they are understood — a provider that never
+    opted in must not advertise support through the shared base class."""
+    assert get_provider("openai", "image").supports_callbacks is False
