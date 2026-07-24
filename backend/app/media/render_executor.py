@@ -9,7 +9,7 @@ from app.core.child_process import ChildProcess
 
 from app.core.config import settings
 from app.media.probe import probe_has_audio_many
-from app.media.render_plan import FILTER_PRESETS, RenderPlan, Transform
+from app.media.render_plan import FILTER_PRESETS, RenderPlan, TextOverlayItem, Transform
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -293,6 +293,47 @@ def _resolve_font_stack(font_family: str | None) -> str:
     return "Sans"
 
 
+def _ass_bgr(hex_color: str) -> str:
+    """#RRGGBB → ASS 覆盖标签用的 &HBBGGRR&(\\1c/\\3c 等,无 alpha)。"""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"&H{b:02X}{g:02X}{r:02X}&"
+
+
+def _text_overlay_dialogue(item: "TextOverlayItem", w: int, h: int) -> str:
+    """一条花字 → 带内联覆盖标签的 ASS Dialogue:用 \\pos 把文字中心(\\an5)放到 transform 位置,
+    \\frz 旋转(ASS 逆时针为正,与我们顺时针相反,取负)、\\fscx/\\fscy 缩放、\\alpha 透明度,再叠加
+    每条自带的字号/颜色/描边(\\bord+\\3c)/阴影(\\shad)/粗斜/字体。语义与预览的 transform 一致。"""
+    tf, st = item.transform, item.style
+    cx = (0.5 + tf.x * 0.5) * w
+    cy = (0.5 + tf.y * 0.5) * h
+    tags = ["\\an5", f"\\pos({cx:.1f},{cy:.1f})"]
+    if abs(tf.rotation) > 0.01:
+        tags.append(f"\\frz{-tf.rotation:.2f}")
+    if abs(tf.scale - 1.0) > 0.001:
+        tags.append(f"\\fscx{tf.scale * 100:.1f}\\fscy{tf.scale * 100:.1f}")
+    tags.append(f"\\fs{st.font_size:g}")
+    tags.append(f"\\1c{_ass_bgr(st.color)}")
+    if st.stroke_width > 0:
+        tags.append(f"\\bord{st.stroke_width:g}\\3c{_ass_bgr(st.stroke_color)}")
+    else:
+        tags.append("\\bord0")
+    if st.shadow > 0:
+        tags.append(f"\\shad{st.shadow:g}")
+    if tf.opacity < 1.0:
+        tags.append(f"\\alpha&H{round((1.0 - tf.opacity) * 255):02X}&")
+    tags.append(f"\\b{1 if st.bold else 0}")
+    if st.italic:
+        tags.append("\\i1")
+    if st.font_family:
+        tags.append(f"\\fn{_resolve_font_stack(st.font_family)}")
+    override = "{" + "".join(tags) + "}"
+    return (
+        f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
+        f"Default,,0,0,0,,{override}{_ass_text(item.text)}"
+    )
+
+
 def _build_ass(plan: RenderPlan) -> str:
     """A styled ASS subtitle file matching the preview's subtitle_style (font size in native
     frame pixels, text/box colour + box opacity, bold, position, vertical offset)."""
@@ -330,6 +371,7 @@ def _build_ass(plan: RenderPlan) -> str:
         f"Default,,0,0,0,,{_ass_text(item.text)}"
         for item in plan.subtitles
     ]
+    lines += [_text_overlay_dialogue(item, w, h) for item in plan.text_overlays]
     return header + "\n".join(lines) + "\n"
 
 
@@ -458,7 +500,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
 
     # Burned-in subtitles from subtitle tracks: a styled ASS file (libass) so font size,
     # colour, background box, bold, position and offset match the preview's subtitle_style.
-    if plan.subtitles:
+    if plan.subtitles or plan.text_overlays:
         ass_path = output_path.with_suffix(".ass")
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")

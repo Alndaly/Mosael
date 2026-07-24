@@ -79,11 +79,23 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     # bottom layer) is the BOTTOM-MOST video track that actually has clips — empty tracks below
     # it contribute nothing, and treating an empty bottom track as the base would drop the whole
     # render ("no clips to render"). Tracks above the base composite as overlays (top row last).
-    video_tracks_with_clips = [track for track in video_tracks if track.clips]
-    base_track = video_tracks_with_clips[-1] if video_tracks_with_clips else None
-    base_clips = [clip_dict(clip) for clip in (base_track.clips if base_track else [])]
-    overlay_tracks = [track for track in video_tracks_with_clips[:-1] if not track.muted]
-    overlay_clips = [clip_dict(clip) for track in reversed(overlay_tracks) for clip in track.clips]
+    def media_clips(track: Track) -> list:
+        return [clip for clip in track.clips if clip.asset_id]
+
+    def text_clips(track: Track) -> list:
+        return [clip for clip in track.clips if not clip.asset_id and clip.text_override]
+
+    # base(全画幅底层)= 最底「有媒体片段」的 video 轨。纯花字轨(只有无 asset 的文本元素)不参与
+    # base/overlay 判定,否则会被当作缺素材的画面片段而报错。
+    video_tracks_with_media = [track for track in video_tracks if media_clips(track)]
+    base_track = video_tracks_with_media[-1] if video_tracks_with_media else None
+    base_clips = [clip_dict(clip) for clip in (media_clips(base_track) if base_track else [])]
+    overlay_tracks = [track for track in video_tracks_with_media[:-1] if not track.muted]
+    overlay_clips = [clip_dict(clip) for track in reversed(overlay_tracks) for clip in media_clips(track)]
+    # 花字:未静音 video 轨上的文本片段(无 asset、有 text_override),按各自 transform 定位烧录。
+    text_overlays = [
+        clip_dict(clip) for track in video_tracks if not track.muted for clip in text_clips(track)
+    ]
     # Audio to mix over the base: every audio-track clip PLUS every overlay video-track clip's
     # own audio (so a video on an upper track sounds, not just the base track — matching the
     # preview). Attach each clip's track solo/duck so the plan can mix (solo silences non-soloed
@@ -96,7 +108,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     ] + [
         {**clip_dict(clip), "solo": track.solo, "duck": track.duck, "optional": True}
         for track in reversed(overlay_tracks)
-        for clip in track.clips
+        for clip in media_clips(track)
     ]
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
 
@@ -134,6 +146,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
         subtitle_style=subtitle_style,
+        text_overlays=text_overlays,
         luts=luts,
         solo_active=solo_active,
         mute_base_audio=mute_base_audio,

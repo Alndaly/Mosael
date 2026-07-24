@@ -165,6 +165,37 @@ DEFAULT_SUBTITLE_STYLE = SubtitleStyleSpec()
 
 
 @dataclass(frozen=True)
+class TextStyleSpec:
+    """花字(独立文本元素)的逐条外观:每条自带一套样式,区别于序列级统一的 SubtitleStyleSpec。
+    描边/阴影编译成 ASS 的 \\bord/\\shad;定位/缩放/旋转/透明度走 transform,不放这里。"""
+
+    font_size: float = 48.0
+    color: str = "#ffffff"
+    stroke_color: str = "#000000"
+    stroke_width: float = 0.0
+    shadow: float = 0.0
+    bold: bool = True
+    italic: bool = False
+    align: str = "center"  # left | center | right —— 单点定位时的锚点对齐
+    font_family: str = ""
+    font_dir: str = ""
+
+
+DEFAULT_TEXT_STYLE = TextStyleSpec()
+
+
+@dataclass(frozen=True)
+class TextOverlayItem:
+    """video 轨上的花字:文字 + 逐条样式 + transform 定位(与画面自由元素同一套 transform)。"""
+
+    start: float
+    duration: float
+    text: str
+    style: TextStyleSpec = DEFAULT_TEXT_STYLE
+    transform: Transform = field(default_factory=Transform)
+
+
+@dataclass(frozen=True)
 class RenderPlan:
     sequence_id: str
     sequence_revision: int
@@ -175,6 +206,7 @@ class RenderPlan:
     audio_overlays: tuple[AudioItem, ...] = ()
     subtitles: tuple[SubtitleItem, ...] = ()
     subtitle_style: SubtitleStyleSpec = DEFAULT_SUBTITLE_STYLE
+    text_overlays: tuple[TextOverlayItem, ...] = ()
     # Solo: silence the base video track's audio (a soloed track elsewhere took over).
     mute_base_audio: bool = False
     render_plan_hash: str = field(default="")
@@ -193,6 +225,7 @@ class RenderPlan:
             audio_overlays=self.audio_overlays,
             subtitles=self.subtitles,
             subtitle_style=self.subtitle_style,
+            text_overlays=self.text_overlays,
             mute_base_audio=self.mute_base_audio,
             render_plan_hash=digest,
         )
@@ -261,6 +294,7 @@ def build_render_plan(
     audio_clips: list[dict] | None = None,
     subtitle_clips: list[dict] | None = None,
     subtitle_style: dict | None = None,
+    text_overlays: list[dict] | None = None,
     luts: dict[str, str] | None = None,
     fill_mode: str = "cover",
     solo_active: bool = False,
@@ -401,6 +435,26 @@ def build_render_plan(
             SubtitleItem(start=float(clip["timeline_start"]), duration=round(clip_duration, 6), text=text)
         )
 
+    # 花字:video 轨上无 asset 的文本元素,每条自带样式,用 transform 定位(与画面元素同一套)。
+    text_items: list[TextOverlayItem] = []
+    for clip in sorted(text_overlays or [], key=lambda c: float(c["timeline_start"])):
+        text = str(clip.get("text_override") or "").strip()
+        if not text:
+            continue
+        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
+        if clip_duration <= 0:
+            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        text_items.append(
+            TextOverlayItem(
+                start=float(clip["timeline_start"]),
+                duration=round(clip_duration, 6),
+                text=text,
+                style=_read_text_style((clip.get("effects") or {}).get("text_style")),
+                transform=_read_transform(clip),
+            )
+        )
+        duration = max(duration, float(clip["timeline_start"]) + clip_duration)
+
     plan = RenderPlan(
         sequence_id=sequence_id,
         sequence_revision=revision,
@@ -414,6 +468,7 @@ def build_render_plan(
         audio_overlays=tuple(audio_overlays),
         subtitles=tuple(subtitles),
         subtitle_style=_read_subtitle_style(subtitle_style),
+        text_overlays=tuple(text_items),
         mute_base_audio=mute_base_audio,
     )
     return plan.with_hash()
@@ -463,6 +518,37 @@ def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
         bold=bool(raw.get("bold", d.bold)),
         position=position if position in ("bottom", "center", "top") else d.position,
         offset=num("offset", d.offset, 0.0, 100.0),
+        font_family=str(raw.get("font_family", d.font_family) or "")[:200],
+        font_dir=str(raw.get("font_dir", d.font_dir) or "")[:500],
+    )
+
+
+def _read_text_style(raw: dict | None) -> TextStyleSpec:
+    """clip.effects.text_style → 校验过的花字样式,逐字段回落默认值。"""
+    if not isinstance(raw, dict):
+        return DEFAULT_TEXT_STYLE
+    d = DEFAULT_TEXT_STYLE
+
+    def num(key: str, default: float, lo: float, hi: float) -> float:
+        try:
+            return max(lo, min(hi, float(raw.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
+    def color(key: str, default: str) -> str:
+        value = str(raw.get(key, default)).strip()
+        return value if _HEX_RE.match(value) else default
+
+    align = str(raw.get("align", d.align))
+    return TextStyleSpec(
+        font_size=num("font_size", d.font_size, 4.0, 800.0),
+        color=color("color", d.color),
+        stroke_color=color("stroke_color", d.stroke_color),
+        stroke_width=num("stroke_width", d.stroke_width, 0.0, 40.0),
+        shadow=num("shadow", d.shadow, 0.0, 40.0),
+        bold=bool(raw.get("bold", d.bold)),
+        italic=bool(raw.get("italic", d.italic)),
+        align=align if align in ("left", "center", "right") else d.align,
         font_family=str(raw.get("font_family", d.font_family) or "")[:200],
         font_dir=str(raw.get("font_dir", d.font_dir) or "")[:500],
     )
