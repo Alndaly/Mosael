@@ -14,7 +14,7 @@ sidebar:
 
 ## 邮件联系
 
-- 📮 <lucky.always.h@gmail.com>
+- 📮 <1142704468@qq.com>
 
 一般事务、合作洽谈请发邮件,会尽快回复。
 

@@ -14,7 +14,7 @@ Questions, ideas, or partnership inquiries — any of the channels below will re
 
 ## Email
 
-- 📮 <lucky.always.h@gmail.com>
+- 📮 <1142704468@qq.com>
 
 For general matters and business inquiries; we reply as soon as we can.
 

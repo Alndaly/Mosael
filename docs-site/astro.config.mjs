@@ -20,7 +20,7 @@ export default defineConfig({
       favicon: "/favicon.svg",
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/Alndaly/mibu-cut" },
-        { icon: "email", label: "邮件联系", href: "mailto:lucky.always.h@gmail.com" },
+        { icon: "email", label: "邮件联系", href: "mailto:1142704468@qq.com" },
       ],
       // 字体策略:正文字体自托管(打进 dist,离线可用);展示层的霞鹜文楷是唯一例外——
       // 它有上百个中文子集文件,打包会显著增肥 dist,故走 CDN,离线/CDN 不可达时
