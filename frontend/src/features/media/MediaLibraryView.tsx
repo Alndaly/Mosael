@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
-import { api, assetFileUrl, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { saveAssetToDisk } from "@/lib/download";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { useImagePreview } from "@/components/app/image-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Recorder } from "@/features/editor/Recorder";
@@ -48,7 +47,6 @@ function compareAssets(a: Asset, b: Asset, key: SortKey): number {
 export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const { openImagePreview } = useImagePreview();
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [previewing, setPreviewing] = React.useState<Asset | null>(null);
@@ -76,15 +74,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       const assetId = (event as CustomEvent<string>).detail;
       const asset = (assets.data ?? []).find((item) => item.id === assetId);
       if (!asset) return;
-      if (asset.kind === "image") {
-        openImagePreview({ src: assetFileUrl(asset.id), title: asset.name });
-      } else {
-        setPreviewing(asset);
-      }
+      // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
+      setPreviewing(asset);
     };
     window.addEventListener("mibu:open-asset", onOpenAsset);
     return () => window.removeEventListener("mibu:open-asset", onOpenAsset);
-  }, [assets.data, openImagePreview]);
+  }, [assets.data]);
 
   const uploadAsset = useMutation({
     // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。
@@ -336,13 +331,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <div
                   className="relative"
                   onClick={() => {
-                    if (selectMode) {
-                      toggleSelected(asset.id);
-                    } else if (asset.kind === "image") {
-                      openImagePreview({ src: assetFileUrl(asset.id), title: asset.name });
-                    } else {
-                      setPreviewing(asset);
-                    }
+                    // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
+                    if (selectMode) toggleSelected(asset.id);
+                    else setPreviewing(asset);
                   }}
                 >
                   <AssetTile asset={asset} selected={selectMode && selectedIds.has(asset.id)} />
