@@ -33,6 +33,14 @@ export function Scopes({
   const t = useI18n();
   const [mode, setMode] = React.useState<ScopeMode>("histogram");
   const [blocked, setBlocked] = React.useState(false);
+  // 空态原因(诊断用):no-picture=播放头无画面;no-frame=有源但取不到帧(多为跨域/未解码)。
+  const [reason, setReason] = React.useState<"ok" | "no-picture" | "no-frame">("no-picture");
+  const reasonRef = React.useRef(reason);
+  const setReasonOnce = React.useCallback((next: "ok" | "no-picture" | "no-frame") => {
+    if (reasonRef.current === next) return;
+    reasonRef.current = next;
+    setReason(next);
+  }, []);
   const displayRef = React.useRef<HTMLCanvasElement | null>(null);
   const sampleRef = React.useRef<HTMLCanvasElement | null>(null);
   // 用 ref 保存 filter/mode/imageSrc,避免 rAF 闭包吃到旧值又频繁重启循环。
@@ -78,16 +86,16 @@ export function Scopes({
       else imgProbe.removeAttribute("src");
     };
 
-    const paint = (source: CanvasImageSource, dctx: CanvasRenderingContext2D, display: HTMLCanvasElement, applyFilter: boolean): void => {
+    const paint = (source: CanvasImageSource, dctx: CanvasRenderingContext2D, display: HTMLCanvasElement, applyFilter: boolean): boolean => {
       const sctx = sample.getContext("2d", { willReadFrequently: true });
-      if (!sctx) return;
+      if (!sctx) return false;
       sctx.clearRect(0, 0, SAMPLE_W, SAMPLE_H);
       // 合成器画布已烧录调色,再叠一次 filter 会重复上色 → 只有原始视频/图片源才套 filter。
       sctx.filter = applyFilter ? filterRef.current || "none" : "none";
       try {
         sctx.drawImage(source, 0, 0, SAMPLE_W, SAMPLE_H);
       } catch {
-        return;
+        return false;
       }
       let pixels: Uint8ClampedArray;
       try {
@@ -95,10 +103,11 @@ export function Scopes({
       } catch {
         setBlocked(true); // canvas tainted — cross-origin frame without CORS
         cancelAnimationFrame(raf);
-        return;
+        return false;
       }
       if (modeRef.current === "histogram") drawHistogram(dctx, display, pixels);
       else drawWaveform(dctx, display, pixels);
+      return true;
     };
 
     const tick = (now: number) => {
@@ -127,11 +136,20 @@ export function Scopes({
         }
       }
       // 采样优先级:合成器画布(多段/叠加/花字的真实帧,已调色)> 视频探针帧 > 图片探针帧。
-      // 都没有就跳过,不清屏(留住上一帧)。合成器画布不再叠 filter,原始视频/图片才叠。
+      // 合成器画布不再叠 filter,原始视频/图片才叠。
       const composite = canvasRef?.current;
-      if (composite && composite.width > 0 && composite.height > 0) paint(composite, dctx, display, false);
-      else if (probe.readyState >= 2 && probe.videoWidth) paint(probe, dctx, display, true);
-      else if (imgProbe.complete && imgProbe.naturalWidth) paint(imgProbe, dctx, display, true);
+      let ok = false;
+      if (composite && composite.width > 0 && composite.height > 0) ok = paint(composite, dctx, display, false);
+      else if (probe.readyState >= 2 && probe.videoWidth) ok = paint(probe, dctx, display, true);
+      else if (imgProbe.complete && imgProbe.naturalWidth) ok = paint(imgProbe, dctx, display, true);
+      if (ok) {
+        setReasonOnce("ok");
+      } else {
+        // 有声明的采样源(合成器画布 / 图源 / 视频源)却取不到帧 = 多为跨域受限或尚未解码;
+        // 三者都没有 = 播放头处根本没画面。
+        const hasSource = Boolean(composite) || Boolean(imageSrcRef.current) || Boolean(main?.currentSrc);
+        setReasonOnce(hasSource ? "no-frame" : "no-picture");
+      }
     };
     raf = requestAnimationFrame(tick);
     return () => {
@@ -167,7 +185,11 @@ export function Scopes({
       </div>
       <div className={cn("relative", fill && "min-h-0 flex-1")}>
         <canvas ref={displayRef} width={256} height={128} className={cn("block rounded-md bg-[#0b0b0d]", fill ? "h-full w-full" : "h-auto w-full")} />
-        {blocked && <p className="absolute inset-0 m-0 flex items-center justify-center p-2 text-center text-[10.5px] leading-normal text-[rgb(255_255_255/0.7)]">{t("scopeUnavailable")}</p>}
+        {(blocked || reason !== "ok") && (
+          <p className="absolute inset-0 m-0 flex items-center justify-center p-2 text-center text-[10.5px] leading-normal text-[rgb(255_255_255/0.7)]">
+            {blocked ? t("scopeUnavailable") : reason === "no-picture" ? t("scopeNoPicture") : t("scopeNoFrame")}
+          </p>
+        )}
       </div>
     </div>
   );
