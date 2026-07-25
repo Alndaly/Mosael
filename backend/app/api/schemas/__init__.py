@@ -464,13 +464,19 @@ class NotificationListOut(BaseModel):
 class AnalyzeAssetRequest(BaseModel):
     question: str = Field(default="", max_length=2000)
     profile_id: str | None = None
+    #: 视频分析方式:auto(有原生能力就走原生,否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
+    mode: str = "auto"
 
 
 class AnalyzeAssetResponse(BaseModel):
     answer: str
     provider: str
     model: str
-    frames: int
+    #: 实际走的方式:image / native / frames。
+    mode: str = "frames"
+    #: 抽帧数(原生模式为 0)。
+    frames: int = 0
+    used_transcript: bool = False
 
 
 class ProviderProfileCreate(BaseModel):

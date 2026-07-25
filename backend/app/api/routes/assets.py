@@ -124,7 +124,7 @@ def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession,
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        result = analyze_asset(db, asset, body.question, body.profile_id)
+        result = analyze_asset(db, asset, body.question, body.profile_id, mode=body.mode)
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return AnalyzeAssetResponse(**result)

@@ -8,7 +8,8 @@ import pytest
 
 from app.ai.analysis import service
 from app.core.db import SessionLocal
-from app.db.models import ProviderProfile
+from app.db.models import Asset, ProviderProfile
+from tests.test_publish import make_video_asset
 from tests.util import fresh_client
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
@@ -123,3 +124,115 @@ def test_analyze_rejects_audio_assets() -> None:
     ).json()
     res = client.post(f"/api/assets/{asset['id']}/analyze", json={"question": "?"})
     assert res.status_code == 422
+
+
+class _FakeResp:
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return self._payload
+
+
+def _add_native_profile(db, vendor: str, base_url: str = "", model: str = "m") -> None:
+    db.add(ProviderProfile(name=vendor, vendor=vendor, base_url=base_url, api_key=f"sk-{vendor}", default_model=model))
+    db.commit()
+
+
+def test_pick_native_video_profile_priority() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    with SessionLocal() as db:
+        assert service.pick_native_video_profile(db) is None
+        _add_native_profile(db, "moonshot")
+        _add_native_profile(db, "alibaba")
+    with SessionLocal() as db:
+        assert service.pick_native_video_profile(db).vendor == "alibaba"  # google>alibaba>moonshot
+        _add_native_profile(db, "google", base_url="https://gl/v1beta", model="gemini-2.0-flash")
+    with SessionLocal() as db:
+        assert service.pick_native_video_profile(db).vendor == "google"
+
+
+def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+    captured: dict = {}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured["json"] = kwargs.get("json")
+        return _FakeResp({"choices": [{"message": {"content": "海边散步的女孩"}}]})
+
+    monkeypatch.setattr(service.httpx, "post", fake_post)
+    with SessionLocal() as db:
+        _add_native_profile(db, "alibaba", base_url="https://dashscope/compatible-mode/v1", model="qwen-vl-max")
+        asset = db.get(Asset, asset_json["id"])
+        result = service.analyze_asset(db, asset, "讲了什么", mode="native")
+    assert result["mode"] == "native" and result["provider"] == "alibaba"
+    assert result["answer"] == "海边散步的女孩"
+    content = captured["json"]["messages"][0]["content"]
+    assert any(part.get("type") == "video_url" for part in content)
+    assert content[-1]["video_url"]["url"].startswith("data:video/mp4;base64,")
+
+
+def test_analyze_video_native_gemini_inline_data(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+    captured: dict = {}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured["json"] = kwargs.get("json")
+        captured["params"] = kwargs.get("params")
+        return _FakeResp({"candidates": [{"content": {"parts": [{"text": "Gemini 看到了海"}]}}]})
+
+    monkeypatch.setattr(service.httpx, "post", fake_post)
+    with SessionLocal() as db:
+        _add_native_profile(db, "google", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.0-flash")
+        asset = db.get(Asset, asset_json["id"])
+        result = service.analyze_asset(db, asset, "描述", mode="native")
+    assert result["mode"] == "native" and result["provider"] == "google"
+    assert ":generateContent" in captured["url"]
+    assert captured["params"]["key"] == "sk-google"
+    parts = captured["json"]["contents"][0]["parts"]
+    assert parts[1]["inline_data"]["mime_type"] == "video/mp4"
+
+
+def test_analyze_native_without_provider_errors() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+    with SessionLocal() as db:
+        asset = db.get(Asset, asset_json["id"])
+        with pytest.raises(service.AnalysisError):
+            service.analyze_asset(db, asset, "?", mode="native")
+
+
+def test_analyze_auto_falls_back_to_frames(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+    monkeypatch.setattr(service, "extract_video_frames", lambda path: [b"f1", b"f2"])
+    monkeypatch.setattr(service, "call_vision_model", lambda profile, messages: "抽帧描述")
+    with SessionLocal() as db:
+        _add_native_profile(db, "minimax")  # 视觉但非原生视频
+        asset = db.get(Asset, asset_json["id"])
+        result = service.analyze_asset(db, asset, "?", mode="auto")
+    assert result["mode"] == "frames" and result["frames"] == 2
+
+
+def test_native_video_size_guard(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+    monkeypatch.setattr(service, "MAX_NATIVE_VIDEO_MB", 0)  # 任何视频都超限
+    with SessionLocal() as db:
+        _add_native_profile(db, "alibaba")
+        asset = db.get(Asset, asset_json["id"])
+        with pytest.raises(service.AnalysisError):
+            service.analyze_asset(db, asset, "?", mode="native")

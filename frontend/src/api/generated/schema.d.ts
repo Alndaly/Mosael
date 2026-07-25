@@ -3629,6 +3629,11 @@ export interface components {
             question: string;
             /** Profile Id */
             profile_id?: string | null;
+            /**
+             * Mode
+             * @default auto
+             */
+            mode: string;
         };
         /** AnalyzeAssetResponse */
         AnalyzeAssetResponse: {
@@ -3638,8 +3643,21 @@ export interface components {
             provider: string;
             /** Model */
             model: string;
-            /** Frames */
+            /**
+             * Mode
+             * @default frames
+             */
+            mode: string;
+            /**
+             * Frames
+             * @default 0
+             */
             frames: number;
+            /**
+             * Used Transcript
+             * @default false
+             */
+            used_transcript: boolean;
         };
         /** AsrModelOut */
         AsrModelOut: {

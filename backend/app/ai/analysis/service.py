@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import math
+import mimetypes
 import subprocess
 import tempfile
 from pathlib import Path
@@ -33,6 +34,17 @@ REQUEST_TIMEOUT_SECONDS = 120
 # 转写文本喂进分析时的字符上限(控 token)。
 TRANSCRIPT_MAX_CHARS = 6000
 
+# 支持"原生视频理解"(直接吃视频、不抽帧)的 vendor:
+#   google  → Gemini 原生 API(视频走 inline_data)
+#   alibaba → 通义千问 Qwen-VL(OpenAI 兼容,content 里 video_url)
+#   moonshot→ Kimi 视觉(OpenAI 兼容,content 里 video_url)
+NATIVE_VIDEO_VENDORS = ("google", "alibaba", "moonshot")
+GEMINI_VIDEO_VENDORS = ("google",)
+# 视频分析方式:auto=有原生能力就走原生、否则抽帧;native=强制原生;frames=强制抽帧+转写。
+VIDEO_ANALYSIS_MODES = ("auto", "frames", "native")
+# 原生视频直传体积上限:base64 会膨胀约 33%,过大既慢又易被网关拒。超限建议抽帧。
+MAX_NATIVE_VIDEO_MB = 48
+
 
 def adaptive_frame_count(duration_seconds: float) -> int:
     """按时长定帧数:约每 SECONDS_PER_FRAME 秒 1 帧,夹在 [MIN_VIDEO_FRAMES, MAX_VIDEO_FRAMES]。"""
@@ -58,6 +70,22 @@ def pick_analysis_profile(db: Session, profile_id: str | None = None) -> Provide
         if vendor in by_vendor:
             return by_vendor[vendor]
     raise AnalysisError("没有可用的多模态供应商，请在设置中添加（如 Kimi 或 MiniMax）")
+
+
+def pick_native_video_profile(db: Session, profile_id: str | None = None) -> ProviderProfile | None:
+    """挑一个支持原生视频理解的启用档案。指定 id 时必须本身是 native vendor;否则按 NATIVE_VIDEO_VENDORS
+    优先级挑。没有则返回 None(交给上层回落抽帧)。"""
+    if profile_id:
+        profile = db.get(ProviderProfile, profile_id)
+        if profile is not None and profile.enabled and profile.vendor in NATIVE_VIDEO_VENDORS:
+            return profile
+        return None
+    profiles = db.scalars(select(ProviderProfile).where(ProviderProfile.enabled.is_(True))).all()
+    by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
+    for vendor in NATIVE_VIDEO_VENDORS:
+        if vendor in by_vendor:
+            return by_vendor[vendor]
+    return None
 
 
 def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
@@ -140,28 +168,111 @@ def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) 
         raise AnalysisError(sanitize_provider_error(f"分析请求失败: {exc}", profile.api_key)) from exc
 
 
-def analyze_asset(db: Session, asset: Asset, question: str, profile_id: str | None = None) -> dict[str, Any]:
+def _prompt_text(asset: Asset, question: str, transcript: str | None) -> str:
+    """原生视频用的纯文本提示(不含帧,画面交给模型直读);带上转写作为"听"的补充。"""
+    meta = asset.media_info or {}
+    context = f"素材名称: {asset.name}；类型: {asset.kind}"
+    if meta.get("duration"):
+        context += f"；时长: {meta['duration']}秒"
+    if transcript:
+        context += f"\n\n【语音转写(自动识别,可能有误差,仅供参考)】\n{transcript}"
+    return f"{context}\n\n{question}"
+
+
+def _read_native_video(path: Path) -> tuple[bytes, str]:
+    data = path.read_bytes()
+    if len(data) > MAX_NATIVE_VIDEO_MB * 1024 * 1024:
+        raise AnalysisError(f"视频超过 {MAX_NATIVE_VIDEO_MB}MB,原生直传过大,请改用抽帧模式")
+    mime = mimetypes.guess_type(path.name)[0] or "video/mp4"
+    return data, mime
+
+
+def _call_gemini_video(profile: ProviderProfile, prompt: str, video: bytes, mime: str) -> str:
+    """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
+    base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+    model = profile.default_model or "gemini-2.0-flash"
+    body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": mime, "data": base64.b64encode(video).decode()}},
+                ],
+            }
+        ]
+    }
+    try:
+        response = httpx.post(
+            f"{base_url}/models/{model}:generateContent",
+            params={"key": profile.api_key},
+            json=body,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return str(payload["candidates"][0]["content"]["parts"][0]["text"]).strip()
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+        raise AnalysisError(sanitize_provider_error(f"Gemini 视频分析失败: {exc}", profile.api_key)) from exc
+
+
+def _analyze_video_native(profile: ProviderProfile, asset: Asset, path: Path, question: str, transcript: str | None) -> str:
+    """原生视频理解:Gemini 走 inline_data;Qwen-VL / Kimi 等 OpenAI 兼容端走 content 里的 video_url。"""
+    video, mime = _read_native_video(path)
+    prompt = _prompt_text(asset, question, transcript)
+    if profile.vendor in GEMINI_VIDEO_VENDORS:
+        return _call_gemini_video(profile, prompt, video, mime)
+    data_uri = f"data:{mime};base64,{base64.b64encode(video).decode()}"
+    content = [{"type": "text", "text": prompt}, {"type": "video_url", "video_url": {"url": data_uri}}]
+    return call_vision_model(profile, [{"role": "user", "content": content}])
+
+
+def analyze_asset(
+    db: Session, asset: Asset, question: str, profile_id: str | None = None, mode: str = "auto"
+) -> dict[str, Any]:
     if asset.kind not in ("image", "video"):
         raise AnalysisError("只支持分析图片或视频素材")
     if not asset.file_key:
         raise AnalysisError("素材没有本地文件")
+    if mode not in VIDEO_ANALYSIS_MODES:
+        raise AnalysisError(f"未知分析方式: {mode}")
     path = resolve_key(asset.file_key)
     if not path.is_file():
         raise AnalysisError("素材文件缺失")
 
-    profile = pick_analysis_profile(db, profile_id)
-    transcript_text: str | None = None
+    prompt = question.strip() or "请描述这个素材的内容。"
+
+    # 图片:始终抽一帧走视觉模型(原生视频那套对图片没意义)。
     if asset.kind == "image":
-        images = [path.read_bytes()]
-    else:
-        images = extract_video_frames(path)  # 帧数按时长自适应
-        transcript_text = _asset_transcript_text(db, asset.id)  # 有转写就一起喂进去
-    messages = build_messages(asset, question.strip() or "请描述这个素材的内容。", images, transcript=transcript_text)
-    answer = call_vision_model(profile, messages)
+        profile = pick_analysis_profile(db, profile_id)
+        answer = call_vision_model(profile, build_messages(asset, prompt, [path.read_bytes()]))
+        return {"answer": answer, "provider": profile.vendor, "model": profile.default_model, "mode": "image", "frames": 1}
+
+    transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
+    native_profile = None if mode == "frames" else pick_native_video_profile(db, profile_id)
+
+    # 原生视频理解:显式 native 必须有原生档案;auto 有就走、没有回落抽帧。
+    if mode == "native" and native_profile is None:
+        raise AnalysisError("没有支持原生视频理解的供应商(需 Gemini / 通义千问 Qwen-VL / Kimi),或改用抽帧模式")
+    if native_profile is not None and mode in ("native", "auto"):
+        answer = _analyze_video_native(native_profile, asset, path, prompt, transcript_text)
+        return {
+            "answer": answer,
+            "provider": native_profile.vendor,
+            "model": native_profile.default_model,
+            "mode": "native",
+            "used_transcript": bool(transcript_text),
+        }
+
+    # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
+    profile = pick_analysis_profile(db, profile_id)
+    images = extract_video_frames(path)  # 帧数按时长自适应
+    answer = call_vision_model(profile, build_messages(asset, prompt, images, transcript=transcript_text))
     return {
         "answer": answer,
         "provider": profile.vendor,
         "model": profile.default_model,
+        "mode": "frames",
         "frames": len(images),
         "used_transcript": bool(transcript_text),
     }
