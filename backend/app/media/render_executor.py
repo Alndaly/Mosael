@@ -834,6 +834,11 @@ def build_ffmpeg_command(
         audio_label,
         "-t",
         str(plan.timeline_duration),
+        # 强制恒定帧率输出:多段(图片+视频)concat 会产生 VFR,mp4 头里 avg_frame_rate 变成
+        # 十几帧、播放器据此播得一卡一卡(逐帧其实是 30fps,但时间戳不规整)。输出 -r 把成片钉成
+        # 规整的 30fps CFR(各版本 ffmpeg 通用),和预览一样顺。
+        "-r",
+        str(plan.output.fps),
         *_video_encode_args(plan.output, force_software=force_software),
         "-c:a",
         "aac",
