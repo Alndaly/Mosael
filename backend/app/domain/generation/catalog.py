@@ -100,13 +100,13 @@ COMFYUI_IMAGE_CAPABILITIES = {
 COMFYUI_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video"],
     "max_prompt_chars": 8000,
-    "parameter_keys": ["duration_seconds", "seed", "steps", "negative_prompt", "size"],
+    # 尺寸/步数/采样器等由所选工作流的动态参数表单调,主控件只留时长/负向(之前 size 有 key 却没
+    # sizes、给了 resolutions 又没挂,尺寸下拉是空的——一并去掉)。
+    "parameter_keys": ["duration_seconds", "seed", "negative_prompt"],
     "duration_seconds": [3, 5, 10],
     "default_duration_seconds": 5,
-    "resolutions": ["480p", "720p", "1080p"],
-    "default_resolution": "720p",
     "max_duration_seconds": 10,
-    # 视频没有内置图:必须在 ComfyUI 档案里粘贴 API 格式的视频工作流模板
+    # 视频没有内置图:选一个 ComfyUI 里保存的视频工作流,或在档案里粘贴 API 模板。
     "requires_workflow_template": True,
 }
 

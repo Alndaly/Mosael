@@ -42,6 +42,7 @@ import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -392,6 +393,99 @@ function GenerateWorkspace({
   }, [generationConfig.workflow, selectedModel?.provider_profile_id]);
   const setWorkflowParam = (nodeId: string, name: string, value: unknown) =>
     setWorkflowParams((current) => ({ ...current, [nodeId]: { ...(current[nodeId] ?? {}), [name]: value } }));
+  // ComfyUI 的工作流选择 + 动态参数,图像/视频分支共用。动态参数隐藏已有主控件对应的角色:
+  // 图像有提示词/尺寸/seed 主控件 → 隐藏它们;视频没有尺寸主控件 → 保留 width/height 让用户手调。
+  const comfyWorkflowSection = React.useMemo(() => {
+    if (!isComfyui || !selectedModel) return null;
+    const hiddenRoles = new Set(
+      selectedModel.kind === "image"
+        ? ["prompt", "negative", "seed", "width", "height"]
+        : ["prompt", "negative", "seed"],
+    );
+    const visibleParams = (comfyParams.data ?? []).filter((param) => !param.role || !hiddenRoles.has(param.role));
+    return (
+      <>
+        <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+          <span>{t("comfyWorkflow")}</span>
+          <Select
+            value={generationConfig.workflow || "__default__"}
+            onValueChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
+          >
+            <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">{t("comfyWorkflowDefault")}</SelectItem>
+              {(comfyWorkflows.data ?? []).map((wf) => (
+                <SelectItem key={wf.path} value={wf.path}>
+                  {wf.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[10.5px] font-normal text-muted-foreground">
+            {comfyWorkflows.isError
+              ? t("comfyWorkflowError")
+              : comfyWorkflows.data && comfyWorkflows.data.length === 0
+                ? t("comfyWorkflowEmpty")
+                : t("comfyWorkflowHint")}
+          </span>
+        </label>
+        {generationConfig.workflow && visibleParams.length > 0 && (
+          <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
+            {visibleParams.map((param) => {
+              const current = workflowParams[param.node_id]?.[param.name] ?? param.value;
+              const label = `${param.title || param.class_type} · ${param.name}`;
+              return (
+                <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-[11.5px] text-muted-foreground">
+                  <span className="truncate" title={label}>{label}</span>
+                  {param.type === "COMBO" ? (
+                    <SearchableSelect
+                      className="h-7"
+                      value={String(current)}
+                      onValueChange={(value) => setWorkflowParam(param.node_id, param.name, value)}
+                      options={param.options ?? []}
+                    />
+                  ) : param.type === "BOOLEAN" ? (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 justify-self-start accent-primary"
+                      checked={Boolean(current)}
+                      onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.checked)}
+                    />
+                  ) : param.type === "INT" || param.type === "FLOAT" ? (
+                    <Input
+                      className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                      type="number"
+                      value={String(current ?? "")}
+                      min={param.min}
+                      max={param.max}
+                      step={param.step ?? (param.type === "INT" ? 1 : 0.01)}
+                      onChange={(event) =>
+                        setWorkflowParam(
+                          param.node_id,
+                          param.name,
+                          param.type === "INT" ? Math.trunc(Number(event.target.value) || 0) : Number(event.target.value) || 0,
+                        )
+                      }
+                    />
+                  ) : (
+                    <Input
+                      className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                      value={String(current ?? "")}
+                      onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.value)}
+                    />
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComfyui, selectedModel, comfyWorkflows.data, comfyWorkflows.isError, comfyParams.data, generationConfig.workflow, workflowParams, t]);
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
@@ -819,93 +913,9 @@ function GenerateWorkspace({
                 </SelectContent>
               </Select>
             </label>
+            {comfyWorkflowSection}
             {selectedModel.kind === "image" ? (
               <>
-                {isComfyui && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
-                    <span>{t("comfyWorkflow")}</span>
-                    <Select
-                      value={generationConfig.workflow || "__default__"}
-                      onValueChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
-                    >
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__default__">{t("comfyWorkflowDefault")}</SelectItem>
-                        {(comfyWorkflows.data ?? []).map((wf) => (
-                          <SelectItem key={wf.path} value={wf.path}>
-                            {wf.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-[10.5px] font-normal text-muted-foreground">
-                      {comfyWorkflows.isError
-                        ? t("comfyWorkflowError")
-                        : comfyWorkflows.data && comfyWorkflows.data.length === 0
-                          ? t("comfyWorkflowEmpty")
-                          : t("comfyWorkflowHint")}
-                    </span>
-                  </label>
-                )}
-                {isComfyui && generationConfig.workflow && (comfyParams.data ?? []).some((p) => !p.role) && (
-                  <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
-                    {(comfyParams.data ?? [])
-                      .filter((param) => !param.role)
-                      .map((param) => {
-                        const current = workflowParams[param.node_id]?.[param.name] ?? param.value;
-                        const label = `${param.title || param.class_type} · ${param.name}`;
-                        return (
-                          <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-[11.5px] text-muted-foreground">
-                            <span className="truncate" title={label}>{label}</span>
-                            {param.type === "COMBO" ? (
-                              <Select value={String(current)} onValueChange={(value) => setWorkflowParam(param.node_id, param.name, value)}>
-                                <SelectTrigger className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {(param.options ?? []).map((option) => (
-                                    <SelectItem key={option} value={option}>{option}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : param.type === "BOOLEAN" ? (
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 justify-self-start accent-primary"
-                                checked={Boolean(current)}
-                                onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.checked)}
-                              />
-                            ) : param.type === "INT" || param.type === "FLOAT" ? (
-                              <Input
-                                className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
-                                type="number"
-                                value={String(current ?? "")}
-                                min={param.min}
-                                max={param.max}
-                                step={param.step ?? (param.type === "INT" ? 1 : 0.01)}
-                                onChange={(event) =>
-                                  setWorkflowParam(
-                                    param.node_id,
-                                    param.name,
-                                    param.type === "INT" ? Math.trunc(Number(event.target.value) || 0) : Number(event.target.value) || 0,
-                                  )
-                                }
-                              />
-                            ) : (
-                              <Input
-                                className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
-                                value={String(current ?? "")}
-                                onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.value)}
-                              />
-                            )}
-                          </label>
-                        );
-                      })}
-                  </div>
-                )}
                 {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>
