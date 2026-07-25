@@ -18,6 +18,7 @@ export function Scopes({
   filter,
   imageSrc,
   canvasRef,
+  fill = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   filter: string;
@@ -26,6 +27,8 @@ export function Scopes({
   /** 合成器画布(多段/叠加/花字时的真实渲染帧,已烧录调色)。存在即优先从它采样 —— 一举覆盖
    *  图片/视频/多轨/文字,且不需要再叠一次 filter。 */
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;
+  /** 填满容器高度(浮窗可缩放时用):画布随窗口拉伸而非固定 2:1。 */
+  fill?: boolean;
 }) {
   const t = useI18n();
   const [mode, setMode] = React.useState<ScopeMode>("histogram");
@@ -141,8 +144,8 @@ export function Scopes({
   }, [videoRef]);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="grid h-6 grid-cols-2 overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+    <div className={cn("flex flex-col gap-1.5", fill && "h-full")}>
+      <div className="grid h-6 flex-none grid-cols-2 overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
         <button
           type="button"
           role="tab"
@@ -162,8 +165,8 @@ export function Scopes({
           {t("scopeWaveform")}
         </button>
       </div>
-      <div className="relative">
-        <canvas ref={displayRef} width={256} height={128} className="block h-auto w-full rounded-md bg-[#0b0b0d]" />
+      <div className={cn("relative", fill && "min-h-0 flex-1")}>
+        <canvas ref={displayRef} width={256} height={128} className={cn("block rounded-md bg-[#0b0b0d]", fill ? "h-full w-full" : "h-auto w-full")} />
         {blocked && <p className="absolute inset-0 m-0 flex items-center justify-center p-2 text-center text-[10.5px] leading-normal text-[rgb(255_255_255/0.7)]">{t("scopeUnavailable")}</p>}
       </div>
     </div>
