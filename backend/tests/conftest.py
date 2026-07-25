@@ -20,6 +20,9 @@ os.environ["MIBU_GENERATE_PROXIES"] = "0"
 # Force software (libx264+CRF) export so render output is deterministic and we
 # don't depend on a hardware encoder being present on the CI/dev box.
 os.environ["MIBU_HW_ENCODE"] = "0"
+# Don't launch a headless Chromium to rasterize subtitles/花字 in the suite; the ASS
+# fallback path stays exercised and tests don't depend on Playwright/dist being present.
+os.environ["MIBU_TEXT_RASTERIZE"] = "0"
 
 import pytest
 

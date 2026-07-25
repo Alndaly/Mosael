@@ -197,7 +197,8 @@ def _kf_expr(points: tuple[tuple[float, float], ...], prog: str) -> str:
 
 
 def _element_transform(
-    in_label: str, tf: Transform, width: int, height: int, prefix: str, *, start: float = 0.0, duration: float = 1.0
+    in_label: str, tf: Transform, width: int, height: int, prefix: str, *, start: float = 0.0,
+    duration: float = 1.0, element_sized: bool = False,
 ) -> tuple[list[str], str, str, str]:
     """Turn a frame-sized (WxH, cover-filled) element [in_label] into a scaled/rotated/faded
     element ready to overlay, matching the preview's ``translate(x·50%,y·50%) scale rotate`` +
@@ -232,6 +233,9 @@ def _element_transform(
         s_expr = _kf_expr(scale_pts, prog_t)
         # eval=frame re-evaluates w/h each frame; iw/ih are the cover-filled frame (WxH).
         filters.append(f"[{in_label}]scale=w='iw*({s_expr})':h='ih*({s_expr})':eval=frame[{prefix}s]")
+    elif element_sized:
+        # element_sized(如花字 PNG):元素本就是自然尺寸,按 iw/ih 缩放,而不是套画幅尺寸。
+        filters.append(f"[{in_label}]scale=w='iw*{tf.scale:.5f}':h='ih*{tf.scale:.5f}'[{prefix}s]")
     else:
         scaled_w, scaled_h = max(2, _even(width * tf.scale)), max(2, _even(height * tf.scale))
         filters.append(f"[{in_label}]scale={scaled_w}:{scaled_h}[{prefix}s]")
@@ -259,9 +263,9 @@ def _element_transform(
 
     if tf.rotation != 0 or animate_rot:
         angle = f"(({_kf_expr(rot_pts, prog_t)})*PI/180)" if animate_rot else f"{math.radians(tf.rotation):.6f}"
-        if animate_scale:
-            # Element size varies per frame → rotate onto a per-frame diagonal square (rotate centres
-            # the input in the larger ow×oh canvas), so no angle clips the corners.
+        if animate_scale or element_sized:
+            # Element size varies per frame (or is input-sized) → rotate onto a per-frame diagonal
+            # square from iw/ih (rotate centres the input in the larger ow×oh canvas), no corner clip.
             filters.append(f"[{label}]rotate='{angle}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none[{prefix}r]")
         else:
             # Fixed size → pad to the diagonal square before rotating; box is angle-independent, so an
@@ -275,7 +279,7 @@ def _element_transform(
 
     x_pts, y_pts = tf.keyed("x"), tf.keyed("y")
     animate_pos = len(x_pts) >= 2 or len(y_pts) >= 2
-    if animate_pos or animate_scale:
+    if animate_pos or animate_scale or element_sized:
         # Centre in output px = frame centre + offset·half-frame; overlay origin = centre − element/2.
         # W/H are the canvas, w/h the (possibly animated) element size — so centring holds as it scales.
         x_expr = _kf_expr(x_pts, prog_t) if x_pts else f"{tf.x:.5f}"
@@ -523,6 +527,20 @@ def _escape_filter_path(path: Path) -> str:
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
+def _subtitle_overlay_pos(style, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:
+    """字幕 PNG 左上角坐标:水平居中 + 按 position/offset 竖直定位(镜像预览 subtitleCss)。
+    offset 是画幅高百分比;center 位置里 offset 是相对元素高(与前端 translate 的 % 语义一致)。"""
+    x = max(0, (w - pw) // 2)
+    off = style.offset / 100.0
+    if style.position == "top":
+        y = int(round(off * h))
+    elif style.position == "center":
+        y = int(round(h / 2 + off * ph - ph / 2))
+    else:  # bottom
+        y = int(round(h - off * h - ph))
+    return x, y
+
+
 # 从深处剪一小段时,靠 trim 滤镜切会逼 ffmpeg 从第 0 帧一路解码到 src_in——长素材里这一步
 # 能占掉绝大多数导出时间(表现为进度长时间卡在个位数、speed≈0.0x)。改用输入级 -ss 快进:
 # ffmpeg 先跳到 src_in 之前最近的关键帧,默认 accurate_seek 会精确解码并丢弃到 src_in、并把
@@ -666,6 +684,7 @@ def build_ffmpeg_command(
     output_path: Path,
     *,
     force_software: bool = False,
+    text_pngs: dict | None = None,
 ) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
@@ -773,9 +792,39 @@ def build_ffmpeg_command(
         video_label = out_label
         input_index += 1
 
-    # Burned-in subtitles from subtitle tracks: a styled ASS file (libass) so font size,
-    # colour, background box, bold, position and offset match the preview's subtitle_style.
-    if plan.subtitles or plan.text_overlays:
+    # 字幕 + 花字:优先叠加「按预览 CSS 用无头 Chromium 渲染的透明 PNG」(text_pngs),逐像素
+    # 对齐预览(字体/字号/描边/阴影/背景圆角全一致);拿不到(找不到前端 dist/Chromium,或测试
+    # 关闭)时回落到下面的 ASS(libass)烧字。每条 PNG 都 -loop 成时间线上的一段,再叠加。
+    if text_pngs is not None:
+        for item, (png, pw, ph) in zip(plan.subtitles, text_pngs.get("subtitles", [])):
+            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
+            sx, sy = _subtitle_overlay_pos(plan.subtitle_style, pw, ph, width, height)
+            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{item.start}/TB[stin{input_index}]")
+            out_label = f"[vts{input_index}]"
+            filters.append(
+                f"{video_label}[stin{input_index}]overlay=x={sx}:y={sy}:eof_action=pass:"
+                f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
+            )
+            video_label = out_label
+            input_index += 1
+        for k, (item, (png, pw, ph)) in enumerate(zip(plan.text_overlays, text_pngs.get("text_overlays", []))):
+            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
+            # 花字 PNG 当作一个自由元素:移到时间线起点,再复用元素变换管线施加动画,以文字中心
+            # 对齐 (cx,cy)。element_sized=True 让缩放/定位按 PNG 自然尺寸而非画幅尺寸。
+            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{item.start}/TB[htin{k}]")
+            tfilters, tlabel, tox, toy = _element_transform(
+                f"htin{k}", item.transform, width, height, f"ht{k}",
+                start=item.start, duration=item.duration, element_sized=True,
+            )
+            filters += tfilters
+            out_label = f"[vtx{k}]"
+            filters.append(
+                f"{video_label}[{tlabel}]overlay=x='{tox}':y='{toy}':eof_action=pass:"
+                f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
+            )
+            video_label = out_label
+            input_index += 1
+    elif plan.subtitles or plan.text_overlays:
         ass_path = output_path.with_suffix(".ass")
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")
@@ -851,6 +900,48 @@ def build_ffmpeg_command(
     return args
 
 
+def _png_size(data: bytes) -> tuple[int, int]:
+    """从 PNG 头(IHDR)读宽高,免依赖。"""
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
+def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
+    """把每条字幕/花字按预览 CSS 渲染成透明 PNG,返回 {subtitles, text_overlays} 列表(元素为
+    (png路径, 宽, 高));关掉开关 / 找不到前端 dist / Chromium 失败时返回 None → 回落 ASS。"""
+    if not settings.text_rasterize:
+        return None
+    if not (plan.subtitles or plan.text_overlays):
+        return {"subtitles": [], "text_overlays": []}
+    try:
+        from app.media.text_render import TextRasterizer
+
+        tr = TextRasterizer(plan.output.width, plan.output.height)
+        if not tr.available():
+            logger.warning("frontend dist not found; text burn falls back to ASS")
+            return None
+        result: dict = {"subtitles": [], "text_overlays": []}
+        stem = workdir / output_stem(plan)
+        with tr:
+            for i, item in enumerate(plan.subtitles):
+                png = tr.render_subtitle(item.text, plan.subtitle_style)
+                path = stem.with_name(f"{stem.name}.sub{i}.png")
+                path.write_bytes(png)
+                result["subtitles"].append((path, *_png_size(png)))
+            for i, item in enumerate(plan.text_overlays):
+                png = tr.render_huazi(item.text, item.style)
+                path = stem.with_name(f"{stem.name}.txt{i}.png")
+                path.write_bytes(png)
+                result["text_overlays"].append((path, *_png_size(png)))
+        return result
+    except Exception:
+        logger.exception("text rasterization failed; falling back to ASS burn")
+        return None
+
+
+def output_stem(plan: RenderPlan) -> str:
+    return f"text_{plan.sequence_id}"
+
+
 def execute_render(
     plan: RenderPlan,
     resolve: Callable[[str], Path],
@@ -882,11 +973,16 @@ def execute_render(
         output_path.name,
     )
 
+    # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
+    text_pngs = _rasterize_text(plan, output_path.parent)
+
     def run_once(*, force_software: bool) -> tuple[int, str, bool]:
         if on_phase is not None:
             on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
         # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
-        command = build_ffmpeg_command(plan, resolve, output_path, force_software=force_software)
+        command = build_ffmpeg_command(
+            plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs
+        )
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
         # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg

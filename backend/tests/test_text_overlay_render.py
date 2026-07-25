@@ -197,3 +197,42 @@ def test_fontsize_scaled_to_match_browser_rendering():
     tags = _text_style_tags(_read_text_style({"font_size": 100}))
     assert f"\\fs{100 * _ASS_FONTSIZE_SCALE:g}" in tags
     assert _ASS_FONTSIZE_SCALE > 1.0
+
+
+def test_build_command_composites_text_pngs_instead_of_ass(tmp_path):
+    """给了 text_pngs 就用 PNG 叠加(overlay + -loop),不再走 ASS(subtitles= 滤镜)。"""
+    from pathlib import Path
+
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1920, height=1080, fps=30,
+        clips=[{"id": "c", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+        assets={"a": {"file_key": "/x.png"}},
+        subtitle_clips=[{"id": "s1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": "字幕"}],
+        text_overlays=[{"id": "t1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": "花字",
+                        "effects": {"text_style": {"font_size": 72}}}],
+    )
+    sub_png, txt_png = tmp_path / "sub.png", tmp_path / "txt.png"
+    text_pngs = {"subtitles": [(sub_png, 300, 60)], "text_overlays": [(txt_png, 400, 90)]}
+    cmd = build_ffmpeg_command(plan, lambda k: Path(k), tmp_path / "o.mp4", text_pngs=text_pngs)
+    joined = " ".join(cmd)
+    assert "subtitles=" not in joined  # 不再 ASS 烧字
+    assert str(sub_png) in cmd and str(txt_png) in cmd  # 两张 PNG 都作为输入
+    assert "overlay=x=" in joined  # 字幕定点叠加
+    assert cmd.count("-loop") >= 2  # 每条文字 PNG 都 loop 成一段
+
+
+def test_build_command_falls_back_to_ass_without_text_pngs(tmp_path):
+    from pathlib import Path
+
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1920, height=1080, fps=30,
+        clips=[{"id": "c", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+        assets={"a": {"file_key": "/x.png"}},
+        subtitle_clips=[{"id": "s1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": "字幕"}],
+    )
+    cmd = build_ffmpeg_command(plan, lambda k: Path(k), tmp_path / "o.mp4")  # text_pngs=None
+    assert "subtitles=" in " ".join(cmd)  # 回落 ASS

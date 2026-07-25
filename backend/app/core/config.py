@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # 并避开 CI/VM 里硬件编码器缺失导致的失败。
     hw_encode: bool = True
 
+    # 字幕/花字烧字:True=用无头 Chromium 按预览 CSS 渲染成 PNG 再叠加(逐像素对齐预览);
+    # False 或找不到前端 dist/Chromium 时回落 ASS(libass)烧字。测试里关掉走 ASS 分支
+    # (确定、无需起浏览器)。frontend_dist 为空时从仓库结构自动定位。
+    text_rasterize: bool = True
+    frontend_dist: str = ""
+
     # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
     # interpreter so this backend stays light; empty asr_python autodetects
     # (env → sibling mibu-video venv → this interpreter).
