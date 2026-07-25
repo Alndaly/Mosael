@@ -74,7 +74,14 @@ export function JobDetailDialog({
           </div>
 
           {active && <Progress className="my-0.5" value={Math.round(current.progress * 100)} />}
-          <p className="m-0 text-xs text-foreground">{current.message}</p>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="m-0 text-xs text-foreground">{current.message}</p>
+            {active && (
+              <span className="timecode shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                {Math.round(current.progress * 100)}%
+              </span>
+            )}
+          </div>
           {current.error && <p className="m-0 text-[11.5px] text-destructive">{current.error}</p>}
 
           <div className="grid gap-1 border-t border-border pt-2">

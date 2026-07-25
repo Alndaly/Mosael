@@ -1175,7 +1175,10 @@ function ExportControl({
   return (
     <span className="mr-2 inline-flex items-center gap-1.5">
       {status === "running" && (
-        <span className="timecode inline-flex items-center gap-1 text-[11px] text-muted-foreground">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title={job.data?.message ?? undefined}>
+          {job.data?.message && <span className="max-w-[190px] truncate">{job.data.message}</span>}
+          <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
+        </span>
       )}
       {status === "succeeded" && (
         <span className="inline-flex items-center gap-1 text-[11px] text-[var(--track-audio-text)]">

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -10,7 +12,15 @@ from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
-from app.media.render_executor import RenderExecutionError, execute_render
+from app.media.render_executor import (
+    PHASE_ENCODE,
+    PHASE_FALLBACK,
+    PHASE_FINALIZE,
+    PHASE_PREPARE,
+    RenderExecutionError,
+    RenderProgress,
+    execute_render,
+)
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
 
 
@@ -220,6 +230,36 @@ def _run_export(job_id: str, plan: RenderPlan) -> None:
         run_job_guarded(job_id, lambda: _run_export_body(job_id, plan), what="导出")
 
 
+def _format_eta(seconds: float) -> str:
+    """预计剩余时间的中文速写:'8 秒' / '1 分 20 秒' / '1 时 5 分'。"""
+    total = max(0, int(round(seconds)))
+    if total < 60:
+        return f"{total} 秒"
+    minutes, secs = divmod(total, 60)
+    if minutes < 60:
+        return f"{minutes} 分 {secs} 秒" if secs else f"{minutes} 分"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} 时 {minutes} 分"
+
+
+def _export_message(phase: str, prog: RenderProgress | None) -> str:
+    """按阶段(+编码时的速度/ETA)组织用户可感知的中文进度文案。"""
+    if phase == PHASE_PREPARE:
+        return "准备导出…"
+    if phase == PHASE_FALLBACK:
+        return "硬件编码不可用,已转软件编码…"
+    if phase == PHASE_FINALIZE:
+        return "封装文件…"
+    # PHASE_ENCODE
+    bits = ["编码中"]
+    if prog is not None:
+        if prog.speed:
+            bits.append(f"{prog.speed:.1f}x")
+        if prog.eta_seconds is not None:
+            bits.append(f"约剩 {_format_eta(prog.eta_seconds)}")
+    return " · ".join(bits) if len(bits) > 1 else "编码中…"
+
+
 def _run_export_body(job_id: str, plan: RenderPlan) -> None:
     output_path = settings.data_dir / "exports" / f"{job_id}.mp4"
     with SessionLocal() as db:
@@ -227,22 +267,52 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         if job is None:
             return
         job.status = "running"
-        job.message = "Rendering"
+        job.message = _export_message(PHASE_PREPARE, None)
         emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
         db.commit()
 
-        last_progress = -1.0
+        phase = PHASE_PREPARE
+        last_fraction = -1.0
+        last_write = 0.0
 
-        def on_progress(value: float) -> None:
-            nonlocal last_progress
-            if value - last_progress < 0.02:
-                return
-            last_progress = value
+        def write_progress(fraction: float | None, message: str) -> None:
             with SessionLocal() as progress_db:
                 progress_job = progress_db.get(Job, job_id)
                 if progress_job is not None:
-                    progress_job.progress = round(value, 4)
+                    if fraction is not None:
+                        progress_job.progress = round(fraction, 4)
+                    progress_job.message = message
                     progress_db.commit()
+
+        def on_phase(name: str) -> None:
+            nonlocal phase, last_fraction
+            phase = name
+            if name == PHASE_FALLBACK:
+                # 软件编码从头再来:进度条明确回退到 0 并说明原因,而不是无声归零让人以为卡死。
+                last_fraction = -1.0
+                with SessionLocal() as fb_db:
+                    fb_job = fb_db.get(Job, job_id)
+                    if fb_job is not None:
+                        fb_job.progress = 0.0
+                        fb_job.message = _export_message(name, None)
+                        emit_job_event(fb_db, job_id, "job.encode_fallback", {})
+                        fb_db.commit()
+            elif name == PHASE_FINALIZE:
+                # ffmpeg 逐帧进度到不了 100%(末块 out_time ≈ 时长−1帧),封装阶段再顶到 99%,
+                # 让进度条贴近满、配合"封装文件…"文案,避免观感上"卡在 96%"。
+                write_progress(0.99, _export_message(name, None))
+            else:
+                write_progress(None, _export_message(name, None))
+
+        def on_progress(prog: RenderProgress) -> None:
+            nonlocal last_fraction, last_write
+            now = time.monotonic()
+            # 至少涨 1.5% 或过去 1 秒才落库:既不每秒多写,又让 ETA/速度保持新鲜。
+            if prog.fraction - last_fraction < 0.015 and now - last_write < 1.0:
+                return
+            last_fraction = prog.fraction
+            last_write = now
+            write_progress(prog.fraction, _export_message(PHASE_ENCODE, prog))
 
         try:
             execute_render(
@@ -251,6 +321,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 output_path,
                 on_progress,
                 on_child=lambda child: register_job_child(job_id, child),
+                on_phase=on_phase,
             )
             # Cancelling kills ffmpeg, which makes it exit non-zero and raise below — but a
             # cancellation landing just as it finished would otherwise be overwritten here, and
@@ -258,6 +329,8 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             if not finish_job(db, job, status="running"):
                 db.commit()
                 return
+            job.message = "整理输出…"
+            db.commit()
             sequence = db.get(Sequence, plan.sequence_id)
             asset = register_file_asset(
                 db,
@@ -271,20 +344,20 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 job,
                 status="succeeded",
                 progress=1.0,
-                message="Export complete",
+                message="导出完成",
                 result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
             ):
                 emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
         except RenderExecutionError as exc:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
-            # cancellation's own message rather than relabelling it "Export failed".
-            if not finish_job(db, job, status="failed", message="Export failed", error=str(exc)):
+            # cancellation's own message rather than relabelling it "导出失败".
+            if not finish_job(db, job, status="failed", message="导出失败", error=str(exc)):
                 db.commit()
                 unregister_job_child(job_id)
                 return
             emit_job_event(db, job.id, "job.failed", {"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash})
         except Exception as exc:  # defensive: a worker thread must never die silently
-            if finish_job(db, job, status="failed", message="Export failed", error=str(exc)[:500]):
+            if finish_job(db, job, status="failed", message="导出失败", error=str(exc)[:500]):
                 emit_job_event(db, job.id, "job.failed", {})
         finally:
             # The registry must not outlive the run, or a later cancel would kill a dead

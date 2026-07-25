@@ -5,6 +5,7 @@ import math
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 from app.core.child_process import ChildProcess
 
@@ -26,6 +27,55 @@ class RenderExecutionError(RuntimeError):
     def __init__(self, message: str, *, stderr_tail: str = "") -> None:
         super().__init__(message)
         self.stderr_tail = stderr_tail
+
+
+# 渲染的阶段:准备(建命令/ffmpeg 初始化,进度停在 0)→ 编码(逐帧,有 speed/ETA)→
+# 封装(ffmpeg 收到 progress=end 后重写 moov/faststart,常见"卡在 99%")→
+# fallback(硬件编码失败,转软件重来)。上层据此给出更可感知的中文提示。
+PHASE_PREPARE = "prepare"
+PHASE_ENCODE = "encode"
+PHASE_FINALIZE = "finalize"
+PHASE_FALLBACK = "fallback"
+
+
+class RenderProgress(NamedTuple):
+    """一次进度回调携带的信息:进度分数 + 实时速度/帧率 + 预计剩余秒数。"""
+
+    fraction: float
+    speed: float | None  # 相对实时的倍率,ffmpeg 的 speed=12.3x
+    fps: float | None
+    eta_seconds: float | None
+
+
+def _parse_ffmpeg_speed(value: str) -> float | None:
+    """ffmpeg 的 speed 字段形如 '12.3x' / 'N/A';取不到返回 None。"""
+    value = value.strip().rstrip("x")
+    if not value or value == "N/A":
+        return None
+    try:
+        speed = float(value)
+    except ValueError:
+        return None
+    return speed if speed > 0 else None
+
+
+def _progress_from_block(block: dict[str, str], total_us: float) -> RenderProgress:
+    """把一整块 ffmpeg -progress 输出解析成 RenderProgress。ETA = 剩余时间线时长 / 速度。"""
+    try:
+        out_us = int(block.get("out_time_us", "0"))
+    except ValueError:
+        out_us = 0
+    fraction = min(1.0, max(0.0, out_us / total_us)) if total_us > 0 else 0.0
+    speed = _parse_ffmpeg_speed(block.get("speed", ""))
+    try:
+        fps = float(block["fps"]) if block.get("fps") not in (None, "", "N/A") else None
+    except ValueError:
+        fps = None
+    eta: float | None = None
+    if speed and total_us > 0:
+        remaining_media_s = max(0.0, (total_us - out_us) / 1_000_000)
+        eta = remaining_media_s / speed
+    return RenderProgress(fraction=fraction, speed=speed, fps=fps, eta_seconds=eta)
 
 
 def _atempo_chain(speed: float) -> str:
@@ -744,18 +794,26 @@ def execute_render(
     plan: RenderPlan,
     resolve: Callable[[str], Path],
     output_path: Path,
-    on_progress: Callable[[float], None] | None = None,
+    on_progress: Callable[[RenderProgress], None] | None = None,
     on_child: Callable[[ChildProcess], None] | None = None,
+    on_phase: Callable[[str], None] | None = None,
 ) -> None:
-    """Run FFmpeg, reporting progress in [0, 1] from -progress output.
+    """Run FFmpeg, reporting progress from its -progress stream.
 
-    `on_child` hands the caller the running child so a cancellation can kill it. Without that,
-    cancelling only flipped a database row while ffmpeg ran to completion.
+    `on_progress` gets a RenderProgress (fraction + live speed/fps/ETA) per progress block, so the
+    caller can show something more legible than a bare percentage. `on_phase` announces the coarse
+    stage (prepare/encode/finalize/fallback) so a job stuck building filters or rewriting the moov
+    box reads as work-in-progress rather than a frozen bar. `on_child` hands the caller the running
+    child so a cancellation can kill it — without that, cancel only flipped a database row while
+    ffmpeg ran to completion.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     total_us = max(plan.timeline_duration, 0.001) * 1_000_000
 
     def run_once(*, force_software: bool) -> tuple[int, str, bool]:
+        if on_phase is not None:
+            on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
+        # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
         command = build_ffmpeg_command(plan, resolve, output_path, force_software=force_software)
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
@@ -765,12 +823,24 @@ def execute_render(
         child = ChildProcess(process)
         if on_child is not None:
             on_child(child)
+        block: dict[str, str] = {}
+        encoding = False
         for line in child.raw_lines():
-            if on_progress and line.startswith("out_time_us="):
-                try:
-                    on_progress(min(1.0, int(line.split("=", 1)[1]) / total_us))
-                except ValueError:
-                    pass
+            line = line.strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            block[key] = value
+            if key != "progress":  # accumulate until the block terminator
+                continue
+            if not encoding and on_phase is not None:
+                encoding = True
+                on_phase(PHASE_ENCODE)  # first block ⇒ frames are flowing
+            if value == "end" and on_phase is not None:
+                on_phase(PHASE_FINALIZE)  # -progress end; ffmpeg still writes faststart moov
+            if on_progress is not None:
+                on_progress(_progress_from_block(block, total_us))
+            block = {}
         stderr_tail = child.finish()
         return process.returncode or 0, stderr_tail, child.killed
 
@@ -780,8 +850,6 @@ def execute_render(
     # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
     hw_used = settings.hw_encode and _available_hw_encoder() is not None
     if returncode != 0 and hw_used and not killed:
-        if on_progress:
-            on_progress(0.0)
         returncode, stderr_tail, killed = run_once(force_software=True)
     if returncode != 0:
         raise RenderExecutionError(
