@@ -422,7 +422,7 @@ def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str
         override = "{" + "".join(tags + base_tags) + "}"
         return [
             f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
-            f"Default,,0,0,0,,{override}{text}"
+            f"Text,,0,0,0,,{override}{text}"
         ]
 
     stops = sorted({0.0, 1.0} | {p[0] for pts in (x_pts, y_pts, s_pts, r_pts, o_pts) for p in pts})
@@ -454,7 +454,7 @@ def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str
         override = "{" + "".join(tags + base_tags) + anim + "}"
         seg_start, seg_end = item.start + a * item.duration, item.start + b * item.duration
         lines.append(
-            f"Dialogue: 0,{_ass_timestamp(seg_start)},{_ass_timestamp(seg_end)},Default,,0,0,0,,{override}{text}"
+            f"Dialogue: 0,{_ass_timestamp(seg_start)},{_ass_timestamp(seg_end)},Text,,0,0,0,,{override}{text}"
         )
     return lines
 
@@ -487,7 +487,13 @@ def _build_ass(plan: RenderPlan) -> str:
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Default,{fontname},{style.font_size:g},{primary},&H000000FF,{back},{back},{bold},"
-        f"0,0,0,100,100,0,0,{border_style},{outline},0,{align},40,40,{margin_v},1\n\n"
+        f"0,0,0,100,100,0,0,{border_style},{outline},0,{align},40,40,{margin_v},1\n"
+        # 花字专用样式:BorderStyle=1(仅描边/阴影,绝不画背景框)。花字自己没有背景,
+        # 若沿用 Default 样式会连字幕的框一起继承(预览里没有),导出就凭空多一个黑框。
+        # 字号/颜色/粗斜/描边/阴影/字体全部由每条 Dialogue 的 \\ 覆盖标签逐条给出;这里只定
+        # BorderStyle 和阴影色(&H59… ≈ 预览 rgba(0,0,0,.65) 的投影)。
+        "Style: Text,Sans,48,&H00FFFFFF,&H000000FF,&H00000000,&H59000000,-1,0,0,0,"
+        "100,100,0,0,1,0,0,5,0,0,0,1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )

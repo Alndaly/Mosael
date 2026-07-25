@@ -150,3 +150,39 @@ def test_fontsdir_falls_back_to_title_font(tmp_path: Path) -> None:
     )
     graph = " ".join(build_ffmpeg_command(plan, lambda k: tmp_path / k, tmp_path / "o.mp4"))
     assert ":fontsdir='" in graph  # 花字上传字体让 fontsdir 出现(字幕本身没有字体)
+
+
+class TestHuaziBoxNotInheritedFromSubtitle:
+    """回归:花字自己没有背景,不能继承字幕的背景框。历史 bug 是花字与字幕共用 Default 样式
+    (BorderStyle=3 带框),于是字幕一开框、花字就凭空多个黑框,与预览不符。花字应走独立的
+    Text 样式(BorderStyle=1,仅描边/阴影)。"""
+
+    def _ass(self) -> str:
+        from app.media.render_executor import _build_ass
+
+        plan = build_render_plan(
+            sequence_id="s", revision=1, width=1920, height=1080, fps=30,
+            clips=[{"id": "c", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+            assets={"a": {"file_key": "/x.png"}},
+            subtitle_clips=[{"id": "s1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": "字幕"}],
+            subtitle_style={"font_size": 40, "bg_opacity": 0.6, "color": "#ffffff"},
+            text_overlays=[{"id": "t1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": "花字",
+                            "effects": {"text_style": {"font_size": 72, "color": "#ffee00"}}}],
+        )
+        return _build_ass(plan)
+
+    def test_subtitle_uses_boxed_default_style(self) -> None:
+        ass = self._ass()
+        default = next(ln for ln in ass.splitlines() if ln.startswith("Style: Default,"))
+        # Default 样式:BorderStyle=3(第 16 个字段)= 不透明框,字幕保留背景
+        assert default.split(",")[15] == "3"
+        assert any(ln.startswith("Dialogue:") and ",Default," in ln and "字幕" in ln for ln in ass.splitlines())
+
+    def test_huazi_uses_boxless_text_style(self) -> None:
+        ass = self._ass()
+        assert any(ln.startswith("Style: Text,") for ln in ass.splitlines()), "花字应有独立 Text 样式"
+        text_style = next(ln for ln in ass.splitlines() if ln.startswith("Style: Text,"))
+        assert text_style.split(",")[15] == "1"  # BorderStyle=1:无背景框
+        # 花字 Dialogue 必须引用 Text 样式,而不是带框的 Default
+        huazi = next(ln for ln in ass.splitlines() if ln.startswith("Dialogue:") and "花字" in ln)
+        assert ",Text," in huazi and ",Default," not in huazi
