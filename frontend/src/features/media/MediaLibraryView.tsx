@@ -260,28 +260,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <SelectItem value="duration">{t("sortDuration")}</SelectItem>
             </SelectContent>
           </Select>
-          {allTags.length > 0 && (
-            <div
-              className="flex flex-wrap items-center gap-1 text-muted-foreground"
-              role="group"
-              aria-label={t("filterByTag")}
-            >
-              <Tags size={13} />
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={cn(
-                    "inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
-                    tagFilter === tag && "border-primary bg-accent text-accent-foreground",
-                  )}
-                  onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {selectMode ? (
@@ -326,6 +304,26 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       </div>
+      {/* 标签筛选单独一行:塞进上面的工具条会把下拉/按钮挤乱,标签多了还会换行错位。 */}
+      {allTags.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1 text-muted-foreground" role="group" aria-label={t("filterByTag")}>
+          <Tags size={13} className="shrink-0" />
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={tagFilter === tag}
+              className={cn(
+                "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
+                tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
+              )}
+              onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
 
       {(assets.data ?? []).length === 0 ? (
