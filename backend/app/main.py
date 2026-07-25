@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -40,8 +41,11 @@ from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
 from app.api.deps import require_worker_key
+from app.core.logging import configure_logging
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal, init_db
+
+logger = logging.getLogger(__name__)
 from app.core.permissions import get_current_user
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.generation import ensure_builtin_generation_models
@@ -53,33 +57,42 @@ from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()  # 先配好日志,后续启动步骤才追溯得到
+    logger.info("Mibu backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
     issue_worker_key()
     # 配置指定的 kind 翻成 external 执行模式(外部 worker 经 claim/report 驱动)。
     # 必须在 reconcile 之前——external kind 的任务跨重启存活,不能被判失败。
-    for kind in (k.strip() for k in settings.external_job_kinds.split(",")):
-        if kind:
-            register_external_kind(kind)
+    external = [k.strip() for k in settings.external_job_kinds.split(",") if k.strip()]
+    for kind in external:
+        register_external_kind(kind)
+    if external:
+        logger.info("external job kinds (driven by outside worker): %s", ", ".join(external))
     with SessionLocal() as db:
         ensure_builtin_generation_models(db)
         # A restart kills every in-process worker thread — fail the jobs they
         # were running so they don't linger frozen in the task center.
-        reconcile_orphaned_jobs(db)
+        failed = reconcile_orphaned_jobs(db)
         # 同理:卡在 running 的智能体会话拨回 idle,否则前端永远「思考中」。
         reconcile_orphaned_agent_sessions(db)
         # Backfill preview proxies for any videos missing one (best-effort).
         reconcile_missing_proxies(db)
         # 修复 remux 上线前导入的坏素材(直录 webm 缺时长/缩略图/波形)。
         reconcile_broken_media_info(db)
+    if failed:
+        logger.info("reconciled %d orphaned job(s) left running by a previous restart", failed)
     if settings.scheduler_enabled:
         start_scheduler_loop()
+        logger.info("scheduler loop started")
     if settings.feishu_autostart:
         from app.integrations.feishu.service import autostart_enabled_bots, stop_all_connections
 
         autostart_enabled_bots()
+    logger.info("Mibu backend ready")
     yield
+    logger.info("Mibu backend shutting down")
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()

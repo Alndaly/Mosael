@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -26,6 +27,8 @@ from app.domain.publish import (
     PublishDomainError,
 )
 from app.media.paths import resolve_key
+
+logger = logging.getLogger(__name__)
 
 # 登录态复检间隔:bound/login_required 的账号超过该时长未查就该复检。
 BINDING_RECHECK_HOURS = 12
@@ -153,6 +156,11 @@ def report_task(
     _sync_job(db, task)
     if status != previous:
         _notify_status(db, task)
+        if status in ("success", "prepared"):
+            logger.info("publish task %s → %s: %s", task_id, status, task.title)
+        elif status != "running":
+            # failed / login_required / blocked / permission_required / waiting_manual…
+            logger.warning("publish task %s → %s: %s", task_id, status, error_message or task.title)
     db.commit()
     db.refresh(task)
     return task

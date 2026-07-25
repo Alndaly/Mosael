@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path.home() / ".mibu-cut"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8800
+    # 后端日志级别(MIBU_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
+    # 不配的话 app.* 日志会冒泡到没挂 handler 的 root 被丢弃——见 core/logging.py。
+    log_level: str = "INFO"
     scheduler_enabled: bool = True
     feishu_autostart: bool = True
     # 第三方登录(留空 = 对应按钮不出现)。Google 用「Web 应用」型客户端并把

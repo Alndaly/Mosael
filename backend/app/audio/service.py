@@ -5,6 +5,7 @@ asset. The worker subprocess keeps torch/funasr/whisperx out of this process.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tempfile
 import threading
@@ -20,6 +21,8 @@ from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
+
+logger = logging.getLogger(__name__)
 
 WORKER_PATH = Path(__file__).with_name("asr_worker.py")
 ASR_TIMEOUT_SECONDS = 3600
@@ -189,6 +192,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {"provider": provider})
             db.commit()
+            logger.info("transcription job %s: provider=%s asset=%s", job_id, provider, asset_id)
 
             asset = db.get(Asset, asset_id)
             source = resolve_key(asset.file_key)
@@ -222,6 +226,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job.result = {"transcript_id": transcript.id, "segments": len(segments)}
             emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
             db.commit()
+            logger.info("transcription job %s succeeded: %d segments (%s)", job_id, len(segments), provider)
         except Exception as exc:  # noqa: BLE001 — worker thread must record, not die
             db.rollback()
             job = db.get(Job, job_id)
@@ -231,6 +236,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 job.error = str(exc)[:800]
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
+            logger.warning("transcription job %s failed: %s", job_id, exc)
 
 
 __all__ = ["AsrError", "start_transcription", "resolve_asr_runtime", "to_segment_ins", "run_asr"]

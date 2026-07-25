@@ -68,9 +68,12 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
         if job is None or workflow is None:
             return
         try:
+            logger.info("workflow job %s: running '%s'", job_id, workflow.name)
             run_workflow(db, workflow, job, params)
+            db.refresh(job)
+            logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
-            logger.exception("Workflow %s failed", workflow_id)
+            logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
             job.status = "failed"
             job.error = str(exc)[:500]
             job.message = "工作流失败"

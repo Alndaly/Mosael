@@ -70,7 +70,7 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
     try:
         body()
     except Exception as exc:  # noqa: BLE001 — a worker thread must never die silently
-        logger.exception("%s worker failed", what)
+        logger.exception("%s worker crashed (job=%s)", what, job_id)
         try:
             with SessionLocal() as db:
                 job = db.get(Job, job_id)
@@ -97,6 +97,11 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
         return False
     for key, value in fields.items():
         setattr(job, key, value)
+    status = fields.get("status")
+    if status == "failed":
+        logger.warning("job %s [%s] failed: %s", job.id, job.kind, fields.get("error") or fields.get("message") or "")
+    elif status == "succeeded":
+        logger.info("job %s [%s] succeeded", job.id, job.kind)
     return True
 # Retention (plan §12.3): active jobs keep every event; terminal jobs keep the
 # most recent few; terminal jobs older than the window lose all detail events.
@@ -143,9 +148,11 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         job.message = "等待执行器认领"
         db.add(TaskEvent(job_id=job.id, type="job.awaiting_worker", payload={}))
         db.commit()
+        logger.info("job %s [%s] queued for external worker", job.id, job.kind)
         return False
     db.commit()
     threading.Thread(target=thread_target, daemon=True).start()
+    logger.info("job %s [%s] dispatched in-process", job.id, job.kind)
     return True
 
 
@@ -171,6 +178,7 @@ def create_job(
     db.add(job)
     db.flush()
     db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))
+    logger.info("job %s [%s] created (workspace=%s)", job.id, kind, workspace_id)
     return job
 
 
@@ -221,6 +229,7 @@ def cancel_job(db: Session, job: Job) -> Job:
             task.status = "cancelled"
     db.commit()
     db.refresh(job)
+    logger.info("job %s [%s] cancelled by user (child_killed=%s)", job.id, job.kind, killed)
     return job
 
 
@@ -262,6 +271,7 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
             db.add(TaskEvent(job_id=job.id, type="job.claimed", payload={"worker": worker}))
             db.commit()
             db.refresh(job)
+            logger.info("job %s [%s] claimed by worker=%s", job.id, job.kind, worker or "?")
             return job
         db.rollback()  # 另一个 worker 抢先了;重试下一条
 
@@ -298,10 +308,12 @@ def report_job(
             job.message = message
         if status == "failed":
             job.error = (error or message or "worker 报告失败")[:500]
+            logger.warning("job %s [%s] failed (external worker): %s", job.id, job.kind, job.error)
         else:
             job.progress = 1.0
             if result is not None:
                 job.result = result
+            logger.info("job %s [%s] succeeded (external worker)", job.id, job.kind)
         db.add(TaskEvent(job_id=job.id, type=f"job.{status}", payload={}))
     db.commit()
     db.refresh(job)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 import threading
@@ -19,6 +20,8 @@ from app.domain.usage import record_usage
 Generation runner: executes a generation job off-thread. Results always land
 as assets + generated_assets rows (plan §18.4) — never as loose temp files.
 """
+
+logger = logging.getLogger(__name__)
 
 
 def start_generation_thread(generation_id: str) -> None:
@@ -66,6 +69,13 @@ def _run_generation(generation_id: str) -> None:
         job.message = "Generating"
         emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
         db.commit()
+        logger.info(
+            "generation job %s: provider=%s model=%s kind=%s",
+            job.id,
+            generation.provider,
+            generation.model,
+            generation.kind,
+        )
 
         workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
         request: GenerationRequest | None = None
@@ -110,6 +120,14 @@ def _run_generation(generation_id: str) -> None:
             _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
+            logger.info(
+                "generation job %s succeeded in %.1fs (%s/%s) → asset %s",
+                job.id,
+                time.monotonic() - started,
+                generation.provider,
+                generation.model,
+                asset.id,
+            )
         except ProviderError as exc:
             if request is not None:
                 _record_generation_usage(db, generation, job, request, context, None, started, "failed")
@@ -152,6 +170,7 @@ def _fail(db, job: Job, message: str) -> None:
     job.error = message[:500]
     emit_job_event(db, job.id, "job.failed", {})
     db.commit()
+    logger.warning("generation job %s failed: %s", job.id, message)
 
 
 def _source_files_for_generation(db, generation: GenerationJob) -> tuple[Path, ...]:

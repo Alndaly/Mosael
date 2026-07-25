@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from sqlalchemy import select
@@ -23,6 +24,8 @@ from app.media.render_executor import (
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
 
+
+logger = logging.getLogger(__name__)
 
 # 导出参数(对话框可调,全部可省略 → 维持原有行为):
 # resolution 是目标短边档位,只降不升;quality 映射 (CRF, x264 preset)。
@@ -270,6 +273,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         job.message = _export_message(PHASE_PREPARE, None)
         emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
         db.commit()
+        started = time.monotonic()
 
         phase = PHASE_PREPARE
         last_fraction = -1.0
@@ -348,6 +352,14 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
             ):
                 emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+                size_mb = output_path.stat().st_size / 1_048_576 if output_path.exists() else 0.0
+                logger.info(
+                    "export job %s finished in %.1fs (%.1f MB) → asset %s",
+                    job_id,
+                    time.monotonic() - started,
+                    size_mb,
+                    asset.id,
+                )
         except RenderExecutionError as exc:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
             # cancellation's own message rather than relabelling it "导出失败".

@@ -282,6 +282,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.text();
+    // 开发者可在控制台追溯失败的后端调用;抛出的错误照常驱动界面 toast 给用户。
+    const method = (init?.method ?? "GET").toUpperCase();
+    console.warn(`[api] ${method} ${path} → ${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
     throw new Error(`${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
   }
   if (res.status === 204) return undefined as T;

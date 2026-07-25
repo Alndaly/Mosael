@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import math
 import subprocess
 from collections.abc import Callable
@@ -18,6 +19,8 @@ RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
 Every segment yields a normalized [vN][aN] pair (scaled/padded to the output
 format, gaps as black + silence), concatenated and encoded to mp4.
 """
+
+logger = logging.getLogger(__name__)
 
 AUDIO_RATE = 48000
 DUCK_GAIN = 0.3  # ≈ −10.5 dB: how far a ducked track drops under overlapping audio (闪避)
@@ -810,6 +813,17 @@ def execute_render(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     total_us = max(plan.timeline_duration, 0.001) * 1_000_000
 
+    hw_encoder = _available_hw_encoder() if settings.hw_encode else None
+    logger.info(
+        "render start: encoder=%s output=%dx%d@%gfps duration=%.1fs → %s",
+        hw_encoder or "libx264",
+        plan.output.width,
+        plan.output.height,
+        plan.output.fps,
+        plan.timeline_duration,
+        output_path.name,
+    )
+
     def run_once(*, force_software: bool) -> tuple[int, str, bool]:
         if on_phase is not None:
             on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
@@ -848,8 +862,13 @@ def execute_render(
     # A hardware encoder can be *listed* by ffmpeg yet fail at runtime (no GPU, driver/permission,
     # unsupported dimensions). When that happens — and only when we weren't the ones who stopped it
     # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
-    hw_used = settings.hw_encode and _available_hw_encoder() is not None
+    hw_used = hw_encoder is not None
     if returncode != 0 and hw_used and not killed:
+        logger.warning(
+            "render: hardware encoder %s failed (rc=%s), retrying with software libx264",
+            hw_encoder,
+            returncode,
+        )
         returncode, stderr_tail, killed = run_once(force_software=True)
     if returncode != 0:
         raise RenderExecutionError(
