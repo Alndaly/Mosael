@@ -369,9 +369,17 @@ def _ass_bgr(hex_color: str) -> str:
     return f"&H{b:02X}{g:02X}{r:02X}&"
 
 
+# libass 把 ASS Fontsize 映射成字形像素的方式和浏览器 CSS font-size 不一样:同一字体(如苹方),
+# 浏览器渲染的字形墨迹约 0.93×em,libass 只有约 0.665×em——导出的字幕/花字比预览小约 30%。
+# 实测把 Fontsize 乘 1.4,libass 渲染的中文墨迹正好和浏览器一致(200px→280 时墨迹 133→186,
+# 与浏览器 CSS 200px 的 186 吻合)。以 CJK 系统字体(苹方/微软雅黑,本 app 默认)标定;纯拉丁
+# 字体会略偏大,但本 app 以中文为主。前端字号是原生帧像素,乘这个系数即得视觉一致的 Fontsize。
+_ASS_FONTSIZE_SCALE = 1.4
+
+
 def _text_style_tags(st) -> list[str]:
     """花字外观标签(字号/颜色/描边/阴影/粗斜/字体),不含位置/缩放/旋转/透明度。"""
-    tags = [f"\\fs{st.font_size:g}", f"\\1c{_ass_bgr(st.color)}"]
+    tags = [f"\\fs{st.font_size * _ASS_FONTSIZE_SCALE:g}", f"\\1c{_ass_bgr(st.color)}"]
     if st.stroke_width > 0:
         tags.append(f"\\bord{st.stroke_width:g}\\3c{_ass_bgr(st.stroke_color)}")
     else:
@@ -468,10 +476,11 @@ def _build_ass(plan: RenderPlan) -> str:
     style = plan.subtitle_style
     w, h = plan.output.width, plan.output.height
     align = {"bottom": 2, "center": 5, "top": 8}.get(style.position, 2)
+    scaled_fs = style.font_size * _ASS_FONTSIZE_SCALE  # 见 _ASS_FONTSIZE_SCALE:对齐浏览器视觉字号
     box_alpha = round((1.0 - style.bg_opacity) * 255)
     has_box = style.bg_opacity > 0
     border_style = 3 if has_box else 1  # 3 = opaque box (BackColour), 1 = plain/outline
-    outline = round(style.font_size * 0.12) if has_box else 0  # box padding
+    outline = round(scaled_fs * 0.12) if has_box else 0  # box padding
     margin_v = 0 if style.position == "center" else round(style.offset / 100.0 * h)
     primary = _ass_color(style.color)
     back = _ass_color(style.bg_color, box_alpha)
@@ -489,7 +498,7 @@ def _build_ass(plan: RenderPlan) -> str:
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Default,{fontname},{style.font_size:g},{primary},&H000000FF,{back},{back},{bold},"
+        f"Style: Default,{fontname},{scaled_fs:g},{primary},&H000000FF,{back},{back},{bold},"
         f"0,0,0,100,100,0,0,{border_style},{outline},0,{align},40,40,{margin_v},1\n"
         # 花字专用样式:BorderStyle=1(仅描边/阴影,绝不画背景框)。花字自己没有背景,
         # 若沿用 Default 样式会连字幕的框一起继承(预览里没有),导出就凭空多一个黑框。

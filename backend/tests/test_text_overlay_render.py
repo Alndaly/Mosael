@@ -77,9 +77,11 @@ class TestDialogue:
         )
         # transform 默认恒等 → 画面正中,静态时单条 Dialogue
         (line,) = _text_overlay_dialogues(item, 1920, 1080)
+        from app.media.render_executor import _ASS_FONTSIZE_SCALE
+
         assert "\\an5" in line
         assert "\\pos(960.0,540.0)" in line  # 恒等 transform → 画面中心
-        assert "\\fs64" in line
+        assert f"\\fs{64 * _ASS_FONTSIZE_SCALE:g}" in line  # 字号按 libass↔浏览器系数放大
         assert "\\1c&H0000FF&" in line  # 红 #ff0000 → BGR 0000FF
         assert "\\bord3\\3c&H000000&" in line
         assert "\\b1" in line
@@ -186,3 +188,12 @@ class TestHuaziBoxNotInheritedFromSubtitle:
         # 花字 Dialogue 必须引用 Text 样式,而不是带框的 Default
         huazi = next(ln for ln in ass.splitlines() if ln.startswith("Dialogue:") and "花字" in ln)
         assert ",Text," in huazi and ",Default," not in huazi
+
+
+def test_fontsize_scaled_to_match_browser_rendering():
+    """libass 渲染字号比浏览器小约 0.71×,导出前需按 _ASS_FONTSIZE_SCALE 放大,才和预览等大。"""
+    from app.media.render_executor import _ASS_FONTSIZE_SCALE, _text_style_tags
+
+    tags = _text_style_tags(_read_text_style({"font_size": 100}))
+    assert f"\\fs{100 * _ASS_FONTSIZE_SCALE:g}" in tags
+    assert _ASS_FONTSIZE_SCALE > 1.0
