@@ -119,22 +119,50 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
     return payload
 
 
+def _provider_error(response: httpx.Response, model: str) -> str:
+    """把供应商的 4xx/5xx 响应体提炼成人看得懂的一行——否则只剩个裸状态码,查不出根因。"""
+    detail = response.text.strip()
+    try:
+        body = response.json()
+    except (ValueError, json.JSONDecodeError):
+        body = None
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            detail = str(err["message"])
+        elif isinstance(err, str) and err:
+            detail = err
+        elif body.get("message"):
+            detail = str(body["message"])
+    detail = " ".join(detail.split())[:500] or "(无错误详情)"
+    return f"LLM 供应商返回 {response.status_code}(模型 {model}):{detail}"
+
+
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     profile = require_profile(db, config.get("profile_id"), error=WorkflowDomainError)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
         messages.append({"role": "system", "content": str(config["system"])})
-    messages.append({"role": "user", "content": str(config.get("prompt", ""))})
+    prompt = str(config.get("prompt", ""))
+    # 空提示词是最常见的一类 400(prompt 切了「引用」却没绑上游、或上游给了空):提前拦下,给准信。
+    if not prompt.strip():
+        raise WorkflowDomainError("LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。")
+    messages.append({"role": "user", "content": prompt})
     base_url = profile.base_url.rstrip("/")
     model = str(config.get("model") or profile.default_model)
-    response = httpx.post(
-        f"{base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {profile.api_key}"},
-        json=_request_payload(config, model, messages),
-        timeout=LLM_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
+    try:
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {profile.api_key}"},
+            json=_request_payload(config, model, messages),
+            timeout=LLM_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise WorkflowDomainError(_provider_error(exc.response, model)) from exc
+    except httpx.RequestError as exc:
+        raise WorkflowDomainError(f"调用 LLM 失败(网络/连接):{exc}") from exc
     text = str(response.json()["choices"][0]["message"]["content"]).strip()
     result: dict[str, Any] = {"text": text}
     if str(config.get("response_format") or "text") in {"json_object", "json_schema"}:

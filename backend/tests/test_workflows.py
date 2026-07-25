@@ -536,6 +536,73 @@ def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
             raise AssertionError("expected WorkflowDomainError")
 
 
+def test_llm_node_surfaces_provider_error_body(monkeypatch) -> None:
+    # 400 等 4xx 时,把供应商响应体里的原因带出来(否则日志只剩裸状态码,查不出根因)。
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    def fake_post(url: str, headers: dict, json: dict, timeout: int):
+        return ai_nodes.httpx.Response(
+            400,
+            json={"error": {"message": "response_format.type must be one of text, json_object"}},
+            request=ai_nodes.httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+
+    with SessionLocal() as db:
+        profile = ProviderProfile(
+            name="LLM",
+            vendor="openai-compatible",
+            base_url="https://api.deepseek.com",
+            api_key="sk",
+            default_model="deepseek-chat",
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add_all([profile, workflow])
+        db.flush()
+
+        try:
+            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})
+        except WorkflowDomainError as exc:
+            msg = str(exc)
+            assert "400" in msg
+            assert "deepseek-chat" in msg
+            assert "response_format.type must be one of" in msg
+        else:
+            raise AssertionError("expected WorkflowDomainError")
+
+
+def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
+    # 空提示词提前拦下(不打网络),给出可操作的中文提示。
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("空提示词不应发起网络请求")
+
+    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+
+    with SessionLocal() as db:
+        profile = ProviderProfile(
+            name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk", default_model="m"
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add_all([profile, workflow])
+        db.flush()
+
+        try:
+            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "   "})
+        except WorkflowDomainError as exc:
+            assert "提示词为空" in str(exc)
+        else:
+            raise AssertionError("expected WorkflowDomainError")
+
+
 def test_new_nodes_registered_and_validate() -> None:
     from app.domain.workflows.executors import registered_types
 
