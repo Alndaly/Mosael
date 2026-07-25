@@ -20,10 +20,15 @@ from pathlib import Path
 
 from app.core.config import settings
 
-# app 根字体(design/tokens.css 的 --font-sans):空 font_family 的花字继承它。
+# app 根字体(design/tokens.css 的 --font-sans):空 font_family 的花字继承它(霞鹜文楷/楷体)。
 _APP_FONT_STACK = (
     '"Inter Variable", "LXGW WenKai Screen", "LXGW WenKai", -apple-system, '
     'BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif'
+)
+# 字幕默认字体栈(前端 subtitleStyle.ts 的 SYSTEM_FONT_STACK):空 font_family 的字幕用系统黑体,
+# 和花字继承的 --font-sans(楷体)不同——不能混用,否则字幕字体和预览对不上。
+_SUBTITLE_FONT_STACK = (
+    'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif'
 )
 
 
@@ -85,7 +90,7 @@ def _subtitle_style_css(style, frame_w: int) -> str:
         f"font-size:{float(style.font_size):g}px",
         f"color:{style.color}",
         f"font-weight:{700 if style.bold else 400}",
-        f"font-family:{style.font_family or _APP_FONT_STACK}",
+        f"font-family:{style.font_family or _SUBTITLE_FONT_STACK}",
         f"background:{bg}",
         "text-shadow:0 1px 2px rgba(0,0,0,0.7)",
     ]
