@@ -192,7 +192,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           />
         )}
       </button>
-      {card && <div className="border-t border-border px-2.5 py-2">{card}</div>}
+      {/* 富结果卡(如 list_assets 的素材列表)可能几十条 → 封顶高度、内部滚动,别把整张卡撑到几屏高。 */}
+      {card && <div className="max-h-[360px] overflow-y-auto border-t border-border px-2.5 py-2">{card}</div>}
       {open && hasBody && (
         <div className="flex flex-col gap-2 border-t border-border px-[9px] py-2">
           {argText && (
