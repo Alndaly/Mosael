@@ -19,6 +19,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
+/**
+ * Radix 偶发在弹窗关闭时把 `<body>` 的 pointer-events:none 留住,整页点不动、必须刷新。
+ * 常见于弹窗由 ContextMenu/DropdownMenu 触发:菜单关闭的清理与弹窗打开竞争,弹窗再关时只跑了
+ * 自己那份,菜单留下的锁没人清。这里在 open→false 后兜底:若 DOM 里确无仍打开的 Radix 浮层,
+ * 就把 body 的 pointer-events 复位(有其它浮层开着则不动,避免误清坏别人的模态屏蔽)。
+ */
+function useUnlockBodyOnClose(open: boolean): void {
+  React.useEffect(() => {
+    if (open) return;
+    const id = window.setTimeout(() => {
+      const stillOpen = document.querySelector(
+        '[data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"], [data-radix-menu-content][data-state="open"], [data-radix-popper-content-wrapper] [data-state="open"]',
+      );
+      if (!stillOpen && document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [open]);
+}
+
 /** Shared modal shell (no native dialogs per frontend rules). */
 export function ModalShell({
   open,
@@ -34,6 +55,7 @@ export function ModalShell({
   /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
   className?: string;
 }) {
+  useUnlockBodyOnClose(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={className}>
@@ -113,6 +135,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
 }) {
   const t = useI18n();
+  useUnlockBodyOnClose(open);
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <AlertDialogContent>
