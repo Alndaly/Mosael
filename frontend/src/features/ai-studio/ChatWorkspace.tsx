@@ -8,8 +8,10 @@ import {
   CornerDownRight,
   Database,
   FileText,
+  Film,
   Loader2,
   MessageSquarePlus,
+  Music,
   Paperclip,
   Pencil,
   Plus,
@@ -22,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
+import { API_BASE, api, assetFileUrl, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -514,30 +516,32 @@ export function ChatWorkspace({
                 </button>
               </div>
             ))}
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 px-2.5 pt-1.5">
-                {attachments.map((asset) => (
-                  <span
-                    className="inline-flex items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-[9px] py-0.5 text-[11px]"
-                    key={asset.id}
-                  >
-                    {asset.name}
-                    <button
-                      type="button"
-                      className="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => setAttachments((current) => current.filter((item) => item.id !== asset.id))}
-                      aria-label={t("delete")}
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
             <form
               className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
               onSubmit={submit}
             >
+              {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-0.5 pb-1">
+                  {attachments.map((asset) => (
+                    <span
+                      className="inline-flex max-w-[240px] items-center gap-[5px] rounded-full border border-border bg-panel-subtle py-[3px] pl-2 pr-1.5 text-[11px]"
+                      key={asset.id}
+                    >
+                      <Paperclip size={10} className="shrink-0 text-muted-foreground" />
+                      <span className="truncate" title={asset.name}>{asset.name}</span>
+                      <button
+                        type="button"
+                        className="grid shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => setAttachments((current) => current.filter((item) => item.id !== asset.id))}
+                        aria-label={t("delete")}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <Textarea
                 rows={2}
                 className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
@@ -979,6 +983,57 @@ function formatUsageCost(events: ReturnType<typeof summarizeMessageUsage>, t: Re
   return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
 }
 
+// 发送时附件被拼成 `[附件 asset_id=… 名称=… 类型=…]` 交给智能体识别;用户气泡里要把它从正文里拆出来,
+// 渲染成缩略图/文件胶囊,而不是把这段标记原样显示。名称可含空格,所以非贪婪匹配到 “ 类型=”。
+const ATTACHMENT_TOKEN = /\n?\[附件 asset_id=(\S+) 名称=(.*?) 类型=([a-z]+)\]/g;
+
+function parseUserContent(content: string): { text: string; attachments: { assetId: string; name: string; kind: string }[] } {
+  const attachments: { assetId: string; name: string; kind: string }[] = [];
+  const text = content
+    .replace(ATTACHMENT_TOKEN, (_match, assetId: string, name: string, kind: string) => {
+      attachments.push({ assetId, name, kind });
+      return "";
+    })
+    .trim();
+  return { text, attachments };
+}
+
+function UserAttachment({ assetId, name, kind }: { assetId: string; name: string; kind: string }) {
+  if (kind === "image") {
+    return (
+      <img
+        src={assetFileUrl(assetId)}
+        alt={name}
+        title={name}
+        loading="lazy"
+        className="max-h-[180px] max-w-full rounded-lg border border-border bg-black object-contain"
+      />
+    );
+  }
+  const Icon = kind === "video" ? Film : kind === "audio" ? Music : Paperclip;
+  return (
+    <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-[11.5px] text-muted-foreground">
+      <Icon size={12} className="shrink-0" />
+      <span className="truncate" title={name}>{name}</span>
+    </span>
+  );
+}
+
+function UserMessageContent({ content }: { content: string }) {
+  const { text, attachments } = React.useMemo(() => parseUserContent(content), [content]);
+  if (attachments.length === 0) return <div>{content}</div>;
+  return (
+    <div className="grid gap-1.5">
+      {text && <div className="whitespace-pre-wrap">{text}</div>}
+      <div className="flex flex-wrap gap-1.5">
+        {attachments.map((att) => (
+          <UserAttachment key={att.assetId} assetId={att.assetId} name={att.name} kind={att.kind} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
@@ -1015,7 +1070,7 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
           <AgentTurnContent timeline={payload?.timeline} />
         )
       ) : (
-        <div>{message.content}</div>
+        <UserMessageContent content={message.content} />
       )}
       {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
       {message.role === "assistant" && (
