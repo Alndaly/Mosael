@@ -97,6 +97,7 @@ import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
@@ -1061,21 +1062,24 @@ function WorkflowEditor({
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
           {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
-          <Select onValueChange={addNode} value="">
-            <SelectTrigger className="h-8 w-auto rounded-full border-input bg-card px-3 text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
-              <Plus size={12} />
-              <span>{t("wfAddNode")}</span>
-            </SelectTrigger>
-            <SelectContent className="max-w-none">
-              {nodeTypes
-                .filter((meta) => meta.type !== "start" || !graphHasStart)
-                .map((meta) => (
-                  <SelectItem key={meta.type} value={meta.type}>
-                    {meta.label}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value=""
+            onValueChange={addNode}
+            searchPlaceholder={t("wfAddNode")}
+            options={nodeTypes
+              .filter((meta) => meta.type !== "start" || !graphHasStart)
+              .map((meta) => ({ value: meta.type, label: meta.label }))}
+            trigger={
+              <button
+                type="button"
+                className="flex h-8 w-auto items-center gap-1 rounded-full border border-input bg-card px-3 text-xs text-foreground hover:bg-muted"
+                aria-label={t("wfAddNode")}
+              >
+                <Plus size={12} />
+                <span>{t("wfAddNode")}</span>
+              </button>
+            }
+          />
           <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
@@ -1641,21 +1645,22 @@ function LoopBodyEditor({
         <span className="inline-flex items-center gap-[5px] text-[12.5px] font-semibold text-foreground">
           <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
         </span>
-        <Select onValueChange={addNode} value="">
-          <SelectTrigger className="ml-auto h-8 w-auto rounded-full border-input bg-card px-3 text-foreground hover:bg-muted data-[placeholder]:text-foreground [&_span]:text-xs" aria-label={t("wfAddNode")}>
-            <Plus size={12} />
-            <span>{t("wfAddNode")}</span>
-          </SelectTrigger>
-          <SelectContent className="max-w-none">
-            {nodeTypes
-              .filter((meta) => meta.type !== "start")
-              .map((meta) => (
-                <SelectItem key={meta.type} value={meta.type}>
-                  {meta.label}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value=""
+          onValueChange={addNode}
+          searchPlaceholder={t("wfAddNode")}
+          options={nodeTypes.filter((meta) => meta.type !== "start").map((meta) => ({ value: meta.type, label: meta.label }))}
+          trigger={
+            <button
+              type="button"
+              className="ml-auto flex h-8 w-auto items-center gap-1 rounded-full border border-input bg-card px-3 text-xs text-foreground hover:bg-muted"
+              aria-label={t("wfAddNode")}
+            >
+              <Plus size={12} />
+              <span>{t("wfAddNode")}</span>
+            </button>
+          }
+        />
       </div>
       <div className="relative min-h-0">
         <ReactFlow

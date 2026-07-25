@@ -20,6 +20,7 @@ export function SearchableSelect({
   emptyText,
   className,
   disabled,
+  trigger,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -29,6 +30,8 @@ export function SearchableSelect({
   emptyText?: string;
   className?: string;
   disabled?: boolean;
+  /** 自定义触发器(替换默认按钮),用于像「添加节点」这类带图标/胶囊样式的触发器。 */
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
   const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
@@ -36,17 +39,19 @@ export function SearchableSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            "flex h-8 w-full items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
-            className,
-          )}
-        >
-          <span className="truncate">{selected?.label ?? placeholder ?? ""}</span>
-          <ChevronDown size={14} className="shrink-0 opacity-50" />
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            disabled={disabled}
+            className={cn(
+              "flex h-8 w-full items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
+              className,
+            )}
+          >
+            <span className="truncate">{selected?.label ?? placeholder ?? ""}</span>
+            <ChevronDown size={14} className="shrink-0 opacity-50" />
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
