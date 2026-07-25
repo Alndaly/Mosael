@@ -217,11 +217,19 @@ function buildGenerationEngineOptions(
   };
 
   for (const profile of enabledProfiles) {
+    // 只挂档案实际声明支持的能力(capability_ids,含用户按档案的覆盖)→ 避免只做对话的
+    // openai-compatible 档案(如 Ollama/DeepSeek)冒出 gpt-image-2 这类图像/视频错配。
+    const profileCaps = new Set(profile.capability_ids ?? []);
     for (const model of catalog.filter((item) => item.provider === profile.vendor)) {
+      if (!profileCaps.has(model.kind)) continue;
       add(profile, model.kind, model.model, model);
     }
     for (const row of defaults) {
-      if ((row.capability === "image" || row.capability === "video") && row.provider_profile_id === profile.id) {
+      if (
+        (row.capability === "image" || row.capability === "video") &&
+        row.provider_profile_id === profile.id &&
+        profileCaps.has(row.capability)
+      ) {
         add(profile, row.capability, row.model);
       }
     }
