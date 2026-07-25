@@ -64,6 +64,8 @@ export function Monitor({
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  // 合成器画布的镜像 ref:示波器优先从它采样(compositor 激活时的真实成片帧)。
+  const compositorCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
@@ -429,6 +431,7 @@ export function Monitor({
           videoRef={videoRef}
           filter={cssFilter}
           imageSrc={isImage && activeAsset ? assetFileUrl(activeAsset.id) : null}
+          canvasRef={compositorCanvasRef}
           onClose={() => setShowScopes(false)}
         />
       )}
@@ -504,6 +507,7 @@ export function Monitor({
               width={sequence.width}
               height={sequence.height}
               fillMode={fillMode}
+              scopeCanvasRef={compositorCanvasRef}
               className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
               style={fitStyle}
             />

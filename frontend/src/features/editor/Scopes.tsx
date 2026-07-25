@@ -17,11 +17,15 @@ export function Scopes({
   videoRef,
   filter,
   imageSrc,
+  canvasRef,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   filter: string;
   /** 当前帧是图片时的图源:视频探针取不到帧,就改从图片采样(否则图片素材下示波器一片空)。 */
   imageSrc?: string | null;
+  /** 合成器画布(多段/叠加/花字时的真实渲染帧,已烧录调色)。存在即优先从它采样 —— 一举覆盖
+   *  图片/视频/多轨/文字,且不需要再叠一次 filter。 */
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }) {
   const t = useI18n();
   const [mode, setMode] = React.useState<ScopeMode>("histogram");
@@ -71,11 +75,12 @@ export function Scopes({
       else imgProbe.removeAttribute("src");
     };
 
-    const paint = (source: CanvasImageSource, dctx: CanvasRenderingContext2D, display: HTMLCanvasElement): void => {
+    const paint = (source: CanvasImageSource, dctx: CanvasRenderingContext2D, display: HTMLCanvasElement, applyFilter: boolean): void => {
       const sctx = sample.getContext("2d", { willReadFrequently: true });
       if (!sctx) return;
       sctx.clearRect(0, 0, SAMPLE_W, SAMPLE_H);
-      sctx.filter = filterRef.current || "none";
+      // 合成器画布已烧录调色,再叠一次 filter 会重复上色 → 只有原始视频/图片源才套 filter。
+      sctx.filter = applyFilter ? filterRef.current || "none" : "none";
       try {
         sctx.drawImage(source, 0, 0, SAMPLE_W, SAMPLE_H);
       } catch {
@@ -118,9 +123,12 @@ export function Scopes({
           }
         }
       }
-      // 有视频帧优先用视频;否则(图片素材)退回图片探针。都没有就跳过,不清屏(留住上一帧)。
-      if (probe.readyState >= 2 && probe.videoWidth) paint(probe, dctx, display);
-      else if (imgProbe.complete && imgProbe.naturalWidth) paint(imgProbe, dctx, display);
+      // 采样优先级:合成器画布(多段/叠加/花字的真实帧,已调色)> 视频探针帧 > 图片探针帧。
+      // 都没有就跳过,不清屏(留住上一帧)。合成器画布不再叠 filter,原始视频/图片才叠。
+      const composite = canvasRef?.current;
+      if (composite && composite.width > 0 && composite.height > 0) paint(composite, dctx, display, false);
+      else if (probe.readyState >= 2 && probe.videoWidth) paint(probe, dctx, display, true);
+      else if (imgProbe.complete && imgProbe.naturalWidth) paint(imgProbe, dctx, display, true);
     };
     raf = requestAnimationFrame(tick);
     return () => {

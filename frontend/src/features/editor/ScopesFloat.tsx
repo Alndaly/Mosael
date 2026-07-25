@@ -25,11 +25,13 @@ export function ScopesFloat({
   videoRef,
   filter,
   imageSrc,
+  canvasRef,
   onClose,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   filter: string;
   imageSrc?: string | null;
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
   onClose: () => void;
 }) {
   const t = useI18n();
@@ -91,7 +93,7 @@ export function ScopesFloat({
         </button>
       </div>
       <div className="p-1.5">
-        <Scopes videoRef={videoRef} filter={filter} imageSrc={imageSrc} />
+        <Scopes videoRef={videoRef} filter={filter} imageSrc={imageSrc} canvasRef={canvasRef} />
       </div>
     </div>
   );
