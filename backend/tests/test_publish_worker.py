@@ -63,6 +63,29 @@ def test_browser_platform_waits_for_worker_and_reports() -> None:
     assert client.get(f"/api/jobs/{task['job_id']}").json()["status"] == "succeeded"
 
 
+def test_orphaned_running_task_is_reclaimed_on_fresh_claim() -> None:
+    # 执行器认领后翻 running,若中途崩溃/重启丢了在飞任务,任务会永远停在"运行中"。
+    # 下次轮询(claim)时应自愈:账号已不在 worker 在跑集合里 → 置 failed,可重试。
+    client = fresh_client()
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
+    ws, account, task = setup_browser_task(client)
+
+    claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": []}).json()
+    assert claimed["task"]["id"] == task["id"]
+    assert client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]["status"] == "running"
+
+    # 账号仍在在跑集合里(worker 正常处理中)→ 不回收
+    client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]]})
+    assert client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]["status"] == "running"
+
+    # 执行器重启:在跑集合空了,这条 running 的 owner 已消失 → 自愈成 failed
+    client.post("/api/publish/worker/claim", json={"exclude_accounts": []})
+    healed = client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()[0]
+    assert healed["status"] == "failed"
+    assert "发布器中断" in (healed["error"] or "")
+    assert client.get(f"/api/jobs/{task['job_id']}").json()["status"] == "failed"
+
+
 def test_title_limit_and_binding_check_flow() -> None:
     client = fresh_client()
     # These tests drive the worker channel, which now needs its shared key.

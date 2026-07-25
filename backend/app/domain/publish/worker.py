@@ -46,11 +46,43 @@ def _browser_platforms() -> list[str]:
     return [key for key, meta in PUBLISH_PLATFORMS.items() if meta.get("executor") == "browser"]
 
 
+# 一条 running 任务最长允许多久没有任何回报;超过即视为发布器悬挂。短片上传通常几分钟内
+# 就有终态,给到 30 分钟足够宽松,不会误杀正常上传。
+STALE_RUNNING_MINUTES = 30
+
+
+def reclaim_orphaned_running(db: Session, exclude_accounts: list[str]) -> int:
+    """自愈悬挂的 running 任务——账号自愈(claim_check)只管登录态复检,任务这条链一直没有兜底:
+    执行器认领后翻成 running,若中途崩溃/重启(丢了在飞任务)或彻底卡死,任务就永远停在
+    "运行中",UI 上一直转圈。两条判据:
+      1) 账号不在 worker 当前在跑集合里 —— owner 已消失(deterministic,重启即命中);
+      2) 超过 STALE_RUNNING_MINUTES 没有任何回报 —— 执行器还活着但卡死。
+    置 failed 而非重排:可能其实已发布,重排会造成重复投稿;失败 + 明确文案让用户自行确认/重试。
+    """
+    stale_before = now() - timedelta(minutes=STALE_RUNNING_MINUTES)
+    reclaimed = 0
+    for task in db.scalars(select(PublishTask).where(PublishTask.status == "running")).all():
+        orphaned = task.account_id not in exclude_accounts
+        stalled = task.updated_at is not None and task.updated_at < stale_before
+        if not (orphaned or stalled):
+            continue
+        task.status = "failed"
+        task.error_message = "发布器中断:未收到最终结果(发布器可能重启或卡死)。请到平台确认是否已发布,未发布则重试。"
+        _sync_job(db, task)
+        _notify_status(db, task)
+        reclaimed += 1
+    if reclaimed:
+        db.commit()
+    return reclaimed
+
+
 def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, Any] | None:
     """认领最老的一条 pending 浏览器任务并翻成 running。
 
     单进程 SQLite 后端 + 单个 worker:同事务内 select→update 即原子。
     """
+    # 每次轮询顺手回收悬挂的 running 任务(worker 活着就会持续调这里,重启后第一拍即清理)。
+    reclaim_orphaned_running(db, exclude_accounts)
     stmt = (
         select(PublishTask, PublishAccount)
         .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
