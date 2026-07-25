@@ -65,7 +65,12 @@ export const CodeEditor = React.forwardRef<
   );
 
   return (
-    <div className="overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono">
+    <div
+      // .cm-content 撑到最小高度:否则内容只有一行时,editor 外框虽高、可点击的文本区只有一行,
+      // 点到下方空白光标不定位(表现为"除第一行外点击无效")。
+      className="overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)]"
+      style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
+    >
       <CodeMirror
         ref={cmRef}
         value={value}
