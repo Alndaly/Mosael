@@ -66,9 +66,11 @@ export const CodeEditor = React.forwardRef<
 
   return (
     <div
-      // .cm-content 撑到最小高度:否则内容只有一行时,editor 外框虽高、可点击的文本区只有一行,
-      // 点到下方空白光标不定位(表现为"除第一行外点击无效")。
-      className="overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)]"
+      // 两件事一起保证"点哪都能聚焦":
+      // 1) h-fit —— 外框收缩到编辑器实际高度,别被父级 grid/flex 的 align-stretch 拉高,否则
+      //    editor 只有 minHeight、下方多出的空白是死区,点了不定位(表现为"除第一行外点击无效")。
+      // 2) .cm-content/.cm-scroller 撑到 minHeight —— 内容仅一行时可点区也铺满到最小高度。
+      className="h-fit overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)]"
       style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
     >
       <CodeMirror
