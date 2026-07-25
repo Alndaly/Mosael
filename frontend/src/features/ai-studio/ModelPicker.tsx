@@ -1,10 +1,11 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -68,20 +69,26 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   const currentProfileId = session.provider_profile_id ?? defaultChat?.provider_profile_id ?? "";
   const currentModel = session.model ?? defaultChat?.model ?? "";
   const current = currentProfileId && currentModel ? `${currentProfileId}${SEP}${currentModel}` : "";
+  const currentLabel = options.find((option) => option.value === current)?.label ?? t("agentModelPlaceholder");
 
+  // 供应商(如火山)可能一次暴露几十个模型,普通下拉会顶穿屏幕 → 可搜索、封顶高度的选择器。
   return (
-    // key 随 current 变化重挂,规避 Radix 对初始受控值不刷新显示文本的问题
-    <Select key={current || "none"} value={current} onValueChange={(value) => setModel.mutate(value)}>
-      <SelectTrigger className="h-7 w-auto min-w-0 max-w-[220px] gap-1 px-2 text-xs text-muted-foreground" aria-label={t("agentModelLabel")}>
-        <SelectValue placeholder={t("agentModelPlaceholder")} />
-      </SelectTrigger>
-      <SelectContent className="max-w-none">
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      value={current}
+      onValueChange={(value) => setModel.mutate(value)}
+      options={options}
+      searchPlaceholder={t("agentModelPlaceholder")}
+      emptyText={t("cmdkEmpty")}
+      trigger={
+        <button
+          type="button"
+          aria-label={t("agentModelLabel")}
+          className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-input bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+        >
+          <span className="truncate">{currentLabel}</span>
+          <ChevronDown size={13} className="shrink-0 opacity-50" />
+        </button>
+      }
+    />
   );
 }
