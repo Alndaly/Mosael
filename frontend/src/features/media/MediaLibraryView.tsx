@@ -459,6 +459,26 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
             {formatSeconds(duration)}
           </span>
         )}
+        {/* 标签叠在缩略图左下角(而非信息区),这样有无标签的卡片信息区一样高、栅格不错位。 */}
+        {assetTags(asset).length > 0 && (
+          <div className="absolute bottom-1.5 left-1.5 flex max-w-[70%] flex-wrap gap-1">
+            {assetTags(asset)
+              .slice(0, 2)
+              .map((tag) => (
+                <span
+                  className="max-w-full truncate rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-[10.5px] text-[#e8eaed]"
+                  key={tag}
+                >
+                  {tag}
+                </span>
+              ))}
+            {assetTags(asset).length > 2 && (
+              <span className="rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-[10.5px] text-[#e8eaed]">
+                +{assetTags(asset).length - 2}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="grid gap-[5px] px-2 py-[9px]">
         <strong className="truncate text-xs font-semibold" title={asset.name}>
@@ -468,25 +488,6 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
           <Badge variant="secondary">{asset.kind}</Badge>
           <small className="text-[11px] text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
-        {assetTags(asset).length > 0 && (
-          <div className="flex flex-wrap gap-[3px]">
-            {assetTags(asset)
-              .slice(0, 3)
-              .map((tag) => (
-                <span
-                  className="inline-flex cursor-default items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 py-0 text-[11px] text-muted-foreground"
-                  key={tag}
-                >
-                  {tag}
-                </span>
-              ))}
-            {assetTags(asset).length > 3 && (
-              <span className="inline-flex cursor-default items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 py-0 text-[11px] text-muted-foreground">
-                +{assetTags(asset).length - 3}
-              </span>
-            )}
-          </div>
-        )}
         <span className="truncate font-mono text-[11px] tabular-nums text-muted-foreground">
           {width ? `${width}×${asset.media_info.height}` : "—"}
           {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
