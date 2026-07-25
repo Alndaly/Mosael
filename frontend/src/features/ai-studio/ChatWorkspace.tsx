@@ -683,6 +683,15 @@ function ChatInspector({
   tools: AgentTool[];
 }) {
   const t = useI18n();
+  // 会话没显式设模型时,后端按供应商默认回退——与底部模型选择器同源,取生效模型而不是裸 session.model
+  // (否则这里显示 —,底部却显示 deepseek-v4-pro,对不上)。
+  const defaults = useQuery({
+    queryKey: ["provider-defaults"],
+    queryFn: () => api<components["schemas"]["ProviderDefaultOut"][]>("/api/settings/provider-defaults"),
+    staleTime: 60_000,
+  });
+  const defaultChatModel = (defaults.data ?? []).find((item) => item.capability === "chat")?.model ?? "";
+  const effectiveModel = session?.model || defaultChatModel;
   const recentTools = React.useMemo(
     () => collectRecentToolCalls(messages, running ? streamTimeline : []).slice(0, 6),
     [messages, running, streamTimeline],
@@ -729,8 +738,14 @@ function ChatInspector({
           </div>
           <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
             <dt className="truncate text-[11px] text-muted-foreground">{t("agentModel")}</dt>
-            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session?.model ?? session?.adapter ?? ""}>{session?.model ?? session?.adapter ?? "—"}</dd>
+            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={effectiveModel}>{effectiveModel || "—"}</dd>
           </div>
+          {session?.adapter && (
+            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+              <dt className="truncate text-[11px] text-muted-foreground">{t("agentFramework")}</dt>
+              <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session.adapter}>{session.adapter}</dd>
+            </div>
+          )}
           <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
             <dt className="truncate text-[11px] text-muted-foreground">{t("agentUpdatedAt")}</dt>
             <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground">{session ? formatInspectorTime(session.updated_at) : "—"}</dd>
