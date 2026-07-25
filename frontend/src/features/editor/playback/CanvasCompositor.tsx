@@ -32,7 +32,6 @@ export function CanvasCompositor({
   className,
   style,
   onSourceFailed,
-  scopeCanvasRef,
 }: {
   layers: CompositorLayer[];
   width: number;
@@ -44,9 +43,6 @@ export function CanvasCompositor({
   /** A proxy that cannot be decoded here. The caller should drop back to element playback —
       otherwise the layer simply never paints and the viewer sees an unexplained black frame. */
   onSourceFailed?: (assetId: string) => void;
-  /** Mirror the composited canvas out to the caller (scopes read the final graded frame from it;
-      images are drawn crossOrigin so it stays getImageData-readable). */
-  scopeCanvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
 }) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const sourcesRef = React.useRef<Map<string, ProxyVideoSource>>(new Map());
@@ -259,14 +255,7 @@ export function CanvasCompositor({
           )}
         </svg>
       )}
-      <canvas
-        ref={(node) => {
-          canvasRef.current = node;
-          if (scopeCanvasRef) scopeCanvasRef.current = node;
-        }}
-        className={className}
-        style={style}
-      />
+      <canvas ref={canvasRef} className={className} style={style} />
     </>
   );
 }

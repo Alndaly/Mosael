@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl, type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -13,7 +13,6 @@ import { MonitorElement } from "@/features/editor/MonitorElement";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
 import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/WebAudioMixer";
 import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
-import { ScopesFloat } from "@/features/editor/ScopesFloat";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform, type GainKeyframe } from "@/features/editor/keyframes";
@@ -59,13 +58,10 @@ export function Monitor({
   const masterMuted = useEditorStore((state) => state.muted);
   const { setPlayhead, setPlaying, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
     useEditorStore.getState();
-  const [showScopes, setShowScopes] = React.useState(false);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  // 合成器画布的镜像 ref:示波器优先从它采样(compositor 激活时的真实成片帧)。
-  const compositorCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const loadedAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
@@ -210,14 +206,6 @@ export function Monitor({
     () => overlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
     [overlayClips, playhead],
   );
-  // 示波器图源:当前播放头下"最上层可见的图片片段"的图源 —— 叠加轨优先于基础轨。基础轨(videoClips)
-  // 常常没有当前片段(比如图片都在叠加轨、基础轨是花字/字幕),只看 activeAsset 会误判"无画面"。
-  const scopeImageSrc = React.useMemo(() => {
-    const clip = [...activeOverlayClips, activeClip].find(
-      (item) => item?.asset_id && assetById.get(item.asset_id)?.kind === "image",
-    );
-    return clip?.asset_id ? assetFileUrl(clip.asset_id) : null;
-  }, [activeOverlayClips, activeClip, assetById]);
   // The selected on-screen element (base V1 or any active overlay) gets the transform handles.
   const selectedActive = React.useMemo(
     () => [activeClip, ...activeOverlayClips].find((clip) => clip && selectedClipIds.includes(clip.id)) ?? null,
@@ -433,30 +421,6 @@ export function Monitor({
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_auto]">
-      {/* Scopes as a draggable floating window (position: fixed), never covering the picture. */}
-      {showScopes && (
-        <ScopesFloat
-          videoRef={videoRef}
-          filter={cssFilter}
-          imageSrc={scopeImageSrc}
-          canvasRef={compositorCanvasRef}
-          onClose={() => setShowScopes(false)}
-        />
-      )}
-      {/* 示波器要反映"可见成片帧"(所有轨道合成后),而非单条轨道。显示端合成器开着时直接采它的
-          画布;关着时,这里挂一个离屏合成器喂同一批图层,渲染出真实可见帧供示波器采样(图片总能画;
-          带音轨的混音仍由 WebAudioMixer/元素路径负责,这个合成器只画面、不出声)。 */}
-      {showScopes && !compositorActive && (
-        <div className="pointer-events-none fixed left-[-99999px] top-0 h-px w-px overflow-hidden" aria-hidden>
-          <CanvasCompositor
-            layers={compositorLayers}
-            width={sequence.width}
-            height={sequence.height}
-            fillMode={fillMode}
-            scopeCanvasRef={compositorCanvasRef}
-          />
-        </div>
-      )}
       {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
           compositor is active; otherwise one <audio> per active audio-track clip. */}
       {compositorActive ? (
@@ -529,7 +493,6 @@ export function Monitor({
               width={sequence.width}
               height={sequence.height}
               fillMode={fillMode}
-              scopeCanvasRef={compositorCanvasRef}
               className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
               style={fitStyle}
             />
@@ -713,16 +676,6 @@ export function Monitor({
           <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
         </div>
         <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={showScopes ? "bg-[rgb(255_255_255/0.1)]! text-primary!" : undefined}
-            onClick={() => setShowScopes((on) => !on)}
-            aria-label={t("scopes")}
-            title={t("scopes")}
-          >
-            <Activity size={14} />
-          </Button>
           <Button variant="ghost" size="icon" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
