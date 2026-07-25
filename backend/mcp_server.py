@@ -476,15 +476,22 @@ def generate_podcast(
 
 
 @mcp.tool()
-def analyze_asset(asset_id: str, question: str = "") -> dict[str, Any]:
+def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict[str, Any]:
     """Runs directly: analyze an EXISTING image/video media asset with a multimodal model.
 
     Use after list_assets when you need to understand visual/audio content,
-    scenes, on-screen text, mood, or best moments for cutting. Videos are sampled
-    into frames. Do NOT use for KB documents, web pages, workflow graphs, or to
-    generate new media — use read_kb_document/fetch_url/get_workflow/generate_*.
+    scenes, on-screen text, mood, or best moments for cutting. Do NOT use for KB
+    documents, web pages, workflow graphs, or to generate new media — use
+    read_kb_document/fetch_url/get_workflow/generate_*.
+
+    mode: how to feed video (images always go directly):
+      - "auto" (default): native video understanding when a capable profile is
+        configured (Gemini / Qwen-VL / Kimi), otherwise sampled frames + transcript.
+      - "native": force native video understanding (errors if no capable profile).
+      - "frames": force sampled frames + transcript.
+    Pass "native" only when the user explicitly asks for native/whole-video analysis.
     """
-    return _post(f"/api/assets/{asset_id}/analyze", {"question": question})
+    return _post(f"/api/assets/{asset_id}/analyze", {"question": question, "mode": mode})
 
 
 @mcp.tool()
