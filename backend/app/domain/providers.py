@@ -294,6 +294,10 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
 }
 
 
+# 已知能力全集(建/改档案时校验覆盖值,过滤掉无意义的能力名)。
+ALL_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast", "embedding")
+
+
 def capability_ids_for_vendor(vendor: str) -> list[str]:
     """Runnable capability ids exposed by one configured profile.
 
@@ -301,6 +305,25 @@ def capability_ids_for_vendor(vendor: str) -> list[str]:
     validation all ask here instead of re-reading a free-form capability string.
     """
     return list(VENDOR_PRESETS.get(vendor, {}).get("capability_ids", []))
+
+
+def normalize_capability_ids(values: list[str] | None) -> list[str] | None:
+    """把用户传入的能力覆盖收敛成"已知能力、去重保序"的列表;None 透传(表示沿用 vendor 默认)。"""
+    if values is None:
+        return None
+    seen: list[str] = []
+    for value in values:
+        if value in ALL_CAPABILITY_IDS and value not in seen:
+            seen.append(value)
+    return seen
+
+
+def effective_capability_ids(profile: "ProviderProfile") -> list[str]:
+    """档案的实际生效能力:有档案级覆盖用覆盖,否则回落 vendor 预设。"""
+    override = getattr(profile, "capability_ids", None)
+    if override is not None:
+        return normalize_capability_ids(override) or []
+    return capability_ids_for_vendor(profile.vendor)
 
 
 def supports_capability(vendor: str, capability: str) -> bool:

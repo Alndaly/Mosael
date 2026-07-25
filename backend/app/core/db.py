@@ -107,6 +107,17 @@ def _migrate_agent_sessions() -> None:
             conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN adapter_state JSON"))
 
 
+def _migrate_provider_capabilities() -> None:
+    """加列迁移:provider_profiles 增加 capability_ids(档案级能力覆盖,None=沿用 vendor 默认)。"""
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
+    if "capability_ids" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
+
+
 def init_db() -> None:
     from app.db import models  # noqa: F401
 
@@ -121,6 +132,7 @@ def init_db() -> None:
     _migrate_clip_transform()
     _migrate_tts_config()
     _migrate_provider_extra()
+    _migrate_provider_capabilities()
     Base.metadata.create_all(bind=engine)
 
 

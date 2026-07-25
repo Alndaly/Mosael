@@ -478,6 +478,8 @@ class ProviderProfileCreate(BaseModel):
     vendor: str = Field(min_length=1, max_length=60)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
     config: dict[str, str] = Field(default_factory=dict)
+    #: 档案级能力覆盖(None=沿用 vendor 默认)。用于把只做对话的通用端点取消 image/video 等。
+    capability_ids: list[str] | None = None
     #: 服务端从既有档案复制 secret 字段(如同一把方舟 Key 配到另一能力的独立档案),
     #: 密钥全程不出后端、不下发前端。仅在本档案未显式提供该字段时生效。
     copy_credentials_from: str | None = None
@@ -487,6 +489,8 @@ class ProviderProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
     config: dict[str, str] | None = None
+    #: 档案级能力覆盖;传 [] 清空(=显式声明"无能力"),传 null / 不传则不改动。
+    capability_ids: list[str] | None = None
     enabled: bool | None = None
 
 
@@ -519,6 +523,13 @@ class ProviderProfileOut(OrmModel):
     extra: dict[str, str] = Field(default_factory=dict)
     #: Masked, adapter-shaped config for the settings form; secret fields are hints only.
     config: dict[str, str] = Field(default_factory=dict)
+
+    #: ORM 列 capability_ids 可为 None(=沿用 vendor 默认);model_validate 时先归一成 []。
+    #: 路由 _profile_out 随后会覆写成实际生效能力(effective_capability_ids)。
+    @field_validator("capability_ids", mode="before")
+    @classmethod
+    def _caps_none_to_list(cls, value: object) -> object:
+        return value if value is not None else []
 
 
 class ProviderDefaultOut(BaseModel):

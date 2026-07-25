@@ -708,7 +708,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Asset */
+        get: operations["get_asset_api_assets__asset_id__get"];
         put?: never;
         post?: never;
         /** Delete Asset */
@@ -2214,6 +2215,47 @@ export interface paths {
         };
         /** List Generation Models */
         get: operations["list_generation_models_api_generation_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generation/comfyui/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Comfyui Workflows
+         * @description 列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
+         *     这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。
+         */
+        get: operations["list_comfyui_workflows_api_generation_comfyui_workflows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generation/comfyui/workflow-params": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Comfyui Workflow Params
+         * @description 提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。
+         */
+        get: operations["get_comfyui_workflow_params_api_generation_comfyui_workflow_params_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5126,6 +5168,8 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
+            /** Capability Ids */
+            capability_ids?: string[] | null;
             /** Copy Credentials From */
             copy_credentials_from?: string | null;
         };
@@ -5172,6 +5216,8 @@ export interface components {
             config?: {
                 [key: string]: string;
             } | null;
+            /** Capability Ids */
+            capability_ids?: string[] | null;
             /** Enabled */
             enabled?: boolean | null;
         };
@@ -7941,6 +7987,37 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["Body_import_asset_api_assets_import_post"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_api_assets__asset_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -11213,6 +11290,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerationModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_comfyui_workflows_api_generation_comfyui_workflows_get: {
+        parameters: {
+            query?: {
+                profile_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_comfyui_workflow_params_api_generation_comfyui_workflow_params_get: {
+        parameters: {
+            query: {
+                workflow: string;
+                profile_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
             /** @description Validation Error */

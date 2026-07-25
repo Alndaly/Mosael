@@ -28,7 +28,13 @@ from app.db.models import KbEmbeddingConfig, ProviderDefault, ProviderPricingRul
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
-from app.domain.providers import VENDOR_PRESETS, capability_ids_for_vendor, supports_capability
+from app.domain.providers import (
+    VENDOR_PRESETS,
+    capability_ids_for_vendor,
+    effective_capability_ids,
+    normalize_capability_ids,
+    supports_capability,
+)
 from app.domain.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 
 router = APIRouter(tags=["settings"])
@@ -36,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out = ProviderProfileOut.model_validate(profile)
-    out.capability_ids = capability_ids_for_vendor(profile.vendor)
+    out.capability_ids = effective_capability_ids(profile)
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
     out.extra = _masked_extra(profile)
     out.config = _masked_config(profile)
@@ -205,7 +211,7 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     ensure_instance_admin(db, user, "credentials")
-    profile = ProviderProfile(name=body.name, vendor=body.vendor)
+    profile = ProviderProfile(name=body.name, vendor=body.vendor, capability_ids=normalize_capability_ids(body.capability_ids))
     # 服务端凭据复制:同一把 Key 要配到另一能力的独立档案时,密钥从既有档案
     # 直接拷进新行,不经前端往返(设置接口对密钥只回打码提示,前端本就拿不到)。
     # 先注入 secret 字段,再走常规配置应用 —— 显式传入的值仍可覆盖,必填校验共用。
@@ -243,6 +249,9 @@ def update_provider_profile(
         profile.name = body.name
     if "enabled" in patch and body.enabled is not None:
         profile.enabled = body.enabled
+    # 显式传了 capability_ids 才动:[] = 清空能力,null = 回落 vendor 默认,不传 = 不改。
+    if "capability_ids" in patch:
+        profile.capability_ids = normalize_capability_ids(body.capability_ids)
     incoming = _config_from_body(body)
     if incoming:
         _apply_profile_config(profile, incoming, creating=False)

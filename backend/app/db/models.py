@@ -526,6 +526,10 @@ class ProviderProfile(Base):
     #: listing voices are three unrelated credentials from three different consoles. Which keys
     #: a vendor uses is declared by its VENDOR_PRESETS entry, which is also what renders the form.
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    #: 能力覆盖:非 None 时覆盖 vendor 默认能力(用户可按档案增删)。典型用途:把只做对话的
+    #: openai-compatible 档案取消 image,避免生成下拉冒出 Ollama·gpt-image-2 这类错配。
+    #: None = 沿用 vendor 预设(capability_ids_for_vendor)。
+    capability_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

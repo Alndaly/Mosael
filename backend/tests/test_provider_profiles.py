@@ -48,6 +48,34 @@ def test_resolution_reads_enabled_profiles() -> None:
         assert resolve_profile(db, "alibaba").name == "主力 DashScope"
 
 
+def test_capability_ids_override() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    cfg = {"api_key": "sk-x", "base_url": "https://x/v1", "default_model": "m"}
+
+    # 不传覆盖 → 沿用 vendor 默认(openai-compatible: chat/image/embedding)
+    default = client.post(
+        "/api/settings/providers", json={"name": "兼容默认", "vendor": "openai-compatible", "config": cfg}
+    ).json()
+    assert set(default["capability_ids"]) == {"chat", "image", "embedding"}
+
+    # 建档案时覆盖为只做对话;未知能力被过滤
+    chat_only = client.post(
+        "/api/settings/providers",
+        json={"name": "只对话", "vendor": "openai-compatible", "config": cfg, "capability_ids": ["chat", "bogus"]},
+    ).json()
+    assert chat_only["capability_ids"] == ["chat"]
+
+    # 改档案:传 [] = 清空能力
+    assert client.patch(f"/api/settings/providers/{default['id']}", json={"capability_ids": []}).json()["capability_ids"] == []
+    # 传 null = 回落 vendor 默认
+    reverted = client.patch(f"/api/settings/providers/{default['id']}", json={"capability_ids": None}).json()
+    assert set(reverted["capability_ids"]) == {"chat", "image", "embedding"}
+    # 只改名、不传 capability_ids → 能力不动
+    renamed = client.patch(f"/api/settings/providers/{default['id']}", json={"name": "改名"}).json()
+    assert set(renamed["capability_ids"]) == {"chat", "image", "embedding"}
+
+
 def test_vendor_presets_listed() -> None:
     client = fresh_client()
     presets = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
