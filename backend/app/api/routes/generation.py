@@ -111,6 +111,22 @@ def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | N
         raise HTTPException(status_code=502, detail=f"连接 ComfyUI 失败({base}):{exc}") from exc
 
 
+@router.get("/generation/comfyui/workflow-params")
+def get_comfyui_workflow_params(
+    workflow: str, db: DbSession, user: CurrentUser, profile_id: str | None = None
+) -> list[dict]:
+    """提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。"""
+    from app.ai.providers.comfyui_client import ComfyUIClient
+    from app.domain.providers import resolve_profile
+
+    profile = resolve_profile(db, "comfyui", profile_id)
+    base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
+    try:
+        return ComfyUIClient(base).fetch_workflow_params(workflow)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"读取 ComfyUI 工作流参数失败({base}):{exc}") from exc
+
+
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")

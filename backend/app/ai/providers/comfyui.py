@@ -19,7 +19,7 @@ from app.ai.providers.base import (
     ProviderError,
     metering_from_request,
 )
-from app.ai.providers.comfyui_client import ComfyUIClient, inject_generation_params
+from app.ai.providers.comfyui_client import ComfyUIClient, apply_workflow_params, inject_generation_params
 
 """
 ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential image/video
@@ -204,6 +204,10 @@ class ComfyUIProvider(GenerationProvider):
                     "可在生成时改选其它工作流、内置文生图,或在档案里粘贴自定义 API 模板。"
                 ) from exc
             graph = inject_generation_params(api_prompt, values)
+            # 动态表单里用户显式调过的参数(steps/cfg/采样器/…)覆盖工作流默认值。
+            overrides = request.parameters.get("workflow_params")
+            if isinstance(overrides, dict):
+                graph = apply_workflow_params(graph, overrides)
             return substitute_placeholders(graph, values)
         template = self._resolve_template(client, context)
         return substitute_placeholders(template, values)

@@ -5,16 +5,25 @@ control_after_generate 隐藏项跳过、连接解析、Reroute 透传、muted �
 
 from __future__ import annotations
 
-from app.ai.providers.comfyui_client import graph_to_api_prompt, inject_generation_params
+from app.ai.providers.comfyui_client import (
+    extract_workflow_params,
+    graph_to_api_prompt,
+    inject_generation_params,
+)
 
 OBJECT_INFO = {
     "KSampler": {"input": {"required": {
         "seed": ["INT", {"control_after_generate": True}],  # 关键:标了 control_after_generate
-        "steps": ["INT", {}],
+        "steps": ["INT", {"min": 1, "max": 10000}],
+        "cfg": ["FLOAT", {"min": 0.0, "max": 100.0}],
+        "sampler_name": [["euler", "dpmpp_2m"]],  # COMBO
+        "scheduler": [["normal", "karras"]],
+        "denoise": ["FLOAT", {"min": 0.0, "max": 1.0}],
         "model": ["MODEL"], "positive": ["CONDITIONING"], "negative": ["CONDITIONING"], "latent_image": ["LATENT"],
     }}},
-    "CLIPTextEncode": {"input": {"required": {"text": ["STRING"], "clip": ["CLIP"]}}},
+    "CLIPTextEncode": {"input": {"required": {"text": ["STRING", {"multiline": True}], "clip": ["CLIP"]}}},
     "EmptyLatentImage": {"input": {"required": {"width": ["INT"], "height": ["INT"], "batch_size": ["INT"]}}},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": ["STRING"]}}},
     "ControlNetApplyAdvanced": {"input": {"required": {"positive": ["CONDITIONING"], "negative": ["CONDITIONING"]}}},
 }
 
@@ -85,6 +94,47 @@ def test_inject_recurses_through_controlnet() -> None:
     assert api["7"]["inputs"]["text"] == "N"  # 负向不混
     assert api["3"]["inputs"]["seed"] == 99
     assert api["5"]["inputs"]["width"] == 768 and api["5"]["inputs"]["height"] == 768
+
+
+def test_converted_widget_keeps_index_aligned() -> None:
+    """widget 被拉成连接输入(converted-to-input)后仍占 widgets_values 一个位置——不步进就会错位:
+    width/height 转连接后,batch_size 会误取 width 的旧值(真实 controlnet 工作流踩过这个坑)。"""
+    ui = {
+        "nodes": [
+            {"id": 5, "type": "EmptyLatentImage", "widgets_values": [512, 768, 1],
+             "inputs": [
+                 {"name": "width", "widget": {"name": "width"}, "link": 1},   # converted:widget + link
+                 {"name": "height", "widget": {"name": "height"}, "link": 2},
+                 {"name": "batch_size", "widget": {"name": "batch_size"}, "link": None},
+             ]},
+            {"id": 8, "type": "CheckpointLoaderSimple", "widgets_values": ["m"], "inputs": [_widget("ckpt_name")]},
+        ],
+        "links": [[1, 8, 0, 5, 0, "INT"], [2, 8, 1, 5, 1, "INT"]],
+    }
+    api = graph_to_api_prompt(ui, OBJECT_INFO)
+    assert api["5"]["inputs"]["batch_size"] == 1  # 不是 512
+    assert api["5"]["inputs"]["width"] == ["8", 0]  # 连接
+
+
+def test_extract_params_types_roles_and_ranges() -> None:
+    ui = {
+        "nodes": [
+            {"id": 3, "type": "KSampler", "widgets_values": [42, "randomize", 20, 7.0, "euler", "normal", 1.0],
+             "inputs": [
+                 _conn("model", 1), _conn("positive", 2), _conn("negative", 3), _conn("latent_image", 4),
+                 _widget("seed"), _widget("steps"), _widget("cfg"), _widget("sampler_name"), _widget("scheduler"), _widget("denoise"),
+             ]},
+            {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["hello"], "inputs": [_conn("clip", 5), _widget("text")]},
+        ],
+        "links": [[2, 6, 0, 3, 1, "CONDITIONING"]],
+    }
+    params = {(p["class_type"], p["name"]): p for p in extract_workflow_params(ui, OBJECT_INFO)}
+    assert params[("KSampler", "seed")]["type"] == "INT" and params[("KSampler", "seed")]["role"] == "seed"
+    assert params[("KSampler", "cfg")]["type"] == "FLOAT" and params[("KSampler", "cfg")]["max"] == 100.0
+    combo = params[("KSampler", "sampler_name")]
+    assert combo["type"] == "COMBO" and combo["options"] == ["euler", "dpmpp_2m"]
+    assert params[("CLIPTextEncode", "text")]["role"] == "prompt"  # KSampler.positive 追溯到它
+    assert ("KSampler", "model") not in params  # 连接输入不出现在可调参数里
 
 
 def test_inject_does_not_touch_connected_inputs() -> None:

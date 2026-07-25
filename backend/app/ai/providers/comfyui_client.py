@@ -87,11 +87,18 @@ def graph_to_api_prompt(ui_graph: dict[str, Any], object_info: dict[str, Any]) -
             name = inp.get("name")
             if not name:
                 continue
+            has_widget = "widget" in inp
             if inp.get("link") is not None:
                 source = resolve_source(inp["link"])
                 if source is not None:
                     inputs[name] = source
-            elif "widget" in inp:
+                # converted-to-input:widget 被拉成了连接,但它在 widgets_values 里仍占位置——
+                # 必须照样步进索引,否则后续 widget 全部对错(如 batch_size 取到 width 的旧值)。
+                if has_widget and value_index < len(widgets):
+                    value_index += 1
+                    if _has_control_after_generate(input_defs.get(name)):
+                        value_index += 1
+            elif has_widget:
                 if value_index < len(widgets):
                     inputs[name] = widgets[value_index]
                     value_index += 1
@@ -149,6 +156,115 @@ def inject_generation_params(api_prompt: dict[str, Any], values: dict[str, Any])
     return api_prompt
 
 
+def _trace_text_encode_id(ref: Any, api_prompt: dict[str, Any], prefer_slot: str, seen: set[str]) -> str | None:
+    """从 [node,slot] 追溯到 CLIPTextEncode 的节点 id(穿过 ControlNetApply 等),供角色标注。"""
+    if not isinstance(ref, list) or not ref:
+        return None
+    node_id = str(ref[0])
+    if node_id in seen:
+        return None
+    seen.add(node_id)
+    node = api_prompt.get(node_id)
+    if node is None:
+        return None
+    if str(node.get("class_type", "")).startswith("CLIPTextEncode"):
+        return node_id
+    inputs = node.get("inputs", {})
+    for key in (prefer_slot, "conditioning", "positive", "negative"):
+        found = _trace_text_encode_id(inputs.get(key), api_prompt, prefer_slot, seen)
+        if found is not None:
+            return found
+    return None
+
+
+def _text_encode_roles(api_prompt: dict[str, Any]) -> dict[str, str]:
+    """{CLIPTextEncode 节点id → "prompt"/"negative"},由采样器 positive/negative 追溯得到。"""
+    roles: dict[str, str] = {}
+    for node in api_prompt.values():
+        if node.get("class_type") in _SAMPLER_TYPES:
+            for slot, role in (("positive", "prompt"), ("negative", "negative")):
+                target = _trace_text_encode_id(node.get("inputs", {}).get(slot), api_prompt, slot, set())
+                if target is not None:
+                    roles.setdefault(target, role)
+    return roles
+
+
+def _describe_param(
+    node_id: str, class_type: str, title: str | None, name: str, value: Any, input_def: Any, role: str | None
+) -> dict[str, Any] | None:
+    """把一个字面量输入描述成前端可渲染的参数(类型 + 约束)。未知类型/无定义 → None(跳过)。"""
+    if not isinstance(input_def, list) or not input_def:
+        return None
+    type_spec = input_def[0]
+    constraints = input_def[1] if len(input_def) > 1 and isinstance(input_def[1], dict) else {}
+    param: dict[str, Any] = {"node_id": node_id, "class_type": class_type, "title": title, "name": name, "value": value, "role": role}
+    if isinstance(type_spec, list):
+        param["type"] = "COMBO"
+        param["options"] = [str(option) for option in type_spec]
+    elif type_spec in ("INT", "FLOAT"):
+        param["type"] = type_spec
+        for key in ("min", "max", "step"):
+            if key in constraints:
+                param[key] = constraints[key]
+    elif type_spec == "BOOLEAN":
+        param["type"] = "BOOLEAN"
+    elif type_spec == "STRING":
+        param["type"] = "STRING"
+        param["multiline"] = bool(constraints.get("multiline"))
+    else:
+        return None
+    return param
+
+
+def extract_workflow_params(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> list[dict[str, Any]]:
+    """从工作流提取「可调的字面量输入」,供前端动态生成参数表单。每项含节点/输入名/类型/当前值/
+    取值范围(INT/FLOAT 的 min/max/step、COMBO 的 options),并标出语义角色(prompt/negative/seed/
+    width/height)让前端把 mibu 的主提示词/尺寸对上去。连接来的输入(值来自上游节点)不可调,跳过。"""
+    api = graph_to_api_prompt(ui_graph, object_info)
+    titles: dict[str, str] = {}
+    for node in ui_graph.get("nodes") or []:
+        if isinstance(node, dict):
+            titles[str(node.get("id"))] = str(
+                node.get("title") or (node.get("properties") or {}).get("Node name for S&R") or node.get("type") or ""
+            )
+    roles = _text_encode_roles(api)
+    params: list[dict[str, Any]] = []
+    for node_id, node in api.items():
+        class_type = str(node["class_type"])
+        type_input = (object_info.get(class_type) or {}).get("input") or {}
+        defs = {**(type_input.get("required") or {}), **(type_input.get("optional") or {})}
+        for name, value in node["inputs"].items():
+            if isinstance(value, list):  # 连接输入不可调
+                continue
+            role: str | None = None
+            if name in ("seed", "noise_seed"):
+                role = "seed"
+            elif name == "width":
+                role = "width"
+            elif name == "height":
+                role = "height"
+            elif class_type.startswith("CLIPTextEncode") and name == "text":
+                role = roles.get(node_id)
+            described = _describe_param(node_id, class_type, titles.get(node_id), name, value, defs.get(name), role)
+            if described is not None:
+                params.append(described)
+    return params
+
+
+def apply_workflow_params(api_prompt: dict[str, Any], overrides: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """把动态表单里用户改过的值({node_id: {input_name: value}})覆盖回 API prompt(就地)。只改字面量
+    输入,连接输入不动;节点/输入不存在则忽略(工作流可能已变,不该因此报错)。"""
+    for node_id, inputs in (overrides or {}).items():
+        node = api_prompt.get(str(node_id))
+        if not isinstance(node, dict):
+            continue
+        node_inputs = node.get("inputs", {})
+        for name, value in (inputs or {}).items():
+            if name in node_inputs and not isinstance(node_inputs[name], list):
+                node_inputs[name] = value
+    return api_prompt
+
+
 class ComfyUIClient:
     """ComfyUI HTTP 接入。短生命周期,随生成/列举请求创建。"""
 
@@ -194,3 +310,9 @@ class ComfyUIClient:
         ui_graph = self.fetch_workflow(path)
         object_info = self.fetch_object_info()
         return graph_to_api_prompt(ui_graph, object_info)
+
+    def fetch_workflow_params(self, path: str) -> list[dict[str, Any]]:
+        """拉取工作流 + object_info,提取可调参数清单(供动态表单)。"""
+        ui_graph = self.fetch_workflow(path)
+        object_info = self.fetch_object_info()
+        return extract_workflow_params(ui_graph, object_info)
