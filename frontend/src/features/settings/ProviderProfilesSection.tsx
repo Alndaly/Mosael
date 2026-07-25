@@ -314,45 +314,48 @@ export function ProviderProfilesSection({
                 )}
               />
             ))}
-            <FormItem>
-              <FormLabel>{t("providerCapabilities")}</FormLabel>
-              <FormControl>
-                <div className="flex flex-wrap gap-1.5">
-                  {CAPABILITY_CHOICES.map((cap) => {
-                    const selected = form.watch("capabilityIds") ?? [];
-                    const active = selected.includes(cap);
-                    const label =
-                      cap === "chat" ? t("capChat")
-                      : cap === "image" ? t("capImage")
-                      : cap === "video" ? t("capVideo")
-                      : cap === "tts" ? t("capTts")
-                      : t("capEmbedding");
-                    return (
-                      <button
-                        key={cap}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => {
-                          const current = form.getValues("capabilityIds") ?? [];
-                          form.setValue(
-                            "capabilityIds",
-                            active ? current.filter((item) => item !== cap) : [...current, cap],
-                            { shouldDirty: true },
+            <FormField
+              control={form.control}
+              name="capabilityIds"
+              render={({ field }) => {
+                const selected = field.value ?? [];
+                const label = (cap: string) =>
+                  cap === "chat" ? t("capChat")
+                  : cap === "image" ? t("capImage")
+                  : cap === "video" ? t("capVideo")
+                  : cap === "tts" ? t("capTts")
+                  : t("capEmbedding");
+                return (
+                  <FormItem>
+                    <FormLabel>{t("providerCapabilities")}</FormLabel>
+                    <FormControl>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CAPABILITY_CHOICES.map((cap) => {
+                          const active = selected.includes(cap);
+                          return (
+                            <button
+                              key={cap}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() =>
+                                field.onChange(active ? selected.filter((item) => item !== cap) : [...selected, cap])
+                              }
+                              className={cn(
+                                "inline-flex cursor-pointer items-center rounded-full border border-border bg-panel px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
+                                active && "border-primary bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                              )}
+                            >
+                              {label(cap)}
+                            </button>
                           );
-                        }}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center rounded-full border border-border bg-panel px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
-                          active && "border-primary bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </FormControl>
-              <FormDescription>{t("providerCapabilitiesHint")}</FormDescription>
-            </FormItem>
+                        })}
+                      </div>
+                    </FormControl>
+                    <FormDescription>{t("providerCapabilitiesHint")}</FormDescription>
+                  </FormItem>
+                );
+              }}
+            />
             <div className="mt-1 flex justify-end gap-1.5">
               <Button type="button" variant="outline" size="sm" onClick={closeModal}>
                 {t("cancel")}
