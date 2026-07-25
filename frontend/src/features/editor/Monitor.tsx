@@ -210,6 +210,14 @@ export function Monitor({
     () => overlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
     [overlayClips, playhead],
   );
+  // 示波器图源:当前播放头下"最上层可见的图片片段"的图源 —— 叠加轨优先于基础轨。基础轨(videoClips)
+  // 常常没有当前片段(比如图片都在叠加轨、基础轨是花字/字幕),只看 activeAsset 会误判"无画面"。
+  const scopeImageSrc = React.useMemo(() => {
+    const clip = [...activeOverlayClips, activeClip].find(
+      (item) => item?.asset_id && assetById.get(item.asset_id)?.kind === "image",
+    );
+    return clip?.asset_id ? assetFileUrl(clip.asset_id) : null;
+  }, [activeOverlayClips, activeClip, assetById]);
   // The selected on-screen element (base V1 or any active overlay) gets the transform handles.
   const selectedActive = React.useMemo(
     () => [activeClip, ...activeOverlayClips].find((clip) => clip && selectedClipIds.includes(clip.id)) ?? null,
@@ -430,7 +438,7 @@ export function Monitor({
         <ScopesFloat
           videoRef={videoRef}
           filter={cssFilter}
-          imageSrc={isImage && activeAsset ? assetFileUrl(activeAsset.id) : null}
+          imageSrc={scopeImageSrc}
           canvasRef={compositorCanvasRef}
           onClose={() => setShowScopes(false)}
         />
