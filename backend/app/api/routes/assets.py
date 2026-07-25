@@ -74,6 +74,13 @@ def list_assets(
     return list(db.scalars(stmt))
 
 
+@router.get("/assets/{asset_id}", response_model=AssetOut)
+def get_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Asset:
+    # 单资产详情。前端 MediaPreview / 智能体工具卡靠它拉元数据;缺这个路由会 404,
+    # 卡片就一直显示「素材不可用」。require_asset 已内含工作区访问校验。
+    return require_asset(db, user, asset_id)
+
+
 @router.patch("/assets/{asset_id}", response_model=AssetOut)
 def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentUser) -> Asset:
     asset = require_asset(db, user, asset_id)
