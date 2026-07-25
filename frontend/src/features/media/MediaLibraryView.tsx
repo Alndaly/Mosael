@@ -289,8 +289,19 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <span className="whitespace-nowrap text-xs text-muted-foreground">
                 {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
               </span>
-              <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set(visible.map((a) => a.id)))}>
-                <ListChecks size={13} /> {t("mediaSelectAll")}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // 切换:当前可见项已全选则取消全选,否则全选(再点一下能取消)。
+                  const allSelected = visible.length > 0 && visible.every((asset) => selectedIds.has(asset.id));
+                  setSelectedIds(allSelected ? new Set() : new Set(visible.map((asset) => asset.id)));
+                }}
+              >
+                <ListChecks size={13} />{" "}
+                {visible.length > 0 && visible.every((asset) => selectedIds.has(asset.id))
+                  ? t("mediaDeselectAll")
+                  : t("mediaSelectAll")}
               </Button>
               <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
                 <Tag size={13} /> {t("addTags")}
