@@ -443,6 +443,20 @@ export function Monitor({
           onClose={() => setShowScopes(false)}
         />
       )}
+      {/* 示波器要反映"可见成片帧"(所有轨道合成后),而非单条轨道。显示端合成器开着时直接采它的
+          画布;关着时,这里挂一个离屏合成器喂同一批图层,渲染出真实可见帧供示波器采样(图片总能画;
+          带音轨的混音仍由 WebAudioMixer/元素路径负责,这个合成器只画面、不出声)。 */}
+      {showScopes && !compositorActive && (
+        <div className="pointer-events-none fixed left-[-99999px] top-0 h-px w-px overflow-hidden" aria-hidden>
+          <CanvasCompositor
+            layers={compositorLayers}
+            width={sequence.width}
+            height={sequence.height}
+            fillMode={fillMode}
+            scopeCanvasRef={compositorCanvasRef}
+          />
+        </div>
+      )}
       {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
           compositor is active; otherwise one <audio> per active audio-track clip. */}
       {compositorActive ? (
