@@ -40,11 +40,30 @@ export function MediaPool({
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
   const [search, setSearch] = React.useState("");
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+  // 当前(按类型过滤后的)素材里出现过的标签,去重排序 —— 只列真实存在的标签,避免筛出空结果。
+  const availableTags = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const asset of assets) {
+      if (kindFilter !== "all" && asset.kind !== kindFilter) continue;
+      for (const tag of asset.tags ?? []) if (tag) set.add(tag);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "zh"));
+  }, [assets, kindFilter]);
+  // 选中的标签若因切换类型而不再存在,自动剔除,别留下永远筛不出东西的"幽灵标签"。
+  React.useEffect(() => {
+    setSelectedTags((current) => current.filter((tag) => availableTags.includes(tag)));
+  }, [availableTags]);
+  const toggleTag = (tag: string) =>
+    setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
   const visibleAssets = React.useMemo(() => {
     const query = search.trim().toLowerCase();
     return assets.filter((asset) => {
       const tags = asset.tags ?? [];
+      // 多选标签取交集(每个选中标签都得有),这样点得越多筛得越窄。
+      const matchesTags = selectedTags.length === 0 || selectedTags.every((tag) => tags.includes(tag));
       return (
+        matchesTags &&
         (kindFilter === "all" || asset.kind === kindFilter) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
@@ -52,7 +71,7 @@ export function MediaPool({
           asset.kind.toLowerCase().includes(query))
       );
     });
-  }, [assets, kindFilter, search]);
+  }, [assets, kindFilter, search, selectedTags]);
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
     video: t("kindVideo"),
@@ -132,6 +151,29 @@ export function MediaPool({
             </button>
           ))}
         </div>
+        {/* 标签筛选:只列当前类型下真实存在的标签;多选取交集,点亮的再点一下即取消。 */}
+        {availableTags.length > 0 && (
+          <div className="flex max-h-[62px] flex-wrap gap-1 overflow-y-auto" role="group" aria-label={t("mediaTagFilter")}>
+            {availableTags.map((tag) => {
+              const active = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleTag(tag)}
+                  className={cn(
+                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-panel px-2 py-[2px] text-[11px] text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
+                    active &&
+                      "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
+                  )}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="grid content-start gap-1.5 overflow-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
         {visibleAssets.map((asset) => (
