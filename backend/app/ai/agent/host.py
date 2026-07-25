@@ -376,6 +376,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 workspace_id=session.workspace_id,
                 skills_index=skills_index_for_prompt() or "(暂无技能)",
             )
+            # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
+            if session.analysis_video_mode == "native":
+                system_prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'
+            elif session.analysis_video_mode == "frames":
+                system_prompt += '\n\n【用户设定】本次会话视频分析方式=抽帧:调用 analyze_asset 分析视频时必须传 mode="frames"(抽帧+转写)。'
             # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
             provider_dict: dict | None = None
             agent_model: str | None = None

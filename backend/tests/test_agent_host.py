@@ -341,3 +341,18 @@ def test_reconcile_orphaned_agent_sessions() -> None:
 
         # 幂等
         assert reconcile_orphaned_agent_sessions(db) == 0
+
+
+def test_session_analysis_video_mode_patch() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    assert session["analysis_video_mode"] == "auto"  # 默认
+
+    patched = client.patch(f"/api/agent/sessions/{session['id']}", json={"analysis_video_mode": "native"}).json()
+    assert patched["analysis_video_mode"] == "native"
+    assert client.get(f"/api/agent/sessions/{session['id']}").json()["analysis_video_mode"] == "native"
+
+    # 非法值被拒
+    bad = client.patch(f"/api/agent/sessions/{session['id']}", json={"analysis_video_mode": "bogus"})
+    assert bad.status_code == 422

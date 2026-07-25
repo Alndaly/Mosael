@@ -1121,6 +1121,8 @@ class AgentSessionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
+    #: 视频分析方式偏好:auto / native / frames。
+    analysis_video_mode: str | None = None
 
 
 class AgentSessionOut(OrmModel):
@@ -1132,6 +1134,7 @@ class AgentSessionOut(OrmModel):
     adapter: str
     provider_profile_id: str | None = None
     model: str | None = None
+    analysis_video_mode: str = "auto"
     status: str
     created_at: datetime
     updated_at: datetime

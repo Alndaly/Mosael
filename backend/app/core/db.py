@@ -105,6 +105,8 @@ def _migrate_agent_sessions() -> None:
             conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN model VARCHAR(120)"))
         if "adapter_state" not in columns:
             conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN adapter_state JSON"))
+        if "analysis_video_mode" not in columns:
+            conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN analysis_video_mode VARCHAR(16) DEFAULT 'auto' NOT NULL"))
 
 
 def _migrate_provider_capabilities() -> None:

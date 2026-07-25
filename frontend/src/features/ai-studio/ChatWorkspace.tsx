@@ -33,6 +33,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { useImagePreview } from "@/components/app/image-preview";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
+import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
@@ -615,6 +616,7 @@ export function ChatWorkspace({
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
+                  <AnalysisModePicker session={session.data ?? null} />
                 </div>
                 {/* One button that changes meaning, the way ChatGPT does it: while the agent
                     works it stops the turn, and the moment you type something it becomes send

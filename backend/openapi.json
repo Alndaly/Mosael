@@ -11203,6 +11203,11 @@
             ],
             "title": "Model"
           },
+          "analysis_video_mode": {
+            "type": "string",
+            "title": "Analysis Video Mode",
+            "default": "auto"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -11269,6 +11274,17 @@
               }
             ],
             "title": "Model"
+          },
+          "analysis_video_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Video Mode"
           }
         },
         "type": "object",

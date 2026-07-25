@@ -730,6 +730,9 @@ class AgentSession(Base):
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # 视频分析方式偏好:auto(默认,原生优先否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
+    # 会话级,聊天里可切,注入系统提示让 analyze_asset 照此传 mode。
+    analysis_video_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
     # pi 适配器无 --resume:存 pi 序列化的消息数组做多轮记忆(下轮回灌 initialState.messages)
     adapter_state: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running

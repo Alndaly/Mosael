@@ -3583,6 +3583,11 @@ export interface components {
             provider_profile_id?: string | null;
             /** Model */
             model?: string | null;
+            /**
+             * Analysis Video Mode
+             * @default auto
+             */
+            analysis_video_mode: string;
             /** Status */
             status: string;
             /**
@@ -3604,6 +3609,8 @@ export interface components {
             provider_profile_id?: string | null;
             /** Model */
             model?: string | null;
+            /** Analysis Video Mode */
+            analysis_video_mode?: string | null;
         };
         /** AgentSkillOut */
         AgentSkillOut: {
