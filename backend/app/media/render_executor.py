@@ -11,7 +11,7 @@ from typing import NamedTuple
 from app.core.child_process import ChildProcess
 
 from app.core.config import settings
-from app.media.probe import probe_has_audio_many
+from app.media.probe import guess_kind, probe_has_audio_many
 from app.media.render_plan import FILTER_PRESETS, RenderPlan, TextOverlayItem, Transform
 
 """
@@ -520,6 +520,19 @@ def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, flo
     return [], src_in, src_out
 
 
+_IMAGE_LOOP_PAD = 0.2  # -t 相对 trim 末尾留的小余量,保证末帧不缺
+
+
+def _image_loop_args(path: Path, needs_time: bool, trim_end: float) -> list[str]:
+    """静态图片进 ffmpeg 是**单帧**,下游 fps 拉伸即可(省事又快)。但一旦叠加基于时间 t/T
+    的效果——transform 关键帧动画、淡入淡出——单帧的时间戳不推进,表达式恒取 t=0 的值,
+    动画/淡入直接失效(常见表现:透明度停在 0 → 整段纯黑)。这类图片必须 -loop 1 变成真正
+    逐帧推进的视频流;-t 必须给(无限流会让 concat 永远卡在这一段),取 trim 末尾加点余量。"""
+    if needs_time and guess_kind(path) == "image":
+        return ["-loop", "1", "-t", f"{max(trim_end, 0.04) + _IMAGE_LOOP_PAD:.6f}"]
+    return []
+
+
 def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
     """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。"""
     head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
@@ -655,7 +668,9 @@ def build_ffmpeg_command(
             path = resolve(segment.source.file_key)
             src = segment.source
             seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
-            args += seek + ["-i", str(path)]
+            # 带动画或淡入淡出的图片需要逐帧时间轴,否则单帧 → 表达式停在 t=0(动画/淡入失效)。
+            needs_time = bool(segment.transform.keyframes) or segment.video_fade_in > 0 or segment.video_fade_out > 0
+            args += _image_loop_args(path, needs_time, tout) + seek + ["-i", str(path)]
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
@@ -684,7 +699,9 @@ def build_ffmpeg_command(
                 )
                 filters += tfilters
                 filters.append(
-                    f"color=black:s={width}x{height}:r={fps}[bg{i}];"
+                    # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
+                    # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
+                    f"color=black:s={width}x{height}:r={fps}:d={segment.duration}[bg{i}];"
                     f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]"
                 )
             if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
@@ -719,7 +736,7 @@ def build_ffmpeg_command(
         path = resolve(overlay.source.file_key)
         src = overlay.source
         seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
-        args += seek + ["-i", str(path)]
+        args += _image_loop_args(path, bool(overlay.transform.keyframes), tout) + seek + ["-i", str(path)]
         filters.append(
             f"[{input_index}:v]trim=start={tin}:end={tout},"
             f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
