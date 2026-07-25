@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import math
 import subprocess
 from collections.abc import Callable
@@ -468,7 +469,105 @@ def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, s
     return f"{head},scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2{end}"
 
 
-def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path) -> list[str]:
+# 硬件 H.264 编码器,顺序即优先级。VideoToolbox 是 macOS 系统媒体引擎(Apple Silicon 与
+# Intel Mac 都走);NVENC/QSV/AMF 分别对应 Windows 上的 N卡 / Intel 核显 / A卡。同机极少
+# 同时具备多个,先探到谁用谁即可。
+_HW_ENCODER_PRIORITY = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "h264_amf")
+
+
+@functools.lru_cache(maxsize=1)
+def _available_hw_encoder() -> str | None:
+    """探测本机 ffmpeg 支持哪个硬件 H.264 编码器,进程内缓存一次。
+
+    只看 `ffmpeg -encoders` 里“列出”的名字 —— 是否真能跑还取决于驱动/权限/是否有显卡,
+    所以真正编码失败时 execute_render 会回落到软件 libx264 再跑一遍。探测本身失败(ffmpeg
+    缺失等)按“无硬件”处理。"""
+    try:
+        proc = subprocess.run(
+            [settings.ffmpeg, "-hide_banner", "-encoders"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:
+        return None
+    listed = proc.stdout or ""
+    for name in _HW_ENCODER_PRIORITY:
+        if name in listed:
+            return name
+    return None
+
+
+def _target_bitrate_kbps(output) -> int:
+    """由 分辨率×帧率×每像素比特(bpp) 推目标码率,bpp 受 CRF 调节。
+
+    硬件编码器大多没有 x264 那种成熟的 CRF 恒定质量,得给码率。把用户设的 CRF 映射成 bpp:
+    CRF 20 ≈ 0.10 bpp(1080p30 ≈ 6Mbps 的高画质),CRF 每 +6 码率减半、每 −6 翻倍,和 x264
+    的 CRF 手感一致。最后夹在 [0.5, 120] Mbps 的合理区间内。"""
+    width = max(int(output.width), 2)
+    height = max(int(output.height), 2)
+    fps = output.fps if getattr(output, "fps", 0) and output.fps > 0 else 30.0
+    bpp = 0.10 * (2.0 ** ((20 - int(output.crf)) / 6.0))
+    kbps = width * height * fps * bpp / 1000.0
+    return int(max(500.0, min(kbps, 120_000.0)))
+
+
+def _hw_encode_args(encoder: str, output) -> list[str]:
+    """给定硬件编码器的完整 -c:v 参数(码率模式 + yuv420p,保证各家播放器都能放)。"""
+    kbps = _target_bitrate_kbps(output)
+    common = [
+        "-c:v",
+        encoder,
+        "-b:v",
+        f"{kbps}k",
+        "-maxrate",
+        f"{int(kbps * 1.5)}k",
+        "-bufsize",
+        f"{kbps * 2}k",
+        "-pix_fmt",
+        "yuv420p",
+    ]
+    if encoder == "h264_videotoolbox":
+        # 非实时(-realtime 0)换更好画质;-allow_sw 1 在个别机器无硬件编码单元时回落苹果的
+        # 软件实现而不是直接报错。
+        return common + ["-realtime", "0", "-allow_sw", "1"]
+    if encoder == "h264_nvenc":
+        # p5 是质量/速度的平衡档,vbr 走上面的 b:v/maxrate,spatial_aq 改善平坦区域观感。
+        return common + ["-preset", "p5", "-rc", "vbr", "-spatial-aq", "1"]
+    if encoder == "h264_qsv":
+        return common + ["-preset", "medium"]
+    if encoder == "h264_amf":
+        return common + ["-quality", "balanced", "-rc", "vbr_peak"]
+    return common
+
+
+def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
+    """导出的视频编码参数:能用硬件就用硬件(码率模式),否则回落 libx264+CRF。
+
+    force_software=True 用于硬件编码失败后的重试,强制走软件编码。"""
+    if settings.hw_encode and not force_software:
+        encoder = _available_hw_encoder()
+        if encoder:
+            return _hw_encode_args(encoder, output)
+    return [
+        "-c:v",
+        "libx264",
+        "-preset",
+        output.encode_preset,
+        "-crf",
+        str(output.crf),
+        "-pix_fmt",
+        "yuv420p",
+    ]
+
+
+def build_ffmpeg_command(
+    plan: RenderPlan,
+    resolve: Callable[[str], Path],
+    output_path: Path,
+    *,
+    force_software: bool = False,
+) -> list[str]:
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
     # the command is assembled — the probes are independent and each one is just waiting on an
@@ -629,12 +728,7 @@ def build_ffmpeg_command(plan: RenderPlan, resolve: Callable[[str], Path], outpu
         audio_label,
         "-t",
         str(plan.timeline_duration),
-        "-c:v",
-        "libx264",
-        "-preset",
-        plan.output.encode_preset,
-        "-crf",
-        str(plan.output.crf),
+        *_video_encode_args(plan.output, force_software=force_software),
         "-c:a",
         "aac",
         "-b:a",
@@ -659,30 +753,38 @@ def execute_render(
     cancelling only flipped a database row while ffmpeg ran to completion.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    command = build_ffmpeg_command(plan, resolve, output_path)
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
     total_us = max(plan.timeline_duration, 0.001) * 1_000_000
-    # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
-    # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
-    # blocks writing it, stops emitting progress, and both sides wait forever with the job
-    # stuck in `running` and no way out but killing the backend.
-    child = ChildProcess(process)
-    if on_child is not None:
-        on_child(child)
-    for line in child.raw_lines():
-        if on_progress and line.startswith("out_time_us="):
-            try:
-                on_progress(min(1.0, int(line.split("=", 1)[1]) / total_us))
-            except ValueError:
-                pass
-    stderr_tail = child.finish()
-    if process.returncode != 0:
+
+    def run_once(*, force_software: bool) -> tuple[int, str, bool]:
+        command = build_ffmpeg_command(plan, resolve, output_path, force_software=force_software)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
+        # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
+        # blocks writing it, stops emitting progress, and both sides wait forever with the job
+        # stuck in `running` and no way out but killing the backend.
+        child = ChildProcess(process)
+        if on_child is not None:
+            on_child(child)
+        for line in child.raw_lines():
+            if on_progress and line.startswith("out_time_us="):
+                try:
+                    on_progress(min(1.0, int(line.split("=", 1)[1]) / total_us))
+                except ValueError:
+                    pass
+        stderr_tail = child.finish()
+        return process.returncode or 0, stderr_tail, child.killed
+
+    returncode, stderr_tail, killed = run_once(force_software=False)
+    # A hardware encoder can be *listed* by ffmpeg yet fail at runtime (no GPU, driver/permission,
+    # unsupported dimensions). When that happens — and only when we weren't the ones who stopped it
+    # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
+    hw_used = settings.hw_encode and _available_hw_encoder() is not None
+    if returncode != 0 and hw_used and not killed:
+        if on_progress:
+            on_progress(0.0)
+        returncode, stderr_tail, killed = run_once(force_software=True)
+    if returncode != 0:
         raise RenderExecutionError(
-            f"FFmpeg exited with code {process.returncode}",
+            f"FFmpeg exited with code {returncode}",
             stderr_tail=stderr_tail,
         )

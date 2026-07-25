@@ -41,6 +41,9 @@ class ChildProcess:
     ) -> None:
         self._process = process
         self.timed_out = False
+        # True once kill() ran — lets callers tell "we stopped it" (cancel/timeout) from
+        # "the child died on its own", e.g. to decide whether an encoder fallback should retry.
+        self.killed = False
         # Bounded: a chatty child must not be able to grow this without limit either.
         self._stderr: deque[str] = deque(maxlen=stderr_lines)
         self._drain = threading.Thread(target=self._read_stderr, daemon=True)
@@ -63,6 +66,7 @@ class ChildProcess:
 
     def kill(self) -> None:
         """Stop the child now. Safe to call from another thread, and more than once."""
+        self.killed = True
         try:
             self._process.kill()
         except Exception:  # noqa: BLE001 — already gone

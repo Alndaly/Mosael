@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # original). Disable (MIBU_GENERATE_PROXIES=0) in tests to avoid spawning ffmpeg.
     generate_proxies: bool = True
 
+    # 硬件加速导出:探测并优先使用 GPU/媒体引擎编码器(macOS VideoToolbox /
+    # Windows NVENC·QSV·AMF),比 libx264 软件编码快数倍且几乎不占 CPU;都不可用时
+    # 回落 libx264+CRF。测试里关掉(MIBU_HW_ENCODE=0)以保证软件编码的确定性,
+    # 并避开 CI/VM 里硬件编码器缺失导致的失败。
+    hw_encode: bool = True
+
     # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
     # interpreter so this backend stays light; empty asr_python autodetects
     # (env → sibling mibu-video venv → this interpreter).

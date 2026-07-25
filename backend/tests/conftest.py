@@ -17,6 +17,9 @@ os.environ["MIBU_FEISHU_AUTOSTART"] = "0"
 # Don't spawn ffmpeg proxy threads on every video import during the suite;
 # test_proxy.py re-enables it explicitly to exercise the pipeline.
 os.environ["MIBU_GENERATE_PROXIES"] = "0"
+# Force software (libx264+CRF) export so render output is deterministic and we
+# don't depend on a hardware encoder being present on the CI/dev box.
+os.environ["MIBU_HW_ENCODE"] = "0"
 
 import pytest
 
