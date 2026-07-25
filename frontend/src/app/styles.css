@@ -30,11 +30,13 @@
    ============================================================ */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   /* 浮层:Radix popover/select/dropdown/context-menu(都挂在 popper 包裹层下)、
-     对话框/命令面板/画布浮层(role=dialog)、Sonner toast。 */
+     对话框/命令面板/画布浮层(role=dialog)、确认框(AlertDialog 的 role=alertdialog,
+     否则删除确认这类弹窗是实底、和其它浮层不一致)、Sonner toast。 */
   /* tooltip 豁免:小标签要实底 primary(否则日间模式白字配浅玻璃底不可读) */
   [data-radix-popper-content-wrapper] > *:not([data-tooltip]),
   [data-radix-menu-content],
-  [role="dialog"] {
+  [role="dialog"],
+  [role="alertdialog"] {
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(20px) saturate(1.6);
     backdrop-filter: blur(20px) saturate(1.6);

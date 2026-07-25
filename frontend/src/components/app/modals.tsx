@@ -143,12 +143,13 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className="h-7 rounded-md px-2 text-xs">
+        <AlertDialogFooter className="gap-1.5 space-x-0 sm:gap-1.5 sm:space-x-0">
+          {/* 与任务详情等浮层统一:size=sm 的胶囊按钮,右下角对齐;确认沿用 destructive 红以示危险。 */}
+          <AlertDialogCancel className="mt-0 h-8 rounded-full px-3 text-xs sm:mt-0">
             {t("cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
-            className="h-7 rounded-md bg-destructive px-2 text-xs text-white hover:bg-destructive/90"
+            className="h-8 rounded-full bg-destructive px-3 text-xs text-white hover:bg-destructive/90"
             onClick={(event) => {
               event.preventDefault();
               onConfirm();
