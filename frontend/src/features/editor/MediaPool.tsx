@@ -1,12 +1,13 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, type Asset } from "@/api/client";
+import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { TagsDialog } from "@/features/media/TagsDialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
 import { Recorder } from "@/features/editor/Recorder";
@@ -36,6 +37,7 @@ export function MediaPool({
   const qc = useQueryClient();
   const [recorderOpen, setRecorderOpen] = React.useState(false);
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
+  const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
@@ -82,6 +84,13 @@ export function MediaPool({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
       setRenaming(null);
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+  const saveTags = useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) => setAssetTags(id, tags),
+    onSuccess: () => {
+      setEditingTags(null);
       void qc.invalidateQueries({ queryKey: ["assets"] });
     },
   });
@@ -193,6 +202,9 @@ export function MediaPool({
               <ContextMenuItem onSelect={() => setRenaming(asset)}>
                 <Pencil /> {t("rename")}
               </ContextMenuItem>
+              <ContextMenuItem onSelect={() => setEditingTags(asset)}>
+                <Tag /> {t("editTags")}
+              </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
                 <Trash2 /> {t("delete")}
@@ -210,6 +222,13 @@ export function MediaPool({
         initialValue={renaming?.name ?? ""}
         onCancel={() => setRenaming(null)}
         onSubmit={(name) => renaming && rename.mutate({ id: renaming.id, name })}
+      />
+      <TagsDialog
+        open={editingTags !== null}
+        title={t("editTags")}
+        initialTags={editingTags?.tags ?? []}
+        onCancel={() => setEditingTags(null)}
+        onSubmit={(tags) => editingTags && saveTags.mutate({ id: editingTags.id, tags })}
       />
       <ConfirmDialog
         open={deleting !== null}
