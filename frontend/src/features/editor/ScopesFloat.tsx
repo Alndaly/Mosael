@@ -24,10 +24,12 @@ function readPos(): { x: number; y: number } {
 export function ScopesFloat({
   videoRef,
   filter,
+  imageSrc,
   onClose,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   filter: string;
+  imageSrc?: string | null;
   onClose: () => void;
 }) {
   const t = useI18n();
@@ -89,7 +91,7 @@ export function ScopesFloat({
         </button>
       </div>
       <div className="p-1.5">
-        <Scopes videoRef={videoRef} filter={filter} />
+        <Scopes videoRef={videoRef} filter={filter} imageSrc={imageSrc} />
       </div>
     </div>
   );

@@ -422,9 +422,16 @@ export function Monitor({
   };
 
   return (
-    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_38px]">
+    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_auto]">
       {/* Scopes as a draggable floating window (position: fixed), never covering the picture. */}
-      {showScopes && <ScopesFloat videoRef={videoRef} filter={cssFilter} onClose={() => setShowScopes(false)} />}
+      {showScopes && (
+        <ScopesFloat
+          videoRef={videoRef}
+          filter={cssFilter}
+          imageSrc={isImage && activeAsset ? assetFileUrl(activeAsset.id) : null}
+          onClose={() => setShowScopes(false)}
+        />
+      )}
       {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
           compositor is active; otherwise one <audio> per active audio-track clip. */}
       {compositorActive ? (
@@ -643,9 +650,9 @@ export function Monitor({
           style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
         />
       </div>
-      {/* 底部行:左右缩进与画面/进度条同一刻度(12px);不加上下 padding,
-          38px 行高靠 items-center 精确居中(原 3px/5px 不对称,内容偏高 1px)。 */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-3 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+      {/* 底部行:左右缩进与画面/进度条同一刻度(12px);上下留白让按钮离面板底边有呼吸感,
+          不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-3 pb-2.5 pt-1 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
         <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />

@@ -16,20 +16,25 @@ const FRAME_MS = 1000 / 12; // ~12fps 采样
 export function Scopes({
   videoRef,
   filter,
+  imageSrc,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   filter: string;
+  /** 当前帧是图片时的图源:视频探针取不到帧,就改从图片采样(否则图片素材下示波器一片空)。 */
+  imageSrc?: string | null;
 }) {
   const t = useI18n();
   const [mode, setMode] = React.useState<ScopeMode>("histogram");
   const [blocked, setBlocked] = React.useState(false);
   const displayRef = React.useRef<HTMLCanvasElement | null>(null);
   const sampleRef = React.useRef<HTMLCanvasElement | null>(null);
-  // 用 ref 保存 filter/mode,避免 rAF 闭包吃到旧值又频繁重启循环。
+  // 用 ref 保存 filter/mode/imageSrc,避免 rAF 闭包吃到旧值又频繁重启循环。
   const filterRef = React.useRef(filter);
   const modeRef = React.useRef(mode);
+  const imageSrcRef = React.useRef(imageSrc);
   filterRef.current = filter;
   modeRef.current = mode;
+  imageSrcRef.current = imageSrc;
 
   React.useEffect(() => {
     let raf = 0;
@@ -48,40 +53,31 @@ export function Scopes({
     probe.preload = "auto";
     let probeBase = ""; // 主视频 src(未加 buster),用于判断是否换源
 
+    // 图片探针:图片素材下监视器用 <img> 而非 <video>,视频探针取不到帧。用独立 crossOrigin 图
+    // (同样加 buster 绕开已缓存的非 CORS 响应)采样,canvas 不被污染。
+    const imgProbe = new Image();
+    imgProbe.crossOrigin = "anonymous";
+    let imgBase = "";
+
     const syncSource = (mainSrc: string) => {
       if (mainSrc === probeBase) return;
       probeBase = mainSrc;
       probe.src = mainSrc ? mainSrc + (mainSrc.includes("?") ? "&" : "?") + "scope=1" : "";
     };
+    const syncImage = (src: string) => {
+      if (src === imgBase) return;
+      imgBase = src;
+      if (src) imgProbe.src = src + (src.includes("?") ? "&" : "?") + "scope=1";
+      else imgProbe.removeAttribute("src");
+    };
 
-    const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
-      if (now - last < FRAME_MS) return;
-      last = now;
-      const main = videoRef.current;
-      const display = displayRef.current;
-      if (!main || !display) return;
-      syncSource(main.currentSrc || "");
-      // 跟随主视频:播放时也让采样视频播,暂停/漂移时对齐 currentTime。
-      // 只在真漂移时 seek —— 每帧重复 seek 会把 readyState 打回 1,画面永远画不出来。
-      if (!main.paused && probe.paused) void probe.play().catch(() => {});
-      if (main.paused && !probe.paused) probe.pause();
-      const drift = Math.abs(probe.currentTime - main.currentTime);
-      if (drift > (main.paused ? 0.05 : 0.35)) {
-        try {
-          probe.currentTime = main.currentTime;
-        } catch {
-          /* not seekable yet */
-        }
-      }
-      if (probe.readyState < 2 || !probe.videoWidth) return;
+    const paint = (source: CanvasImageSource, dctx: CanvasRenderingContext2D, display: HTMLCanvasElement): void => {
       const sctx = sample.getContext("2d", { willReadFrequently: true });
-      const dctx = display.getContext("2d");
-      if (!sctx || !dctx) return;
+      if (!sctx) return;
       sctx.clearRect(0, 0, SAMPLE_W, SAMPLE_H);
       sctx.filter = filterRef.current || "none";
       try {
-        sctx.drawImage(probe, 0, 0, SAMPLE_W, SAMPLE_H);
+        sctx.drawImage(source, 0, 0, SAMPLE_W, SAMPLE_H);
       } catch {
         return;
       }
@@ -96,38 +92,67 @@ export function Scopes({
       if (modeRef.current === "histogram") drawHistogram(dctx, display, pixels);
       else drawWaveform(dctx, display, pixels);
     };
+
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last < FRAME_MS) return;
+      last = now;
+      const main = videoRef.current;
+      const display = displayRef.current;
+      if (!display) return;
+      const dctx = display.getContext("2d");
+      if (!dctx) return;
+      syncSource(main?.currentSrc || "");
+      syncImage(imageSrcRef.current || "");
+      // 视频路径:跟随主视频播放/暂停/漂移对齐。只在真漂移时 seek —— 每帧重复 seek 会把
+      // readyState 打回 1,画面永远画不出来。
+      if (main && probeBase) {
+        if (!main.paused && probe.paused) void probe.play().catch(() => {});
+        if (main.paused && !probe.paused) probe.pause();
+        const drift = Math.abs(probe.currentTime - main.currentTime);
+        if (drift > (main.paused ? 0.05 : 0.35)) {
+          try {
+            probe.currentTime = main.currentTime;
+          } catch {
+            /* not seekable yet */
+          }
+        }
+      }
+      // 有视频帧优先用视频;否则(图片素材)退回图片探针。都没有就跳过,不清屏(留住上一帧)。
+      if (probe.readyState >= 2 && probe.videoWidth) paint(probe, dctx, display);
+      else if (imgProbe.complete && imgProbe.naturalWidth) paint(imgProbe, dctx, display);
+    };
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
       probe.pause();
       probe.removeAttribute("src");
       probe.load();
+      imgProbe.removeAttribute("src");
     };
   }, [videoRef]);
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex">
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-6 flex-1" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "histogram"}
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "histogram" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setMode("histogram")}
-          >
-            {t("scopeHistogram")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "waveform"}
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "waveform" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setMode("waveform")}
-          >
-            {t("scopeWaveform")}
-          </button>
-        </div>
+      <div className="grid h-6 grid-cols-2 overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "histogram"}
+          className={cn("inline-flex cursor-pointer items-center justify-center rounded-none border-0 bg-transparent px-[11px] text-[11px] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "histogram" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+          onClick={() => setMode("histogram")}
+        >
+          {t("scopeHistogram")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "waveform"}
+          className={cn("inline-flex cursor-pointer items-center justify-center rounded-none border-0 bg-transparent px-[11px] text-[11px] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", mode === "waveform" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+          onClick={() => setMode("waveform")}
+        >
+          {t("scopeWaveform")}
+        </button>
       </div>
       <div className="relative">
         <canvas ref={displayRef} width={256} height={128} className="block h-auto w-full rounded-md bg-[#0b0b0d]" />
