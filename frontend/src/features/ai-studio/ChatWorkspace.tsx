@@ -8,10 +8,8 @@ import {
   CornerDownRight,
   Database,
   FileText,
-  Film,
   Loader2,
   MessageSquarePlus,
-  Music,
   Paperclip,
   Pencil,
   Plus,
@@ -32,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { useImagePreview } from "@/components/app/image-preview";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -999,21 +998,29 @@ function parseUserContent(content: string): { text: string; attachments: { asset
 }
 
 function UserAttachment({ assetId, name, kind }: { assetId: string; name: string; kind: string }) {
+  const { openImagePreview } = useImagePreview();
+  const src = assetFileUrl(assetId);
   if (kind === "image") {
     return (
-      <img
-        src={assetFileUrl(assetId)}
-        alt={name}
+      <button
+        type="button"
         title={name}
-        loading="lazy"
-        className="max-h-[180px] max-w-full rounded-lg border border-border bg-black object-contain"
-      />
+        className="block max-h-[180px] w-fit max-w-full cursor-zoom-in overflow-hidden rounded-lg border border-border bg-black p-0"
+        onClick={() => openImagePreview({ src, title: name })}
+      >
+        <img src={src} alt={name} loading="lazy" className="block max-h-[180px] w-auto max-w-full object-contain" />
+      </button>
     );
   }
-  const Icon = kind === "video" ? Film : kind === "audio" ? Music : Paperclip;
+  if (kind === "video") {
+    return <video src={src} controls preload="metadata" className="max-h-[200px] max-w-full rounded-lg border border-border bg-black" />;
+  }
+  if (kind === "audio") {
+    return <audio src={src} controls preload="metadata" className="w-[260px] max-w-full" />;
+  }
   return (
     <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-[11.5px] text-muted-foreground">
-      <Icon size={12} className="shrink-0" />
+      <Paperclip size={12} className="shrink-0" />
       <span className="truncate" title={name}>{name}</span>
     </span>
   );
