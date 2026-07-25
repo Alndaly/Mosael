@@ -758,12 +758,110 @@ function WorkflowEditor({
   const applyGraph = React.useCallback(
     (next: WorkflowGraph) => {
       setGraph(next);
-      setNodes(toFlowNodes(next, registry));
+      // 重建节点时保留 React Flow 的选中态:否则改配置/加节点/连边(都走这里)会把 selection 冲掉,
+      // 当前选中的节点立刻失去焦点(用户报的"点击节点立马失去焦点、无法聚焦")。
+      setNodes((current) => {
+        const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
+        return toFlowNodes(next, registry).map((node) =>
+          selectedIds.has(node.id) ? { ...node, selected: true } : node,
+        );
+      });
       setEdges(toFlowEdges(next));
       setDirty(true);
     },
     [registry],
   );
+
+  // 节点剪贴板(应用内,按 workflow 编辑器实例存活)。存被选中的节点 + 其内部边,
+  // 粘贴时整体换新 id、内部连线原样重连、位置向右下错开。
+  const clipboardRef = React.useRef<{ nodes: WorkflowGraph["nodes"]; edges: WorkflowGraph["edges"] }>({
+    nodes: [],
+    edges: [],
+  });
+  const copySelection = React.useCallback((): boolean => {
+    const selectedIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    if (selectedIds.size === 0) return false;
+    const pickedNodes = graph.nodes.filter((node) => selectedIds.has(node.id));
+    // 只带上"两端都被选中"的边:整段子图连内部接线一起复制,不牵连外部节点。
+    const pickedEdges = graph.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
+    clipboardRef.current = structuredClone({ nodes: pickedNodes, edges: pickedEdges });
+    return true;
+  }, [nodes, graph]);
+  const pasteClipboard = React.useCallback((): boolean => {
+    const clip = clipboardRef.current;
+    if (clip.nodes.length === 0) return false;
+    const used = new Set(graph.nodes.map((node) => node.id));
+    const freshId = (type: string): string => {
+      const base = type.replace(/_/g, "-");
+      let index = 1;
+      while (used.has(`${base}-${index}`)) index += 1;
+      const id = `${base}-${index}`;
+      used.add(id);
+      return id;
+    };
+    const idMap = new Map<string, string>();
+    const newNodes: WorkflowGraph["nodes"] = [];
+    for (const node of clip.nodes) {
+      if (node.type === "start") continue; // start 唯一,不复制
+      const id = freshId(node.type);
+      idMap.set(node.id, id);
+      newNodes.push({
+        ...structuredClone(node),
+        id,
+        position: { x: (node.position?.x ?? 0) + 48, y: (node.position?.y ?? 0) + 48 },
+      });
+    }
+    if (newNodes.length === 0) return false;
+    const newEdges = clip.edges
+      .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
+      .map((edge) => {
+        const source = idMap.get(edge.source)!;
+        const target = idMap.get(edge.target)!;
+        const id =
+          edge.kind === "data"
+            ? `d-${source}-${edge.source_output}-${target}-${edge.target_input}`
+            : `e-${source}${edge.source_handle ? `-${edge.source_handle}` : ""}-${target}`;
+        return { ...structuredClone(edge), id, source, target };
+      });
+    const next: WorkflowGraph = {
+      ...graph,
+      nodes: [...graph.nodes, ...newNodes],
+      edges: [...graph.edges, ...newEdges],
+    };
+    // 让下次 Cmd+V 继续向右下错开,避免层层重叠。
+    clipboardRef.current = structuredClone({
+      nodes: clip.nodes.map((node) => ({
+        ...node,
+        position: { x: (node.position?.x ?? 0) + 48, y: (node.position?.y ?? 0) + 48 },
+      })),
+      edges: clip.edges,
+    });
+    setGraph(next);
+    const pastedIds = new Set(newNodes.map((node) => node.id));
+    // 只让粘贴出来的新节点选中(旧选区取消),方便立刻整体拖走。
+    setNodes(toFlowNodes(next, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
+    setEdges(toFlowEdges(next));
+    setDirty(true);
+    setSelectedNodeId(newNodes[0].id);
+    return true;
+  }, [graph, registry]);
+
+  // Cmd/Ctrl+C 复制选中节点,Cmd/Ctrl+V 粘贴;输入框 / 代码编辑器里不劫持(交给系统复制粘贴)。
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        if (copySelection()) event.preventDefault();
+      } else if (key === "v") {
+        if (pasteClipboard()) event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [copySelection, pasteClipboard]);
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
