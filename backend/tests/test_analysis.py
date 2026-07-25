@@ -47,6 +47,26 @@ def test_build_messages_shape() -> None:
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
+def test_build_messages_includes_transcript() -> None:
+    class FakeAsset:
+        name = "对谈"
+        kind = "video"
+        media_info = {"duration": 30.0}
+
+    messages = service.build_messages(FakeAsset(), "讲了什么？", [b"a"], transcript="你好，今天聊剪辑。")
+    text = messages[0]["content"][0]["text"]
+    assert "语音转写" in text
+    assert "你好，今天聊剪辑。" in text
+
+
+def test_adaptive_frame_count_scales_with_duration() -> None:
+    # 约每 6 秒 1 帧,夹在 [4, 16]。
+    assert service.adaptive_frame_count(0) == service.MIN_VIDEO_FRAMES
+    assert service.adaptive_frame_count(3) == service.MIN_VIDEO_FRAMES  # 太短也保底 4 帧
+    assert service.adaptive_frame_count(60) == 10
+    assert service.adaptive_frame_count(6000) == service.MAX_VIDEO_FRAMES  # 长视频封顶
+
+
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_extract_video_frames(tmp_path: Path) -> None:
     video = tmp_path / "v.mp4"
