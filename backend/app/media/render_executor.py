@@ -182,8 +182,11 @@ def _kf_expr(points: tuple[tuple[float, float], ...], prog: str) -> str:
         return "0"
     if len(points) == 1:
         return f"{points[0][1]:.5f}"
+    # 从最后一段往前包,让 if(lt(prog,t1),...) 的**最小边界在最外层**:prog 落进哪一段就用哪一段。
+    # 若正序包,最外层会变成最大的 t1,任何早期 prog 都先命中最后一段(clip 夹成 0 → 恒取末值),
+    # 3 个及以上关键帧的动画会整体卡死在末值(如缩放恒为 1.7,画面全程满屏、看不到放大)。
     expr = f"{points[-1][1]:.5f}"  # progress ≥ last t → last value
-    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+    for (t0, v0), (t1, v1) in reversed(list(zip(points, points[1:]))):
         span = t1 - t0
         if span > 1e-6:
             seg = f"({v0:.5f}+({v1 - v0:.5f})*(clip(({prog})-{t0:.6f},0,{span:.6f}))/{span:.6f})"

@@ -104,3 +104,49 @@ def test_static_transform_still_uses_fixed_integer_position() -> None:
         "transform": {"x": 0.5, "scale": 1.2},
     }])
     assert "if(lt(" not in graph  # nothing animates
+
+
+class TestKfExprMultiKeyframe:
+    """回归:_kf_expr 生成的 ffmpeg 表达式必须和参考插值 _kf_sample 逐点吻合,尤其 3+ 关键帧。
+    历史 bug 是嵌套 if 顺序反了 → 任何早期 prog 都命中最后一段、恒取末值(如缩放全程卡在
+    1.7,导出看不到放大)。"""
+
+    @staticmethod
+    def _eval(expr: str, t: float) -> float:
+        def iff(c, a, b):
+            return a if c else b
+
+        def lt(a, b):
+            return a < b
+
+        def clip(x, lo, hi):
+            return max(lo, min(hi, x))
+
+        return eval(expr.replace("if(", "iff("), {"iff": iff, "lt": lt, "clip": clip, "t": t})
+
+    def _check(self, points):
+        from app.media.render_executor import _kf_expr, _kf_sample
+
+        expr = _kf_expr(points, "t")
+        for i in range(0, 101):
+            t = i / 100.0
+            got = self._eval(expr, t)
+            ref = _kf_sample(points, points[0][1], t)
+            assert abs(got - ref) < 1e-4, f"t={t}: expr={got} != sample={ref} for {points}"
+
+    def test_four_keyframes_ken_burns(self):
+        # 用户真实数据:缩放 0.168 → 1.517 → 1.7 → 1.7
+        self._check(((0.0, 0.168), (0.503, 1.517), (0.571, 1.7), (0.825, 1.7)))
+
+    def test_three_keyframes_interpolate_each_segment(self):
+        self._check(((0.0, 0.0), (0.5, 1.0), (1.0, 0.0)))
+
+    def test_two_keyframes_still_correct(self):
+        self._check(((0.0, 1.0), (1.0, 2.0)))
+
+    def test_early_progress_uses_first_segment(self):
+        from app.media.render_executor import _kf_expr
+
+        expr = _kf_expr(((0.0, 0.168), (0.5, 1.5), (1.0, 1.7)), "t")
+        # 进度 0.1 落在第一段(0→0.5),应在 0.168 与 1.5 之间线性插值,绝不是末值 1.7
+        assert 0.168 < self._eval(expr, 0.1) < 1.5
