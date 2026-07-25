@@ -23,7 +23,9 @@ import {
   assetThumbnailUrl,
   importAsset,
   listComfyuiWorkflows,
+  listComfyuiWorkflowParams,
   type Asset,
+  type ComfyParam,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationModel,
@@ -376,6 +378,20 @@ function GenerateWorkspace({
     staleTime: 60_000,
     retry: false,
   });
+  // 选了具体工作流 → 拉它的可调参数(动态表单);用户改过的值存这里,覆盖工作流默认。
+  const [workflowParams, setWorkflowParams] = React.useState<Record<string, Record<string, unknown>>>({});
+  const comfyParams = useQuery({
+    queryKey: ["comfyui-workflow-params", selectedModel?.provider_profile_id, generationConfig.workflow],
+    queryFn: () => listComfyuiWorkflowParams(generationConfig.workflow, selectedModel?.provider_profile_id),
+    enabled: Boolean(isComfyui && selectedModel?.provider_profile_id && generationConfig.workflow),
+    staleTime: 60_000,
+    retry: false,
+  });
+  React.useEffect(() => {
+    setWorkflowParams({}); // 换工作流/档案 → 清用户覆盖,回到该工作流默认
+  }, [generationConfig.workflow, selectedModel?.provider_profile_id]);
+  const setWorkflowParam = (nodeId: string, name: string, value: unknown) =>
+    setWorkflowParams((current) => ({ ...current, [nodeId]: { ...(current[nodeId] ?? {}), [name]: value } }));
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
@@ -532,7 +548,12 @@ function GenerateWorkspace({
           kind: selectedModel!.kind,
           prompt,
           negative_prompt: supportsNegativePrompt ? generationConfig.negativePrompt.trim() : "",
-          parameters: generationParameters(selectedModel!, generationConfig),
+          parameters: {
+            ...generationParameters(selectedModel!, generationConfig),
+            ...(isComfyui && generationConfig.workflow && Object.keys(workflowParams).length > 0
+              ? { workflow_params: workflowParams }
+              : {}),
+          },
           source_asset_ids:
             selectedModel!.kind === "video" && supportsFirstFrame && generationConfig.firstFrameAssetId
               ? [generationConfig.firstFrameAssetId]
@@ -827,6 +848,63 @@ function GenerateWorkspace({
                           : t("comfyWorkflowHint")}
                     </span>
                   </label>
+                )}
+                {isComfyui && generationConfig.workflow && (comfyParams.data ?? []).some((p) => !p.role) && (
+                  <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
+                    {(comfyParams.data ?? [])
+                      .filter((param) => !param.role)
+                      .map((param) => {
+                        const current = workflowParams[param.node_id]?.[param.name] ?? param.value;
+                        const label = `${param.title || param.class_type} · ${param.name}`;
+                        return (
+                          <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-[11.5px] text-muted-foreground">
+                            <span className="truncate" title={label}>{label}</span>
+                            {param.type === "COMBO" ? (
+                              <Select value={String(current)} onValueChange={(value) => setWorkflowParam(param.node_id, param.name, value)}>
+                                <SelectTrigger className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(param.options ?? []).map((option) => (
+                                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : param.type === "BOOLEAN" ? (
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 justify-self-start accent-primary"
+                                checked={Boolean(current)}
+                                onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.checked)}
+                              />
+                            ) : param.type === "INT" || param.type === "FLOAT" ? (
+                              <Input
+                                className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                                type="number"
+                                value={String(current ?? "")}
+                                min={param.min}
+                                max={param.max}
+                                step={param.step ?? (param.type === "INT" ? 1 : 0.01)}
+                                onChange={(event) =>
+                                  setWorkflowParam(
+                                    param.node_id,
+                                    param.name,
+                                    param.type === "INT" ? Math.trunc(Number(event.target.value) || 0) : Number(event.target.value) || 0,
+                                  )
+                                }
+                              />
+                            ) : (
+                              <Input
+                                className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                                value={String(current ?? "")}
+                                onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.value)}
+                              />
+                            )}
+                          </label>
+                        );
+                      })}
+                  </div>
                 )}
                 {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
                   <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">

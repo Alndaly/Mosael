@@ -748,6 +748,27 @@ export function listComfyuiWorkflows(profileId?: string): Promise<ComfyWorkflow[
   return api<ComfyWorkflow[]>(`/api/generation/comfyui/workflows${q}`);
 }
 
+export type ComfyParam = {
+  node_id: string;
+  class_type: string;
+  title: string | null;
+  name: string;
+  value: unknown;
+  role: "prompt" | "negative" | "seed" | "width" | "height" | null;
+  type: "INT" | "FLOAT" | "STRING" | "COMBO" | "BOOLEAN";
+  options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
+  multiline?: boolean;
+};
+/** 提取某工作流的可调参数(类型/范围/当前值/角色),供动态表单渲染。 */
+export function listComfyuiWorkflowParams(workflow: string, profileId?: string): Promise<ComfyParam[]> {
+  const q = new URLSearchParams({ workflow });
+  if (profileId) q.set("profile_id", profileId);
+  return api<ComfyParam[]>(`/api/generation/comfyui/workflow-params?${q.toString()}`);
+}
+
 export function renameAsset(assetId: string, name: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`, { method: "PATCH", body: JSON.stringify({ name }) });
 }
