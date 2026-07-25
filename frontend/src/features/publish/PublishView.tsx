@@ -32,7 +32,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -199,17 +198,17 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("publishListTitle")}</h2>
           </div>
-          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
+          <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {(tasks.data ?? []).map((task) => (
               <ContextMenu key={task.id}>
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
+                    className={cn("flex min-w-0 cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:w-auto max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
                     onClick={() => setSelectedId(task.id)}
                   >
                     <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", ACTIVE.has(task.status) && "bg-[#22c55e]")} />
-                    <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
+                    <span className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                       <strong>{task.title || task.asset_name}</strong>
                       <small>
                         {task.account_name} · {t(`batchStatus_${task.status}` as never)}
@@ -485,6 +484,20 @@ function ProxyDialog({
   );
 }
 
+/** 详情行:标签固定窄列 + 值紧随其右、左对齐填满剩余宽度(读起来是"字段:内容",
+ *  而不是设置页那种"标签左、控件甩到最右"、中间一大片空白)。窄屏改成上下堆叠。 */
+function InfoRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[124px_minmax(0,1fr)] items-start gap-4 px-3.5 py-2.5 max-[520px]:grid-cols-1 max-[520px]:gap-1">
+      <dt className="grid content-start gap-0.5 pt-px">
+        <span className="text-[12.5px] font-medium text-foreground">{label}</span>
+        {description && <span className="text-[11px] leading-[1.4] text-muted-foreground">{description}</span>}
+      </dt>
+      <dd className="m-0 min-w-0 text-[12.5px] leading-[1.6] text-foreground">{children}</dd>
+    </div>
+  );
+}
+
 function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => void }) {
   const t = useI18n();
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, staleTime: Infinity });
@@ -493,71 +506,74 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
     <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
-      <SettingsGroup
-        title={task.title || task.asset_name}
-        description={`${task.account_name} · ${task.platform} · ${t(`batchStatus_${task.status}` as never)}`}
-        actions={
-          <div className="flex items-center gap-1.5">
-            {ACTIVE.has(task.status) ? (
-              <Loader2 size={14} className="animate-mibu-spin" />
-            ) : ok ? (
-              <CheckCircle2 size={14} className="text-[#16a34a]" />
-            ) : BLOCKED.has(task.status) ? (
-              <CircleAlert size={14} className="text-[#d97706]" />
-            ) : (
-              <CircleAlert size={14} className="text-destructive" />
-            )}
-            {isBrowser && window.mibuPublish && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  window.mibuPublish
-                    ?.openPage(task.account_id, task.platform)
-                    .catch((error: Error) => toast.error(error.message))
-                }
-              >
-                <ExternalLink size={13} /> {t("publishOpenPage")}
-              </Button>
-            )}
-            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
-              <Trash2 size={13} /> {t("delete")}
+      <header className="flex items-start justify-between gap-3 px-0.5">
+        <div className="min-w-0">
+          <h2 className="m-0 text-[16px] font-[650] leading-[1.35] tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title || task.asset_name}</h2>
+          <p className="mb-0 mt-1 text-[12.5px] text-muted-foreground">
+            {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {ACTIVE.has(task.status) ? (
+            <Loader2 size={14} className="animate-mibu-spin" />
+          ) : ok ? (
+            <CheckCircle2 size={14} className="text-[#16a34a]" />
+          ) : BLOCKED.has(task.status) ? (
+            <CircleAlert size={14} className="text-[#d97706]" />
+          ) : (
+            <CircleAlert size={14} className="text-destructive" />
+          )}
+          {isBrowser && window.mibuPublish && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                window.mibuPublish
+                  ?.openPage(task.account_id, task.platform)
+                  .catch((error: Error) => toast.error(error.message))
+              }
+            >
+              <ExternalLink size={13} /> {t("publishOpenPage")}
             </Button>
-          </div>
-        }
-      >
-        <SettingsRow label={t("publishAsset")} description={t("publishAssetDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.asset_name}</code>
-        </SettingsRow>
+          )}
+          <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
+            <Trash2 size={13} /> {t("delete")}
+          </Button>
+        </div>
+      </header>
+      <dl className="m-0 grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">
+        <InfoRow label={t("publishAsset")} description={t("publishAssetDesc")}>
+          <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
+        </InfoRow>
         {task.description && (
-          <SettingsRow label={t("publishDescription")}>
-            <span className="max-w-[480px] whitespace-pre-wrap text-[12.5px] leading-[1.6] text-foreground">{task.description}</span>
-          </SettingsRow>
+          <InfoRow label={t("publishDescription")}>
+            <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{task.description}</p>
+          </InfoRow>
         )}
         {task.tags.length > 0 && (
-          <SettingsRow label={t("publishTags")}>
-            <span className="flex flex-wrap gap-1">
+          <InfoRow label={t("publishTags")}>
+            <div className="flex flex-wrap gap-1">
               {task.tags.map((tag) => (
-                <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-1.5 text-[11px] text-muted-foreground" key={tag}>
+                <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>
                   {tag}
                 </span>
               ))}
-            </span>
-          </SettingsRow>
+            </div>
+          </InfoRow>
         )}
         {task.status === "succeeded" && task.result.target != null && (
-          <SettingsRow label={t("publishResult")} description={t("publishResultDesc")}>
-            <code className="timecode inline-flex max-w-[420px] items-center gap-[5px] truncate text-xs text-muted-foreground" title={String(task.result.target)}>
-              <FolderOutput size={12} /> {String(task.result.target)}
+          <InfoRow label={t("publishResult")} description={t("publishResultDesc")}>
+            <code className="timecode inline-flex items-center gap-[5px] text-xs text-muted-foreground [overflow-wrap:anywhere]" title={String(task.result.target)}>
+              <FolderOutput size={12} className="shrink-0" /> {String(task.result.target)}
             </code>
-          </SettingsRow>
+          </InfoRow>
         )}
         {task.status === "failed" && task.error && (
-          <SettingsRow label={t("publishError")}>
-            <span className="max-w-[420px] text-xs text-destructive">{task.error}</span>
-          </SettingsRow>
+          <InfoRow label={t("publishError")}>
+            <p className="m-0 whitespace-pre-wrap text-destructive [overflow-wrap:anywhere]">{task.error}</p>
+          </InfoRow>
         )}
-      </SettingsGroup>
+      </dl>
     </div>
   );
 }
