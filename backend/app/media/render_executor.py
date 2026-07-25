@@ -505,6 +505,21 @@ def _escape_filter_path(path: Path) -> str:
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
+# 从深处剪一小段时,靠 trim 滤镜切会逼 ffmpeg 从第 0 帧一路解码到 src_in——长素材里这一步
+# 能占掉绝大多数导出时间(表现为进度长时间卡在个位数、speed≈0.0x)。改用输入级 -ss 快进:
+# ffmpeg 先跳到 src_in 之前最近的关键帧,默认 accurate_seek 会精确解码并丢弃到 src_in、并把
+# 该点重置为时间 0,所以 trim 改成从 0 起算、长度不变,帧仍然精确。src_in≈0(图片、从头的
+# 片段)不加 -ss,行为与之前完全一致。
+_INPUT_SEEK_THRESHOLD = 0.05
+
+
+def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, float]:
+    """返回 (输入前置的 -ss 参数, trim 起点, trim 终点)。src_in 够大才快进,否则保持原样。"""
+    if src_in > _INPUT_SEEK_THRESHOLD:
+        return ["-ss", f"{src_in:.6f}"], 0.0, round(src_out - src_in, 6)
+    return [], src_in, src_out
+
+
 def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
     """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。"""
     head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
@@ -638,8 +653,9 @@ def build_ffmpeg_command(
     for i, segment in enumerate(plan.video_segments):
         if segment.kind == "clip" and segment.source is not None:
             path = resolve(segment.source.file_key)
-            args += ["-i", str(path)]
             src = segment.source
+            seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
+            args += seek + ["-i", str(path)]
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
@@ -649,7 +665,7 @@ def build_ffmpeg_command(
             if segment.transform.is_identity:
                 filters.append(
                     _base_video_chain(
-                        input_index, i, src.src_in, src.src_out, setpts, width, height, fps,
+                        input_index, i, tin, tout, setpts, width, height, fps,
                         f"{preset}{video_fades}", plan.output.fill_mode,
                     )
                 )
@@ -658,7 +674,7 @@ def build_ffmpeg_command(
                 # at its transform (matches the preview compositor; fill_mode is moot here since
                 # the element is cover-filled like the preview's objectFit:cover).
                 filters.append(
-                    f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},setpts={setpts},"
+                    f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts},"
                     f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
                     f"{preset}{video_fades},fps={fps},setsar=1[elt{i}]"
                 )
@@ -677,7 +693,7 @@ def build_ffmpeg_command(
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
                 filters.append(
-                    f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,{tempo}"
+                    f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,{tempo}"
                     f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
@@ -701,10 +717,11 @@ def build_ffmpeg_command(
     video_label = "[vbase]"
     for i, overlay in enumerate(plan.overlays):
         path = resolve(overlay.source.file_key)
-        args += ["-i", str(path)]
         src = overlay.source
+        seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
+        args += seek + ["-i", str(path)]
         filters.append(
-            f"[{input_index}:v]trim=start={src.src_in}:end={src.src_out},"
+            f"[{input_index}:v]trim=start={tin}:end={tout},"
             f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[oelt{i}]"
         )
@@ -750,8 +767,9 @@ def build_ffmpeg_command(
             path = resolve(item.source.file_key)
             if item.optional and not has_audio.get(path, False):
                 continue  # overlay video-track source with no audio stream
-            args += ["-i", str(path)]
             src = item.source
+            seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
+            args += seek + ["-i", str(path)]
             delay_ms = int(item.start * 1000)
             audio_fades = _fade_filters(item.fade_in, item.fade_out, item.duration, audio=True)
             # Ducking: after adelay the stream is on timeline time, so the enable windows are
@@ -761,7 +779,7 @@ def build_ffmpeg_command(
                 enable = "+".join(f"between(t,{a},{b})" for a, b in item.duck_windows)
                 duck = f",volume=enable='{enable}':volume={DUCK_GAIN}"
             filters.append(
-                f"[{input_index}:a]atrim=start={src.src_in}:end={src.src_out},asetpts=PTS-STARTPTS,"
+                f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,"
                 f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
                 f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
                 f"adelay={delay_ms}:all=1{duck}[aov{i}]"
