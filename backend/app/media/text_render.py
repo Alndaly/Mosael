@@ -84,15 +84,17 @@ def _subtitle_style_css(style, frame_w: int) -> str:
         bg = f"rgba({r},{g},{b},{style.bg_opacity:g})"
     else:
         bg = "transparent"
+    # 背景框的内边距/圆角/投影用 em(随字号等比),和前端 Monitor 的字幕框保持一致——固定 px
+    # 会因为预览缩放而两边对不上。见 Monitor.tsx 同款注释。
     parts = [
         "display:inline-block", f"max-width:{int(frame_w * 0.86)}px", "white-space:pre-wrap",
-        "border-radius:6px", "padding:3px 10px", "text-align:center", "line-height:1.45",
+        "border-radius:0.33em", "padding:0.16em 0.55em", "text-align:center", "line-height:1.45",
         f"font-size:{float(style.font_size):g}px",
         f"color:{style.color}",
         f"font-weight:{700 if style.bold else 400}",
         f"font-family:{style.font_family or _SUBTITLE_FONT_STACK}",
         f"background:{bg}",
-        "text-shadow:0 1px 2px rgba(0,0,0,0.7)",
+        "text-shadow:0 0.055em 0.11em rgba(0,0,0,0.7)",
     ]
     return ";".join(parts)
 
