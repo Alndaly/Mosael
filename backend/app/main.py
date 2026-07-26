@@ -36,6 +36,7 @@ from app.api.routes.batches import router as batches_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.job_worker import router as job_worker_router
+from app.api.routes.browser_worker import router as browser_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
@@ -50,6 +51,7 @@ from app.core.permissions import get_current_user
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.generation import ensure_builtin_generation_models
 from app.ai.agent.host import reconcile_orphaned_agent_sessions
+from app.domain.browser import reconcile_browser_state
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
 from app.media.proxy import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
@@ -77,6 +79,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         failed = reconcile_orphaned_jobs(db)
         # 同理:卡在 running 的智能体会话拨回 idle,否则前端永远「思考中」。
         reconcile_orphaned_agent_sessions(db)
+        # 浏览器自动化:执行器视图随旧进程消失,残留动作/会话回收(见 domain/browser)。
+        reconcile_browser_state()
         # Backfill preview proxies for any videos missing one (best-effort).
         reconcile_missing_proxies(db)
         # 修复 remux 上线前导入的坏素材(直录 webm 缺时长/缩略图/波形)。
@@ -156,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(publish_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
     # 通用 job worker 通道(claim/report/heartbeat):同一把 worker key,任意 external kind。
     app.include_router(job_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
+    app.include_router(browser_worker_router, prefix="/api", dependencies=[Depends(require_worker_key)])
     protected = [Depends(get_current_user)]
     app.include_router(projects_router, prefix="/api", dependencies=protected)
     app.include_router(workspaces_router, prefix="/api", dependencies=protected)

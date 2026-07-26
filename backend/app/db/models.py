@@ -512,6 +512,49 @@ class PublishTask(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class BrowserSession(Base):
+    """一个隔离的自动化浏览器会话(RPA 节点 / 智能体 / 手动)。
+
+    分区(partition)决定 cookie/storage 归属,与发布严格分命名空间:
+    - 发布(不由此表管):persist:mibu-<accountId>
+    - 临时会话:ephemeral-<id>(无 persist: 前缀 → 内存态,关闭即清)
+    - 具名持久会话:persist:rpa-<name>(保留登录,供重复自动化)
+    RPA 侧只会构造 ephemeral-/persist:rpa- 分区,物理上碰不到发布登录。"""
+
+    __tablename__ = "browser_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="ephemeral")  # ephemeral | named
+    name: Mapped[str] = mapped_column(String(80), nullable=False, default="")  # 具名会话名
+    partition: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    owner_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")  # agent | workflow | manual
+    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # agent_session_id / workflow job id
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")  # open | closed
+    last_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class BrowserAction(Base):
+    """浏览器会话上的一个待执行动作(navigate/click/input/extract/…)。调用方入队后阻塞轮询到
+    终态(见 domain/browser.run_action);Electron 浏览器 worker 认领→执行→回报。"""
+
+    __tablename__ = "browser_actions"
+    __table_args__ = (Index("idx_browser_actions_status_created", "status", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(ForeignKey("browser_sessions.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    args: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")  # queued | running | done | failed
+    result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class ProviderProfile(Base):
     """A user-configured AI provider account. Multiple profiles per vendor
     are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""

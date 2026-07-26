@@ -53,12 +53,16 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
+    # 浏览器自动化(RPA / 智能体)
+    "BrowserSession": ("app/domain/browser/",),
+    "BrowserAction": ("app/domain/browser/",),
     # 配置
     "ProviderProfile": ("app/domain/providers.py", "app/api/routes/settings.py"),
     "ProviderDefault": ("app/domain/provider_defaults.py", "app/api/routes/settings.py"),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),
     "KbEmbeddingConfig": ("app/domain/kb/",),
+    "AiRuntimeConfig": ("app/api/routes/settings.py",),
     "TtsConfig": ("app/domain/tts_config.py",),
     # 智能体/集成
     "AgentSession": ("app/ai/agent/", "app/domain/agent/"),

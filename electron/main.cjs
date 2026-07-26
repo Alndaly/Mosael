@@ -308,9 +308,20 @@ function createWindow() {
     }
   }
 
+  // 浏览器自动化执行器(RPA / 智能体):与发布并列,独立会话/分区,不碰发布登录。
+  if (publish && publish.startBrowserWorker) {
+    try {
+      publish.stopBrowserWorker();
+      publish.startBrowserWorker({ window: win });
+    } catch (e) {
+      console.warn("[browser] 启动执行器失败:", e.message);
+    }
+  }
+
   win.on("closed", () => {
     try {
       publish?.stopPublishWorker();
+      publish?.stopBrowserWorker?.();
     } catch {
       /* 窗口已销毁,忽略 */
     }
