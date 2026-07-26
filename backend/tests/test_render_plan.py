@@ -126,3 +126,29 @@ def test_plan_carries_encode_settings():
         crf=99, encode_preset="warp-speed",
     )
     assert (fallback.output.crf, fallback.output.encode_preset) == (51, "veryfast")
+
+
+def test_base_padded_to_full_duration_when_overlay_longer():
+    """底轨(base)比上层视频短时,画面补黑场延伸到整条时间线——否则导出视频在底轨结束处截断,
+    音频/上层视频还在走画面却没了(用户报的「预览与导出完全不同」)。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1920, height=1080, fps=30.0,
+        clips=[clip("base", "a1", 0, 0, 3)],  # 底轨 3s
+        overlay_clips=[{"id": "ov", "asset_id": "a2", "timeline_start": 0, "src_in": 0, "src_out": 8}],  # 叠加层 8s
+        assets={"a1": {"file_key": "media/a1.mp4"}, "a2": {"file_key": "media/a2.mp4"}},
+    )
+    assert plan.timeline_duration == 8
+    assert plan.video_segments[-1].kind == "gap"  # 尾部黑场
+    assert round(sum(s.duration for s in plan.video_segments), 3) == 8  # 画面铺满整条
+
+
+def test_no_trailing_pad_when_base_longest():
+    """底轨最长时不补尾部黑场(回归:别给正常时间线平白加黑帧)。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=1920, height=1080, fps=30.0,
+        clips=[clip("base", "a1", 0, 0, 8)],
+        overlay_clips=[{"id": "ov", "asset_id": "a2", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+        assets={"a1": {"file_key": "media/a1.mp4"}, "a2": {"file_key": "media/a2.mp4"}},
+    )
+    assert plan.timeline_duration == 8
+    assert [s.kind for s in plan.video_segments] == ["clip"]  # 无尾部 gap

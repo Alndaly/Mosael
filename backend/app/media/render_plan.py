@@ -462,6 +462,12 @@ def build_render_plan(
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
 
+    # 底轨(base = 最底有片段的视频轨)若比上层视频/音频/字幕短,给画面补一段尾部黑场,
+    # 让视频延伸到整条时间线时长。否则视频在 base 结束处就截断——上层视频(叠加层)、音频、
+    # 字幕还在往后走,画面却没了,导出比预览短一大截、内容对不上(用户报的「预览与导出完全不同」)。
+    if cursor < duration - GAP_EPSILON:
+        segments.append(Segment(kind="gap", duration=round(duration - cursor, 6)))
+
     plan = RenderPlan(
         sequence_id=sequence_id,
         sequence_revision=revision,
