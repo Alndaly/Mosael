@@ -199,7 +199,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+      {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。负 margin 抵消滚动容器的
+          内边距以贴顶、铺满宽度;bg 盖住滚上来的卡片。 */}
+      <div className="sticky top-0 z-20 -mx-3.5 -mt-3.5 flex flex-col gap-2 bg-background px-3.5 pt-3.5 pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Button asChild size="sm">
             <label className="inline-flex cursor-pointer items-center gap-1.5">
@@ -301,7 +304,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       </div>
       {/* 标签筛选单独一行:塞进上面的工具条会把下拉/按钮挤乱,标签多了还会换行错位。 */}
       {allTags.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-1 text-muted-foreground" role="group" aria-label={t("filterByTag")}>
+        <div className="flex flex-wrap items-center gap-1 text-muted-foreground" role="group" aria-label={t("filterByTag")}>
           <Tags size={13} className="shrink-0" />
           {allTags.map((tag) => (
             <button
@@ -319,6 +322,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           ))}
         </div>
       )}
+      </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
 
       {(assets.data ?? []).length === 0 ? (
