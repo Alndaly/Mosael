@@ -309,10 +309,16 @@ function createWindow() {
   }
 
   // 浏览器自动化执行器(RPA / 智能体):与发布并列,独立会话/分区,不碰发布登录。
+  // onFrame 把「最近操作的会话」的截帧推给前端做实时预览(离屏自动化视图否则看不到)。
   if (publish && publish.startBrowserWorker) {
     try {
       publish.stopBrowserWorker();
-      publish.startBrowserWorker({ window: win });
+      publish.startBrowserWorker({
+        window: win,
+        onFrame: (frame) => {
+          if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
+        },
+      });
     } catch (e) {
       console.warn("[browser] 启动执行器失败:", e.message);
     }

@@ -75,6 +75,10 @@ export async function executeBrowserAction(
       await driver.evaluate(expr);
       return { lastUrl: driver.url() };
     }
+    case "screenshot": {
+      const dataUrl = await driver.captureBase64();
+      return { value: dataUrl, lastUrl: driver.url() };
+    }
     default:
       throw new Error(`未知浏览器动作: ${action}`);
   }

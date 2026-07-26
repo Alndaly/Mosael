@@ -15,6 +15,7 @@ import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { BrowserPreview } from "@/components/layout/BrowserPreview";
 import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
@@ -83,6 +84,7 @@ export function App() {
                 <AuthGate />
                 <AppToaster />
                 <PublishViewBar />
+                <BrowserPreview />
               </ImagePreviewProvider>
             </AuthProvider>
           </TooltipProvider>

@@ -1,4 +1,4 @@
-import type { WebContents } from "electron";
+import type { NativeImage, WebContents } from "electron";
 import { writeFile } from "node:fs/promises";
 
 import { plog } from "./log";
@@ -24,8 +24,18 @@ const KEY_MAP: Record<string, string> = {
 export class PageDriver {
   private debuggerAttached = false;
   private abortSignal: AbortSignal | null = null;
+  private latestFrame: NativeImage | null = null; // 离屏渲染的最近一帧(paint 事件),供预览/截图
 
-  constructor(private readonly wc: WebContents) {}
+  constructor(private readonly wc: WebContents) {
+    // 离屏渲染(offscreen)的视图靠 paint 事件出帧;非离屏视图不触发,无害。
+    try {
+      this.wc.on("paint", (_event, _dirty, image) => {
+        this.latestFrame = image;
+      });
+    } catch {
+      /* 某些环境无 paint 事件,忽略 */
+    }
+  }
 
   setAbortSignal(signal: AbortSignal | null): void {
     this.abortSignal = signal;
@@ -1023,6 +1033,24 @@ export class PageDriver {
   async screenshot(path: string): Promise<void> {
     const image = await this.wc.capturePage();
     await writeFile(path, image.toPNG());
+  }
+
+  /** 截当前画面为 data URL(缩小到 480 宽省流)。优先用离屏渲染 paint 事件缓存的最近一帧(离屏
+   *  视图 capturePage 空白,帧只从 paint 来);没有再退回 capturePage(竞速超时,绝不挂起)。 */
+  async captureBase64(): Promise<string | null> {
+    try {
+      if (this.latestFrame && !this.latestFrame.isEmpty()) {
+        return this.latestFrame.resize({ width: 480 }).toDataURL();
+      }
+      const image = await Promise.race([
+        this.wc.capturePage(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
+      ]);
+      if (!image || image.isEmpty()) return null;
+      return image.resize({ width: 480 }).toDataURL();
+    } catch {
+      return null;
+    }
   }
 
   detach(): void {

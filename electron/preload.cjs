@@ -48,3 +48,12 @@ contextBridge.exposeInMainWorld("mibuPublish", {
     return () => ipcRenderer.removeListener("publish:view", listener);
   },
 });
+
+// 自动化浏览器(RPA / 智能体)的实时预览帧:离屏视图截帧,前端画成缩略预览。
+contextBridge.exposeInMainWorld("mibuBrowser", {
+  onFrame: (callback) => {
+    const listener = (_event, frame) => callback(frame);
+    ipcRenderer.on("browser:frame", listener);
+    return () => ipcRenderer.removeListener("browser:frame", listener);
+  },
+});

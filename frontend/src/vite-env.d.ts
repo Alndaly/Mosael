@@ -36,8 +36,17 @@ interface MibuUpdateInfo {
   error?: string;
 }
 
+/** 自动化浏览器(RPA / 智能体)的实时预览帧。 */
+interface BrowserFrame {
+  sessionId: string;
+  dataUrl: string;
+}
+
 interface Window {
   mibuPublish?: MibuPublishBridge;
+  mibuBrowser?: {
+    onFrame: (callback: (frame: BrowserFrame) => void) => () => void;
+  };
   mibuDesktop?: {
     platform: string;
     setTitleOverlay?: (colors: { color: string; symbolColor: string }) => void;
