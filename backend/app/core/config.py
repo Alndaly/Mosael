@@ -101,10 +101,6 @@ class Settings(BaseSettings):
     def plugins_dir(self) -> Path:
         return self.data_dir / "plugins"
 
-    @property
-    def skills_dir(self) -> Path:
-        return self.data_dir / "skills"
-
 
 settings = Settings()
 

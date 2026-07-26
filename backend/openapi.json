@@ -10701,83 +10701,6 @@
         }
       }
     },
-    "/api/agent/prompt-skills": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Get Prompt Skills",
-        "operationId": "get_prompt_skills_api_agent_prompt_skills_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PromptSkillOut"
-                  },
-                  "type": "array",
-                  "title": "Response Get Prompt Skills Api Agent Prompt Skills Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/prompt-skills/{skill_id}": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Get Prompt Skill",
-        "operationId": "get_prompt_skill_api_agent_prompt_skills__skill_id__get",
-        "parameters": [
-          {
-            "name": "skill_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Skill Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PromptSkillOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/agent/manifest": {
       "get": {
         "tags": [
@@ -14845,46 +14768,6 @@
         ],
         "title": "ProjectWithStatsOut",
         "description": "列表页项目卡片用的汇总信息;单个项目端点仍返回精简 ProjectOut。"
-      },
-      "PromptSkillOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "default": ""
-          },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "user"
-          },
-          "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "PromptSkillOut",
-        "description": "文件型智能体技能(skills/<id>/SKILL.md);body 仅在单独获取时返回。"
       },
       "ProviderDefaultOut": {
         "properties": {

@@ -15,7 +15,6 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
-from app.domain.agent.prompt_skills import skills_index_for_prompt
 from app.domain.usage import estimate_text_tokens, record_usage
 
 """
@@ -46,11 +45,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本
 - 需要联网查最新资料时用 web_search 搜索、fetch_url 读网页(只读,随时可用)。
 - 所有已批准的时间线修改用户都可以撤销,不必过度谨慎,但一次确认卡只装一个连贯意图。
 工作区 ID: {workspace_id}。用用户使用的语言回复,简洁、面向创作者,不要提及内部实现细节。
-不要读写本机文件系统,不要执行 shell 命令;只使用 mibu 工具与对话。
-
-你有一组技能(可复用的操作手册)。当任务命中某个技能时,先用 load_skill 拉取正文,
-再严格按其流程执行;不确定时也可先 list_skills 查看。当前技能索引:
-{skills_index}"""
+不要读写本机文件系统,不要执行 shell 命令;只使用 mibu 工具与对话。"""
 
 _turn_callbacks: list[Callable[[str], None]] = []
 
@@ -374,7 +369,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         try:
             system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
                 workspace_id=session.workspace_id,
-                skills_index=skills_index_for_prompt() or "(暂无技能)",
             )
             # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
             if session.analysis_video_mode == "native":

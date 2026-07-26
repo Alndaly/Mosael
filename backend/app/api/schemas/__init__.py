@@ -1354,16 +1354,6 @@ class KbSearchResultOut(BaseModel):
     from_graph: bool = False
 
 
-class PromptSkillOut(BaseModel):
-    """文件型智能体技能(skills/<id>/SKILL.md);body 仅在单独获取时返回。"""
-
-    id: str
-    name: str
-    description: str = ""
-    source: str = "user"
-    body: str | None = None
-
-
 class AgentManifestOut(BaseModel):
     app: str
     version: str

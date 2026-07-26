@@ -282,37 +282,6 @@ def test_stop_is_not_an_error_when_nothing_is_running() -> None:
     assert res.json() == {"stopped": False}
 
 
-def test_prompt_skills_seed_list_and_load(tmp_path, monkeypatch) -> None:
-    from app.core.config import settings
-    from app.domain.agent import prompt_skills
-
-    monkeypatch.setattr(settings, "data_dir", tmp_path)
-    client = fresh_client()
-
-    listed = client.get("/api/agent/prompt-skills").json()
-    ids = {skill["id"] for skill in listed}
-    assert "transcript-rough-cut" in ids and "export-delivery" in ids
-    assert all(skill.get("body") in (None, "") for skill in listed)  # 列表不带正文
-
-    loaded = client.get("/api/agent/prompt-skills/transcript-rough-cut").json()
-    assert loaded["name"] == "逐字稿粗剪"
-    assert "cut_clip_ranges" in loaded["body"]
-
-    # 用户自建技能:目录 + SKILL.md 即生效。
-    custom = settings.skills_dir / "my-skill" / "SKILL.md"
-    custom.parent.mkdir(parents=True, exist_ok=True)
-    custom.write_text("---\nname: 我的技能\ndescription: 自定义\n---\n\n步骤正文", encoding="utf-8")
-    listed_again = client.get("/api/agent/prompt-skills").json()
-    mine = next(skill for skill in listed_again if skill["id"] == "my-skill")
-    assert mine["source"] == "user" and mine["name"] == "我的技能"
-
-    # 路径穿越拒绝。
-    assert client.get("/api/agent/prompt-skills/..%2F..%2Fetc").status_code == 404
-
-    index = prompt_skills.skills_index_for_prompt()
-    assert "transcript-rough-cut" in index and "my-skill" in index
-
-
 def test_reconcile_orphaned_agent_sessions() -> None:
     """重启把 running 会话线程杀死 → 启动时拨回 idle 并补中断说明,idle 会话不动。"""
     from app.ai.agent.host import reconcile_orphaned_agent_sessions

@@ -146,7 +146,6 @@ electron/         main.cjs (main process) + publish/ (embedded-browser publishin
 agent-sidecar/    agent sidecar (pi runtime, Node)
 docs/             architecture and subsystem docs (see below)
 plugins/          local plugins (subprocess + MCP)
-skills/           file-based agent skills (skills/<id>/SKILL.md)
 ```
 
 ## Deep-dive docs

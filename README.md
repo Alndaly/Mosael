@@ -145,7 +145,6 @@ electron/         main.cjs(主进程)+ publish/(内嵌浏览器发布执行器 T
 agent-sidecar/    智能体 sidecar(pi 运行时,Node)
 docs/             架构与子系统文档(见下)
 plugins/          本地插件(子进程 + MCP 暴露)
-skills/           文件型智能体技能(skills/<id>/SKILL.md)
 ```
 
 ## 深入文档

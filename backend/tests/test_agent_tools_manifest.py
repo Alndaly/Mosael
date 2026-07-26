@@ -181,8 +181,8 @@ def test_the_declared_schema_matches_what_the_function_accepts() -> None:
     The sidecar reads `properties` to decide which arguments to fill in — it supplies
     workspace_id only to tools that declare it. It first supplied it to every tool, and the
     tools are plain Python functions, so an argument they do not accept is a TypeError rather
-    than an ignored extra: web_search, analyze_asset and list_skills failed on their first
-    call. Drift in either direction breaks a caller that trusted the schema.
+    than an ignored extra: web_search and analyze_asset failed on their first call. Drift in
+    either direction breaks a caller that trusted the schema.
     """
     import inspect
 
@@ -213,7 +213,7 @@ def test_workspace_scoped_tools_declare_workspace_id() -> None:
     }
     for scoped in ("list_assets", "list_projects", "search_kb", "list_workflows"):
         assert "workspace_id" in declared[scoped], f"{scoped} lost its workspace_id parameter"
-    for unscoped in ("web_search", "fetch_url", "list_skills", "analyze_asset"):
+    for unscoped in ("web_search", "fetch_url", "analyze_asset"):
         assert "workspace_id" not in declared[unscoped], (
             f"{unscoped} now declares workspace_id; the sidecar will start sending it"
         )

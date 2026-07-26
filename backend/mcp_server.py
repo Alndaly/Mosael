@@ -608,28 +608,6 @@ def create_kb_note(
 
 
 @mcp.tool()
-def list_skills() -> list[dict[str, Any]]:
-    """Read-only: list available agent skills/playbooks for common Mibu tasks.
-
-    Use at the start of a task when a reusable workflow may apply. Each entry has
-    id, name, description. When a task matches a skill, call load_skill(id) and
-    follow its body strictly. This does not inspect or modify media/workflows.
-    """
-    return _get("/api/agent/prompt-skills")
-
-
-@mcp.tool()
-def load_skill(skill_id: str) -> dict[str, Any]:
-    """Read-only: load one skill/playbook body by skill_id.
-
-    Use only after list_skills or when the user names a skill. Follow the
-    returned markdown step by step. This is guidance for your process, not a
-    project asset, KB document, timeline, or workflow graph.
-    """
-    return _get(f"/api/agent/prompt-skills/{skill_id}")
-
-
-@mcp.tool()
 def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
     """Runs directly: replace an EXISTING media asset's tag list.
 

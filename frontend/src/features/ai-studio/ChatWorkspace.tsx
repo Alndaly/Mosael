@@ -27,7 +27,6 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -44,7 +43,6 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentManifest = components["schemas"]["AgentManifestOut"];
 type AgentTool = components["schemas"]["ToolSpec"];
-type PromptSkill = components["schemas"]["PromptSkillOut"];
 type AgentUsageEvent = {
   id: string;
   agent_message_id: string | null;
@@ -75,12 +73,6 @@ export function ChatWorkspace({
   const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const [attachments, setAttachments] = React.useState<Asset[]>([]);
-  const [skillsOpen, setSkillsOpen] = React.useState(false);
-  const skills = useQuery({
-    queryKey: ["prompt-skills"],
-    queryFn: () => api<PromptSkill[]>("/api/agent/prompt-skills"),
-    staleTime: 60_000,
-  });
   const manifest = useQuery({
     queryKey: ["agent-manifest"],
     queryFn: () => api<AgentManifest>("/api/agent/manifest"),
@@ -562,44 +554,6 @@ export function ChatWorkspace({
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
                   {switcher}
-                  <Popover open={skillsOpen} onOpenChange={setSkillsOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant={skillsOpen ? "secondary" : "ghost"}
-                        size="icon"
-                        aria-label={t("skillsTitle")}
-                      >
-                        <Sparkles size={14} />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="grid w-[300px] gap-0.5 p-2" align="start" aria-label={t("skillsTitle")}>
-                      <strong className="px-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                        {t("skillsTitle")}
-                      </strong>
-                      {(skills.data ?? []).map((skill) => (
-                        <button
-                          key={skill.id}
-                          type="button"
-                          className="grid cursor-pointer gap-px rounded-md border-0 bg-transparent p-1.5 text-left transition-colors duration-100 hover:bg-secondary"
-                          onClick={() => {
-                            setDraft((current) =>
-                              current.trim()
-                                ? current
-                                : t("skillUsePrefix").replace("{name}", skill.name) + " ",
-                            );
-                            setSkillsOpen(false);
-                          }}
-                        >
-                          <em className="text-[12.5px] font-semibold not-italic">{skill.name}</em>
-                          <span className="text-[11.5px] leading-[1.45] text-muted-foreground">{skill.description}</span>
-                        </button>
-                      ))}
-                      {(skills.data ?? []).length === 0 && (
-                        <span className="px-1.5 py-1 text-xs text-muted-foreground">{t("skillsEmpty")}</span>
-                      )}
-                    </PopoverContent>
-                  </Popover>
                   <Button asChild variant="ghost" size="icon" aria-label={t("attachFile")} disabled={uploadAttachment.isPending}>
                     <label>
                       <input
@@ -656,7 +610,6 @@ export function ChatWorkspace({
         running={running}
         elapsedSeconds={elapsedSeconds}
         streamTimeline={streamTimeline}
-        skills={skills.data ?? []}
         manifest={manifest.data ?? null}
         tools={tools.data ?? []}
       />
@@ -672,7 +625,6 @@ function ChatInspector({
   running,
   elapsedSeconds,
   streamTimeline,
-  skills,
   manifest,
   tools,
 }: {
@@ -683,7 +635,6 @@ function ChatInspector({
   running: boolean;
   elapsedSeconds: number;
   streamTimeline: AgentTimelineItem[];
-  skills: PromptSkill[];
   manifest: AgentManifest | null;
   tools: AgentTool[];
 }) {
@@ -820,10 +771,6 @@ function ChatInspector({
           <Sparkles size={13} /> {t("agentInspectorCapabilities")}
         </h3>
         <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-          <span className="truncate text-[11px] text-muted-foreground">{t("skillsTitle")}</span>
-          <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{skills.length}</strong>
-        </div>
-        <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
           <span className="truncate text-[11px] text-muted-foreground">{t("agentTools")}</span>
           <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{tools.length}</strong>
         </div>
@@ -834,16 +781,7 @@ function ChatInspector({
           </div>
         )}
         <div className="flex flex-wrap gap-[5px]">
-          {skills.slice(0, 4).map((skill) => (
-            <span
-              className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
-              key={skill.id}
-              title={skill.description}
-            >
-              {skill.name}
-            </span>
-          ))}
-          {tools.slice(0, Math.max(0, 6 - Math.min(skills.length, 4))).map((tool) => (
+          {tools.slice(0, 6).map((tool) => (
             <span
               className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
               key={tool.name}

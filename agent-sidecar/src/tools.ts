@@ -130,8 +130,8 @@ export async function buildAllTools(apiBase: string, token: string, workspaceId:
           // Fill in the workspace only for tools that declare it: the model has no reason to
           // know which workspace this turn belongs to, but the tools are plain Python functions
           // and an argument they do not accept is a TypeError, not an ignored extra. Injecting
-          // it blindly broke every tool without the parameter — web_search, analyze_asset,
-          // list_skills — on the first call.
+          // it blindly broke every tool without the parameter — web_search, analyze_asset —
+          // on the first call.
           if (workspaceId && !args.workspace_id && takesWorkspace) args.workspace_id = workspaceId;
           const response = (await mibuPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
             arguments: args,
