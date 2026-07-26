@@ -86,6 +86,35 @@ def browser_input(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     return {"session": sid}
 
 
+@register("browser_upload")
+def browser_upload(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 二选一——
+    asset_id 在后端解析成本机绝对路径再交给执行器(素材文件与执行器同机,本地优先)。"""
+    from app.db.models import Asset
+    from app.media.paths import resolve_key
+
+    sid = _session_id(config)
+    path = str(config.get("file_path") or "").strip()
+    asset_id = str(config.get("asset_id") or "").strip()
+    if asset_id and not path:
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != workflow.workspace_id:
+            raise WorkflowDomainError("上传素材不存在")
+        if not asset.file_key:
+            raise WorkflowDomainError("上传素材没有文件")
+        path = str(resolve_key(asset.file_key))
+    if not path:
+        raise WorkflowDomainError("上传节点需要 asset_id 或 file_path")
+    timeout_ms = _int(config.get("timeout_ms"), 15_000)
+    _run(
+        sid,
+        "upload",
+        {"selector": str(config.get("selector") or "").strip(), "path": path, "timeout_ms": timeout_ms},
+        timeout=timeout_ms / 1000 + 20,
+    )
+    return {"session": sid}
+
+
 @register("browser_extract")
 def browser_extract(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_id(config)

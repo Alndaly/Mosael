@@ -390,6 +390,19 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["session"],
     },
+    "browser_upload": {
+        "label": "浏览器·上传文件",
+        "category": "浏览器",
+        "description": "往页面的文件输入框(<input type=file>)塞一个本地文件——发布上传视频的关键一步。用 asset_id 传素材(如 {{export_1.asset_id}}),或 file_path 传本地绝对路径(二选一)。走 CDP setFileInputFiles,不弹系统对话框。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "description": "文件输入框 CSS 选择器(默认 input[type=file])"},
+            "asset_id": {"type": "template", "description": "要上传的素材 id(如 {{export_1.asset_id}});与 file_path 二选一"},
+            "file_path": {"type": "template", "description": "或直接给本地绝对路径;与 asset_id 二选一"},
+            "timeout_ms": {"type": "string", "description": "等文件输入框出现的超时(毫秒,默认 15000)"},
+        },
+        "outputs": ["session"],
+    },
     "browser_extract": {
         "label": "浏览器·提取",
         "category": "浏览器",

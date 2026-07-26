@@ -8,9 +8,8 @@ export interface ActionOutcome {
 const s = (v: unknown): string => (v == null ? "" : String(v));
 
 /**
- * 把一个后端动作分派到 PageDriver。Phase 0 只用 DOM 级动作(离屏 headless 视图上即可跑,与发布
- * 后台流一致):navigate/click/input/press_key/extract/evaluate/wait/scroll。坐标点击、截图、
- * 上传、循环遍历等留到后续阶段(截图需要离屏渲染,见 browserSessions 注释)。
+ * 把一个后端动作分派到 PageDriver:navigate/click/input/upload/press_key/extract/evaluate/wait/
+ * scroll/screenshot。upload 经 CDP setFileInputFiles 塞文件(与发布上传同一套 driver.setFiles)。
  */
 export async function executeBrowserAction(
   driver: PageDriver,
@@ -30,6 +29,17 @@ export async function executeBrowserAction(
     }
     case "input": {
       await driver.fillField(s(args.selector), s(args.value));
+      return { lastUrl: driver.url() };
+    }
+    case "upload": {
+      const path = s(args.path);
+      if (!path) throw new Error("upload 需要文件路径");
+      const selector = s(args.selector) || 'input[type="file"]';
+      const timeout = Number(args.timeout_ms) || 15_000;
+      // 文件输入框常在点了「上传」后才挂载:先等它出现,再经 CDP setFileInputFiles 塞文件(不弹系统框)。
+      const ok = await driver.fileInputAttached(selector, timeout);
+      if (!ok) throw new Error(`upload: 文件输入框未出现: ${selector}`);
+      await driver.setFiles(selector, path);
       return { lastUrl: driver.url() };
     }
     case "press_key": {
