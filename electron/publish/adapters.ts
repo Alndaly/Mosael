@@ -562,6 +562,14 @@ export class BilibiliAdapter implements PublishAdapter {
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.uploadUrl);
+    // 上一次投稿成功后,B 站**原地**把编辑页替换成成功页(URL 不变,见 waitResult 注释)。而持久
+    // 视图复用同一 WebContents,下一次 goto 到「同一个 URL」常被 SPA abort、不刷新,于是残留成功页
+    // ——找不到上传入口,这一次发布就失败。没探到文件输入(成功页/异常态)就先去 about:blank 断开
+    // SPA,再回到上传页,强制拿一张干净页面。
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, 6_000))) {
+      await this.driver.goto("about:blank");
+      await this.driver.goto(this.s.uploadUrl);
+    }
   }
 
   async checkLogin(): Promise<boolean> {
