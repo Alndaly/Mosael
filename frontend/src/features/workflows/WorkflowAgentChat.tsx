@@ -18,13 +18,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, api, getAuthToken } from "@/api/client";
+import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
+import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -117,13 +119,28 @@ export function WorkflowAgentChat({
   const [streamText, setStreamText] = React.useState("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
   const [attachments, setAttachments] = React.useState<{ name: string; content: string }[]>([]);
+  const [media, setMedia] = React.useState<Asset[]>([]);
+  const [uploading, setUploading] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const MAX_FILE = 200 * 1024; // 200KB of text
+  // 图片/视频/音频走素材导入(智能体可分析,与对话页一致);文本文件仍内联为上下文(便于按脚本搭流程)。
   const pickFiles = async (files: FileList | null) => {
     if (!files) return;
     const added: { name: string; content: string }[] = [];
     for (const file of Array.from(files)) {
+      if (/^(image|video|audio)\//.test(file.type)) {
+        setUploading(true);
+        try {
+          const asset = await importAsset({ workspaceId, file });
+          setMedia((cur) => [...cur, asset]);
+        } catch {
+          toast.error(t("wfAgentFileUnreadable").replace("{name}", file.name));
+        } finally {
+          setUploading(false);
+        }
+        continue;
+      }
       if (file.size > MAX_FILE) {
         toast.error(t("wfAgentFileTooBig").replace("{name}", file.name));
         continue;
@@ -311,7 +328,7 @@ export function WorkflowAgentChat({
       api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
     onSuccess: refreshQueue,
   });
-  const showStop = running && !draft.trim() && attachments.length === 0;
+  const showStop = running && !draft.trim() && attachments.length === 0 && media.length === 0;
   const stopTurn = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
     meta: { silentError: true },
@@ -410,10 +427,20 @@ export function WorkflowAgentChat({
   }, [messages.data?.length, streamText]);
 
   const send = useMutation({
-    mutationFn: async ({ text, files }: { text: string; files: { name: string; content: string }[] }) => {
-      // Attached files are inlined as fenced context so the text-only agent can read them.
+    mutationFn: async ({
+      text,
+      files,
+      mediaAssets,
+    }: {
+      text: string;
+      files: { name: string; content: string }[];
+      mediaAssets: Asset[];
+    }) => {
+      // 文本文件内联为围栏上下文(纯文本智能体可读);图片/视频/音频编码成附件标记,气泡里渲染成缩略图。
       const fileBlock = files.map((f) => `[${t("wfAgentAttached")} ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n");
-      const visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
+      let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
+      for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
+      visibleContent = visibleContent.trim();
       const context = [
         t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName),
         fileBlock,
@@ -440,6 +467,7 @@ export function WorkflowAgentChat({
     onSuccess: ({ targetId }) => {
       setDraft("");
       setAttachments([]);
+      setMedia([]);
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
@@ -449,8 +477,8 @@ export function WorkflowAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draft.trim() && attachments.length === 0) || send.isPending) return;
-    send.mutate({ text: draft.trim(), files: attachments });
+    if ((!draft.trim() && attachments.length === 0 && media.length === 0) || send.isPending) return;
+    send.mutate({ text: draft.trim(), files: attachments, mediaAssets: media });
   };
 
   return (
@@ -585,7 +613,7 @@ export function WorkflowAgentChat({
                   <AgentTurnContent timeline={payload?.timeline} />
                 )
               ) : (
-                <div>{message.content}</div>
+                <UserMessageContent content={message.content} />
               )}
               {message.role === "assistant" && typeof duration === "number" && (
                 <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
@@ -648,8 +676,21 @@ export function WorkflowAgentChat({
           </button>
         </div>
       ))}
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || media.length > 0 || uploading) && (
         <div className="flex flex-wrap gap-1 px-3.5 pt-1">
+          {media.map((asset, i) => (
+            <span key={asset.id} className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={asset.name}>
+              <Paperclip size={11} />
+              <span className="truncate">{asset.name}</span>
+              <button
+                type="button"
+                aria-label={t("close")}
+                onClick={() => setMedia((cur) => cur.filter((_, j) => j !== i))}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
           {attachments.map((file, i) => (
             <span key={`${file.name}-${i}`} className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={file.name}>
               <Paperclip size={11} />
@@ -663,6 +704,11 @@ export function WorkflowAgentChat({
               </button>
             </span>
           ))}
+          {uploading && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              <Loader2 size={11} className="animate-mibu-spin" /> {t("wfAgentAttach")}
+            </span>
+          )}
         </div>
       )}
       <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-[20px] border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
@@ -690,17 +736,20 @@ export function WorkflowAgentChat({
             }
           }}
         />
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            aria-label={t("wfAgentAttach")}
-            title={t("wfAgentAttach")}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Paperclip size={15} />
-          </Button>
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex min-w-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label={t("wfAgentAttach")}
+              title={t("wfAgentAttach")}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip size={15} />
+            </Button>
+            <ModelPicker workspaceId={workspaceId} session={activeSession} />
+          </div>
           {showStop ? (
             <Button
               size="icon"
@@ -715,7 +764,7 @@ export function WorkflowAgentChat({
               size="icon"
               className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attachments.length === 0) || send.isPending}
+              disabled={(!draft.trim() && attachments.length === 0 && media.length === 0) || send.isPending || uploading}
               onClick={submit}
             >
               <Send size={14} />
