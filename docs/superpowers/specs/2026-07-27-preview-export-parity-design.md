@@ -41,13 +41,22 @@
                                  帧 → ffmpeg(仅编码 + OfflineAudioContext 混音 + 封装)
 ```
 
-- **一个场景模型 + 一个合成器 `draw(model, t)`**。预览是它的实时循环;导出是它的离线逐帧循环。二者共用**同一份绘制代码**,画面天生一致。
-- 字幕/花字进入合成器(P0),成为场景模型的一层,预览与导出都由 canvas 画。
+- **一个场景模型 + 一个合成器 `draw(model, t)`**(只画视频/图片层)。预览是它的实时循环;导出是它的离线逐帧循环。二者共用**同一份绘制代码**,画面天生一致。
+
+### 文字层不进 canvas(P0 调整,降风险)
+
+调研发现文字**已经一致**,不必上 canvas:预览的字幕/花字是 DOM 叠层(读 `subtitleCss` 行内样式);
+导出侧 `text_render.TextRasterizer` **用 app 同一份 CSS(headless chromium + @font-face)渲成 PNG** 再由
+ffmpeg 烧录——两边同源 CSS,早已逐像素对齐。所以:
+
+- **canvas 只负责视频/图片合成**(parity bug 都在这层);
+- **文字仍是独立层**:预览 DOM(CSS)、导出 ffmpeg 烧 CSS→PNG。方案 Y 里,ffmpeg 把文字 PNG 叠在
+  「canvas 已合成好的视频帧」之上再编码。文字排版一致性沿用现成机制,**不在 canvas 上重造 CSS 文本布局**(高风险活直接免掉)。
 
 ## 分阶段(每阶段带 flag、ffmpeg 老路作 fallback、独立可验)
 
-- **P0 字幕/花字上 canvas。** 合成器新增文本层:字幕轨 + 花字,按现有 `subtitle_style` / text_style + transform 在 canvas 上排版绘制,与当前 DOM 预览逐像素对齐。验证:同一时间线,canvas 文本与现 DOM 文本位置/字体/描边一致。
-- **P1 合成器成默认预览。** 翻默认(仍留 flag 回退)。预览从此=最终画面权威。**这一步直接对着 canvas 修掉画中画多轨定位、段落切换黑屏等现报 bug**(它们是合成器 bug,不再是 parity)。验证:多轨 PiP / 相邻片段切换 / 底轨短于上层,预览均正确、无黑闪。
+- ~~P0 字幕/花字上 canvas~~ **免掉**:文字已 CSS 同源一致(见上),canvas 只做视频/图片;文字由 ffmpeg 烧 CSS→PNG,叠在 canvas 帧之上。
+- **P1 合成器成默认预览 + 修视频合成 bug。** 翻默认(仍留 flag 回退)。预览从此=最终画面权威。**这一步直接对着 canvas 修掉画中画多轨定位、段落切换黑屏等现报 bug**(它们是合成器 bug,不再是 parity)。验证:多轨 PiP / 相邻片段切换 / 底轨短于上层,预览均正确、无黑闪。
 - **P2 离线渲染核心 + 导出代理(路 C)。** ①后端:导出前为用到的源造全分辨率短 GOP H.264 代理(缓存复用,复用 S0 代理管线)。②前端:`renderFrameAt(model, t)` 确定性版——每源精确 seek 全分辨率代理、按 model 合成、返回一帧 bitmap,脱离 rAF。验证:给定 t,离线帧 == 预览同 t 帧(pixel diff 阈内)。
 - **P3 编码管线(方案 Y)。** 离线帧逐帧 → 后端 ffmpeg(rawvideo 管道)编码;音频用 `OfflineAudioContext` 渲整段混音(gain/duck/fade/solo)→ 交 ffmpeg;进度 + 取消。验证:整条时间线导出成片,画面与预览一致、音画同步。
 - **P4 导出切新路,ffmpeg render_plan 老路留 fallback(flag)。** 新路稳定后默认;WebCodecs 不可用 / 造代理失败 → 回退老 render_plan。逐像素回归:同一时间线两路各导一版,采样帧 pixel diff 入 CI。
