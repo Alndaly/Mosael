@@ -682,6 +682,33 @@ export function recheckPublishAccount(accountId: string): Promise<PublishAccount
   return api<PublishAccount>(`/api/publish/accounts/${accountId}/recheck`, { method: "POST" });
 }
 
+// ---- 浏览器池:持久登录档案(发布账号 = 挂平台的档案;通用档案任意站点复用) ----
+
+export type BrowserProfile = components["schemas"]["BrowserProfileOut"];
+
+export function listBrowserProfiles(workspaceId: string): Promise<BrowserProfile[]> {
+  return api<BrowserProfile[]>(`/api/browser/profiles?workspace_id=${workspaceId}`);
+}
+
+export function createBrowserProfile(body: {
+  workspace_id: string;
+  name: string;
+  proxy?: string | null;
+}): Promise<BrowserProfile> {
+  return api<BrowserProfile>("/api/browser/profiles", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateBrowserProfile(
+  profileId: string,
+  body: { name?: string; proxy?: string | null; enabled?: boolean },
+): Promise<BrowserProfile> {
+  return api<BrowserProfile>(`/api/browser/profiles/${profileId}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteBrowserProfile(profileId: string): Promise<unknown> {
+  return api(`/api/browser/profiles/${profileId}`, { method: "DELETE" });
+}
+
 export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
   return api<PublishTask[]>(`/api/publish/tasks?workspace_id=${workspaceId}`);
 }

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
+  Boxes,
   CalendarClock,
   Check,
   ChevronsUpDown,
@@ -46,7 +47,8 @@ export type StudioView =
   | "settings"
   | "workflows"
   | "scheduler"
-  | "plugins";
+  | "plugins"
+  | "browser-pool";
 
 const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
   { view: "home", icon: <Home size={17} />, labelKey: "navHome" },
@@ -60,6 +62,7 @@ const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: Me
 
 const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
   { view: "workflows", icon: <Workflow size={17} />, labelKey: "navWorkflows" },
+  { view: "browser-pool", icon: <Boxes size={17} />, labelKey: "navBrowserPool" },
   { view: "scheduler", icon: <CalendarClock size={17} />, labelKey: "schedulerTitle" },
   { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
 ];

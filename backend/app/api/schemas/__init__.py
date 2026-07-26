@@ -1018,9 +1018,13 @@ class BrowserProfileOut(BaseModel):
     enabled: bool
     last_used_at: datetime | None = None
     created_at: datetime
-    # 若被发布账号绑定,回其平台/账号 id(浏览器池页据此标注「发布账号」)。
+    # 若被发布账号绑定,回其平台/账号 id + 登录态(浏览器池页据此标注「发布账号」并显示登录状态、
+    # 复用登录/复检动作);通用档案这些为 None。
     platform: str | None = None
     bound_account_id: str | None = None
+    binding_status: str | None = None
+    last_checked_at: datetime | None = None
+    last_error: str | None = None
 
 
 class BrowserProfileCreate(BaseModel):

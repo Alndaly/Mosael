@@ -32,6 +32,9 @@ def _serialize(db, prof: BrowserProfile) -> BrowserProfileOut:
         created_at=prof.created_at,
         platform=account.platform if account else None,
         bound_account_id=account.id if account else None,
+        binding_status=account.binding_status if account else None,
+        last_checked_at=account.last_checked_at if account else None,
+        last_error=account.last_error if account else None,
     )
 
 

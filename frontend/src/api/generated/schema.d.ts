@@ -3983,6 +3983,12 @@ export interface components {
             platform?: string | null;
             /** Bound Account Id */
             bound_account_id?: string | null;
+            /** Binding Status */
+            binding_status?: string | null;
+            /** Last Checked At */
+            last_checked_at?: string | null;
+            /** Last Error */
+            last_error?: string | null;
         };
         /** BrowserProfileUpdate */
         BrowserProfileUpdate: {

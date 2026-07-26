@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
+  Boxes,
   CalendarClock,
   Clapperboard,
   FileAudio,
@@ -47,6 +48,7 @@ const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[
   { view: "publish", labelKey: "navPublish", keywords: ["publish", "fabu"], icon: <Rocket size={14} /> },
   { view: "kb", labelKey: "navKb", keywords: ["kb", "knowledge", "zhishiku"], icon: <BookOpen size={14} /> },
   { view: "workflows", labelKey: "navWorkflows", keywords: ["workflow", "flow", "gongzuoliu"], icon: <Workflow size={14} /> },
+  { view: "browser-pool", labelKey: "navBrowserPool", keywords: ["browser", "pool", "account", "liulanqi", "zhanghao"], icon: <Boxes size={14} /> },
   { view: "settings", labelKey: "navSettings", keywords: ["settings", "shezhi"], icon: <Settings size={14} /> },
   { view: "scheduler", labelKey: "schedulerTitle", keywords: ["schedule", "cron", "dingshi"], icon: <CalendarClock size={14} /> },
   { view: "plugins", labelKey: "pluginsTitle", keywords: ["plugins", "chajian"], icon: <Plug size={14} /> },

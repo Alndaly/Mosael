@@ -1,0 +1,333 @@
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  createBrowserProfile,
+  deleteBrowserProfile,
+  deletePublishAccount,
+  listBrowserProfiles,
+  listPublishPlatforms,
+  patchPublishAccount,
+  recheckPublishAccount,
+  updateBrowserProfile,
+  type BrowserProfile,
+  type Workspace,
+} from "@/api/client";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { EmptyState } from "@/components/layout/EmptyState";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { relativeTime } from "@/lib/time";
+import { cn } from "@/lib/utils";
+
+// 过渡态:后台复检/登录在改登录态时轮询把徽标拉回真实值。
+const TRANSITIONAL = new Set(["checking", "unknown"]);
+
+/** 浏览器池:所有持久登录身份(BrowserProfile)一屏管全。发布账号 = 挂平台的档案,复用其登录/复检;
+ *  通用档案任意站点复用(工作流/智能体)。账号矩阵从发布页抽离到这里。 */
+export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const qc = useQueryClient();
+  const [creating, setCreating] = React.useState(false);
+  const [renaming, setRenaming] = React.useState<BrowserProfile | null>(null);
+  const [proxyEditing, setProxyEditing] = React.useState<BrowserProfile | null>(null);
+  const [removing, setRemoving] = React.useState<BrowserProfile | null>(null);
+
+  const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms });
+  const profiles = useQuery({
+    queryKey: ["browser-profiles", workspace.id],
+    queryFn: () => listBrowserProfiles(workspace.id),
+    refetchInterval: (query) => {
+      const data = (query.state.data ?? []) as BrowserProfile[];
+      return data.some((p) => p.platform && TRANSITIONAL.has(p.binding_status ?? "")) ? 4000 : false;
+    },
+  });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["browser-profiles", workspace.id] });
+    void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
+  };
+
+  const create = useMutation({
+    mutationFn: (body: { name: string; proxy: string | null }) =>
+      createBrowserProfile({ workspace_id: workspace.id, name: body.name, proxy: body.proxy }),
+    onSuccess: () => {
+      setCreating(false);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // 发布账号(bound)的字段以 publish account 为准(worker 读它);同时同步档案,避免池页显示漂移。
+  const patchName = useMutation({
+    mutationFn: async ({ p, name }: { p: BrowserProfile; name: string }) => {
+      if (p.bound_account_id) await patchPublishAccount(p.bound_account_id, { name });
+      await updateBrowserProfile(p.id, { name });
+    },
+    onSuccess: () => {
+      setRenaming(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const patchProxy = useMutation({
+    mutationFn: async ({ p, proxy }: { p: BrowserProfile; proxy: string | null }) => {
+      if (p.bound_account_id) await patchPublishAccount(p.bound_account_id, { proxy });
+      await updateBrowserProfile(p.id, { proxy });
+    },
+    onSuccess: () => {
+      setProxyEditing(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const setEnabled = useMutation({
+    mutationFn: async ({ p, enabled }: { p: BrowserProfile; enabled: boolean }) => {
+      if (p.bound_account_id) await patchPublishAccount(p.bound_account_id, { enabled });
+      await updateBrowserProfile(p.id, { enabled });
+    },
+    onSuccess: refresh,
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const recheck = useMutation({
+    mutationFn: (accountId: string) => recheckPublishAccount(accountId),
+    onSuccess: refresh,
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: async (p: BrowserProfile) => {
+      if (p.bound_account_id) await deletePublishAccount(p.bound_account_id); // 级联删发布任务;解绑后档案可删
+      await deleteBrowserProfile(p.id);
+    },
+    onSuccess: () => {
+      setRemoving(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const login = (p: BrowserProfile) => {
+    if (p.bound_account_id && p.platform) {
+      window.mibuPublish
+        ?.login(p.bound_account_id, p.platform)
+        .then(() => toast.success(t("poolLoginOpened")))
+        .catch((e: Error) => toast.error(e.message));
+    } else {
+      // 通用档案的可见登录窗需要新的桌面端 IPC —— 见 Step 4b(在 persist:pool-<id> 分区开可见窗)。
+      toast.info(t("poolGenericLoginSoon"));
+    }
+  };
+
+  const items = profiles.data ?? [];
+
+  return (
+    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-2 p-3">
+      <div className="flex items-center gap-2">
+        <h2 className="m-0 inline-flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
+          <Boxes size={17} /> {t("poolTitle")}
+        </h2>
+        <small className="text-[11.5px] text-muted-foreground">{t("poolSubtitle")}</small>
+        <span className="flex-1" />
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Plus size={14} /> {t("poolCreate")}
+        </Button>
+      </div>
+
+      {profiles.isSuccess && items.length === 0 ? (
+        <div className="grid place-items-center">
+          <EmptyState icon={<Boxes size={22} />} title={t("poolEmptyTitle")} body={t("poolEmptyBody")} />
+        </div>
+      ) : (
+        <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+          {items.map((p) => {
+            const bound = Boolean(p.bound_account_id);
+            const platformLabel = (platforms.data ?? []).find((m) => m.platform === p.platform)?.label ?? p.platform;
+            return (
+              <ContextMenu key={p.id}>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className={cn(
+                      "flex min-h-32 flex-col gap-[3px] overflow-hidden rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)]",
+                      !p.enabled && "opacity-55",
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="mr-auto text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                        {bound ? platformLabel : t("poolGeneric")}
+                      </span>
+                      {p.proxy && (
+                        <em
+                          className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-[10px] not-italic text-primary"
+                          title={p.proxy}
+                        >
+                          <Globe size={10} /> {t("publishProxyOn")}
+                        </em>
+                      )}
+                      {bound && (
+                        <em
+                          className={cn(
+                            "rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground",
+                            p.binding_status === "bound" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+                            ["login_required", "manual_required", "permission_required"].includes(p.binding_status ?? "") &&
+                              "bg-[color-mix(in_srgb,#d97706_12%,transparent)] text-[#d97706]",
+                          )}
+                        >
+                          {t(`binding_${p.binding_status}` as never)}
+                        </em>
+                      )}
+                    </div>
+                    <strong className="truncate text-[13px]">{p.name}</strong>
+                    <small className="text-[11px] text-muted-foreground">
+                      {bound
+                        ? p.last_checked_at
+                          ? t("publishLastChecked").replace("{t}", relativeTime(p.last_checked_at, locale))
+                          : t("publishNeverChecked")
+                        : p.last_used_at
+                          ? t("poolLastUsed").replace("{t}", relativeTime(p.last_used_at, locale))
+                          : t("poolNeverUsed")}
+                    </small>
+                    <small className={cn("truncate text-[11px] text-destructive", !p.last_error && "invisible")}>
+                      {p.last_error ?? " "}
+                    </small>
+                    <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
+                        disabled={bound && !window.mibuPublish}
+                        onClick={() => login(p)}
+                      >
+                        <LogIn size={13} /> {t("poolLogin")}
+                      </Button>
+                      {bound && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={recheck.isPending}
+                          onClick={() => recheck.mutate(p.bound_account_id!)}
+                        >
+                          <RefreshCcw size={13} /> {t("publishRecheck")}
+                        </Button>
+                      )}
+                      <span className="flex-1" />
+                      <Switch
+                        checked={p.enabled}
+                        onCheckedChange={(next) => setEnabled.mutate({ p, enabled: next })}
+                        aria-label={t("publishAccountEnabled")}
+                      />
+                    </div>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => setRenaming(p)}>{t("rename")}</ContextMenuItem>
+                  <ContextMenuItem onSelect={() => setProxyEditing(p)}>
+                    <Globe /> {t("publishProxySet")}
+                  </ContextMenuItem>
+                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(p)}>
+                    <Trash2 /> {t("delete")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
+        </div>
+      )}
+
+      {creating && <CreateProfileDialog onCancel={() => setCreating(false)} onCreate={(b) => create.mutate(b)} pending={create.isPending} />}
+      <RenameDialog
+        open={renaming !== null}
+        title={t("rename")}
+        initialValue={renaming?.name ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(name) => renaming && patchName.mutate({ p: renaming, name })}
+      />
+      {proxyEditing && (
+        <ProxyDialog
+          initial={proxyEditing.proxy ?? ""}
+          onCancel={() => setProxyEditing(null)}
+          onSave={(proxy) => patchProxy.mutate({ p: proxyEditing, proxy })}
+          pending={patchProxy.isPending}
+        />
+      )}
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("delete")}
+        body={removing?.bound_account_id ? t("poolDeleteBoundBody") : t("poolDeleteBody")}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && remove.mutate(removing)}
+      />
+    </div>
+  );
+}
+
+function CreateProfileDialog({
+  onCancel,
+  onCreate,
+  pending,
+}: {
+  onCancel: () => void;
+  onCreate: (body: { name: string; proxy: string | null }) => void;
+  pending: boolean;
+}) {
+  const t = useI18n();
+  const [name, setName] = React.useState("");
+  const [proxy, setProxy] = React.useState("");
+  return (
+    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolCreate")}>
+      <div className="grid gap-2 p-3">
+        <label className="grid gap-1 text-xs text-muted-foreground">
+          {t("poolNameLabel")}
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("poolNamePlaceholder")} autoFocus />
+        </label>
+        <label className="grid gap-1 text-xs text-muted-foreground">
+          {t("publishProxySet")}
+          <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" />
+        </label>
+        <div className="mt-1 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" disabled={pending || !name.trim()} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>
+            {t("poolCreate")}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ProxyDialog({
+  initial,
+  onCancel,
+  onSave,
+  pending,
+}: {
+  initial: string;
+  onCancel: () => void;
+  onSave: (proxy: string | null) => void;
+  pending: boolean;
+}) {
+  const t = useI18n();
+  const [proxy, setProxy] = React.useState(initial);
+  return (
+    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("publishProxySet")}>
+      <div className="grid gap-2 p-3">
+        <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" autoFocus />
+        <small className="text-[11px] text-muted-foreground">{t("poolProxyHint")}</small>
+        <div className="mt-1 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" disabled={pending} onClick={() => onSave(proxy.trim() || null)}>
+            {t("save")}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
