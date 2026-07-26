@@ -53,6 +53,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
     # 浏览器自动化(RPA / 智能体)
+    "BrowserProfile": ("app/domain/browser/",),
     "BrowserSession": ("app/domain/browser/",),
     "BrowserAction": ("app/domain/browser/",),
     # 配置

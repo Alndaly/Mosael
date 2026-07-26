@@ -4,9 +4,10 @@
 调用方 open_session → run_action(入队一条 BrowserAction 并阻塞轮询到终态)→ close_session;
 Electron 的浏览器 worker 认领 queued 动作 → 用 PageDriver 在会话分区的视图上执行 → 回报结果。
 
-会话隔离(见 models.BrowserSession):临时会话用 `ephemeral-<id>`(内存态),具名持久用
-`persist:rpa-<name>`,与发布的 `persist:mibu-<accountId>` 严格分命名空间——RPA 侧只会构造前两类
-分区,物理上碰不到发布登录。
+会话分区(见 models.BrowserSession):临时 `ephemeral-<id>`(内存态)、具名 `persist:rpa-<name>`、
+池档案会话用其档案分区(BrowserProfile.partition,可为发布登录的 `persist:mibu-<accountId>`)。
+「浏览器池」把持久登录身份统一成 BrowserProfile(不再只服务发布);池档案会话受**租约**(一档案
+一时刻一会话)约束,接入智能体时再叠**显式授权**闸——见 open_session / _open_profile_session。
 """
 
 from __future__ import annotations
@@ -18,7 +19,9 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import BrowserAction, BrowserSession
+from app.db.models import BrowserAction, BrowserProfile, BrowserSession, PublishAccount, now
+
+_UNSET = object()  # update_profile 里区分「不改」与「置空」
 
 # 动作默认超时:navigate 到重前端页可能慢(pageDriver.goto 自身 45s),给足余量;调用方可覆盖。
 ACTION_TIMEOUT_SECONDS = 120.0
@@ -49,16 +52,85 @@ def _partition_for(session: BrowserSession) -> str:
     return f"ephemeral-{session.id}"
 
 
+# ---------- 浏览器池:档案(持久身份)CRUD ----------
+
+
+def create_profile(db: Session, *, workspace_id: str, name: str, proxy: str | None = None) -> BrowserProfile:
+    """新建一个通用池档案。分区 persist:pool-<id>(依赖 id,flush 后再算)。"""
+    prof = BrowserProfile(workspace_id=workspace_id, name=(name or "").strip()[:160], proxy=(proxy or None), enabled=True)
+    db.add(prof)
+    db.flush()
+    prof.partition = f"persist:pool-{prof.id}"
+    db.commit()
+    db.refresh(prof)
+    return prof
+
+
+def get_profile(db: Session, workspace_id: str, profile_id: str) -> BrowserProfile:
+    prof = db.get(BrowserProfile, profile_id)
+    if prof is None or prof.workspace_id != workspace_id:
+        raise BrowserDomainError("浏览器档案不存在")
+    return prof
+
+
+def list_profiles(db: Session, workspace_id: str) -> list[BrowserProfile]:
+    return list(
+        db.scalars(
+            select(BrowserProfile)
+            .where(BrowserProfile.workspace_id == workspace_id)
+            .order_by(BrowserProfile.created_at.desc())
+        )
+    )
+
+
+def update_profile(
+    db: Session,
+    workspace_id: str,
+    profile_id: str,
+    *,
+    name: str | None = None,
+    proxy: str | None | object = _UNSET,
+    enabled: bool | None = None,
+) -> BrowserProfile:
+    prof = get_profile(db, workspace_id, profile_id)
+    if name is not None:
+        prof.name = name.strip()[:160]
+    if proxy is not _UNSET:
+        prof.proxy = (proxy or None) if isinstance(proxy, str) else None
+    if enabled is not None:
+        prof.enabled = enabled
+    db.commit()
+    db.refresh(prof)
+    return prof
+
+
+def delete_profile(db: Session, workspace_id: str, profile_id: str) -> None:
+    """删档案。有活动会话(租约未释放)或被发布账号绑定 → 拒删,避免删掉正在用/发布依赖的登录身份。"""
+    prof = get_profile(db, workspace_id, profile_id)
+    if db.scalar(
+        select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
+    ):
+        raise BrowserDomainError("该档案有正在进行的会话,先结束再删")
+    if db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile_id)):
+        raise BrowserDomainError("该档案绑定了发布账号,请先在发布页解绑或删除账号")
+    db.delete(prof)
+    db.commit()
+
+
 def open_session(
     db: Session,
     *,
     workspace_id: str,
     kind: str = "ephemeral",
     name: str = "",
+    profile_id: str | None = None,
     owner_kind: str = "manual",
     owner_id: str | None = None,
 ) -> BrowserSession:
-    """新建(或复用同名的具名)浏览器会话。临时会话每次都是新的隔离上下文。"""
+    """新建(或复用)浏览器会话。临时会话每次都是新隔离上下文;具名会话跨次复用;池档案会话在
+    档案分区上开,受**租约**约束(一个档案同一时刻一个活动会话:同 owner 复用、异 owner 拒绝)。"""
+    if profile_id:
+        return _open_profile_session(db, workspace_id, profile_id, owner_kind, owner_id)
     kind = "named" if kind == "named" else "ephemeral"
     safe = ""
     if kind == "named":
@@ -87,6 +159,37 @@ def open_session(
     db.add(session)
     db.flush()
     session.partition = _partition_for(session)  # 依赖 id(临时会话),故 flush 后再算
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def _open_profile_session(
+    db: Session, workspace_id: str, profile_id: str, owner_kind: str, owner_id: str | None
+) -> BrowserSession:
+    prof = get_profile(db, workspace_id, profile_id)
+    if not prof.enabled:
+        raise BrowserDomainError("该浏览器档案已停用")
+    # 租约:一个档案同一时刻只允许一个活动会话。
+    existing = db.scalar(
+        select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
+    )
+    if existing is not None:
+        if existing.owner_kind == owner_kind and (existing.owner_id or "") == (owner_id or ""):
+            return existing  # 同一 owner 复用
+        raise BrowserDomainError("该档案正被占用(同一时刻只允许一个会话),请稍后再试")
+    session = BrowserSession(
+        workspace_id=workspace_id,
+        kind="profile",
+        name=(prof.name or "")[:80],
+        partition=prof.partition,
+        profile_id=profile_id,
+        owner_kind=owner_kind if owner_kind in ("agent", "workflow", "manual") else "manual",
+        owner_id=owner_id,
+        status="open",
+    )
+    db.add(session)
+    prof.last_used_at = now()
     db.commit()
     db.refresh(session)
     return session

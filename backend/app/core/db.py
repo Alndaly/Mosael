@@ -133,6 +133,50 @@ def _migrate_job_parent() -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_jobs_parent_job_id ON jobs (parent_job_id)"))
 
 
+def _migrate_browser_pool() -> None:
+    """浏览器池:browser_sessions / publish_accounts 增加 profile_id(加列,保留既有数据)。
+    browser_profiles 表本身由 create_all 建;发布账号→档案的回填在 create_all 之后跑
+    (见 _backfill_browser_pool),那时表才存在。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "browser_sessions" in tables:
+            if "profile_id" not in {c["name"] for c in inspector.get_columns("browser_sessions")}:
+                conn.execute(text("ALTER TABLE browser_sessions ADD COLUMN profile_id VARCHAR(64)"))
+        if "publish_accounts" in tables:
+            if "profile_id" not in {c["name"] for c in inspector.get_columns("publish_accounts")}:
+                conn.execute(text("ALTER TABLE publish_accounts ADD COLUMN profile_id VARCHAR(64)"))
+
+
+def _backfill_browser_pool() -> None:
+    """给还没挂档案的发布账号,按其**既有分区** persist:mibu-<id> 建一个 browser_profiles 档案并
+    回填 profile_id。组合(不合并):发布账号表保留,只多一个指针。幂等——只处理 profile_id 为空的
+    账号。分区沿用不变 → Electron 打开同一分区,发布登录态不丢。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "publish_accounts" not in tables or "browser_profiles" not in tables:
+        return
+    from app.db.models import new_id
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, workspace_id, name, proxy, enabled FROM publish_accounts WHERE profile_id IS NULL")
+        ).fetchall()
+        for acc in rows:
+            pid = new_id()
+            conn.execute(
+                text(
+                    'INSERT INTO browser_profiles (id, workspace_id, name, "partition", proxy, enabled, created_at, updated_at) '
+                    "VALUES (:id, :ws, :name, :part, :proxy, :enabled, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": pid, "ws": acc.workspace_id, "name": acc.name, "part": f"persist:mibu-{acc.id}", "proxy": acc.proxy, "enabled": acc.enabled},
+            )
+            conn.execute(
+                text("UPDATE publish_accounts SET profile_id = :pid WHERE id = :aid"),
+                {"pid": pid, "aid": acc.id},
+            )
+
+
 def init_db() -> None:
     from app.db import models  # noqa: F401
 
@@ -149,7 +193,9 @@ def init_db() -> None:
     _migrate_provider_extra()
     _migrate_provider_capabilities()
     _migrate_job_parent()
+    _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)
+    _backfill_browser_pool()
 
 
 def _migrate_user_profile() -> None:
