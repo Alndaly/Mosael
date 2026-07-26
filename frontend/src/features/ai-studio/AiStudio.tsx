@@ -48,6 +48,7 @@ import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { formatCostMicros } from "@/features/ai-studio/messageUsage";
 import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -1200,6 +1201,13 @@ function GenerationTurn({
     typeof durationSeconds === "number"
       ? t(isRunning ? "usageRunning" : "usageDuration").replace("{t}", formatElapsedSeconds(durationSeconds))
       : "";
+  // 计费:与对话页同一套格式化(见 messageUsage)。有已知费用显示金额;有事件但无定价显示「未定价」。
+  const costLabel =
+    typeof generation.cost_micros === "number" && generation.currency
+      ? t("usageCost").replace("{cost}", formatCostMicros(generation.currency, generation.cost_micros))
+      : generation.cost_confidence === "unknown"
+        ? t("usageCostUnknown")
+        : "";
   return (
     <article className="grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
       <div className="grid justify-items-end gap-1">
@@ -1252,6 +1260,7 @@ function GenerationTurn({
             {generation.provider} · {generation.model}
           </span>
           {durationLabel ? <span>{durationLabel}</span> : null}
+          {costLabel ? <span>{costLabel}</span> : null}
         </small>
       </div>
     </article>

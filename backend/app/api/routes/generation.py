@@ -15,7 +15,7 @@ from app.api.schemas import (
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.ai.providers import get_provider
-from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job
+from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job, ProviderUsageEvent
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.runner import start_generation_thread
@@ -162,7 +162,36 @@ def list_generation_jobs(
     # 按记录自身时间排序,不 join jobs:job 被任务中心清掉后(job_id 置空)
     # 记录仍要出现在会话历史里 —— inner join 会把它们整个吞掉。
     stmt = stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
-    return list(db.scalars(stmt))
+    generations = list(db.scalars(stmt))
+    _attach_generation_costs(db, generations)
+    return generations
+
+
+def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) -> None:
+    """把各生成记录的计费(用量事件 source_type=generation_job)贴到瞬态属性上,供 GenerationJobOut 读。
+    一条生成可能有多个事件(started/succeeded…):已知费用求和;有事件但都无价则计 unknown。"""
+    ids = [g.id for g in generations]
+    if not ids:
+        return
+    events = db.scalars(
+        select(ProviderUsageEvent).where(
+            ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id.in_(ids)
+        )
+    ).all()
+    by_gen: dict[str, list[ProviderUsageEvent]] = {}
+    for ev in events:
+        by_gen.setdefault(ev.source_id, []).append(ev)
+    for gen in generations:
+        evs = by_gen.get(gen.id, [])
+        known = [e for e in evs if e.cost_micros is not None]
+        if known:
+            gen.cost_micros = sum(int(e.cost_micros) for e in known)  # type: ignore[attr-defined]
+            gen.currency = known[0].currency  # type: ignore[attr-defined]
+            gen.cost_confidence = known[0].cost_confidence  # type: ignore[attr-defined]
+        elif evs:
+            gen.cost_micros = None  # type: ignore[attr-defined]
+            gen.currency = evs[0].currency  # type: ignore[attr-defined]
+            gen.cost_confidence = "unknown"  # type: ignore[attr-defined]
 
 
 def _generation_model_out(model: GenerationModel) -> GenerationModelOut:

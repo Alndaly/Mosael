@@ -227,6 +227,33 @@ def test_clearing_finished_jobs_keeps_generation_history() -> None:
     assert listed[0]["job_id"] is None  # job 没了,记录还在
 
 
+def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
+    """生成结果带出计费:有已知费用显金额;有事件但无定价显 unknown;无事件为空。"""
+    from app.domain.usage import record_usage
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        g1 = GenerationJob(workspace_id=ws["id"], provider="alibaba", model="qwen-image", kind="image", request={"prompt": "a"})
+        g2 = GenerationJob(workspace_id=ws["id"], provider="x", model="y", kind="image", request={"prompt": "b"})
+        g3 = GenerationJob(workspace_id=ws["id"], provider="x", model="z", kind="image", request={"prompt": "c"})
+        db.add_all([g1, g2, g3])
+        db.flush()
+        record_usage(db, workspace_id=ws["id"], capability="image", operation="generation_job",
+                     source_type="generation_job", source_id=g1.id, idempotency_key=f"generation:{g1.id}:succeeded",
+                     cost_micros=12345, currency="CNY", cost_confidence="estimated")
+        record_usage(db, workspace_id=ws["id"], capability="image", operation="generation_job",
+                     source_type="generation_job", source_id=g2.id, idempotency_key=f"generation:{g2.id}:succeeded",
+                     cost_micros=None, currency="CNY")
+        db.commit()
+        ids = (g1.id, g2.id, g3.id)
+
+    jobs = {j["id"]: j for j in client.get(f"/api/generation/jobs?workspace_id={ws['id']}").json()}
+    assert jobs[ids[0]]["cost_micros"] == 12345 and jobs[ids[0]]["currency"] == "CNY" and jobs[ids[0]]["cost_confidence"] == "estimated"
+    assert jobs[ids[1]]["cost_micros"] is None and jobs[ids[1]]["cost_confidence"] == "unknown"
+    assert jobs[ids[2]]["cost_micros"] is None and jobs[ids[2]]["cost_confidence"] is None
+
+
 def test_generation_job_detach_migration_rebuilds_old_table() -> None:
     """存量库(job_id NOT NULL + CASCADE)启动时整表重建为 SET NULL,数据原样保留。"""
     from app.core.db import _migrate_generation_job_detach

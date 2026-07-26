@@ -96,7 +96,7 @@ function formatTokenCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
-function formatCostMicros(currency: string, micros: number): string {
+export function formatCostMicros(currency: string, micros: number): string {
   const amount = micros / 1_000_000;
   const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : "";
   const precision = amount > 0 && amount < 0.01 ? 6 : 4;

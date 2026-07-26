@@ -818,6 +818,11 @@ class GenerationJobOut(OrmModel):
     result_asset_id: str | None
     created_at: datetime
     updated_at: datetime
+    # 计费:取自本次生成记录的用量事件(source_type=generation_job)。cost_micros 为已知估算费用;
+    # 有事件但无定价规则时 cost_confidence=unknown、cost_micros 为空(前端显示「未定价」)。
+    cost_micros: int | None = None
+    currency: str | None = None
+    cost_confidence: str | None = None
 
 
 class GenerationCreateResponse(BaseModel):

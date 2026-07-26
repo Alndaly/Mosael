@@ -4399,6 +4399,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Cost Micros */
+            cost_micros?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Cost Confidence */
+            cost_confidence?: string | null;
         };
         /** GenerationModelOut */
         GenerationModelOut: {
