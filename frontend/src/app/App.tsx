@@ -151,7 +151,7 @@ function PublishViewBar() {
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
         </button>
       </div>
-      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none" onSubmit={submit}>
+      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0" onSubmit={submit}>
         {state.loading && <Loader2 size={13} className="flex-none animate-mibu-spin text-muted-foreground" />}
         <Input
           value={address}
