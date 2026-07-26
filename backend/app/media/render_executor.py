@@ -1025,6 +1025,7 @@ def execute_render(
         )
         returncode, stderr_tail, killed = run_once(force_software=True)
     if returncode != 0:
+        logger.error("render: ffmpeg failed (rc=%s):\n%s", returncode, stderr_tail)
         raise RenderExecutionError(
             f"FFmpeg exited with code {returncode}",
             stderr_tail=stderr_tail,

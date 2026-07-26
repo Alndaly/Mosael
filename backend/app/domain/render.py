@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
 
 from sqlalchemy import select
@@ -363,7 +365,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         except RenderExecutionError as exc:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
             # cancellation's own message rather than relabelling it "导出失败".
-            if not finish_job(db, job, status="failed", message="导出失败", error=str(exc)):
+            if not finish_job(db, job, status="failed", message="导出失败", error=_friendly_render_error(exc)):
                 db.commit()
                 unregister_job_child(job_id)
                 return
@@ -376,6 +378,20 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             # process handle — or worse, a recycled one.
             unregister_job_child(job_id)
         db.commit()
+
+
+def _friendly_render_error(exc: RenderExecutionError) -> str:
+    """把 ffmpeg 失败翻成可操作的中文。能从 stderr 认出「某个输入文件打不开」时点名是哪个素材
+    —— 最常见就是录制未完整 / 损坏的 webm(无效 EBML / End of file),让用户知道该换哪段,
+    而不是只看到无意义的「FFmpeg exited with code 187」。认不出就退回原始错误。"""
+    tail = exc.stderr_tail or ""
+    match = re.search(r"Error opening input file (.+)", tail)
+    if match:
+        name = os.path.basename(match.group(1).strip().rstrip(".")) or match.group(1).strip()
+        return f"无法读取素材「{name}」——文件可能损坏或未录制完整,请移除或替换该片段后重试。"
+    if re.search(r"Invalid data found|invalid as first byte of an EBML|moov atom not found|End of file", tail):
+        return "有素材文件损坏或未录制完整,导出中止;请检查时间线上的片段(尤其是录制的 webm)。"
+    return f"导出失败:{exc}"
 
 
 __all__ = ["build_plan_for_sequence", "start_export", "RenderPlanError"]

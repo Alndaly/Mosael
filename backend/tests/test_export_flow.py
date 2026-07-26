@@ -130,3 +130,25 @@ def test_export_empty_sequence_rejected() -> None:
     ).json()
     res = client.post(f"/api/sequences/{sequence['id']}/export")
     assert res.status_code == 422
+
+
+def test_friendly_render_error_names_corrupt_input() -> None:
+    """导出失败时把 ffmpeg「打不开输入文件」翻成点名素材的中文(修复 code 187 无信息问题)。"""
+    from app.domain.render import _friendly_render_error
+    from app.media.render_executor import RenderExecutionError
+
+    tail = (
+        "[in#4] 0x00 at pos 36 invalid as first byte of an EBML number\n"
+        "Error opening input file /Users/x/.mibu-cut/media/assets/w/a/摄像头-1784712022145.webm.\n"
+        "Error opening input files: End of file\n"
+    )
+    msg = _friendly_render_error(RenderExecutionError("FFmpeg exited with code 187", stderr_tail=tail))
+    assert "摄像头-1784712022145.webm" in msg and "损坏或未录制完整" in msg
+
+    # 认不出具体文件但有损坏迹象 → 泛化提示
+    msg2 = _friendly_render_error(RenderExecutionError("FFmpeg exited with code 1", stderr_tail="moov atom not found"))
+    assert "损坏或未录制完整" in msg2
+
+    # 完全认不出 → 退回原始错误
+    msg3 = _friendly_render_error(RenderExecutionError("FFmpeg exited with code 8", stderr_tail="weird"))
+    assert "code 8" in msg3
