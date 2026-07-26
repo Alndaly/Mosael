@@ -15,7 +15,7 @@ from app.domain.assets import import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
-from app.media.proxy import proxy_path, start_proxy_job
+from app.media.proxy import export_proxy_path, proxy_path, start_proxy_job
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
@@ -223,6 +223,18 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
     proxy = proxy_path(resolve_key(asset.file_key).parent)
     if not proxy.is_file():
         raise HTTPException(status_code=404, detail="Proxy not available")
+    return FileResponse(proxy, media_type="video/mp4")
+
+
+@router.get("/assets/{asset_id}/export-proxy")
+def get_asset_export_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """The full-resolution short-GOP proxy the offline export compositor decodes (see media/proxy.py).
+    Built on demand by the export orchestrator; 404 until then — callers ensure it first."""
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
+    proxy = export_proxy_path(resolve_key(asset.file_key).parent)
+    if not proxy.is_file():
+        raise HTTPException(status_code=404, detail="Export proxy not available")
     return FileResponse(proxy, media_type="video/mp4")
 
 

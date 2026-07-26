@@ -311,6 +311,13 @@ export function assetProxyUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/proxy${suffix}`;
 }
 
+/** The full-resolution short-GOP proxy the offline EXPORT compositor decodes. Built on demand by the
+    export orchestrator (media_info.export_proxy_status === "ready"); 404 until then. */
+export function assetExportProxyUrl(assetId: string): string {
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/assets/${assetId}/export-proxy${suffix}`;
+}
+
 export interface WaveformData {
   version: number;
   duration: number;

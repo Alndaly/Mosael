@@ -1,10 +1,17 @@
-"""Preview proxies for the WebCodecs compositor.
+"""Proxies for the WebCodecs compositor.
 
 On video import we transcode a lightweight 720p H.264 proxy with a fixed short
 GOP + faststart. The browser compositor decodes THIS (guaranteed-decodable
 avc/mp4, cheap to seek) instead of the original, whose codec/container could be
-anything; export still uses the original. Best-effort — a failed proxy just
-means that clip falls back to the `<video>` element path in the preview.
+anything. Best-effort — a failed proxy just means that clip falls back to the
+`<video>` element path in the preview.
+
+The same pipeline, minus the height cap and at a near-lossless CRF, produces the
+**export proxy**: a full-resolution short-GOP variant the offline export
+compositor decodes so a single canvas renderer drives both preview and export
+(see docs/superpowers/specs/2026-07-27-preview-export-parity-design.md, 路 C).
+Built on demand at export time and cache-reused; it is an intermediate that the
+final encode re-compresses, hence the low CRF to keep generational loss negligible.
 """
 
 from __future__ import annotations
@@ -26,6 +33,11 @@ PROXY_NAME = "proxy.mp4"
 # Height cap for the proxy. The compositor decodes this, not the original, so a
 # 720p ceiling keeps decode cheap while staying crisp on typical preview panes.
 PROXY_HEIGHT = 720
+# Full-resolution export proxy (路 C): same short-GOP/no-B-frame recipe, native resolution, and a
+# near-visually-lossless CRF because the final export pass re-encodes it — the extra generation must
+# not show. Sibling to the asset like the preview proxy; larger, but temporary and cache-reused.
+EXPORT_PROXY_NAME = "export-proxy.mp4"
+EXPORT_PROXY_CRF = 16
 # Bound concurrent ffmpeg transcodes (a startup backfill can queue one job per video at once).
 _TRANSCODE_SLOTS = threading.Semaphore(2)
 
@@ -44,29 +56,58 @@ def proxy_status(asset: Asset) -> str:
     return str((asset.media_info or {}).get("proxy_status") or "none")
 
 
-def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
-    """Reassign media_info (a plain JSON column) so SQLAlchemy tracks the change."""
+def export_proxy_path(asset_directory: Path) -> Path:
+    return asset_directory / EXPORT_PROXY_NAME
+
+
+def export_proxy_key_for(asset: Asset) -> str:
+    """Storage key of the export proxy sibling to the asset's own file."""
+    return str(Path(asset.file_key).parent / EXPORT_PROXY_NAME)
+
+
+def export_proxy_status(asset: Asset) -> str:
+    """ready | failed | none — the full-resolution export proxy's build state."""
+    return str((asset.media_info or {}).get("export_proxy_status") or "none")
+
+
+def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None, prefix: str = "proxy") -> None:
+    """Reassign media_info (a plain JSON column) so SQLAlchemy tracks the change.
+
+    `prefix` selects which proxy's flags to write: "proxy" for the preview proxy,
+    "export_proxy" for the full-resolution export one — they cache independently.
+    """
     asset = db.get(Asset, asset_id)
     if asset is None:
         return
     info = dict(asset.media_info or {})
-    info["proxy_status"] = status
+    info[f"{prefix}_status"] = status
     if key is not None:
-        info["proxy_key"] = key
+        info[f"{prefix}_key"] = key
     elif status != "ready":
-        info.pop("proxy_key", None)
+        info.pop(f"{prefix}_key", None)
     asset.media_info = info
     db.commit()
 
 
-def build_proxy(source: Path, target: Path) -> bool:
-    """Transcode a 720p H.264 short-GOP faststart proxy. Returns success."""
+def build_proxy(source: Path, target: Path, *, max_height: int | None = PROXY_HEIGHT, crf: int = 23) -> bool:
+    """Transcode an H.264 short-GOP faststart proxy. Returns success.
+
+    `max_height` caps height (never upscaling) for the preview proxy; pass None to keep native
+    resolution (the export proxy), still forcing even dimensions for yuv420p. `crf` trades size
+    for quality — 23 for preview, lower for the near-lossless export intermediate.
+    """
+    # Cap height (even width via -2) for preview; for the export proxy keep native size but round
+    # each dimension down to even, which yuv420p requires. Same size in → essentially no resample.
+    scale = (
+        f"scale=-2:'min({max_height},ih)'"
+        if max_height is not None
+        else "scale='trunc(iw/2)*2':'trunc(ih/2)*2'"
+    )
     args = [
         settings.ffmpeg, "-y", "-v", "error",
         "-i", str(source),
-        # Cap height at 720 (never upscale), keep aspect, force even dimensions.
-        "-vf", f"scale=-2:'min({PROXY_HEIGHT},ih)'",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-vf", scale,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf),
         # Fixed 30-frame GOP (a keyframe every 30 frames, no scene-cut keyframes)
         # → the compositor can seek to a nearby sync sample cheaply.
         "-g", "30", "-keyint_min", "30", "-sc_threshold", "0",
@@ -83,6 +124,11 @@ def build_proxy(source: Path, target: Path) -> bool:
         target.unlink(missing_ok=True)
         return False
     return target.is_file()
+
+
+def build_export_proxy(source: Path, target: Path) -> bool:
+    """Full-resolution, near-lossless short-GOP proxy for deterministic offline export compositing."""
+    return build_proxy(source, target, max_height=None, crf=EXPORT_PROXY_CRF)
 
 
 def start_proxy_job(db: Session, asset: Asset, *, force: bool = False) -> Job | None:
@@ -194,12 +240,43 @@ def reconcile_missing_proxies(db: Session) -> int:
     return queued
 
 
+def ensure_export_proxy(db: Session, asset: Asset) -> Path | None:
+    """Build (once, cached) the full-resolution export proxy for a video asset; return its path.
+
+    Synchronous and idempotent — the export orchestrator calls it before offline rendering, and a
+    file already on disk short-circuits (repairing the media_info flag if a restart lost it). Holds
+    a transcode slot only for the actual build. Returns None for non-file-backed non-videos or when
+    the transcode fails (the caller then falls back to the ffmpeg render_plan path).
+    """
+    if asset.kind != "video" or not asset.file_key:
+        return None
+    source = resolve_key(asset.file_key)
+    target = export_proxy_path(source.parent)
+    if target.is_file():
+        if export_proxy_status(asset) != "ready":
+            _set_proxy_meta(db, asset.id, "ready", key=export_proxy_key_for(asset), prefix="export_proxy")
+        return target
+    with _TRANSCODE_SLOTS:
+        ok = build_export_proxy(source, target)
+    if ok:
+        _set_proxy_meta(db, asset.id, "ready", key=export_proxy_key_for(asset), prefix="export_proxy")
+        return target
+    _set_proxy_meta(db, asset.id, "failed", prefix="export_proxy")
+    return None
+
+
 __all__ = [
     "PROXY_NAME",
+    "EXPORT_PROXY_NAME",
     "build_proxy",
+    "build_export_proxy",
     "proxy_path",
     "proxy_key_for",
     "proxy_status",
+    "export_proxy_path",
+    "export_proxy_key_for",
+    "export_proxy_status",
+    "ensure_export_proxy",
     "start_proxy_job",
     "reconcile_missing_proxies",
 ]

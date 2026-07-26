@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Job
+from app.db.models import Asset, Job
 from app.media import proxy as proxymod
 from app.media.probe import probe_media
 from tests.util import fresh_client
@@ -65,6 +65,54 @@ def test_build_proxy_never_upscales(tmp_path: Path) -> None:
     target = tmp_path / "proxy.mp4"
     assert proxymod.build_proxy(src, target) is True
     assert probe_media(target)["height"] == 360  # min(720, 360) = 360
+
+
+def test_build_export_proxy_keeps_native_resolution(tmp_path: Path) -> None:
+    src = tmp_path / "src.mp4"
+    make_video(src, 1920, 1080)
+    target = tmp_path / "export-proxy.mp4"
+    assert proxymod.build_export_proxy(src, target) is True
+    info = probe_media(target)
+    # Full resolution preserved — NOT capped to 720 like the preview proxy.
+    assert info["width"] == 1920
+    assert info["height"] == 1080
+
+
+def test_ensure_export_proxy_builds_serves_and_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "generate_proxies", True)
+    monkeypatch.setattr(proxymod.threading, "Thread", _FakeThread)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    src = tmp_path / "v.mp4"
+    make_video(src, 640, 360)
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"]},
+        files={"file": ("v.mp4", src.read_bytes(), "video/mp4")},
+    ).json()
+
+    # No export proxy until the orchestrator builds one — endpoint 404s.
+    assert client.get(f"/api/assets/{asset['id']}/export-proxy").status_code == 404
+
+    with SessionLocal() as db:
+        path = proxymod.ensure_export_proxy(db, db.get(Asset, asset["id"]))
+        assert path is not None and path.is_file()
+        assert proxymod.export_proxy_status(db.get(Asset, asset["id"])) == "ready"
+
+    # Now served; distinct from the preview proxy (still absent — proxy job never ran here).
+    res = client.get(f"/api/assets/{asset['id']}/export-proxy")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "video/mp4"
+    assert client.get(f"/api/assets/{asset['id']}/proxy").status_code == 404
+
+    # Cache hit: a second ensure short-circuits to the file on disk, never re-transcoding.
+    def _no_rebuild(*_a: object, **_k: object) -> bool:
+        raise AssertionError("cached export proxy must not be rebuilt")
+
+    monkeypatch.setattr(proxymod, "build_export_proxy", _no_rebuild)
+    with SessionLocal() as db:
+        again = proxymod.ensure_export_proxy(db, db.get(Asset, asset["id"]))
+        assert again is not None and again.is_file()
 
 
 def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
