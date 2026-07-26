@@ -46,15 +46,26 @@ def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float |
 
 @register("browser_open")
 def browser_open(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    mode = "named" if str(config.get("session_mode") or "ephemeral") == "named" else "ephemeral"
-    session = browser.open_session(
-        db,
-        workspace_id=workflow.workspace_id,
-        kind=mode,
-        name=str(config.get("session_name") or ""),
-        owner_kind="workflow",
-        owner_id=workflow.id,
-    )
+    mode = str(config.get("session_mode") or "ephemeral")
+    try:
+        if mode == "pool":
+            profile_id = str(config.get("profile_id") or "").strip()
+            if not profile_id:
+                raise WorkflowDomainError("请选择浏览器池档案(session_mode=pool)")
+            session = browser.open_session(
+                db, workspace_id=workflow.workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=workflow.id
+            )
+        else:
+            session = browser.open_session(
+                db,
+                workspace_id=workflow.workspace_id,
+                kind="named" if mode == "named" else "ephemeral",
+                name=str(config.get("session_name") or ""),
+                owner_kind="workflow",
+                owner_id=workflow.id,
+            )
+    except browser.BrowserDomainError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
     url = str(config.get("url") or "").strip()
     if url:
         _run(session.id, "navigate", {"url": url})

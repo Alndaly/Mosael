@@ -349,11 +349,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     "browser_open": {
         "label": "打开浏览器",
         "category": "浏览器",
-        "description": "新建一个隔离浏览器会话并可选导航到网址,输出 session 供后续浏览器节点使用。默认临时会话(跑完即清);具名持久会话保留登录。与发布登录物理隔离。",
+        "description": "新建一个浏览器会话并可选导航到网址,输出 session 供后续浏览器节点使用。ephemeral=临时(跑完即清);named=具名持久(保留登录);pool=复用「浏览器池」里某个已登录档案(受租约:一档案一时刻一会话)。",
         "config": {
             "url": {"type": "template", "description": "打开后导航到的网址(可留空,之后用「导航」节点)"},
-            "session_mode": {"type": "string", "options": ["ephemeral", "named"], "description": "ephemeral=临时;named=具名持久(保留 cookie/登录)"},
+            "session_mode": {"type": "string", "options": ["ephemeral", "named", "pool"], "description": "ephemeral=临时;named=具名持久;pool=复用浏览器池档案(已登录身份)"},
             "session_name": {"type": "string", "description": "具名会话名称(session_mode=named 时必填)"},
+            "profile_id": {"type": "string", "description": "浏览器池档案(session_mode=pool 时必填),复用其登录态"},
         },
         "outputs": ["session"],
     },

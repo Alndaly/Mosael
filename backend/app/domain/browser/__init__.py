@@ -55,12 +55,15 @@ def _partition_for(session: BrowserSession) -> str:
 # ---------- 浏览器池:档案(持久身份)CRUD ----------
 
 
-def create_profile(db: Session, *, workspace_id: str, name: str, proxy: str | None = None) -> BrowserProfile:
-    """新建一个通用池档案。分区 persist:pool-<id>(依赖 id,flush 后再算)。"""
+def create_profile(
+    db: Session, *, workspace_id: str, name: str, proxy: str | None = None, partition: str | None = None
+) -> BrowserProfile:
+    """新建一个池档案。默认通用档案分区 persist:pool-<id>;发布账号建档时传 partition=
+    persist:mibu-<accountId> 沿用其既有登录分区(见 publish.create_account,登录态不丢)。"""
     prof = BrowserProfile(workspace_id=workspace_id, name=(name or "").strip()[:160], proxy=(proxy or None), enabled=True)
     db.add(prof)
     db.flush()
-    prof.partition = f"persist:pool-{prof.id}"
+    prof.partition = partition or f"persist:pool-{prof.id}"
     db.commit()
     db.refresh(prof)
     return prof

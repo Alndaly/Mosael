@@ -9,9 +9,11 @@ from __future__ import annotations
 import pytest
 
 from app.core.db import SessionLocal, _backfill_browser_pool
-from app.db.models import BrowserProfile, PublishAccount
+from app.db.models import BrowserProfile, BrowserSession, PublishAccount, Workflow
 from app.domain import browser
 from app.domain.publish import create_account
+from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows.executors import get_executor
 from tests.util import fresh_client
 
 
@@ -46,27 +48,38 @@ def test_profile_crud_api() -> None:
     assert client.get(f"/api/browser/profiles?workspace_id={ws}").json() == []
 
 
-def test_backfill_migrates_publish_account_preserving_partition() -> None:
+def test_new_publish_account_gets_pool_profile() -> None:
+    """新建发布账号即建档挂靠:分区 persist:mibu-<id>,pool 页标注平台/账号。"""
     client = fresh_client()
     ws = _ws(client)
     with SessionLocal() as db:
         acc = create_account(db, workspace_id=ws, platform="bilibili", name="B站主号", config={})
         acc_id = acc.id
-        assert acc.profile_id is None  # 本阶段新账号还没自动挂档案(step2 再接)
+        assert acc.profile_id is not None
+        prof = db.get(BrowserProfile, acc.profile_id)
+        assert prof.partition == f"persist:mibu-{acc_id}" and prof.name == "B站主号"
+    pool = client.get(f"/api/browser/profiles?workspace_id={ws}").json()
+    assert len(pool) == 1 and pool[0]["platform"] == "bilibili" and pool[0]["bound_account_id"] == acc_id
+
+
+def test_backfill_relinks_legacy_account_preserving_partition() -> None:
+    """老库里的发布账号(profile_id 为空)由回填补档,分区沿用 persist:mibu-<id> —— 登录不丢、幂等。"""
+    client = fresh_client()
+    ws = _ws(client)
+    with SessionLocal() as db:
+        acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="老号", config={}).id
+        # 模拟老库:清掉自动建的档案与指针,回到「有账号、无档案」的历史态
+        acc = db.get(PublishAccount, acc_id)
+        db.delete(db.get(BrowserProfile, acc.profile_id))
+        acc.profile_id = None
+        db.commit()
 
     _backfill_browser_pool()
 
     with SessionLocal() as db:
         acc = db.get(PublishAccount, acc_id)
         assert acc.profile_id is not None
-        prof = db.get(BrowserProfile, acc.profile_id)
-        assert prof is not None
-        # 最要命的不变量:分区沿用 persist:mibu-<accountId>,Electron 打开同一分区,发布登录不丢
-        assert prof.partition == f"persist:mibu-{acc_id}"
-        assert prof.name == "B站主号"
-        # pool 列表把它标注成发布账号
-        pool = client.get(f"/api/browser/profiles?workspace_id={ws}").json()
-        assert len(pool) == 1 and pool[0]["platform"] == "bilibili" and pool[0]["bound_account_id"] == acc_id
+        assert db.get(BrowserProfile, acc.profile_id).partition == f"persist:mibu-{acc_id}"
 
     _backfill_browser_pool()  # 幂等:再跑不重复建档
     with SessionLocal() as db:
@@ -87,6 +100,26 @@ def test_profile_lease_one_active_session() -> None:
     with SessionLocal() as db:  # 异 owner → 占用中(租约)
         with pytest.raises(browser.BrowserDomainError):
             browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="B")
+
+
+def test_workflow_browser_open_pool_mode() -> None:
+    """工作流 browser_open 的 pool 模式:在池档案分区上开会话,owner=workflow;缺档案报错。"""
+    client = fresh_client()
+    ws = _ws(client)
+    with SessionLocal() as db:
+        pid = browser.create_profile(db, workspace_id=ws, name="流程用池号").id
+        wf_id = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}).id
+    with SessionLocal() as db:
+        wf = db.get(Workflow, wf_id)
+        out = get_executor("browser_open")(db, wf, {"session_mode": "pool", "profile_id": pid})
+        sess = db.get(BrowserSession, out["session"])
+        assert sess.kind == "profile" and sess.profile_id == pid
+        assert sess.owner_kind == "workflow" and sess.owner_id == wf_id
+        assert sess.partition.startswith("persist:pool-")
+    with SessionLocal() as db:
+        wf = db.get(Workflow, wf_id)
+        with pytest.raises(WorkflowDomainError):
+            get_executor("browser_open")(db, wf, {"session_mode": "pool"})  # 缺 profile_id
 
 
 def test_cannot_delete_bound_or_busy_profile() -> None:

@@ -131,6 +131,16 @@ def create_account(
     db.add(account)
     db.commit()
     db.refresh(account)
+    # 发布账号即浏览器池档案(组合):按其登录分区 persist:mibu-<id> 建档并回填,pool 页统一可见,
+    # 工作流/智能体可复用其登录。浏览器域负责建档,发布域只写指针(见 domain/browser)。
+    from app.domain import browser
+
+    profile = browser.create_profile(
+        db, workspace_id=workspace_id, name=name, proxy=account.proxy, partition=f"persist:mibu-{account.id}"
+    )
+    account.profile_id = profile.id
+    db.commit()
+    db.refresh(account)
     return account
 
 
