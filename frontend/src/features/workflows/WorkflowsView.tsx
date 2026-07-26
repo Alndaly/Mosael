@@ -7,6 +7,7 @@ import {
   Handle,
   MarkerType,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   applyEdgeChanges,
@@ -123,6 +124,7 @@ import {
   type DataType,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+import { collapseToSubgraph } from "@/features/workflows/collapse";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -807,6 +809,30 @@ function WorkflowEditor({
     [registry],
   );
 
+  // 框选 → 折叠为子图(ComfyUI 式):把选中节点收进一个 subgraph 节点,进出边界的引用/数据边自动重写。
+  const handleCollapse = React.useCallback(
+    (ids: string[]) => {
+      const res = collapseToSubgraph(graph, ids);
+      if (!res.ok) {
+        const description =
+          res.reason === "start"
+            ? t("wfCollapseErrStart")
+            : res.reason === "not-convex"
+              ? t("wfCollapseErrNotConvex")
+              : res.reason === "condition-branch"
+                ? t("wfCollapseErrCondition")
+                : t("wfCollapseErrEmpty");
+        toast.error(t("wfCollapseFailed"), { description });
+        return;
+      }
+      applyGraph(res.graph);
+      setSelectedNodeId(res.subgraphId);
+      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === res.subgraphId })));
+      toast.success(t("wfCollapseDone"));
+    },
+    [graph, applyGraph, t],
+  );
+
   // 节点剪贴板(应用内,按 workflow 编辑器实例存活)。存被选中的节点 + 其内部边,
   // 粘贴时整体换新 id、内部连线原样重连、位置向右下错开。
   const clipboardRef = React.useRef<{ nodes: WorkflowGraph["nodes"]; edges: WorkflowGraph["edges"] }>({
@@ -1132,6 +1158,8 @@ function WorkflowEditor({
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
+  const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
 
   // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
   // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
@@ -1417,6 +1445,18 @@ function WorkflowEditor({
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
+            {selectedFlowIds.length >= 2 && (
+              <Panel position="top-center">
+                <button
+                  type="button"
+                  onClick={() => handleCollapse(selectedFlowIds)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                  title={t("wfCollapseHint")}
+                >
+                  <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
+                </button>
+              </Panel>
+            )}
             <Background gap={20} size={1.2} />
             {/* 缩放钮/预览图不吃应用主题(xyflow 默认一律白底),把 --xy-* 变量
                 映射到设计令牌,昼夜两版都跟着色板走;投影按全局规范去掉。 */}
