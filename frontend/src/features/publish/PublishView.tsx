@@ -1,38 +1,32 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bug, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Globe, Loader2, LogIn, Plus, RefreshCcw, Rocket, Settings2, Sparkles, Trash2, Users } from "lucide-react";
+import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, Plus, Rocket, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { usePersistentTab } from "@/lib/usePersistentTab";
 
 import {
   api,
   createPublishAccount,
   createPublishTask,
-  deletePublishAccount,
   deletePublishTask,
   generatePublishCopy,
   listPublishAccounts,
   listPublishPlatforms,
   listPublishTasks,
-  patchPublishAccount,
-  recheckPublishAccount,
   type Asset,
   type PublishAccount,
   type PublishPlatform,
   type PublishTask,
   type Workspace,
 } from "@/api/client";
-import { useI18n, usePreferences } from "@/app/preferences";
+import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -45,7 +39,6 @@ const BLOCKED = new Set(["login_required", "waiting_manual", "permission_require
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [tab, setTab] = usePersistentTab<"records" | "accounts">("publish", "records", ["records", "accounts"]);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   // 任务中心深链(mibu:open-* 事件通道):直接选中那条发布记录。
@@ -54,7 +47,6 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       const id = (event as CustomEvent<string>).detail;
       if (typeof id === "string" && id) {
         setSelectedId(id);
-        setTab("records");
       }
     };
     window.addEventListener("mibu:open-publish-task", onOpenTask);
@@ -101,7 +93,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         }}
         onManageAccounts={() => {
           setCreating(false);
-          setTab("accounts");
+          setManagingAccounts(true);
         }}
       />
       <AddAccountDialog open={managingAccounts} workspace={workspace} onClose={() => setManagingAccounts(false)} />
@@ -115,49 +107,22 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     </>
   );
 
+  // 账号矩阵已抽离到「浏览器池」tab;发布页只留记录 + 添加发布账号(添加后即入池)。
   const seg = (
     <div className="flex items-center justify-between">
-      <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
-        <button
-          type="button"
-          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "records" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-          onClick={() => setTab("records")}
-        >
-          <Rocket size={13} /> {t("publishTabRecords")}
-        </button>
-        <button
-          type="button"
-          className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "accounts" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-          onClick={() => setTab("accounts")}
-        >
-          <Users size={13} /> {t("publishTabAccounts")}
-        </button>
-      </div>
-      {tab === "records" ? (
+      <h2 className="m-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+        <Rocket size={13} /> {t("publishTabRecords")}
+      </h2>
+      <div className="flex items-center gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => setManagingAccounts(true)}>
+          <Users size={13} /> {t("publishAccountAdd")}
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
           <Plus size={13} /> {t("publishCreate")}
         </Button>
-      ) : (
-        <Button variant="outline" size="sm" onClick={() => setManagingAccounts(true)}>
-          <Plus size={13} /> {t("publishAccountAdd")}
-        </Button>
-      )}
+      </div>
     </div>
   );
-
-  if (tab === "accounts") {
-    return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
-        <div className="flex h-full min-h-0 flex-col gap-1.5">
-          {seg}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <AccountsPanel workspace={workspace} onAdd={() => setManagingAccounts(true)} />
-          </div>
-        </div>
-        {dialogs}
-      </div>
-    );
-  }
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
@@ -176,8 +141,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                   <Button onClick={() => setCreating(true)}>
                     <Plus size={15} /> {t("publishCreate")}
                   </Button>
-                  <Button variant="outline" onClick={() => setTab("accounts")}>
-                    <Settings2 size={15} /> {t("publishTabAccounts")}
+                  <Button variant="outline" onClick={() => setManagingAccounts(true)}>
+                    <Users size={15} /> {t("publishAccountAdd")}
                   </Button>
                 </div>
               }
@@ -238,249 +203,6 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       </div>
       {dialogs}
     </div>
-  );
-}
-
-/** 账号矩阵:多平台账号卡片墙。登录态、上次检测、启停、复检一屏看全。 */
-function AccountsPanel({ workspace, onAdd }: { workspace: Workspace; onAdd: () => void }) {
-  const t = useI18n();
-  const { locale } = usePreferences();
-  const qc = useQueryClient();
-  const [renaming, setRenaming] = React.useState<PublishAccount | null>(null);
-  const [removing, setRemoving] = React.useState<PublishAccount | null>(null);
-  const [proxyEditing, setProxyEditing] = React.useState<PublishAccount | null>(null);
-
-  const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, staleTime: Infinity });
-  const accounts = useQuery({
-    queryKey: ["publish-accounts", workspace.id],
-    queryFn: () => listPublishAccounts(workspace.id),
-    // 复检/登录在后台改登录态,轮询把徽标拉回真实状态。自适应:有账号在过渡态
-    // (checking/unknown,马上会翻)时 3s 快轮询尽快抓到翻转,全都稳定后降到 20s。
-    refetchInterval: (query) => {
-      const data = (query.state.data ?? []) as PublishAccount[];
-      const transitioning = data.some((a) => a.binding_status === "checking" || a.binding_status === "unknown");
-      return transitioning ? 3000 : 20000;
-    },
-    refetchOnWindowFocus: true,
-  });
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-accounts", workspace.id] });
-
-  const patch = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean; proxy?: string | null } }) =>
-      patchPublishAccount(id, body),
-    onSuccess: () => {
-      refresh();
-    },
-    // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
-    // open with its confirm button re-enabled, so repeated clicks fired repeated
-    // requests. The global fallback still reports the error.
-    onSettled: () => {
-      setRenaming(null);
-    },
-  });
-  const recheck = useMutation({
-    mutationFn: (id: string) => recheckPublishAccount(id),
-    onSuccess: () => {
-      toast.success(t("publishRecheckQueued"));
-      refresh();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => deletePublishAccount(id),
-    onSuccess: () => {
-      setRemoving(null);
-      refresh();
-    },
-  });
-
-  const items = accounts.data ?? [];
-  if (accounts.isSuccess && items.length === 0) {
-    return (
-      <div className="grid min-h-full place-items-center">
-        <EmptyState
-          icon={<Users size={22} />}
-          title={t("publishNoAccountsTitle")}
-          body={t("publishNoAccountsBody")}
-          action={
-            <Button onClick={onAdd}>
-              <Plus size={15} /> {t("publishAccountAdd")}
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-      {items.map((account) => {
-        const meta = (platforms.data ?? []).find((p) => p.platform === account.platform);
-        const isBrowser = meta?.executor === "browser";
-        return (
-          <ContextMenu key={account.id}>
-            <ContextMenuTrigger asChild>
-              <div className={cn("min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-h-32 flex-col gap-[3px] rounded-lg p-2.5", !account.enabled && "opacity-55")}>
-                <div className="flex items-center gap-1.5">
-                  <span className="mr-auto text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">{meta?.label ?? account.platform}</span>
-                  {isBrowser && account.proxy && (
-                    <em className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-[10px] not-italic text-primary" title={account.proxy}>
-                      <Globe size={10} /> {t("publishProxyOn")}
-                    </em>
-                  )}
-                  {isBrowser ? (
-                    <em
-                      className={cn(
-                        "ml-0 rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground",
-                        account.binding_status === "bound" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
-                        ["login_required", "manual_required", "permission_required"].includes(account.binding_status) &&
-                          "bg-[color-mix(in_srgb,#d97706_12%,transparent)] text-[#d97706]",
-                      )}
-                    >
-                      {t(`binding_${account.binding_status}` as never)}
-                    </em>
-                  ) : (
-                    <em className="ml-0 rounded-full bg-[color-mix(in_srgb,#16a34a_12%,transparent)] px-1.5 text-[10px] not-italic text-[#16a34a]">{t("publishLocalExecutor")}</em>
-                  )}
-                </div>
-                <strong className="truncate text-[13px]">{account.name}</strong>
-                <small className="text-[11px] text-muted-foreground">
-                  {isBrowser
-                    ? `${account.profile_name ? `${account.profile_name} · ` : ""}${
-                        account.last_checked_at
-                          ? t("publishLastChecked").replace("{t}", relativeTime(account.last_checked_at, locale))
-                          : t("publishNeverChecked")
-                      }`
-                    : t("publishLocalHint")}
-                </small>
-                {/* 状态行恒占位:有错误显示错误,否则空占位,保证同排卡片行数一致。 */}
-                <small className={cn("truncate text-[11px] text-destructive", !account.last_error && "invisible")}>
-                  {account.last_error ?? " "}
-                </small>
-                <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
-                  {isBrowser && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
-                      disabled={!window.mibuPublish}
-                      onClick={() => {
-                        window.mibuPublish
-                          ?.login(account.id, account.platform)
-                          .then(() => toast.success(t("publishLoginOpened")))
-                          .catch((error: Error) => toast.error(error.message));
-                      }}
-                    >
-                      <LogIn size={13} /> {t("publishLogin")}
-                    </Button>
-                  )}
-                  {isBrowser && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={recheck.isPending}
-                      onClick={() => recheck.mutate(account.id)}
-                    >
-                      <RefreshCcw size={13} /> {t("publishRecheck")}
-                    </Button>
-                  )}
-                  <span className="flex-1" />
-                  <Switch
-                    checked={account.enabled}
-                    onCheckedChange={(next) => patch.mutate({ id: account.id, body: { enabled: next } })}
-                    aria-label={t("publishAccountEnabled")}
-                  />
-                </div>
-              </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onSelect={() => setRenaming(account)}>{t("rename")}</ContextMenuItem>
-              {isBrowser && (
-                <ContextMenuItem onSelect={() => setProxyEditing(account)}>
-                  <Globe /> {t("publishProxySet")}
-                </ContextMenuItem>
-              )}
-              {isBrowser && window.mibuPublish && (
-                <ContextMenuItem
-                  onSelect={() => {
-                    window.mibuPublish
-                      ?.inspect(account.id, account.platform)
-                      .then((ok) => (ok ? undefined : toast.error(t("publishInspectFailed"))))
-                      .catch((error: Error) => toast.error(error.message));
-                  }}
-                >
-                  <Bug /> {t("publishInspect")}
-                </ContextMenuItem>
-              )}
-              <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(account)}>
-                <Trash2 /> {t("delete")}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        );
-      })}
-      <RenameDialog
-        open={renaming !== null}
-        title={t("rename")}
-        initialValue={renaming?.name ?? ""}
-        onCancel={() => setRenaming(null)}
-        onSubmit={(value) => renaming && patch.mutate({ id: renaming.id, body: { name: value } })}
-      />
-      <ConfirmDialog
-        open={removing !== null}
-        title={t("deleteConfirmTitle")}
-        body={t("publishAccountDeleteBody")}
-        onCancel={() => setRemoving(null)}
-        onConfirm={() => removing && remove.mutate(removing.id)}
-      />
-      <ProxyDialog
-        account={proxyEditing}
-        onClose={() => setProxyEditing(null)}
-        onSave={(value) => {
-          if (proxyEditing) patch.mutate({ id: proxyEditing.id, body: { proxy: value } });
-          setProxyEditing(null);
-        }}
-      />
-    </div>
-  );
-}
-
-/** 设置某账号的代理(空 = 清除走直连)。下次打开该账号视图时生效。 */
-function ProxyDialog({
-  account,
-  onClose,
-  onSave,
-}: {
-  account: PublishAccount | null;
-  onClose: () => void;
-  onSave: (proxy: string) => void;
-}) {
-  const t = useI18n();
-  const [value, setValue] = React.useState("");
-  React.useEffect(() => {
-    setValue(account?.proxy ?? "");
-  }, [account]);
-  return (
-    <ModalShell open={account !== null} onOpenChange={(next) => !next && onClose()} title={t("publishProxySet")}>
-      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-          <span>{t("publishProxy")}</span>
-          <Input
-            autoFocus
-            value={value}
-            placeholder="http://user:pass@host:port"
-            spellCheck={false}
-            onChange={(event) => setValue(event.target.value)}
-          />
-          <small>{t("publishProxyHint")}</small>
-        </label>
-        <div className="mt-1 flex justify-end gap-1.5">
-          <Button variant="ghost" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button onClick={() => onSave(value.trim())}>{t("save")}</Button>
-        </div>
-      </div>
-    </ModalShell>
   );
 }
 
