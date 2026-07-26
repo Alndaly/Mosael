@@ -3,6 +3,7 @@ import { resolvePlatform } from "./platforms";
 import type { PageDriver } from "./pageDriver";
 import { AutomationBlockedError } from "./errors";
 import { SELECTORS } from "./selectors";
+import { plog } from "./log";
 
 export interface PublishAdapter {
   openCreatorPage(): Promise<void>;
@@ -691,17 +692,34 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
-    const donePattern = this.s.publishDoneTexts.join("|");
-    const ok =
-      (await this.driver.waitForUrl(this.s.isManageUrl, RESULT_TIMEOUT)) ||
-      (await this.driver.waitForFunction(
-        `new RegExp(${JSON.stringify(donePattern)}).test(document.body?.innerText || '')`,
-        RESULT_TIMEOUT,
-        1_000,
-      ));
-    if (!ok) {
-      throw new Error("Bilibili did not confirm publish (no success text or manager redirect).");
-    }
+    // B 站投稿成功**不跳转 URL**:原地把编辑页替换成成功页(「稿件投递成功 / 查看进度 / 再投一个」)。
+    // 旧实现先 waitForUrl(稿件管理页) 干等满 RESULT_TIMEOUT 再看文本——URL 永远不变,于是每次成功都要
+    // 白卡约 2 分钟,慢一点还会误报「未确认发布」。改为单循环并发判断:成功页文案(强信号)/ 老流程
+    // 跳转(兜底)/ 明确失败提示 任一出现即结束。提交处理可达 ~2 分钟,给足 5 分钟余量。
+    const RESULT_WAIT = 5 * 60 * 1000;
+    const settled = await this.driver.waitForFunction(
+      `(() => {
+        const t = (document.body && document.body.innerText) || '';
+        return /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t)
+          || /upload-manager|content-manager|article/.test(location.href)
+          || /投稿失败|提交失败|发布失败|标题重复/.test(t);
+      })()`,
+      RESULT_WAIT,
+      1_000,
+    );
+    const state = await this.driver.evaluate<{ ok: boolean; fail: string | null; url: string }>(
+      `(() => {
+        const t = (document.body && document.body.innerText) || '';
+        const ok = /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t)
+          || /upload-manager|content-manager|article/.test(location.href);
+        const m = t.match(/投稿失败|提交失败|发布失败|标题重复/);
+        return { ok: ok, fail: ok ? null : (m ? m[0] : null), url: location.href };
+      })()`,
+    );
+    plog("waitResult:", { settled, ...state });
+    if (state.ok) return;
+    if (state.fail) throw new Error(`B 站投稿被拒:${state.fail}`);
+    throw new Error("Bilibili did not confirm publish (no success page or manager redirect).");
   }
 
   private async inputTag(tag: string): Promise<boolean> {
