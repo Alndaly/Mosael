@@ -24,7 +24,7 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ![Agent authorization gate: reusing a login requires explicit approval each time](docs/media/agent-authorize.png)
 
-> The images above are code-generated from the brand design system; live captures are in the docs site.
+> The browser pool is a live screenshot; the collapse animation and authorization card are illustrations generated from the brand design system.
 
 ---
 
