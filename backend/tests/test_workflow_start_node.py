@@ -35,4 +35,5 @@ def test_the_engine_does_not_identify_the_start_node_by_its_id() -> None:
     """
     source = inspect.getsource(engine)
     assert 'nid != "start"' not in source, "the start node is being identified by id again"
-    assert 'node_types.get(nid) != "start"' in source
+    # 入口判定按类型(execute_graph.is_entry:start 类型永远是入口),不按字面 id。
+    assert 'node_types.get(nid) == "start"' in source

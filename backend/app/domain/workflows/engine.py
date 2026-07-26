@@ -90,15 +90,24 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
             db.commit()
 
 
-def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
-    """依赖驱动的并行执行:一个节点的全部前驱都完成后才可运行,彼此独立的分支**同时**跑
-    (线程池,节点多为 I/O 型:LLM / HTTP / 子任务)。
+def execute_graph(
+    graph: dict[str, Any],
+    *,
+    wf_id: str,
+    initial_context: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    job: Job | None = None,
+    db: Session | None = None,
+    entry_is_root: bool = False,
+) -> tuple[dict[str, Any], bool]:
+    """依赖驱动的并行执行内核(顶层工作流与循环体/子图共用):前驱全完成才可运行,彼此独立的
+    分支**同时**跑(线程池)。条件分支按 source_handle 匹配才算活跃;未被活跃入边触达的节点整段
+    跳过(Dify 语义)。返回 (最终上下文, 是否被取消)。
 
-    分支语义不变:条件节点把 true/false 写进 result,出边按 source_handle 匹配才算活跃;
-    未被任何活跃入边触达的节点整段跳过(Dify 语义)。编排(调度 + 事件 + job)只在主线程用
-    传入的 db;每个节点在 worker 线程里用**各自的 SessionLocal**,互不干扰。
+    - 顶层:传 job + db,发事件/进度、支持取消;只有 start 类型是入口。
+    - 子图(循环体等):不传 job;`entry_is_root=True` 让无入边节点也作为入口;用 initial_context
+      播种(如 {loop:{item,index}})。子图节点不重设 parent job(沿用外层节点已设的父上下文)。
     """
-    graph = workflow.graph
     order = topo_order(graph)  # 校验 DAG + 稳定顺序
     order_ids = [str(node["id"]) for node in order]
     nodes_by_id = {str(node["id"]): node for node in (graph.get("nodes") or [])}
@@ -110,15 +119,27 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         if source in nodes_by_id and target in nodes_by_id:
             incoming[target].append(edge)
     total = max(len(order_ids), 1)
-    wf_id, wf_name, wf_job_id = workflow.id, workflow.name, job.id
+    wf_job_id = job.id if job is not None else None
+    has_job = job is not None and db is not None
 
-    context: dict[str, dict[str, Any]] = {}
+    context: dict[str, Any] = dict(initial_context or {})
     executed: set[str] = set()
     done: set[str] = set()  # executed ∪ skipped
     lock = threading.Lock()
 
     def node_label(nid: str) -> str:
         return str(nodes_by_id[nid].get("name") or NODE_TYPES[node_types[nid]]["label"])
+
+    def event(kind: str, payload: dict[str, Any]) -> None:
+        if has_job:
+            emit_job_event(db, job.id, kind, payload)
+            db.commit()
+
+    def is_entry(nid: str) -> bool:
+        # start 类型永远是入口;子图里无入边的根也是入口。
+        if node_types.get(nid) == "start":
+            return True
+        return entry_is_root and not incoming.get(nid)
 
     def incoming_active(nid: str) -> bool:
         node_edges = incoming.get(nid, [])
@@ -129,7 +150,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
             with lock:
                 if source not in executed:
                     continue
-                source_result = context.get(source, {}).get("result")
+                source_result = context.get(source, {}).get("result") if isinstance(context.get(source), dict) else None
             if node_types.get(source) == "condition":
                 wanted = str(edge.get("source_handle") or "true")
                 if wanted != ("true" if source_result else "false"):
@@ -151,20 +172,16 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         handler = get_executor(ntype)
         if handler is None:
             raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
-        # 本节点派生的子任务(发布/导出/转写/生成/配音)都归到这条工作流 job 下:任务中心据此
-        # 收纳,不再平铺。set/reset 在本 worker 线程内,与其它并行节点互不干扰(见 jobs.create_job)。
-        token = set_parent_job(wf_job_id)
+        # 顶层:本节点派生的子任务归到这条工作流 job 下(任务中心收纳)。子图不重设——沿用外层
+        # 节点已设的父上下文(见 jobs.create_job / set_parent_job)。
+        token = set_parent_job(wf_job_id) if has_job else None
         try:
-            # 每个节点用独立 session(SQLAlchemy Session 非线程安全),workflow 也在本 session 重取。
-            with SessionLocal() as node_db:
+            with SessionLocal() as node_db:  # 每节点独立 session(非线程安全),workflow 本 session 重取
                 wf = node_db.get(Workflow, wf_id)
                 return handler(node_db, wf, config)
         finally:
-            reset_parent_job(token)
-
-    job.status = "running"
-    job.message = f"工作流运行中: {wf_name}"
-    db.commit()
+            if token is not None:
+                reset_parent_job(token)
 
     processed = 0
     scheduled: set[str] = set()
@@ -182,31 +199,27 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                 if not all(str(edge.get("source")) in done for edge in incoming.get(nid, [])):
                     continue
                 scheduled.add(nid)
-                # By TYPE, not by the literal id "start". A start node named anything else has
-                # no incoming edges, so it failed this check and was skipped — and with it
-                # everything downstream, while the run still reported success with an empty
-                # context. run_node already dispatches on type, so the two halves disagreed.
-                if node_types.get(nid) != "start" and not incoming_active(nid):
+                if not is_entry(nid) and not incoming_active(nid):
                     with lock:
                         done.add(nid)
-                    emit_job_event(db, job.id, "workflow.node.skipped", {"node_id": nid, "name": node_label(nid)})
+                    event("workflow.node.skipped", {"node_id": nid, "name": node_label(nid)})
                     processed += 1
-                    job.progress = processed / total
-                    db.commit()
+                    if has_job:
+                        job.progress = processed / total
+                        db.commit()
                     continue
-                emit_job_event(db, job.id, "workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)})
-                db.commit()
+                event("workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)})
                 futures[pool.submit(run_node, nid)] = nid
 
         schedule_ready()
         while futures and error is None and not cancelled:
-            # 用户取消(cancel_job 把 job 翻 failed):不再调度新节点,在飞的节点跑完即止。
-            db.refresh(job)
-            if job.status == "failed":
-                cancelled = True
-                emit_job_event(db, job.id, "workflow.cancelled", {"pending": len(futures)})
-                db.commit()
-                break
+            if has_job:
+                # 用户取消(cancel_job 把 job 翻 failed):不再调度新节点,在飞的节点跑完即止。
+                db.refresh(job)
+                if job.status == "failed":
+                    cancelled = True
+                    event("workflow.cancelled", {"pending": len(futures)})
+                    break
             completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
             for future in completed:
                 nid = futures.pop(future)
@@ -214,40 +227,51 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
                     outputs = future.result()
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     error = exc
-                    # 不发终态事件的话,这个节点在执行历史里会永远停在"运行中"转圈——
-                    # 外层只有 workflow.failed,定位不到是哪个节点、因为什么失败。
-                    emit_job_event(db, job.id, "workflow.node.failed", {"node_id": nid, "name": node_label(nid), "error": str(exc)[:500]})
-                    db.commit()
+                    event("workflow.node.failed", {"node_id": nid, "name": node_label(nid), "error": str(exc)[:500]})
                     break
                 with lock:
                     context[nid] = outputs
                     executed.add(nid)
                     done.add(nid)
                 processed += 1
-                emit_job_event(db, job.id, "workflow.node.finished", {"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)})
-                job.progress = processed / total
-                db.commit()
+                event("workflow.node.finished", {"node_id": nid, "name": node_label(nid), "outputs": _trim_outputs(outputs)})
+                if has_job:
+                    job.progress = processed / total
+                    db.commit()
             if error is None and not cancelled:
                 schedule_ready()
 
     if error is not None:
         raise error
+    return context, cancelled
+
+
+def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
+    """顶层工作流执行:走 execute_graph,收尾算「输出」节点契约并落 job.result。"""
+    graph = workflow.graph
+    node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
+    job.status = "running"
+    job.message = f"工作流运行中: {workflow.name}"
+    db.commit()
+
+    context, cancelled = execute_graph(graph, wf_id=workflow.id, params=params, job=job, db=db)
     if cancelled:
         return context
 
-    job.status = "succeeded"
-    job.progress = 1.0
-    job.message = f"工作流完成: {wf_name}"
     # 「输出」节点声明的具名输出:被 call_workflow 调用时,调用方拿的就是这个契约(见 executors/subworkflow)。
     output_values: dict[str, Any] = {}
     for nid, out in context.items():
         if node_types.get(nid) == "output" and isinstance(out, dict):
             output_values.update(out.get("output") or {})
+
+    job.status = "succeeded"
+    job.progress = 1.0
+    job.message = f"工作流完成: {workflow.name}"
     job.result = {
         "context": {nid: _trim_outputs(out) for nid, out in context.items()},
         "output": output_values,
     }
-    emit_job_event(db, job.id, "workflow.finished", {"nodes": len(order_ids), "executed": len(executed)})
+    emit_job_event(db, job.id, "workflow.finished", {"nodes": len(node_types), "executed": len(context)})
     db.commit()
     return context
 

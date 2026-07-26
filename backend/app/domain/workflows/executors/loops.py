@@ -10,16 +10,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
 from app.db.models import Workflow
-from app.domain.workflows import (
-    WorkflowDomainError,
-    interpolate,
-    topo_order,
-    validate_body_graph,
-)
-from app.domain.workflows.binding import apply_data_edges, interpolate_node_config
-from app.domain.workflows.executors import get_executor, register
+from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
+from app.domain.workflows.executors import register
 from app.domain.workflows.executors.common import truthy
 
 LOOP_WHILE_HARD_CAP = 1000
@@ -31,58 +24,19 @@ LOOP_FOREACH_HARD_CAP = 1000
 
 
 def run_subgraph(body: dict[str, Any], base_context: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
-    """Run a nested loop-body sub-graph synchronously (topo order) and return its context.
-
-    Reuses the same handlers, data-edge binding, {{var}} interpolation and condition-branch
-    semantics as the main engine, minus the job/TaskEvent/parallelism machinery. `base_context`
-    seeds the loop scope (e.g. {"loop": {"item": ..., "index": ...}}); body nodes reference it as
-    {{loop.item}} / {{loop.index}} and each other as {{node_id.output}}.
+    """跑一个循环体子图并返回其上下文。**与主引擎同一套内核**(execute_graph):并行调度、数据边
+    绑定、{{var}} 插值、条件分支语义完全一致——不再是阉割版。`base_context` 播种循环作用域
+    (如 {"loop": {"item": ..., "index": ...}}),子图节点用 {{loop.item}}/{{loop.index}} 与
+    {{node_id.output}} 互相引用;无入边的根即入口(entry_is_root)。
     """
     errors = validate_body_graph(body)
     if errors:
         raise WorkflowDomainError("；".join(errors))
-    nodes = list(body.get("nodes") or [])
-    edges = list(body.get("edges") or [])
-    nodes_by_id = {str(n["id"]): n for n in nodes}
-    node_types = {nid: str(n.get("type")) for nid, n in nodes_by_id.items()}
-    incoming: dict[str, list[dict[str, Any]]] = {nid: [] for nid in nodes_by_id}
-    for edge in edges:
-        source, target = str(edge.get("source")), str(edge.get("target"))
-        if source in nodes_by_id and target in nodes_by_id:
-            incoming[target].append(edge)
+    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
 
-    context: dict[str, Any] = dict(base_context)
-    executed: set[str] = set()
-
-    def incoming_active(nid: str) -> bool:
-        node_edges = incoming.get(nid, [])
-        if not node_edges:
-            return True  # a body root (no incoming) is an entry point → always runs
-        for edge in node_edges:
-            source = str(edge.get("source"))
-            if source not in executed:
-                continue
-            if node_types.get(source) == "condition":
-                wanted = str(edge.get("source_handle") or "true")
-                if wanted != ("true" if context.get(source, {}).get("result") else "false"):
-                    continue
-            return True
-        return False
-
-    for node in topo_order(body):
-        nid = str(node["id"])
-        ntype = node_types[nid]
-        if not incoming_active(nid):
-            continue  # unreached branch — skip (Dify semantics)
-        config = apply_data_edges(nid, dict(node.get("config") or {}), edges, context)
-        config = interpolate_node_config(ntype, config, context)
-        handler = get_executor(ntype)
-        if handler is None:
-            raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
-        with SessionLocal() as sub_db:
-            wf = sub_db.get(Workflow, workflow_id)
-            context[nid] = handler(sub_db, wf, config)
-        executed.add(nid)
+    context, _cancelled = execute_graph(
+        body, wf_id=workflow_id, initial_context=base_context, entry_is_root=True
+    )
     return context
 
 
