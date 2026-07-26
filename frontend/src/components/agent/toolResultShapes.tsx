@@ -1,9 +1,10 @@
 import React from "react";
 
 import { Maximize2, Play } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
-import { useImagePreview } from "@/components/app/image-preview";
+import { api, assetThumbnailUrl, type Asset } from "@/api/client";
+import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -70,35 +71,20 @@ function seconds(value: unknown): string {
 
 /* ---------- cards ---------- */
 
-/** Inline player for one asset. Mounted only once its row is opened — a list of twenty
-    assets would otherwise create twenty decoders for media nobody asked to see. */
-function AssetPlayer({ id, kind, name }: { id: string; kind: string; name: string }) {
-  const { openImagePreview } = useImagePreview();
-  const src = assetFileUrl(id);
-  // Bounded, not full-bleed: an inline preview sits inside a conversation, and a portrait
-  // photo at full width pushes the rest of the answer off the screen. Click through to the
-  // original for a real look at it.
-  if (kind === "image") {
-    return (
-      <button
-        type="button"
-        className="block max-h-[200px] w-fit max-w-full cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0"
-        onClick={() => openImagePreview({ src, title: name })}
-      >
-        <img className="block max-h-[200px] w-auto max-w-full object-contain" src={src} alt={name} loading="lazy" />
-      </button>
-    );
-  }
-  if (kind === "video") return <video className="max-h-[260px] w-full rounded-md border border-border bg-black" src={src} controls autoPlay preload="metadata" />;
-  if (kind === "audio") return <audio className="h-8 w-full rounded-md" src={src} controls autoPlay preload="metadata" />;
-  return null;
+/** 点击素材行 → 按 id 现取完整素材、打开与「素材」标签页同款的详情预览弹窗。
+    工具结果里可能只有投影(id/name/kind),所以不能直接拿行数据喂弹窗,得按 id 重取。 */
+function AssetPreviewModalById({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const asset = useQuery({
+    queryKey: ["asset", id],
+    enabled: Boolean(id),
+    queryFn: () => api<Asset>(`/api/assets/${id}`),
+  });
+  return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} />;
 }
 
 const PLAYABLE = new Set(["video", "audio", "image"]);
 
-function AssetRow({ row }: { row: Record<string, unknown> }) {
-  const { openImagePreview } = useImagePreview();
-  const [open, setOpen] = React.useState(false);
+function AssetRow({ row, onOpen }: { row: Record<string, unknown>; onOpen: (id: string) => void }) {
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const id = String(row.id ?? "");
   const kind = String(row.kind ?? "");
@@ -108,7 +94,9 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
   const info = isRecord(row.media_info) ? row.media_info : undefined;
   // An image has no duration; showing "0:00" for one is noise that reads like a broken value.
   const duration = kind === "image" ? null : row.duration_seconds ?? info?.duration;
-  const playable = Boolean(id) && PLAYABLE.has(kind);
+  // 任何有 id 的素材都可点开详情弹窗(与素材页一致);playable 只决定悬停角标是播放还是放大。
+  const clickable = Boolean(id);
+  const playable = clickable && PLAYABLE.has(kind);
   const isImage = kind === "image";
   const shouldTryThumb = Boolean(id) && !thumbFailed && (kind === "image" || kind === "video");
 
@@ -145,36 +133,32 @@ function AssetRow({ row }: { row: Record<string, unknown> }) {
 
   return (
     <li className="grid gap-1">
-      {playable ? (
+      {clickable ? (
         <button
           type="button"
           className="group/play flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 text-left hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-          onClick={() => {
-            if (isImage) {
-              openImagePreview({ src: assetFileUrl(id), title: name });
-            } else {
-              setOpen((v) => !v);
-            }
-          }}
-          aria-expanded={isImage ? undefined : open}
+          onClick={() => onOpen(id)}
         >
           {body}
         </button>
       ) : (
         <div className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">{body}</div>
       )}
-      {open && playable && <AssetPlayer id={id} kind={kind} name={name} />}
     </li>
   );
 }
 
 function AssetList({ rows }: { rows: Record<string, unknown>[] }) {
+  const [previewId, setPreviewId] = React.useState<string | null>(null);
   return (
-    <ul className="m-0 grid list-none gap-1 p-0">
-      {rows.map((row, index) => (
-        <AssetRow key={String(row.id ?? row.name ?? index)} row={row} />
-      ))}
-    </ul>
+    <>
+      <ul className="m-0 grid list-none gap-1 p-0">
+        {rows.map((row, index) => (
+          <AssetRow key={String(row.id ?? row.name ?? index)} row={row} onOpen={setPreviewId} />
+        ))}
+      </ul>
+      <AssetPreviewModalById id={previewId} onClose={() => setPreviewId(null)} />
+    </>
   );
 }
 
