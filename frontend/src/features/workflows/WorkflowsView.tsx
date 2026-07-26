@@ -64,6 +64,13 @@ import {
   Tags,
   FolderInput,
   FolderPlus,
+  AppWindow,
+  MousePointerClick,
+  Keyboard,
+  ScanText,
+  MousePointer2,
+  Hourglass,
+  PanelTopClose,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -129,6 +136,15 @@ const WF_NODE_COLORS: Record<string, string> = {
   transcribe_asset: "#0891b2",
   export_sequence: "#e11d48",
   ai_generate: "#c026d3",
+  browser_open: "#0ea5e9",
+  browser_navigate: "#0ea5e9",
+  browser_click: "#0ea5e9",
+  browser_input: "#0ea5e9",
+  browser_extract: "#0ea5e9",
+  browser_wait: "#0ea5e9",
+  browser_scroll: "#0ea5e9",
+  browser_evaluate: "#0ea5e9",
+  browser_close: "#0ea5e9",
 };
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
@@ -149,6 +165,15 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   text_transform: <CaseSensitive size={13} />,
   delay: <Timer size={13} />,
   synthesize_speech: <AudioLines size={13} />,
+  browser_open: <AppWindow size={13} />,
+  browser_navigate: <Globe size={13} />,
+  browser_click: <MousePointerClick size={13} />,
+  browser_input: <Keyboard size={13} />,
+  browser_extract: <ScanText size={13} />,
+  browser_wait: <Hourglass size={13} />,
+  browser_scroll: <MousePointer2 size={13} />,
+  browser_evaluate: <Code2 size={13} />,
+  browser_close: <PanelTopClose size={13} />,
   notify: <Bell size={13} />,
   translate: <Languages size={13} />,
   loop_foreach: <Repeat size={13} />,

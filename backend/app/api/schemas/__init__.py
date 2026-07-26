@@ -993,6 +993,7 @@ class WorkflowNodeTypeOut(BaseModel):
     type: str
     label: str
     description: str
+    category: str = ""  # 面板分组;空=通用组
     config: dict
     outputs: list[str]
 

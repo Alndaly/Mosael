@@ -981,7 +981,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/HeartbeatRequest"
+                "$ref": "#/components/schemas/app__api__routes__job_worker__HeartbeatRequest"
               }
             }
           },
@@ -996,6 +996,135 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Heartbeat Api Jobs Worker Heartbeat Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/browser/worker/claim": {
+      "post": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Claim",
+        "operationId": "claim_api_browser_worker_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__browser_worker__ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Claim Api Browser Worker Claim Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/browser/worker/report": {
+      "patch": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Report",
+        "operationId": "report_api_browser_worker_report_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__browser_worker__ReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Report Api Browser Worker Report Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/browser/worker/heartbeat": {
+      "post": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Heartbeat",
+        "operationId": "heartbeat_api_browser_worker_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__browser_worker__HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Heartbeat Api Browser Worker Heartbeat Post"
                 }
               }
             }
@@ -13297,26 +13426,6 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "HeartbeatRequest": {
-        "properties": {
-          "worker": {
-            "type": "string",
-            "title": "Worker"
-          },
-          "kinds": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Kinds"
-          }
-        },
-        "type": "object",
-        "required": [
-          "worker"
-        ],
-        "title": "HeartbeatRequest"
-      },
       "InsertClipRequest": {
         "properties": {
           "track_id": {
@@ -18014,6 +18123,11 @@
             "type": "string",
             "title": "Description"
           },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": ""
+          },
           "config": {
             "additionalProperties": true,
             "type": "object",
@@ -18371,6 +18485,80 @@
         "title": "WorkspaceSummaryOut",
         "description": "首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"
       },
+      "app__api__routes__browser_worker__ClaimRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "title": "Worker",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ClaimRequest"
+      },
+      "app__api__routes__browser_worker__HeartbeatRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "title": "Worker",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "HeartbeatRequest"
+      },
+      "app__api__routes__browser_worker__ReportRequest": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "last_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "status"
+        ],
+        "title": "ReportRequest"
+      },
       "app__api__routes__job_worker__ClaimRequest": {
         "properties": {
           "worker": {
@@ -18388,6 +18576,26 @@
         },
         "type": "object",
         "title": "ClaimRequest"
+      },
+      "app__api__routes__job_worker__HeartbeatRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "title": "Worker"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "HeartbeatRequest"
       },
       "app__api__routes__job_worker__ReportRequest": {
         "properties": {

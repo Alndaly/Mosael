@@ -311,6 +311,108 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["project_id", "name"],
     },
+    # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
+    # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
+    "browser_open": {
+        "label": "打开浏览器",
+        "category": "浏览器",
+        "description": "新建一个隔离浏览器会话并可选导航到网址,输出 session 供后续浏览器节点使用。默认临时会话(跑完即清);具名持久会话保留登录。与发布登录物理隔离。",
+        "config": {
+            "url": {"type": "template", "description": "打开后导航到的网址(可留空,之后用「导航」节点)"},
+            "session_mode": {"type": "string", "options": ["ephemeral", "named"], "description": "ephemeral=临时;named=具名持久(保留 cookie/登录)"},
+            "session_name": {"type": "string", "description": "具名会话名称(session_mode=named 时必填)"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_navigate": {
+        "label": "浏览器·导航",
+        "category": "浏览器",
+        "description": "在会话里跳转到网址。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "url": {"type": "template", "required": True, "description": "目标网址"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_click": {
+        "label": "浏览器·点击",
+        "category": "浏览器",
+        "description": "按 CSS 选择器或可见文本点击元素。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "description": "CSS 选择器(与文本二选一)"},
+            "text": {"type": "template", "description": "按可见文本点击(与选择器二选一)"},
+            "exact": {"type": "string", "options": ["否", "是"], "description": "文本是否精确匹配"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_input": {
+        "label": "浏览器·输入",
+        "category": "浏览器",
+        "description": "往输入框/文本域填入内容(含 contenteditable)。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "required": True, "description": "目标输入框的 CSS 选择器"},
+            "value": {"type": "template", "description": "要填入的内容"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_extract": {
+        "label": "浏览器·提取",
+        "category": "浏览器",
+        "description": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "required": True, "description": "CSS 选择器"},
+            "attribute": {"type": "string", "description": "取该属性值(留空=取文本)"},
+            "all": {"type": "string", "options": ["否", "是"], "description": "是=取全部匹配为数组;否=第一个"},
+        },
+        "outputs": ["session", "value"],
+    },
+    "browser_wait": {
+        "label": "浏览器·等待",
+        "category": "浏览器",
+        "description": "等元素出现/消失、URL 变化或页面出现某文本。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "description": "等这个元素(默认等出现)"},
+            "gone": {"type": "string", "options": ["否", "是"], "description": "是=等元素消失"},
+            "url_contains": {"type": "template", "description": "等 URL 包含此片段(与选择器/文本三选一)"},
+            "text": {"type": "template", "description": "等页面出现此文本"},
+            "timeout_ms": {"type": "number", "description": "超时毫秒,默认 15000"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_scroll": {
+        "label": "浏览器·滚动",
+        "category": "浏览器",
+        "description": "滚动到某元素,或按像素滚动页面。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "selector": {"type": "template", "description": "滚动到该元素(留空=按 dy 滚动)"},
+            "dy": {"type": "number", "description": "无选择器时向下滚动的像素,默认 600"},
+        },
+        "outputs": ["session"],
+    },
+    "browser_evaluate": {
+        "label": "浏览器·执行脚本",
+        "category": "浏览器",
+        "description": "在页面里执行一段 JS 表达式并取返回值(高级)。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
+            "expression": {"type": "code", "required": True, "description": "JS 表达式,其返回值即输出 value"},
+        },
+        "outputs": ["session", "value"],
+    },
+    "browser_close": {
+        "label": "关闭浏览器",
+        "category": "浏览器",
+        "description": "关闭会话:临时会话顺带清掉 cookie/存储。用完记得关,免得视图常驻。",
+        "config": {
+            "session": {"type": "string", "required": True, "description": "要关闭的 session"},
+        },
+        "outputs": [],
+    },
 }
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")

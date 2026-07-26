@@ -45,6 +45,7 @@ def node_types() -> list[dict]:
             "type": key,
             "label": meta["label"],
             "description": meta["description"],
+            "category": meta.get("category", ""),
             "config": meta["config"],
             "outputs": list(meta["outputs"]),
         }

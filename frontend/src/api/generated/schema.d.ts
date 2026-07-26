@@ -448,6 +448,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/worker/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim */
+        post: operations["claim_api_browser_worker_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/worker/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Report */
+        patch: operations["report_api_browser_worker_report_patch"];
+        trace?: never;
+    };
+    "/api/browser/worker/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat */
+        post: operations["heartbeat_api_browser_worker_heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces": {
         parameters: {
             query?: never;
@@ -4375,13 +4426,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** HeartbeatRequest */
-        HeartbeatRequest: {
-            /** Worker */
-            worker: string;
-            /** Kinds */
-            kinds?: string[];
-        };
         /** InsertClipRequest */
         InsertClipRequest: {
             /** Track Id */
@@ -6337,6 +6381,11 @@ export interface components {
             label: string;
             /** Description */
             description: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
             /** Config */
             config: {
                 [key: string]: unknown;
@@ -6502,11 +6551,49 @@ export interface components {
             };
         };
         /** ClaimRequest */
+        app__api__routes__browser_worker__ClaimRequest: {
+            /**
+             * Worker
+             * @default
+             */
+            worker: string;
+        };
+        /** HeartbeatRequest */
+        app__api__routes__browser_worker__HeartbeatRequest: {
+            /**
+             * Worker
+             * @default
+             */
+            worker: string;
+        };
+        /** ReportRequest */
+        app__api__routes__browser_worker__ReportRequest: {
+            /** Action Id */
+            action_id: string;
+            /** Status */
+            status: string;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+            /** Last Url */
+            last_url?: string | null;
+        };
+        /** ClaimRequest */
         app__api__routes__job_worker__ClaimRequest: {
             /**
              * Worker
              * @default
              */
+            worker: string;
+            /** Kinds */
+            kinds?: string[];
+        };
+        /** HeartbeatRequest */
+        app__api__routes__job_worker__HeartbeatRequest: {
+            /** Worker */
             worker: string;
             /** Kinds */
             kinds?: string[];
@@ -7361,7 +7448,112 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["HeartbeatRequest"];
+                "application/json": components["schemas"]["app__api__routes__job_worker__HeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_api_browser_worker_claim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__browser_worker__ClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_browser_worker_report_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__browser_worker__ReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_api_browser_worker_heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__browser_worker__HeartbeatRequest"];
             };
         };
         responses: {
