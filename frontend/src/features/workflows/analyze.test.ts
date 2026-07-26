@@ -24,6 +24,7 @@ const registry: RegistryLike = {
       },
       transcribe_asset: { config: { asset_id: { type: "template", required: true } } },
       template: { config: { template: { type: "template", required: true } } },
+      subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
     };
     return table[type];
   },
@@ -84,6 +85,26 @@ describe("analyzeWorkflow", () => {
     expect(mismatch).toMatchObject({ severity: "warn", expected: "asset", actual: "text", configKey: "asset_id" });
     // 软提示不阻断运行。
     expect(a.runnable).toBe(true);
+  });
+
+  it("does not flag a subgraph node's output / inner refs as stale-var", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        {
+          id: "sg",
+          type: "subgraph",
+          config: {
+            inputs: { x: "{{start.q}}" },
+            body: { nodes: [{ id: "t", type: "template", config: { template: "{{input.x}}" } }], edges: [] },
+            output: "{{t.text}}", // 引用内部节点 t —— 不该被顶层判为失效
+          },
+        },
+      ],
+      [{ id: "e1", source: "start", target: "sg" }],
+    );
+    const a = analyzeWorkflow(g, registry, fullCtx);
+    expect((a.byNode.get("sg") ?? []).filter((i) => i.code === "stale-var")).toEqual([]);
   });
 
   it("does not warn when an asset output feeds an asset slot", () => {

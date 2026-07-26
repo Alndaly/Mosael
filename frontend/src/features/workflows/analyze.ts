@@ -95,6 +95,11 @@ export interface RegistryLike {
 
 const VAR_RE = /\{\{\s*([\w.-]+)\s*\}\}/g;
 
+// 内嵌子图节点(循环体 / subgraph):body/output/condition 引用的是子作用域({{loop.*}} / {{input.*}})
+// 或**内部**节点,不在顶层解析,顶层失效检查要跳过它们(与后端 NESTED_BODY_TYPES / RAW_KEYS 对齐)。
+const NESTED_BODY_TYPES = new Set(["loop_foreach", "loop_while", "subgraph"]);
+const NESTED_BODY_RAW_KEYS = new Set(["body", "output", "condition"]);
+
 /** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
 export function extractRefs(value: unknown): Array<{ ref: string; sourceId: string }> {
   if (typeof value !== "string" || !value.includes("{{")) return [];
@@ -181,6 +186,8 @@ export function analyzeWorkflow(
       const spec = (rawSpec ?? {}) as ConfigSpecLike;
       if (spec.required && isEmpty(config[key]) && !dataBound.has(`${node.id}:${key}`))
         push("error", "required-missing", { configKey: key });
+      // 子图/循环体的 body/output/condition 引用子作用域或内部节点,顶层不做失效检查(否则误报)。
+      if (NESTED_BODY_TYPES.has(node.type) && NESTED_BODY_RAW_KEYS.has(key)) continue;
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
