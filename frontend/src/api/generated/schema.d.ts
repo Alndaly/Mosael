@@ -3545,6 +3545,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-browser/act": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Act */
+        post: operations["act_api_agent_browser_act_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-browser/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close */
+        post: operations["close_api_agent_browser_close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3559,6 +3593,19 @@ export interface components {
             last_error?: string | null;
             /** Profile Name */
             profile_name?: string | null;
+        };
+        /** ActRequest */
+        ActRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Session Id */
+            session_id: string;
+            /** Action */
+            action: string;
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
         };
         /** AddTrackRequest */
         AddTrackRequest: {
@@ -3999,6 +4046,13 @@ export interface components {
             clip_id: string;
             /** Text */
             text: string;
+        };
+        /** CloseRequest */
+        CloseRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Session Id */
+            session_id: string;
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -14569,6 +14623,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ToolInvocation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    act_api_agent_browser_act_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_api_agent_browser_close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseRequest"];
             };
         };
         responses: {

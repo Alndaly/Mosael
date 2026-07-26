@@ -33,6 +33,8 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "update_workflow": {"permission": "edit", "cost": "none"},
     "edit_workflow": {"permission": "edit", "cost": "none"},
     "run_workflow": {"permission": "ai-cost", "cost": "ai"},
+    # 智能体开一个隔离浏览器并导航——入口确认(用户看到目标网址再放行);后续同会话动作内联。
+    "browser_open": {"permission": "edit", "cost": "none"},
 }
 
 EDIT_OP_KINDS = (
@@ -117,6 +119,10 @@ def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
 
 
 def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[str, Any]) -> None:
+    if tool == "browser_open":
+        url = str(payload.get("url") or "").strip()
+        if url and not (url.startswith("http://") or url.startswith("https://")):
+            raise ConfirmationError("浏览器只能打开 http(s) 网址")
     if tool in ("edit_timeline", "render_sequence"):
         sequence = db.get(Sequence, str(payload.get("sequence_id", "")))
         if sequence is None or sequence.workspace_id != workspace_id:
@@ -208,6 +214,10 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
     if tool == "run_workflow":
         name = str(payload.get("name") or payload.get("workflow_id") or "")
         return f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
+    if tool == "browser_open":
+        url = str(payload.get("url") or "").strip()
+        mode = "具名持久" if str(payload.get("session_mode")) == "named" else "临时"
+        return f"智能体打开{mode}浏览器" + (f" → {url}" if url else "")
     prompt = str(payload.get("prompt") or payload.get("text") or payload.get("topic") or "")[:80]
     if tool == "generate_image":
         return f"生成图片: {prompt}"
@@ -222,6 +232,20 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
 
 def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     payload = confirmation.payload
+    if confirmation.tool == "browser_open":
+        from app.domain import browser as browser_domain
+
+        session = browser_domain.open_session(
+            db,
+            workspace_id=confirmation.workspace_id,
+            kind="named" if str(payload.get("session_mode")) == "named" else "ephemeral",
+            name=str(payload.get("session_name") or ""),
+            owner_kind="agent",
+        )
+        url = str(payload.get("url") or "").strip()
+        if url:
+            browser_domain.run_action(session.id, "navigate", {"url": url})
+        return {"session_id": session.id, "url": url}
     if confirmation.tool == "edit_timeline":
         return _execute_edit_timeline(db, payload)
     if confirmation.tool == "render_sequence":

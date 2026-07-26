@@ -11089,6 +11089,92 @@
           }
         }
       }
+    },
+    "/api/agent-browser/act": {
+      "post": {
+        "tags": [
+          "agent-browser"
+        ],
+        "summary": "Act",
+        "operationId": "act_api_agent_browser_act_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Act Api Agent Browser Act Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-browser/close": {
+      "post": {
+        "tags": [
+          "agent-browser"
+        ],
+        "summary": "Close",
+        "operationId": "close_api_agent_browser_close_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Close Api Agent Browser Close Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11138,6 +11224,34 @@
           "account_id"
         ],
         "title": "AccountPatchRequest"
+      },
+      "ActRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "session_id",
+          "action"
+        ],
+        "title": "ActRequest"
       },
       "AddTrackRequest": {
         "properties": {
@@ -12306,6 +12420,24 @@
           "text"
         ],
         "title": "ClipTextEntry"
+      },
+      "CloseRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "session_id"
+        ],
+        "title": "CloseRequest"
       },
       "ConfirmationCreate": {
         "properties": {
