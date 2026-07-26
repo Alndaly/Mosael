@@ -363,6 +363,28 @@ app.whenReady().then(async () => {
   ipcMain.handle("publish:forward", () => requirePublish().viewForward());
   ipcMain.handle("publish:reload", () => requirePublish().viewReload());
   ipcMain.handle("publish:hideView", () => requirePublish().hidePublishView());
+  // 通用池档案的可见登录窗:在该分区(persist:pool-*)开一个独立窗口登任意站点。用户登完关窗、
+  // cookie 落盘,之后工作流/智能体用该档案复用登录。安全:只放行 persist:pool-* 分区(发布账号
+  // 走 publish:login);只放行 http(s);不挂 mibu 预载(第三方站点不该拿到任何应用 API)。
+  ipcMain.handle("browser:openLogin", async (_e, { partition, url }) => {
+    try {
+      const part = String(partition || "");
+      if (!part.startsWith("persist:pool-")) return { ok: false, error: "只支持通用池档案的登录窗" };
+      const target = String(url || "").trim();
+      if (!/^https?:\/\//i.test(target)) return { ok: false, error: "请输入 http(s) 网址" };
+      const win = new BrowserWindow({
+        width: 1100,
+        height: 780,
+        title: "登录",
+        autoHideMenuBar: true,
+        webPreferences: { partition: part, contextIsolation: true, nodeIntegration: false },
+      });
+      await win.loadURL(target);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
   // 账号视图里注入的「返回 Mibu」按钮(accountview-preload.cjs)→ 收起内嵌视图。
   ipcMain.on("publish:exit", () => {
     try {

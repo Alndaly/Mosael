@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -19,6 +19,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -35,9 +36,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
+  const [addingAccount, setAddingAccount] = React.useState(false);
   const [renaming, setRenaming] = React.useState<BrowserProfile | null>(null);
   const [proxyEditing, setProxyEditing] = React.useState<BrowserProfile | null>(null);
   const [removing, setRemoving] = React.useState<BrowserProfile | null>(null);
+  const [loginFor, setLoginFor] = React.useState<BrowserProfile | null>(null);
 
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms });
   const profiles = useQuery({
@@ -117,9 +120,10 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         ?.login(p.bound_account_id, p.platform)
         .then(() => toast.success(t("poolLoginOpened")))
         .catch((e: Error) => toast.error(e.message));
+    } else if (window.mibuBrowser?.openLogin) {
+      setLoginFor(p); // 通用档案:填登录网址 → 在该档案分区开可见登录窗
     } else {
-      // 通用档案的可见登录窗需要新的桌面端 IPC —— 见 Step 4b(在 persist:pool-<id> 分区开可见窗)。
-      toast.info(t("poolGenericLoginSoon"));
+      toast.info(t("publishNeedDesktop"));
     }
   };
 
@@ -133,6 +137,9 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         </h2>
         <small className="text-[11.5px] text-muted-foreground">{t("poolSubtitle")}</small>
         <span className="flex-1" />
+        <Button variant="outline" size="sm" onClick={() => setAddingAccount(true)}>
+          <Users size={14} /> {t("publishAccountAdd")}
+        </Button>
         <Button size="sm" onClick={() => setCreating(true)}>
           <Plus size={14} /> {t("poolCreate")}
         </Button>
@@ -198,8 +205,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        title={window.mibuPublish ? undefined : t("publishNeedDesktop")}
-                        disabled={bound && !window.mibuPublish}
+                        title={window.mibuPublish || window.mibuBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
+                        disabled={bound ? !window.mibuPublish : !window.mibuBrowser?.openLogin}
                         onClick={() => login(p)}
                       >
                         <LogIn size={13} /> {t("poolLogin")}
@@ -238,6 +245,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         </div>
       )}
 
+      <AddAccountDialog open={addingAccount} workspace={workspace} onClose={() => setAddingAccount(false)} />
+      {loginFor && <LoginUrlDialog profile={loginFor} onCancel={() => setLoginFor(null)} onDone={refresh} />}
       {creating && <CreateProfileDialog onCancel={() => setCreating(false)} onCreate={(b) => create.mutate(b)} pending={create.isPending} />}
       <RenameDialog
         open={renaming !== null}
@@ -262,6 +271,57 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         onConfirm={() => removing && remove.mutate(removing)}
       />
     </div>
+  );
+}
+
+function LoginUrlDialog({
+  profile,
+  onCancel,
+  onDone,
+}: {
+  profile: BrowserProfile;
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  const t = useI18n();
+  const [url, setUrl] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+  const open = async () => {
+    let u = url.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+    setPending(true);
+    const res = await window.mibuBrowser?.openLogin?.(profile.partition, u);
+    setPending(false);
+    if (res?.ok) {
+      toast.success(t("poolLoginOpened"));
+      onDone();
+      onCancel();
+    } else {
+      toast.error(res?.error ?? t("poolLoginFailed"));
+    }
+  };
+  return (
+    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolLoginTitle").replace("{name}", profile.name)}>
+      <div className="grid gap-2 p-3">
+        <Input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://example.com/login"
+          autoFocus
+          onKeyDown={(e) => e.key === "Enter" && open()}
+        />
+        <small className="text-[11px] text-muted-foreground">{t("poolLoginHint")}</small>
+        <div className="mt-1 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>
+            {t("poolLogin")}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 

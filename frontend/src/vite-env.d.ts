@@ -46,6 +46,8 @@ interface Window {
   mibuPublish?: MibuPublishBridge;
   mibuBrowser?: {
     onFrame: (callback: (frame: BrowserFrame) => void) => () => void;
+    /** 通用池档案的可见登录窗:在给定持久分区开一个独立窗口登任意站点,用户登完关窗,cookie 落盘。 */
+    openLogin?: (partition: string, url: string) => Promise<{ ok: boolean; error?: string }>;
   };
   mibuDesktop?: {
     platform: string;
