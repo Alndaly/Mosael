@@ -420,6 +420,9 @@ export function WorkflowAgentChat({
           setStreamTimeline([]);
           void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
           void qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] });
+          // 回合结束后计费事件才落库,而 usage-events 只在 running 时轮询——不主动失效,这条回复
+          // 的 token/费用就一直缺(见对话页同款失效)。
+          void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
         }
       }
     },
