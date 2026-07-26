@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.media.render_executor import build_ffmpeg_command
+from app.media.render_executor import _ASS_FONTSIZE_SCALE, build_ffmpeg_command
 from app.media.render_plan import build_render_plan
 from tests.util import fresh_client
 
@@ -152,7 +152,7 @@ def test_subtitle_style_flows_into_ass(tmp_path) -> None:
     ass = (tmp_path / "out.ass").read_text(encoding="utf-8")
     style_line = next(line for line in ass.splitlines() if line.startswith("Style: Default"))
     fields = style_line.split(",")
-    assert fields[2] == "48"  # Fontsize
+    assert fields[2] == f"{48 * _ASS_FONTSIZE_SCALE:g}"  # Fontsize（ASS 回退按此系数放大以对齐浏览器视觉字号)
     assert fields[3] == "&H000000FF"  # PrimaryColour = red, opaque
     assert fields[7] == "-1"  # Bold
     assert fields[15] == "3"  # BorderStyle = opaque box (bg_opacity 1.0)
