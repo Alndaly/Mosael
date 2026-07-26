@@ -1,6 +1,6 @@
 import React from "react";
 
-import { assetFileUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client";
+import { assetFileUrl, type Asset, type Clip } from "@/api/client";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
 import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
@@ -48,15 +48,9 @@ export function MonitorElement({
     if (isImage) return;
     const video = videoRef.current;
     if (!video) return;
-    // 优先放 720p 短 GOP 代理(就是给预览用的):解码/跳转都轻,和播放头同步时不会因为解不动
-    // 全分辨率原片而一顿一顿(常见于把导出的视频再拖回时间线对比)。代理没就绪才回落原片。
-    const src =
-      (asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready"
-        ? assetProxyUrl(asset.id)
-        : assetFileUrl(asset.id);
-    if (loadedRef.current !== src) {
-      loadedRef.current = src;
-      video.src = src;
+    if (loadedRef.current !== asset.id) {
+      loadedRef.current = asset.id;
+      video.src = assetFileUrl(asset.id);
     }
     const speed = clip.speed || 1;
     const desired = clip.src_in + (playhead - clip.timeline_start) * speed;

@@ -1,7 +1,7 @@
 import React from "react";
 import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
-import { assetFileUrl, assetProxyUrl, type Asset, type Clip, type Sequence } from "@/api/client";
+import { assetFileUrl, type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -355,15 +355,9 @@ export function Monitor({
       if (!video.paused) video.pause();
       return;
     }
-    // 优先放 720p 短 GOP 代理(带音轨,给预览用):解码/跳转都轻,和播放头同步时不会因为解不动
-    // 全分辨率原片而一顿一顿(常见于把导出的视频再拖回时间线对比)。代理没就绪才回落原片。
-    const src =
-      (activeAsset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready"
-        ? assetProxyUrl(activeAsset.id)
-        : assetFileUrl(activeAsset.id);
-    if (loadedAssetRef.current !== src) {
-      loadedAssetRef.current = src;
-      video.src = src;
+    if (loadedAssetRef.current !== activeAsset.id) {
+      loadedAssetRef.current = activeAsset.id;
+      video.src = assetFileUrl(activeAsset.id);
     }
     const clipSpeed = activeClip.speed || 1;
     const desired = activeClip.src_in + (playhead - activeClip.timeline_start) * clipSpeed;
