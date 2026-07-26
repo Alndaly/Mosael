@@ -10,7 +10,6 @@ import {
   FolderPlus,
   Home,
   Languages,
-  Layers,
   LogOut,
   MonitorCog,
   Moon,
@@ -42,7 +41,6 @@ export type StudioView =
   | "media"
   | "editor"
   | "ai"
-  | "batch"
   | "publish"
   | "kb"
   | "settings"
@@ -55,7 +53,6 @@ const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: Me
   { view: "media", icon: <FolderOpen size={17} />, labelKey: "navMedia" },
   { view: "editor", icon: <Scissors size={17} />, labelKey: "navEditor" },
   { view: "ai", icon: <Bot size={17} />, labelKey: "navAi" },
-  { view: "batch", icon: <Layers size={17} />, labelKey: "navBatch" },
   { view: "publish", icon: <Rocket size={17} />, labelKey: "navPublish" },
   { view: "kb", icon: <BookOpen size={17} />, labelKey: "navKb" },
   { view: "settings", icon: <Settings size={17} />, labelKey: "navSettings" },

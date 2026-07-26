@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, CheckCheck, GitBranch, Layers, Send, Users, X } from "lucide-react";
+import { Bell, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
 
 import {
   listNotifications,
@@ -22,7 +22,6 @@ import { cn } from "@/lib/utils";
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   publish: <Send size={13} />,
   workflow: <GitBranch size={13} />,
-  batch: <Layers size={13} />,
   team: <Users size={13} />,
 };
 

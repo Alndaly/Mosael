@@ -17,7 +17,6 @@ export function gotoRecord(route: string, event?: string, id?: unknown): void {
 export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey: string }> = {
   publish: { event: "mibu:open-publish-task", payloadKey: "task_id" },
   workflow: { event: "mibu:open-workflow", payloadKey: "workflow_id" },
-  batch: { event: "mibu:open-batch", payloadKey: "batch_id" },
 };
 
 /** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 mibu:open-settings。 */

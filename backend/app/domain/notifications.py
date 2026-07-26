@@ -17,7 +17,7 @@ from app.db.models import Notification, WorkspaceMember, now
 # 每个用户最多保留的通知条数,超出的最旧记录随新通知写入被清理。
 MAX_PER_USER = 200
 
-NOTIFICATION_TYPES = ("system", "publish", "workflow", "batch", "team")
+NOTIFICATION_TYPES = ("system", "publish", "workflow", "team")
 
 
 def notify(

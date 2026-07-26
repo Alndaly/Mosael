@@ -49,7 +49,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ScheduledTask": ("app/domain/scheduler/",),
     "ScheduledTaskRun": ("app/domain/scheduler/", "app/workers/scheduler.py"),
     "Workflow": ("app/domain/workflows/",),
-    "BatchRun": ("app/domain/workflows/",),
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),

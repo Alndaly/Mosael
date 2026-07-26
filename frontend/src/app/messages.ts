@@ -94,7 +94,6 @@ export const messages = {
     navMedia: "素材",
     navEditor: "剪辑",
     navAi: "AI Studio",
-    navBatch: "批量",
     navPublish: "发布",
     navKb: "知识库",
     navSettings: "设置",
@@ -230,7 +229,6 @@ export const messages = {
     toolStatusDone: "完成",
     toolStatusRunning: "运行中",
     toolStatusFailed: "失败",
-    batchListTitle: "批量任务",
     publishListTitle: "发布记录",
     attachFile: "上传附件",
     // 监视器走带一律有可读 aria(此前是英文裸串)。
@@ -278,10 +276,6 @@ export const messages = {
     usageCost: "费用 {cost}",
     usageCostUnknown: "未定价",
 
-    // Batch
-    batchTitle: "批量",
-    batchDescription: "批量混剪与批量生成任务的编排台。",
-
     // Publish
 
     // Knowledge base
@@ -303,21 +297,6 @@ export const messages = {
     navWorkflows: "工作流",
     chatNoSessions: "还没有对话,点右上角「新对话」开始。",
     railLocalAccount: "本地账号",
-    batchEmptyTitle: "还没有批量任务",
-    batchEmptyBody: "选一个工作流,填多组参数,一键批量跑:批量混剪、批量生成、批量转写都从这里开始。",
-    batchCreate: "新建批量",
-    batchNameLabel: "批量名称",
-    batchRows: "参数行(每行跑一次)",
-    batchAddRow: "添加一行",
-    batchNoParams: "该工作流没有输入参数,每行即一次运行",
-    batchStart: "开始批量",
-    batchProgress: "总进度",
-    batchProgressDesc: "按已完成的参数行计算。",
-    batchItems: "运行明细",
-    batchItemsDesc: "每行参数一次运行,失败不会中断其余行。",
-    batchDeleteBody: "批量记录将被删除,已产生的运行记录保留在任务中心。",
-    batchSucceededShort: "成功",
-    batchFailedShort: "失败",
     publishEmptyTitle: "还没有发布记录",
     publishEmptyBody: "选一条成片,配好标题、简介与标签,发布到本地目录、Webhook 或各视频平台;文案可以让 AI 代笔。",
     publishCreate: "新建发布",
@@ -1371,7 +1350,6 @@ export const messages = {
     runStatus_queued: "排队中",
     jobKindWorkflow: "工作流",
     jobKindPublish: "发布",
-    jobKindBatch: "批量",
     jobKindOther: "任务",
     jobDone: "已完成",
     jobFailed: "失败",
@@ -1495,7 +1473,6 @@ export const messages = {
     navMedia: "Media",
     navEditor: "Edit",
     navAi: "AI Studio",
-    navBatch: "Batch",
     navPublish: "Publish",
     navKb: "Knowledge",
     navSettings: "Settings",
@@ -1630,7 +1607,6 @@ export const messages = {
     toolStatusDone: "Done",
     toolStatusRunning: "Running",
     toolStatusFailed: "Failed",
-    batchListTitle: "Batch runs",
     publishListTitle: "Publish records",
     attachFile: "Attach file",
     monStart: "Jump to start",
@@ -1676,10 +1652,6 @@ export const messages = {
     usageCost: "Cost {cost}",
     usageCostUnknown: "Unpriced",
 
-    // Batch
-    batchTitle: "Batch",
-    batchDescription: "Orchestrate batch remixing and bulk generation runs.",
-
     // Publish
 
     // Knowledge base
@@ -1701,21 +1673,6 @@ export const messages = {
     navWorkflows: "Workflows",
     chatNoSessions: "No conversations yet — hit New chat to start.",
     railLocalAccount: "Local account",
-    batchEmptyTitle: "No batches yet",
-    batchEmptyBody: "Pick a workflow, fill in parameter rows, run them all: batch remixing, generation and transcription start here.",
-    batchCreate: "New batch",
-    batchNameLabel: "Batch name",
-    batchRows: "Parameter rows (one run each)",
-    batchAddRow: "Add row",
-    batchNoParams: "This workflow has no inputs — each row is one run",
-    batchStart: "Start batch",
-    batchProgress: "Progress",
-    batchProgressDesc: "Computed over finished rows.",
-    batchItems: "Runs",
-    batchItemsDesc: "One run per row; a failure never aborts the rest.",
-    batchDeleteBody: "The batch record is removed; its runs stay in the task center.",
-    batchSucceededShort: "ok",
-    batchFailedShort: "failed",
     publishEmptyTitle: "No publishes yet",
     publishEmptyBody: "Pick an exported video, add title/description/tags, publish to a folder, webhook or a video platform — AI can draft the copy.",
     publishCreate: "New publish",
@@ -2764,7 +2721,6 @@ export const messages = {
     runStatus_queued: "Queued",
     jobKindWorkflow: "Workflow",
     jobKindPublish: "Publish",
-    jobKindBatch: "Batch",
     jobKindOther: "Task",
     jobDone: "done",
     jobFailed: "failed",

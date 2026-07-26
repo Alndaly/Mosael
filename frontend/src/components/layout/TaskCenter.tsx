@@ -6,7 +6,6 @@ import {
   CircleAlert,
   Download,
   GitBranch,
-  Layers,
   Loader2,
   Mic,
   Send,
@@ -79,8 +78,6 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     if (!route) return;
     const payload = (job.payload ?? {}) as Record<string, unknown>;
     if (job.kind === "publish") gotoRecord(route, "mibu:open-publish-task", payload.task_id);
-    else if (job.kind === "batch" || typeof payload.batch_id === "string")
-      gotoRecord("/batch", "mibu:open-batch", payload.batch_id);
     else if (job.kind === "workflow") gotoRecord(route, "mibu:open-workflow", payload.workflow_id);
     else gotoRecord(route);
     setDetailJob(null);
@@ -179,7 +176,6 @@ const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
   scheduled: { icon: <Timer size={13} />, labelKey: "jobKindScheduled" },
   workflow: { icon: <GitBranch size={13} />, labelKey: "jobKindWorkflow" },
   publish: { icon: <Send size={13} />, labelKey: "jobKindPublish" },
-  batch: { icon: <Layers size={13} />, labelKey: "jobKindBatch" },
 };
 
 /** 任务 → 对应详情页;payload 里有 project_id 就带上,编辑器直接落到项目。 */
@@ -190,7 +186,6 @@ const KIND_ROUTE: Record<string, string> = {
   scheduled: "scheduler",
   workflow: "workflows",
   publish: "publish",
-  batch: "batch",
 };
 
 function jobRoute(job: Job): string | null {

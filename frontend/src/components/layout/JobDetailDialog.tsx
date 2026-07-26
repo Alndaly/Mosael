@@ -172,7 +172,6 @@ function kindKey(kind: string): string {
     scheduled: "Scheduled",
     workflow: "Workflow",
     publish: "Publish",
-    batch: "Batch",
   };
   return map[kind] ?? "Other";
 }
