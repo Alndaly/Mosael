@@ -4,6 +4,7 @@ import { assetFileUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client
 import { CURVES_FILTER_ID } from "@/features/editor/colorCurves";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
 import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
+import { paintScene, type ScenePaintLayer } from "@/features/editor/playback/scenePaint";
 import { evictions } from "@/features/editor/playback/sourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
@@ -219,41 +220,20 @@ export function CanvasCompositor({
       lastSignature = signature;
       dirtyRef.current = false;
 
-      ctx.clearRect(0, 0, width, height);
-
-      const fill = fillModeRef.current;
+      // Resolve each visible layer to a finished paint spec, then hand the whole frame to the ONE
+      // shared draw routine (also used by the offline export renderer, so preview == export pixels).
+      // isBase is the layer's ORIGINAL index-0 position, not its position after nulls are dropped:
+      // a base whose frame hasn't decoded yet must not let an overlay inherit base framing.
+      const paintLayers: ScenePaintLayer[] = [];
       for (let i = 0; i < currentLayers.length; i++) {
-        const layer = currentLayers[i];
         const media = resolved[i];
         if (!media) continue;
-        const { source: img, w: mw, h: mh } = media;
-
+        const layer = currentLayers[i];
         // 关键帧:按播放头在片段内的进度插值,画布合成才随预览动起来(拖拽手柄时 override 优先)。
         const tf = layer.transformOverride ?? sampleTransform(readTransform(layer.clip.transform), clipProgress(layer.clip, playhead));
-        // Only the base layer (index 0) follows the sequence fill mode; overlays always cover.
-        // "blur" paints a full-frame blurred cover backdrop, then the sharp contain-fit picture.
-        const contain = i === 0 && fill !== "cover";
-        if (i === 0 && fill === "blur") {
-          const bs = Math.max(width / mw, height / mh);
-          ctx.save();
-          ctx.filter = "blur(24px)";
-          ctx.drawImage(img, (width - mw * bs) / 2, (height - mh * bs) / 2, mw * bs, mh * bs);
-          ctx.restore();
-        }
-        const fit = contain ? Math.min(width / mw, height / mh) : Math.max(width / mw, height / mh);
-        const dw = mw * fit;
-        const dh = mh * fit;
-
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, Math.min(1, tf.opacity));
-        ctx.filter = filtersRef.current[i]?.filter || "none";
-        // Match Monitor's CSS: translate(x·50%, y·50%) of the frame, scale + rotate about center.
-        ctx.translate(width / 2 + tf.x * 0.5 * width, height / 2 + tf.y * 0.5 * height);
-        ctx.rotate((tf.rotation * Math.PI) / 180);
-        ctx.scale(tf.scale, tf.scale);
-        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
-        ctx.restore();
+        paintLayers.push({ img: media.source, mw: media.w, mh: media.h, tf, filter: filtersRef.current[i]?.filter || "", isBase: i === 0 });
       }
+      paintScene(ctx, paintLayers, { width, height, fillMode: fillModeRef.current });
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
