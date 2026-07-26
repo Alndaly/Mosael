@@ -44,4 +44,4 @@ def registered_types() -> frozenset[str]:
 
 
 # 导入即注册:注册表函数定义完成后再挂载各执行器模块(顺序无关,但保持稳定)。
-from app.domain.workflows.executors import ai, basic, browser, content, loops, subjobs  # noqa: E402,F401
+from app.domain.workflows.executors import ai, basic, browser, content, loops, subjobs, subworkflow  # noqa: E402,F401

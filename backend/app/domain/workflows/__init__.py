@@ -235,6 +235,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "loop_foreach": {
         "label": "循环·遍历",
+        "category": "组合",
         "description": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 引用当前元素与序号。",
         "config": {
             "items": {
@@ -252,6 +253,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "loop_while": {
         "label": "循环·条件",
+        "category": "组合",
         "description": "反复运行内嵌子流程,直到条件不再成立(带最大次数上限防死循环)。子流程内用 {{loop.index}} 拿当前轮次;子流程里放一个「条件」节点,把它的 {{节点id.result}} 填到 condition。",
         "config": {
             "body": {"type": "graph", "description": "循环体子流程(每轮跑一遍;通常含一个条件节点决定是否继续)"},
@@ -310,6 +312,26 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "name": {"type": "template", "required": True, "description": "项目名"},
         },
         "outputs": ["project_id", "name"],
+    },
+    # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
+    "call_workflow": {
+        "label": "调用工作流",
+        "category": "组合",
+        "description": "把另一个已保存的工作流当子流程调用:映射入参 → 跑完取其「输出」节点声明的结果作为本节点输出(引用 {{call_1.output.xxx}})。子流程走完整引擎,自动收纳到本流程下、随本流程取消;防递归、防过深。",
+        "config": {
+            "workflow_id": {"type": "string", "required": True, "description": "要调用的工作流(选一个已保存的)"},
+            "inputs": {"type": "object", "description": "入参映射 {参数名: 值/引用},喂给子流程开始节点的参数,如 {\"topic\": \"{{start.theme}}\"}"},
+        },
+        "outputs": ["output"],
+    },
+    "output": {
+        "label": "输出",
+        "category": "组合",
+        "description": "声明本工作流的输出(参考 dify End):{名: 引用}。被「调用工作流」时,调用方拿到的就是这里声明的具名输出;留空/无本节点则输出整份上下文。",
+        "config": {
+            "values": {"type": "object", "description": "具名输出 {名: 引用},如 {\"result\": \"{{llm_1.text}}\", \"url\": \"{{browser_1.value}}\"}"},
+        },
+        "outputs": ["output"],
     },
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。

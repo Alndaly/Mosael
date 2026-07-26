@@ -36,6 +36,11 @@ def set_parent_job(job_id: str | None) -> contextvars.Token:
 def reset_parent_job(token: contextvars.Token) -> None:
     _current_parent_job.reset(token)
 
+
+def current_parent_job_id() -> str | None:
+    """当前正在执行的父任务 id(工作流节点里 = 本工作流 job);无则 None。"""
+    return _current_parent_job.get()
+
 # Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
 # stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
 # burning CPU the user had asked to stop, and then the worker overwrote the cancellation with

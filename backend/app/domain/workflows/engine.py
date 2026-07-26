@@ -238,7 +238,15 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
     job.status = "succeeded"
     job.progress = 1.0
     job.message = f"工作流完成: {wf_name}"
-    job.result = {"context": {nid: _trim_outputs(out) for nid, out in context.items()}}
+    # 「输出」节点声明的具名输出:被 call_workflow 调用时,调用方拿的就是这个契约(见 executors/subworkflow)。
+    output_values: dict[str, Any] = {}
+    for nid, out in context.items():
+        if node_types.get(nid) == "output" and isinstance(out, dict):
+            output_values.update(out.get("output") or {})
+    job.result = {
+        "context": {nid: _trim_outputs(out) for nid, out in context.items()},
+        "output": output_values,
+    }
     emit_job_event(db, job.id, "workflow.finished", {"nodes": len(order_ids), "executed": len(executed)})
     db.commit()
     return context

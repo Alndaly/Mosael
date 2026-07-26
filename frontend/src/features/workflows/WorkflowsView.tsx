@@ -71,6 +71,7 @@ import {
   MousePointer2,
   Hourglass,
   PanelTopClose,
+  FileOutput,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -145,6 +146,10 @@ const WF_NODE_COLORS: Record<string, string> = {
   browser_scroll: "#0ea5e9",
   browser_evaluate: "#0ea5e9",
   browser_close: "#0ea5e9",
+  call_workflow: "#6366f1",
+  output: "#059669",
+  loop_foreach: "#6366f1",
+  loop_while: "#6366f1",
 };
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
@@ -174,6 +179,8 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   browser_scroll: <MousePointer2 size={13} />,
   browser_evaluate: <Code2 size={13} />,
   browser_close: <PanelTopClose size={13} />,
+  call_workflow: <WorkflowIcon size={13} />,
+  output: <FileOutput size={13} />,
   notify: <Bell size={13} />,
   translate: <Languages size={13} />,
   loop_foreach: <Repeat size={13} />,
@@ -1896,6 +1903,11 @@ function NodeInspector({
     queryFn: () => api<Array<{ plugin_id: string; plugin_name: string; tool_name: string }>>("/api/plugins/tools"),
     enabled: node.type === "plugin_tool",
   });
+  const callableWorkflows = useQuery({
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => listWorkflows(workspaceId),
+    enabled: node.type === "call_workflow",
+  });
   const publishAccounts = useQuery({
     queryKey: ["publish-accounts", workspaceId],
     queryFn: () => listPublishAccounts(workspaceId),
@@ -2095,6 +2107,10 @@ function NodeInspector({
     }
     if (node.type === "synthesize_speech" && key === "voice_id") {
       return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
+    }
+    if (node.type === "call_workflow" && key === "workflow_id") {
+      // 列出可调用的工作流;选到自己/成环由后端运行时守卫拒绝。
+      return (callableWorkflows.data ?? []).map((wf) => ({ value: wf.id, label: wf.name }));
     }
     // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。
     if (inputType(node.type, key) === "asset") {
