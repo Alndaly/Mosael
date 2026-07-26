@@ -33,7 +33,7 @@ def _run(wf_id: str, params: dict | None = None) -> tuple[str, dict, str | None,
 
 
 def test_composition_nodes_registered() -> None:
-    for t in ("call_workflow", "output"):
+    for t in ("call_workflow", "output", "subgraph"):
         assert t in NODE_TYPES and t in registered_types()
         assert NODE_TYPES[t]["category"] == "组合"
 
@@ -113,3 +113,91 @@ def test_self_recursion_is_rejected() -> None:
     status, _result, err, _ = _run(wf_id)
     assert status == "failed"
     assert "递归" in (err or "")
+
+
+def test_subgraph_seeds_input_and_resolves_output() -> None:
+    """内嵌子图:inputs 在外层解析后播种 {{input.名}},output 模板对**子上下文**解析。"""
+    ws = _ws()
+    with SessionLocal() as db:
+        wf = create_workflow(
+            db,
+            workspace_id=ws,
+            name="子图·输入输出契约",
+            graph={
+                "nodes": [
+                    {"id": "start", "type": "start", "config": {"params": {"seed": "世界"}}},
+                    {
+                        "id": "sg",
+                        "type": "subgraph",
+                        "config": {
+                            "inputs": {"x": "{{start.seed}}"},  # 外层解析 → 播种 input.x
+                            "body": {
+                                "nodes": [
+                                    {"id": "t1", "type": "template", "config": {"template": "你好 {{input.x}}"}},
+                                ],
+                                "edges": [],
+                            },
+                            "output": "{{t1.text}}",  # 对子上下文解析
+                        },
+                    },
+                    {"id": "out", "type": "output", "config": {"values": {"final": "{{sg.output}}"}}},
+                ],
+                "edges": [
+                    {"id": "e1", "source": "start", "target": "sg"},
+                    {"id": "e2", "source": "sg", "target": "out"},
+                ],
+            },
+        )
+        wf_id = wf.id
+
+    status, result, err, _ = _run(wf_id)
+    assert status == "succeeded", err
+    assert result["output"] == {"final": "你好 世界"}
+
+
+def test_subgraph_nests_arbitrarily() -> None:
+    """子图套子图:内层 subgraph 的 body/output 在跑外层 body 时也被保留原文(SUBGRAPH_TYPES),
+    逐层解析——证明「可任意嵌套」。"""
+    ws = _ws()
+    with SessionLocal() as db:
+        inner_body = {
+            "nodes": [
+                {"id": "leaf", "type": "template", "config": {"template": "深 {{input.y}}"}},
+            ],
+            "edges": [],
+        }
+        outer_body = {
+            "nodes": [
+                {
+                    "id": "inner_sg",
+                    "type": "subgraph",
+                    "config": {"inputs": {"y": "{{input.x}}"}, "body": inner_body, "output": "{{leaf.text}}"},
+                },
+            ],
+            "edges": [],
+        }
+        wf = create_workflow(
+            db,
+            workspace_id=ws,
+            name="子图·嵌套",
+            graph={
+                "nodes": [
+                    {"id": "start", "type": "start", "config": {"params": {"seed": "世界"}}},
+                    {
+                        "id": "outer_sg",
+                        "type": "subgraph",
+                        "config": {"inputs": {"x": "{{start.seed}}"}, "body": outer_body, "output": "{{inner_sg.output}}"},
+                    },
+                    {"id": "out", "type": "output", "config": {"values": {"final": "{{outer_sg.output}}"}}},
+                ],
+                "edges": [
+                    {"id": "e1", "source": "start", "target": "outer_sg"},
+                    {"id": "e2", "source": "outer_sg", "target": "out"},
+                ],
+            },
+        )
+        wf_id = wf.id
+
+    status, result, err, _ = _run(wf_id)
+    assert status == "succeeded", err
+    assert result["output"] == {"final": "深 世界"}

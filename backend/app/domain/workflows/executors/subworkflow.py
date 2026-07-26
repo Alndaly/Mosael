@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
 from app.domain.workflows.executors import register
 from app.domain.workflows.executors.common import wait_for_job
 
@@ -24,6 +24,35 @@ def output(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str,
     """声明工作流输出:config['values'] 里的引用已被引擎插值,原样作为具名输出返回。"""
     values = config.get("values")
     return {"output": dict(values) if isinstance(values, dict) else {}}
+
+
+@register("subgraph")
+def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """内嵌子图(ComfyUI 式「折叠为子图」的运行时):把一组节点封装成一个可复用单元,内嵌、可任意
+    嵌套。**与主引擎同一套内核**(execute_graph):并行 / 数据边 / 条件分支语义与顶层一致。
+
+    - inputs:外层喂进来的值,已被引擎在外层作用域插值(见 binding.RAW_KEYS——inputs 不在里面),
+      播种为子图作用域 {{input.名}};
+    - body:子图本身(binding 里保留原文),无入边的根即入口(entry_is_root);
+    - output:引用子图内部节点输出的模板(如 {{node.text}}),对**子上下文**插值;留空则输出整份
+      子上下文(去掉 input 作用域)。
+    """
+    body = config.get("body") or {"nodes": [], "edges": []}
+    errors = validate_body_graph(body, scope="input")  # 子图作用域是 input(循环体是 loop)
+    if errors:
+        raise WorkflowDomainError("；".join(errors))
+    inputs = config.get("inputs")
+    seed = {"input": dict(inputs)} if isinstance(inputs, dict) else {"input": {}}
+
+    from app.domain.workflows.engine import execute_graph  # 惰性:避开 engine↔executors 循环导入
+
+    context, _cancelled = execute_graph(
+        body, wf_id=workflow.id, initial_context=seed, entry_is_root=True
+    )
+    output_tpl = config.get("output")
+    if output_tpl:
+        return {"output": interpolate(output_tpl, context)}
+    return {"output": {nid: out for nid, out in context.items() if nid != "input"}}
 
 
 def _guard_recursion(db: Session, target_id: str, current_wf_id: str) -> None:

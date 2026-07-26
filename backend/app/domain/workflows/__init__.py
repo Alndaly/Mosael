@@ -333,6 +333,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["output"],
     },
+    "subgraph": {
+        "label": "子图",
+        "category": "组合",
+        "description": "把一组节点封装成一个可复用子图(参考 ComfyUI「折叠为子图」):内嵌、可任意嵌套,在节点内进子画布编辑。与主引擎同一套内核(并行/条件分支一致)。用 inputs 把外层值喂进去(子图内 {{input.名}} 引用),output 指定子图输出(引用内部节点,如 {{node_1.text}});留空则输出整份子上下文。",
+        "config": {
+            "inputs": {"type": "object", "description": "喂进子图的输入 {名: 值/引用},子图内用 {{input.名}} 取,如 {\"topic\": \"{{start.theme}}\"}"},
+            "body": {"type": "graph", "description": "子图(在节点内进子画布编辑;无入边的根即入口,可放多个)"},
+            "output": {"type": "template", "description": "子图输出,引用内部节点输出(如 {{node_1.text}});留空则输出整份子上下文"},
+        },
+        "outputs": ["output"],
+    },
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
     "browser_open": {
@@ -536,38 +547,61 @@ def validate_graph(
     return errors
 
 
-def validate_body_graph(body: dict[str, Any]) -> list[str]:
-    """循环体子图校验:必须非空、无 start 节点、其余同 validate_graph。"""
+# 内嵌子图类节点:body/output/condition 属于**内层**作用域(见 binding.interpolate_node_config
+# 保留原文的理由),既是插值时机的依据,也是校验时不下钻的依据。binding.py 从这里取,单一真源。
+NESTED_BODY_TYPES = frozenset({"loop_foreach", "loop_while", "subgraph"})
+NESTED_BODY_RAW_KEYS = ("body", "output", "condition")
+
+
+def validate_body_graph(body: dict[str, Any], *, scope: str = "loop") -> list[str]:
+    """内嵌子图(循环体 / subgraph)校验:必须非空、无 start 节点、其余同 validate_graph;
+    再查引用是否越出作用域。scope 是执行时播种的作用域名——循环体用 "loop"、subgraph 用 "input"。"""
+    label = "循环体" if scope == "loop" else "子图"
     nodes = body.get("nodes") if isinstance(body, dict) else None
     if not isinstance(nodes, list) or not nodes:
-        return ["循环体不能为空,至少要有一个节点"]
+        return [f"{label}不能为空,至少要有一个节点"]
     errors = validate_graph(body, require_start=False)
-    errors.extend(_unresolvable_body_refs(body, nodes))
+    errors.extend(_unresolvable_body_refs(nodes, scope))
     return errors
 
 
-def _unresolvable_body_refs(body: dict[str, Any], nodes: list[Any]) -> list[str]:
-    """Reject a body template that references anything outside the loop's own scope.
+def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
+    """Reject a body template that references anything outside its own scope.
 
-    run_subgraph seeds the body context with `loop` and the body's own nodes — nothing else. A
-    body node referencing an outer node like {{start.prefix}} therefore interpolated to the empty
-    string: no error, no warning, just silently missing text in whatever the loop produced. That
-    is the worst failure mode available, so name it at validation time instead.
+    A body context is seeded with the scope var (`loop` for loops, `input` for subgraph) and the
+    body's own nodes — nothing else. A body node referencing an outer node like {{start.prefix}}
+    therefore interpolated to the empty string: no error, no warning, just silently missing text in
+    whatever the body produced. That is the worst failure mode available, so name it at validation
+    time instead.
 
     (Making the body actually see the outer scope is not a matter of passing more context: body,
     output and condition are deliberately left un-interpolated at the outer scope so that
-    {{loop.item}} survives to be resolved per iteration. Resolving outer references there too
-    means a second, guarded pass — a real change, not a tweak.)
+    {{loop.item}} / {{input.x}} survive to be resolved when the body runs. Resolving outer
+    references there too means a second, guarded pass — a real change, not a tweak.)
+
+    Nested bodies are NOT descended into: a nested loop/subgraph node's own body/output/condition
+    belong to *its* inner scope and are validated when it runs. Scanning them here would misreport
+    the inner body's node names as out-of-scope references. Its `inputs`/`items` (outer-facing) are
+    still scanned, since those resolve in *this* scope.
     """
-    known = {"loop"} | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    known = {scope} | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
     unknown: set[str] = set()
-    for match in VARIABLE_RE.finditer(json.dumps(body, ensure_ascii=False)):
-        root = match.group(1).strip().split(".")[0]
-        if root and root not in known:
-            unknown.add(root)
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        config = dict(node.get("config") or {})
+        if node.get("type") in NESTED_BODY_TYPES:
+            for key in NESTED_BODY_RAW_KEYS:
+                config.pop(key, None)
+        for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False)):
+            root = match.group(1).strip().split(".")[0]
+            if root and root not in known:
+                unknown.add(root)
     if not unknown:
         return []
-    return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 loop 与体内节点"]
+    if scope == "loop":
+        return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 loop 与体内节点"]
+    return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 input 与体内节点"]
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:

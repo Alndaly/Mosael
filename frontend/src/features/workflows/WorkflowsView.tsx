@@ -27,6 +27,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Boxes,
   Braces,
   CaseSensitive,
   CircleCheck,
@@ -148,6 +149,7 @@ const WF_NODE_COLORS: Record<string, string> = {
   browser_close: "#0ea5e9",
   call_workflow: "#6366f1",
   output: "#059669",
+  subgraph: "#8b5cf6",
   loop_foreach: "#6366f1",
   loop_while: "#6366f1",
 };
@@ -181,6 +183,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   browser_close: <PanelTopClose size={13} />,
   call_workflow: <WorkflowIcon size={13} />,
   output: <FileOutput size={13} />,
+  subgraph: <Boxes size={13} />,
   notify: <Bell size={13} />,
   translate: <Languages size={13} />,
   loop_foreach: <Repeat size={13} />,
@@ -732,7 +735,7 @@ function WorkflowEditor({
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
   // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
   const [dragging, setDragging] = React.useState(false);
-  // Drill-in: double-click a loop node to edit its nested body sub-graph in an overlay canvas.
+  // Drill-in: double-click a loop OR subgraph node to edit its nested body sub-graph in an overlay canvas.
   const [editingLoopId, setEditingLoopId] = React.useState<string | null>(null);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   // 首次 fitView 前隐藏画布(挂载首帧节点在默认视口的错误位置,直接可见会闪一下)
@@ -1406,7 +1409,8 @@ function WorkflowEditor({
             onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
             onNodeDoubleClick={(_event, node) => {
               const g = graph.nodes.find((item) => item.id === node.id);
-              if (g && (g.type === "loop_foreach" || g.type === "loop_while")) setEditingLoopId(node.id);
+              if (g && (g.type === "loop_foreach" || g.type === "loop_while" || g.type === "subgraph"))
+                setEditingLoopId(node.id);
             }}
             onPaneClick={() => setSelectedNodeId(null)}
             defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
@@ -1622,8 +1626,9 @@ function CodeField({
 }
 
 /** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
-/** Drill-in editor for a loop node's nested `body` sub-graph (Dify-style). A self-contained
- *  mini-canvas: add/connect/move/delete/config body nodes; changes flow up via onChange. */
+/** Drill-in editor for a loop / subgraph node's nested `body` sub-graph (Dify / ComfyUI-style).
+ *  A self-contained mini-canvas: add/connect/move/delete/config body nodes; changes flow up via
+ *  onChange. Header/hints switch on the node type (loop scope {{loop.*}} vs subgraph {{input.*}}). */
 function LoopBodyEditor({
   loopNode,
   registry,
@@ -1773,7 +1778,8 @@ function LoopBodyEditor({
           <ArrowLeft size={14} /> {t("wfLoopBack")}
         </button>
         <span className="inline-flex items-center gap-[5px] text-[12.5px] font-semibold text-foreground">
-          <Repeat size={13} /> {loopNode.name} · {t("wfLoopBody")}
+          {loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />} {loopNode.name} ·{" "}
+          {t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}
         </span>
         <SearchableSelect
           value=""
@@ -1819,7 +1825,7 @@ function LoopBodyEditor({
             className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
           />
         </ReactFlow>
-        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t("wfLoopEmptyHint")}</div>}
+        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t(loopNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}</div>}
         {selectedNode && (
           <NodeInspector
             node={selectedNode}
@@ -2384,13 +2390,14 @@ function NodeInspector({
         {specs
           .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
           .map(([key, spec]) => {
-          // 循环体是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
+          // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
           if (spec?.type === "graph") {
             const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
+            const isSubgraph = node.type === "subgraph";
             return (
               <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
-                <label>{t("wfLoopBody")}</label>
-                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-[11.5px] leading-normal text-muted-foreground">{t("wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
+                <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
+                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-[11.5px] leading-normal text-muted-foreground">{t(isSubgraph ? "wfSubgraphBodyNote" : "wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
               </div>
             );
           }
