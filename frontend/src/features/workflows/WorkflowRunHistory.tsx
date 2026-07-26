@@ -76,7 +76,7 @@ function outputsText(outputs: Record<string, unknown>): string {
 function RunIcon({ status }: { status: string }) {
   if (status === "succeeded") return <CheckCircle2 size={13} className="text-[#3fb950]" />;
   if (status === "failed") return <XCircle size={13} className="text-[#e5484d]" />;
-  if (RUNNING.has(status)) return <Loader2 size={13} className="spin text-primary" />;
+  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mibu-spin text-primary" />;
   return <CircleDashed size={13} />;
 }
 
@@ -144,8 +144,8 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
               key={run.id}
               type="button"
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-[rgb(255_255_255/0.05)]",
-                run.id === selectedId && "bg-[rgb(255_255_255/0.08)] hover:bg-[rgb(255_255_255/0.08)]",
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-secondary",
+                run.id === selectedId && "bg-accent hover:bg-accent",
               )}
               onClick={() => setSelectedId(run.id)}
             >
@@ -181,7 +181,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
                         type="button"
                         className={cn(
                           "flex w-full items-center gap-[7px] rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-xs text-foreground",
-                          hasDetail && "cursor-pointer hover:bg-[rgb(255_255_255/0.05)]",
+                          hasDetail && "cursor-pointer hover:bg-secondary",
                         )}
                         onClick={() => hasDetail && toggleExpanded(s.nid)}
                         aria-expanded={hasDetail ? open : undefined}
@@ -193,7 +193,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
                         ) : s.status === "skipped" ? (
                           <SkipForward size={12} className="shrink-0" />
                         ) : (
-                          <Loader2 size={12} className="spin shrink-0 text-primary" />
+                          <Loader2 size={12} className="animate-mibu-spin shrink-0 text-primary" />
                         )}
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.status === "skipped" ? (
@@ -217,7 +217,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
                         </p>
                       )}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
-                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-[rgb(255_255_255/0.05)] px-2 py-1.5 font-mono text-[10.5px] leading-[1.55] text-muted-foreground">
+                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10.5px] leading-[1.55] text-muted-foreground">
                           {outputsText(s.outputs)}
                         </pre>
                       )}
