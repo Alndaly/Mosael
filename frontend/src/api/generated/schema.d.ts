@@ -2884,6 +2884,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ai Runtime */
+        get: operations["get_ai_runtime_api_settings_ai_runtime_get"];
+        /**
+         * Set Ai Runtime
+         * @description 供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。
+         */
+        put: operations["set_ai_runtime_api_settings_ai_runtime_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/confirmations": {
         parameters: {
             query?: never;
@@ -3612,6 +3633,19 @@ export interface components {
             tools?: unknown[];
             /** Permissions */
             permissions?: unknown[];
+        };
+        /** AiRuntimeConfigOut */
+        AiRuntimeConfigOut: {
+            /**
+             * Max Retries
+             * @default 3
+             */
+            max_retries: number;
+        };
+        /** AiRuntimeConfigUpdate */
+        AiRuntimeConfigUpdate: {
+            /** Max Retries */
+            max_retries: number;
         };
         /** AnalyzeAssetRequest */
         AnalyzeAssetRequest: {
@@ -12963,6 +12997,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KbEmbeddingConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ai_runtime_api_settings_ai_runtime_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRuntimeConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_ai_runtime_api_settings_ai_runtime_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiRuntimeConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRuntimeConfigOut"];
                 };
             };
             /** @description Validation Error */

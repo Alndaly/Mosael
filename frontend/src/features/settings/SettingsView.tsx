@@ -15,6 +15,7 @@ import { FeishuSection } from "@/features/settings/FeishuSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
+import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
 import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
@@ -161,6 +162,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                 title={t("providerChatTitle")}
                 description={t("providerChatDesc")}
               />
+              <AiRuntimeSection />
             </>
           )}
           {section === "provider-image" && (

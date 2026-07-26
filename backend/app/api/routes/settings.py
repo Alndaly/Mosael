@@ -10,6 +10,8 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.permissions import ensure_instance_admin
 from app.api.schemas import (
+    AiRuntimeConfigOut,
+    AiRuntimeConfigUpdate,
     KbEmbeddingConfigOut,
     KbEmbeddingConfigUpdate,
     ProviderDefaultOut,
@@ -24,7 +26,7 @@ from app.api.schemas import (
     VendorPresetOut,
 )
 from app.core.db import SessionLocal
-from app.db.models import KbEmbeddingConfig, ProviderDefault, ProviderPricingRule, ProviderProfile
+from app.db.models import AiRuntimeConfig, KbEmbeddingConfig, ProviderDefault, ProviderPricingRule, ProviderProfile
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
@@ -469,3 +471,22 @@ def set_kb_embedding(
 
         threading.Thread(target=run, daemon=True).start()
     return _kb_embedding_out()
+
+
+@router.get("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
+def get_ai_runtime(db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
+    row = db.get(AiRuntimeConfig, "default")
+    return AiRuntimeConfigOut(max_retries=row.max_retries if row is not None else 3)
+
+
+@router.put("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
+def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
+    """供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。"""
+    ensure_instance_admin(db, user, "credentials")
+    row = db.get(AiRuntimeConfig, "default")
+    if row is None:
+        row = AiRuntimeConfig(id="default")
+        db.add(row)
+    row.max_retries = body.max_retries
+    db.commit()
+    return AiRuntimeConfigOut(max_retries=row.max_retries)

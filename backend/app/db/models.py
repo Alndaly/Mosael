@@ -642,6 +642,17 @@ class KbEmbeddingConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class AiRuntimeConfig(Base):
+    """Singleton (id='default') 运行时 AI 设置。目前只含「供应商瞬断时的最大重试次数」
+    (0..10,缺省 3),用户可在设置页调整——见 workflows/executors/ai.py。"""
+
+    __tablename__ = "ai_runtime_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class TtsConfig(Base):
     """Singleton (id='default') runtime config for voice cloning: which engine,
     the external interpreter that has f5-tts/fish-speech installed, and the model

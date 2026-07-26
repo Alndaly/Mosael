@@ -634,6 +634,15 @@ class KbEmbeddingConfigUpdate(BaseModel):
     dim: int = Field(ge=1, le=8192)
 
 
+class AiRuntimeConfigOut(BaseModel):
+    max_retries: int = 3
+
+
+class AiRuntimeConfigUpdate(BaseModel):
+    # 供应商瞬断时的最大重试次数(不含首次);0 表示不重试。
+    max_retries: int = Field(ge=0, le=10)
+
+
 class VoiceOut(BaseModel):
     id: str
     name: str

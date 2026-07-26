@@ -9020,6 +9020,77 @@
         }
       }
     },
+    "/api/settings/ai-runtime": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Ai Runtime",
+        "operationId": "get_ai_runtime_api_settings_ai_runtime_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiRuntimeConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Ai Runtime",
+        "description": "供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。",
+        "operationId": "set_ai_runtime_api_settings_ai_runtime_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiRuntimeConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiRuntimeConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/confirmations": {
       "post": {
         "tags": [
@@ -11307,6 +11378,32 @@
           "source"
         ],
         "title": "AgentSkillOut"
+      },
+      "AiRuntimeConfigOut": {
+        "properties": {
+          "max_retries": {
+            "type": "integer",
+            "title": "Max Retries",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "title": "AiRuntimeConfigOut"
+      },
+      "AiRuntimeConfigUpdate": {
+        "properties": {
+          "max_retries": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Retries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_retries"
+        ],
+        "title": "AiRuntimeConfigUpdate"
       },
       "AnalyzeAssetRequest": {
         "properties": {
