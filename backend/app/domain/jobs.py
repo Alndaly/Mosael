@@ -226,32 +226,52 @@ def reconcile_orphaned_jobs(db: Session) -> int:
     return len(stale)
 
 
-def cancel_job(db: Session, job: Job) -> Job:
-    """用户主动取消:job 落终态,发布任务同步撤单,工作流/批量在节点边界停下。
-
-    线程内正在执行的节点无法安全掐断;engine/batch 每个节点边界都会重读 job
-    状态,看到已取消就不再继续——"停止中断"语义是节点粒度的。
-    """
+def _cancel_job_row(db: Session, job: Job) -> bool:
+    """把单个 job 落取消态 + 掐子进程 + 撤发布单(不 commit)。返回它是否原本还在跑。"""
     if job.status not in ("queued", "running"):
-        raise ValueError("任务已结束,无法取消")
+        return False
     job.status = "failed"
     job.error = "已取消"
     job.message = "已取消"
     db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
     # Stop the actual work, not just the row describing it.
-    killed = kill_job_child(job.id)
-    if killed:
+    if kill_job_child(job.id):
         db.add(TaskEvent(job_id=job.id, type="job.child_killed", payload={}))
-
     if job.kind == "publish":
         from app.db.models import PublishTask
 
         task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
         if task is not None and task.status not in ("success", "prepared", "failed", "cancelled"):
-            task.status = "cancelled"
+            task.status = "cancelled"  # 桌面发布器下次 report/heartbeat 读到 cancelled 即中止自动化
+    return True
+
+
+def cancel_job(db: Session, job: Job) -> Job:
+    """用户主动取消:job 落终态,发布任务同步撤单,工作流/批量在节点边界停下。
+
+    线程内正在执行的节点无法安全掐断;engine/batch 每个节点边界都会重读 job 状态,看到已取消
+    就不再继续——"停止中断"语义是节点粒度的。**级联**到工作流派生的子任务(发布/导出/转写/生成/
+    配音):否则父流取消了,发布子任务还在桌面发布器里跑(见 parent_job_id 链)。
+    """
+    if job.status not in ("queued", "running"):
+        raise ValueError("任务已结束,无法取消")
+    _cancel_job_row(db, job)
+    # 广度遍历后代,连嵌套子工作流一并取消。
+    frontier, seen = [job.id], {job.id}
+    while frontier:
+        parent_id = frontier.pop()
+        children = db.scalars(
+            select(Job).where(Job.parent_job_id == parent_id, Job.status.in_(("queued", "running")))
+        ).all()
+        for child in children:
+            if child.id in seen:
+                continue
+            seen.add(child.id)
+            _cancel_job_row(db, child)
+            frontier.append(child.id)
     db.commit()
     db.refresh(job)
-    logger.info("job %s [%s] cancelled by user (child_killed=%s)", job.id, job.kind, killed)
+    logger.info("job %s [%s] cancelled by user (cascaded %d descendants)", job.id, job.kind, len(seen) - 1)
     return job
 
 

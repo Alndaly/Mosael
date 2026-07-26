@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.jobs import create_job, reset_parent_job, set_parent_job
+from app.domain.jobs import cancel_job, create_job, reset_parent_job, set_parent_job
 from tests.util import fresh_client
 
 
@@ -90,3 +90,29 @@ def test_top_level_filter_and_children_endpoint() -> None:
     children = client.get(f"/api/jobs/{parent_id}/children").json()
     assert [c["id"] for c in children] == [child_id]
     assert children[0]["parent_job_id"] == parent_id
+
+
+def test_cancel_workflow_cascades_to_descendants() -> None:
+    """取消工作流 → 级联取消它派生的发布子任务(及嵌套孙任务);不相干的顶层任务不受牵连。"""
+    _, ws = _workspace()
+    with SessionLocal() as db:
+        parent = create_job(db, workspace_id=ws, kind="workflow", payload={})
+        parent.status = "running"
+        db.flush()
+        child = create_job(db, workspace_id=ws, kind="publish", payload={}, parent_job_id=parent.id)
+        child.status = "running"
+        grandchild = create_job(db, workspace_id=ws, kind="export_sequence", payload={}, parent_job_id=child.id)
+        grandchild.status = "running"
+        other = create_job(db, workspace_id=ws, kind="workflow", payload={})  # 不相干的顶层任务
+        other.status = "running"
+        db.commit()
+        ids = (parent.id, child.id, grandchild.id, other.id)
+
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, ids[0]))
+
+    with SessionLocal() as db:
+        assert db.get(Job, ids[0]).status == "failed"  # 父工作流
+        assert db.get(Job, ids[1]).status == "failed"  # 发布子任务被级联取消(此前会残留在跑)
+        assert db.get(Job, ids[2]).status == "failed"  # 嵌套孙任务
+        assert db.get(Job, ids[3]).status == "running"  # 不相干任务不动
