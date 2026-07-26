@@ -56,6 +56,6 @@ contextBridge.exposeInMainWorld("mibuBrowser", {
     ipcRenderer.on("browser:frame", listener);
     return () => ipcRenderer.removeListener("browser:frame", listener);
   },
-  // 通用池档案登录:在给定分区开可见窗登任意站点(见 main.cjs browser:openLogin)。
-  openLogin: (partition, url) => ipcRenderer.invoke("browser:openLogin", { partition, url }),
+  // 通用池档案登录:在该档案分区开内嵌视图登任意站点(见 main.cjs browser:openLogin)。
+  openLogin: (opts) => ipcRenderer.invoke("browser:openLogin", opts),
 });

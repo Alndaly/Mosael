@@ -358,6 +358,27 @@ function endLogin(gen: number, accountId?: string): void {
   }
 }
 
+/** 浏览器池通用档案登录:复用发布账号那套**内嵌视图**(AccountViewManager.openView),在该档案分区
+ *  亮出登录页,不弹外部系统窗。与 openLogin 一样占前台单槽——已有视图在前台则拒绝。viewId = 分区名。
+ *  通用档案没有平台适配器/登录态轮询,登不登成由用户自己判断(cookie 落分区即可)。 */
+export async function openPoolLogin(opts: {
+  partition: string;
+  url: string;
+  name?: string;
+  proxy?: string | null;
+}): Promise<void> {
+  if (!views) throw new Error(tr("发布器未就绪"));
+  if (views.visibleAccountId && views.visibleAccountId !== opts.partition)
+    throw new Error(tr("有账号正在前台操作，请先处理完再登录"));
+  await views.openView({
+    viewId: opts.partition,
+    partition: opts.partition,
+    name: opts.name,
+    url: opts.url,
+    proxy: opts.proxy ?? null,
+  });
+}
+
 /** 触发某账号登录:亮出其视图、打开登录页,轮询登录态并回写后端(最多 10 分钟)。 */
 export async function openLogin(accountId: string, platform: string): Promise<void> {
   if (!views) return;

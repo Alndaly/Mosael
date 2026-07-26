@@ -4,6 +4,7 @@ export {
   startPublishWorker,
   stopPublishWorker,
   openLogin,
+  openPoolLogin,
   openPage,
   inspectAccount,
   navigateView,

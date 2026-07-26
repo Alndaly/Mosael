@@ -291,7 +291,7 @@ function LoginUrlDialog({
     if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
     setPending(true);
-    const res = await window.mibuBrowser?.openLogin?.(profile.partition, u);
+    const res = await window.mibuBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
     setPending(false);
     if (res?.ok) {
       toast.success(t("poolLoginOpened"));

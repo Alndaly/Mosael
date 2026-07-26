@@ -23,6 +23,10 @@ export class AccountViewManager {
   private views = new Map<string, WebContentsView>();
   private drivers = new Map<string, PageDriver>();
   private appliedProxy = new Map<string, string | null>();
+  // 泛化:非发布账号的视图(浏览器池通用档案)显式登记其分区与显示名;发布账号不登记,
+  // 沿用 persist:mibu-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
+  private partitions = new Map<string, string>();
+  private names = new Map<string, string>();
   private window: BaseWindow | null = null;
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
@@ -52,6 +56,27 @@ export class AccountViewManager {
       proxyRules: normalizedProxy ?? undefined,
     });
     this.appliedProxy.set(partition, normalizedProxy);
+  }
+
+  /** 通用:在给定分区开一个内嵌视图、亮出并导航到 url —— 供「浏览器池」通用档案登录复用**同一套**
+   *  内嵌视图(与发布账号登录一致:同容器、同「返回 Mibu」、同顶栏工具条),不弹外部系统窗。
+   *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
+  async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
+    this.partitions.set(opts.viewId, opts.partition);
+    if (opts.name) this.names.set(opts.viewId, opts.name);
+    const normalizedProxy = opts.proxy?.trim() || null;
+    if (this.appliedProxy.get(opts.partition) !== normalizedProxy) {
+      const viewSession = session.fromPartition(opts.partition);
+      await viewSession.setProxy({
+        mode: normalizedProxy ? "fixed_servers" : "direct",
+        proxyRules: normalizedProxy ?? undefined,
+      });
+      this.appliedProxy.set(opts.partition, normalizedProxy);
+    }
+    const { view } = this.ensure(opts.viewId);
+    this.show(opts.viewId);
+    const url = normalizeAddress(opts.url);
+    if (url) void view.webContents.loadURL(url);
   }
 
   /** Bring an account's view to the front of the window and size it. */
@@ -222,8 +247,9 @@ export class AccountViewManager {
     return { view, driver: this.drivers.get(accountId)! };
   }
 
-  private partitionFor(accountId: string): string {
-    return `persist:mibu-${accountId}`;
+  private partitionFor(id: string): string {
+    // 登记过的(池档案)用其显式分区;未登记的(发布账号)沿用旧约定 persist:mibu-<id>。
+    return this.partitions.get(id) ?? `persist:mibu-${id}`;
   }
 
   private detachView(accountId: string): void {
@@ -255,7 +281,7 @@ export class AccountViewManager {
     this.onViewChanged({
       visible: this.visibleId !== null,
       accountId: this.visibleId,
-      accountName: this.visibleId ? this.nameOf(this.visibleId) : null,
+      accountName: this.visibleId ? this.names.get(this.visibleId) ?? this.nameOf(this.visibleId) : null,
       url: wc ? wc.getURL() : "",
       canGoBack: wc ? wc.navigationHistory.canGoBack() : false,
       canGoForward: wc ? wc.navigationHistory.canGoForward() : false,
