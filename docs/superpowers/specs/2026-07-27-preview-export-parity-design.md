@@ -1,7 +1,8 @@
 # 预览 = 导出:渲染一致性(治本)— 设计
 
 日期: 2026-07-27
-状态: 排期(P0–P4),待实现
+状态: 进行中 —— **P1 完成**(合成器修黑闪);**P2 落地但未接线**(导出代理 + 离线渲染核心已建、
+待 P3 编码管线驱动后才能逐像素校验);**翻默认预览暂缓**(留待 P2/P3 验证充分);P3–P4 待做。
 关联: [WebCodecs 预览合成器设计](2026-07-19-webcodecs-compositor-design.md)(本设计的地基:S0–S2 已落地的 `CanvasCompositor`)
 
 ## 问题
@@ -56,8 +57,12 @@ ffmpeg 烧录——两边同源 CSS,早已逐像素对齐。所以:
 ## 分阶段(每阶段带 flag、ffmpeg 老路作 fallback、独立可验)
 
 - ~~P0 字幕/花字上 canvas~~ **免掉**:文字已 CSS 同源一致(见上),canvas 只做视频/图片;文字由 ffmpeg 烧 CSS→PNG,叠在 canvas 帧之上。
-- **P1 合成器成默认预览 + 修视频合成 bug。** 翻默认(仍留 flag 回退)。预览从此=最终画面权威。**这一步直接对着 canvas 修掉画中画多轨定位、段落切换黑屏等现报 bug**(它们是合成器 bug,不再是 parity)。验证:多轨 PiP / 相邻片段切换 / 底轨短于上层,预览均正确、无黑闪。
-- **P2 离线渲染核心 + 导出代理(路 C)。** ①后端:导出前为用到的源造全分辨率短 GOP H.264 代理(缓存复用,复用 S0 代理管线)。②前端:`renderFrameAt(model, t)` 确定性版——每源精确 seek 全分辨率代理、按 model 合成、返回一帧 bitmap,脱离 rAF。验证:给定 t,离线帧 == 预览同 t 帧(pixel diff 阈内)。
+- **P1 修视频合成 bug ✅(翻默认暂缓)。** 段落切换黑闪已治本:合成器预热即将播放片段的解码器(`prewarmLayers`,冷片段在到达前完成 fetch/解析/首帧),不再黑闪(`CanvasCompositor` + `Monitor`)。画中画多轨已核对与 `MonitorElement` 逐项一致,翻默认不会走样。**翻默认(compositor flag 默认开)拆出,待 P2/P3 真机验证充分后再做**——它改真实预览引擎(含音频时钟切到 WebAudioMixer),值得拿真实工程先验。验证方式:真机多轨 PiP / 相邻片段切换 / 底轨短于上层。
+- **P2 离线渲染核心 + 导出代理(路 C)——已落地,未接线。**
+  - ①后端 ✅:`ensure_export_proxy` 惰性造全分辨率短 GOP H.264(crf16 近无损)导出代理,`export-proxy.mp4` 缓存复用;`GET /assets/{id}/export-proxy` 服务(复用预览代理管线,`build_proxy(max_height=None)`)。测试覆盖原生分辨率保留 + 建/服务/缓存。
+  - ②前端权威 ✅:`sceneModel.sceneLayersAt`(唯一「t 时刻可见层」,8 单测)+ `scenePaint.paintScene`(唯一绘制代码,合成器已改调);预览与导出从此共用「画什么/怎么画」。
+  - ③前端离线核心 ✅(未接线):`OfflineVideoSource`(可 await 的整-GOP 确定性解码)+ `OfflineFrameRenderer.renderFrameAt(t)`(精确 seek 导出代理 → paintScene 到 OffscreenCanvas)。
+  - **未闭环**:renderFrameAt 尚未被导出流程调用,依赖 WebCodecs + 后端已建代理,故「离线帧 == 预览同 t 帧(pixel diff)」的验证要等 P3 编码管线接上、真机跑。已知取舍:色阶曲线 LUT 在 OffscreenCanvas 上 url(#) 不解析,当前仅应用可用 CSS 表达的调色(设计既定非目标)。
 - **P3 编码管线(方案 Y)。** 离线帧逐帧 → 后端 ffmpeg(rawvideo 管道)编码;音频用 `OfflineAudioContext` 渲整段混音(gain/duck/fade/solo)→ 交 ffmpeg;进度 + 取消。验证:整条时间线导出成片,画面与预览一致、音画同步。
 - **P4 导出切新路,ffmpeg render_plan 老路留 fallback(flag)。** 新路稳定后默认;WebCodecs 不可用 / 造代理失败 → 回退老 render_plan。逐像素回归:同一时间线两路各导一版,采样帧 pixel diff 入 CI。
 
