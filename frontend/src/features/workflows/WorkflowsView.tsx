@@ -125,6 +125,7 @@ import {
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
+import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -1036,13 +1037,11 @@ function WorkflowEditor({
       const source = connection.source ?? "";
       const target = connection.target ?? "";
       if (!source || !target || source === target) return false;
-      const handle = ("sourceHandle" in connection ? connection.sourceHandle : undefined) ?? undefined;
-      if (
-        graph.edges.some(
-          (edge) =>
-            edge.source === source && edge.target === target && (edge.source_handle ?? undefined) === handle,
-        )
-      ) {
+      const srcHandle = ("sourceHandle" in connection ? connection.sourceHandle : undefined) ?? undefined;
+      const tgtHandle = ("targetHandle" in connection ? connection.targetHandle : undefined) ?? undefined;
+      // 查重按边的种类分开(见 connections.ts):数据边不存 source_handle,若和控制边混比,
+      // 「先连属性再连顺序」会把已有数据边误判成重复而拒掉控制边。数据边去重交给 onConnect 替换。
+      if (!isDataConnection(srcHandle, tgtHandle) && isDuplicateControlEdge(graph.edges, source, target, srcHandle)) {
         return false;
       }
       // 从 target 出发能走回 source 即成环
