@@ -26,6 +26,7 @@ export interface CompositorLayer {
  */
 export function CanvasCompositor({
   layers,
+  prewarmLayers,
   width,
   height,
   fillMode = "cover",
@@ -34,6 +35,10 @@ export function CanvasCompositor({
   onSourceFailed,
 }: {
   layers: CompositorLayer[];
+  /** Clips the playhead is about to reach (video only). Their decoders are kept alive and their
+      first frame primed ahead of time, so crossing a cut into a cold proxy doesn't flash black
+      while it fetches/parses/decodes. Never drawn — priming only. */
+  prewarmLayers?: CompositorLayer[];
   width: number;
   height: number;
   /** Base-layer fit, matching the sequence reframe (overlay layers always cover). */
@@ -60,6 +65,8 @@ export function CanvasCompositor({
   const imagesRef = React.useRef<Map<string, HTMLImageElement>>(new Map());
   const layersRef = React.useRef(layers);
   layersRef.current = layers;
+  const prewarmRef = React.useRef(prewarmLayers);
+  prewarmRef.current = prewarmLayers;
   const fillModeRef = React.useRef(fillMode);
   fillModeRef.current = fillMode;
   React.useEffect(() => {
@@ -94,6 +101,11 @@ export function CanvasCompositor({
     for (const layer of layers) {
       if (layer.asset.kind === "image") wantImage.add(layer.asset.id);
       else wantVideo.set(layer.clip.id, layer.asset.id);
+    }
+    // Upcoming clips keep their decoder too — created here so the fetch/parse starts ahead of the
+    // playhead; the draw loop then primes their first frame. (Video only; images decode instantly.)
+    for (const layer of prewarmLayers ?? []) {
+      if (layer.asset.kind !== "image") wantVideo.set(layer.clip.id, layer.asset.id);
     }
     for (const [id, source] of sourcesRef.current) {
       if (!wantVideo.has(id)) {
@@ -131,7 +143,7 @@ export function CanvasCompositor({
     imagesRef.current.forEach((_img, id) => {
       if (!wantImage.has(id)) imagesRef.current.delete(id);
     });
-  }, [layers]);
+  }, [layers, prewarmLayers]);
 
   React.useEffect(() => {
     return () => {
@@ -185,6 +197,16 @@ export function CanvasCompositor({
           reportedFailures.current.add(layer.asset.id);
           onSourceFailedRef.current?.(layer.asset.id);
         }
+      }
+
+      // Prime the decoders of clips the playhead is about to reach, at their first frame, so a cut
+      // into a never-seen proxy paints immediately instead of flashing black through the fetch/
+      // parse/first-GOP window. Not drawn — priming only; frameAt is idempotent once buffered, so
+      // this settles to a no-op. Kept above the settle early-return for the same reason mediaFor is:
+      // it is what drives decoding, and a paused playhead parked just before a cut still needs it.
+      for (const layer of prewarmRef.current ?? []) {
+        const source = sourcesRef.current.get(layer.clip.id);
+        if (source && source.ok) source.frameAt(layer.clip.src_in);
       }
 
       if (playhead === lastPlayhead && signature === lastSignature && !dirtyRef.current) {

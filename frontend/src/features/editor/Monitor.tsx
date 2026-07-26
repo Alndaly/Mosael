@@ -24,6 +24,9 @@ import { useEditorStore } from "@/stores/editorStore";
  * whichever video-track clip sits under it and is continuously re-synced.
  * Gaps render as black, matching export semantics.
  */
+/** How far ahead of the playhead to warm an upcoming clip's decoder. One short-GOP proxy's
+    fetch+parse+first-GOP fits comfortably inside this, so a cut into it never flashes black. */
+const PREWARM_SEC = 0.8;
 /** CSS approximations of the backend FFmpeg filter presets (render_plan.FILTER_PRESETS). */
 const FILTER_CSS: Record<string, string> = {
   bw: "grayscale(1)",
@@ -248,6 +251,36 @@ export function Monitor({
     return layers;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClip, activeOverlayClips, assetById, draft, selectedActive?.id]);
+  // Video clips (any video track) the playhead is about to reach — handed to the compositor to warm
+  // their decoders before the cut, so playing into a never-seen proxy paints immediately instead of
+  // flashing black through its fetch/parse/first-GOP window. The id-set (not the clip objects) is the
+  // stable key: it only changes when a clip enters/leaves the look-ahead window, so the array identity
+  // holds across playhead ticks and the compositor's source pool doesn't churn every frame.
+  const prewarmIds = React.useMemo(() => {
+    const ids: string[] = [];
+    const horizon = playhead + PREWARM_SEC;
+    for (const track of videoTracks) {
+      for (const clip of track.clips ?? []) {
+        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue;
+        if (clip.timeline_start > playhead && clip.timeline_start <= horizon) ids.push(clip.id);
+      }
+    }
+    return ids;
+  }, [videoTracks, assetById, playhead]);
+  const prewarmKey = prewarmIds.join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const prewarmSet = React.useMemo(() => new Set(prewarmIds), [prewarmKey]);
+  const prewarmLayers = React.useMemo<CompositorLayer[]>(() => {
+    const out: CompositorLayer[] = [];
+    for (const track of videoTracks) {
+      for (const clip of track.clips ?? []) {
+        if (!prewarmSet.has(clip.id)) continue;
+        const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
+        if (asset && asset.kind === "video") out.push({ clip, asset });
+      }
+    }
+    return out;
+  }, [prewarmSet, videoTracks, assetById]);
   // Only take the canvas path when every active clip can be drawn there (image, or a
   // video whose proxy is ready); otherwise fall back wholesale to the element preview.
   // Assets whose proxy turned out to be undecodable HERE — a codec this browser lacks, a
@@ -490,6 +523,7 @@ export function Monitor({
             <CanvasCompositor
               onSourceFailed={markUndecodable}
               layers={compositorLayers}
+              prewarmLayers={prewarmLayers}
               width={sequence.width}
               height={sequence.height}
               fillMode={fillMode}
