@@ -122,6 +122,42 @@ def test_workflow_browser_open_pool_mode() -> None:
             get_executor("browser_open")(db, wf, {"session_mode": "pool"})  # 缺 profile_id
 
 
+def test_agent_pool_open_requires_confirmation_naming_identity() -> None:
+    """智能体用池档案必须过确认卡(显式授权每会话):卡上点名是哪个档案;批准后才在其分区开会话。"""
+    client = fresh_client()
+    ws = _ws(client)
+    with SessionLocal() as db:
+        pid = browser.create_profile(db, workspace_id=ws, name="采集号").id
+    conf = client.post(
+        "/api/confirmations",
+        json={"workspace_id": ws, "tool": "browser_pool_open", "payload": {"profile_id": pid, "url": ""}},
+    ).json()
+    assert conf["status"] == "pending"
+    assert "采集号" in conf["summary"] and "⚠️" in conf["summary"]  # 点名身份 + 跨信任边界警示
+    approved = client.post(f"/api/confirmations/{conf['id']}/approve").json()
+    assert approved["status"] == "executed"
+    with SessionLocal() as db:
+        sess = db.get(BrowserSession, approved["result"]["session_id"])
+        assert sess.profile_id == pid and sess.kind == "profile" and sess.owner_kind == "agent"
+
+
+def test_agent_pool_open_unknown_profile_rejected() -> None:
+    client = fresh_client()
+    ws = _ws(client)
+    r = client.post(
+        "/api/confirmations",
+        json={"workspace_id": ws, "tool": "browser_pool_open", "payload": {"profile_id": "nope"}},
+    )
+    assert r.status_code == 422  # 档案不存在 → 连确认卡都不给建
+
+
+def test_pool_agent_tools_in_manifest_and_gating() -> None:
+    client = fresh_client()
+    by_name = {tool["name"]: tool for tool in client.get("/api/agent/tools").json()}
+    assert by_name.get("browser_pool_open", {}).get("confirmation") is True  # 用登录身份 → 必确认
+    assert by_name.get("browser_pool_list", {}).get("confirmation") is False  # 只读发现 → 内联
+
+
 def test_cannot_delete_bound_or_busy_profile() -> None:
     client = fresh_client()
     ws = _ws(client)
