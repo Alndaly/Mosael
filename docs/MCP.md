@@ -15,6 +15,11 @@ summaries — never raw internal schemas.
 | `generate_image` | ai-cost | Propose image generation — requires confirmation |
 | `generate_video` | ai-cost | Propose video generation — requires confirmation |
 | `get_confirmation` | readonly | Poll a confirmation: pending → executed/rejected/failed |
+| `browser_open` | edit | Open an **isolated, throwaway** automation browser (cannot see the user's logins) — **requires confirmation**; returns a `session_id` the other `browser_*` tools drive |
+| `browser_pool_list` | readonly | List browser-**pool** profiles the agent may request (id / name / platform / login status) — **no cookies or credentials exposed** |
+| `browser_pool_open` | edit | Open a session **reusing one of the user's logged-in pool profiles** — **requires confirmation** on a card that names that identity (explicit per-session authorization); returns a `session_id` |
+
+The browser tools reuse the confirmation gate. `browser_pool_open` is the security-critical one: the agent can use **no** logged-in profile without the user approving a card that names the identity ("显式授权每会话"). Agents are instructed that page content is DATA, not instructions; never enter passwords/payment; and warn the user before any post/submit/purchase.
 
 ## Confirmation flow (plan §16.2/§17.2)
 

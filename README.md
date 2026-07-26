@@ -6,10 +6,25 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 本地优先的桌面应用:一个 Electron 壳里跑着 FastAPI 后端(SQLite)、React 前端和一个内嵌浏览器发布执行器。
 素材导入 → 逐字剪辑 → 导出成片 → 抖音/B站/小红书/视频号矩阵发布,可由工作流与定时触发器全自动串起来。
+工作流可嵌套(子图 / 调用工作流 / 框选折叠);所有持久登录集中在「浏览器池」里,供发布、工作流 RPA 与智能体复用。
 
 ![操作演示:素材拖入时间线,播放头定位后一键分割](docs/media/timeline-edit.gif)
 
 > 更多操作演示(工作流搭建、知识库、发布矩阵……)见[文档站点](docs-site/)各指南页。
+
+### 近期新增
+
+**工作流嵌套(参考 ComfyUI / dify)** —— 框选画布上的节点,一键「折叠为子图」,进出边界的引用自动重连;子图可任意嵌套,`调用工作流`把整条流程当工具复用,循环体与顶层共用同一套并行引擎。
+
+![框选 → 折叠为子图](docs/media/collapse-subgraph.gif)
+
+**浏览器池** —— 把所有持久登录身份统一成「档案」:发布账号(挂平台)与任意站点的通用登录,一处管理;发布、工作流 RPA 与 AI 智能体都能复用其登录态。智能体复用需**逐次显式授权**(确认卡点名是哪个身份),动不了你没给的账号。
+
+![浏览器池:统一登录身份,工作流与智能体安全复用](docs/media/browser-pool.png)
+
+![智能体授权闸:复用登录身份必须逐次显式授权](docs/media/agent-authorize.png)
+
+> 以上为按品牌设计系统代码生成的示意图;交互实拍见文档站点。
 
 ---
 
@@ -132,12 +147,12 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 ```
 backend/          FastAPI + SQLAlchemy 2.0 + Alembic(29 个迁移)
-  app/domain/     领域内核:sequences(剪辑) render workflows publish kb agent
+  app/domain/     领域内核:sequences(剪辑) render workflows publish browser kb agent
                   scheduler transcripts generation plugins notifications
   app/api/routes/ HTTP 路由
   tests/          pytest
 frontend/         Vite + React 19 + TS + Tailwind v4 + Radix/shadcn
-  src/features/   editor timeline monitor media ai-studio workflows batch
+  src/features/   editor timeline monitor media ai-studio workflows browser-pool
                   publish kb scheduler plugins settings
   src/design/     设计令牌(tokens.css)
   src/app/        壳层、路由、i18n(messages.ts)、全局样式(styles.css)

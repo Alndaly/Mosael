@@ -15,14 +15,14 @@
 ### Frontend
 
 - Instrument-panel design system in `design/tokens.css`: neutral cold-gray canvas, white panels, refined blue primary, semantic track colors (video/audio/subtitle/overlay), editor surface tokens (monitor/ruler/playhead/lanes), mono tabular timecode, separately calibrated dark theme.
-- App shell: 56px icon rail with the plan's 8 primary sections (首页/素材/剪辑/AI Studio/批量/发布/知识库/设置) plus scheduler/plugins secondary entries, tooltips, topbar crumb, quick theme/language toggles.
+- App shell: 56px icon rail with primary sections (首页/素材/剪辑/AI Studio/发布/知识库/设置) plus secondary entries 工作流/浏览器池/定时任务/插件, tooltips, topbar crumb, quick theme/language toggles. (The old 批量 tab was removed — batch runs are now covered by workflows.)
 - Real editor (four-region NLE layout):
   - Timeline: adaptive timecode ruler, scrubbable playhead, zoom (buttons + ctrl/cmd-wheel), snap toggle, colored per-kind clips, pointer drag move, edge trim handles, selection, drop-to-insert from pool.
   - Pure geometry kernel `domain/timeline/geometry.ts` with 21 Vitest cases.
   - Monitor: rAF playback clock, `<video>` synced to the active video-track clip, black gaps, image clip rendering, transport bar.
   - Media pool (thumbnails, drag + double-click append) and Inspector (ranges, speed/gain, delete).
   - State split per plan §14.2: server truth in React Query, drag drafts + transient UI in Zustand.
-- Home (project cards), Media library (thumbnail grid), Settings (preferences + backend info); Batch/Publish/KB as crafted planned states.
+- Home (project cards), Media library (thumbnail grid), Settings (preferences + backend info); Publish/KB as crafted planned states.
 - i18n (zh/en) and light/dark across every surface; OpenAPI-generated types only.
 
 ### Verified end-to-end (browser)
@@ -158,13 +158,15 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - File conversion engines: markitdown (local default) or MinerU API, selected by config.
 - Tiptap v3 note editor (StarterKit + official markdown extension + placeholder), markdown round-trip.
 
-### Workflows + batch + scheduler triggers (plan §12, Phase 13)
+### Workflows + nesting + scheduler triggers (plan §12, Phase 13)
 
-- `workflows.graph` JSON `{nodes, edges}` driven by a NODE_TYPES registry (start / llm / kb_search / plugin_tool / transcribe_asset / export_sequence / ai_generate / publish / condition / http_request / code / template) that simultaneously drives validation, the canvas UI and the agent's editing tools.
+- `workflows.graph` JSON `{nodes, edges}` driven by a NODE_TYPES registry (start / llm / kb_search / plugin_tool / transcribe_asset / export_sequence / ai_generate / publish / condition / http_request / code / template / loops + the browser and composition nodes below) that simultaneously drives validation, the canvas UI and the agent's editing tools.
 - Branch-aware engine: only nodes reachable via active edges run; condition nodes route true/false by `source_handle`; skipped nodes emit events. `{{node.key}}` interpolation between nodes. Code node = isolated python subprocess (20s, `-I`, PATH-only env).
 - React Flow canvas: dual condition handles, cycle-checking `isValidConnection`, minimap, node inspector v2 (overlay panel, static/dynamic selects, upstream-variable chips, Dify-style `/` slash picker via mirror-div caret measurement).
 - Per-workflow resident agent session (`external_key=workflow:<id>`) with memory; edits go through `update_workflow` behind confirmation cards; canvas auto-syncs on `updated_at` when not dirty.
-- Batch = workflow × params rows (sequential runner, parent job aggregates, one row failing does not abort the batch).
+- **Nesting redesign (ComfyUI + dify)**: `call_workflow` calls another saved workflow as a sub-flow (workflow-as-tool — map inputs, receive its declared outputs; runs as a child job that nests under the parent and cascades cancel; recursion + depth guarded, `MAX_NEST_DEPTH=8`); `output` node declares a workflow's named outputs (dify End-style) that a caller receives; `subgraph` wraps a group of nodes into a reusable, arbitrarily-nestable inline subgraph edited in a focused sub-canvas, seeded with `{{input.x}}`. Marquee-select on the canvas → **折叠为子图** collapses the selection into a subgraph node, auto-rewiring boundary references (`{{node.key}}` string refs and data edges) — pure transform in `frontend/src/features/workflows/collapse.ts`.
+- **Unified engine**: subgraphs and loop bodies run on the same real parallel engine (`execute_graph`) as the top level — same parallel / condition / data-edge semantics, not a stripped-down sequential runner.
+- Batch tab removed: "same workflow × N param rows" is now covered by workflows (loop_foreach / subgraph / call_workflow / multi-node).
 - Scheduler = trigger + workflow: manual / once / interval / daily / weekly / **webhook** (per-task secret, public POST endpoint with constant-time compare, no-reentry 409).
 
 ### Publish + account matrix (plan §6.9, Phase 13)
@@ -172,8 +174,17 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - Platform registry with `executor` local (folder/webhook/mock) vs browser (douyin/bilibili/xiaohongshu/weixin-channels); per-platform `title_max` enforced at create; Chinese aliases.
 - Full Electron publisher ported from mibu-video: per-account persistent session partitions, CDP file upload, adapters, foreground/background view management, cross-account concurrency with same-account serialization.
 - Worker queue protocol (claim / report rich statuses / claim-check / mark-due / heartbeat) — see [PUBLISHING.md](PUBLISHING.md) for the protocol and the **hard constraints** learned the hard way.
-- Account matrix tab: binding badges, platform nickname, last-check time, login / recheck / enable / rename / delete; checking-deadlock self-heal.
-- AI publish copy; publish workflow node.
+- Account matrix moved out of the Publish page into the **浏览器池** tab (see below): binding badges, platform nickname, last-check time, login / recheck / enable / rename / delete; checking-deadlock self-heal. The Publish page now shows publish records + 新建发布 only.
+- AI publish copy; publish workflow node; **`browser_upload` node** ("浏览器·上传文件") sets a file on a page's `<input type=file>` via CDP `DOM.setFileInputFiles` (no OS dialog) — takes an `asset_id` (e.g. `{{export_1.asset_id}}`) or a local `file_path`, the key primitive for publishing via workflow.
+
+### Browser pool / persistent-login (BrowserProfile)
+
+- Every persistent browser login is unified into one concept: `BrowserProfile` (DB table `browser_profiles`) = a reusable login identity = a persistent session partition + proxy + metadata. **发布账号 = 挂了平台的档案** (`publish_accounts.profile_id`); **通用档案 = 不挂平台**, reusable for any site.
+- Migration by **composition, not merge**: `publish_accounts` keeps its table + gains `profile_id`; each publish account gets a profile that reuses its existing partition `persist:mibu-<accountId>` (logins preserved). Generic profiles use `persist:pool-<id>`.
+- New **浏览器池** tab (`frontend/src/features/browser-pool/BrowserPoolView.tsx`, Boxes icon, between 工作流 and 定时任务); adding/managing accounts and generic profiles happens here.
+- **Lease**: one active session per profile at a time (`domain/browser.open_session`). **Login**: both publish accounts and generic profiles log in via the same app-embedded WebContentsView with a "返回 Mibu" button — not a separate OS window.
+- **Reusable by workflows**: the `browser_open` node gained `session_mode: pool` + `profile_id` → runs RPA reusing a pool profile's login.
+- **Reusable by the agent** behind an explicit-authorization gate: `browser_pool_list` (read-only discovery — id/name/platform/login-status, no cookies) and `browser_pool_open(profile_id)` (a confirmation-card tool: the agent can use no logged-in profile without the user approving a card that names the identity — 显式授权每会话). See [MCP.md](MCP.md).
 
 ### Task bus, notifications, cancellation
 

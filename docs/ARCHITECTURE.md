@@ -21,22 +21,23 @@
 | `sequences/` | 剪辑内核:insert/move/trim/delete/split/cut-range 等操作,每次操作校验不变量并落 `sequence_operations` + `sequence_revisions`(撤销/重做的基础) |
 | `render.py` | 序列 → RenderPlan(纯函数)→ ffmpeg 执行导出 |
 | `transcripts/` | 逐字稿:ASR 导入、token 级编辑、投影到时间线(删句 = 剪源区间) |
-| `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 纯调度引擎 + 批量运行;新增节点 = 元数据 + 一个执行器文件,引擎不动 |
-| `publish/` | 发布:平台注册表、任务队列、worker 协议、本地适配器 |
+| `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 统一并行调度引擎(`execute_graph`);新增节点 = 元数据 + 一个执行器文件,引擎不动。**嵌套**:`subgraph`(内嵌可复用子图)、`call_workflow`(调另一工作流当子流程,子 job 收纳 + 级联取消 + 防递归/过深)、`output`(声明工作流输出契约);子图与循环体都跑在同一套引擎上(并行/条件一致) |
+| `publish/` | 发布:平台注册表、任务队列、worker 协议、本地适配器;账号即挂平台的浏览器档案(`profile_id`) |
+| `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流 |
 | `agent/` | 智能体会话:CLI 适配器 + 流式 + 记忆 |
 | `kb/` | 知识库:FTS5 trigram + 向量(Milvus Lite)+ 图谱(Neo4j,可选) |
 | `generation/` | 文生图/视频:供应商契约 + 适配器 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露 |
-| `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布/批量)统一为 `jobs` + `task_events` |
+| `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events` |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
 
 ### 任务总线是枢纽
 
-任何耗时操作都建一个 `job`(kind = render/transcribe/ai_generation/workflow/publish/batch/scheduled),
+任何耗时操作都建一个 `job`(kind = render/transcribe/ai_generation/workflow/publish/scheduled),
 前端任务中心只认 `jobs` + `task_events`,不关心是谁在干活。这让"取消任务"能有统一语义:
-`cancel_job()` 把 job 落终态,工作流引擎与批量运行器**在每个节点边界重读 job 状态**决定是否停下
-——中断是节点粒度的(执行中的单个节点无法安全掐断)。事件统一经 `emit_job_event()` 发,
+`cancel_job()` 把 job 落终态,工作流引擎**在每个节点边界重读 job 状态**决定是否停下
+——中断是节点粒度的(执行中的单个节点无法安全掐断);子工作流经父子 job 链随父级级联取消。事件统一经 `emit_job_event()` 发,
 TaskEvent 行只在总线创建。
 
 每种 kind 有一个**执行模式**:`in_process`(默认,守护线程)或 `external`(外部 worker 经
@@ -54,7 +55,8 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace
 - `sequences` / `tracks` / `clips` — 时间线;`sequence_operations` 记录每次编辑及其逆操作(撤销)
 - `jobs` / `task_events` — 任务总线
 - `workflows` — DAG 存 JSON:`{nodes:[{id,type,config,position}], edges:[{source,target,source_handle}]}`
-- `publish_accounts` / `publish_tasks` — 账号矩阵与发布记录
+- `publish_accounts` / `publish_tasks` — 发布账号与发布记录(`publish_accounts.profile_id` 指向所挂的浏览器档案)
+- `browser_profiles` / `browser_sessions` / `browser_actions` — 浏览器池:持久登录身份、会话(租约)、待执行动作队列
 - `notifications` — 每用户一行,`type` 含 `team`(为协作申请预留)
 
 ## 前端:服务端真相 vs 瞬时状态
@@ -87,6 +89,8 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace
 
 智能体通过 MCP 工具读写系统(查素材、改时间线、跑工作流、生成内容)。
 **所有写操作先出确认卡**(`tool_confirmations` 表 + 前端卡片),用户批准后才执行——见 [MCP.md](MCP.md)。
+智能体也能复用**浏览器池**:`browser_pool_list` 只读发现档案(不含 cookie),`browser_pool_open(profile_id)`
+是确认卡工具——不经用户批准一张**点名该登录身份**的卡(显式授权每会话),智能体拿不到任何已登录档案。
 
 工作流画布里的 AI 编辑也是同一套:每条工作流一个常驻智能体会话(`external_key = workflow:<id>`),
 有记忆,改图走 `update_workflow` 工具 + 确认卡,画布检测到 `updated_at` 变化自动同步(未脏时)。

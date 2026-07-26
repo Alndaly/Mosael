@@ -6,10 +6,25 @@ An AI video creation studio = **NLE core + AI app center + creative agent workbe
 
 A local-first desktop app: one Electron shell running a FastAPI backend (SQLite), a React frontend, and an embedded-browser publishing executor.
 Import footage → transcript-based editing → export → publish to Douyin / Bilibili / Xiaohongshu / WeChat Channels, with workflows and scheduled triggers automating the whole chain.
+Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persistent browser login lives in one **Browser Pool**, reusable by publishing, workflow RPA, and the agent.
 
 ![Demo: drag clips onto the timeline, position the playhead, split in one keystroke](docs/media/timeline-edit.gif)
 
 > More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs site](docs-site/) guides.
+
+### Recently added
+
+**Workflow nesting (à la ComfyUI / dify)** — marquee-select nodes on the canvas and collapse them into a subgraph in one click; boundary references rewire automatically. Subgraphs nest arbitrarily, `call_workflow` reuses a whole flow as a tool, and loop bodies run on the same parallel engine as the top level.
+
+![Marquee → collapse to subgraph](docs/media/collapse-subgraph.gif)
+
+**Browser pool** — every persistent login becomes a reusable "profile": publish accounts (platform-bound) and generic logins for any site, managed in one place; publishing, workflow RPA, and the AI agent all reuse them. Agent reuse requires **explicit per-request approval** (a card that names the identity) — it can't touch a profile you didn't grant.
+
+![Browser pool: unified logins, safely reused by workflows and the agent](docs/media/browser-pool.png)
+
+![Agent authorization gate: reusing a login requires explicit approval each time](docs/media/agent-authorize.png)
+
+> The images above are code-generated from the brand design system; live captures are in the docs site.
 
 ---
 
@@ -133,12 +148,12 @@ For publishing issues, start with `publisher.log` — every step is recorded.
 
 ```
 backend/          FastAPI + SQLAlchemy 2.0 + Alembic
-  app/domain/     Domain core: sequences (editing), render, workflows, publish, kb, agent,
+  app/domain/     Domain core: sequences (editing), render, workflows, publish, browser, kb, agent,
                   scheduler, transcripts, generation, plugins, notifications
   app/api/routes/ HTTP routes
   tests/          pytest
 frontend/         Vite + React 19 + TS + Tailwind v4 + Radix/shadcn
-  src/features/   editor timeline monitor media ai-studio workflows batch
+  src/features/   editor timeline monitor media ai-studio workflows browser-pool
                   publish kb scheduler plugins settings
   src/design/     design tokens (tokens.css)
   src/app/        shell, routing, i18n (messages.ts), global styles (styles.css)

@@ -35,10 +35,12 @@
 
 ## 账号矩阵
 
-发布页「账号矩阵」页签是一等入口:
+账号矩阵已从发布页抽离到独立的**「浏览器池」tab**(见 [ARCHITECTURE.md](ARCHITECTURE.md) 的 `browser/` 子系统):
+发布账号 = 挂了平台的浏览器档案(`publish_accounts.profile_id`),与不挂平台的通用档案同屏管理。
+发布页现在只做发布本身(发布记录 + 新建发布),账号的「增」和「管」都归口浏览器池。
 
 - 每账号一张卡:平台、登录态徽标、平台昵称、上次检测、最近错误、登录/复检、启停开关、右键重命名/删除。
-- **登录会话持久化**:每账号一个 Electron `persist:mibu-<accountId>` 分区(`~/Library/Application Support/mibu/Partitions/`),重启不掉登录——这是"睡一觉起来照常自动发"的基础。
+- **登录会话持久化**:每发布账号一个 Electron `persist:mibu-<accountId>` 分区(`~/Library/Application Support/mibu/Partitions/`),重启不掉登录——这是"睡一觉起来照常自动发"的基础;账号并入浏览器池时**沿用这个既有分区**,登录态不丢。通用档案则用 `persist:pool-<id>`。
 - **登录态复检**:执行器空闲时后台静默巡检(bound/login_required 超过 12h 或 unknown 即到期),把 UI 拉回真实状态。手动「复检」把账号打回 `unknown` 让下一轮立刻认领。
 
 ### checking 卡死的自愈(踩过的坑)
