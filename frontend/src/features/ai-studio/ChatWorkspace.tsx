@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
+import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
@@ -43,20 +44,6 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentManifest = components["schemas"]["AgentManifestOut"];
 type AgentTool = components["schemas"]["ToolSpec"];
-type AgentUsageEvent = {
-  id: string;
-  agent_message_id: string | null;
-  provider: string;
-  model: string;
-  capability: string;
-  operation: string;
-  status: string;
-  duration_seconds: number | null;
-  units: Record<string, unknown>;
-  cost_micros: number | null;
-  currency: string;
-  cost_confidence: string;
-};
 
 export function ChatWorkspace({
   workspace,
@@ -829,120 +816,8 @@ function formatInspectorTime(value: string | null | undefined) {
   }).format(date);
 }
 
-function numberUnit(value: unknown): number | null {
-  if (typeof value === "boolean") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function quantityForUnit(units: Record<string, unknown>, unit: "token" | "input_token" | "output_token"): number {
-  const aliases = {
-    token: ["token", "tokens", "total_token", "total_tokens"],
-    input_token: ["input_token", "input_tokens", "prompt_tokens", "input_characters"],
-    output_token: ["output_token", "output_tokens", "completion_tokens", "output_characters"],
-  } satisfies Record<typeof unit, string[]>;
-  for (const key of aliases[unit]) {
-    const value = numberUnit(units[key]);
-    if (value != null) return value;
-  }
-  if (unit === "token") {
-    const input = quantityForUnit(units, "input_token");
-    const output = quantityForUnit(units, "output_token");
-    return input + output;
-  }
-  return 0;
-}
-
-function summarizeMessageUsage(events: AgentUsageEvent[]) {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let totalTokens = 0;
-  let durationSeconds = 0;
-  let hasDuration = false;
-  let unknownCostEvents = 0;
-  const costByCurrency = new Map<string, number>();
-
-  for (const event of events) {
-    const units = event.units ?? {};
-    const input = quantityForUnit(units, "input_token");
-    const output = quantityForUnit(units, "output_token");
-    const total = Math.max(quantityForUnit(units, "token"), input + output);
-    inputTokens += input;
-    outputTokens += output;
-    totalTokens += total;
-    if (typeof event.duration_seconds === "number") {
-      durationSeconds += event.duration_seconds;
-      hasDuration = true;
-    }
-    if (typeof event.cost_micros === "number") {
-      const currency = event.currency || "USD";
-      costByCurrency.set(currency, (costByCurrency.get(currency) ?? 0) + event.cost_micros);
-    } else {
-      unknownCostEvents += 1;
-    }
-  }
-
-  return {
-    inputTokens: Math.round(inputTokens),
-    outputTokens: Math.round(outputTokens),
-    totalTokens: Math.round(totalTokens),
-    durationSeconds: hasDuration ? durationSeconds : null,
-    costByCurrency,
-    unknownCostEvents,
-  };
-}
-
-function formatTokenCount(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
-}
-
-function formatCostMicros(currency: string, micros: number): string {
-  const amount = micros / 1_000_000;
-  const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : "";
-  const precision = amount > 0 && amount < 0.01 ? 6 : 4;
-  const value = new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: amount === 0 ? 0 : 2,
-    maximumFractionDigits: precision,
-  }).format(amount);
-  return symbol ? `${symbol}${value}` : `${value} ${currency}`;
-}
-
-function formatUsageCost(events: ReturnType<typeof summarizeMessageUsage>, t: ReturnType<typeof useI18n>): string | null {
-  const known = [...events.costByCurrency.entries()].filter(([, value]) => value >= 0);
-  if (known.length > 0) {
-    return t("usageCost").replace(
-      "{cost}",
-      known.map(([currency, micros]) => formatCostMicros(currency, micros)).join(" + "),
-    );
-  }
-  return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
-}
-
 function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
-  const t = useI18n();
-  const [copied, setCopied] = React.useState(false);
   const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
-  const usage = summarizeMessageUsage(usageEvents);
-  const duration = payload?.usage?.duration_seconds ?? usage.durationSeconds;
-  const tokenLabel =
-    usage.totalTokens > 0 ? t("usageTokens").replace("{n}", formatTokenCount(usage.totalTokens)) : null;
-  const tokenTitle =
-    usage.inputTokens > 0 || usage.outputTokens > 0
-      ? `${t("homeLegendInputTokens")} ${formatTokenCount(usage.inputTokens)} · ${t("homeLegendOutputTokens")} ${formatTokenCount(usage.outputTokens)}`
-      : undefined;
-  const costLabel = formatUsageCost(usage, t);
-
-  const copy = () => {
-    void navigator.clipboard.writeText(message.content).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
   return (
     <div
       className={
@@ -962,28 +837,12 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
       )}
       {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
       {message.role === "assistant" && (
-        <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100">
-          <button
-            type="button"
-            className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
-            title={t("copyMessage")}
-            onClick={copy}
-          >
-            {copied ? <Check size={11} /> : <Copy size={11} />}
-            {copied ? t("copied") : t("copyMessage")}
-          </button>
-          {typeof duration === "number" && (
-            <span className="timecode text-[11px] text-muted-foreground">
-              {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
-            </span>
-          )}
-          {tokenLabel && (
-            <span className="text-[11px] text-muted-foreground" title={tokenTitle}>
-              {tokenLabel}
-            </span>
-          )}
-          {costLabel && <span className="text-[11px] text-muted-foreground">{costLabel}</span>}
-        </div>
+        <MessageUsageFooter
+          content={message.content}
+          usageEvents={usageEvents}
+          durationOverride={payload?.usage?.duration_seconds}
+          className="opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
+        />
       )}
     </div>
   );

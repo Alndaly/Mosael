@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
+import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -313,6 +314,23 @@ export function WorkflowAgentChat({
     queryFn: () => api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/queue`),
     refetchInterval: 1500,
   });
+  // 计费/用量:与对话页同源,按 agent_message_id 归到各条回复(见 MessageUsageFooter)。
+  const usageEvents = useQuery({
+    queryKey: ["agent-usage-events", sessionId],
+    enabled: Boolean(sessionId),
+    queryFn: () => api<AgentUsageEvent[]>(`/api/agent/sessions/${sessionId}/usage-events`),
+    refetchInterval: running ? 1200 : false,
+  });
+  const usageByMessage = React.useMemo(() => {
+    const byMessage = new Map<string, AgentUsageEvent[]>();
+    for (const event of usageEvents.data ?? []) {
+      if (!event.agent_message_id) continue;
+      const current = byMessage.get(event.agent_message_id) ?? [];
+      current.push(event);
+      byMessage.set(event.agent_message_id, current);
+    }
+    return byMessage;
+  }, [usageEvents.data]);
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
@@ -615,12 +633,13 @@ export function WorkflowAgentChat({
               ) : (
                 <UserMessageContent content={message.content} />
               )}
-              {message.role === "assistant" && typeof duration === "number" && (
-                <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-                  <span className="timecode text-[11px] text-muted-foreground">
-                    {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
-                  </span>
-                </div>
+              {message.role === "assistant" && (
+                <MessageUsageFooter
+                  content={message.content}
+                  usageEvents={usageByMessage.get(message.id) ?? []}
+                  durationOverride={duration}
+                  className="flex-wrap text-muted-foreground"
+                />
               )}
             </div>
           );
