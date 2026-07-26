@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
-from app.domain.jobs import create_job, emit_job_event
+from app.domain.jobs import create_job, emit_job_event, reset_parent_job, set_parent_job
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -110,7 +110,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         if source in nodes_by_id and target in nodes_by_id:
             incoming[target].append(edge)
     total = max(len(order_ids), 1)
-    wf_id, wf_name = workflow.id, workflow.name
+    wf_id, wf_name, wf_job_id = workflow.id, workflow.name, job.id
 
     context: dict[str, dict[str, Any]] = {}
     executed: set[str] = set()
@@ -151,10 +151,16 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
         handler = get_executor(ntype)
         if handler is None:
             raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
-        # 每个节点用独立 session(SQLAlchemy Session 非线程安全),workflow 也在本 session 重取。
-        with SessionLocal() as node_db:
-            wf = node_db.get(Workflow, wf_id)
-            return handler(node_db, wf, config)
+        # 本节点派生的子任务(发布/导出/转写/生成/配音)都归到这条工作流 job 下:任务中心据此
+        # 收纳,不再平铺。set/reset 在本 worker 线程内,与其它并行节点互不干扰(见 jobs.create_job)。
+        token = set_parent_job(wf_job_id)
+        try:
+            # 每个节点用独立 session(SQLAlchemy Session 非线程安全),workflow 也在本 session 重取。
+            with SessionLocal() as node_db:
+                wf = node_db.get(Workflow, wf_id)
+                return handler(node_db, wf, config)
+        finally:
+            reset_parent_job(token)
 
     job.status = "running"
     job.message = f"工作流运行中: {wf_name}"

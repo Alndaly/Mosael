@@ -360,6 +360,9 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    # 工作流节点派生的子任务(发布/导出/转写/生成/配音)挂在父工作流 job 上,任务中心据此收纳、
+    # 不再与父工作流平铺成两行。顶层任务(用户直接发起)为 None。软引用,不设外键级联。
+    parent_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="queued")
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     message: Mapped[str] = mapped_column(String(500), nullable=False, default="")

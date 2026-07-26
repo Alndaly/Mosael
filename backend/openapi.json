@@ -5251,6 +5251,16 @@
               ],
               "title": "Kind"
             }
+          },
+          {
+            "name": "top_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Top Level"
+            }
           }
         ],
         "responses": {
@@ -5350,6 +5360,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/children": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Job Children",
+        "description": "一个工作流 job 派生的子任务(发布/导出/转写/生成/配音)。任务详情里「收纳」展示。",
+        "operationId": "list_job_children_api_jobs__job_id__children_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "title": "Response List Job Children Api Jobs  Job Id  Children Get"
                 }
               }
             }
@@ -13331,6 +13388,17 @@
           "kind": {
             "type": "string",
             "title": "Kind"
+          },
+          "parent_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Job Id"
           },
           "status": {
             "type": "string",

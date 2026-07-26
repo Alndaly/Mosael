@@ -46,7 +46,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}`),
+    // top_level=true:工作流派生的子任务(发布/导出/转写/生成/配音)收纳到父工作流下,
+    // 不再与父工作流平铺成两行;子任务在工作流任务详情里查看。
+    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}&top_level=true`),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
     refetchOnWindowFocus: true,

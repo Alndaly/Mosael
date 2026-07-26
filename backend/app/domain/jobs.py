@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 from collections.abc import Callable
@@ -16,6 +17,24 @@ from app.db.models import now as models_now
 logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("succeeded", "failed")
+
+# 「当前正在执行的父任务」——工作流引擎在跑某个子任务节点时把父 workflow job id 设进来,
+# create_job 据此自动给派生的子 job 打上 parent_job_id(见 workflows/engine.py)。用 contextvar
+# 而非显式穿参:子任务创建函数(start_publish/start_export/…)散落各领域,都汇聚到 create_job,
+# 在此一处捕获最省事;非工作流路径下取默认 None,即顶层任务。每个节点在自己的线程里 set/reset,
+# 线程间天然隔离。
+_current_parent_job: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "mibu_current_parent_job", default=None
+)
+
+
+def set_parent_job(job_id: str | None) -> contextvars.Token:
+    """标记「后续 create_job 派生的都是 job_id 的子任务」。返回的 token 用于 reset_parent_job。"""
+    return _current_parent_job.set(job_id)
+
+
+def reset_parent_job(token: contextvars.Token) -> None:
+    _current_parent_job.reset(token)
 
 # Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
 # stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
@@ -173,8 +192,11 @@ def create_job(
     kind: str,
     payload: dict[str, Any],
     message: str = "Queued",
+    parent_job_id: str | None = None,
 ) -> Job:
-    job = Job(workspace_id=workspace_id, kind=kind, payload=payload, message=message)
+    # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
+    parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
+    job = Job(workspace_id=workspace_id, kind=kind, payload=payload, message=message, parent_job_id=parent)
     db.add(job)
     db.flush()
     db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))

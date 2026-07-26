@@ -120,6 +120,19 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
+def _migrate_job_parent() -> None:
+    """加列迁移:jobs 增加 parent_job_id —— 工作流派生的子任务归到父工作流下,
+    任务中心不再把子任务与父工作流平铺成两行。老行留 NULL 即顶层任务,语义正确。"""
+    inspector = inspect(engine)
+    if "jobs" not in set(inspector.get_table_names()):
+        return
+    cols = {c["name"] for c in inspector.get_columns("jobs")}
+    if "parent_job_id" not in cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN parent_job_id VARCHAR(64)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_jobs_parent_job_id ON jobs (parent_job_id)"))
+
+
 def init_db() -> None:
     from app.db import models  # noqa: F401
 
@@ -135,6 +148,7 @@ def init_db() -> None:
     _migrate_tts_config()
     _migrate_provider_extra()
     _migrate_provider_capabilities()
+    _migrate_job_parent()
     Base.metadata.create_all(bind=engine)
 
 

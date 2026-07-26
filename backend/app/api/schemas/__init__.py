@@ -434,6 +434,7 @@ class JobOut(OrmModel):
     id: str
     workspace_id: str
     kind: str
+    parent_job_id: str | None = None
     status: str
     progress: float
     message: str

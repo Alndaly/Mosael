@@ -1838,6 +1838,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Job Children
+         * @description 一个工作流 job 派生的子任务(发布/导出/转写/生成/配音)。任务详情里「收纳」展示。
+         */
+        get: operations["list_job_children_api_jobs__job_id__children_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_id}/cancel": {
         parameters: {
             query?: never;
@@ -4414,6 +4434,8 @@ export interface components {
             workspace_id: string;
             /** Kind */
             kind: string;
+            /** Parent Job Id */
+            parent_job_id?: string | null;
             /** Status */
             status: string;
             /** Progress */
@@ -10251,6 +10273,7 @@ export interface operations {
             query: {
                 workspace_id: string;
                 kind?: string | null;
+                top_level?: boolean;
             };
             header?: never;
             path?: never;
@@ -10329,6 +10352,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_children_api_jobs__job_id__children_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"][];
                 };
             };
             /** @description Validation Error */

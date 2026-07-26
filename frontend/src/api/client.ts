@@ -137,6 +137,11 @@ export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
   return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
 }
 
+/** 工作流 job 派生的子任务(发布/导出/转写/生成/配音),在任务详情里「收纳」展示。 */
+export function listJobChildren(jobId: string): Promise<Job[]> {
+  return api<Job[]>(`/api/jobs/${jobId}/children`);
+}
+
 export type AsrModel = components["schemas"]["AsrModelOut"];
 export function listAsrModels(): Promise<AsrModel[]> {
   return api<AsrModel[]>("/api/asr/models");
