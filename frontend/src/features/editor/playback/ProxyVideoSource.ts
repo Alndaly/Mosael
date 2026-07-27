@@ -39,6 +39,11 @@ export class ProxyVideoSource {
   private closed = false;
   private failed = false;
   private byteLength = 0;
+  // 一帧"上次画过的画面",专门用来填 seek 期间的空窗。向后跳(或跨回已 park 的片段)必须
+  // 丢弃整个缓冲从关键帧重解,而解码是异步的 —— 那几个 rAF 里没有任何帧可返回,合成器就
+  // 跳过该层、画出黑屏(正向播放不进这条路径,所以只有倒着拖/跨切分边界才闪黑)。
+  // 留住最后一帧当兜底:画面停一下,远好过闪黑。
+  private held: Decoded | null = null;
 
   readonly ready: Promise<void>;
 
@@ -235,7 +240,10 @@ export class ProxyVideoSource {
       } catch {
         /* flush on a fresh decoder can reject; ignore */
       }
-      for (const f of this.frames) f.frame.close();
+      this.holdNewest();
+      for (const f of this.frames) {
+        if (f !== this.held) f.frame.close();
+      }
       this.frames = [];
       this.decodeCursor = key;
     }
@@ -264,11 +272,26 @@ export class ProxyVideoSource {
         }
       }
       this.frames = keep;
+      this.hold(null); // 真帧到位,兜底帧可以释放了
       return this.frames.find((f) => f.t === bestT)?.frame ?? null;
     }
     // Nothing ≤ sec yet (just seeked, first frame still decoding) — show the earliest
-    // available so the canvas isn't blank; don't evict.
-    return this.frames[0]?.frame ?? null;
+    // available, else the frame we held across the seek, so the canvas never goes blank.
+    return this.frames[0]?.frame ?? this.held?.frame ?? null;
+  }
+
+  /** 换用(或清空)兜底帧,顺手关掉上一张,避免 seek 反复触发时泄漏 VideoFrame。 */
+  private hold(next: Decoded | null): void {
+    if (this.held === next) return;
+    this.held?.frame.close();
+    this.held = next;
+  }
+
+  /** 把缓冲里最新的一帧留作兜底。缓冲为空时**保留现有兜底帧**而不是清掉 ——
+   *  park 后复活正是"缓冲空但已有兜底"的情形,清掉就等于把黑屏又放回来。 */
+  private holdNewest(): void {
+    const newest = this.frames[this.frames.length - 1];
+    if (newest) this.hold(newest);
   }
 
   /**
@@ -285,7 +308,12 @@ export class ProxyVideoSource {
    */
   park(): void {
     if (this.closed) return;
-    for (const f of this.frames) f.frame.close();
+    // 留一帧兜底:跨回这个片段(倒着拖过任一切分边界)时,复活要先从关键帧重解,
+    // 期间没有兜底就会闪黑。一个源只多留一张帧,代价可控。
+    this.holdNewest();
+    for (const f of this.frames) {
+      if (f !== this.held) f.frame.close();
+    }
     this.frames = [];
     if (this.decoder && this.decoder.state !== "closed") {
       try {
@@ -302,6 +330,7 @@ export class ProxyVideoSource {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.hold(null);
     for (const f of this.frames) f.frame.close();
     this.frames = [];
     if (this.decoder && this.decoder.state !== "closed") {
