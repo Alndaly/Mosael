@@ -7,7 +7,6 @@ import { API_BASE, api, userAvatarUrl, type Workspace } from "@/api/client";
 import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { compositorEnabled, compositorSupported, setCompositorEnabled } from "@/features/editor/playback/compositorFlag";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -549,27 +548,7 @@ function AppearanceSection() {
           </button>
         </div>
       </SettingsRow>
-      <CompositorRow />
     </SettingsGroup>
-  );
-}
-
-/** Opt-in switch for the WebCodecs canvas compositor (per-device localStorage). */
-function CompositorRow() {
-  const t = useI18n();
-  const [on, setOn] = React.useState(compositorEnabled);
-  const supported = compositorSupported();
-  return (
-    <SettingsRow label={t("previewCompositor")} description={t("previewCompositorDesc")}>
-      <Switch
-        checked={on && supported}
-        disabled={!supported}
-        onCheckedChange={(next) => {
-          setCompositorEnabled(next);
-          setOn(next);
-        }}
-      />
-    </SettingsRow>
   );
 }
 
