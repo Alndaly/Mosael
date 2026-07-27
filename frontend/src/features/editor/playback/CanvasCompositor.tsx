@@ -136,8 +136,25 @@ export function CanvasCompositor({
     for (const id of wantImage) {
       if (!imagesRef.current.has(id)) {
         const img = new Image();
-        img.crossOrigin = "anonymous"; // keep the canvas readable (scopes/capture) — asset URLs are cross-origin
-        img.src = assetFileUrl(id);
+        // crossOrigin keeps the canvas readable (scopes/capture). But a crossOrigin load enforces
+        // strict CORS, and some shells (Electron file:// → Origin "null") fail it even though the
+        // video path's fetch() succeeds — leaving the base image permanently black with no fallback
+        // (unlike video sources, which report failure and drop to element playback). So on error,
+        // retry ONCE without crossOrigin: the picture paints (canvas becomes tainted → only readback
+        // /scopes degrade, never the image itself). onload marks dirty so a late image repaints even
+        // if the paused canvas had already settled on black.
+        const url = assetFileUrl(id);
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          dirtyRef.current = true;
+        };
+        img.onerror = () => {
+          if (img.crossOrigin != null) {
+            img.crossOrigin = null;
+            img.src = url;
+          }
+        };
+        img.src = url;
         imagesRef.current.set(id, img);
       }
     }
