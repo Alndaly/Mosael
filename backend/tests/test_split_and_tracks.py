@@ -152,3 +152,77 @@ def test_track_mute_lock_with_undo() -> None:
     undone = client.post(f"/api/sequences/{sequence['id']}/undo").json()
     reverted = next(t for t in undone["tracks"] if t["id"] == track["id"])
     assert reverted["muted"] is False and reverted["locked"] is False
+
+
+def _animated_clip(client: TestClient) -> tuple[dict, dict, str]:
+    """一个带位置动画(x: -0.6 → 0.6)的片段,源区间 [0, 8]。"""
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    asset = client.post(
+        "/api/assets",
+        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
+    ).json()
+    sequence = client.post(
+        "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
+    ).json()
+    track = next(t for t in sequence["tracks"] if t["kind"] == "video")
+    state = client.post(
+        f"/api/sequences/{sequence['id']}/clips",
+        json={"track_id": track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": 8},
+    ).json()
+    clip = next(t for t in state["tracks"] if t["kind"] == "video")["clips"][0]
+    client.patch(
+        f"/api/sequences/{sequence['id']}/clips/{clip['id']}/transform",
+        json={"transform": {"scale": 0.4, "muted": False,
+                            "keyframes": [{"t": 0, "x": -0.6}, {"t": 1, "x": 0.6}]}},
+    )
+    return sequence, clip, sequence["id"]
+
+
+def _xs(clip: dict) -> list[tuple[float, float]]:
+    return sorted((kf["t"], kf["x"]) for kf in clip["transform"]["keyframes"] if "x" in kf)
+
+
+def test_split_slices_keyframes_so_animation_stays_continuous() -> None:
+    """关键帧 t 是片段内归一化进度,原样复制会让每一段重播整段动画(切点处跳回起点)。
+
+    正中切开后:左段应走完动画的前半(-0.6 → 中点 0.0),右段接着走后半(0.0 → 0.6)。"""
+    client = fresh_client()
+    sequence, clip, sid = _animated_clip(client)
+    state = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split", json={"src_time": 4}).json()
+    left, right = clips(state)
+    assert _xs(left) == [(0.0, -0.6), (1.0, 0.0)]
+    assert _xs(right) == [(0.0, 0.0), (1.0, 0.6)]
+    # 跨切点连续:左段末值 == 右段首值
+    assert _xs(left)[-1][1] == _xs(right)[0][1]
+
+
+def test_split_points_keeps_transform_and_slices_each_piece() -> None:
+    """多点切分此前用手写字段表建片段,漏掉 transform/muted/text_override —— 变换整个丢失。"""
+    client = fresh_client()
+    sequence, clip, sid = _animated_clip(client)
+    state = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split-points",
+                        json={"src_times": [2, 6]}).json()
+    pieces = clips(state)
+    assert len(pieces) == 3
+    for piece in pieces:  # 变换不再丢失
+        assert piece["transform"].get("scale") == 0.4
+    # 三段依次覆盖 -0.6 → -0.3 → 0.3 → 0.6,首尾相接
+    assert _xs(pieces[0])[0][1] == -0.6
+    assert _xs(pieces[-1])[-1][1] == 0.6
+    for earlier, later in zip(pieces, pieces[1:]):
+        assert abs(_xs(earlier)[-1][1] - _xs(later)[0][1]) < 1e-6
+
+
+def test_split_without_keyframes_leaves_transform_untouched() -> None:
+    """静态变换(无关键帧)不该被切分改写。"""
+    client = fresh_client()
+    state, clip = setup_clip(client)
+    sid = state["id"]
+    client.patch(f"/api/sequences/{sid}/clips/{clip['id']}/transform",
+                 json={"transform": {"scale": 0.5, "x": 0.25}})
+    split = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split", json={"src_time": 5}).json()
+    for piece in clips(split):
+        assert piece["transform"]["scale"] == 0.5
+        assert piece["transform"]["x"] == 0.25

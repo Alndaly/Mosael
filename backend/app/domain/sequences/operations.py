@@ -981,12 +981,22 @@ def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
         **_inherited(clip),
     }
     db.delete(clip)
-    left = Clip(**common, timeline_start=original["timeline_start"], src_in=original["src_in"], src_out=op.src_time)
+    orig_in, orig_out = original["src_in"], original["src_out"]
+    # 关键帧按各自的源区间重投影,否则两半各自重播整段动画(切点处画面跳回起点)。
+    def piece_common(piece_in: float, piece_out: float) -> dict[str, Any]:
+        return {**common, "transform": _sliced_transform(common["transform"], orig_in, orig_out, piece_in, piece_out)}
+
+    left = Clip(
+        **piece_common(orig_in, op.src_time),
+        timeline_start=original["timeline_start"],
+        src_in=orig_in,
+        src_out=op.src_time,
+    )
     right = Clip(
-        **common,
-        timeline_start=original["timeline_start"] + (op.src_time - original["src_in"]) / speed,
+        **piece_common(op.src_time, orig_out),
+        timeline_start=original["timeline_start"] + (op.src_time - orig_in) / speed,
         src_in=op.src_time,
-        src_out=original["src_out"],
+        src_out=orig_out,
     )
     db.add_all([left, right])
     db.flush()
@@ -1157,6 +1167,7 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
     created: list[dict[str, Any]] = []
     speed = clip.speed or 1.0
     inherited = _inherited(clip)
+    orig_in, orig_out = clip.src_in, clip.src_out
     db.delete(clip)
     timeline_cursor = original["timeline_start"]
     for src_start, src_end in kept:
@@ -1168,7 +1179,8 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
             timeline_start=timeline_cursor,
             src_in=src_start,
             src_out=src_end,
-            **inherited,
+            # 关键帧按保留段的源区间重投影(同 split);否则每段都重播整段动画。
+            **{**inherited, "transform": _sliced_transform(inherited["transform"], orig_in, orig_out, src_start, src_end)},
         )
         db.add(piece)
         db.flush()
@@ -1222,21 +1234,22 @@ def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> 
         raise SequenceDomainError("No valid split point inside the clip")
 
     original = _clip_payload(clip)
+    # _inherited(不是手写字段表):此前这里漏了 transform / muted / text_override,多点切分会把
+    # 画面变换、静音、文本一并丢掉 —— 与单点切分行为不一致。
     common = {
         "workspace_id": sequence.workspace_id,
         "sequence_id": sequence.id,
         "track_id": clip.track_id,
         "asset_id": clip.asset_id,
-        "gain": clip.gain,
-        "speed": clip.speed,
-        "effects": clip.effects,
+        **_inherited(clip),
     }
+    orig_in, orig_out = clip.src_in, clip.src_out
     boundaries = [clip.src_in, *points, clip.src_out]
     db.delete(clip)
     created: list[dict[str, Any]] = []
     for src_start, src_end in zip(boundaries, boundaries[1:]):
         piece = Clip(
-            **common,
+            **{**common, "transform": _sliced_transform(common["transform"], orig_in, orig_out, src_start, src_end)},
             # Keep each piece where it already sits on the timeline (speed-adjusted) — a split
             # divides, it must not move anything.
             timeline_start=original["timeline_start"] + (src_start - original["src_in"]) / speed,
@@ -1292,6 +1305,66 @@ INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text
 
 def _inherited(clip: Clip) -> dict[str, Any]:
     return {field: getattr(clip, field) for field in INHERITED_CLIP_FIELDS}
+
+
+_KEYFRAME_PROPS = ("scale", "x", "y", "opacity", "rotation")
+
+
+def _sample_keyframe_track(points: list[tuple[float, float]], t: float) -> float:
+    """分段线性 + 端点保持 —— 与前端 sampleProp、导出端 _kf_sample 同语义。"""
+    if t <= points[0][0]:
+        return points[0][1]
+    if t >= points[-1][0]:
+        return points[-1][1]
+    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+        if t0 <= t <= t1:
+            factor = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return v0 + (v1 - v0) * factor
+    return points[-1][1]
+
+
+def _sliced_transform(
+    transform: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> Any:
+    """把关键帧动画裁剪到 [piece_in, piece_out] 这一段上。
+
+    关键帧的 t 是**片段内归一化进度**(0=片段头、1=片段尾),所以把原 transform 原样复制给切出的
+    每一段,等于让每段都从头重播整段动画 —— 用户看到的是"切一刀,画面在切点跳回动画起点"。
+
+    这里按源时间把动画重新投影到新片段的进度轴:段首/段尾取原动画在该处的采样值(保证跨切点
+    连续、接得上),中间落在本段内的关键帧按比例重映射。无关键帧的 transform 原样返回。
+    """
+    if not isinstance(transform, dict):
+        return transform
+    raw = transform.get("keyframes")
+    if not isinstance(raw, list) or not raw:
+        return transform
+    span = orig_out - orig_in
+    piece_span = piece_out - piece_in
+    if span <= 0 or piece_span <= 0:
+        return transform
+
+    sliced: list[dict[str, Any]] = []
+    for prop in _KEYFRAME_PROPS:
+        points = sorted(
+            (float(kf["t"]), float(kf[prop]))
+            for kf in raw
+            if isinstance(kf, dict)
+            and isinstance(kf.get("t"), (int, float))
+            and isinstance(kf.get(prop), (int, float))
+        )
+        if not points:
+            continue
+        values: dict[float, float] = {}
+        # 两端必取:它们承接上一段的结尾 / 下一段的开头。
+        for edge_q, edge_src in ((0.0, piece_in), (1.0, piece_out)):
+            values[edge_q] = _sample_keyframe_track(points, (edge_src - orig_in) / span)
+        for progress, value in points:
+            q = (orig_in + progress * span - piece_in) / piece_span
+            if 1e-6 < q < 1 - 1e-6:
+                values[round(q, 6)] = value
+        sliced.extend({"t": q, prop: values[q]} for q in sorted(values))
+    return {**transform, "keyframes": sliced}
 
 
 def timeline_span(clip: Clip) -> float:
