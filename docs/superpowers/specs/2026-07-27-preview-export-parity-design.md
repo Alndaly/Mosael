@@ -1,8 +1,9 @@
 # 预览 = 导出:渲染一致性(治本)— 设计
 
 日期: 2026-07-27
-状态: 进行中 —— **P1 完成**(合成器修黑闪);**P2 落地但未接线**(导出代理 + 离线渲染核心已建、
-待 P3 编码管线驱动后才能逐像素校验);**翻默认预览暂缓**(留待 P2/P3 验证充分);P3–P4 待做。
+状态: 进行中 —— **P1 完成**(合成器修黑闪);**P2 落地未接线**(导出代理 + 离线渲染核心已建);
+**P3 编码核心落地未接线**(rawvideo→ffmpeg 编码器 + 测试);**翻默认预览暂缓**;剩 P3 传输/驱动/音频
++ P4 导出切路,均须真机验证。所有已落地代码均带测试、导出仍走老 render_plan。
 关联: [WebCodecs 预览合成器设计](2026-07-19-webcodecs-compositor-design.md)(本设计的地基:S0–S2 已落地的 `CanvasCompositor`)
 
 ## 问题
@@ -63,7 +64,9 @@ ffmpeg 烧录——两边同源 CSS,早已逐像素对齐。所以:
   - ②前端权威 ✅:`sceneModel.sceneLayersAt`(唯一「t 时刻可见层」,8 单测)+ `scenePaint.paintScene`(唯一绘制代码,合成器已改调);预览与导出从此共用「画什么/怎么画」。
   - ③前端离线核心 ✅(未接线):`OfflineVideoSource`(可 await 的整-GOP 确定性解码)+ `OfflineFrameRenderer.renderFrameAt(t)`(精确 seek 导出代理 → paintScene 到 OffscreenCanvas)。
   - **未闭环**:renderFrameAt 尚未被导出流程调用,依赖 WebCodecs + 后端已建代理,故「离线帧 == 预览同 t 帧(pixel diff)」的验证要等 P3 编码管线接上、真机跑。已知取舍:色阶曲线 LUT 在 OffscreenCanvas 上 url(#) 不解析,当前仅应用可用 CSS 表达的调色(设计既定非目标)。
-- **P3 编码管线(方案 Y)。** 离线帧逐帧 → 后端 ffmpeg(rawvideo 管道)编码;音频用 `OfflineAudioContext` 渲整段混音(gain/duck/fade/solo)→ 交 ffmpeg;进度 + 取消。验证:整条时间线导出成片,画面与预览一致、音画同步。
+- **P3 编码管线(方案 Y)——编码核心已落地,传输/驱动未接线。**
+  - 后端编码核心 ✅:`frame_encoder.encode_frames_to_mp4`——原始 RGBA 帧 → ffmpeg rawvideo stdin → faststart mp4,可混入音轨;视频编码参数与老路共用 `_video_encode_args`;并发抽干 stderr、逐帧进度、帧间取消。4 测试(分辨率/帧率/时长、音轨、帧尺寸校验、取消)。
+  - **未接线**:①WebSocket 传输(前端逐帧 `renderFrameAt` → 帧字节流 → 喂 `encode_frames_to_mp4`,async↔sync 队列桥);②前端导出驱动循环 + 先 `ensure_export_proxy`;③音频 `OfflineAudioContext` 整段混音(gain/duck/fade/solo)→ WAV → 交 ffmpeg;④进度/取消 UI。这些是浏览器/网络/编排,须真机验证。验证目标:整条时间线导出成片,画面与预览一致、音画同步。
 - **P4 导出切新路,ffmpeg render_plan 老路留 fallback(flag)。** 新路稳定后默认;WebCodecs 不可用 / 造代理失败 → 回退老 render_plan。逐像素回归:同一时间线两路各导一版,采样帧 pixel diff 入 CI。
 
 ## 非目标 / 风险 / 缓解
