@@ -36,6 +36,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -845,7 +846,18 @@ function GenerateWorkspace({
 
       <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
         <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
-          {ordered.length === 0 && (
+          {/* First load: skeleton turns instead of flashing the "no jobs yet" empty state. */}
+          {activeSession && sessionJobs.isLoading && ordered.length === 0 && (
+            <div className="flex flex-col gap-3.5" aria-hidden>
+              {[0, 1].map((i) => (
+                <div key={i} className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-44 self-end rounded-full" />
+                  <Skeleton className="aspect-square w-full max-w-[320px] rounded-lg" />
+                </div>
+              ))}
+            </div>
+          )}
+          {!(activeSession && sessionJobs.isLoading) && ordered.length === 0 && (
             <div className="m-auto">
               <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
             </div>

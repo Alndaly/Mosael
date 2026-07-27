@@ -26,6 +26,7 @@ import { relativeTime } from "@/lib/time";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -378,7 +379,16 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
       </div>
       {importFile.isError && <p className="text-xs text-destructive">{errText(importFile.error)}</p>}
 
-      {docs.length === 0 ? (
+      {documents.isLoading && docs.length === 0 ? (
+        <div className="flex flex-col gap-1" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-2.5 rounded-md border border-border bg-card py-1 pl-2.5 pr-1.5">
+              <Skeleton className="h-4 flex-1 rounded" />
+              <Skeleton className="h-4 w-12 rounded-full" />
+            </div>
+          ))}
+        </div>
+      ) : docs.length === 0 ? (
         <EmptyState icon={<FileText size={20} />} title={t("kbNoDocsTitle")} body={t("kbNoDocsBody")} />
       ) : (
         <div className="flex flex-col gap-1">
