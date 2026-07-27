@@ -91,6 +91,33 @@ def test_overlay_video_audio_mixed_but_silent_source_skipped(tmp_path) -> None:
     assert "amix=inputs=2" in graph  # base + tone only; the silent (missing-audio) overlay was skipped
 
 
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_base_image_is_looped_so_overlays_enable_over_it(tmp_path) -> None:
+    """A base-track IMAGE must be fed as looped multi-frame video, not a single frame. A single
+    frame freezes the base timestamp, so an overlay's enable='between(t,...)' never activates over
+    the image segment — transformed / picture-in-picture overlays vanish over an image background in
+    the export (they render fine over video/gap segments, whose timestamps advance)."""
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "bg", "asset_id": "img", "timeline_start": 0, "src_in": 0, "src_out": 5}],
+        assets={"img": {"file_key": "bg.png"}, "ov": {"file_key": "ov.mp4"}},
+        overlay_clips=[
+            {
+                "id": "pip", "asset_id": "ov", "timeline_start": 1, "src_in": 0, "src_out": 3,
+                "transform": {"scale": 0.5, "x": 0.3, "y": 0.3, "rotation": 0, "opacity": 1},
+            }
+        ],
+    )
+    cmd = build_ffmpeg_command(plan, lambda key: Path("/x/" + key), tmp_path / "o.mp4")
+    joined = " ".join(cmd)
+    # The base image input carries -loop 1 (so it produces real frames across its duration)…
+    assert "-loop" in cmd and "bg.png" in joined
+    # …and the transformed overlay's enable window is present to gate over it.
+    assert "enable='between(t," in joined
+
+
 def test_solo_silences_non_soloed_audio_and_base() -> None:
     plan = build_render_plan(
         sequence_id="s", revision=1, width=320, height=180, fps=30,

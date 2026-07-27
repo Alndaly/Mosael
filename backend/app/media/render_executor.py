@@ -706,7 +706,15 @@ def build_ffmpeg_command(
             src = segment.source
             seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
             # 带动画或淡入淡出的图片需要逐帧时间轴,否则单帧 → 表达式停在 t=0(动画/淡入失效)。
-            needs_time = bool(segment.transform.keyframes) or segment.video_fade_in > 0 or segment.video_fade_out > 0
+            # 底轨图片还有一个更隐蔽的必须逐帧的理由:单帧图片的时间戳不推进,叠加在它上面的 overlay
+            # 其 enable='between(t,...)' 读到的 t 冻住,于是画中画/带变换的上层在「图片底」这段完全不
+            # 出现(而在视频/黑场底上正常)——导出里「图片背景 + 画中画」只剩底图。故图片一律 -loop 逐帧。
+            needs_time = (
+                bool(segment.transform.keyframes)
+                or segment.video_fade_in > 0
+                or segment.video_fade_out > 0
+                or guess_kind(path) == "image"
+            )
             args += _image_loop_args(path, needs_time, tout) + seek + ["-i", str(path)]
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
