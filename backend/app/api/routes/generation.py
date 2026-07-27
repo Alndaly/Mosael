@@ -12,12 +12,15 @@ from app.api.schemas import (
     GenerationSessionCreate,
     GenerationSessionOut,
     GenerationSessionUpdate,
+    PromptOptimizeRequest,
+    PromptOptimizeResponse,
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.ai.providers import get_provider
 from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job, ProviderUsageEvent
 from app.domain.generation import create_generation_job, ensure_builtin_generation_models
 from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
 from app.domain.generation.runner import start_generation_thread
 
 router = APIRouter(tags=["generation"])
@@ -94,6 +97,24 @@ def list_generation_models(db: DbSession, kind: str | None = None) -> list[Gener
         stmt = stmt.where(GenerationModel.kind == kind)
     stmt = stmt.order_by(GenerationModel.provider, GenerationModel.model)
     return [_generation_model_out(model) for model in db.scalars(stmt)]
+
+
+@router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
+def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUser) -> PromptOptimizeResponse:
+    """把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。"""
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        result = optimize_image_prompt(
+            db,
+            raw_prompt=body.prompt,
+            provider=body.provider,
+            model=body.model,
+            profile_id=body.provider_profile_id,
+            ui_language=body.language,
+        )
+    except PromptOptimizeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return PromptOptimizeResponse(**result)
 
 
 @router.get("/generation/comfyui/workflows")

@@ -830,6 +830,24 @@ class GenerationCreateResponse(BaseModel):
     job: JobOut
 
 
+class PromptOptimizeRequest(BaseModel):
+    workspace_id: str
+    #: 目标图像平台(provider/model)——只用来选平台提示词习惯,不是重写用的 LLM。
+    provider: str = Field(min_length=1, max_length=80)
+    model: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1)
+    #: 重写用的聊天 LLM 供应商配置;缺省用默认启用的那个(与助手/工作流同一个)。
+    provider_profile_id: str | None = None
+    language: str = Field(default="zh", max_length=10)
+
+
+class PromptOptimizeResponse(BaseModel):
+    prompt: str
+    negative_prompt: str = ""
+    notes: str = ""
+    platform: str = ""
+
+
 class GenerationSessionCreate(BaseModel):
     workspace_id: str
     title: str = Field(default="新生成", max_length=200)

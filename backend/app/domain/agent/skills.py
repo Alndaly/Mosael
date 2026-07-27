@@ -39,11 +39,12 @@ CORE_SKILLS = [
     {
         "id": "mibu.ai_generation",
         "name": "AI Generation",
-        "description": "Create image and video generation jobs across configured providers.",
+        "description": "Create image and video generation jobs across configured providers, and optimize an image prompt for a target platform's conventions.",
         "source": "core",
         "tools": [
             {"name": "list_generation_models", "method": "GET", "path": "/api/generation/models"},
             {"name": "create_generation_job", "method": "POST", "path": "/api/generation/jobs"},
+            {"name": "optimize_image_prompt", "method": "POST", "path": "/api/generation/optimize-prompt"},
         ],
         "permissions": ["generation:read", "generation:write"],
     },
