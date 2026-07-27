@@ -137,28 +137,87 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# 项目历次更名(mibu-new → mibu-video → mibu-cut → open-studio)的数据目录迁移:按新→旧
-# 顺序找到第一个存在的老目录整体平移(同卷 rename,原子且瞬时,SQLite/媒体一并带走)。
-# 仅对默认路径做 —— OPEN_STUDIO_DATA_DIR 显式指过别处的部署不动。必须发生在任何
-# mkdir 之前:先建了空的新目录会让迁移永远跳过(踩过一次)。
-if settings.data_dir == Path.home() / ".open-studio" and not settings.data_dir.exists():
-    for _legacy_data_dir in (
-        Path.home() / ".mibu-cut",
-        Path.home() / ".mibu-video",
-        Path.home() / ".mibu-new",
-    ):
-        if _legacy_data_dir.is_dir():
-            _legacy_data_dir.rename(settings.data_dir)
-            break
+_DEFAULT_DATA_DIR = Path.home() / ".open-studio"
+_LEGACY_DATA_DIRS = (Path.home() / ".mibu-cut", Path.home() / ".mibu-video", Path.home() / ".mibu-new")
+_DB_NAMES = ("open-studio.db", "mibu.db")
 
-# 库文件更名 mibu.db → open-studio.db。同样必须早于任何 SQLAlchemy 连接:一旦连上,
-# SQLite 会先把新名建成空库,迁移条件(新库不存在)就永远不成立、老数据凭空"消失"。
-# -wal/-shm 是同一库的同伴文件,必须一起搬,否则残留的 WAL 会被当成另一个库的日志。
-if not settings.db_path.exists():
-    _legacy_db = settings.data_dir / "mibu.db"
-    if _legacy_db.is_file():
-        _legacy_db.rename(settings.db_path)
-        for _suffix in ("-wal", "-shm"):
-            _sidecar = _legacy_db.with_name(_legacy_db.name + _suffix)
-            if _sidecar.is_file():
-                _sidecar.rename(settings.db_path.with_name(settings.db_path.name + _suffix))
+
+def _db_has_rows(path: Path) -> bool:
+    """这个 SQLite 文件里有没有真实的用户数据(以 workspaces 表有行为准)。
+
+    判「有没有数据」而不是判「文件在不在」:一个已建好表结构、但一行没有的空库也有几百 KB,
+    靠体积区分不了。只读打开,任何异常(文件不是库、缺表、被占用)都当作"没有数据"。
+    """
+    if not path.is_file():
+        return False
+    try:
+        import sqlite3
+
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            row = connection.execute("SELECT COUNT(*) FROM workspaces").fetchone()
+            return bool(row and row[0])
+        finally:
+            connection.close()
+    except Exception:
+        return False
+
+
+def _dir_has_user_data(directory: Path) -> bool:
+    return any(_db_has_rows(directory / name) for name in _DB_NAMES)
+
+
+def _migrate_data_dir() -> None:
+    """项目历次更名(mibu-new → mibu-video → mibu-cut → open-studio)的数据目录迁移。
+
+    只在默认路径上做 —— OPEN_STUDIO_DATA_DIR 显式指过别处的部署不动。
+
+    判据是**新目录里有没有用户数据**,而不是"新目录存不存在"。后者踩过一次:任何一个进程
+    (哪怕只是导入了 app.core.db,它在模块层就 mkdir)都会先把空的新目录建出来,此后迁移
+    条件永远不成立 —— 老数据原地不动、应用却开在空库上,用户看到的是"所有项目都没了"。
+    新目录已被空壳占位时,把空壳挪到 .stale 备份名下再平移老目录(不删任何东西)。
+    """
+    if settings.data_dir != _DEFAULT_DATA_DIR or _dir_has_user_data(_DEFAULT_DATA_DIR):
+        return
+    if not _DEFAULT_DATA_DIR.exists():
+        # 快路径:新目录还没建 → 第一个存在的老目录整体平移(同卷 rename,原子且瞬时)。
+        legacy = next((d for d in _LEGACY_DATA_DIRS if d.is_dir()), None)
+        if legacy is not None:
+            legacy.rename(_DEFAULT_DATA_DIR)
+        return
+    # 新目录已被空壳占位:只有当某个老目录确有用户数据时才值得动它(空目录之间来回搬没意义)。
+    legacy = next((d for d in _LEGACY_DATA_DIRS if d.is_dir() and _dir_has_user_data(d)), None)
+    if legacy is None:
+        return
+    stale = _DEFAULT_DATA_DIR.with_name(_DEFAULT_DATA_DIR.name + ".stale")
+    index = 1
+    while stale.exists():
+        index += 1
+        stale = _DEFAULT_DATA_DIR.with_name(f"{_DEFAULT_DATA_DIR.name}.stale{index}")
+    _DEFAULT_DATA_DIR.rename(stale)  # 不删任何东西,只是让开
+    legacy.rename(_DEFAULT_DATA_DIR)
+
+
+def _migrate_db_filename() -> None:
+    """库文件更名 mibu.db → open-studio.db。
+
+    必须早于任何 SQLAlchemy 连接:一旦连上,SQLite 会先把新名建成空库。同样以"有没有数据"
+    为判据 —— 只看文件在不在的话,那个空库会让真数据永远搬不过来。
+    -wal/-shm 是同一库的同伴文件,必须一起搬,否则残留的 WAL 会被当成另一个库的日志。
+    """
+    # 判据不对称是有意的:同一个数据目录里存在 mibu.db,本身就说明"这个装机用的是旧库名",
+    # 即便它是空的也该采纳(那就是这个装机的库)。只需守住一点:新库已有数据时绝不覆盖。
+    legacy_db = settings.data_dir / "mibu.db"
+    if not legacy_db.is_file() or _db_has_rows(settings.db_path):
+        return
+    if settings.db_path.exists():  # 空壳占位 → 让开
+        settings.db_path.rename(settings.db_path.with_name(settings.db_path.name + ".stale"))
+    legacy_db.rename(settings.db_path)
+    for _suffix in ("-wal", "-shm"):
+        sidecar = legacy_db.with_name(legacy_db.name + _suffix)
+        if sidecar.is_file():
+            sidecar.replace(settings.db_path.with_name(settings.db_path.name + _suffix))
+
+
+_migrate_data_dir()
+_migrate_db_filename()
