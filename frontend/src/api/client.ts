@@ -318,6 +318,28 @@ export function assetExportProxyUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/export-proxy${suffix}`;
 }
 
+export interface PromptOptimizeResult {
+  prompt: string;
+  negative_prompt: string;
+  notes: string;
+  platform: string;
+}
+
+/** 分平台图像提示词优化:按目标 provider/model 的平台习惯重写提示词。与智能助手技能共用同一后端。 */
+export function optimizeImagePrompt(body: {
+  workspace_id: string;
+  provider: string;
+  model: string;
+  prompt: string;
+  provider_profile_id?: string | null;
+  language?: string;
+}): Promise<PromptOptimizeResult> {
+  return api<PromptOptimizeResult>("/api/generation/optimize-prompt", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export interface WaveformData {
   version: number;
   duration: number;

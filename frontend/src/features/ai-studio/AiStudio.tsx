@@ -14,8 +14,10 @@ import {
   Trash2,
   Upload,
   Video,
+  Wand2,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   api,
@@ -24,6 +26,7 @@ import {
   importAsset,
   listComfyuiWorkflows,
   listComfyuiWorkflowParams,
+  optimizeImagePrompt,
   type Asset,
   type ComfyParam,
   type GenerationCreateResponse,
@@ -301,6 +304,7 @@ function GenerateWorkspace({
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const { openImagePreview } = useImagePreview();
   const sessionKey = generationSessionSelectionKey(workspace.id);
@@ -674,6 +678,29 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
     },
   });
+  // 分平台提示词优化:按当前所选图像模型的平台习惯重写提示框内容(与助手技能共用同一后端)。
+  const optimizePrompt = useMutation({
+    mutationFn: () =>
+      optimizeImagePrompt({
+        workspace_id: workspace.id,
+        provider: selectedModel!.provider,
+        model: selectedModel!.model,
+        prompt,
+        provider_profile_id: selectedModel!.provider_profile_id,
+        language: locale,
+      }),
+    onSuccess: (result) => {
+      setPrompt(result.prompt);
+      // SD 类平台会连 negative 一起给;仅当当前模型支持 negative 时才写回。
+      if (result.negative_prompt && supportsNegativePrompt) {
+        setGenerationConfig((config) => ({ ...config, negativePrompt: result.negative_prompt }));
+      }
+      toast.success(`${t("optimizePrompt")} · ${result.platform}`, { description: result.notes || undefined });
+    },
+    onError: (error) => {
+      toast.error(t("optimizePromptFailed"), { description: error instanceof Error ? error.message : String(error) });
+    },
+  });
   const renameSession = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       api<GenerationSession>(`/api/generation/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
@@ -860,6 +887,24 @@ function GenerateWorkspace({
                 <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-[9px] py-0.5 text-[11.5px] text-muted-foreground">
                   {selectedModel.label}
                 </span>
+              )}
+              {selectedModel?.kind === "image" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-[11.5px] text-muted-foreground hover:text-foreground"
+                  disabled={!prompt.trim() || !selectedAdapterAvailable || optimizePrompt.isPending || createGeneration.isPending}
+                  onClick={() => optimizePrompt.mutate()}
+                  title={t("optimizePrompt")}
+                >
+                  {optimizePrompt.isPending ? (
+                    <Loader2 size={13} className="animate-mibu-spin" />
+                  ) : (
+                    <Wand2 size={13} />
+                  )}
+                  {t("optimizePrompt")}
+                </Button>
               )}
             </div>
             <Button
