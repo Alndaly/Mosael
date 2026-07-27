@@ -82,6 +82,9 @@ export function AppShell({
   workspaces = [],
   onSelectWorkspace,
   projectName,
+  projects = [],
+  currentProjectId,
+  onSwitchProject,
   actions,
   children,
 }: {
@@ -92,6 +95,10 @@ export function AppShell({
   workspaces?: Workspace[];
   onSelectWorkspace?: (id: string) => void;
   projectName: string | null;
+  /** Projects (timelines) in the current workspace — powers the in-header timeline switcher. */
+  projects?: { id: string; name: string }[];
+  currentProjectId?: string | null;
+  onSwitchProject?: (id: string) => void;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -134,7 +141,11 @@ export function AppShell({
                 <>
                   <span className="text-border-strong">/</span>
                   {projectName ? (
-                    <strong className="truncate font-semibold text-foreground">{projectName}</strong>
+                    onSwitchProject && projects.length > 0 ? (
+                      <ProjectSwitcher projects={projects} currentProjectId={currentProjectId ?? null} onSwitchProject={onSwitchProject} />
+                    ) : (
+                      <strong className="truncate font-semibold text-foreground">{projectName}</strong>
+                    )
                   ) : (
                     <span className="italic text-muted-foreground">{t("crumbNoProject")}</span>
                   )}
@@ -221,6 +232,56 @@ export function AppShell({
 
 /** 面包屑首段的工作区切换器:始终是可点的下拉(单工作区也要有「能切换/能新建」
     的可见线索,否则没人知道工作区可以换),列表底部带「新建工作区」入口。 */
+/** In-editor timeline switcher: the project name in the breadcrumb becomes a dropdown of the
+    workspace's projects (each = a timeline), so you can jump between timelines without going home. */
+function ProjectSwitcher({
+  projects,
+  currentProjectId,
+  onSwitchProject,
+}: {
+  projects: { id: string; name: string }[];
+  currentProjectId: string | null;
+  onSwitchProject: (id: string) => void;
+}) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const current = projects.find((p) => p.id === currentProjectId);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="-mx-1 inline-flex min-w-0 shrink cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] font-semibold text-foreground transition-colors duration-100 [font:inherit] hover:bg-secondary [&_svg]:text-muted-foreground"
+          aria-label={t("timelineSwitch")}
+        >
+          <span className="truncate">{current?.name ?? ""}</span>
+          <ChevronsUpDown size={12} className="shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="grid max-h-[min(60vh,360px)] w-64 gap-0.5 overflow-auto p-1.5" align="start" sideOffset={8}>
+        <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("timelineSwitch")}</div>
+        {projects.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={cn(
+              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+              p.id === currentProjectId && "font-semibold text-primary",
+            )}
+            onClick={() => {
+              setOpen(false);
+              if (p.id !== currentProjectId) onSwitchProject(p.id);
+            }}
+          >
+            <span className="truncate">{p.name}</span>
+            {p.id === currentProjectId && <Check size={13} />}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function WorkspaceSwitcher({
   workspaceId,
   workspaceName,

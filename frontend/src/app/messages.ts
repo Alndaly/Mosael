@@ -3,6 +3,7 @@ export const messages = {
     // Shell
     workspaceDefault: "默认工作区",
     workspaceSwitch: "切换工作区",
+    timelineSwitch: "切换时间线",
     workspaceNew: "新建工作区",
     workspaceCreated: "已创建工作区「{name}」",
     workspaceMemberCount: "{n} 名成员",
@@ -1404,6 +1405,7 @@ export const messages = {
     // Shell
     workspaceDefault: "Default workspace",
     workspaceSwitch: "Switch workspace",
+    timelineSwitch: "Switch timeline",
     workspaceNew: "New workspace",
     workspaceCreated: "Workspace “{name}” created",
     workspaceMemberCount: "{n} members",

@@ -344,6 +344,9 @@ function Studio({
       workspaces={workspaces}
       onSelectWorkspace={onSelectWorkspace}
       projectName={project?.name ?? null}
+      projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
+      currentProjectId={project?.id ?? null}
+      onSwitchProject={openProject}
     >
       {view === "home" && <HomeView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
       {view === "media" && <MediaLibraryView workspace={workspace} />}
