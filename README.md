@@ -1,4 +1,4 @@
-# Mibu
+# Open Studio
 
 **简体中文** | [English](README.en.md)
 
@@ -30,10 +30,10 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 ## 快速开始:启动 App
 
-已构建好的 App 在 `release/mac-arm64/Mibu.app`,双击即可,或:
+已构建好的 App 在 `release/mac-arm64/Open Studio.app`,双击即可,或:
 
 ```bash
-open release/mac-arm64/Mibu.app
+open "release/mac-arm64/Open Studio.app"
 ```
 
 App 会自动拉起内置后端(占 `127.0.0.1:8800`)、加载前端、启动发布执行器——不需要手动起任何服务。
@@ -47,7 +47,7 @@ pnpm install                 # 根目录一次
 cd backend && uv sync && cd ..
 
 pnpm build:mac               # 前端 + 发布器 bundle + 后端(PyInstaller) + 打包 .app
-open release/mac-arm64/Mibu.app
+open "release/mac-arm64/Open Studio.app"
 ```
 
 `pnpm dist:mac` 同流程但产出 `.dmg`(分发时用)。
@@ -134,12 +134,12 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.mibu-cut/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
-| `~/.mibu-cut/media/` | 导入与导出的媒体文件 |
-| `~/.mibu-cut/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
-| `~/Library/Application Support/mibu/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
-| `~/Library/Application Support/mibu/logs/backend.log` | 打包版后端 stdout/stderr |
-| `~/Library/Application Support/mibu/Partitions/` | 各发布账号的持久登录会话 |
+| `~/.open-studio/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
+| `~/.open-studio/media/` | 导入与导出的媒体文件 |
+| `~/.open-studio/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
+| `~/Library/Application Support/Open Studio/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
+| `~/Library/Application Support/Open Studio/logs/backend.log` | 打包版后端 stdout/stderr |
+| `~/Library/Application Support/Open Studio/Partitions/` | 各发布账号的持久登录会话 |
 
 排查发布问题先看 `publisher.log`,每一步都有记录。
 

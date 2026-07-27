@@ -17,9 +17,15 @@ try {
   const fs = require("node:fs");
   const appData = app.getPath("appData");
   const newUserData = path.join(appData, app.getName());
-  const oldUserData = path.join(appData, "Mibu");
-  if (oldUserData !== newUserData && fs.existsSync(oldUserData) && !fs.existsSync(newUserData)) {
-    fs.renameSync(oldUserData, newUserData);
+  // 旧名大小写不确定(setName 曾为 "Mibu",打包/文档里也见过小写 "mibu"),两者都试一遍。
+  if (!fs.existsSync(newUserData)) {
+    for (const legacy of ["Mibu", "mibu"]) {
+      const oldUserData = path.join(appData, legacy);
+      if (oldUserData !== newUserData && fs.existsSync(oldUserData)) {
+        fs.renameSync(oldUserData, newUserData);
+        break;
+      }
+    }
   }
 } catch (err) {
   console.warn("[open-studio] userData migration skipped:", err);

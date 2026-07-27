@@ -1,4 +1,4 @@
-# Mibu
+# Open Studio
 
 [简体中文](README.md) | **English**
 
@@ -30,10 +30,10 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ## Quick start
 
-The built app lives at `release/mac-arm64/Mibu.app`. Double-click it, or:
+The built app lives at `release/mac-arm64/Open Studio.app`. Double-click it, or:
 
 ```bash
-open release/mac-arm64/Mibu.app
+open "release/mac-arm64/Open Studio.app"
 ```
 
 The app boots its bundled backend (on `127.0.0.1:8800`), loads the frontend, and starts the publishing executor — no manual services needed.
@@ -47,7 +47,7 @@ pnpm install                 # once, at the repo root
 cd backend && uv sync && cd ..
 
 pnpm build:mac               # frontend + publisher bundle + backend (PyInstaller) + package .app
-open release/mac-arm64/Mibu.app
+open "release/mac-arm64/Open Studio.app"
 ```
 
 `pnpm dist:mac` is the same pipeline but produces a `.dmg` for distribution.
@@ -135,12 +135,12 @@ cd frontend && pnpm gen:api              # regenerate TS types after backend Ope
 
 | Location | Contents |
 | --- | --- |
-| `~/.mibu-cut/mibu.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
-| `~/.mibu-cut/media/` | Imported and exported media files |
-| `~/.mibu-cut/kb_vectors.db` | Knowledge-base vectors (Milvus Lite; remote configurable) |
-| `~/Library/Application Support/mibu/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
-| `~/Library/Application Support/mibu/logs/backend.log` | Packaged-backend stdout/stderr |
-| `~/Library/Application Support/mibu/Partitions/` | Persistent login sessions per publishing account |
+| `~/.open-studio/mibu.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
+| `~/.open-studio/media/` | Imported and exported media files |
+| `~/.open-studio/kb_vectors.db` | Knowledge-base vectors (Milvus Lite; remote configurable) |
+| `~/Library/Application Support/Open Studio/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
+| `~/Library/Application Support/Open Studio/logs/backend.log` | Packaged-backend stdout/stderr |
+| `~/Library/Application Support/Open Studio/Partitions/` | Persistent login sessions per publishing account |
 
 For publishing issues, start with `publisher.log` — every step is recorded.
 
