@@ -127,3 +127,48 @@ describe("token clamping at clip edges", () => {
     expect(projected.tokens[2]).toMatchObject({ start_time: 2.8, end_time: 3.0 });
   });
 });
+
+describe("speed-adjusted clips (source seconds ≠ timeline seconds)", () => {
+  const segments = new Map([["a1", [seg("s1", 0, 2, "hello"), seg("s2", 2, 4, "world")]]]);
+
+  it("maps transcript segments through playback speed", () => {
+    // 2× :源 0..4 只占时间线 2s。s1(源 0..2)→ 时间线 10..11;s2(源 2..4)→ 11..12
+    const fast = { ...clip("c1", "a1", 10, 0, 4), speed: 2 };
+    const result = projectTranscript([fast], segments);
+    expect(result.map((r) => [r.timelineStart, r.timelineEnd])).toEqual([
+      [10, 11],
+      [11, 12],
+    ]);
+  });
+
+  it("maps at half speed too (source stretches on the timeline)", () => {
+    const slow = { ...clip("c1", "a1", 0, 0, 4), speed: 0.5 };
+    const result = projectTranscript([slow], segments);
+    expect(result.map((r) => [r.timelineStart, r.timelineEnd])).toEqual([
+      [0, 4],
+      [4, 8],
+    ]);
+  });
+
+  it("keeps speed=1 and missing speed identical (no regression)", () => {
+    const plain = projectTranscript([clip("c1", "a1", 10, 0, 4)], segments);
+    const explicit = projectTranscript([{ ...clip("c1", "a1", 10, 0, 4), speed: 1 }], segments);
+    expect(explicit).toEqual(plain);
+  });
+
+  it("places silences and their durations in timeline time", () => {
+    // 语音 0..1 与 3..4,中间 1..3 静音;2× → 时间线上从 +0.5 起、长 1s
+    const speech = new Map([
+      ["a1", [{ ...seg("s1", 0, 4, "x"), tokens: [
+        { start_time: 0, end_time: 1, text: "a" },
+        { start_time: 3, end_time: 4, text: "b" },
+      ] }]],
+    ]);
+    const fast = { ...clip("c1", "a1", 0, 0, 4), speed: 2 };
+    const gaps = detectSilences([fast], speech, 0.5);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].srcStart).toBe(1);
+    expect(gaps[0].timelineStart).toBe(0.5);
+    expect(gaps[0].duration).toBe(1);
+  });
+});

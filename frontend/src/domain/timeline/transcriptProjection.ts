@@ -10,6 +10,20 @@ export interface ProjectableClip {
   timeline_start: number;
   src_in: number;
   src_out: number;
+  /** Playback rate. Source seconds are NOT timeline seconds when this isn't 1 — see srcToTimeline. */
+  speed?: number;
+}
+
+/**
+ * A source time inside the clip → where it lands on the sequence timeline.
+ *
+ * Dividing by speed is the whole point: at 2× a word 10s into the source plays 5s into the clip.
+ * Mapping without it put every transcript word (and every detected silence) progressively further
+ * off on any speed-adjusted clip — clicking a word seeked to the wrong place, and silence ranges
+ * highlighted the wrong stretch of timeline.
+ */
+function srcToTimeline(clip: ProjectableClip, srcTime: number): number {
+  return clip.timeline_start + (srcTime - clip.src_in) / (clip.speed || 1);
 }
 
 export interface TokenLike {
@@ -61,8 +75,8 @@ export function projectTranscript(
         clipId: clip.id,
         text: segment.text,
         speaker: segment.speaker ?? null,
-        timelineStart: clip.timeline_start + (visibleStart - clip.src_in),
-        timelineEnd: clip.timeline_start + (visibleEnd - clip.src_in),
+        timelineStart: srcToTimeline(clip, visibleStart),
+        timelineEnd: srcToTimeline(clip, visibleEnd),
         srcStart: visibleStart,
         srcEnd: visibleEnd,
         clipped: segment.start_time < clip.src_in || segment.end_time > clip.src_out,
@@ -126,8 +140,9 @@ export function detectSilences(
           clipId: clip.id,
           srcStart: from,
           srcEnd: to,
-          timelineStart: clip.timeline_start + (from - clip.src_in),
-          duration: to - from,
+          timelineStart: srcToTimeline(clip, from),
+          // 时间线上的实际时长(变速后源秒数 ≠ 时间线秒数)——UI 用它画区间宽度。
+          duration: (to - from) / (clip.speed || 1),
         });
       }
     };
