@@ -6,8 +6,24 @@ const path = require("node:path");
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
 // 这里的 setName 影响 app.getName()/部分弹窗,setAppUserModelId 影响 Windows 任务栏归组。
 // 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
-app.setName("Mibu");
+app.setName("Open Studio");
+// 保留旧的 AppUserModelId(Windows 任务栏归组的不透明 id;改了等于换一个应用,得不偿失)。
 app.setAppUserModelId("dev.mibu.studio");
+
+// 更名(Mibu → Open Studio)迁移:userData = appData/app.getName(),改名会把登录分区
+// (Partitions)与日志留在旧目录下。启动最早、任何 userData 使用之前,把旧目录整体平移到
+// 新名下(仅当新目录尚不存在)。失败不致命——大不了当作全新安装。
+try {
+  const fs = require("node:fs");
+  const appData = app.getPath("appData");
+  const newUserData = path.join(appData, app.getName());
+  const oldUserData = path.join(appData, "Mibu");
+  if (oldUserData !== newUserData && fs.existsSync(oldUserData) && !fs.existsSync(newUserData)) {
+    fs.renameSync(oldUserData, newUserData);
+  }
+} catch (err) {
+  console.warn("[open-studio] userData migration skipped:", err);
+}
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
@@ -67,7 +83,7 @@ async function waitForBackend(timeoutMs) {
 }
 
 async function ensureBackend() {
-  // Port already serving a healthy Mibu backend (e.g. dev uvicorn) → reuse it.
+  // Port already serving a healthy Open Studio backend (e.g. dev uvicorn) → reuse it.
   if (await isHealthy()) return true;
 
   const { command, args, cwd } = backendCommand();
@@ -98,7 +114,7 @@ async function ensureBackend() {
   backend.on("exit", (code) => {
     backend = null;
     if (!quitting && code !== 0 && code !== null) {
-      dialog.showErrorBox("Mibu backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Mibu.`);
+      dialog.showErrorBox("Open Studio backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Open Studio.`);
     }
   });
   return waitForBackend(30000);
@@ -148,12 +164,12 @@ async function checkForUpdates() {
 function buildAppMenu() {
   const isMac = process.platform === "darwin";
   const about = {
-    label: "关于 Mibu",
+    label: "关于 Open Studio",
     click: () =>
       dialog.showMessageBox({
         type: "info",
-        title: "Mibu",
-        message: "Mibu",
+        title: "Open Studio",
+        message: "Open Studio",
         detail: `版本 ${app.getVersion()}`,
         buttons: ["好"],
       }),
@@ -162,17 +178,17 @@ function buildAppMenu() {
     ...(isMac
       ? [
           {
-            label: "Mibu",
+            label: "Open Studio",
             submenu: [
               about,
               { type: "separator" },
               { role: "services", label: "服务" },
               { type: "separator" },
-              { role: "hide", label: "隐藏 Mibu" },
+              { role: "hide", label: "隐藏 Open Studio" },
               { role: "hideOthers", label: "隐藏其他" },
               { role: "unhide", label: "全部显示" },
               { type: "separator" },
-              { role: "quit", label: "退出 Mibu" },
+              { role: "quit", label: "退出 Open Studio" },
             ],
           },
         ]
@@ -228,7 +244,7 @@ function createWindow() {
     height: 900,
     minWidth: 980,
     minHeight: 640,
-    title: "Mibu",
+    title: "Open Studio",
     backgroundColor: "#f0f1f3",
     // 无边框标题栏(参考 mibu-video):mac 红绿灯悬在左上侧栏顶部,
     // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度 = 顶栏 44px)。
@@ -338,9 +354,9 @@ app.whenReady().then(async () => {
   const ready = await ensureBackend();
   if (!ready) {
     dialog.showErrorBox(
-      "Mibu backend failed to start",
+      "Open Studio backend failed to start",
       `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
-        "Check that the port is free and see logs in ~/.mibu-cut/logs if available.",
+        "Check that the port is free and see logs in ~/.open-studio/logs if available.",
     );
     app.quit();
     return;
@@ -377,7 +393,7 @@ app.whenReady().then(async () => {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  // 账号视图里注入的「返回 Mibu」按钮(accountview-preload.cjs)→ 收起内嵌视图。
+  // 账号视图里注入的「返回 Open Studio」按钮(accountview-preload.cjs)→ 收起内嵌视图。
   ipcMain.on("publish:exit", () => {
     try {
       requirePublish().hidePublishView();
@@ -410,7 +426,7 @@ app.whenReady().then(async () => {
 
   buildAppMenu();
   // 关于面板信息(mac 标准关于弹窗)。
-  app.setAboutPanelOptions({ applicationName: "Mibu", applicationVersion: app.getVersion() });
+  app.setAboutPanelOptions({ applicationName: "Open Studio", applicationVersion: app.getVersion() });
   // Dock 图标:打包版走 .icns;开发态未打包时 Dock 用的是 Electron 默认图标,这里用打进仓库的
   // build/icon.png 覆盖(路径不存在时 createFromPath 返回空图,跳过)。
   if (process.platform === "darwin" && app.dock) {

@@ -8,7 +8,7 @@ const BASE =
   process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
 
 function readWorkerKey(): string {
-  const dir = process.env.MIBU_DATA_DIR || join(homedir(), ".mibu-cut");
+  const dir = process.env.MIBU_DATA_DIR || join(homedir(), ".open-studio");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
   } catch {

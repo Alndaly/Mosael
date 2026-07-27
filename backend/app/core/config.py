@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MIBU_", env_file=".env", extra="ignore")
 
-    data_dir: Path = Path.home() / ".mibu-cut"
+    data_dir: Path = Path.home() / ".open-studio"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8800
     # 后端日志级别(MIBU_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
@@ -104,12 +104,16 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# 项目历次更名(mibu-new → mibu-video → mibu-cut)的数据目录迁移:按新→旧顺序
-# 找到第一个存在的老目录整体平移(同卷 rename,原子且瞬时,SQLite/媒体一并带走)。
+# 项目历次更名(mibu-new → mibu-video → mibu-cut → open-studio)的数据目录迁移:按新→旧
+# 顺序找到第一个存在的老目录整体平移(同卷 rename,原子且瞬时,SQLite/媒体一并带走)。
 # 仅对默认路径做 —— MIBU_DATA_DIR 显式指过别处的部署不动。必须发生在任何
 # mkdir 之前:先建了空的新目录会让迁移永远跳过(踩过一次)。
-if settings.data_dir == Path.home() / ".mibu-cut" and not settings.data_dir.exists():
-    for _legacy_data_dir in (Path.home() / ".mibu-video", Path.home() / ".mibu-new"):
+if settings.data_dir == Path.home() / ".open-studio" and not settings.data_dir.exists():
+    for _legacy_data_dir in (
+        Path.home() / ".mibu-cut",
+        Path.home() / ".mibu-video",
+        Path.home() / ".mibu-new",
+    ):
         if _legacy_data_dir.is_dir():
             _legacy_data_dir.rename(settings.data_dir)
             break

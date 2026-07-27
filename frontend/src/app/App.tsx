@@ -94,7 +94,7 @@ export function App() {
   );
 }
 
-/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Mibu。
+/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Open Studio。
  *  内嵌视图从 48px 处铺开,这条必须恰好 48px 高,否则中间露出 App 顶栏穿帮。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
 function PublishViewBar() {
@@ -253,7 +253,7 @@ function WorkspaceGate() {
         <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
           <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
             <Film size={34} />
-            <h1>Mibu</h1>
+            <h1>Open Studio</h1>
             <p>{t("welcomeText")}</p>
             <Button onClick={() => createWorkspace.mutate()}>
               <FolderPlus size={16} /> {t("createWorkspace")}

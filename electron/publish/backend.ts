@@ -31,7 +31,7 @@ interface BackendTask {
 function readWorkerKey(): string {
   const dir =
     process.env.MIBU_DATA_DIR ||
-    join(homedir(), ".mibu-cut");
+    join(homedir(), ".open-studio");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
   } catch {

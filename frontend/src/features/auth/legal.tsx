@@ -7,7 +7,7 @@ import { ModalShell } from "@/components/app/modals";
 type LegalSection = { heading: string; body: string };
 
 const TERMS_ZH: LegalSection[] = [
-  { heading: "1. 协议的接受", body: "创建账户或使用 Mibu(下称「本软件」)即表示你已阅读并同意本协议。若不同意,请勿注册或使用。" },
+  { heading: "1. 协议的接受", body: "创建账户或使用 Open Studio(下称「本软件」)即表示你已阅读并同意本协议。若不同意,请勿注册或使用。" },
   { heading: "2. 服务形态", body: "本软件是本地优先的视频创作工具:账户、项目、素材与时间线数据默认存储在运行后端的这台设备上,不依赖官方云端服务。" },
   { heading: "3. 账户与数据责任", body: "账户仅存在于本机(或你所连接的自建后端)。你需要自行妥善保管登录凭据,并对设备上的数据自行备份 — 本软件不提供云端备份,数据因设备损坏、误删除等造成的丢失需由你自行承担。" },
   { heading: "4. 你的内容", body: "你通过本软件导入、录制、生成或编辑的内容归你所有。你须确保对所处理的素材拥有必要权利,并对使用本软件发布到第三方平台的内容及其合法性负责。" },
@@ -17,7 +17,7 @@ const TERMS_ZH: LegalSection[] = [
 ];
 
 const TERMS_EN: LegalSection[] = [
-  { heading: "1. Acceptance", body: "By creating an account or using Mibu (the \"Software\") you confirm that you have read and agree to these terms. Do not register or use the Software if you disagree." },
+  { heading: "1. Acceptance", body: "By creating an account or using Open Studio (the \"Software\") you confirm that you have read and agree to these terms. Do not register or use the Software if you disagree." },
   { heading: "2. Nature of the service", body: "The Software is a local-first video creation tool: accounts, projects, assets and timeline data are stored on the device running the backend. No official cloud service is involved." },
   { heading: "3. Account and data responsibility", body: "Accounts exist only on this machine (or a self-hosted backend you connect to). Keep your credentials safe and back up your data yourself — the Software provides no cloud backup, and loss caused by device failure or accidental deletion is your responsibility." },
   { heading: "4. Your content", body: "Content you import, record, generate or edit remains yours. You must hold the necessary rights to the material you process, and you are responsible for anything you publish to third-party platforms with the Software." },

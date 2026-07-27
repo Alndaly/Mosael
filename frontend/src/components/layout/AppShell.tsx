@@ -417,7 +417,7 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             <LogOut size={13} /> {t("signOut")}
           </button>
         </div>
-        <div className="border-t border-border pt-2 text-center text-[10.5px] tabular-nums text-muted-foreground">Mibu v{__APP_VERSION__}</div>
+        <div className="border-t border-border pt-2 text-center text-[10.5px] tabular-nums text-muted-foreground">Open Studio v{__APP_VERSION__}</div>
       </PopoverContent>
     </Popover>
   );
