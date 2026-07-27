@@ -92,6 +92,32 @@ def test_overlay_video_audio_mixed_but_silent_source_skipped(tmp_path) -> None:
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_image_overlay_is_looped_even_without_keyframes(tmp_path) -> None:
+    """图片作**叠层**且没有关键帧时也必须 -loop。
+
+    单帧图片时间戳不推进,叠加用的 enable='between(t,…)' 窗口永不命中 → 该图片叠层整段不显示
+    (逐帧像素校验抓到的真实 bug)。此前只在"有关键帧"时才 loop,恰好漏掉最常见的静态贴图。"""
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "bg", "asset_id": "vid", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+        assets={"vid": {"file_key": "bg.mp4"}, "pic": {"file_key": "pic.png"}},
+        overlay_clips=[
+            {
+                "id": "ov", "asset_id": "pic", "timeline_start": 0.5, "src_in": 0, "src_out": 2,
+                # 无 keyframes —— 正是此前漏掉 loop 的那条路径
+                "transform": {"scale": 0.5, "x": 0, "y": 0, "rotation": 0, "opacity": 1},
+            }
+        ],
+    )
+    cmd = build_ffmpeg_command(plan, lambda key: Path("/x/" + key), tmp_path / "o.mp4")
+    # 图片叠层的输入前必须紧跟 -loop 1(在它自己的 -i 之前)
+    idx = cmd.index("/x/pic.png")
+    assert "-loop" in cmd[max(0, idx - 5) : idx], f"image overlay not looped: {cmd[max(0, idx - 5): idx + 1]}"
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_base_image_is_looped_so_overlays_enable_over_it(tmp_path) -> None:
     """A base-track IMAGE must be fed as looped multi-frame video, not a single frame. A single
     frame freezes the base timestamp, so an overlay's enable='between(t,...)' never activates over

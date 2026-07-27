@@ -559,12 +559,18 @@ def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, flo
 _IMAGE_LOOP_PAD = 0.2  # -t 相对 trim 末尾留的小余量,保证末帧不缺
 
 
-def _image_loop_args(path: Path, needs_time: bool, trim_end: float) -> list[str]:
-    """静态图片进 ffmpeg 是**单帧**,下游 fps 拉伸即可(省事又快)。但一旦叠加基于时间 t/T
-    的效果——transform 关键帧动画、淡入淡出——单帧的时间戳不推进,表达式恒取 t=0 的值,
-    动画/淡入直接失效(常见表现:透明度停在 0 → 整段纯黑)。这类图片必须 -loop 1 变成真正
-    逐帧推进的视频流;-t 必须给(无限流会让 concat 永远卡在这一段),取 trim 末尾加点余量。"""
-    if needs_time and guess_kind(path) == "image":
+def _image_loop_args(path: Path, trim_end: float) -> list[str]:
+    """静态图片一律 -loop 成真正逐帧推进的视频流。
+
+    图片默认进 ffmpeg 只有**一帧**,时间戳不推进,于是任何按时间求值的东西都停在 t=0:
+      · 自身的 transform 关键帧动画 / 淡入淡出 → 恒取首值(表现为动画失效、透明度卡 0 全黑);
+      · 叠在它上面的 overlay 的 enable='between(t,…)' → 窗口永不命中(图片作底轨时上层画中画整段消失);
+      · 图片自己作 overlay 时同理 → 该叠层根本不出现。
+    这三类都真实发生过。曾经用一个 needs_time 开关只在"看起来需要时间轴"时才 loop,但需求方
+    (自身动画 / 上层 / 下层)分散在各处,每个调用点都得记得算对——两处算漏就是两个 bug。
+    索性去掉开关:图片一律逐帧,正确性由构造保证,代价只是极小的解码开销。
+    -t 必须给(无限流会让 concat 永远卡在这一段),取 trim 末尾加点余量保住末帧。"""
+    if guess_kind(path) == "image":
         return ["-loop", "1", "-t", f"{max(trim_end, 0.04) + _IMAGE_LOOP_PAD:.6f}"]
     return []
 
@@ -705,17 +711,7 @@ def build_ffmpeg_command(
             path = resolve(segment.source.file_key)
             src = segment.source
             seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
-            # 带动画或淡入淡出的图片需要逐帧时间轴,否则单帧 → 表达式停在 t=0(动画/淡入失效)。
-            # 底轨图片还有一个更隐蔽的必须逐帧的理由:单帧图片的时间戳不推进,叠加在它上面的 overlay
-            # 其 enable='between(t,...)' 读到的 t 冻住,于是画中画/带变换的上层在「图片底」这段完全不
-            # 出现(而在视频/黑场底上正常)——导出里「图片背景 + 画中画」只剩底图。故图片一律 -loop 逐帧。
-            needs_time = (
-                bool(segment.transform.keyframes)
-                or segment.video_fade_in > 0
-                or segment.video_fade_out > 0
-                or guess_kind(path) == "image"
-            )
-            args += _image_loop_args(path, needs_time, tout) + seek + ["-i", str(path)]
+            args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
             setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
@@ -781,7 +777,7 @@ def build_ffmpeg_command(
         path = resolve(overlay.source.file_key)
         src = overlay.source
         seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
-        args += _image_loop_args(path, bool(overlay.transform.keyframes), tout) + seek + ["-i", str(path)]
+        args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
         filters.append(
             f"[{input_index}:v]trim=start={tin}:end={tout},"
             f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
