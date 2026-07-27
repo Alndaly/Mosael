@@ -21,6 +21,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/time";
@@ -151,6 +152,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         </div>
       ) : (
         <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+          {profiles.isLoading &&
+            items.length === 0 &&
+            [0, 1, 2, 3].map((i) => (
+              <div key={`sk${i}`} className="space-y-2 rounded-md border border-border bg-panel p-3" aria-hidden>
+                <Skeleton className="h-4 w-1/2 rounded" />
+                <Skeleton className="h-3 w-2/3 rounded" />
+                <Skeleton className="h-3 w-1/3 rounded" />
+              </div>
+            ))}
           {items.map((p) => {
             const bound = Boolean(p.bound_account_id);
             const platformLabel = (platforms.data ?? []).find((m) => m.platform === p.platform)?.label ?? p.platform;

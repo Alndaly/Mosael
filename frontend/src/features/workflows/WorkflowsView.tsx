@@ -103,6 +103,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -510,6 +511,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             />
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
+            {workflows.isLoading &&
+              (workflows.data ?? []).length === 0 &&
+              [0, 1, 2, 3].map((i) => (
+                <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/4 rounded" />
+                    <Skeleton className="h-2.5 w-1/3 rounded" />
+                  </div>
+                </div>
+              ))}
             {(workflows.data ?? []).map((workflow) => (
               <ContextMenu key={workflow.id}>
                 <ContextMenuTrigger asChild>

@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,16 @@ export function PluginsView() {
             </Button>
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
+            {plugins.isLoading &&
+              (plugins.data ?? []).length === 0 &&
+              [0, 1, 2].map((i) => (
+                <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/4 rounded" />
+                    <Skeleton className="h-2.5 w-1/3 rounded" />
+                  </div>
+                </div>
+              ))}
             {(plugins.data ?? []).map((plugin) => (
               <button
                 key={plugin.id}
