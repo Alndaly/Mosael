@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import loginHeroUrl from "@/assets/login-hero.jpg";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -82,6 +83,13 @@ export function LoginView() {
 
   return (
     <div className="relative grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {/* 桌面端无边框窗:登录/注册页不挂 AppShell,若不自带拖拽条,整个窗口在登录前完全
+          拖不动(只能靠系统快捷键移动)。这条透明带盖住顶栏高度,层级压在语言按钮之下,
+          按钮自身标 no-drag 保证可点。 */}
+      <div
+        className="fixed inset-x-0 top-0 z-[5] hidden h-11 [.is-desktop_&]:block [-webkit-app-region:drag]"
+        aria-hidden
+      />
       <LoginHero />
 
       {/* 未登录也能换语言:与壳层同一偏好存储,登录后无缝延续。 */}
@@ -89,7 +97,7 @@ export function LoginView() {
         type="button"
         variant="ghost"
         size="sm"
-        className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground"
+        className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]"
         onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
         title={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
         aria-label={locale === "zh-CN" ? "Switch to English" : "切换到中文"}
@@ -285,8 +293,13 @@ function OAuthButtons() {
   );
 }
 
-/** 左侧英雄面板:公共目录的 /login-hero.jpg 作满幅背景(加载失败时退回品牌渐变),
- * 底部叠加品牌语。窄屏(<lg)整块隐藏,退回单列表单。 */
+/** 左侧英雄面板:满幅背景图(加载失败时退回品牌渐变),底部叠加品牌语。
+ * 窄屏(<lg)整块隐藏,退回单列表单。
+ *
+ * 图片走 import 而不是 public/ 的绝对路径:打包版用 file:// 加载 index.html,
+ * 写死的 "/login-hero.jpg" 会解析到**文件系统根目录**而不是应用包内(dev 下 vite
+ * 从根提供服务所以看不出来),封面图在打包后静默消失、只剩兜底渐变。import 让
+ * vite 产出随 base 正确解析的相对 URL。 */
 function LoginHero() {
   const t = useI18n();
   const [imageOk, setImageOk] = React.useState(true);
@@ -296,7 +309,7 @@ function LoginHero() {
       <div className="absolute inset-0 bg-[linear-gradient(160deg,color-mix(in_srgb,var(--primary)_58%,var(--background))_0%,color-mix(in_srgb,var(--primary)_24%,var(--background))_46%,var(--background)_100%)]" />
       {imageOk && (
         <img
-          src="/login-hero.jpg"
+          src={loginHeroUrl}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
           onError={() => setImageOk(false)}

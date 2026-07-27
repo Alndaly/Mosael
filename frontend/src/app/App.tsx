@@ -187,10 +187,27 @@ function AppToaster() {
   return <Toaster theme={theme} position="bottom-right" gap={8} toastOptions={{ className: "rounded-lg! border! border-border-strong! bg-popover! text-[12.5px]! text-foreground! shadow-none!" }} />;
 }
 
+/**
+ * 登录/建工作区之前的全屏过渡页(连接中、选工作区…)。这些页面不挂 AppShell,而无边框窗口
+ * 的拖拽区一向由 AppShell 顶栏提供 —— 少了它,窗口在这些状态下**完全拖不动**(启动连接
+ * 可能要好几秒)。这里统一补一条顶部透明拖拽带,内部交互元素标 no-drag。
+ */
+function PreShellScreen({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid min-h-screen place-items-center text-muted-foreground">
+      <div
+        className="fixed inset-x-0 top-0 z-[5] hidden h-11 [.is-desktop_&]:block [-webkit-app-region:drag]"
+        aria-hidden
+      />
+      <div className="[&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]">{children}</div>
+    </div>
+  );
+}
+
 function AuthGate() {
   const t = useI18n();
   const { status } = useAuth();
-  if (status === "loading") return <div className="grid min-h-screen place-items-center text-muted-foreground">{t("connecting")}</div>;
+  if (status === "loading") return <PreShellScreen>{t("connecting")}</PreShellScreen>;
   if (status === "anonymous") return <LoginView />;
   return <WorkspaceGate />;
 }
@@ -246,10 +263,10 @@ function WorkspaceGate() {
     setActiveId(id);
   }, []);
 
-  if (workspaces.isLoading) return <div className="grid min-h-screen place-items-center text-muted-foreground">{t("connecting")}</div>;
+  if (workspaces.isLoading) return <PreShellScreen>{t("connecting")}</PreShellScreen>;
   if (!workspace) {
     return (
-      <div className="grid min-h-screen place-items-center text-muted-foreground">
+      <PreShellScreen>
         <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
           <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
             <Film size={34} />
@@ -260,7 +277,7 @@ function WorkspaceGate() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </PreShellScreen>
     );
   }
   return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
