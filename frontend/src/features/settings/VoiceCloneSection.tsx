@@ -89,7 +89,10 @@ export function VoiceCloneSection() {
     onError: (error: Error) => toast.error(error.message),
   });
   const busy = download.isPending || (models.data ?? []).some((m) => m.status === "downloading");
-  const ready = config.data?.worker_ready ?? false;
+  // worker_ready 是后端针对「已保存」的引擎算的。选了别的引擎但还没保存时,对新引擎无从谈就绪
+  // (要保存后 config 重取才知道)——所以选中引擎 ≠ 已保存引擎时按未就绪处理,顶部提醒也随之
+  // 对应下拉里「选中」的引擎,而不再固定显示旧的已保存引擎(选 Fish Speech 却提示 F5-TTS 的根因)。
+  const ready = (config.data?.worker_ready ?? false) && form.watch("engine") === config.data?.engine;
 
   return (
     <SettingsGroup title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
@@ -101,8 +104,8 @@ export function VoiceCloneSection() {
               {ready
                 ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
                 : t("voiceCloneNotReady")
-                    .replace("{engine}", config.data.engine === "fish-speech" ? "Fish Speech" : "F5-TTS")
-                    .replace("{install}", config.data.engine === "fish-speech" ? t("voiceCloneInstallFish") : t("voiceCloneInstallF5"))}
+                    .replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")
+                    .replace("{install}", isFish ? t("voiceCloneInstallFish") : t("voiceCloneInstallF5"))}
             </AlertDescription>
           </Alert>
         )}
