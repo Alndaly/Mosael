@@ -386,3 +386,28 @@ def test_export_applies_clip_transform(tmp_path: Path) -> None:
     out = tmp_path / "out.mp4"
     execute_render(plan, lambda key: Path(key), out)
     assert out.exists() and out.stat().st_size > 0
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_overlays_hold_last_frame_instead_of_dropping_to_black(tmp_path) -> None:
+    """叠加层用 eof_action=repeat,不能用 pass。
+
+    叠加流常比它的 enable 窗口短一丁点(输入级 -ss 快进后,解码从 src_in 之后的第一帧起,
+    尾巴少了不到一帧)。pass 会在流结束的瞬间放出底层 → 每个叠加片段最后 1~2 帧变黑,
+    连续片段之间就是"切换处闪一下黑"(真实工程里 blackdetect 逐个边界都抓到过)。"""
+    from app.media.render_executor import build_ffmpeg_command
+
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[{"id": "b", "asset_id": "v", "timeline_start": 0, "src_in": 0, "src_out": 5}],
+        assets={"v": {"file_key": "v.mp4"}},
+        overlay_clips=[
+            {"id": "o1", "asset_id": "v", "timeline_start": 1, "src_in": 2, "src_out": 3,
+             "transform": {"scale": 0.5, "x": 0, "y": 0, "rotation": 0, "opacity": 1}},
+            {"id": "o2", "asset_id": "v", "timeline_start": 2, "src_in": 3, "src_out": 4,
+             "transform": {"scale": 0.5, "x": 0, "y": 0, "rotation": 0, "opacity": 1}},
+        ],
+    )
+    command = " ".join(build_ffmpeg_command(plan, lambda key: Path("/x/" + key), tmp_path / "o.mp4"))
+    assert "eof_action=pass" not in command
+    assert command.count("eof_action=repeat") >= 2

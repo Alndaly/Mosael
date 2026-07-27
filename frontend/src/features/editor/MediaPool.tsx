@@ -261,8 +261,12 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
+      {/* 缩略图必须 absolute 铺满(而不是 h-full/w-full):容器是 grid + place-items-center,
+          行高按内容 auto 算且不拉伸,百分比高度因此没有参照、退化成图片固有高度 —— 竖图会
+          撑成 64×96 溢出 36px 的框,被 overflow-hidden 从下方切掉,只剩顶部(实测如此)。
+          absolute inset-0 让图精确等于框,object-cover 才真的从中心裁切。 */}
       <div
-        className={cn("grid aspect-video place-items-center overflow-hidden rounded-sm bg-panel-inset text-muted-foreground [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
+        className={cn("relative grid aspect-video place-items-center overflow-hidden rounded-sm bg-panel-inset text-muted-foreground [&_img]:absolute [&_img]:inset-0 [&_img]:h-full [&_img]:w-full [&_img]:object-cover", asset.kind === "image" && "cursor-zoom-in")}
         onClick={(event) => {
           if (asset.kind !== "image") return;
           event.stopPropagation();

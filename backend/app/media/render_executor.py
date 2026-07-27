@@ -790,7 +790,12 @@ def build_ffmpeg_command(
         filters += tfilters
         out_label = f"[vov{i}]"
         filters.append(
-            f"{video_label}[{tlabel}]overlay=x='{ox}':y='{oy}':eof_action=pass:"
+            # eof_action=repeat(而不是 pass):叠加流常常比它的 enable 窗口短一丁点 —— 用了
+            # 输入级 -ss 快进后,解码从 src_in 之后的第一帧开始,尾巴就少了不到一帧。pass 会在
+            # 流结束的瞬间把底层放出来,于是**每个叠加片段的最后 1~2 帧变黑**,连续片段之间
+            # 看起来就是"切换处闪一下黑"(blackdetect 在真实工程里逐个边界都抓到了)。
+            # repeat 保持最后一帧,窗口由 enable 关闭,不会多画。
+            f"{video_label}[{tlabel}]overlay=x='{ox}':y='{oy}':eof_action=repeat:"
             f"enable='between(t,{overlay.start},{overlay.start + overlay.duration})'{out_label}"
         )
         video_label = out_label
@@ -806,7 +811,7 @@ def build_ffmpeg_command(
             filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{item.start}/TB[stin{input_index}]")
             out_label = f"[vts{input_index}]"
             filters.append(
-                f"{video_label}[stin{input_index}]overlay=x={sx}:y={sy}:eof_action=pass:"
+                f"{video_label}[stin{input_index}]overlay=x={sx}:y={sy}:eof_action=repeat:"
                 f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
             )
             video_label = out_label
@@ -823,7 +828,7 @@ def build_ffmpeg_command(
             filters += tfilters
             out_label = f"[vtx{k}]"
             filters.append(
-                f"{video_label}[{tlabel}]overlay=x='{tox}':y='{toy}':eof_action=pass:"
+                f"{video_label}[{tlabel}]overlay=x='{tox}':y='{toy}':eof_action=repeat:"
                 f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
             )
             video_label = out_label
