@@ -194,6 +194,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const sequence = sequences.data?.[0] ?? null;
 
+  // 换时间线 = 换内容:播放头与播放状态是全局 store 的,不重置就会带着上一条时间线的进度
+  // 继续播新序列(播放头还可能停在新序列长度之外)。这里按序列 id 归零并停播,覆盖所有切换
+  // 入口(项目切换器 / 首页 / 命令面板 / 深链),而不是只在某个按钮的回调里补一手。
+  React.useEffect(() => {
+    if (!sequence?.id) return;
+    const { setPlaying, setPlayhead } = useEditorStore.getState();
+    setPlaying(false);
+    setPlayhead(0);
+  }, [sequence?.id]);
+
   // Uploaded subtitle fonts are workspace-level, like assets and LUTs.
   const fonts = useQuery({
     queryKey: ["fonts", workspace.id],
