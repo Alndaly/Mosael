@@ -24,7 +24,7 @@ import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
 import { cn } from "@/lib/utils";
-import { useDndMonitor, useDroppable, type DragEndEvent, type DragMoveEvent } from "@dnd-kit/core";
+import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
 const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 26;
@@ -460,9 +460,23 @@ export function Timeline({
     target.addEventListener("pointerup", onUp);
   };
 
-  // 素材拖入:dnd-kit 指针事件(原生 HTML5 DnD 在 Electron 下不可靠,已弃用)。
-  const dndPointerX = (event: DragMoveEvent | DragEndEvent): number =>
-    ((event.activatorEvent as PointerEvent).clientX ?? 0) + event.delta.x;
+  // 素材拖入落点的指针 X:直接取实时指针的视口 clientX(与标尺/框选/移动片段同一套),
+  // 而不是 dnd-kit 的 activatorEvent.clientX + event.delta.x。delta 里已含 dnd-kit 对滚动容器
+  // 的滚动补偿,再和 timeAtPointer 里「随滚动实时变化的 canvasRef 矩形」相减,会把横向滚动量
+  // 算两遍——时间线在拖拽中/拖拽前滚动过,落点就偏(「有时候位置不对」)。实时 clientX 配实时
+  // 矩形,滚动只计一次,落点稳。dragStart 先用 activator 兜底,之后由 window pointermove 刷新。
+  const dragPointerXRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!draggingAsset) {
+      dragPointerXRef.current = null;
+      return;
+    }
+    const onMove = (event: PointerEvent) => {
+      dragPointerXRef.current = event.clientX;
+    };
+    window.addEventListener("pointermove", onMove, { capture: true });
+    return () => window.removeEventListener("pointermove", onMove, { capture: true });
+  }, [draggingAsset]);
   // 素材落轨的吸附:目标轨边缘优先,播放头/零点/其他轨道次级(与片段移动同级)。
   const snapDropStart = (start: number, target: Track): number =>
     snapTimeTiered(
@@ -472,6 +486,9 @@ export function Timeline({
       pxPerSecond,
     ).time;
   useDndMonitor({
+    onDragStart(event) {
+      dragPointerXRef.current = (event.activatorEvent as PointerEvent).clientX ?? null;
+    },
     onDragMove(event) {
       const asset = event.active.data.current?.asset as Asset | undefined;
       if (!asset) return;
@@ -481,7 +498,7 @@ export function Timeline({
         return;
       }
       const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
-      let start = timeAtPointer({ clientX: dndPointerX(event) });
+      let start = timeAtPointer({ clientX: dragPointerXRef.current ?? 0 });
       if (snapEnabled) start = snapDropStart(start, track);
       setDropGhost({ trackId: track.id, start, duration: assetDuration });
     },
@@ -491,7 +508,7 @@ export function Timeline({
       const track = event.over?.data.current?.track as Track | undefined;
       if (!asset || !track || !trackAcceptsAsset(track, asset) || track.locked) return;
       const assetDuration = typeof asset.media_info.duration === "number" ? asset.media_info.duration : 5;
-      let start = timeAtPointer({ clientX: dndPointerX(event) });
+      let start = timeAtPointer({ clientX: dragPointerXRef.current ?? 0 });
       if (snapEnabled) start = snapDropStart(start, track);
       onInsertClip({
         trackId: track.id,
