@@ -8,7 +8,7 @@ from app.core.config import settings
 """Effective KB embedding config.
 
 The DB singleton (KbEmbeddingConfig id='default') overrides the
-MIBU_KB_EMBEDDING_* env fallback, so the vector tier can be configured from
+OPEN_STUDIO_KB_EMBEDDING_* env fallback, so the vector tier can be configured from
 the UI. Resolved once and cached; call refresh() after writing the row (or
 after deleting the selected provider profile)."""
 

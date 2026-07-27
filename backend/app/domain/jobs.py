@@ -140,7 +140,7 @@ EVENT_RETENTION_DAYS = 30
 # - "in_process"(默认):领域模块 spawn 守护线程,进程死任务亡——重启时 reconcile 判失败。
 # - "external":外部 worker 经 claim/report 协议(/api/jobs/worker/*,worker key 鉴权)驱动,
 #   任务跨后端重启存活。发布器是第一个外部 worker;任何计算类 kind(render/transcribe…)
-#   都可以经 MIBU_EXTERNAL_JOB_KINDS 或 register_external_kind() 翻成 external,
+#   都可以经 OPEN_STUDIO_EXTERNAL_JOB_KINDS 或 register_external_kind() 翻成 external,
 #   由团队服务器旁的独立 worker 机器认领——这是"多机"的接缝,不是新架构。
 #
 # publish 由 publish 领域自己注册(app/domain/publish/__init__.py);

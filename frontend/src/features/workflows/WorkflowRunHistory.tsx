@@ -76,7 +76,7 @@ function outputsText(outputs: Record<string, unknown>): string {
 function RunIcon({ status }: { status: string }) {
   if (status === "succeeded") return <CheckCircle2 size={13} className="text-[#3fb950]" />;
   if (status === "failed") return <XCircle size={13} className="text-[#e5484d]" />;
-  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mibu-spin text-primary" />;
+  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-openstudio-spin text-primary" />;
   return <CircleDashed size={13} />;
 }
 
@@ -193,7 +193,7 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
                         ) : s.status === "skipped" ? (
                           <SkipForward size={12} className="shrink-0" />
                         ) : (
-                          <Loader2 size={12} className="animate-mibu-spin shrink-0 text-primary" />
+                          <Loader2 size={12} className="animate-openstudio-spin shrink-0 text-primary" />
                         )}
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.status === "skipped" ? (

@@ -48,7 +48,7 @@ const queryClient = new QueryClient({
 export function App() {
   // 桌面(Electron 无边框窗)样式适配:红绿灯占位、标题拖拽区按 is-desktop/is-mac 生效。
   React.useEffect(() => {
-    const desktop = window.mibuDesktop;
+    const desktop = window.openStudioDesktop;
     if (!desktop) return;
     const isWin = desktop.platform !== "darwin";
     document.documentElement.classList.add("is-desktop", isWin ? "is-win" : "is-mac");
@@ -68,7 +68,7 @@ export function App() {
 
   // 全屏时系统窗口控件消失 → 撤掉顶栏为它们预留的边距(mac 76px / Win 148px)。
   React.useEffect(() => {
-    const desktop = window.mibuDesktop;
+    const desktop = window.openStudioDesktop;
     if (!desktop?.onFullscreen) return;
     return desktop.onFullscreen((fullscreen) => {
       document.documentElement.classList.toggle("is-fullscreen", fullscreen);
@@ -106,7 +106,7 @@ function PublishViewBar() {
   });
   const [address, setAddress] = React.useState("");
   const [editing, setEditing] = React.useState(false);
-  React.useEffect(() => window.mibuPublish?.onViewState((next) => setState(next)), []);
+  React.useEffect(() => window.openStudioPublish?.onViewState((next) => setState(next)), []);
   // 地址随导航更新,但用户正在输入时不覆盖(否则打字被主进程回报打断)。
   React.useEffect(() => {
     if (!editing) setAddress(state.url ?? "");
@@ -116,7 +116,7 @@ function PublishViewBar() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const value = address.trim();
-    if (value) void window.mibuPublish?.navigate(value);
+    if (value) void window.openStudioPublish?.navigate(value);
     (event.currentTarget.querySelector("input") as HTMLInputElement | null)?.blur();
   };
 
@@ -127,7 +127,7 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoBack}
-          onClick={() => void window.mibuPublish?.back()}
+          onClick={() => void window.openStudioPublish?.back()}
           title={t("navBack")}
           aria-label={t("navBack")}
         >
@@ -137,7 +137,7 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoForward}
-          onClick={() => void window.mibuPublish?.forward()}
+          onClick={() => void window.openStudioPublish?.forward()}
           title={t("navForward")}
           aria-label={t("navForward")}
         >
@@ -146,7 +146,7 @@ function PublishViewBar() {
         <button
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
-          onClick={() => void window.mibuPublish?.reload()}
+          onClick={() => void window.openStudioPublish?.reload()}
           title={state.loading ? t("navStop") : t("navReload")}
           aria-label={state.loading ? t("navStop") : t("navReload")}
         >
@@ -154,7 +154,7 @@ function PublishViewBar() {
         </button>
       </div>
       <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0" onSubmit={submit}>
-        {state.loading && <Loader2 size={13} className="flex-none animate-mibu-spin text-muted-foreground" />}
+        {state.loading && <Loader2 size={13} className="flex-none animate-openstudio-spin text-muted-foreground" />}
         <Input
           value={address}
           spellCheck={false}
@@ -173,7 +173,7 @@ function PublishViewBar() {
       <button
         type="button"
         className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-[12.5px] text-foreground hover:border-border-strong hover:bg-secondary"
-        onClick={() => void window.mibuPublish?.hideView()}
+        onClick={() => void window.openStudioPublish?.hideView()}
       >
         <ArrowLeft size={14} /> {t("publishBackToMibu")}
       </button>
@@ -195,7 +195,7 @@ function AuthGate() {
   return <WorkspaceGate />;
 }
 
-const ACTIVE_WORKSPACE_KEY = "mibu:workspace";
+const ACTIVE_WORKSPACE_KEY = "openstudio:workspace";
 
 function readStoredWorkspaceId(): string | null {
   try {

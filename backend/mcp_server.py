@@ -5,8 +5,8 @@ summaries, never raw internal schemas. Talks to the local backend HTTP API so
 domain rules and (future) permissions apply uniformly.
 
 Run:  .venv/bin/python mcp_server.py            (from backend/)
-Env:  MIBU_API   (default http://127.0.0.1:8800)
-      MIBU_TOKEN (session token from login; required now that the API
+Env:  OPEN_STUDIO_API   (default http://127.0.0.1:8800)
+      OPEN_STUDIO_TOKEN (session token from login; required now that the API
                   enforces local authentication)
 """
 
@@ -25,7 +25,7 @@ from mcp.server.fastmcp import FastMCP
 #: at import time, so every tool 401'd or misrouted the moment the backend ran on any port
 #: other than 8800 — a packaged build picking a free port, or two instances side by side.
 _API_BASE: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "mibu_api_base", default=os.environ.get("MIBU_API", "http://127.0.0.1:8800")
+    "mibu_api_base", default=os.environ.get("OPEN_STUDIO_API", "http://127.0.0.1:8800")
 )
 
 
@@ -42,7 +42,7 @@ def api_base() -> str:
 # handles many users' turns concurrently and each needs its own credential. A global would leak
 # one caller's token into another's request.
 _API_TOKEN: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "mibu_api_token", default=os.environ.get("MIBU_TOKEN", "")
+    "mibu_api_token", default=os.environ.get("OPEN_STUDIO_TOKEN", "")
 )
 
 

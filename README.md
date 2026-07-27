@@ -54,7 +54,7 @@ open "release/mac-arm64/Open Studio.app"
 
 ### 应用更新
 
-打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)
+打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/open-studio/releases)
 最新 tag 与当前版本,发现新版弹提示引导到发布页下载;设置 → 本地后端 → 版本 里也有
 「检查更新」按钮。
 

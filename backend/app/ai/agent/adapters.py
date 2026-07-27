@@ -41,15 +41,15 @@ class TurnResult:
     usage: dict | None = None
 
 
-def mibu_mcp_config(api_base: str, token: str) -> dict:
+def open_studio_mcp_config(api_base: str, token: str) -> dict:
     backend_dir = Path(__file__).resolve().parents[3]
     python = backend_dir / ".venv" / "bin" / "python"
     return {
         "mcpServers": {
-            "mibu": {
+            "open-studio": {
                 "command": str(python if python.exists() else "python3"),
                 "args": [str(backend_dir / "mcp_server.py")],
-                "env": {"MIBU_API": api_base, "MIBU_TOKEN": token},
+                "env": {"OPEN_STUDIO_API": api_base, "OPEN_STUDIO_TOKEN": token},
             }
         }
     }
@@ -166,9 +166,9 @@ def abort_turn(session_id: str) -> bool:
 
 
 def _pi_sidecar_command() -> tuple[str, str]:
-    node = os.environ.get("MIBU_AGENT_BIN_NODE") or shutil.which("node") or "node"
+    node = os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE") or shutil.which("node") or "node"
     repo_root = Path(__file__).resolve().parents[4]
-    sidecar = os.environ.get("MIBU_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
+    sidecar = os.environ.get("OPEN_STUDIO_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
     return node, sidecar
 
 
@@ -211,10 +211,10 @@ def _run_pi(
         "model": model,
         "sessionState": adapter_state,
     }
-    # 打包版把 Electron 二进制当 node 用(MIBU_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
+    # 打包版把 Electron 二进制当 node 用(OPEN_STUDIO_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
     env = {**os.environ}
-    if os.environ.get("MIBU_AGENT_BIN_NODE"):
+    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     process = subprocess.Popen(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
@@ -293,7 +293,7 @@ def _run_pi(
 def build_claude_command(
     prompt: str, system_prompt: str, mcp_config_path: str, adapter_session_id: str | None
 ) -> list[str]:
-    binary = os.environ.get("MIBU_AGENT_BIN_CLAUDE") or shutil.which("claude") or "claude"
+    binary = os.environ.get("OPEN_STUDIO_AGENT_BIN_CLAUDE") or shutil.which("claude") or "claude"
     command = [
         binary,
         "-p", prompt,
@@ -318,7 +318,7 @@ def _run_claude_streaming(
 ) -> TurnResult:
     """stream-json mode: emits token-level text deltas via on_delta while running."""
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(mibu_mcp_config(api_base, token), handle)
+        json.dump(open_studio_mcp_config(api_base, token), handle)
         config_path = handle.name
     try:
         command = build_claude_command(prompt, system_prompt, config_path, adapter_session_id)

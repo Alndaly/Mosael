@@ -265,7 +265,7 @@ def _resolve_python(engine: str) -> str:
         probe = subprocess.run([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120)
         if probe.returncode == 0:
             return str(python)
-    raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 MIBU_ASR_PYTHON")
+    raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 OPEN_STUDIO_ASR_PYTHON")
 
 
 def start_download(model_id: str) -> dict[str, Any]:

@@ -63,7 +63,7 @@ DEFAULT_TEMPLATE: dict[str, Any] = {
     "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": "{{prompt}}"}},
     "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": "{{negative}}"}},
     "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-    "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "mibu", "images": ["8", 0]}},
+    "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "openstudio", "images": ["8", 0]}},
 }
 
 

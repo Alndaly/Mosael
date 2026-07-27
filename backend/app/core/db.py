@@ -12,6 +12,14 @@ class Base(DeclarativeBase):
     pass
 
 
+#: 发布账号登录分区的命名前缀(完整分区名 = persist:<PARTITION_PREFIX>-<accountId>)。
+#: 与 electron/publish/accountViews.ts 的同名约定必须一致——两边拼的是同一个磁盘目录。
+PARTITION_PREFIX = "openstudio"
+#: 更名前的完整分区前缀。**别把它跟着全局替换一起改掉** —— 它是迁移的"匹配老数据"那一侧,
+#: 改成新名会让迁移变成一条什么都不匹配的空语句(已经踩过一次,由测试兜住)。
+_LEGACY_PARTITION_PREFIX_FULL = "persist:mibu-"
+
+
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -148,10 +156,35 @@ def _migrate_browser_pool() -> None:
                 conn.execute(text("ALTER TABLE publish_accounts ADD COLUMN profile_id VARCHAR(64)"))
 
 
+def _migrate_partition_rename() -> None:
+    """更名:登录分区 persist:mibu-<id> → persist:openstudio-<id>。
+
+    分区名是登录态的地址(Electron 把 cookie/localStorage 存在 userData/Partitions/<名字> 下),
+    所以这里只改「数据库里记的地址」,**磁盘目录由 Electron 在真正用到该分区的那一刻惰性改名**
+    (见 electron/publish/accountViews.ts)。分两处、按需迁移,而不是要求两个进程同时改完——
+    否则谁先谁后都可能出现"库里指向新名、磁盘还是老名"的空窗,表现为全部平台登录失效。
+    幂等:只匹配老前缀。"""
+    inspector = inspect(engine)
+    if "browser_profiles" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                'UPDATE browser_profiles SET "partition" = :new || substr("partition", :cut) '
+                'WHERE "partition" LIKE :old'
+            ),
+            {
+                "new": f"persist:{PARTITION_PREFIX}-",
+                "cut": len(_LEGACY_PARTITION_PREFIX_FULL) + 1,
+                "old": f"{_LEGACY_PARTITION_PREFIX_FULL}%",
+            },
+        )
+
+
 def _backfill_browser_pool() -> None:
-    """给还没挂档案的发布账号,按其**既有分区** persist:mibu-<id> 建一个 browser_profiles 档案并
+    """给还没挂档案的发布账号,按其分区 persist:<prefix>-<id> 建一个 browser_profiles 档案并
     回填 profile_id。组合(不合并):发布账号表保留,只多一个指针。幂等——只处理 profile_id 为空的
-    账号。分区沿用不变 → Electron 打开同一分区,发布登录态不丢。"""
+    账号。分区与 Electron 的约定一致 → 打开同一分区,发布登录态不丢。"""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     if "publish_accounts" not in tables or "browser_profiles" not in tables:
@@ -169,7 +202,7 @@ def _backfill_browser_pool() -> None:
                     'INSERT INTO browser_profiles (id, workspace_id, name, "partition", proxy, enabled, created_at, updated_at) '
                     "VALUES (:id, :ws, :name, :part, :proxy, :enabled, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 ),
-                {"id": pid, "ws": acc.workspace_id, "name": acc.name, "part": f"persist:mibu-{acc.id}", "proxy": acc.proxy, "enabled": acc.enabled},
+                {"id": pid, "ws": acc.workspace_id, "name": acc.name, "part": f"persist:{PARTITION_PREFIX}-{acc.id}", "proxy": acc.proxy, "enabled": acc.enabled},
             )
             conn.execute(
                 text("UPDATE publish_accounts SET profile_id = :pid WHERE id = :aid"),
@@ -195,6 +228,7 @@ def init_db() -> None:
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)
+    _migrate_partition_rename()
     _backfill_browser_pool()
 
 

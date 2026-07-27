@@ -65,7 +65,7 @@ def resolve_asr_runtime() -> tuple[str, str]:
                 return str(python), provider
     raise AsrError(
         "未找到可用的转写环境:请安装 funasr 或 whisperx,"
-        "或设置 MIBU_ASR_PYTHON 指向已安装它们的 Python 解释器"
+        "或设置 OPEN_STUDIO_ASR_PYTHON 指向已安装它们的 Python 解释器"
     )
 
 

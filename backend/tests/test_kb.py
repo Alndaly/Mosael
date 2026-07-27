@@ -320,10 +320,10 @@ def test_kb_milvus_lite_roundtrip_opt_in_subprocess(tmp_path) -> None:
     and only run the native smoke when explicitly requested. Even then, run it out-of-process
     so a segfault reports as a failing smoke instead of killing pytest itself.
     """
-    if os.environ.get("MIBU_RUN_MILVUS_LITE_TEST") != "1":
+    if os.environ.get("OPEN_STUDIO_RUN_MILVUS_LITE_TEST") != "1":
         import pytest
 
-        pytest.skip("Set MIBU_RUN_MILVUS_LITE_TEST=1 to run the native milvus-lite smoke")
+        pytest.skip("Set OPEN_STUDIO_RUN_MILVUS_LITE_TEST=1 to run the native milvus-lite smoke")
 
     script = f"""
 from app.core.db import init_db

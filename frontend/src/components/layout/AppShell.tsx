@@ -107,7 +107,7 @@ export function AppShell({
 
   // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
   React.useEffect(() => {
-    return window.mibuDesktop?.onUpdateAvailable?.((info) => {
+    return window.openStudioDesktop?.onUpdateAvailable?.((info) => {
       if (!info?.hasUpdate) return;
       toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
         duration: 12000,
@@ -159,7 +159,7 @@ export function AppShell({
           <button
             type="button"
             className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-[10px] [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
-            onClick={() => window.dispatchEvent(new CustomEvent("mibu:open-cmdk"))}
+            onClick={() => window.dispatchEvent(new CustomEvent("openstudio:open-cmdk"))}
           >
             <Search size={13} />
             <span>{t("cmdkTitle")}</span>

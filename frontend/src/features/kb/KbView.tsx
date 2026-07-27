@@ -293,11 +293,11 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
   // Cmd+K → KB result → open that document. The palette has dispatched this event all along
   // and nothing listened, so picking a search result navigated to the KB page and showed
   // whatever dataset happened to be selected — the chosen document never opened. The other four
-  // mibu:open-* events all have listeners; this one was simply missed.
+  // openstudio:open-* events all have listeners; this one was simply missed.
   React.useEffect(() => {
     const onOpenDoc = (event: Event) => setOpenDocId((event as CustomEvent<string>).detail);
-    window.addEventListener("mibu:open-kb-doc", onOpenDoc);
-    return () => window.removeEventListener("mibu:open-kb-doc", onOpenDoc);
+    window.addEventListener("openstudio:open-kb-doc", onOpenDoc);
+    return () => window.removeEventListener("openstudio:open-kb-doc", onOpenDoc);
   }, []);
   const [urlOpen, setUrlOpen] = React.useState(false);
 
@@ -383,7 +383,7 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
                 event.currentTarget.value = "";
               }}
             />
-            {importFile.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <FileUp size={13} />} {t("kbImportFile")}
+            {importFile.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <FileUp size={13} />} {t("kbImportFile")}
           </label>
         </Button>
       </div>
@@ -522,7 +522,7 @@ function DocumentDetail({
             {dirty ? t("kbUnsavedHint") : t("kbSaved")}
           </span>
           <Button size="sm" disabled={!dirty || save.isPending} title={t("kbSaveShortcut")} onClick={doSave}>
-            {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSave")}
+            {save.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("kbSave")}
           </Button>
         </span>
       </div>
@@ -597,7 +597,7 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
       >
         <Input value={query} placeholder={t("kbRecallPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
         <Button type="submit" size="sm" disabled={!query.trim() || run.isPending}>
-          {run.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Search size={13} />} {t("kbRecallRun")}
+          {run.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Search size={13} />} {t("kbRecallRun")}
         </Button>
       </form>
       <p className="text-[11.5px] text-muted-foreground">{t("kbRecallHint")}</p>
@@ -628,7 +628,7 @@ function GraphTab({ dataset }: { dataset: KbDataset }) {
     queryKey: ["kb-graph", dataset.id],
     queryFn: () => api<KbGraph>(`/api/kb/datasets/${dataset.id}/graph`),
   });
-  if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="animate-mibu-spin" /></div>;
+  if (graph.isLoading) return <div className="grid h-full place-items-center text-muted-foreground"><Loader2 size={16} className="animate-openstudio-spin" /></div>;
   if (!graph.data?.enabled) {
     return (
       <div className="grid h-full place-items-center">
@@ -755,7 +755,7 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
 
       <div className="flex items-center gap-2.5">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbSaveSettings")}
+          {save.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("kbSaveSettings")}
         </Button>
         {save.isSuccess && !save.isPending && <span className="text-[11.5px] text-success">{t("kbSaved")}</span>}
       </div>
@@ -819,7 +819,7 @@ function CreateDatasetDialog({
               {t("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("create")}
+              {pending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("create")}
             </Button>
           </div>
         </form>
@@ -877,7 +877,7 @@ function KbUrlDialog({
               {t("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("kbImport")}
+              {pending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("kbImport")}
             </Button>
           </div>
         </form>

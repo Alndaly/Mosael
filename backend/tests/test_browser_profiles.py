@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.db import SessionLocal, _backfill_browser_pool
+from app.core.db import PARTITION_PREFIX, SessionLocal, _backfill_browser_pool
 from app.db.models import BrowserProfile, BrowserSession, PublishAccount, Workflow
 from app.domain import browser
 from app.domain.publish import create_account
@@ -63,7 +63,9 @@ def test_new_publish_account_gets_pool_profile() -> None:
 
 
 def test_backfill_relinks_legacy_account_preserving_partition() -> None:
-    """老库里的发布账号(profile_id 为空)由回填补档,分区沿用 persist:mibu-<id> —— 登录不丢、幂等。"""
+    """老库里的发布账号(profile_id 为空)由回填补档,分区按当前约定 persist:<prefix>-<id>。
+    磁盘上的老目录由 Electron 在用到该分区时惰性改名(见 accountViews.migrateLegacyPartitionDir),
+    所以登录仍不丢;幂等。"""
     client = fresh_client()
     ws = _ws(client)
     with SessionLocal() as db:
@@ -79,7 +81,7 @@ def test_backfill_relinks_legacy_account_preserving_partition() -> None:
     with SessionLocal() as db:
         acc = db.get(PublishAccount, acc_id)
         assert acc.profile_id is not None
-        assert db.get(BrowserProfile, acc.profile_id).partition == f"persist:mibu-{acc_id}"
+        assert db.get(BrowserProfile, acc.profile_id).partition == f"persist:{PARTITION_PREFIX}-{acc_id}"
 
     _backfill_browser_pool()  # 幂等:再跑不重复建档
     with SessionLocal() as db:

@@ -221,7 +221,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             <img src={qrDataUrl} alt="Feishu QR" />
           ) : (
             <div className="flex h-[188px] w-[188px] shrink-0 items-center justify-center rounded-md bg-panel-inset text-muted-foreground" aria-hidden>
-              <Loader2 size={20} className="animate-mibu-spin" />
+              <Loader2 size={20} className="animate-openstudio-spin" />
             </div>
           )}
           <div>

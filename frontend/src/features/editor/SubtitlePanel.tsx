@@ -136,7 +136,7 @@ export function SubtitlePanel({
       <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
         {onGenerate && (
           <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
-            {generating ? <Loader2 size={12} className="animate-mibu-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
+            {generating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
           </button>
         )}
         <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
@@ -237,7 +237,7 @@ function SubtitleTranslate({
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
         <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
-          {run.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Languages size={13} />}
+          {run.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Languages size={13} />}
           {(scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
             "{n}",
             String(targets.length),
@@ -326,7 +326,7 @@ function SubtitleStyleControls({
             <div className="grid grid-cols-[42px_auto_auto_minmax(0,1fr)] items-center gap-1 text-xs text-foreground [&>span:first-child]:text-muted-foreground">
               <span />
               <Button variant="ghost" size="sm" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
-                {uploadingFont ? <Loader2 size={12} className="animate-mibu-spin" /> : <Upload size={12} />} {t("subFontUpload")}
+                {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />} {t("subFontUpload")}
               </Button>
               {s.font_id && onDeleteFont && (
                 <Button

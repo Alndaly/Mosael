@@ -1,5 +1,5 @@
 // 渲染层桥:发布执行器(主进程)API + 内嵌视图状态事件。
-// contextIsolation 下渲染层通过 window.mibuPublish 使用;非 Electron 环境该对象不存在,
+// contextIsolation 下渲染层通过 window.openStudioPublish 使用;非 Electron 环境该对象不存在,
 // 前端以此判断「桌面发布器是否可用」。
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -13,7 +13,7 @@ ipcRenderer.on("mibu:fullscreen", (_event, value) => {
 
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
-contextBridge.exposeInMainWorld("mibuDesktop", {
+contextBridge.exposeInMainWorld("openStudioDesktop", {
   platform: process.platform,
   setTitleOverlay: (colors) => ipcRenderer.send("mibu:title-overlay", colors),
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld("mibuDesktop", {
   },
 });
 
-contextBridge.exposeInMainWorld("mibuPublish", {
+contextBridge.exposeInMainWorld("openStudioPublish", {
   login: (accountId, platform) => ipcRenderer.invoke("publish:login", { accountId, platform }),
   openPage: (accountId, platform) => ipcRenderer.invoke("publish:openPage", { accountId, platform }),
   inspect: (accountId, platform) => ipcRenderer.invoke("publish:inspect", { accountId, platform }),
@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld("mibuPublish", {
 });
 
 // 自动化浏览器(RPA / 智能体)的实时预览帧:离屏视图截帧,前端画成缩略预览。
-contextBridge.exposeInMainWorld("mibuBrowser", {
+contextBridge.exposeInMainWorld("openStudioBrowser", {
   onFrame: (callback) => {
     const listener = (_event, frame) => callback(frame);
     ipcRenderer.on("browser:frame", listener);

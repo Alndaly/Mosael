@@ -5,7 +5,7 @@ import { messages, type MessageKey } from "@/app/messages";
 type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
 
-const STORAGE_KEY = "mibu.preferences";
+const STORAGE_KEY = "openstudio.preferences";
 
 
 

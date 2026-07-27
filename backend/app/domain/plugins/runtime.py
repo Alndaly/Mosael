@@ -67,7 +67,7 @@ def execute_tool(manifest: dict[str, Any], tool_name: str, input_payload: dict[s
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-        "MIBU_PLUGIN": "1",
+        "OPEN_STUDIO_PLUGIN": "1",
     }
     started = time.monotonic()
     try:

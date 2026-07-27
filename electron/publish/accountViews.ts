@@ -1,12 +1,41 @@
-import { session, WebContentsView, type BaseWindow } from "electron";
+import { app, session, WebContentsView, type BaseWindow } from "electron";
+import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 
 const noop = (): void => undefined;
-// 账号视图 preload:注入「← 返回 Mibu」悬浮按钮(见 electron/accountview-preload.cjs)。运行时该文件
-// 与打包出的 publish.bundle.cjs 同在 electron/ 下,故按 __dirname 定位。
+// 账号视图 preload:注入「← 返回 Open Studio」悬浮按钮(见 electron/accountview-preload.cjs)。运行时
+// 该文件与打包出的 publish.bundle.cjs 同在 electron/ 下,故按 __dirname 定位。
 const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "accountview-preload.cjs");
+
+/** 发布账号登录分区前缀(完整名 persist:<PARTITION_PREFIX>-<accountId>)。
+ *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。 */
+export const PARTITION_PREFIX = "openstudio";
+const LEGACY_PARTITION_PREFIX = "mibu";
+
+/**
+ * 更名遗留分区目录的**惰性**迁移:persist:openstudio-X 首次被用到时,若它的目录还不存在、
+ * 而老的 mibu-X 目录在,就地改名。
+ *
+ * 为什么惰性而不是启动时批量:分区名同时记在数据库(后端改)和磁盘(这里改),两个进程各改一半。
+ * 任何"先改一边"的方案都存在空窗——库里已指向新名、磁盘还是老名 → Electron 开出一个空分区,
+ * 表现为全部平台登录失效。改成"用到谁迁谁",顺序就无关紧要了,且天然幂等。
+ */
+export function migrateLegacyPartitionDir(partition: string): void {
+  const name = partition.startsWith("persist:") ? partition.slice("persist:".length) : partition;
+  if (!name.startsWith(`${PARTITION_PREFIX}-`)) return;
+  try {
+    const root = path.join(app.getPath("userData"), "Partitions");
+    const target = path.join(root, name);
+    if (fs.existsSync(target)) return;
+    const legacy = path.join(root, `${LEGACY_PARTITION_PREFIX}-${name.slice(PARTITION_PREFIX.length + 1)}`);
+    if (fs.existsSync(legacy)) fs.renameSync(legacy, target);
+  } catch (err) {
+    // 迁移失败不该挡住登录流程:最坏情况是这个档案要重新登录一次。
+    console.warn("[open-studio] partition dir migration skipped", partition, err);
+  }
+}
 
 const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
@@ -14,7 +43,7 @@ const platformUserAgent = (userAgent: string): string => {
 
 /**
  * Owns one embedded WebContentsView per account. Each view uses a persistent
- * session partition (`persist:mibu-<id>`) so cookies / localStorage are isolated
+ * session partition (`persist:openstudio-<id>`) so cookies / localStorage are isolated
  * and survive restarts — this replaces the old Playwright per-account profile
  * directory. The view is laid into the host BaseWindow below a fixed header
  * strip that the renderer keeps clear for its own controls.
@@ -24,7 +53,7 @@ export class AccountViewManager {
   private drivers = new Map<string, PageDriver>();
   private appliedProxy = new Map<string, string | null>();
   // 泛化:非发布账号的视图(浏览器池通用档案)显式登记其分区与显示名;发布账号不登记,
-  // 沿用 persist:mibu-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
+  // 沿用 persist:openstudio-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
   private partitions = new Map<string, string>();
   private names = new Map<string, string>();
   private window: BaseWindow | null = null;
@@ -62,6 +91,8 @@ export class AccountViewManager {
    *  内嵌视图(与发布账号登录一致:同容器、同「返回 Mibu」、同顶栏工具条),不弹外部系统窗。
    *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
   async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
+    // 池档案的分区名直接来自数据库,不经 partitionFor,故这里也要触发一次遗留目录迁移。
+    migrateLegacyPartitionDir(opts.partition);
     this.partitions.set(opts.viewId, opts.partition);
     if (opts.name) this.names.set(opts.viewId, opts.name);
     const normalizedProxy = opts.proxy?.trim() || null;
@@ -93,7 +124,7 @@ export class AccountViewManager {
     // Re-adding the same View is the current View API's z-order operation:
     // Electron reorders it to the topmost child of the window content view.
     this.window.contentView.addChildView(view);
-    console.info("[mibu:view] shown", {
+    console.info("[open-studio:view] shown", {
       accountId,
       bounds: view.getBounds(),
       childCount: this.window.contentView.children.length,
@@ -220,7 +251,7 @@ export class AccountViewManager {
         return { action: "deny" };
       });
       view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-        console.warn("[mibu:view] load failed", {
+        console.warn("[open-studio:view] load failed", {
           accountId,
           errorCode,
           errorDescription,
@@ -248,8 +279,11 @@ export class AccountViewManager {
   }
 
   private partitionFor(id: string): string {
-    // 登记过的(池档案)用其显式分区;未登记的(发布账号)沿用旧约定 persist:mibu-<id>。
-    return this.partitions.get(id) ?? `persist:mibu-${id}`;
+    // 登记过的(池档案)用其显式分区;未登记的(发布账号)按约定 persist:<prefix>-<id>。
+    const partition = this.partitions.get(id) ?? `persist:${PARTITION_PREFIX}-${id}`;
+    // 拿分区名的每条路径最终都会落到这里,所以遗留目录的惰性改名挂在这一处即可(幂等)。
+    migrateLegacyPartitionDir(partition);
+    return partition;
   }
 
   private detachView(accountId: string): void {

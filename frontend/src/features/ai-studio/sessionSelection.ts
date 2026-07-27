@@ -1,7 +1,7 @@
 export function agentSessionSelectionKey(workspaceId: string): string {
-  return `mibu.agent.session.${workspaceId}`;
+  return `openstudio.agent.session.${workspaceId}`;
 }
 
 export function generationSessionSelectionKey(workspaceId: string): string {
-  return `mibu.generation.session.${workspaceId}`;
+  return `openstudio.generation.session.${workspaceId}`;
 }

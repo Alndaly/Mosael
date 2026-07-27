@@ -39,7 +39,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
-  // 任务中心深链(mibu:open-* 事件通道):直接选中那条发布记录。
+  // 任务中心深链(openstudio:open-* 事件通道):直接选中那条发布记录。
   React.useEffect(() => {
     const onOpenTask = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -47,8 +47,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         setSelectedId(id);
       }
     };
-    window.addEventListener("mibu:open-publish-task", onOpenTask);
-    return () => window.removeEventListener("mibu:open-publish-task", onOpenTask);
+    window.addEventListener("openstudio:open-publish-task", onOpenTask);
+    return () => window.removeEventListener("openstudio:open-publish-task", onOpenTask);
   }, []);
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PublishTask | null>(null);
@@ -228,7 +228,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {ACTIVE.has(task.status) ? (
-            <Loader2 size={14} className="animate-mibu-spin" />
+            <Loader2 size={14} className="animate-openstudio-spin" />
           ) : ok ? (
             <CheckCircle2 size={14} className="text-[#16a34a]" />
           ) : BLOCKED.has(task.status) ? (
@@ -236,12 +236,12 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
           ) : (
             <CircleAlert size={14} className="text-destructive" />
           )}
-          {isBrowser && window.mibuPublish && (
+          {isBrowser && window.openStudioPublish && (
             <Button
               size="sm"
               variant="outline"
               onClick={() =>
-                window.mibuPublish
+                window.openStudioPublish
                   ?.openPage(task.account_id, task.platform)
                   .catch((error: Error) => toast.error(error.message))
               }
@@ -430,7 +430,7 @@ function CreatePublishDialog({
         </label>
         <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={aiCopy.isPending || !assetId} onClick={() => aiCopy.mutate()}>
-            {aiCopy.isPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
+            {aiCopy.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
           </Button>
           <span className="flex-1" />
           <Button variant="outline" size="sm" onClick={onClose}>

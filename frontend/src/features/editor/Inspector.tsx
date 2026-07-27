@@ -811,7 +811,7 @@ function TextStylePanel({
       {onUploadFont && (
         <div className="flex items-center gap-1 pl-[48px]">
           <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
-            {uploadingFont ? <Loader2 size={12} className="animate-mibu-spin" /> : <Upload size={12} />} {t("subFontUpload")}
+            {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />} {t("subFontUpload")}
           </Button>
           {style.font_id && onDeleteFont && (
             <Button

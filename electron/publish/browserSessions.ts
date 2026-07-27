@@ -13,7 +13,7 @@ const stripElectron = (ua: string): string => ua.replace(/ Electron\/[0-9.]+/g, 
  * PageDriver。为什么用 BrowserWindow 而不是 WebContentsView:后者不支持 offscreen 渲染,不挂窗口
  * 时根本不出帧(capturePage 空、paint 不触发),预览就无从谈起;OSR BrowserWindow 才是官方的
  * 「不显示也持续渲染」原语——show:false + offscreen:true,paint 事件出帧,PageDriver 据此缓存供
- * 预览/截图。分区只会是 ephemeral-*(内存态)或 persist:rpa-*,与发布 persist:mibu-* 严格隔离。
+ * 预览/截图。分区只会是 ephemeral-*(内存态)或 persist:rpa-*,与发布 persist:openstudio-* 严格隔离。
  */
 export class BrowserSessionManager {
   private windows = new Map<string, BrowserWindow>();

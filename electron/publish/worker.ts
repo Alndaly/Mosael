@@ -29,10 +29,10 @@ const running = new Set<string>();
 const rechecking = new Set<string>();
 // 用户已开始登录接管的账号:后台复检遇到它直接放弃,避免和登录抢同一个视图 goto(表现为空白)。
 const loginAccounts = new Set<string>();
-// 有限并发上限:默认 3,可用 MIBU_PUBLISH_CONCURRENCY 覆盖(夹在 1–5)。多账号同时后台发布更快,但
+// 有限并发上限:默认 3,可用 OPEN_STUDIO_PUBLISH_CONCURRENCY 覆盖(夹在 1–5)。多账号同时后台发布更快,但
 // 同机高频操作对平台风控/机器资源更重,故设上限而非全并发。
 const MAX_CONCURRENT = (() => {
-  const n = Number.parseInt(process.env.MIBU_PUBLISH_CONCURRENCY || "", 10);
+  const n = Number.parseInt(process.env.OPEN_STUDIO_PUBLISH_CONCURRENCY || "", 10);
   return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 3;
 })();
 let stopped = false;
@@ -340,7 +340,7 @@ export function stopPublishWorker(): void {
     loginPollTimer = null;
   }
   // 销毁并清空 views,让下次 startPublishWorker 能重新绑定新窗口(mac 关窗→重新激活)。持久化会话
-  // 在磁盘分区里(persist:mibu-<id>),销毁视图不丢登录态。
+  // 在磁盘分区里(persist:openstudio-<id>),销毁视图不丢登录态。
   views?.destroyAll();
   views = null;
   running.clear();

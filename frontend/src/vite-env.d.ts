@@ -15,7 +15,7 @@ interface PublishViewState {
 }
 
 /** Electron preload 暴露的发布执行器桥;浏览器环境下为 undefined。 */
-interface MibuPublishBridge {
+interface OpenStudioPublishBridge {
   login: (accountId: string, platform: string) => Promise<void>;
   openPage: (accountId: string, platform: string) => Promise<void>;
   inspect: (accountId: string, platform: string) => Promise<boolean>;
@@ -28,7 +28,7 @@ interface MibuPublishBridge {
 }
 
 /** 应用更新检查结果(Electron 主进程查 GitHub Releases)。 */
-interface MibuUpdateInfo {
+interface OpenStudioUpdateInfo {
   current?: string;
   latest?: string;
   hasUpdate?: boolean;
@@ -43,17 +43,17 @@ interface BrowserFrame {
 }
 
 interface Window {
-  mibuPublish?: MibuPublishBridge;
-  mibuBrowser?: {
+  openStudioPublish?: OpenStudioPublishBridge;
+  openStudioBrowser?: {
     onFrame: (callback: (frame: BrowserFrame) => void) => () => void;
     /** 通用池档案登录:在该档案分区开 app 内嵌视图登任意站点(与发布登录同一套视图),cookie 落分区。 */
     openLogin?: (opts: { partition: string; url: string; name?: string; proxy?: string | null }) => Promise<{ ok: boolean; error?: string }>;
   };
-  mibuDesktop?: {
+  openStudioDesktop?: {
     platform: string;
     setTitleOverlay?: (colors: { color: string; symbolColor: string }) => void;
     onFullscreen?: (callback: (fullscreen: boolean) => void) => () => void;
-    checkUpdates?: () => Promise<MibuUpdateInfo>;
-    onUpdateAvailable?: (callback: (info: MibuUpdateInfo) => void) => () => void;
+    checkUpdates?: () => Promise<OpenStudioUpdateInfo>;
+    onUpdateAvailable?: (callback: (info: OpenStudioUpdateInfo) => void) => () => void;
   };
 }

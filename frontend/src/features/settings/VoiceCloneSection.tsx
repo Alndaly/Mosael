@@ -257,7 +257,7 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
           )}
           {downloading && (
             <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-mibu-spin" /> {pct}%
+              <Loader2 size={13} className="animate-openstudio-spin" /> {pct}%
             </span>
           )}
           {model.status === "failed" && (

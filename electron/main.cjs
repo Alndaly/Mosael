@@ -8,7 +8,7 @@ const path = require("node:path");
 // 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
 app.setName("Open Studio");
 // 保留旧的 AppUserModelId(Windows 任务栏归组的不透明 id;改了等于换一个应用,得不偿失)。
-app.setAppUserModelId("dev.mibu.studio");
+app.setAppUserModelId("dev.openstudio.app");
 
 // 更名(Mibu → Open Studio)迁移:userData = appData/app.getName(),改名会把登录分区
 // (Partitions)与日志留在旧目录下。启动最早、任何 userData 使用之前,把旧目录整体平移到
@@ -35,7 +35,7 @@ try {
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
 app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
 
-const BACKEND_PORT = Number(process.env.MIBU_BACKEND_PORT || 8800);
+const BACKEND_PORT = Number(process.env.OPEN_STUDIO_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const isDev = !app.isPackaged;
 
@@ -62,8 +62,8 @@ function backendCommand() {
       cwd: backendDir,
     };
   }
-  const packagedDir = path.join(process.resourcesPath, "backend", "mibu-backend");
-  const executable = process.platform === "win32" ? "mibu-backend.exe" : "mibu-backend";
+  const packagedDir = path.join(process.resourcesPath, "backend", "open-studio-backend");
+  const executable = process.platform === "win32" ? "open-studio-backend.exe" : "open-studio-backend";
   return { command: path.join(packagedDir, executable), args: [], cwd: packagedDir };
 }
 
@@ -106,11 +106,11 @@ async function ensureBackend() {
       stdio = "ignore";
     }
   }
-  const backendEnv = { ...process.env, MIBU_BACKEND_PORT: String(BACKEND_PORT) };
+  const backendEnv = { ...process.env, OPEN_STUDIO_BACKEND_PORT: String(BACKEND_PORT) };
   if (!isDev) {
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
-    backendEnv.MIBU_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
-    backendEnv.MIBU_AGENT_BIN_NODE = process.execPath;
+    backendEnv.OPEN_STUDIO_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
+    backendEnv.OPEN_STUDIO_AGENT_BIN_NODE = process.execPath;
   }
   backend = spawn(command, args, {
     cwd,
@@ -137,7 +137,7 @@ function stopBackend() {
 // macOS 未签名包装不上 Squirrel 自动安装(签名校验必失败),所以走「检查 + 提示 +
 // 打开发布页」的降级路线:GitHub Releases 比对版本号。日后具备 Developer ID 签名
 // 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
-const UPDATE_REPO = "Alndaly/mibu-cut";
+const UPDATE_REPO = "Alndaly/open-studio";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -151,7 +151,7 @@ function compareVersions(a, b) {
 
 async function checkForUpdates() {
   const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "mibu-updater" },
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "open-studio-updater" },
   });
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
   const release = await res.json();
@@ -292,7 +292,7 @@ function createWindow() {
     return { action: "deny" };
   });
   if (isDev) {
-    win.loadURL(process.env.MIBU_FRONTEND_URL || "http://127.0.0.1:5173");
+    win.loadURL(process.env.OPEN_STUDIO_FRONTEND_URL || "http://127.0.0.1:5173");
   } else {
     win.loadFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
   }
@@ -439,7 +439,7 @@ app.whenReady().then(async () => {
     const dockIcon = nativeImage.createFromPath(path.join(__dirname, "..", "build", "icon.png"));
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
-  // Win/Linux:标题栏三键叠层颜色随前端主题(mibuDesktop.setTitleOverlay)。mac 无叠层。
+  // Win/Linux:标题栏三键叠层颜色随前端主题(openStudioDesktop.setTitleOverlay)。mac 无叠层。
   ipcMain.on("mibu:title-overlay", (event, colors) => {
     if (process.platform === "darwin" || !colors) return;
     const win = BrowserWindow.fromWebContents(event.sender);

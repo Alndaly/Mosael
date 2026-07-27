@@ -4,13 +4,13 @@
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "description": "Mibu — AI video creative studio",
-  "repository": "https://github.com/Alndaly/mibu-cut",
+  "repository": "https://github.com/Alndaly/open-studio",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.15.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",
-    "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name mibu-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on run_backend.py",
+    "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name open-studio-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on run_backend.py",
     "build:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
     "dist:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
@@ -24,13 +24,13 @@
     "esbuild": "^0.28.1"
   },
   "build": {
-    "appId": "dev.mibu.studio",
+    "appId": "dev.openstudio.app",
     "productName": "Open Studio",
     "publish": [
       {
         "provider": "github",
         "owner": "Alndaly",
-        "repo": "mibu-cut"
+        "repo": "open-studio"
       }
     ],
     "directories": {
@@ -43,8 +43,8 @@
     ],
     "extraResources": [
       {
-        "from": "backend/dist/mibu-backend",
-        "to": "backend/mibu-backend"
+        "from": "backend/dist/open-studio-backend",
+        "to": "backend/open-studio-backend"
       },
       {
         "from": "agent-sidecar/dist/sidecar.cjs",

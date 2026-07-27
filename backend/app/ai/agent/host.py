@@ -246,9 +246,9 @@ def on_turn_finished(callback: Callable[[str], None]) -> None:
 
 
 def default_adapter() -> str:
-    """The CLI backing the agent — `pi` is the standard. MIBU_AGENT_CLI can override it
+    """The CLI backing the agent — `pi` is the standard. OPEN_STUDIO_AGENT_CLI can override it
     (e.g. `claude`) for machines where that's what's installed."""
-    return os.environ.get("MIBU_AGENT_CLI", "pi")
+    return os.environ.get("OPEN_STUDIO_AGENT_CLI", "pi")
 
 
 def create_session(

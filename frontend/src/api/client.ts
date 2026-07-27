@@ -3,7 +3,7 @@ import type { components } from "@/api/generated/schema";
 // 服务器可切换(团队模式铺垫):默认本机后端,localStorage 记住自定义地址。
 // 切换后整页 reload,让所有模块用新地址重新初始化;换服务器后原 token 失效
 // 会命中 401 → 自动回到登录页。
-const SERVER_KEY = "mibu.server.url";
+const SERVER_KEY = "openstudio.server.url";
 export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
 export const API_BASE = (
   typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
@@ -21,7 +21,7 @@ export function isCustomServer(): boolean {
   return API_BASE !== DEFAULT_API_BASE;
 }
 
-const TOKEN_KEY = "mibu.auth.token";
+const TOKEN_KEY = "openstudio.auth.token";
 let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
 let onUnauthorized: (() => void) | null = null;
 

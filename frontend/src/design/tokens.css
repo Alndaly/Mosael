@@ -35,8 +35,8 @@
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 6px);
 
-  --animate-mibu-spin: mibu-spin 0.9s linear infinite;
-  @keyframes mibu-spin {
+  --animate-openstudio-spin: openstudio-spin 0.9s linear infinite;
+  @keyframes openstudio-spin {
     to {
       transform: rotate(360deg);
     }

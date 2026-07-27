@@ -4,7 +4,7 @@ Mirrors app/audio/asr_models.py: a catalog of downloadable TTS engine weights,
 install detection by probing the HuggingFace cache, deliberate download via the
 worker's warmup action (runs in the external TTS interpreter), byte-poll
 progress with speed + ETA. The heavy engines (f5-tts / fish-speech) live in a
-separate Python resolved from MIBU_TTS_PYTHON.
+separate Python resolved from OPEN_STUDIO_TTS_PYTHON.
 """
 from __future__ import annotations
 
@@ -123,9 +123,9 @@ def _worker_env() -> dict[str, str]:
     env = dict(os.environ)
     env["HF_ENDPOINT"] = cfg.hf_endpoint
     if cfg.resolved_fish_repo:
-        env["MIBU_FISH_REPO_DIR"] = cfg.resolved_fish_repo
+        env["OPEN_STUDIO_FISH_REPO_DIR"] = cfg.resolved_fish_repo
     if cfg.resolved_fish_model:
-        env["MIBU_FISH_MODEL_DIR"] = cfg.resolved_fish_model
+        env["OPEN_STUDIO_FISH_MODEL_DIR"] = cfg.resolved_fish_model
     return env
 
 
@@ -375,7 +375,7 @@ def _download_body(engine_id: str) -> None:
         # for live progress — resolved_fish_model won't resolve until codec.pth lands.
         progress_dir = tts_config.MANAGED_FISH_MODEL
         progress_dir.mkdir(parents=True, exist_ok=True)
-        env["MIBU_FISH_MODEL_DIR"] = str(progress_dir)
+        env["OPEN_STUDIO_FISH_MODEL_DIR"] = str(progress_dir)
         python = _download_python()
     else:
         python = resolve_tts_python(engine.module)

@@ -371,14 +371,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
 
-  // 通知/任务中心深链(mibu:open-* 事件通道):直接选中对应工作流。
+  // 通知/任务中心深链(openstudio:open-* 事件通道):直接选中对应工作流。
   React.useEffect(() => {
     const onOpenWorkflow = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
       if (typeof id === "string" && id) setSelectedId(id);
     };
-    window.addEventListener("mibu:open-workflow", onOpenWorkflow);
-    return () => window.removeEventListener("mibu:open-workflow", onOpenWorkflow);
+    window.addEventListener("openstudio:open-workflow", onOpenWorkflow);
+    return () => window.removeEventListener("openstudio:open-workflow", onOpenWorkflow);
   }, []);
 
   const workflows = useQuery({
@@ -492,7 +492,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             <h2>{t("navWorkflows")}</h2>
             <span className="inline-flex items-center gap-1">
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                {importFile.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <FileUp size={14} />}
+                {importFile.isPending ? <Loader2 size={14} className="animate-openstudio-spin" /> : <FileUp size={14} />}
               </Button>
               <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
                 <Plus size={14} />

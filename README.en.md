@@ -55,7 +55,7 @@ open "release/mac-arm64/Open Studio.app"
 ### App updates
 
 Five seconds after launch, the packaged app silently compares the latest
-[GitHub Release](https://github.com/Alndaly/mibu-cut/releases) tag with the current version and
+[GitHub Release](https://github.com/Alndaly/open-studio/releases) tag with the current version and
 shows a prompt linking to the release page when a new version exists. There is also a
 "Check for updates" button under Settings → Local backend → Version.
 **Shipping a release is just pushing a tag**:

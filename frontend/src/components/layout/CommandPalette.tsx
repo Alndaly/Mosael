@@ -88,10 +88,10 @@ export function CommandPalette({
     // 顶栏搜索按钮通过该事件打开(它和面板不在同一组件树)。
     const onOpenEvent = () => setOpen(true);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mibu:open-cmdk", onOpenEvent);
+    window.addEventListener("openstudio:open-cmdk", onOpenEvent);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mibu:open-cmdk", onOpenEvent);
+      window.removeEventListener("openstudio:open-cmdk", onOpenEvent);
     };
   }, []);
 
@@ -265,7 +265,7 @@ export function CommandPalette({
                   run(() => {
                     onNavigate("media");
                     // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
-                    emitOpenEvent("mibu:open-asset", asset.id);
+                    emitOpenEvent("openstudio:open-asset", asset.id);
                   })
                 }
               >
@@ -286,7 +286,7 @@ export function CommandPalette({
                 onSelect={() =>
                   run(() => {
                     onNavigate("kb");
-                    emitOpenEvent("mibu:open-kb-doc", result.document_id);
+                    emitOpenEvent("openstudio:open-kb-doc", result.document_id);
                   })
                 }
               >

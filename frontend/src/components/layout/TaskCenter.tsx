@@ -35,11 +35,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
-  // 深链通道(与 mibu:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
+  // 深链通道(与 openstudio:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
   React.useEffect(() => {
     const onOpen = () => setOpen(true);
-    window.addEventListener("mibu:open-tasks", onOpen);
-    return () => window.removeEventListener("mibu:open-tasks", onOpen);
+    window.addEventListener("openstudio:open-tasks", onOpen);
+    return () => window.removeEventListener("openstudio:open-tasks", onOpen);
   }, []);
   const [detailJob, setDetailJob] = React.useState<Job | null>(null);
 
@@ -77,8 +77,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     const route = jobRoute(job);
     if (!route) return;
     const payload = (job.payload ?? {}) as Record<string, unknown>;
-    if (job.kind === "publish") gotoRecord(route, "mibu:open-publish-task", payload.task_id);
-    else if (job.kind === "workflow") gotoRecord(route, "mibu:open-workflow", payload.workflow_id);
+    if (job.kind === "publish") gotoRecord(route, "openstudio:open-publish-task", payload.task_id);
+    else if (job.kind === "workflow") gotoRecord(route, "openstudio:open-workflow", payload.workflow_id);
     else gotoRecord(route);
     setDetailJob(null);
   };
@@ -127,7 +127,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               className="relative"
               aria-label={t("taskCenter")}
             >
-              {active.length > 0 ? <Loader2 size={15} className="animate-mibu-spin" /> : <Activity size={15} />}
+              {active.length > 0 ? <Loader2 size={15} className="animate-openstudio-spin" /> : <Activity size={15} />}
               {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-primary px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-primary-foreground">{active.length}</em>}
             </Button>
           </PopoverTrigger>

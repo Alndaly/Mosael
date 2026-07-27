@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 
 from app.ai.agent import adapters, host
-from app.ai.agent.adapters import TurnResult, build_claude_command, mibu_mcp_config
+from app.ai.agent.adapters import TurnResult, build_claude_command, open_studio_mcp_config
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
 from tests.util import fresh_client
@@ -21,9 +21,9 @@ def wait_idle(client, session_id: str, seconds: float = 8) -> str:
 
 
 def test_claude_command_and_mcp_config_shape() -> None:
-    config = mibu_mcp_config("http://127.0.0.1:8800", "tok123")
-    server = config["mcpServers"]["mibu"]
-    assert server["env"]["MIBU_TOKEN"] == "tok123"
+    config = open_studio_mcp_config("http://127.0.0.1:8800", "tok123")
+    server = config["mcpServers"]["open-studio"]
+    assert server["env"]["OPEN_STUDIO_TOKEN"] == "tok123"
     assert server["args"][0].endswith("mcp_server.py")
 
     command = build_claude_command("hi", "sys", "/tmp/cfg.json", "sess-1")

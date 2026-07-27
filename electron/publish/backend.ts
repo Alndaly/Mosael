@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { plog } from "./log";
 
 const BASE =
-  process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
+  process.env.OPEN_STUDIO_BACKEND_URL || process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.OPEN_STUDIO_BACKEND_PORT || process.env.MIBU_BACKEND_PORT || 8800}`;
 
 interface BackendTask {
   id: string;
@@ -30,7 +30,7 @@ interface BackendTask {
 // 会在重启后静默失效,而失败是 401 不是超时,很难查。
 function readWorkerKey(): string {
   const dir =
-    process.env.MIBU_DATA_DIR ||
+    process.env.OPEN_STUDIO_DATA_DIR ||
     join(homedir(), ".open-studio");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();

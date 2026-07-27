@@ -117,11 +117,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
 
   const login = (p: BrowserProfile) => {
     if (p.bound_account_id && p.platform) {
-      window.mibuPublish
+      window.openStudioPublish
         ?.login(p.bound_account_id, p.platform)
         .then(() => toast.success(t("poolLoginOpened")))
         .catch((e: Error) => toast.error(e.message));
-    } else if (window.mibuBrowser?.openLogin) {
+    } else if (window.openStudioBrowser?.openLogin) {
       setLoginFor(p); // 通用档案:填登录网址 → 在该档案分区开可见登录窗
     } else {
       toast.info(t("publishNeedDesktop"));
@@ -215,8 +215,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        title={window.mibuPublish || window.mibuBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
-                        disabled={bound ? !window.mibuPublish : !window.mibuBrowser?.openLogin}
+                        title={window.openStudioPublish || window.openStudioBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
+                        disabled={bound ? !window.openStudioPublish : !window.openStudioBrowser?.openLogin}
                         onClick={() => login(p)}
                       >
                         <LogIn size={13} /> {t("poolLogin")}
@@ -301,7 +301,7 @@ function LoginUrlDialog({
     if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
     setPending(true);
-    const res = await window.mibuBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
+    const res = await window.openStudioBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
     setPending(false);
     if (res?.ok) {
       toast.success(t("poolLoginOpened"));

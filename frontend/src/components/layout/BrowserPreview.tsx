@@ -5,8 +5,8 @@ import { useI18n } from "@/app/preferences";
 
 /**
  * 自动化浏览器实时预览:RPA / 智能体驱动的浏览器是离屏的,用户否则看不到。Electron 的浏览器 worker
- * 把「最近操作的会话」定时截帧(~2fps)经 window.mibuBrowser.onFrame 推来,这里在右下角浮现镜像画面。
- * 停帧 ~3s 无新帧就淡出;可手动关掉。非 Electron 环境 window.mibuBrowser 不存在,组件自然什么都不渲染。
+ * 把「最近操作的会话」定时截帧(~2fps)经 window.openStudioBrowser.onFrame 推来,这里在右下角浮现镜像画面。
+ * 停帧 ~3s 无新帧就淡出;可手动关掉。非 Electron 环境 window.openStudioBrowser 不存在,组件自然什么都不渲染。
  */
 export function BrowserPreview() {
   const t = useI18n();
@@ -15,7 +15,7 @@ export function BrowserPreview() {
   const hideTimer = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    const bridge = window.mibuBrowser;
+    const bridge = window.openStudioBrowser;
     if (!bridge) return;
     const off = bridge.onFrame((next) => {
       setFrame(next);

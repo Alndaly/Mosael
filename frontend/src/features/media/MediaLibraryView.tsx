@@ -77,8 +77,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
       setPreviewing(asset);
     };
-    window.addEventListener("mibu:open-asset", onOpenAsset);
-    return () => window.removeEventListener("mibu:open-asset", onOpenAsset);
+    window.addEventListener("openstudio:open-asset", onOpenAsset);
+    return () => window.removeEventListener("openstudio:open-asset", onOpenAsset);
   }, [assets.data]);
 
   const uploadAsset = useMutation({

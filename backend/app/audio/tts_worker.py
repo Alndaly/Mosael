@@ -1,7 +1,7 @@
 """Standalone TTS / voice-clone worker (ported from mibu-video's tts engines).
 
 Runs inside the *TTS interpreter* — a Python that has f5-tts and/or fish-speech
-installed (configured via MIBU_TTS_PYTHON, autodetected from a sibling
+installed (configured via OPEN_STUDIO_TTS_PYTHON, autodetected from a sibling
 mibu-video venv in dev). Must import nothing from this app at module level
 besides the standard library, so the host backend can ship it to a foreign
 interpreter.
@@ -78,7 +78,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
 
 _FISH_HINT = (
     "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。"
-    "在设置→声音克隆填『源码目录』『模型目录』,或设置 MIBU_FISH_REPO_DIR / MIBU_FISH_MODEL_DIR。"
+    "在设置→声音克隆填『源码目录』『模型目录』,或设置 OPEN_STUDIO_FISH_REPO_DIR / OPEN_STUDIO_FISH_MODEL_DIR。"
 )
 
 
@@ -98,7 +98,7 @@ def _pick_device() -> str:
 def _fish_repo_dir() -> Path:
     """The official fish-speech source checkout — its ``tools.server.*`` modules live at
     the repo root (not in the pip ``fish_speech`` package), so it must go on sys.path."""
-    configured = os.environ.get("MIBU_FISH_REPO_DIR", "").strip()
+    configured = os.environ.get("OPEN_STUDIO_FISH_REPO_DIR", "").strip()
     if configured and Path(configured).expanduser().is_dir():
         return Path(configured).expanduser()
     raise RuntimeError(_FISH_HINT + "(源码目录未找到)")
@@ -106,7 +106,7 @@ def _fish_repo_dir() -> Path:
 
 def _fish_model_dir() -> Path:
     """The weights directory: config.json + model safetensors + codec.pth at its root."""
-    configured = os.environ.get("MIBU_FISH_MODEL_DIR", "").strip()
+    configured = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
     if configured:
         path = Path(configured).expanduser()
         if (path / "codec.pth").is_file():
@@ -175,9 +175,9 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         if engine == "fish-speech":
             from huggingface_hub import snapshot_download  # type: ignore
 
-            # Managed install: land weights flat in MIBU_FISH_MODEL_DIR (codec.pth + config
+            # Managed install: land weights flat in OPEN_STUDIO_FISH_MODEL_DIR (codec.pth + config
             # at its root, which run_fish reads). Without a target, fall back to the HF cache.
-            target = os.environ.get("MIBU_FISH_MODEL_DIR", "").strip()
+            target = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
             if target:
                 snapshot_download(repo_id="fishaudio/s2-pro", local_dir=target)
             else:

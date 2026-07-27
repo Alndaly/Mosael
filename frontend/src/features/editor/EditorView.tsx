@@ -81,7 +81,7 @@ export function EditorView({ workspace, project }: { workspace: Workspace; proje
   return <Editor workspace={workspace} project={project} />;
 }
 
-const PANEL_SIZES_KEY = "mibu.editor.panels.v2";
+const PANEL_SIZES_KEY = "openstudio.editor.panels.v2";
 
 type LeftTab = "media" | "transcript" | "subtitle" | "voice";
 
@@ -1111,7 +1111,7 @@ function LeftTabs({
   );
 }
 
-const EXPORT_PARAMS_KEY = "mibu.export.params";
+const EXPORT_PARAMS_KEY = "openstudio.export.params";
 
 function ExportControl({
   workspaceId,
@@ -1191,7 +1191,7 @@ function ExportControl({
         </span>
       )}
       <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => setConfigOpen(true)}>
-        {busy ? <Loader2 size={13} className="animate-mibu-spin" /> : <Download size={13} />}
+        {busy ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
       <ModalShell open={configOpen} onOpenChange={setConfigOpen} title={t("exportConfigTitle")} className="w-[380px]">

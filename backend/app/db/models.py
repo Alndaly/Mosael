@@ -507,7 +507,7 @@ class BrowserProfile(Base):
     不再只服务自媒体发布:任何需要登录态的站点都能存一个可复用档案(通用池)。
     - 发布账号 = 挂了平台的档案(PublishAccount.profile_id 指过来);
     - 通用档案 = 不挂平台,工作流 / 智能体可复用其登录态。
-    分区:通用档案 persist:pool-<id>;从发布账号迁移来的沿用 persist:mibu-<accountId>(保住登录)。
+    分区:通用档案 persist:pool-<id>;从发布账号迁移来的沿用 persist:openstudio-<accountId>(保住登录)。
     租约:一个档案同一时刻只允许一个活动会话(见 domain/browser.open_session)。"""
 
     __tablename__ = "browser_profiles"
@@ -530,7 +530,7 @@ class BrowserSession(Base):
     - 临时会话:ephemeral-<id>(无 persist: 前缀 → 内存态,关闭即清)
     - 具名持久会话:persist:rpa-<name>(保留登录,供重复自动化)
     - 池档案会话:profile_id 指向 BrowserProfile,partition 沿用该档案分区(可为发布登录的
-      persist:mibu-<accountId>)——「接入浏览器池」正是有意打通这条,受租约 + 显式授权约束。"""
+      persist:openstudio-<accountId>)——「接入浏览器池」正是有意打通这条,受租约 + 显式授权约束。"""
 
     __tablename__ = "browser_sessions"
 
@@ -686,7 +686,7 @@ class ProviderUsageEvent(Base):
 class KbEmbeddingConfig(Base):
     """Singleton (id='default') runtime config for the KB vector tier: which
     provider profile + embedding model + vector dimension. Overrides the
-    MIBU_KB_EMBEDDING_* env fallback so it can be edited from the UI."""
+    OPEN_STUDIO_KB_EMBEDDING_* env fallback so it can be edited from the UI."""
 
     __tablename__ = "kb_embedding_config"
 
@@ -713,7 +713,7 @@ class AiRuntimeConfig(Base):
 class TtsConfig(Base):
     """Singleton (id='default') runtime config for voice cloning: which engine,
     the external interpreter that has f5-tts/fish-speech installed, and the model
-    download source. Overrides the MIBU_TTS_* env fallback so it's UI-editable."""
+    download source. Overrides the OPEN_STUDIO_TTS_* env fallback so it's UI-editable."""
 
     __tablename__ = "tts_config"
 

@@ -39,7 +39,7 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 export type WorkflowAgentMode = "docked" | "floating";
 
 // v2:默认尺寸加大 + 八向缩放手柄。升键让老用户存下的 320×460 小窗让位给新默认(仅一次)。
-const RECT_KEY = "mibu.wf.agent.rect.v2";
+const RECT_KEY = "openstudio.wf.agent.rect.v2";
 
 interface FloatRect {
   x: number;
@@ -651,7 +651,7 @@ export function WorkflowAgentChat({
           <div className="relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-              <Loader2 size={11} className="animate-mibu-spin" />
+              <Loader2 size={11} className="animate-openstudio-spin" />
               <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
@@ -662,7 +662,7 @@ export function WorkflowAgentChat({
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <Loader2 size={12} className="animate-mibu-spin" /> {t("chatThinking")}
+              <Loader2 size={12} className="animate-openstudio-spin" /> {t("chatThinking")}
               <span className="timecode text-[11px] text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
@@ -728,7 +728,7 @@ export function WorkflowAgentChat({
           ))}
           {uploading && (
             <span className="inline-flex items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] px-1.5 py-0.5 text-[11px] text-muted-foreground">
-              <Loader2 size={11} className="animate-mibu-spin" /> {t("wfAgentAttach")}
+              <Loader2 size={11} className="animate-openstudio-spin" /> {t("wfAgentAttach")}
             </span>
           )}
         </div>

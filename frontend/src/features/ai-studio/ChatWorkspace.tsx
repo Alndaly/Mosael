@@ -440,7 +440,7 @@ export function ChatWorkspace({
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
                   <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-                    <Loader2 size={11} className="animate-mibu-spin" />
+                    <Loader2 size={11} className="animate-openstudio-spin" />
                     <span className="timecode text-[11px] text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
@@ -451,7 +451,7 @@ export function ChatWorkspace({
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
                   <span className="inline-flex items-center gap-1.5 self-start whitespace-nowrap">
-                    <Loader2 size={13} className="animate-mibu-spin" /> {t("chatThinking")}
+                    <Loader2 size={13} className="animate-openstudio-spin" /> {t("chatThinking")}
                     <span className="timecode ml-0.5 text-[11px] text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
@@ -553,7 +553,7 @@ export function ChatWorkspace({
                           event.currentTarget.value = "";
                         }}
                       />
-                      {uploadAttachment.isPending ? <Loader2 size={14} className="animate-mibu-spin" /> : <Paperclip size={14} />}
+                      {uploadAttachment.isPending ? <Loader2 size={14} className="animate-openstudio-spin" /> : <Paperclip size={14} />}
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />

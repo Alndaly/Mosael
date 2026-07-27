@@ -5,10 +5,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const BASE =
-  process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.MIBU_BACKEND_PORT || 8800}`;
+  process.env.OPEN_STUDIO_BACKEND_URL || process.env.MIBU_BACKEND_URL || `http://127.0.0.1:${process.env.OPEN_STUDIO_BACKEND_PORT || process.env.MIBU_BACKEND_PORT || 8800}`;
 
 function readWorkerKey(): string {
-  const dir = process.env.MIBU_DATA_DIR || join(homedir(), ".open-studio");
+  const dir = process.env.OPEN_STUDIO_DATA_DIR || join(homedir(), ".open-studio");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();
   } catch {

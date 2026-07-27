@@ -27,7 +27,7 @@ type Confirmation = components["schemas"]["ConfirmationOut"];
 export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: string; allowKey: string }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const storageKey = `mibu.agent.allow.${allowKey}`;
+  const storageKey = `openstudio.agent.allow.${allowKey}`;
 
   const [allowed, setAllowed] = React.useState<string[]>(() => {
     try {

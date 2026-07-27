@@ -5,7 +5,7 @@
 丢弃——现有那几条 `logger.info` 从来没人看得到。
 
 方案:给 `app` 命名空间挂一个 stderr handler(所有 `logging.getLogger(__name__)`
-在 app 包下的都归它),级别由 MIBU_LOG_LEVEL 决定,`propagate=False` 避免与 root/uvicorn
+在 app 包下的都归它),级别由 OPEN_STUDIO_LOG_LEVEL 决定,`propagate=False` 避免与 root/uvicorn
 重复打印。noisy 的第三方库压到 WARNING。
 """
 

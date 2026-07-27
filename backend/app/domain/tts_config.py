@@ -1,5 +1,5 @@
 """Runtime config for voice cloning (TTS). DB singleton (TtsConfig id='default')
-overrides the MIBU_TTS_* env fallback so engine / interpreter / download source /
+overrides the OPEN_STUDIO_TTS_* env fallback so engine / interpreter / download source /
 Fish Speech source+weights dirs are editable from Settings. Cached; call refresh()
 after a write."""
 from __future__ import annotations
@@ -32,8 +32,8 @@ FISH_MODEL_MARKER = "codec.pth"
 
 # Dev convenience: reuse a sibling mibu-video checkout's Fish Speech setup (source
 # clone + already-downloaded weights) so real synthesis works without re-downloading.
-_MIBU_NEW_ROOT = Path(__file__).resolve().parents[3]
-_SIBLING_VIDEO = _MIBU_NEW_ROOT.parent / "mibu-video" / "backend"
+_OPEN_STUDIO_NEW_ROOT = Path(__file__).resolve().parents[3]
+_SIBLING_VIDEO = _OPEN_STUDIO_NEW_ROOT.parent / "mibu-video" / "backend"
 _SIBLING_FISH_REPO = _SIBLING_VIDEO / "third_party" / "fish-speech"
 _SIBLING_FISH_MODEL = _SIBLING_VIDEO / "models" / "tts" / "fish-speech-s2-pro"
 

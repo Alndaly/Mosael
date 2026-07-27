@@ -8,9 +8,9 @@ import React from "react";
  * The legacy per-element preview (`<video>`/`<img>`/MonitorElement in Monitor) survives ONLY as an
  * involuntary safety net — a clip whose proxy isn't ready yet, or a browser without WebCodecs —
  * never as a user-selectable "preview method". There is no UI toggle. A hidden localStorage escape
- * hatch (`mibu.compositor = "0"`, set via devtools) can force the legacy path for debugging.
+ * hatch (`openstudio.compositor = "0"`, set via devtools) can force the legacy path for debugging.
  */
-const KEY = "mibu.compositor";
+const KEY = "openstudio.compositor";
 
 export function compositorEnabled(): boolean {
   try {

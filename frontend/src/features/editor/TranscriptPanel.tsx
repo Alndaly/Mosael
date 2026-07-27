@@ -174,7 +174,7 @@ export function TranscriptPanel({
       disabled={asrRunning}
       onClick={() => startAsr.mutate(firstAssetId)}
     >
-      {asrRunning ? <Loader2 size={12} className="animate-mibu-spin" /> : <Mic size={12} />}
+      {asrRunning ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Mic size={12} />}
       {asrRunning ? (asrJob.data?.message ?? t("transcribing")) : t("aiTranscribe")}
     </button>
   );
@@ -409,7 +409,7 @@ export function TranscriptPanel({
           <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
             <PopoverTrigger asChild>
               <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" disabled={translating} title={t("transcriptTranslateNote")}>
-                {translating ? <Loader2 size={12} className="animate-mibu-spin" /> : <Languages size={12} />}
+                {translating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Languages size={12} />}
                 {t("transcriptTranslateToSubtitles")}
               </button>
             </PopoverTrigger>

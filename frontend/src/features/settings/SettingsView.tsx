@@ -61,7 +61,7 @@ const SECTION_IDS: SectionId[] = [
   "backend",
 ];
 
-const SECTION_STORAGE_KEY = "mibu:settings-section";
+const SECTION_STORAGE_KEY = "openstudio:settings-section";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -76,7 +76,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     setSectionState(id);
   };
 
-  // 深链:别处(如工作流「模型未配置」提示)→ mibu:open-settings 直达对应分区。
+  // 深链:别处(如工作流「模型未配置」提示)→ openstudio:open-settings 直达对应分区。
   React.useEffect(() => {
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
@@ -103,8 +103,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         setFocusProviderCapability(focus ?? null);
       }
     };
-    window.addEventListener("mibu:open-settings", onOpen);
-    return () => window.removeEventListener("mibu:open-settings", onOpen);
+    window.addEventListener("openstudio:open-settings", onOpen);
+    return () => window.removeEventListener("openstudio:open-settings", onOpen);
   }, []);
 
   const nav: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
@@ -324,7 +324,7 @@ function AccountSection() {
           >
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
             <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
-              {avatarPending ? <Loader2 size={13} className="animate-mibu-spin" /> : <Camera size={13} />}
+              {avatarPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Camera size={13} />}
             </span>
           </button>
           <input
@@ -352,7 +352,7 @@ function AccountSection() {
           >
             {saveState === "saving" ? (
               <>
-                <Loader2 size={12} className="animate-mibu-spin" /> {t("profileSaving")}
+                <Loader2 size={12} className="animate-openstudio-spin" /> {t("profileSaving")}
               </>
             ) : saveState === "error" ? (
               t("profileSaveFailed")
@@ -434,7 +434,7 @@ function AccountSection() {
             </label>
             <div className="flex items-end justify-end">
               <Button size="sm" disabled={!canUpdatePassword} onClick={() => void submitPassword()}>
-                {passwordPending ? <Loader2 size={13} className="animate-mibu-spin" /> : null} {t("updatePassword")}
+                {passwordPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("updatePassword")}
               </Button>
             </div>
           </div>
@@ -470,7 +470,7 @@ function profileKey(profile: { username: string; display_name: string; signature
 function UpdateCheckButton() {
   const t = useI18n();
   const [checking, setChecking] = React.useState(false);
-  const check = window.mibuDesktop?.checkUpdates;
+  const check = window.openStudioDesktop?.checkUpdates;
   if (!check) return null;
   return (
     <Button
@@ -494,7 +494,7 @@ function UpdateCheckButton() {
         }
       }}
     >
-      {checking ? <Loader2 size={13} className="animate-mibu-spin" /> : <RefreshCw size={13} />}
+      {checking ? <Loader2 size={13} className="animate-openstudio-spin" /> : <RefreshCw size={13} />}
       {t("updateCheck")}
     </Button>
   );
