@@ -896,7 +896,7 @@ function GenerateWorkspace({
             <div className="flex items-center gap-1.5">
               {switcher}
               {selectedModel && (
-                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-[9px] py-0.5 text-[11.5px] text-muted-foreground">
+                <span className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 text-xs text-muted-foreground">
                   {selectedModel.label}
                 </span>
               )}
@@ -905,7 +905,7 @@ function GenerateWorkspace({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 text-[11.5px] text-muted-foreground hover:text-foreground"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
                   disabled={!prompt.trim() || !selectedAdapterAvailable || optimizePrompt.isPending || createGeneration.isPending}
                   onClick={() => optimizePrompt.mutate()}
                   title={t("optimizePrompt")}
