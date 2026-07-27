@@ -226,3 +226,67 @@ def test_split_without_keyframes_leaves_transform_untouched() -> None:
     for piece in clips(split):
         assert piece["transform"]["scale"] == 0.5
         assert piece["transform"]["x"] == 0.25
+
+
+def _fx_clip(client: TestClient) -> tuple[str, dict]:
+    """带音量关键帧 + 淡入淡出的片段,源区间 [0, 8]。"""
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    asset = client.post(
+        "/api/assets",
+        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
+    ).json()
+    sequence = client.post(
+        "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
+    ).json()
+    track = next(t for t in sequence["tracks"] if t["kind"] == "video")
+    state = client.post(
+        f"/api/sequences/{sequence['id']}/clips",
+        json={"track_id": track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": 8},
+    ).json()
+    clip = next(t for t in state["tracks"] if t["kind"] == "video")["clips"][0]
+    client.patch(
+        f"/api/sequences/{sequence['id']}/clips/{clip['id']}/effects",
+        json={"effects": {"gain_keyframes": [{"t": 0, "gain": 0.0}, {"t": 1, "gain": 1.0}],
+                          "fade_in": 2.0, "fade_out": 2.0,
+                          "video_fade_in": 1.5, "video_fade_out": 1.5}},
+    )
+    return sequence["id"], clip
+
+
+def test_split_keeps_fades_only_at_the_outer_edges() -> None:
+    """淡变是相对片段首尾的绝对秒数,原样复制会让每段都在自己首尾淡一次 ——
+    切一刀就在切点凭空多出「淡出+淡入」,画面黑一下、声音断一下。"""
+    client = fresh_client()
+    sid, clip = _fx_clip(client)
+    state = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split", json={"src_time": 4}).json()
+    left, right = clips(state)
+    assert (left["effects"]["fade_in"], left["effects"]["fade_out"]) == (2.0, 0.0)
+    assert (left["effects"]["video_fade_in"], left["effects"]["video_fade_out"]) == (1.5, 0.0)
+    assert (right["effects"]["fade_in"], right["effects"]["fade_out"]) == (0.0, 2.0)
+    assert (right["effects"]["video_fade_in"], right["effects"]["video_fade_out"]) == (0.0, 1.5)
+
+
+def test_split_slices_gain_keyframes_like_transform_keyframes() -> None:
+    """音量关键帧同样是片段内归一化进度,不裁则每段重播整条音量曲线。"""
+    client = fresh_client()
+    sid, clip = _fx_clip(client)
+    state = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split", json={"src_time": 4}).json()
+    left, right = clips(state)
+    gains = lambda c: sorted((kf["t"], kf["gain"]) for kf in c["effects"]["gain_keyframes"])
+    assert gains(left) == [(0.0, 0.0), (1.0, 0.5)]
+    assert gains(right) == [(0.0, 0.5), (1.0, 1.0)]
+    assert gains(left)[-1][1] == gains(right)[0][1]  # 跨切点连续
+
+
+def test_split_points_middle_pieces_have_no_fades() -> None:
+    """多点切分:中间段两头都不该有淡变,只有首段淡入、末段淡出。"""
+    client = fresh_client()
+    sid, clip = _fx_clip(client)
+    state = client.post(f"/api/sequences/{sid}/clips/{clip['id']}/split-points",
+                        json={"src_times": [2, 6]}).json()
+    first, middle, last = clips(state)
+    assert first["effects"]["video_fade_in"] == 1.5 and first["effects"]["video_fade_out"] == 0.0
+    assert middle["effects"]["video_fade_in"] == 0.0 and middle["effects"]["video_fade_out"] == 0.0
+    assert last["effects"]["video_fade_in"] == 0.0 and last["effects"]["video_fade_out"] == 1.5

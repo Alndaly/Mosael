@@ -982,9 +982,9 @@ def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
     }
     db.delete(clip)
     orig_in, orig_out = original["src_in"], original["src_out"]
-    # 关键帧按各自的源区间重投影,否则两半各自重播整段动画(切点处画面跳回起点)。
+    # 关键帧/淡变按各自的源区间重投影,否则两半各自重播整段动画、且都在切点淡一次。
     def piece_common(piece_in: float, piece_out: float) -> dict[str, Any]:
-        return {**common, "transform": _sliced_transform(common["transform"], orig_in, orig_out, piece_in, piece_out)}
+        return {**common, **_sliced_inherited(common, orig_in, orig_out, piece_in, piece_out)}
 
     left = Clip(
         **piece_common(orig_in, op.src_time),
@@ -1179,8 +1179,8 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
             timeline_start=timeline_cursor,
             src_in=src_start,
             src_out=src_end,
-            # 关键帧按保留段的源区间重投影(同 split);否则每段都重播整段动画。
-            **{**inherited, "transform": _sliced_transform(inherited["transform"], orig_in, orig_out, src_start, src_end)},
+            # 关键帧/淡变按保留段的源区间重投影(同 split);否则每段重播整段动画、并在切口淡一次。
+            **_sliced_inherited(inherited, orig_in, orig_out, src_start, src_end),
         )
         db.add(piece)
         db.flush()
@@ -1249,7 +1249,7 @@ def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> 
     created: list[dict[str, Any]] = []
     for src_start, src_end in zip(boundaries, boundaries[1:]):
         piece = Clip(
-            **{**common, "transform": _sliced_transform(common["transform"], orig_in, orig_out, src_start, src_end)},
+            **{**common, **_sliced_inherited(common, orig_in, orig_out, src_start, src_end)},
             # Keep each piece where it already sits on the timeline (speed-adjusted) — a split
             # divides, it must not move anything.
             timeline_start=original["timeline_start"] + (src_start - original["src_in"]) / speed,
@@ -1323,29 +1323,24 @@ def _sample_keyframe_track(points: list[tuple[float, float]], t: float) -> float
     return points[-1][1]
 
 
-def _sliced_transform(
-    transform: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
-) -> Any:
-    """把关键帧动画裁剪到 [piece_in, piece_out] 这一段上。
+def _slice_keyframes(
+    raw: Any, props: tuple[str, ...], orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> list[dict[str, Any]] | None:
+    """关键帧列表 → 裁到 [piece_in, piece_out] 后的列表;无可切内容时返回 None。
 
-    关键帧的 t 是**片段内归一化进度**(0=片段头、1=片段尾),所以把原 transform 原样复制给切出的
-    每一段,等于让每段都从头重播整段动画 —— 用户看到的是"切一刀,画面在切点跳回动画起点"。
-
-    这里按源时间把动画重新投影到新片段的进度轴:段首/段尾取原动画在该处的采样值(保证跨切点
-    连续、接得上),中间落在本段内的关键帧按比例重映射。无关键帧的 transform 原样返回。
+    关键帧的 t 是**片段内归一化进度**(0=片段头、1=片段尾)。按源时间把动画重投影到新片段的
+    进度轴:段首/段尾取原动画在该处的采样值(跨切点连续、接得上),中间落在本段内的关键帧
+    按比例重映射。
     """
-    if not isinstance(transform, dict):
-        return transform
-    raw = transform.get("keyframes")
     if not isinstance(raw, list) or not raw:
-        return transform
+        return None
     span = orig_out - orig_in
     piece_span = piece_out - piece_in
     if span <= 0 or piece_span <= 0:
-        return transform
+        return None
 
     sliced: list[dict[str, Any]] = []
-    for prop in _KEYFRAME_PROPS:
+    for prop in props:
         points = sorted(
             (float(kf["t"]), float(kf[prop]))
             for kf in raw
@@ -1364,7 +1359,60 @@ def _sliced_transform(
             if 1e-6 < q < 1 - 1e-6:
                 values[round(q, 6)] = value
         sliced.extend({"t": q, prop: values[q]} for q in sorted(values))
-    return {**transform, "keyframes": sliced}
+    return sliced or None
+
+
+def _sliced_transform(
+    transform: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> Any:
+    """画面变换(位置/缩放/旋转/透明度)动画裁到某一段;无关键帧则原样返回。
+
+    不裁的话每段都会从头重播整段动画 —— 用户看到的是"切一刀,画面在切点跳回动画起点"。
+    """
+    if not isinstance(transform, dict):
+        return transform
+    sliced = _slice_keyframes(transform.get("keyframes"), _KEYFRAME_PROPS, orig_in, orig_out, piece_in, piece_out)
+    return transform if sliced is None else {**transform, "keyframes": sliced}
+
+
+def _sliced_effects(
+    effects: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> Any:
+    """effects 里同样按片段计时的东西,也要跟着切:
+
+    · **音量关键帧**(gain_keyframes)与 transform 关键帧同构(t 为片段内进度)——不裁则每段
+      重播整条音量曲线。
+    · **淡入淡出**(fade_in/out、video_fade_in/out)是相对片段首尾的绝对秒数。原样复制会让
+      每一段都在自己的首尾淡一次 —— 切一刀,切点处画面黑一下、声音断一下(段落切换处的
+      "黑屏/断音"多半来源于此)。淡入只属于**首段**、淡出只属于**末段**,中间的切点不该有。
+    """
+    if not isinstance(effects, dict):
+        return effects
+    updated = dict(effects)
+    sliced = _slice_keyframes(effects.get("gain_keyframes"), ("gain",), orig_in, orig_out, piece_in, piece_out)
+    if sliced is not None:
+        updated["gain_keyframes"] = sliced
+    epsilon = 1e-6
+    if piece_in > orig_in + epsilon:  # 不是首段 → 不该再淡入
+        for key in ("fade_in", "video_fade_in"):
+            if updated.get(key):
+                updated[key] = 0.0
+    if piece_out < orig_out - epsilon:  # 不是末段 → 不该在切点淡出
+        for key in ("fade_out", "video_fade_out"):
+            if updated.get(key):
+                updated[key] = 0.0
+    return updated
+
+
+def _sliced_inherited(
+    inherited: dict[str, Any], orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> dict[str, Any]:
+    """切分出的一段应继承的字段:transform / effects 里按片段计时的部分都投影到该段。"""
+    return {
+        **inherited,
+        "transform": _sliced_transform(inherited.get("transform"), orig_in, orig_out, piece_in, piece_out),
+        "effects": _sliced_effects(inherited.get("effects"), orig_in, orig_out, piece_in, piece_out),
+    }
 
 
 def timeline_span(clip: Clip) -> float:
