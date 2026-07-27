@@ -687,7 +687,7 @@ function GenerateWorkspace({
         provider: selectedModel!.provider,
         model: selectedModel!.model,
         prompt,
-        provider_profile_id: selectedModel!.provider_profile_id,
+        // 不传图像模型的 profile:重写用的是「对话」默认 LLM,后端按 resolve_default("chat") 解析。
         language: locale,
       }),
     onSuccess: (result) => {

@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import httpx
 from sqlalchemy.orm import Session
 
+from app.domain.provider_defaults import resolve_default
 from app.domain.providers import require_profile
 
 _LLM_TIMEOUT_SECONDS = 60.0
@@ -139,12 +140,17 @@ def _build_system_prompt(guide: PlatformGuide, ui_language: str) -> str:
     )
 
 
+def _auth_headers(api_key: str) -> dict[str, str]:
+    """空密钥(本地 / 无鉴权端点)不发 Authorization —— 否则 'Bearer ' 是非法头值,httpx 直接抛。"""
+    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+
 def _chat_json(profile, model: str, system: str, user: str) -> dict:
     """一次 chat/completions 调用,强制 JSON 输出,解析为 dict。"""
     try:
         response = httpx.post(
             f"{profile.base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {profile.api_key}"},
+            headers=_auth_headers(profile.api_key or ""),
             json={
                 "model": model,
                 "messages": [
@@ -188,8 +194,17 @@ def optimize_image_prompt(
     if not raw_prompt.strip():
         raise PromptOptimizeError("提示词为空,无法优化")
     guide = guide_for(provider, model)
-    profile = require_profile(db, profile_id, error=PromptOptimizeError)
-    data = _chat_json(profile, profile.default_model, _build_system_prompt(guide, ui_language), raw_prompt.strip())
+    # 用「对话」默认 LLM 重写(与助手同一个),不是图像模型本身:图像 provider 的 default_model 是
+    # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
+    # 传入的 profile / 首个启用的供应商。
+    chat_profile, chat_model = resolve_default(db, "chat")
+    if chat_profile is None:
+        chat_profile = require_profile(db, profile_id, error=PromptOptimizeError)
+    if not chat_model:
+        chat_model = chat_profile.default_model
+    if not chat_model:
+        raise PromptOptimizeError("未配置对话模型,请在设置里为「对话」选择供应商与模型")
+    data = _chat_json(chat_profile, chat_model, _build_system_prompt(guide, ui_language), raw_prompt.strip())
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:
         raise PromptOptimizeError("优化结果为空")

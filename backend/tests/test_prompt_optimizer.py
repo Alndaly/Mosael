@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from app.domain.generation.prompt_optimizer import guide_for
+from app.domain.generation.prompt_optimizer import _auth_headers, guide_for
+
+
+def test_empty_api_key_sends_no_auth_header() -> None:
+    # An empty key must NOT become "Bearer " — httpx rejects that as an illegal header value.
+    assert _auth_headers("") == {}
+    assert _auth_headers("sk-abc") == {"Authorization": "Bearer sk-abc"}
 
 
 def test_sd_platform_wants_tags_and_negative() -> None:
