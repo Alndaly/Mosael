@@ -57,7 +57,7 @@ def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
 # Lets the shared access chokepoint stay read-open but write-gated without every route
 # passing the method through. Defaults to GET so non-HTTP call paths (tests, workers,
 # daemon jobs) are treated as reads and never spuriously 403.
-_request_method: contextvars.ContextVar[str] = contextvars.ContextVar("mibu_request_method", default="GET")
+_request_method: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_request_method", default="GET")
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 

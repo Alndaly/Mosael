@@ -77,7 +77,7 @@ def _run_generation(generation_id: str) -> None:
             generation.kind,
         )
 
-        workdir = Path(tempfile.mkdtemp(prefix="mibu-gen-"))
+        workdir = Path(tempfile.mkdtemp(prefix="open-studio-gen-"))
         request: GenerationRequest | None = None
         started = time.monotonic()
         try:

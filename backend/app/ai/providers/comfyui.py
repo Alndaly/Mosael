@@ -26,7 +26,7 @@ ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential ima
 provider. POST /prompt submits an API-format workflow graph, /history/{id} is polled until
 the graph finishes, outputs are fetched via /view.
 
-The seam that makes arbitrary ComfyUI graphs fit Mibu's prompt→media contract is a
+The seam that makes arbitrary ComfyUI graphs fit Open Studio's prompt→media contract is a
 *template with placeholders*: the profile may carry a workflow exported from ComfyUI
 (API format) in which `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}`
 `{{steps}}` `{{duration_seconds}}` are substituted per request. Images fall back to a

@@ -306,7 +306,7 @@ def _run_synthesis_body(
             engine_module = "fish_speech" if engine == "fish-speech" else "f5_tts"
             python = resolve_tts_python(engine_module)  # real engine if installed, else placeholder fallback
             worker_env = {**os.environ, "HF_ENDPOINT": cfg.hf_endpoint}
-            with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {
                     "action": "synthesize",
@@ -399,7 +399,7 @@ def _synthesize_remote(
         model=model,
         base_url=(profile.base_url if profile else "") or "",
     )
-    with tempfile.TemporaryDirectory(prefix="mibu-tts-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
         # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
         out = Path(tmp) / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
         provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
@@ -515,7 +515,7 @@ def _run_podcast_body(
         token = (profile.api_key if profile else None) or ""
         appid = profile_extra(db, "volcano-podcast", "appid")
 
-        with tempfile.TemporaryDirectory(prefix="mibu-podcast-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="open-studio-podcast-") as tmp:
             out = Path(tmp) / "podcast.mp3"
             result = synthesize_podcast(
                 appid,

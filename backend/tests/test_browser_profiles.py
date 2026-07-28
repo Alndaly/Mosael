@@ -1,7 +1,7 @@
 """浏览器池 Phase 1:持久档案(BrowserProfile)CRUD + 租约(一档案一活动会话)+ 发布账号迁移回填。
 
 统一「持久登录身份」:发布账号 = 挂平台的档案(组合,非合并);通用档案任意站点复用。迁移沿用
-同分区 persist:mibu-<accountId> —— 这条是本阶段最要命的不变量(发布登录态不能丢)。
+同分区 persist:openstudio-<accountId> —— 这条是本阶段最要命的不变量(发布登录态不能丢)。
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def test_profile_crud_api() -> None:
 
 
 def test_new_publish_account_gets_pool_profile() -> None:
-    """新建发布账号即建档挂靠:分区 persist:mibu-<id>,pool 页标注平台/账号。"""
+    """新建发布账号即建档挂靠:分区 persist:openstudio-<id>,pool 页标注平台/账号。"""
     client = fresh_client()
     ws = _ws(client)
     with SessionLocal() as db:
@@ -57,7 +57,7 @@ def test_new_publish_account_gets_pool_profile() -> None:
         acc_id = acc.id
         assert acc.profile_id is not None
         prof = db.get(BrowserProfile, acc.profile_id)
-        assert prof.partition == f"persist:mibu-{acc_id}" and prof.name == "B站主号"
+        assert prof.partition == f"persist:openstudio-{acc_id}" and prof.name == "B站主号"
     pool = client.get(f"/api/browser/profiles?workspace_id={ws}").json()
     assert len(pool) == 1 and pool[0]["platform"] == "bilibili" and pool[0]["bound_account_id"] == acc_id
 

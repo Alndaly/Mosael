@@ -2,7 +2,7 @@
 
 A workspace must always keep at least one owner — you can't demote or remove the last
 one, or the workspace becomes unmanageable. That check-then-write must be atomic, so the
-mutating ops run under a module lock (mirrors mibu-video's core/workspaces.py RLock).
+mutating ops run under a module lock (mirrors the predecessor project's core/workspaces.py RLock).
 Actor-level authorization (who may call these) is enforced in the route layer.
 """
 from __future__ import annotations

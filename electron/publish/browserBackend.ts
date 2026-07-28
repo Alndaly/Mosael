@@ -1,4 +1,4 @@
-// 浏览器自动化执行器 ↔ 后端(/api/browser)的薄客户端。与发布同一信任边界:X-Mibu-Worker-Key
+// 浏览器自动化执行器 ↔ 后端(/api/browser)的薄客户端。与发布同一信任边界:X-Open-Studio-Worker-Key
 // (本机 0600 文件),后端只听 127.0.0.1。后端重启换密钥,故每次重读。
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -17,7 +17,7 @@ function readWorkerKey(): string {
 }
 
 async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { "X-Mibu-Worker-Key": readWorkerKey() };
+  const headers: Record<string, string> = { "X-Open-Studio-Worker-Key": readWorkerKey() };
   if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}/api/browser${path}`, {
     method,

@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 // 那一帧会错过 → 全屏时左上角边距"有时"没撤。这里在 preload 加载即订阅并缓存最新值,
 // onFullscreen 订阅时先补发缓存,消除时序竞态。
 let lastFullscreen = false;
-ipcRenderer.on("mibu:fullscreen", (_event, value) => {
+ipcRenderer.on("openstudio:fullscreen", (_event, value) => {
   lastFullscreen = Boolean(value);
 });
 
@@ -15,21 +15,21 @@ ipcRenderer.on("mibu:fullscreen", (_event, value) => {
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
 contextBridge.exposeInMainWorld("openStudioDesktop", {
   platform: process.platform,
-  setTitleOverlay: (colors) => ipcRenderer.send("mibu:title-overlay", colors),
+  setTitleOverlay: (colors) => ipcRenderer.send("openstudio:title-overlay", colors),
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
-  checkUpdates: () => ipcRenderer.invoke("mibu:check-updates"),
+  checkUpdates: () => ipcRenderer.invoke("openstudio:check-updates"),
   onUpdateAvailable: (callback) => {
     const listener = (_event, info) => callback(info);
-    ipcRenderer.on("mibu:update-available", listener);
-    return () => ipcRenderer.removeListener("mibu:update-available", listener);
+    ipcRenderer.on("openstudio:update-available", listener);
+    return () => ipcRenderer.removeListener("openstudio:update-available", listener);
   },
   // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。订阅时立即补发缓存的当前值,
   // 避免渲染层挂载晚于首帧推送时"有时"漏掉全屏态。
   onFullscreen: (callback) => {
     callback(lastFullscreen);
     const listener = (_event, value) => callback(value);
-    ipcRenderer.on("mibu:fullscreen", listener);
-    return () => ipcRenderer.removeListener("mibu:fullscreen", listener);
+    ipcRenderer.on("openstudio:fullscreen", listener);
+    return () => ipcRenderer.removeListener("openstudio:fullscreen", listener);
   },
 });
 

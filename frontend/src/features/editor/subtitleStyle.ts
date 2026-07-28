@@ -18,7 +18,7 @@ export type SubtitleStyle = {
   font_id: string;
 };
 
-/** Curated families rather than a free-text box. Two rules carried over from mibu-video:
+/** Curated families rather than a free-text box. Two rules carried over from the predecessor project:
     always end in a generic fallback, and put the FAMILY name before any PostScript alias —
     the export side's fontconfig only resolves family names, so an alias-first stack silently
     falls through the whole list to a Latin-only default with no CJK glyphs. */

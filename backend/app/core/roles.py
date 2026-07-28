@@ -1,4 +1,4 @@
-"""Workspace role ladder + permission model (ported from mibu-video's core/workspaces.py).
+"""Workspace role ladder + permission model (ported from the predecessor project's core/workspaces.py).
 
 A member has one **role** (owner > admin > editor > viewer). Each role grants a default
 set of **perms**; an admin can additionally set per-member overrides (WorkspaceMemberPerm)

@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 #: Header the worker sends it in. Custom (not Authorization) so it can never be confused with a
 #: user session — and, usefully, a custom header forces a CORS preflight, which a cross-origin
 #: page then fails.
-WORKER_KEY_HEADER = "X-Mibu-Worker-Key"
+WORKER_KEY_HEADER = "X-Open-Studio-Worker-Key"
+#: 更名前的头名,仍然接受。壳与后端虽然同包发布,但 `main.cjs` 会**复用 8800 上已有的健康后端**
+#: (见 ensureBackend),升级后第一次启动完全可能是「新壳 + 上次残留的旧后端」——只认新头会让
+#: 发布/浏览器 worker 在那一次全线 401。发送侧只发新名,兼容是单向的。
+LEGACY_WORKER_KEY_HEADER = "X-Mibu-Worker-Key"
 
 _KEY_FILENAME = "publish-worker.key"
 _key: str | None = None

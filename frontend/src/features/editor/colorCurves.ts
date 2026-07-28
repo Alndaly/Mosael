@@ -1,4 +1,4 @@
-/** 调色曲线(纯函数域,达芬奇式 Luma/R/G/B)。移植自 mibu-video 的 color-grade。
+/** 调色曲线(纯函数域,达芬奇式 Luma/R/G/B)。移植自前身项目的 color-grade。
  *
  *  - 预览:SVG feComponentTransfer 逐通道查表近似(见 colorCurvesTables)。
  *  - 导出:后端把同样的点烧成 ffmpeg `curves=master:r:g:b`。
@@ -74,7 +74,7 @@ export function evalCurve(points: CurvePoint[], x: number): number {
   return pts[n - 1][1];
 }
 
-export const CURVES_FILTER_ID = "mibu-color-curves";
+export const CURVES_FILTER_ID = "openstudio-color-curves";
 
 /** 每通道的 feComponentTransfer tableValues,identity 时返回 null。
  *

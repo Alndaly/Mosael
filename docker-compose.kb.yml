@@ -3,25 +3,25 @@
 #
 # 用法:
 #   docker compose -f docker-compose.kb.yml up -d
-# 然后给后端配置(env 或 .env,MIBU_ 前缀走 pydantic-settings):
-#   MIBU_NEO4J_URI=bolt://127.0.0.1:7687
-#   MIBU_NEO4J_USER=neo4j
-#   MIBU_NEO4J_PASSWORD=mibu-kb-graph
-# 实体抽取还需配 MIBU_KB_EMBEDDING_VENDOR 指向一个可用的 LLM 供应商。
+# 然后给后端配置(env 或 .env,OPEN_STUDIO_ 前缀走 pydantic-settings):
+#   OPEN_STUDIO_NEO4J_URI=bolt://127.0.0.1:7687
+#   OPEN_STUDIO_NEO4J_USER=neo4j
+#   OPEN_STUDIO_NEO4J_PASSWORD=openstudio-kb-graph
+# 实体抽取还需配 OPEN_STUDIO_KB_EMBEDDING_VENDOR 指向一个可用的 LLM 供应商。
 # 不起这个也能用:知识库照常跑 FTS,知识图谱标签页显示“配置后启用”。
 
 services:
   neo4j:
     image: neo4j:5-community
-    container_name: mibu-kb-neo4j
+    container_name: openstudio-kb-neo4j
     ports:
       - "7474:7474"   # 浏览器控制台 http://localhost:7474
       - "7687:7687"   # bolt(后端连这个)
     environment:
-      NEO4J_AUTH: neo4j/mibu-kb-graph
+      NEO4J_AUTH: neo4j/openstudio-kb-graph
       NEO4J_server_memory_heap_max__size: 1G
     volumes:
-      - mibu_neo4j_data:/data
+      - openstudio_neo4j_data:/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
       interval: 10s
@@ -29,4 +29,4 @@ services:
       retries: 6
 
 volumes:
-  mibu_neo4j_data:
+  openstudio_neo4j_data:

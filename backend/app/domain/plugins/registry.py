@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 
-MANIFEST_FILENAMES = ("mibu.plugin.json", "plugin.json")
+#: 按顺序探测。`open-studio.plugin.json` 是现在的规范名,`plugin.json` 是通用名,
+#: `mibu.plugin.json` 是更名前的写法——用户磁盘上的既有插件还带着它,去掉会让那些插件直接消失。
+MANIFEST_FILENAMES = ("open-studio.plugin.json", "plugin.json", "mibu.plugin.json")
 
 
 class PluginDomainError(ValueError):

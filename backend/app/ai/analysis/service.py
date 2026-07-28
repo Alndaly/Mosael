@@ -90,7 +90,7 @@ def pick_native_video_profile(db: Session, profile_id: str | None = None) -> Pro
 
 def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
     """Evenly sampled JPEG frames via a single ffmpeg pass. count=None → 按时长自适应帧数。"""
-    with tempfile.TemporaryDirectory(prefix="mibu-frames-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="open-studio-frames-") as tmp:
         pattern = Path(tmp) / "frame-%02d.jpg"
         try:
             probe = subprocess.run(

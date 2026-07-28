@@ -18,7 +18,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.db import PARTITION_PREFIX, SessionLocal
 from app.db.models import Asset, Job, PublishAccount, PublishTask
 from app.domain.jobs import create_job, emit_job_event, register_external_kind
 from app.domain.notifications import notify
@@ -35,7 +35,7 @@ class PublishDomainError(ValueError):
 
 # 平台注册表:config 字段描述驱动 UI 表单与校验。
 # executor="local" 在后端线程内完成;executor="browser" 由桌面端发布器
-# (Electron 内嵌浏览器 + 账号登录态)认领执行 —— 老版 mibu-video 同款架构。
+# (Electron 内嵌浏览器 + 账号登录态)认领执行 —— 前身项目同款架构。
 # title_max 在创建时校验,避免任务在平台侧因超长标题晚失败。
 PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     "folder": {
@@ -131,12 +131,12 @@ def create_account(
     db.add(account)
     db.commit()
     db.refresh(account)
-    # 发布账号即浏览器池档案(组合):按其登录分区 persist:mibu-<id> 建档并回填,pool 页统一可见,
+    # 发布账号即浏览器池档案(组合):按其登录分区 persist:<PARTITION_PREFIX>-<id> 建档并回填,pool 页统一可见,
     # 工作流/智能体可复用其登录。浏览器域负责建档,发布域只写指针(见 domain/browser)。
     from app.domain import browser
 
     profile = browser.create_profile(
-        db, workspace_id=workspace_id, name=name, proxy=account.proxy, partition=f"persist:mibu-{account.id}"
+        db, workspace_id=workspace_id, name=name, proxy=account.proxy, partition=f"persist:{PARTITION_PREFIX}-{account.id}"
     )
     account.profile_id = profile.id
     db.commit()

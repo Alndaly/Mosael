@@ -896,7 +896,7 @@ _SUBTITLE_DEFAULTS: dict[str, Any] = {
 
 
 def clean_subtitle_style(raw: dict[str, Any]) -> dict[str, Any]:
-    """归一化字幕样式:补默认、钳制范围、白名单枚举(参考 mibu-video SubtitleStyle)。"""
+    """归一化字幕样式:补默认、钳制范围、白名单枚举(参考前身项目 SubtitleStyle)。"""
     raw = raw or {}
 
     def num(key: str, lo: float, hi: float) -> float:

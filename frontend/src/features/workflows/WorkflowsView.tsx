@@ -411,11 +411,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
   });
-  // 导出:取后端信封(格式/版本权威在后端)→ 落成 .mibu-workflow.json 文件。
+  // 导出:取后端信封(格式/版本权威在后端)→ 落成 .openstudio-workflow.json 文件。
   const menuExport = useMutation({
     mutationFn: async (workflow: Workflow) => {
       const envelope = await exportWorkflowFile(workflow.id);
-      saveJsonToDisk(`${workflow.name}.mibu-workflow.json`, envelope);
+      saveJsonToDisk(`${workflow.name}.openstudio-workflow.json`, envelope);
     },
     onError: (error: Error) => toast.error(t("wfExportFailed"), { description: error.message }),
   });

@@ -21,6 +21,8 @@ Embedding 走 OpenAI 兼容 /embeddings 端点(复用 AI 供应商配置)。
 
 logger = logging.getLogger(__name__)
 
+#: 更名前就叫这个,**不要改**:它是 Milvus 里的集合名,现有用户的向量全在里面。
+#: 改名等于把他们已建好的知识库索引全部弃掉(检索静默返回空),要动必须配一次重建迁移。
 COLLECTION = "mibu_kb_chunks"
 _client_lock = threading.Lock()
 _client: Any | None = None

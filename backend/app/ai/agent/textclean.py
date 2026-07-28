@@ -3,7 +3,7 @@
 本地推理服务(Ollama / LM Studio 等 llama.cpp 系)对 tokenizer 词表外的字符
 (常见于 emoji)会走 byte-fallback:模型逐字节输出 `<0xF0>` 这样的 token,
 某些版本 detokenize 时把它们**按字面文本**吐出,于是 UI 看到
-`<0xF0><0x9F><0x97><0x84>`(实为 🗄 的 UTF-8 四字节)。这不是 Mibu 的解析问题
+`<0xF0><0x9F><0x97><0x84>`(实为 🗄 的 UTF-8 四字节)。这不是 Open Studio 的解析问题
 ——文本到达时就已是这些字面字符。这里把连续的 `<0xXX>` 串重组回 UTF-8;
 解不出合法 UTF-8 的串原样保留(宁可显示原文,不可吞内容)。
 """

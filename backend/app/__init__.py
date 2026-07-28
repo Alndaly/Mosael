@@ -1,2 +1,2 @@
-"""Mibu New backend package."""
+"""Open Studio backend package."""
 

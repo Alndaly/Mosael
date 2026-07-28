@@ -6,7 +6,7 @@ import React from "react";
  * 避免 storage 里的陈旧/非法值把视图带到不存在的分支。
  */
 export function usePersistentTab<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (value: T) => void] {
-  const storageKey = `mibu:tab:${key}`;
+  const storageKey = `openstudio:tab:${key}`;
   const [tab, setTab] = React.useState<T>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as T | null;

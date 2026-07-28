@@ -1,7 +1,7 @@
 """通用 job worker 通道:claim / report / heartbeat。
 
 发布器验证过的拉取协议,推广到任意 external kind(见 app/domain/jobs.py 的执行模式
-接缝)。鉴权与发布 worker 相同:X-Mibu-Worker-Key(本地文件信任边界),在 main.py
+接缝)。鉴权与发布 worker 相同:X-Open-Studio-Worker-Key(本地文件信任边界),在 main.py
 挂载处统一加依赖。publish 因历史契约仍走 /api/publish/worker/*。
 """
 

@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 
 /**
- * Subtitle list editor (老版 mibu-video 的字幕可见入口): every text clip on
+ * Subtitle list editor (沿用前身项目的字幕可见入口): every text clip on
  * every subtitle track, in timeline order — click the timecode to seek, edit
  * the text inline, delete, or add a new one at the playhead.
  */

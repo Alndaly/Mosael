@@ -15,7 +15,7 @@ from app.domain.jobs import emit_job_event
 Provider usage ledger.
 
 This Module owns durable metering rows. Provider profiles say how to call an Adapter; this
-Module says what happened, which metered units were consumed, and how confidently Mibu can
+Module says what happened, which metered units were consumed, and how confidently Open Studio can
 price them. The small Interface is intentional: callers should not learn pricing rules.
 """
 

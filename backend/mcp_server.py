@@ -1,4 +1,4 @@
-"""Mibu MCP server (stdio).
+"""Open Studio MCP server (stdio).
 
 Minimal external-agent surface per plan §17: stable product semantics only —
 summaries, never raw internal schemas. Talks to the local backend HTTP API so
@@ -25,7 +25,7 @@ from mcp.server.fastmcp import FastMCP
 #: at import time, so every tool 401'd or misrouted the moment the backend ran on any port
 #: other than 8800 — a packaged build picking a free port, or two instances side by side.
 _API_BASE: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "mibu_api_base", default=os.environ.get("OPEN_STUDIO_API", "http://127.0.0.1:8800")
+    "open_studio_api_base", default=os.environ.get("OPEN_STUDIO_API", "http://127.0.0.1:8800")
 )
 
 
@@ -42,7 +42,7 @@ def api_base() -> str:
 # handles many users' turns concurrently and each needs its own credential. A global would leak
 # one caller's token into another's request.
 _API_TOKEN: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "mibu_api_token", default=os.environ.get("OPEN_STUDIO_TOKEN", "")
+    "open_studio_api_token", default=os.environ.get("OPEN_STUDIO_TOKEN", "")
 )
 
 
@@ -55,7 +55,7 @@ def _auth_headers() -> dict[str, str]:
     token = _API_TOKEN.get()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
-mcp = FastMCP("mibu")
+mcp = FastMCP("open-studio")
 
 
 def _raise_with_detail(response: httpx.Response) -> None:
@@ -151,7 +151,7 @@ CONFIRMATION_TOOLS = frozenset(
 
 # 确认卡上显示的请求方。经 /api/agent/tools 间接调用时由调用方标注(如 "pi-agent"),
 # 直连 MCP(Claude CLI 等)保持默认。
-_REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("mibu_requested_by", default="mcp-agent")
+_REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_requested_by", default="mcp-agent")
 
 
 def set_requested_by(name: str) -> contextvars.Token:
@@ -164,7 +164,7 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
         "status": confirmation["status"],
         "permission": confirmation["permission"],
         "summary": confirmation["summary"],
-        "message": "等待用户在 Mibu 中确认。用 get_confirmation 轮询结果；批准后 result 才会填充。",
+        "message": "等待用户在 Open Studio 中确认。用 get_confirmation 轮询结果；批准后 result 才会填充。",
     }
 
 
@@ -282,7 +282,7 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
 
     Use ONLY for clips/tracks/cuts/trims/effects on a sequence_id after
     inspect_sequence. This creates a confirmation card; no edit is applied until
-    the user approves it in Mibu, then get_confirmation returns the result.
+    the user approves it in Open Studio, then get_confirmation returns the result.
     Do NOT use for workflow canvas nodes/edges such as add_node, connect,
     set_node_config, remove_node, or remove_edge — use edit_workflow for those.
 
@@ -500,7 +500,7 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
 def list_plugin_tools() -> list[dict[str, Any]]:
     """Read-only: list tools contributed by enabled and permission-granted user plugins.
 
-    Use only when the built-in Mibu tools do not cover the user's request and a
+    Use only when the built-in Open Studio tools do not cover the user's request and a
     plugin-specific capability may. Each entry has plugin_id, tool_name,
     description, and input_schema; call with invoke_plugin_tool. Do NOT use for
     built-in timeline/workflow/KB/media operations when a first-party tool exists.
@@ -513,7 +513,7 @@ def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) ->
     """Runs directly: invoke one plugin tool returned by list_plugin_tools.
 
     Use only with a plugin_id/tool_name/input_schema you got from list_plugin_tools.
-    Built-in Mibu edits, renders, generations, KB operations, and workflow runs
+    Built-in Open Studio edits, renders, generations, KB operations, and workflow runs
     should use their dedicated first-party tools instead. Returns status,
     output, and error.
     """
@@ -587,7 +587,7 @@ def create_kb_note(
     Use to persist reusable creative output the user asks you to keep:
     finalized scripts, shot lists, title/description drafts, research digests.
     If dataset_id is omitted, the note is saved to the workspace's most recent
-    knowledge base; if none exists, Mibu creates an "AI 笔记" knowledge base.
+    knowledge base; if none exists, Open Studio creates an "AI 笔记" knowledge base.
     Do NOT dump raw chat replies; save polished reusable material with a clear
     title. Do NOT use for media asset tags (update_asset_tags), timeline edits
     (edit_timeline), or workflow graph edits (edit_workflow/update_workflow).
@@ -769,7 +769,7 @@ def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
 def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
     """Read-only: search the public web for up-to-date external information.
 
-    Use when the user needs current facts beyond local Mibu data. Returns up to
+    Use when the user needs current facts beyond local Open Studio data. Returns up to
     count results as {title, url, snippet}; follow up with fetch_url to read a
     promising page. Do NOT use for the user's local assets, KB, projects, or
     workflows — use list_assets/search_kb/list_projects/list_workflows.
@@ -783,7 +783,7 @@ def fetch_url(url: str) -> dict[str, Any]:
 
     Use after web_search when you need the page body. Returns {title, url, text}.
     Only http/https public pages are allowed; internal/localhost addresses are
-    blocked. Do NOT use for local Mibu KB documents/assets/workflows.
+    blocked. Do NOT use for local Open Studio KB documents/assets/workflows.
     """
     return _get("/api/webfetch", {"url": url})
 
@@ -947,7 +947,7 @@ def get_confirmation(confirmation_id: str) -> dict[str, Any]:
 
     Use only after a confirmation-required tool returns {confirmation_id,
     status:"pending"}. Status becomes executed/rejected/failed after the user
-    decides in Mibu; result/error explain the outcome. Do NOT call this to find
+    decides in Open Studio; result/error explain the outcome. Do NOT call this to find
     projects, assets, workflows, jobs, or arbitrary IDs.
     """
     confirmation = _get(f"/api/confirmations/{confirmation_id}")

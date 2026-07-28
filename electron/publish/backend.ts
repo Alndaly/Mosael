@@ -1,4 +1,4 @@
-// 发布执行器 ↔ mibu-cut 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
+// 发布执行器 ↔ Open Studio 后端(/api/publish)的薄客户端。后端是任务的单一事实源:执行器
 // 认领待办、回报状态、更新账号登录态,都走这里。本地默认 owner,后端 publish 权限门放行本地。
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -41,7 +41,7 @@ function readWorkerKey(): string {
 }
 
 async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { "X-Mibu-Worker-Key": readWorkerKey() };
+  const headers: Record<string, string> = { "X-Open-Studio-Worker-Key": readWorkerKey() };
   if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}/api/publish${path}`, {
     method,

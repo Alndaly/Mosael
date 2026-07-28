@@ -30,7 +30,7 @@ const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
 const PIP_SIZES = [0.25, 0.33, 0.5];
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-/** mibu-video 调色面板的完整参数集,按老版分组呈现。 */
+/** 调色面板的完整参数集,沿用前身项目的分组。 */
 const GRADE_GROUPS = [
   {
     label: "gradeGroupLight",
@@ -563,7 +563,7 @@ export function Inspector({
 }
 
 /**
- * 调色独立面板(老版 mibu-video color-panel 的形态):作用对象标注 +
+ * 调色独立面板(沿用前身项目 color-panel 的形态):作用对象标注 +
  * 风格预设 + 分组滑杆 + 重置。只作用于选中的片段。
  */
 function ColorGradePanel({

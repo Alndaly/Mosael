@@ -2294,6 +2294,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/optimize-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Optimize Prompt
+         * @description 把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。
+         */
+        post: operations["optimize_prompt_api_generation_optimize_prompt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generation/comfyui/workflows": {
         parameters: {
             query?: never;
@@ -4249,7 +4269,7 @@ export interface components {
             workspace_id: string;
             /**
              * Name
-             * @default Mibu 助手
+             * @default Open Studio 助手
              */
             name: string;
             /** App Id */
@@ -5152,6 +5172,44 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** PromptOptimizeRequest */
+        PromptOptimizeRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Prompt */
+            prompt: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Language
+             * @default zh
+             */
+            language: string;
+        };
+        /** PromptOptimizeResponse */
+        PromptOptimizeResponse: {
+            /** Prompt */
+            prompt: string;
+            /**
+             * Negative Prompt
+             * @default
+             */
+            negative_prompt: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Platform
+             * @default
+             */
+            platform: string;
         };
         /** ProviderDefaultOut */
         ProviderDefaultOut: {
@@ -11595,6 +11653,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerationModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    optimize_prompt_api_generation_optimize_prompt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptOptimizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptOptimizeResponse"];
                 };
             };
             /** @description Validation Error */

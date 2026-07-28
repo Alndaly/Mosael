@@ -1,6 +1,6 @@
 """浏览器自动化 worker 通道:claim / report / heartbeat。
 
-与发布/通用 job worker 同一信任边界:X-Mibu-Worker-Key(本机 0600 文件),在 main.py 挂载处统一
+与发布/通用 job worker 同一信任边界:X-Open-Studio-Worker-Key(本机 0600 文件),在 main.py 挂载处统一
 加依赖。Electron 的浏览器 worker 拉取 queued 动作、执行、回报;后端从不反向连接执行器。
 """
 

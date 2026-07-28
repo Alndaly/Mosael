@@ -11,7 +11,7 @@ import time
 
 from sqlalchemy import select
 
-from app.core.db import SessionLocal
+from app.core.db import PARTITION_PREFIX, SessionLocal
 from app.db.models import BrowserAction, BrowserSession
 from app.domain import browser
 from tests.util import fresh_client, worker_client
@@ -43,7 +43,9 @@ def test_partition_isolation_from_publish() -> None:
 
         named = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!")
         assert named.partition == "persist:rpa-My-Profile"  # 名字清洗进 rpa 命名空间
-        assert not named.partition.startswith("persist:mibu-")  # 绝不撞发布(persist:mibu-<account>)
+        # 绝不撞发布账号的登录分区。前缀取自 PARTITION_PREFIX,不要写死——写死的话前缀一改,
+        # 这个断言就悄悄变成在防一个已经不存在的名字,而真正的碰撞面无人看守。
+        assert not named.partition.startswith(f"persist:{PARTITION_PREFIX}-")
 
         # 具名会话同名复用(要跨次保留登录)。
         again = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!")
@@ -51,9 +53,9 @@ def test_partition_isolation_from_publish() -> None:
 
     # 恶意名字也进不了发布命名空间。
     with SessionLocal() as db:
-        evil = browser.open_session(db, workspace_id=ws, kind="named", name="mibu-someaccount")
-        assert evil.partition == "persist:rpa-mibu-someaccount"
-        assert not evil.partition.startswith("persist:mibu-")
+        evil = browser.open_session(db, workspace_id=ws, kind="named", name=f"{PARTITION_PREFIX}-someaccount")
+        assert evil.partition == f"persist:rpa-{PARTITION_PREFIX}-someaccount"
+        assert not evil.partition.startswith(f"persist:{PARTITION_PREFIX}-")
 
 
 def test_run_action_roundtrip_returns_worker_result() -> None:

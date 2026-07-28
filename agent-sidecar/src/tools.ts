@@ -1,5 +1,5 @@
 /**
- * Mibu tools as pi AgentTools — generated entirely from the backend registry.
+ * Open Studio tools as pi AgentTools — generated entirely from the backend registry.
  *
  * pi has no MCP, so tools come from GET /api/agent/tools (the manifest derived from
  * mcp_server.py, the single tool registry) and execute via POST /api/agent/tools/{name}.
@@ -16,7 +16,7 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 import { log } from "./protocol.js";
 
-async function mibuGet(
+async function apiGet(
   apiBase: string,
   token: string,
   path: string,
@@ -29,7 +29,7 @@ async function mibuGet(
   return res.json();
 }
 
-async function mibuPost(apiBase: string, token: string, path: string, body: unknown): Promise<unknown> {
+async function apiPost(apiBase: string, token: string, path: string, body: unknown): Promise<unknown> {
   const res = await fetch(apiBase + path, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -49,7 +49,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 interface Confirmation { id: string; status: string; result: unknown; error?: string | null }
 
 /**
- * Block until the user resolves a confirmation card in Mibu.
+ * Block until the user resolves a confirmation card in Open Studio.
  * pending -> approved -> executed(result) | failed(error) | rejected. This is the
  * confirmation gate: the agent's turn waits here until the user acts.
  */
@@ -61,7 +61,7 @@ async function awaitConfirmation(
 ): Promise<unknown> {
   // 人工批准是人速的,轮询上限给足(后端 turn 超时 600s 兜底)
   for (let waited = 0; waited < 590_000; waited += 1500) {
-    const cur = (await mibuGet(apiBase, token, `/api/confirmations/${confirmationId}`)) as Confirmation;
+    const cur = (await apiGet(apiBase, token, `/api/confirmations/${confirmationId}`)) as Confirmation;
     if (cur.status === "executed") return cur.result;
     if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
     if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
@@ -103,11 +103,11 @@ const TOOL_LABELS: Record<string, string> = {
   run_workflow: "运行工作流",
 };
 
-/** All Mibu tools for a turn, generated from the backend manifest. */
+/** All Open Studio tools for a turn, generated from the backend manifest. */
 export async function buildAllTools(apiBase: string, token: string, workspaceId: string): Promise<AgentTool[]> {
   let specs: ToolSpec[];
   try {
-    specs = (await mibuGet(apiBase, token, "/api/agent/tools")) as ToolSpec[];
+    specs = (await apiGet(apiBase, token, "/api/agent/tools")) as ToolSpec[];
   } catch (err) {
     // 没有 manifest 就没有工具面;宁可空手起 turn(模型会说明情况),也不要一份注定漂移的内置副本。
     log("could not load the tool manifest; starting the turn without tools:", String(err));
@@ -133,13 +133,13 @@ export async function buildAllTools(apiBase: string, token: string, workspaceId:
           // it blindly broke every tool without the parameter — web_search, analyze_asset —
           // on the first call.
           if (workspaceId && !args.workspace_id && takesWorkspace) args.workspace_id = workspaceId;
-          const response = (await mibuPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
+          const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
             arguments: args,
             requested_by: "pi-agent",
           })) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
-          // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mibu 里批准后把执行结果给模型。
+          // 确认门控:调用只创建了待确认卡,阻塞等用户在 Open Studio 里批准后把执行结果给模型。
           const card = (response?.result ?? {}) as { confirmation_id?: string };
           if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
           return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal));

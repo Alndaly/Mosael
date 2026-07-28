@@ -24,7 +24,7 @@ TERMINAL_STATUSES = ("succeeded", "failed")
 # 在此一处捕获最省事;非工作流路径下取默认 None,即顶层任务。每个节点在自己的线程里 set/reset,
 # 线程间天然隔离。
 _current_parent_job: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "mibu_current_parent_job", default=None
+    "open_studio_current_parent_job", default=None
 )
 
 

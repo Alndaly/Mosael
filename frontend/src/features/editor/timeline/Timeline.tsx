@@ -140,7 +140,7 @@ export function Timeline({
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
 
-  // 落位动画(老 mibu-video 同款):提交回包落进缓存、而 EditorView 的效应还没清草稿的
+  // 落位动画(前身项目同款):提交回包落进缓存、而 EditorView 的效应还没清草稿的
   // 那一帧,缓存已是终值 — 把"追平了缓存的 settling 草稿"视作已清,片段在该帧带着
   // 过渡从松手位置滑向终点;涟漪预览同帧归零,不会二次位移。草稿存活期间(含这一帧)
   // 过渡类保持挂载,松手前的拖拽本体则以 duration-0 保证 1:1 跟手。
@@ -913,7 +913,7 @@ export function Timeline({
                     clip.timeline_start >= insertRipple.from - 1e-9
                       ? insertRipple.shift
                       : 0;
-                  // 位移一律走 transform、left 固定在已提交位置(老 mibu-video 手法):
+                  // 位移一律走 transform、left 固定在已提交位置(前身项目手法):
                   // 拖拽本体 duration-0 跟手,松手/涟漪让位则由过渡平滑滑入。
                   // 落位帧的滑行原理:提交落缓存时 left 跳到终值、shift 同帧归零,
                   // 两个属性各自做 200ms 过渡 → 视觉位置 = left+shift 从"松手点"

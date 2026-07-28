@@ -49,7 +49,7 @@ export class MockAdapter implements PublishAdapter {
   async openCreatorPage(): Promise<void> {
     await this.driver.setHtml(`
       <main style="font-family: system-ui; padding: 32px;">
-        <h1>Mibu Mock Publisher</h1>
+        <h1>Open Studio Mock Publisher</h1>
         <p>Task: ${escapeHtml(this.task.title)}</p>
         <p id="status">Status: preparing</p>
       </main>

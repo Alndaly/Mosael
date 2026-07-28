@@ -1,5 +1,5 @@
 {
-  "id": "dev.mibu.text-toolkit",
+  "id": "dev.openstudio.text-toolkit",
   "name": "Text Toolkit",
   "version": "0.1.0",
   "entry": "tools/main.py",

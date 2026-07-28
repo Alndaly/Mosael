@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Mibu New API",
+    "title": "Open Studio API",
     "version": "0.1.0"
   },
   "paths": {
@@ -6877,6 +6877,48 @@
         }
       }
     },
+    "/api/generation/optimize-prompt": {
+      "post": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Optimize Prompt",
+        "description": "把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。",
+        "operationId": "optimize_prompt_api_generation_optimize_prompt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptOptimizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptOptimizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/generation/comfyui/workflows": {
       "get": {
         "tags": [
@@ -12922,7 +12964,7 @@
             "type": "string",
             "maxLength": 160,
             "title": "Name",
-            "default": "Mibu 助手"
+            "default": "Open Studio 助手"
           },
           "app_id": {
             "type": "string",
@@ -15254,6 +15296,84 @@
         ],
         "title": "ProjectWithStatsOut",
         "description": "列表页项目卡片用的汇总信息;单个项目端点仍返回精简 ProjectOut。"
+      },
+      "PromptOptimizeRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Model"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Language",
+            "default": "zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "provider",
+          "model",
+          "prompt"
+        ],
+        "title": "PromptOptimizeRequest"
+      },
+      "PromptOptimizeResponse": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "negative_prompt": {
+            "type": "string",
+            "title": "Negative Prompt",
+            "default": ""
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "PromptOptimizeResponse"
       },
       "ProviderDefaultOut": {
         "properties": {

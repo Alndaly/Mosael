@@ -103,7 +103,7 @@ def send_text(bot: FeishuBot, chat_id: str, text: str) -> None:
         raise FeishuError(f"飞书发消息失败: {data.get('msg') or data.get('code')}")
 
 
-# --- 反应(reaction)= 飞书的「对方正在输入」(老 mibu-video 同款) ----------------
+# --- 反应(reaction)= 飞书的「对方正在输入」(前身项目同款) ----------------
 #
 # 飞书没有 Slack/iMessage 那种原生输入指示器;给用户发来的那条消息加 emoji_type="Typing"
 # 的反应,客户端会渲染成动画输入指示 —— 处理完删掉,失败换 "CrossMark"。全程 best-effort:
@@ -165,8 +165,8 @@ def seen_recently(message_id: str, window_seconds: float = 300) -> bool:
 
 CAPABILITY_NOTES = {
     "readonly": "本会话为只读档:只允许使用只读工具(list/inspect),不要提交任何确认卡。",
-    "editor": "本会话为编辑档:可以提交时间线修改与生成的确认卡,等待用户在 Mibu 中批准。",
-    "full": "本会话为完整档:可使用全部工具,变更仍需用户在 Mibu 中批准确认卡。",
+    "editor": "本会话为编辑档:可以提交时间线修改与生成的确认卡,等待用户在 Open Studio 中批准。",
+    "full": "本会话为完整档:可使用全部工具,变更仍需用户在 Open Studio 中批准确认卡。",
 }
 
 
@@ -190,7 +190,7 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
                 send_text(
                     bot,
                     chat_id,
-                    "你还没有绑定 Mibu 账号,无法使用本机器人。请在 Mibu『设置 → 飞书机器人』生成绑定码,"
+                    "你还没有绑定 Open Studio 账号,无法使用本机器人。请在 Open Studio『设置 → 飞书机器人』生成绑定码,"
                     "然后把绑定码直接发给我完成绑定。",
                 )
             return
@@ -295,7 +295,7 @@ def _is_member(db: Session, workspace_id: str, user_id: str) -> bool:
 
 
 def _resolve_sender(db: Session, workspace_id: str, open_id: str) -> User | None:
-    """The Mibu account bound to this Feishu sender — only if still a workspace member."""
+    """The Open Studio account bound to this Feishu sender — only if still a workspace member."""
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "open_id": open_id})
     if binding is None or not _is_member(db, workspace_id, binding.user_id):
         return None
@@ -404,7 +404,7 @@ def stop_all_connections() -> None:
         stop_connection(bot_id)
 
 
-# --- 扫码一键创建 (device authorization grant, ported from mibu-video) --------
+# --- 扫码一键创建 (device authorization grant, ported from the predecessor project) --------
 
 _onboard_lock = threading.Lock()
 _onboard_state: dict[str, dict[str, Any]] = {}  # workspace_id -> {phase, qr_url, user_code, error, app_id, _gen}

@@ -18,7 +18,7 @@ const CHANNELS: { key: Channel; label: string; stroke: string }[] = [
   { key: "b", label: "B", stroke: "#3e63dd" },
 ];
 
-// 固定比例画布 + 内边距(与 mibu-video 一致):控制点是正圆、端点不贴边被裁。
+// 固定比例画布 + 内边距(与前身项目一致):控制点是正圆、端点不贴边被裁。
 const W = 224;
 const H = 160;
 const PAD = 8;
@@ -50,7 +50,7 @@ function pathFor(points: CurvePoint[]): string {
   return cmds.join(" ");
 }
 
-/** 达芬奇式色调曲线编辑器,交互移植自 mibu-video:
+/** 达芬奇式色调曲线编辑器,交互移植自前身项目:
  *  曲线/空白处按下 = 原地加点并立刻拖动;点上按下 = 精确抓取;双击/右键删点(端点保留)。 */
 export function CurveEditor({
   curves,
@@ -69,7 +69,7 @@ export function CurveEditor({
 
   // 本地草稿:拖动期间逐帧更新草稿(即时),松手才把整条曲线写给 onChange(一次
   // 服务端往返)。onChange 直连服务端 mutation,若每帧都发,渲染会一直落后于手,
-  // 拖动直接失灵 —— mibu-video 原版写的是同步本地 store,这里用草稿层等价还原手感。
+  // 拖动直接失灵 —— 前身项目原版写的是同步本地 store,这里用草稿层等价还原手感。
   const [draft, setDraft] = React.useState<ColorCurves | null>(null);
   const base = draft ?? curves ?? IDENTITY_CURVES;
   const points = base[channel] ?? IDENTITY_CURVE;

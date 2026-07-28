@@ -88,7 +88,7 @@ export class AccountViewManager {
   }
 
   /** 通用:在给定分区开一个内嵌视图、亮出并导航到 url —— 供「浏览器池」通用档案登录复用**同一套**
-   *  内嵌视图(与发布账号登录一致:同容器、同「返回 Mibu」、同顶栏工具条),不弹外部系统窗。
+   *  内嵌视图(与发布账号登录一致:同容器、同「返回 Open Studio」、同顶栏工具条),不弹外部系统窗。
    *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
   async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
     // 池档案的分区名直接来自数据库,不经 partitionFor,故这里也要触发一次遗留目录迁移。

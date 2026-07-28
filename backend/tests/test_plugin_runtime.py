@@ -21,7 +21,7 @@ def make_plugin(tmp_path: Path, entry_body: str, entry: str = "main.py") -> dict
 
 
 def test_example_plugin_word_count_end_to_end() -> None:
-    manifest = json.loads((EXAMPLE / "mibu.plugin.json").read_text(encoding="utf-8"))
+    manifest = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
     manifest["_path"] = str(EXAMPLE)
     output = execute_tool(manifest, "word_count", {"text": "大家好 欢迎来到米布"})
     assert output["chars"] == 9
@@ -31,7 +31,7 @@ def test_example_plugin_word_count_end_to_end() -> None:
 
 
 def test_plugin_error_response_raises() -> None:
-    manifest = json.loads((EXAMPLE / "mibu.plugin.json").read_text(encoding="utf-8"))
+    manifest = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
     manifest["_path"] = str(EXAMPLE)
     with pytest.raises(PluginRuntimeError, match="unknown tool"):
         execute_tool(manifest, "nope", {})
@@ -68,7 +68,7 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     plugins_dir = tmp_path / "plugins"
     target = plugins_dir / "text-toolkit"
     target.mkdir(parents=True)
-    (target / "mibu.plugin.json").write_text((EXAMPLE / "mibu.plugin.json").read_text(encoding="utf-8"), "utf-8")
+    (target / "open-studio.plugin.json").write_text((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"), "utf-8")
     (target / "tools").mkdir()
     (target / "tools" / "main.py").write_text((EXAMPLE / "tools" / "main.py").read_text(encoding="utf-8"), "utf-8")
     monkeypatch.setattr(type(app_settings), "plugins_dir", property(lambda self: plugins_dir))
@@ -76,7 +76,7 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     plugins = client.post("/api/plugins/scan").json()
-    assert plugins[0]["id"] == "dev.mibu.text-toolkit"
+    assert plugins[0]["id"] == "dev.openstudio.text-toolkit"
     client.patch(f"/api/plugins/{plugins[0]['id']}", json={"enabled": True})
 
     res = client.post(

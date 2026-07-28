@@ -20,6 +20,7 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
     reset_db(tmp_path)
     plugin_dir = tmp_path / "plugins" / "caption-helper"
     plugin_dir.mkdir(parents=True)
+    # 故意用更名前的清单名:证明用户磁盘上的既有插件不会因改名而消失。
     (plugin_dir / "mibu.plugin.json").write_text(
         json.dumps(
             {
@@ -84,7 +85,7 @@ def test_plugin_manifest_scan_enable_tool_and_invocation(tmp_path: Path) -> None
 
     skills = client.get("/api/agent/skills").json()
     skill_ids = {skill["id"] for skill in skills}
-    assert "mibu.ai_generation" in skill_ids
+    assert "open-studio.ai_generation" in skill_ids
     assert "dev.caption-helper:caption_assets" in skill_ids
 
     invocation = client.post(

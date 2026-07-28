@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mibu 宣传片生成器 —— 全程用代码生成,不依赖录屏/截屏。
+"""Open Studio 宣传片生成器 —— 全程用代码生成,不依赖录屏/截屏。
 
 流程:每张幻灯片用 SVG 排版(品牌配色 + 节点式 M logo)→ rsvg-convert 渲成 PNG →
 ffmpeg 逐片加缓慢推近(Ken Burns)+ 交叉溶解(xfade)+ 低音环境垫 → 输出 promo.mp4。
@@ -107,7 +107,7 @@ def foot() -> str:
 def slide_hero():
     return head() + f'''
     {node_m(W/2, 400, 3.4, PRIMARY)}
-    <text x="{W/2}" y="640" font-family="{FONT}" font-size="132" font-weight="800" fill="{INK}" text-anchor="middle" letter-spacing="2">Mibu</text>
+    <text x="{W/2}" y="640" font-family="{FONT}" font-size="96" font-weight="800" fill="{INK}" text-anchor="middle" letter-spacing="1">Open Studio</text>
     <text x="{W/2}" y="712" font-family="{FONT}" font-size="34" font-weight="500" fill="{PRIMARY}" text-anchor="middle" letter-spacing="6">AI NATIVE VIDEO STUDIO</text>
     <text x="{W/2}" y="800" font-family="{FONT}" font-size="30" fill="{MUTE}" text-anchor="middle">本地优先 · 一个桌面应用,跑通 从素材到矩阵发布 的全链路</text>
     ''' + foot()
@@ -293,7 +293,7 @@ def slide_security():
 def slide_cta():
     return head() + f'''
     {node_m(W/2, 380, 2.6, PRIMARY)}
-    <text x="{W/2}" y="600" font-family="{FONT}" font-size="88" font-weight="800" fill="{INK}" text-anchor="middle">Mibu</text>
+    <text x="{W/2}" y="600" font-family="{FONT}" font-size="64" font-weight="800" fill="{INK}" text-anchor="middle">Open Studio</text>
     <text x="{W/2}" y="676" font-family="{FONT}" font-size="34" fill="{MUTE}" text-anchor="middle">本地优先 · 全链路 AI 视频创作工作室</text>
     <rect x="{W/2-230}" y="760" width="460" height="72" rx="36" fill="none" stroke="{BORDER}" stroke-width="1.5"/>
     <text x="{W/2}" y="806" font-family="{MONO}" font-size="28" fill="{PRIMARY}" text-anchor="middle">1142704468@qq.com</text>
@@ -331,7 +331,7 @@ SLIDE_FUNCS_D = {n: d for n, _, d in SLIDE_FUNCS}
 
 def build_video():
     pngs = render_slides()
-    out = os.path.join(HERE, "mibu-promo.mp4")
+    out = os.path.join(HERE, "open-studio-promo.mp4")
     # 每片:loop 成时长 dur 的片段 + 缓慢推近(zoompan)。fps 30。
     inputs = []
     filters = []

@@ -28,7 +28,7 @@ def test_claude_command_and_mcp_config_shape() -> None:
 
     command = build_claude_command("hi", "sys", "/tmp/cfg.json", "sess-1")
     assert "--resume" in command and "sess-1" in command
-    assert "mcp__mibu" in command
+    assert "mcp__open-studio" in command  # 必须与 mcpServers 的键一致,否则白名单匹配不到任何工具
     assert command[command.index("--mcp-config") + 1] == "/tmp/cfg.json"
 
 

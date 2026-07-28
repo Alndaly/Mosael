@@ -613,7 +613,7 @@ class ProviderDefault(Base):
 class ProviderPricingRule(Base):
     """Versioned price rule for one provider capability.
 
-    Pricing is deliberately outside ProviderProfile: a profile tells Mibu how to call an
+    Pricing is deliberately outside ProviderProfile: a profile tells Open Studio how to call an
     Adapter, while this table tells the usage Module how to estimate spend for a metered unit.
     """
 
@@ -722,7 +722,7 @@ class TtsConfig(Base):
     python_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")  # empty = autodetect
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="hf-mirror")  # hf | hf-mirror | modelscope
     # Fish Speech runs from a source checkout + a local weights dir (with codec.pth);
-    # empty = reuse a sibling mibu-video setup if present. See domain/tts_config.py.
+    # empty = fall back to the app-managed install. See domain/tts_config.py.
     fish_repo_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     fish_model_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
@@ -835,7 +835,7 @@ class FeishuBot(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(160), nullable=False, default="Mibu 助手")
+    name: Mapped[str] = mapped_column(String(160), nullable=False, default="Open Studio 助手")
     app_id: Mapped[str] = mapped_column(String(120), nullable=False)
     app_secret: Mapped[str] = mapped_column(String(200), nullable=False)
     capability: Mapped[str] = mapped_column(String(24), nullable=False, default="editor")  # readonly|editor|full
@@ -847,7 +847,7 @@ class FeishuBot(Base):
 
 
 class FeishuBinding(Base):
-    """Binds a Feishu sender (open_id) to a Mibu account within a workspace, so the bot
+    """Binds a Feishu sender (open_id) to a Open Studio account within a workspace, so the bot
     acts with THAT member's permissions instead of a blanket owner identity."""
 
     __tablename__ = "feishu_bindings"

@@ -219,7 +219,7 @@ def test_zero_grade_adds_no_filter(tmp_path) -> None:
 
 
 def test_full_grade_field_mapping(tmp_path) -> None:
-    # mibu-video parity: every field family lands in its FFmpeg filter.
+    # predecessor-project parity: every field family lands in its FFmpeg filter.
     command = grade_command(tmp_path, {
         "exposure": 0.4, "gamma": 0.2, "highlights": 0.5, "blacks": 0.5, "fade": 0.5,
         "temperature": 0.6, "tint": 0.5, "hue": 0.5, "vibrance": 0.5,

@@ -61,7 +61,7 @@ from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
-    logger.info("Mibu backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
+    logger.info("Open Studio backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
@@ -95,9 +95,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         from app.integrations.feishu.service import autostart_enabled_bots, stop_all_connections
 
         autostart_enabled_bots()
-    logger.info("Mibu backend ready")
+    logger.info("Open Studio backend ready")
     yield
-    logger.info("Mibu backend shutting down")
+    logger.info("Open Studio backend shutting down")
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()
@@ -121,7 +121,7 @@ class _MethodBindingMiddleware:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Mibu New API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Open Studio API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(_MethodBindingMiddleware)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather

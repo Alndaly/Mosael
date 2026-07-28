@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-os.environ["OPEN_STUDIO_DATA_DIR"] = tempfile.mkdtemp(prefix="mibu-test-")
+os.environ["OPEN_STUDIO_DATA_DIR"] = tempfile.mkdtemp(prefix="open-studio-test-")
 # Tests drive the scheduler tick() directly; the background loop stays off.
 os.environ["OPEN_STUDIO_SCHEDULER_ENABLED"] = "0"
 os.environ["OPEN_STUDIO_FEISHU_AUTOSTART"] = "0"

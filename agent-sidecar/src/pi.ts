@@ -1,13 +1,13 @@
 /**
  * pi integration (S2): build an OpenAI-compatible provider from the config
- * Mibu passes per turn (base URL + key + model), then run a turn through pi's
+ * Open Studio passes per turn (base URL + key + model), then run a turn through pi's
  * Agent and stream text deltas back out. Tools/hooks come in S3+.
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createModels, createProvider, type Model, type Models } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
-const PROVIDER_ID = "mibu";
+const PROVIDER_ID = "open-studio";
 
 // 上下文压缩(S7):超过阈值时只把最近若干条喂给 LLM,避免长对话撑爆上下文窗口。
 // 切点回退到最近的一条 user 消息,保证不切断 assistant 工具调用与其 toolResult 的配对。
@@ -39,13 +39,13 @@ function buildModels(baseUrl: string, apiKey: string, modelId: string): { models
   };
   const provider = createProvider({
     id: PROVIDER_ID,
-    name: "Mibu provider",
+    name: "Open Studio provider",
     baseUrl,
     // 本地服务(Ollama/LM Studio 等)通常不需要 key,但 pi 缺少 apiKey 时会直接报
     // "No API key for provider" —— 所以补一个占位值,这类端点会忽略它。
     auth: {
       apiKey: {
-        name: "Mibu provider key",
+        name: "Open Studio provider key",
         resolve: async () => ({ auth: { apiKey: apiKey || "not-required" } }),
       },
     },

@@ -175,7 +175,7 @@ function PublishViewBar() {
         className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-[12.5px] text-foreground hover:border-border-strong hover:bg-secondary"
         onClick={() => void window.openStudioPublish?.hideView()}
       >
-        <ArrowLeft size={14} /> {t("publishBackToMibu")}
+        <ArrowLeft size={14} /> {t("publishBackToApp")}
       </button>
     </div>
   );

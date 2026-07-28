@@ -46,13 +46,13 @@ def test_upload_reads_family_from_the_font_not_the_filename() -> None:
     res = client.post(
         "/api/fonts",
         data={"workspace_id": ws},
-        files={"file": ("some-download-name.ttf", _build_font("Mibu Display"), "font/ttf")},
+        files={"file": ("some-download-name.ttf", _build_font("Studio Display"), "font/ttf")},
     )
     assert res.status_code == 200, res.text
     font = res.json()
     # The filename is deliberately unrelated: libass matches on the family in the name table,
     # so storing the filename would make export miss a font the preview rendered.
-    assert font["family"] == "Mibu Display"
+    assert font["family"] == "Studio Display"
     assert font["original_filename"] == "some-download-name.ttf"
 
     listing = client.get("/api/fonts", params={"workspace_id": ws}).json()

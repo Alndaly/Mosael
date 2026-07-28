@@ -79,7 +79,7 @@ class Segment:
     muted: bool = False
     filter: str = ""  # one of FILTER_PRESETS or ""
     # Manual grade: sorted (name, value) pairs, names from GRADE_FIELDS, values
-    # clamped to [-1, 1] (0 entries dropped). Mirrors mibu-video's color panel.
+    # clamped to [-1, 1] (0 entries dropped). Mirrors the predecessor project's color panel.
     grade: tuple[tuple[str, float], ...] = ()
     # Tone curves (DaVinci-style Luma/R/G/B), pre-formatted per channel as
     # (ffmpeg_key, "x/y x/y ...") — identity channels dropped, near-dup points
@@ -245,7 +245,7 @@ GAP_EPSILON = 1e-6
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
-# Full manual-grade field set, ported from mibu-video's color panel. All values
+# Full manual-grade field set, ported from the predecessor project's color panel. All values
 # are normalized to [-1, 1] in clip effects.color; the executor maps them onto
 # the same FFmpeg formulas the old app used (eq/curves/hue/colortemperature/
 # vibrance/colorbalance/unsharp/vignette).

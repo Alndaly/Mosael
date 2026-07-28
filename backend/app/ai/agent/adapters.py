@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 """
-Agent CLI adapters: Mibu hosts a specialized external coding-agent (pi — the
+Agent CLI adapters: Open Studio hosts a specialized external coding-agent (pi — the
 `claude` adapter is an alternative) instead of a homegrown loop. The agent gets
-Mibu's MCP server (with a session token) as its tool surface; mutations still
+Open Studio's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
 
@@ -186,7 +186,7 @@ def _run_pi(
     session_id: str = "",
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
-    its JSONL events. The sidecar's tools call back into Mibu's REST with the
+    its JSONL events. The sidecar's tools call back into Open Studio's REST with the
     service token; mutations still flow through confirmation cards. adapter_state
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
@@ -301,7 +301,9 @@ def build_claude_command(
         "--append-system-prompt", system_prompt,
         "--mcp-config", mcp_config_path,
         "--strict-mcp-config",
-        "--allowedTools", "mcp__mibu",
+        # 前缀必须与 open_studio_mcp_config 里 mcpServers 的键一致——Claude CLI 按配置键给工具
+        # 加命名空间,写错就等于白名单一个工具都匹配不上(MCP 工具全部不可用)。
+        "--allowedTools", "mcp__open-studio",
     ]
     if adapter_session_id:
         command += ["--resume", adapter_session_id]

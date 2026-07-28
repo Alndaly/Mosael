@@ -1,4 +1,4 @@
-"""桌面发布器 worker 协议(老版 mibu-video /api/publish/worker 契约 1:1)。
+"""桌面发布器 worker 协议(前身项目 /api/publish/worker 契约 1:1)。
 
 执行器是本机 Electron 进程:认领 pending 的浏览器平台任务、驱动
 账号内嵌视图完成上传、回报状态;账号登录态巡检同理。后端是唯一

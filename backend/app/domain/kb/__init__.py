@@ -325,7 +325,7 @@ def fetch_url_as_text(url: str, *, timeout: float = 20.0) -> tuple[str, str]:
     if not re.match(r"^https?://", url):
         raise KbImportError("仅支持 http/https 链接")
     try:
-        response = httpx.get(url, timeout=timeout, follow_redirects=True, headers={"User-Agent": "Mibu/1.0"})
+        response = httpx.get(url, timeout=timeout, follow_redirects=True, headers={"User-Agent": "OpenStudio/1.0"})
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise KbImportError(f"抓取失败: {exc}") from exc

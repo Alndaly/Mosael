@@ -102,7 +102,7 @@ def _grade_filter(
     curves: tuple[tuple[str, str], ...] = (),
     lut_path: str = "",
 ) -> str:
-    """Full manual grade → FFmpeg chain, ported from mibu-video's color_vf.
+    """Full manual grade → FFmpeg chain, ported from the predecessor project's color_vf.
 
     Values arrive normalized to [-1, 1]; formulas below convert them back to
     the old panel's native ranges (100-based percentages, ±100 offsets, 0..100

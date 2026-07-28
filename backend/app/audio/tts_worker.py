@@ -1,8 +1,8 @@
-"""Standalone TTS / voice-clone worker (ported from mibu-video's tts engines).
+"""Standalone TTS / voice-clone worker (ported from the predecessor project's tts engines).
 
 Runs inside the *TTS interpreter* — a Python that has f5-tts and/or fish-speech
 installed (configured via OPEN_STUDIO_TTS_PYTHON, autodetected from a sibling
-mibu-video venv in dev). Must import nothing from this app at module level
+a sibling venv in dev). Must import nothing from this app at module level
 besides the standard library, so the host backend can ship it to a foreign
 interpreter.
 

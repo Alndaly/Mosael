@@ -55,7 +55,7 @@ def main(bot_id: str) -> None:
             if ((getattr(sender, "sender_type", "") or "").lower()) == "bot":
                 return  # never answer bots (including ourselves) — loop protection
             sender_id = getattr(sender, "sender_id", None)
-            open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to a Mibu member
+            open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to an Open Studio member
             message = getattr(event, "message", None)
             if message is None or getattr(message, "message_type", None) != "text":
                 return

@@ -11,7 +11,7 @@ from app.domain.plugins import plugin_permissions_granted
 
 CORE_SKILLS = [
     {
-        "id": "mibu.assets",
+        "id": "open-studio.assets",
         "name": "Assets",
         "description": "Import, list, and inspect media assets.",
         "source": "core",
@@ -22,7 +22,7 @@ CORE_SKILLS = [
         "permissions": ["assets:read", "assets:write"],
     },
     {
-        "id": "mibu.sequences",
+        "id": "open-studio.sequences",
         "name": "Sequences",
         "description": "Create timelines and apply edit operations.",
         "source": "core",
@@ -37,7 +37,7 @@ CORE_SKILLS = [
         "permissions": ["sequence:read", "sequence:write"],
     },
     {
-        "id": "mibu.ai_generation",
+        "id": "open-studio.ai_generation",
         "name": "AI Generation",
         "description": "Create image and video generation jobs across configured providers, and optimize an image prompt for a target platform's conventions.",
         "source": "core",
@@ -49,7 +49,7 @@ CORE_SKILLS = [
         "permissions": ["generation:read", "generation:write"],
     },
     {
-        "id": "mibu.scheduler",
+        "id": "open-studio.scheduler",
         "name": "Scheduler",
         "description": "Create scheduled tasks and run them on demand.",
         "source": "core",
@@ -60,7 +60,7 @@ CORE_SKILLS = [
         "permissions": ["scheduler:read", "scheduler:write"],
     },
     {
-        "id": "mibu.plugins",
+        "id": "open-studio.plugins",
         "name": "Plugins",
         "description": "Scan plugins, list enabled tools, and record plugin invocations.",
         "source": "core",
