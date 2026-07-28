@@ -25,9 +25,25 @@ from app.media.render_executor import (
     execute_render,
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
+from app.media.scene import assign_base_and_overlays, is_visual_clip
 
 
 logger = logging.getLogger(__name__)
+
+
+def _asset_kinds(db: Session, sequence: Sequence) -> dict[str, dict[str, str]]:
+    """本序列引用到的素材 → {id: {"kind": ...}},喂给场景契约实现。
+
+    画面层判定要看素材种类(音频素材放在 video 轨上也不该进画面),所以在分配 base/overlay
+    之前就得知道 kind——比原来「先分层、后查素材」的顺序提前一步。
+    """
+    ids = {clip.asset_id for track in sequence.tracks for clip in track.clips if clip.asset_id}
+    if not ids:
+        return {}
+    return {
+        asset.id: {"kind": asset.kind}
+        for asset in db.scalars(select(Asset).where(Asset.id.in_(ids)))
+    }
 
 # 导出参数(对话框可调,全部可省略 → 维持原有行为):
 # resolution 是目标短边档位,只降不升;quality 映射 (CRF, x264 preset)。
@@ -93,23 +109,41 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
     subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
-    # PR/DaVinci z-order: the topmost timeline video track renders on top. The base (full-frame
-    # bottom layer) is the BOTTOM-MOST video track that actually has clips — empty tracks below
-    # it contribute nothing, and treating an empty bottom track as the base would drop the whole
-    # render ("no clips to render"). Tracks above the base composite as overlays (top row last).
-    def media_clips(track: Track) -> list:
-        return [clip for clip in track.clips if clip.asset_id]
 
     def text_clips(track: Track) -> list:
         return [clip for clip in track.clips if not clip.asset_id and clip.text_override]
 
-    # base(全画幅底层)= 最底「有媒体片段」的 video 轨。纯花字轨(只有无 asset 的文本元素)不参与
-    # base/overlay 判定,否则会被当作缺素材的画面片段而报错。
-    video_tracks_with_media = [track for track in video_tracks if media_clips(track)]
-    base_track = video_tracks_with_media[-1] if video_tracks_with_media else None
+    # 画面的 base/overlay 归属由 app/media/scene.py 决定——它是**契约实现**,前端
+    # sceneModel.ts 是它的对侧,两者由 contracts/scene-cases.json 钉死(见 test_scene_parity.py)。
+    # 这里绝不要就地重写这段判定:曾经就是两侧各写一份、各自绿测试、语义却相反。
+    kind_by_asset = _asset_kinds(db, sequence)
+    track_views = [
+        {
+            "id": track.id,
+            "kind": track.kind,
+            "position": track.position,
+            "muted": track.muted,
+            "clips": [
+                {"id": c.id, "asset_id": c.asset_id, "timeline_start": c.timeline_start,
+                 "src_in": c.src_in, "src_out": c.src_out, "speed": c.speed}
+                for c in track.clips
+            ],
+        }
+        for track in sequence.tracks
+    ]
+    base_view, overlay_views = assign_base_and_overlays(track_views, kind_by_asset)
+    track_by_id = {track.id: track for track in sequence.tracks}
+    base_track = track_by_id.get(str(base_view["id"])) if base_view else None
+    overlay_tracks = [track_by_id[str(v["id"])] for v in overlay_views]
+
+    def media_clips(track: Track) -> list:
+        return [clip for clip in track.clips if is_visual_clip({"asset_id": clip.asset_id}, kind_by_asset)]
+
     base_clips = [clip_dict(clip) for clip in (media_clips(base_track) if base_track else [])]
-    overlay_tracks = [track for track in video_tracks_with_media[:-1] if not track.muted]
-    overlay_clips = [clip_dict(clip) for track in reversed(overlay_tracks) for clip in media_clips(track)]
+    # overlay_views 已是 bottom→top(绘制序),直接展开即可——不要再 reversed 一次。
+    # **静音轨的画面保留**:轨道头静音是喇叭图标,只关音频;把画面一并去掉会让「给画中画轨静音」
+    # 变成「这层画面从成片里消失」,而预览里它还好好地显示着。音频侧的排除在下面 audible。
+    overlay_clips = [clip_dict(clip) for track in overlay_tracks for clip in media_clips(track)]
     # 花字:未静音 video 轨上的文本片段(无 asset、有 text_override),按各自 transform 定位烧录。
     text_overlays = [
         clip_dict(clip) for track in video_tracks if not track.muted for clip in text_clips(track)
@@ -127,20 +161,23 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     # preview). Attach each clip's track solo/duck so the plan can mix (solo silences non-soloed
     # tracks; duck lowers a ducked track under overlapping non-ducked audio). The executor probes
     # and skips overlay sources that have no audio stream (silent videos / images).
+    # 静音在**音频侧**才生效(画面侧见上)。overlay_tracks 已是 bottom→top,不要再反转。
+    audible_overlay_tracks = [track for track in overlay_tracks if not track.muted]
     audio_clips = [
         {**clip_dict(clip), "solo": track.solo, "duck": track.duck}
         for track in audio_tracks
         for clip in track.clips
     ] + [
         {**clip_dict(clip), "solo": track.solo, "duck": track.duck, "optional": True}
-        for track in reversed(overlay_tracks)
+        for track in audible_overlay_tracks
         for clip in media_clips(track)
     ]
     subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
 
     solo_active = any(track.solo for track in sequence.tracks)
     base_video_soloed = bool(base_track and base_track.solo)
-    mute_base_audio = solo_active and not base_video_soloed
+    # base 轨自己被静音时也要闭嘴——画面留着,声音去掉,与 overlay 轨同一条规则。
+    mute_base_audio = (solo_active and not base_video_soloed) or bool(base_track and base_track.muted)
 
     asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips if clip["asset_id"]}
     assets = {
