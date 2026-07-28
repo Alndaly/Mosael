@@ -163,7 +163,6 @@ export function VoiceCloneSection() {
                       </SelectContent>
                     </Select>
                   </FormControl>
-                  {!isFish && <FormDescription>{t("voiceCloneF5NoPaths")}</FormDescription>}
                 </FormItem>
               )}
             />
@@ -192,36 +191,6 @@ export function VoiceCloneSection() {
                 </FormItem>
               )}
             />
-            {isFish && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="fish_repo_dir"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("voiceCloneFishRepo")}</FormLabel>
-                      <FormControl>
-                        <Input placeholder="/path/to/fish-speech" {...field} />
-                      </FormControl>
-                      <FormDescription>{t("voiceCloneFishRepoHint")}</FormDescription>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="fish_model_dir"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("voiceCloneFishModel")}</FormLabel>
-                      <FormControl>
-                        <Input placeholder="/path/to/fish-speech-s2-pro" {...field} />
-                      </FormControl>
-                      <FormDescription>{t("voiceCloneFishModelHint")}</FormDescription>
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
             <div className="mt-1 flex justify-end gap-1.5">
               <Button type="submit" size="sm" disabled={save.isPending}>
                 {t("save")}
@@ -255,19 +224,6 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
-          {model.needs_source && (
-            <small className={cn("mt-[3px] inline-flex items-center gap-1 text-[11.5px] text-muted-foreground [&_code]:font-mono [&_code]:text-[11px] [&_code]:text-muted-foreground [&_code]:[overflow-wrap:anywhere]", model.source_ready && "text-success [&_code]:text-success")}>
-              {model.source_ready ? (
-                <>
-                  <CheckCircle2 size={11} /> {t("voiceCloneSourceReady")} <code>{model.source_dir}</code>
-                </>
-              ) : (
-                <>
-                  <CircleAlert size={11} /> {t("voiceCloneSourceMissing")}
-                </>
-              )}
-            </small>
-          )}
         </div>
         <div className="shrink-0">
           {model.status === "installed" && (
