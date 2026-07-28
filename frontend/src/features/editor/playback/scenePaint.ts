@@ -1,14 +1,19 @@
 import type { Transform } from "@/features/editor/TransformOverlay";
 
 /**
- * The ONE piece of canvas-drawing code, shared by the live preview compositor (rAF) and the
- * offline export renderer (deterministic per-frame). Given already-resolved media + sampled
- * transforms, it paints one frame — so a pixel produced for preview and the same pixel produced
- * for export come out of the exact same math. See the preview=export parity design (方案 Y).
+ * The preview's canvas-drawing step: given already-resolved media + sampled transforms, paint one
+ * frame. It does NOT decode, seek, sample keyframes or pick which clips are visible — callers hand
+ * it a finished layer list (bottom→top).
  *
- * It does NOT decode, seek, sample keyframes or pick which clips are visible — callers hand it a
- * finished layer list (bottom→top). Text/subtitles are a separate layer (DOM in preview, ffmpeg
- * CSS→PNG in export) and never come through here.
+ * This paints the PREVIEW only. Export does its own compositing in ffmpeg
+ * (`render_plan.py` + `render_executor.py`) and never comes through here — see
+ * docs/adr/0004-preview-export-parity-by-contract.md for why the two renderers stay separate.
+ * The geometry below therefore has a counterpart in the ffmpeg overlay expressions
+ * (`_element_transform`): cover-fill to frame → scale → rotate → opacity → translate by
+ * (x·50%, y·50%). Keep the two in step; what MUST agree literally (which layers are visible, their
+ * z-order, which one is the base) is pinned by contracts/scene-cases.json.
+ *
+ * Text/subtitles are a separate layer either way (DOM in preview, ffmpeg CSS→PNG in export).
  */
 export interface ScenePaintLayer {
   /** A decoded VideoFrame, a loaded <img>, or any other drawable source. */
