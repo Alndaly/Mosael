@@ -40,7 +40,7 @@
 发布页现在只做发布本身(发布记录 + 新建发布),账号的「增」和「管」都归口浏览器池。
 
 - 每账号一张卡:平台、登录态徽标、平台昵称、上次检测、最近错误、登录/复检、启停开关、右键重命名/删除。
-- **登录会话持久化**:每发布账号一个 Electron `persist:mibu-<accountId>` 分区(`~/Library/Application Support/mibu/Partitions/`),重启不掉登录——这是"睡一觉起来照常自动发"的基础;账号并入浏览器池时**沿用这个既有分区**,登录态不丢。通用档案则用 `persist:pool-<id>`。
+- **登录会话持久化**:每发布账号一个 Electron `persist:openstudio-<accountId>` 分区(`~/Library/Application Support/Open Studio/Partitions/`),重启不掉登录——这是"睡一觉起来照常自动发"的基础;账号并入浏览器池时**沿用这个既有分区**,登录态不丢。通用档案则用 `persist:pool-<id>`。
 - **登录态复检**:执行器空闲时后台静默巡检(bound/login_required 超过 12h 或 unknown 即到期),把 UI 拉回真实状态。手动「复检」把账号打回 `unknown` 让下一轮立刻认领。
 
 ### checking 卡死的自愈(踩过的坑)
@@ -61,7 +61,7 @@
 
 曾为反检测用 `wc.debugger.attach("1.3")` + `Page.enable` + `Page.addScriptToEvaluateOnNewDocument`
 注入 navigator 补丁。结果:**bilibili / 小红书 / 视频号这类重前端 SPA 渲染直接坏掉、页面空白、`loadURL` 长时间不 resolve**。
-单变量 A/B 确认:关掉 debugger 后登录页正常渲染出二维码与表单。老版 mibu-video 从没这东西,所以"原来都能打开"。
+单变量 A/B 确认:关掉 debugger 后登录页正常渲染出二维码与表单。前身项目从没这东西,所以"原来都能打开"。
 
 **反检测只保留不需要 debugger、不破坏渲染的两条**(已验证 `navigator.webdriver=false`、UA 无 Electron):
 
@@ -84,7 +84,7 @@ poll 循环接管登录态判断。改后登录 IPC **8ms** 返回,视图立刻�
 
 ## 调试
 
-日志:`~/Library/Application Support/mibu/logs/publisher.log` —— 认领、runTask 各步、goto(含 loaded/timeout/rejected)、
+日志:`~/Library/Application Support/Open Studio/logs/publisher.log` —— 认领、runTask 各步、goto(含 loaded/timeout/rejected)、
 checkLogin 结果、复检、回报,以及所有原本会被静默吞掉的 catch,全部有记录。
 
 > **观测器效应警告**:用 `--remote-debugging-port` 起 App 会与 `wc.debugger` 争用,把 `sendCommand`

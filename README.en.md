@@ -10,7 +10,7 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ![Demo: drag clips onto the timeline, position the playhead, split in one keystroke](docs/media/timeline-edit.gif)
 
-> More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs site](docs-site/) guides.
+> More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs site](https://openstudio.team) guides (source in `docs-site/`).
 
 ### Recently added
 
@@ -55,7 +55,7 @@ open "release/mac-arm64/Open Studio.app"
 ### App updates
 
 Five seconds after launch, the packaged app silently compares the latest
-[GitHub Release](https://github.com/Alndaly/open-studio/releases) tag with the current version and
+[GitHub Release](https://github.com/Alndaly/OpenStudio/releases) tag with the current version and
 shows a prompt linking to the release page when a new version exists. There is also a
 "Check for updates" button under Settings → Local backend → Version.
 **Shipping a release is just pushing a tag**:
@@ -84,7 +84,7 @@ repository**. Triggering the same workflow manually from the Actions page is a d
 | --- | --- |
 | `pnpm build:frontend` | Vite build → `frontend/dist` |
 | `pnpm build:publisher` | esbuild bundle of the embedded publishing executor → `electron/publish.bundle.cjs` |
-| `pnpm build:backend` | PyInstaller backend → `backend/dist/mibu-backend` |
+| `pnpm build:backend` | PyInstaller backend → `backend/dist/open-studio-backend` |
 | `pnpm build:mac` | All three + electron-builder `.app` |
 | `pnpm dist:mac` | Same, producing a `.dmg` |
 
@@ -135,7 +135,7 @@ cd frontend && pnpm gen:api              # regenerate TS types after backend Ope
 
 | Location | Contents |
 | --- | --- |
-| `~/.open-studio/mibu.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
+| `~/.open-studio/open-studio.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
 | `~/.open-studio/media/` | Imported and exported media files |
 | `~/.open-studio/kb_vectors.db` | Knowledge-base vectors (Milvus Lite; remote configurable) |
 | `~/Library/Application Support/Open Studio/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
@@ -147,7 +147,7 @@ For publishing issues, start with `publisher.log` — every step is recorded.
 ## Repository layout
 
 ```
-backend/          FastAPI + SQLAlchemy 2.0 + Alembic
+backend/          FastAPI + SQLAlchemy 2.0 (schema via create_all + _migrate_*, see ARCHITECTURE)
   app/domain/     Domain core: sequences (editing), render, workflows, publish, browser, kb, agent,
                   scheduler, transcripts, generation, plugins, notifications
   app/api/routes/ HTTP routes
@@ -176,11 +176,11 @@ plugins/          local plugins (subprocess + MCP)
 Google / Apple sign-in buttons appear only when credentials are configured (`backend/.env`):
 
 ```
-MIBU_GOOGLE_CLIENT_ID=...        # Google Cloud "Web application" client
-MIBU_GOOGLE_CLIENT_SECRET=...    # register redirect URI http://127.0.0.1:8800/api/auth/oauth/google/callback
-MIBU_APPLE_CLIENT_ID=...         # Apple Services ID; Apple requires HTTPS callbacks (team deployments)
-MIBU_APPLE_CLIENT_SECRET=...     # a JWT signed with your team key per Apple's spec
-MIBU_OAUTH_REDIRECT_BASE=...     # override the callback base for team deployments (default http://127.0.0.1:8800)
+OPEN_STUDIO_GOOGLE_CLIENT_ID=...        # Google Cloud "Web application" client
+OPEN_STUDIO_GOOGLE_CLIENT_SECRET=...    # register redirect URI http://127.0.0.1:8800/api/auth/oauth/google/callback
+OPEN_STUDIO_APPLE_CLIENT_ID=...         # Apple Services ID; Apple requires HTTPS callbacks (team deployments)
+OPEN_STUDIO_APPLE_CLIENT_SECRET=...     # a JWT signed with your team key per Apple's spec
+OPEN_STUDIO_OAUTH_REDIRECT_BASE=...     # override the callback base for team deployments (default http://127.0.0.1:8800)
 ```
 
 The flow is a desktop-friendly authorization code flow: system browser completes auth → callback hits the local backend → the app polls and signs in automatically. First login creates a local account from the email's local part (same rights as password accounts, no local password).

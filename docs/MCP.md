@@ -1,4 +1,4 @@
-# Mibu MCP Server
+# Open Studio MCP Server
 
 Minimal external-agent surface (plan §17). Tools return stable product
 summaries — never raw internal schemas.
@@ -24,7 +24,7 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 ## Confirmation flow (plan §16.2/§17.2)
 
 Mutating tools never execute directly. They create a pending confirmation;
-a card appears in the Mibu UI showing the requesting agent, permission level,
+a card appears in the Open Studio UI showing the requesting agent, permission level,
 and operation details. Only user approval executes the action — timeline
 edits run through SequenceOperations and stay undoable (⌘Z). Agents poll
 `get_confirmation` until the status is terminal; `result` then carries the
@@ -41,12 +41,12 @@ sequence).
 ## Running
 
 The backend HTTP API must be running (default `http://127.0.0.1:8800`,
-override with `MIBU_API`). The API requires local authentication, so pass a
-session token via `MIBU_TOKEN` (obtain one with `POST /api/auth/login`).
+override with `OPEN_STUDIO_API`). The API requires local authentication, so pass a
+session token via `OPEN_STUDIO_TOKEN` (obtain one with `POST /api/auth/login`).
 
 ```bash
 cd backend
-MIBU_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
+OPEN_STUDIO_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
 ```
 
 Register with an MCP client, e.g. Claude Code:

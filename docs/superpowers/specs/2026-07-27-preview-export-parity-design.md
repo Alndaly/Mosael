@@ -1,9 +1,21 @@
 # 预览 = 导出:渲染一致性(治本)— 设计
 
 日期: 2026-07-27
-状态: 进行中 —— **P1 完成**(合成器修黑闪);**P2 落地未接线**(导出代理 + 离线渲染核心已建);
-**P3 编码核心落地未接线**(rawvideo→ffmpeg 编码器 + 测试);**翻默认预览暂缓**;剩 P3 传输/驱动/音频
-+ P4 导出切路,均须真机验证。所有已落地代码均带测试、导出仍走老 render_plan。
+状态: **已被取代(2026-07-28)——方案 Y 不再推进**。见
+[ADR-0004 预览与导出一致性靠契约](../../adr/0004-preview-export-parity-by-contract.md)
+与 [ARCHITECTURE.md「预览与导出」](../../ARCHITECTURE.md)。
+
+**保留本文的原因**:P1(合成器修黑闪、翻默认)与「文字层不进 canvas」的调研结论仍然有效且已生效;
+被否决的只是 P2–P4 的「canvas 合成导出帧」路线。否决理由:①它会让导出丢掉 `curves` 与 `lut3d`
+——OffscreenCanvas 解析不了 `url(#svg-filter)`(浏览器既定限制),canvas 2D 也没有 3D LUT 等价物,
+等于把权威从高保真侧换到低保真侧;②帧由浏览器产出会废掉 `OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
+的外派能力,团队/远程后端不可用;③1080p30 十分钟约 149 GB 原始 RGBA 的传输量。
+
+**取而代之**:可见层/z 序/base 归属由 `contracts/scene-cases.json` 双侧钉死(治掉全部已发生的
+parity bug),调色明确 ffmpeg 权威、预览近似。**未接线的 P2/P3 代码**
+(`OfflineFrameRenderer` / `OfflineVideoSource` / `frame_encoder` / 导出代理及其路由)已于
+2026-07-28 删除——git 历史保留,重启方案 Y 时可从这里取回。
+
 关联: [WebCodecs 预览合成器设计](2026-07-19-webcodecs-compositor-design.md)(本设计的地基:S0–S2 已落地的 `CanvasCompositor`)
 
 ## 问题

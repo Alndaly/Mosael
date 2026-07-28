@@ -2,9 +2,9 @@
 
 ## 三段自举:App 启动时发生了什么
 
-`open Mibu.app` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
+`open "Open Studio.app"` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
 
-1. **拉起后端** — spawn 打包的 `mibu-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪(30s 超时)。
+1. **拉起后端** — spawn 打包的 `open-studio-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪(30s 超时)。
    若 8800 已有健康后端(如 dev server),**复用它**,不再起新进程(`ensureBackend()` 里的 `isHealthy()` 检查)。
 2. **开窗加载前端** — 打包版 `loadFile(frontend/dist/index.html)`,开发版 `loadURL(localhost:5173)`。
    hash 路由(`#/editor?p=<id>`)——因为 `file://` 下 path 路由不可用。
@@ -42,15 +42,35 @@ TaskEvent 行只在总线创建。
 
 每种 kind 有一个**执行模式**:`in_process`(默认,守护线程)或 `external`(外部 worker 经
 `/api/jobs/worker/*` 的 claim/report 协议认领,跨后端重启存活——发布器同款模式的推广,
-见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`MIBU_EXTERNAL_JOB_KINDS=render`
+见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
 即可把渲染交给独立 worker 机器,领域代码不改。
 
 ### 数据模型要点
 
-SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
+SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
+
+**表结构怎么演进**(重要,曾被误记为 Alembic):运行时**不跑迁移框架**。`init_db()` 做两件事——
+`Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/core/db.py` 里的一串 `_migrate_*`
+函数,给**已装机**补上 `create_all` 不会施加的变更(加列、改外键、回填)。
+
+改表结构因此是两步:①改 `models.py`(新装机由此得到正确结构);②加一个 `_migrate_*`(已装机由此
+跟上)。只做①的话,新装机正常、老用户升级后崩在缺列上。
+
+`_migrate_*` 有明确的退休判据:**它保护的最早版本一旦不再需要支持,就可以删**。判据是引入时间
+对比最早仍支持的 GitHub Release —— 早于它的只服务从未公开的 dev 库,可以删掉;晚于它的仍在为
+真实用户的升级路径服务。仓库里一度还留着 30 个 Alembic 迁移文件,但它们从不被执行、且自
+2026-07-23 起就与 `models.py` 漂移(此后模型改了 6 次、迁移 0 次),已随这条规约一并移除。
+
 团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝,四级角色 + 逐权限覆盖。
 每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
 (见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
+
+**主机权限 vs 内容权限**:工作流的 `code` 节点在后端主机上执行任意 Python(进程隔离 + 超时 +
+输出上限,但**不是沙箱**)。单机安装下作者就是机器主人,无所谓;团队/远程后端下,`edit` 是所有
+写路由的门而 editor 默认就有 `edit`,不额外设防就等于「能改内容」隐含「能拿服务器」。因此四条
+落库路径(create / import / patch / 确认卡审批)都过 `ensure_graph_node_privileges`,要求
+`ensure_instance_admin`——与供应商凭据、解释器路径同级。扫描**递归进子图/循环体**,否则
+「折叠为子图」即可绕过。
 
 - `sequences` / `tracks` / `clips` — 时间线;`sequence_operations` 记录每次编辑及其逆操作(撤销)
 - `jobs` / `task_events` — 任务总线
@@ -58,6 +78,33 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace
 - `publish_accounts` / `publish_tasks` — 发布账号与发布记录(`publish_accounts.profile_id` 指向所挂的浏览器档案)
 - `browser_profiles` / `browser_sessions` / `browser_actions` — 浏览器池:持久登录身份、会话(租约)、待执行动作队列
 - `notifications` — 每用户一行,`type` 含 `team`(为协作申请预留)
+
+## 预览与导出:两个渲染器,一份契约
+
+画面有两套渲染实现,而且**只能有两套**:
+
+| | 预览 | 导出 |
+| --- | --- | --- |
+| 在哪 | 浏览器,`CanvasCompositor`(WebCodecs 解 720p 代理 → canvas 2D) | 后端,`render_plan.py` + `render_executor.py` → 单次 ffmpeg |
+| 为什么不能挪 | 要本地同步跑到 60fps,要渲染**尚未提交**的拖拽草稿 | 要无头、跨重启存活、可被外部 worker 认领([ADR-0002](adr/0002-claim-report-worker-protocol.md)) |
+
+两个约束各自成立,所以合并成一个渲染器不是可选项。一致性按**谁是权威**分层处理
+(理由与被否决的方案见 [ADR-0004](adr/0004-preview-export-parity-by-contract.md)):
+
+- **可见层 / z 序 / base 归属 —— 必须逐字一致**。这是所有已发生 parity bug 的所在地。
+  两侧实现(`frontend/.../playback/sceneModel.ts` 与 `backend/app/media/scene.py`)由
+  [`contracts/scene-cases.json`](../contracts/scene-cases.json) 钉死:同一份语言中立语料,
+  两侧测试各跑一遍,任一侧单方面改语义 → 两边 CI 一起红。**改语义先改语料**。
+- **调色 —— ffmpeg 权威,预览近似**,这是**有意的**而非缺陷。导出用 `eq`/`curves`/`lut3d`
+  做真实色彩运算;预览是 CSS/canvas 近似(`monitorFilters.ts` 的函数名与注释即声明了这一点)。
+  想让 canvas 成为权威就得放弃色阶曲线与 3D LUT——把权威换到低保真的一侧,不是对齐。
+  预览显示不了的效果在 UI 明示(LUT 选择器下方的提示)。
+- **文字 —— 已经同源一致**:导出侧 `text_render.TextRasterizer` 用无头 Chromium 加载
+  **app 自己构建出的 CSS 与 @font-face** 渲成透明 PNG 再由 ffmpeg 叠加,字体环境与预览完全相同。
+  拿不到 Chromium / 前端 dist 时优雅回落 libass。
+
+> 想要逐像素精确的画面,行业惯例(PR / DaVinci)是**渲染预览**——走真正的导出管线渲一段来看,
+> 而不是让两套近似互相追。
 
 ## 前端:服务端真相 vs 瞬时状态
 
@@ -76,11 +123,11 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace
 - **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
-- **深链事件通道**:跨页面跳转用 `mibu:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
+- **深链事件通道**:跨页面跳转用 `openstudio:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
 
 ### 桌面适配
 
-前端通过 `window.mibuDesktop`(preload 暴露)判断是否在 Electron 里,给 `<html>` 打 `is-desktop` / `is-mac` / `is-win`:
+前端通过 `window.openStudioDesktop`(preload 暴露)判断是否在 Electron 里,给 `<html>` 打 `is-desktop` / `is-mac` / `is-win`:
 
 - 无边框窗:顶栏全宽横贯,mac 红绿灯落在顶栏左侧(面包屑让位 88px),Win/Linux 用 `titleBarOverlay` 并给顶栏右侧留位。
 - 拖拽区:顶栏与侧栏可拖窗(`-webkit-app-region: drag`),其中交互元素必须 `no-drag`,否则点击被当成拖窗吃掉。
@@ -97,7 +144,7 @@ SQLite(WAL)+ SQLAlchemy 2.0 + Alembic(29 个迁移)。所有实体挂 `workspace
 
 ## 服务器切换(团队模式)
 
-`API_BASE` 在**模块加载时**从 `localStorage["mibu.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
+`API_BASE` 在**模块加载时**从 `localStorage["openstudio.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
 切服务器 = 写 localStorage + **整页 reload** 让它重新解析(会话随之失效,落回登录页)。
 
 因为 `hasUsers` 探测与 `login` 都打向 `API_BASE`,**服务器入口必须在登录之前**——所以 `ServerPicker`

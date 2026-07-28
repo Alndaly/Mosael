@@ -56,10 +56,53 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 功能与测试都健康,但改动 Locality 差。切分方向:画布 / 节点检查器 / 节点表单(Workflows),
 面板编排 / 变换与合成 / mutations(Editor)。低优先,顺手做,不专项大拆。
 
+## 5. 预览与导出 — ✅ 已按契约收口(2026-07-28)
+
+画面语义曾在两侧各写一份、各自绿测试、断言却相反,产出用户可见的成片不一致。现在可见层 / z 序 /
+base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双侧钉死,单侧改语义会让
+两边 CI 一起红。**改这块必须先改语料**(见 `contracts/README.md`)。
+
+调色是**有意**允许两侧不同的(ffmpeg 权威、预览近似),不要试图把它也拉进契约——那只会逼导出
+放弃色阶曲线与 3D LUT。理由见 [ADR-0004](adr/0004-preview-export-parity-by-contract.md)。
+
+## 6. `_migrate_*` 会持续堆积
+
+运行时没有迁移框架,已装机的表结构变更全靠 `app/core/db.py` 里的 `_migrate_*` 链,而它只增不减。
+退休判据写在 [ARCHITECTURE.md](ARCHITECTURE.md):引入时间早于**最早仍支持的 Release** 即可删。
+每次停止支持某个旧版本时顺手清一轮,否则 `init_db()` 会慢慢长成考古现场。
+
+**删之前必须核对发布时间**(`gh release list` 的时间是 UTC,git log 默认本地时区,边界很容易算反),
+以及那一版实际用的数据目录/库文件名——删错的代价是用户打开看到空工作室。
+
+## 7. 更名的残留会**持续**制造真 bug,不只是不好看
+
+「Mibu → Open Studio」改了名却没同步的地方,已经出过下面这些**功能性**问题——全都不是文案问题:
+
+- `--allowedTools mcp__mibu` 与 mcpServers 的键 `open-studio` 对不上 → claude 适配器的 MCP 工具**一个都用不了**
+- `create_account` 仍造 `persist:mibu-<id>` 分区 → 每个新发布账号一出生就是"待迁移的旧数据"
+- npm dev 脚本只认 `MIBU_BACKEND_PORT`,而 `main.cjs` 只认 `OPEN_STUDIO_BACKEND_PORT` → 设新变量会让后端与壳连到**不同端口**
+- `usePersistentTab` 写 `mibu:tab:*`,而 storageMigration 每次启动把它搬走 → tab 状态反复迁移
+- 一个断言 `not startswith("persist:mibu-")` 在前缀改名后,变成在防一个**已不存在**的名字,真正的碰撞面无人看守
+- i18n 提示还在描述已被删除的「同级 mibu-video venv」回退 → UI 对用户撒谎
+
+**规范名见 [CONTEXT.md 的「命名」段](../CONTEXT.md)**;`MIBU_*` / `persist:mibu-*` / `mibu.*` 键 /
+`mibu.plugin.json` / `mibu-workflow` / `mibu_kb_chunks` 是**单向兼容垫片**,只许读、不许在新代码里写。
+
+核验(应当只剩兼容层、其测试与其说明):
+
+```bash
+grep -rniE "mibu" . | grep -vE "node_modules|/\.git/|pnpm-lock|publish\.bundle\.cjs|/dist/|/release/|__pycache__|\.tsbuildinfo|/\.codegraph/"
+```
+
+**别忘了生成物**:改了后端默认值/字段要重跑 `cd frontend && pnpm gen:api`,改了 `pyproject.toml` 的
+包名要重跑 `uv lock`——否则旧名会从生成文件里长回来。
+
 ## Verification rule
 
 每个 slice 至少跑:
 
 - `pnpm build:publisher` when touching `electron/publish/**`
 - `cd frontend && pnpm exec tsc -b --noEmit && pnpm vitest run` when touching frontend
+- `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
+  测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么
 - targeted browser smoke only when the change affects actual platform page driving

@@ -10,7 +10,7 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 ![操作演示:素材拖入时间线,播放头定位后一键分割](docs/media/timeline-edit.gif)
 
-> 更多操作演示(工作流搭建、知识库、发布矩阵……)见[文档站点](docs-site/)各指南页。
+> 更多操作演示(工作流搭建、知识库、发布矩阵……)见[文档站点](https://openstudio.team)各指南页(源码在 `docs-site/`)。
 
 ### 近期新增
 
@@ -54,7 +54,7 @@ open "release/mac-arm64/Open Studio.app"
 
 ### 应用更新
 
-打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/open-studio/releases)
+打包版启动 5 秒后静默比对 [GitHub Releases](https://github.com/Alndaly/OpenStudio/releases)
 最新 tag 与当前版本,发现新版弹提示引导到发布页下载;设置 → 本地后端 → 版本 里也有
 「检查更新」按钮。
 
@@ -83,7 +83,7 @@ artifact,不碰 Releases)。
 | --- | --- |
 | `pnpm build:frontend` | Vite 构建前端 → `frontend/dist` |
 | `pnpm build:publisher` | esbuild 打包内嵌发布执行器 → `electron/publish.bundle.cjs` |
-| `pnpm build:backend` | PyInstaller 打包后端 → `backend/dist/mibu-backend` |
+| `pnpm build:backend` | PyInstaller 打包后端 → `backend/dist/open-studio-backend` |
 | `pnpm build:mac` | 以上三者 + electron-builder 出 `.app` |
 | `pnpm dist:mac` | 同上,出 `.dmg` |
 
@@ -124,8 +124,8 @@ pnpm dev            # 仓库根目录;等价于 frontend 的 pnpm electron:dev
 ### 测试与检查
 
 ```bash
-cd backend  && uv run pytest -q          # 553 用例
-cd frontend && pnpm vitest run           # 130 用例
+cd backend  && uv run pytest -q          # 780 用例
+cd frontend && pnpm vitest run           # 212 用例
 cd frontend && pnpm exec tsc -b --noEmit # 类型检查(必须在 frontend 目录下跑)
 cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 类型
 ```
@@ -134,7 +134,7 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.open-studio/mibu.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…) |
+| `~/.open-studio/open-studio.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…;旧装机的 `mibu.db` 首次启动自动改名) |
 | `~/.open-studio/media/` | 导入与导出的媒体文件 |
 | `~/.open-studio/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
 | `~/Library/Application Support/Open Studio/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
@@ -146,7 +146,7 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 ## 仓库结构
 
 ```
-backend/          FastAPI + SQLAlchemy 2.0 + Alembic(29 个迁移)
+backend/          FastAPI + SQLAlchemy 2.0(建表走 create_all + _migrate_*,见 ARCHITECTURE)
   app/domain/     领域内核:sequences(剪辑) render workflows publish browser kb agent
                   scheduler transcripts generation plugins notifications
   app/api/routes/ HTTP 路由
@@ -158,6 +158,7 @@ frontend/         Vite + React 19 + TS + Tailwind v4 + Radix/shadcn
   src/app/        壳层、路由、i18n(messages.ts)、全局样式(styles.css)
 electron/         main.cjs(主进程)+ publish/(内嵌浏览器发布执行器 TS 源)
 agent-sidecar/    智能体 sidecar(pi 运行时,Node)
+contracts/        跨实现的可执行规约(前后端各跑一遍同一份语料),见 contracts/README.md
 docs/             架构与子系统文档(见下)
 plugins/          本地插件(子进程 + MCP 暴露)
 ```
@@ -175,11 +176,11 @@ plugins/          本地插件(子进程 + MCP 暴露)
 Google / Apple 登录按钮只在配置了对应凭据时出现(`backend/.env`):
 
 ```
-MIBU_GOOGLE_CLIENT_ID=...        # Google Cloud「Web 应用」客户端
-MIBU_GOOGLE_CLIENT_SECRET=...    # 重定向 URI 登记 http://127.0.0.1:8800/api/auth/oauth/google/callback
-MIBU_APPLE_CLIENT_ID=...         # Apple Services ID;Apple 要求 HTTPS 回调,适用于团队部署
-MIBU_APPLE_CLIENT_SECRET=...     # 按 Apple 规范用团队密钥签好的 JWT
-MIBU_OAUTH_REDIRECT_BASE=...     # 团队部署时覆盖回调基址(默认 http://127.0.0.1:8800)
+OPEN_STUDIO_GOOGLE_CLIENT_ID=...        # Google Cloud「Web 应用」客户端
+OPEN_STUDIO_GOOGLE_CLIENT_SECRET=...    # 重定向 URI 登记 http://127.0.0.1:8800/api/auth/oauth/google/callback
+OPEN_STUDIO_APPLE_CLIENT_ID=...         # Apple Services ID;Apple 要求 HTTPS 回调,适用于团队部署
+OPEN_STUDIO_APPLE_CLIENT_SECRET=...     # 按 Apple 规范用团队密钥签好的 JWT
+OPEN_STUDIO_OAUTH_REDIRECT_BASE=...     # 团队部署时覆盖回调基址(默认 http://127.0.0.1:8800)
 ```
 
 流程是桌面友好的授权码流:系统浏览器完成授权 → 回调打到本机后端 → App 轮询自动落座;

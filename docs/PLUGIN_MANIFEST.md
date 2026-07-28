@@ -1,7 +1,7 @@
 # Plugin Manifest
 
-Mibu plugins are local directories under `~/.mibu-cut/plugins/<plugin-folder>`.
-Each plugin must contain `mibu.plugin.json` or `plugin.json`.
+Open Studio plugins are local directories under `~/.open-studio/plugins/<plugin-folder>`.
+Each plugin must contain `open-studio.plugin.json` or `plugin.json` (`mibu.plugin.json` from before the rename is still accepted).
 
 ## Minimal Example
 

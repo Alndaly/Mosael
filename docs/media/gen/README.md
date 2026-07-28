@@ -7,13 +7,13 @@
 依赖:`rsvg-convert`(librsvg)、`ffmpeg`、系统中文字体(PingFang SC / Hiragino Sans GB)。
 
 ```bash
-python3 docs/media/gen/build_promo.py         # → mibu-promo.mp4(~30s 宣传片)
+python3 docs/media/gen/build_promo.py         # → open-studio-promo.mp4(~30s 宣传片)
 python3 docs/media/gen/build_collapse_gif.py  # → collapse.gif(折叠为子图演示)
 ```
 
 产出:
 - `docs/media/collapse-subgraph.gif` —— 框选 → 折叠为子图
 - `docs/media/browser-pool.png` / `agent-authorize.png` —— 浏览器池 / 智能体授权闸示意
-- `mibu-promo.mp4` —— 完整宣传片(体积较大,不入库;按需发布)
+- `open-studio-promo.mp4` —— 完整宣传片(体积较大,不入库;按需发布)
 
 > 联系:1142704468@qq.com

@@ -4,7 +4,7 @@
 
 ### Backend
 
-- Clean monorepo skeleton with FastAPI backend and Alembic migrations.
+- Clean monorepo skeleton with a FastAPI backend; schema is `create_all` + `_migrate_*` (see ARCHITECTURE.md).
 - Real relational models for workspace, project, asset, sequence, track, clip, jobs, events, scheduler, generated assets, plugins.
 - CRUD APIs for workspaces, projects, assets, sequences.
 - SequenceOperation edit kernel: insert_clip, move_clip (track-kind checked), trim_clip, delete_clip — each validates invariants and records `sequence_operations` + `sequence_revisions` rows.
@@ -33,17 +33,17 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - RenderPlan kernel: pure, hashable clip/gap segment plans with unit tests; overlaps and missing files rejected.
 - RenderExecutor: single-invocation FFmpeg render (segments normalized to output format, gaps as black+silence, concat, x264/aac) with -progress reporting.
-- Export flow: export button in the timeline toolbar → render job with live progress → mp4 in ~/.mibu-video/exports/ → result registered as an exported asset (thumbnail included) that appears in the media pool and library.
-- Test isolation: tests run in a temp MIBU_DATA_DIR (conftest) so the suite never touches the live database.
+- Export flow: export button in the timeline toolbar → render job with live progress → mp4 in ~/.open-studio/exports/ → result registered as an exported asset (thumbnail included) that appears in the media pool and library.
+- Test isolation: tests run in a temp OPEN_STUDIO_DATA_DIR (conftest) so the suite never touches the live database.
 
 ### Undo / Redo (plan §10.2)
 
-- Alembic 0002 history columns; undo applies operation inverses, redo re-applies; fresh edits invalidate the redo stack; every undo/redo is itself an operation + revision.
+- Schema history columns; undo applies operation inverses, redo re-applies; fresh edits invalidate the redo stack; every undo/redo is itself an operation + revision.
 - Editor toolbar buttons + ⌘Z / ⇧⌘Z; can_undo/can_redo on sequence responses.
 
 ### Transcripts (plan Phase 5 MVP)
 
-- Alembic 0003: transcripts / transcript_segments / transcript_tokens / clip_transcript_refs.
+- Schema: transcripts / transcript_segments / transcript_tokens / clip_transcript_refs.
 - PUT/GET /api/assets/{id}/transcript; attaching replaces the prior transcript; transcripts are analysis results, never a second edit state.
 - Pure projection kernel (transcriptProjection.ts, tested) maps asset segments through clip src ranges; editor left panel 素材/逐字稿 tabs with click-to-seek and playhead highlight.
 
@@ -53,34 +53,34 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 ### Local auth + workspace scoping (plan Phase 2)
 
-- Local accounts (PBKDF2 password hashes, opaque session tokens in auth_sessions, Alembic 0004); register/login/me/logout; first account adopts pre-auth workspaces.
+- Local accounts (PBKDF2 password hashes, opaque session tokens in auth_sessions); register/login/me/logout; first account adopts pre-auth workspaces.
 - Every router behind authentication; workspace membership enforced across projects/assets/sequences/jobs/generation/scheduler — foreign or unknown resources return 404 (plan §9.3); media endpoints accept ?token= for <video>/<img>.
-- Login/register screen gates the app; token in localStorage; 401 anywhere drops back to login; account section with sign-out in Settings; MCP server passes MIBU_TOKEN.
+- Login/register screen gates the app; token in localStorage; 401 anywhere drops back to login; account section with sign-out in Settings; MCP server passes OPEN_STUDIO_TOKEN.
 - Isolation tests: second user sees no foreign workspaces, all cross-user access 404s.
 
 ### Desktop packaging (plan Phase 14, macOS)
 
-- Backend packaged with PyInstaller (run_backend.py → dist/mibu-backend, 127.0.0.1 only).
+- Backend packaged with PyInstaller (run_backend.py → dist/open-studio-backend, 127.0.0.1 only).
 - Production Electron shell: reuses an already-healthy backend or spawns the packaged binary, waits on /api/health (30s), error dialogs on failure/crash, kills the backend on quit.
 - electron-builder config in root package.json (mac dir/dmg targets; win nsis config prepared, unverified); frontend built with relative base for file:// loading; CORS opened for the file:// origin — auth still gates every request.
-- Verified: `pnpm build:mac` produces Mibu.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan mibu-backend and releases the port.
+- Verified: `pnpm build:mac` produces Open Studio.app (~275MB) that launches its embedded backend (health ok), and quitting leaves no orphan open-studio-backend and releases the port.
 
 ### UI refinement pass + agent capabilities
 
 - Token-level streaming chat: claude adapter in stream-json mode with partial deltas → per-session SSE endpoint → live bubble; Streamdown renders all assistant markdown (tables/code/CJK, unterminated-block safe).
 - Context menus everywhere (projects/assets/pool/sessions/clips) with rename/delete modals (no native dialogs); full CRUD APIs for projects/assets (in-use guard)/sessions; scheduler rows gain pause/enable + delete; empty states center vertically.
-- Provider profiles (Alembic 0009): multiple named provider accounts with vendor presets (DashScope/ARK/Kimi/MiniMax/OpenAI/compatible), base_url + default model, enable toggle; legacy credentials remain as fallback; Settings UI rebuilt around profiles.
+- Provider profiles (schema): multiple named provider accounts with vendor presets (DashScope/ARK/Kimi/MiniMax/OpenAI/compatible), base_url + default model, enable toggle; legacy credentials remain as fallback; Settings UI rebuilt around profiles.
 - Asset analysis: images direct, videos frame-sampled (ffmpeg) into OpenAI-compatible multimodal chat — works with Kimi & MiniMax profiles; POST /assets/{id}/analyze + analyze_asset MCP tool; chat composer supports file attachments that land as assets and are referenced in the message for the agent.
 
 ### Agent host layer + Feishu binding
 
-- Mibu hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (Alembic 0008), claude CLI adapter (headless JSON mode, MCP config injection with minted service token, --resume continuity, specialized system prompt teaching the confirmation contract) + best-effort opencode adapter; single-flight turns, errors become assistant messages.
+- Open Studio hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (schema), claude CLI adapter (headless JSON mode, MCP config injection with minted service token, --resume continuity, specialized system prompt teaching the confirmation contract) + best-effort opencode adapter; single-flight turns, errors become assistant messages.
 - Chat Workspace in AI Studio (对话/生成 tabs): sessions, bubble thread, thinking indicator, composer. Verified with a real claude turn calling mibu list_assets.
 - Feishu binding ported from mibu-video: lark-oapi long-connection worker (one child process per bot), tenant-token send, message dedupe + mention stripping, chats map to agent sessions (external_key feishu:bot:chat) with capability-tier prompts; 扫码一键创建 via device-authorization grant + manual App ID/Secret; Settings section with QR, bot list, status, capability; autostart on app launch, cleanup on shutdown.
 
 ### Mutating MCP tools + confirmation cards (plan §16.2/§17.2/§17.4)
 
-- tool_confirmations table (Alembic 0007) with permission levels (edit / ai-cost / render-cost); pending → approved/rejected → executed/failed lifecycle.
+- tool_confirmations table (schema) with permission levels (edit / ai-cost / render-cost); pending → approved/rejected → executed/failed lifecycle.
 - Confirmation kernel validates payloads up front and executes only on approval: edit_timeline applies operation batches through SequenceOperations (undoable), render_sequence starts the export job, generate_image/video dispatch the provider runner.
 - MCP tools: edit_timeline, render_sequence, generate_image, generate_video (all return pending confirmations) + get_confirmation for polling.
 - Global confirmation card stack in the UI: requesting agent, permission badge, operation details, approve/reject; approvals refresh sequences/assets/jobs.
@@ -97,7 +97,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Pluggable provider contract (validate/generate with guardrails: num_images ≤ 4, duration ≤ 10s, resolution whitelist; sanitized errors so keys never leak) in app/ai/providers.
 - Real adapters: qwen-image via DashScope async tasks, Seedance via Volcano ARK content-generation tasks (pure payload builders unit-tested).
 - Mock image/video providers synthesize media locally with ffmpeg so the whole pipeline runs offline.
-- Credentials table (Alembic 0005) + masked settings API and Settings UI for provider keys.
+- Credentials table (schema) + masked settings API and Settings UI for provider keys.
 - Generation runner thread: submit→poll→download→register as generated asset + generated_assets row + job lifecycle; results are draggable timeline material immediately.
 - AI Studio rebuilt: prompt composer, data-driven model pills, live-polling queue with result thumbnails.
 
@@ -130,7 +130,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 ### Filters + subtitles + chrome polish
 
 - Filter presets (bw/warm/cool/vivid/fade) on clip effects: validated in RenderPlan, eq/hue chains in the executor, CSS-equivalent preview in the Monitor, preset row in the Inspector.
-- Subtitle tracks: clips.asset_id nullable (0010), text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
+- Subtitle tracks: clips.asset_id nullable, text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
 - Chrome: page headers removed app-wide (slim action toolbars instead), AI Studio 对话/生成 segmented control in the chat sidebar, visible timeline clip-action buttons, redesigned monitor transport (circular play, custom volume), hairline-only panel resizers, ChatGPT-grade assistant message typography, media-library covers fixed (missing auth token on thumbnail URLs).
 
 ### Professional color grading (mibu-video parity + beyond)
@@ -182,7 +182,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - Every persistent browser login is unified into one concept: `BrowserProfile` (DB table `browser_profiles`) = a reusable login identity = a persistent session partition + proxy + metadata. **发布账号 = 挂了平台的档案** (`publish_accounts.profile_id`); **通用档案 = 不挂平台**, reusable for any site.
 - Migration by **composition, not merge**: `publish_accounts` keeps its table + gains `profile_id`; each publish account gets a profile that reuses its existing partition `persist:mibu-<accountId>` (logins preserved). Generic profiles use `persist:pool-<id>`.
 - New **浏览器池** tab (`frontend/src/features/browser-pool/BrowserPoolView.tsx`, Boxes icon, between 工作流 and 定时任务); adding/managing accounts and generic profiles happens here.
-- **Lease**: one active session per profile at a time (`domain/browser.open_session`). **Login**: both publish accounts and generic profiles log in via the same app-embedded WebContentsView with a "返回 Mibu" button — not a separate OS window.
+- **Lease**: one active session per profile at a time (`domain/browser.open_session`). **Login**: both publish accounts and generic profiles log in via the same app-embedded WebContentsView with a "返回 Open Studio" button — not a separate OS window.
 - **Reusable by workflows**: the `browser_open` node gained `session_mode: pool` + `profile_id` → runs RPA reusing a pool profile's login.
 - **Reusable by the agent** behind an explicit-authorization gate: `browser_pool_list` (read-only discovery — id/name/platform/login-status, no cookies) and `browser_pool_open(profile_id)` (a confirmation-card tool: the agent can use no logged-in profile without the user approving a card that names the identity — 显式授权每会话). See [MCP.md](MCP.md).
 
@@ -200,7 +200,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 ### 2026-07 wave: full UI rebuild + team invitations + editor interaction parity
 
 - **Style system rebuilt**: every handwritten global class inlined as Tailwind v4 classes on JSX (`styles.css` 10.4k → ~40 lines of portal overrides); dual palettes redesigned (warm-paper light `#f6f4f0`+`#6a5cd8`, warm-sandalwood dark `#141218`+`#8a7bf0`, independently calibrated), `--radius: 8px` scale (sm6/md8/lg10/xl14), pill segmented controls, **no drop shadows anywhere** (hairline borders + surface steps), solid `--field` form fills, CVD-validated chart palettes.
-- **Team membership is invitation-based**: admins invite by username (`workspace_invitations`, Alembic 0028), invitees accept/decline from actionable notification cards; four roles + per-permission overrides remain. Admin-created accounts removed.
+- **Team membership is invitation-based**: admins invite by username (`workspace_invitations`), invitees accept/decline from actionable notification cards; four roles + per-permission overrides remain. Admin-created accounts removed.
 - **Editor interaction parity with mibu-video**: pool→timeline drags on dnd-kit (native HTML5 DnD dead under Electron); transform-based clip drags with 200ms settle glide and animated insert-ripple parting; **two-tier snapping** (target-track edges beat playhead/cross-track candidates); true insert edits (a clip straddling the drop point splits, its tail ripples — move and pool-drop alike, undo/redo carries the split); vertical auto-scroll while dragging.
 - **Import hardening**: duration-less MediaRecorder webm (camera/screen/mic) losslessly remuxed at import + startup backfill for legacy assets; recorder rejects empty capture (<2KB) with a retry prompt instead of importing dead files.
 - **Login redesigned**: split-screen photo hero (`public/login-hero.jpg`, gradient fallback), labeled form fields, Terms of Service / Privacy Policy dialogs (`features/auth/legal.tsx`, zh/en) with an implicit-consent line on registration.
@@ -209,8 +209,44 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - **Publish**: demo/mock platform removed from the registry (folder/webhook + real browser platforms remain).
 - **Workspace/project UX**: breadcrumb switcher always visible with a create-workspace entry; created workspaces/projects seed the query cache before navigation (kills the stale-list bounce-back); project creation jumps straight into its empty editor.
 
+### 2026-07-28: preview↔export parity by contract, and a dead-code sweep
+
+- **Scene contract** (`contracts/scene-cases.json`): the semantics preview and export must agree on
+  literally — visible layers at t, z-order, base assignment — expressed as a language-neutral corpus
+  that `backend/tests/test_scene_parity.py` and `sceneModel.parity.test.ts` both execute. A one-sided
+  semantic change now turns both suites red. Rationale and the rejected alternative (方案 Y: canvas
+  composites the export frames) are in [ADR-0004](adr/0004-preview-export-parity-by-contract.md).
+- **Two real parity bugs the contract caught immediately**, each with a green-but-contradictory test
+  on either side: a **muted upper video track** showed in preview and vanished from the export (the
+  track header's mute is a speaker icon — audio only; picture stays, audio drops); an **empty bottom
+  video track** was treated as the base by preview (demoting the real picture to an overlay and
+  losing fill-mode framing) but not by export. Base is now the bottom-most track that actually
+  carries picture, on both sides.
+- **Colour is deliberately NOT in the contract**: ffmpeg is authoritative (`eq`/`curves`/`lut3d`),
+  preview is a declared CSS/canvas approximation. Making canvas authoritative would delete tone
+  curves and 3D LUT from exports. Text was already pixel-identical (export rasterises the app's own
+  CSS through headless Chromium).
+- **`code` node is now gated as host access, not content access**: it runs arbitrary Python on the
+  backend host, so all four persist paths (create / import / patch / confirmation approval) require
+  `ensure_instance_admin`. The scan recurses into subgraph and loop bodies — folding a `code` node
+  into a subgraph would otherwise walk straight past the gate.
+- **Dead code removed**: the unwired 方案 Y cluster (`OfflineFrameRenderer`, `OfflineVideoSource`,
+  `frame_encoder`, the export-proxy builders and route), 8 `_migrate_*` functions predating the first
+  public release, predecessor-project fallbacks (`.mibu-video` / `.mibu-new` data dirs, sibling-venv
+  and Fish Speech probes), and the 30 Alembic migrations — never executed at runtime and drifted from
+  `models.py` since 2026-07-23. Migrations that serve v0.1.0/v0.2.0 users are kept; the retirement
+  rule is in ARCHITECTURE.md.
+- **Two latent test-isolation defects fixed** (exposed, not caused, by the new tests): agent turns run
+  in daemon threads that kept writing while `fresh_client()` rebuilt the schema, and `_wait_idle`
+  returned in the gap between a turn ending and its queued successor starting. The parallel-branch
+  test also stopped inferring concurrency from total wall-clock and now asserts that the two
+  execution spans overlap.
+
 ## Next
 
+- Precise preview ("render preview"): render a selected range through the real export pipeline so a
+  user can see exact frames on demand — the industry answer (PR/DaVinci) to a fast-but-approximate
+  live preview. Designed in ARCHITECTURE.md, not built.
 - Transitions (转场) in the render plan and editor.
 - Plugin write-path tools via jobs + confirmation cards; scoped API token injection per granted permission.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
