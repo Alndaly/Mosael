@@ -815,10 +815,18 @@ def test_parallel_fanout_and_join() -> None:
     assert ctx["join"]["text"] == "A:X|B:X"  # join 拿到两侧、只跑一次
 
 def test_parallel_branches_run_concurrently() -> None:
-    """两条独立分支各睡 1s:真并发则总墙钟 ≈ 1s(远小于串行的 2s)。"""
+    """两条独立分支必须真并发:各自记录执行区间,断言两段**重叠**。
+
+    这里刻意不用「总墙钟 < 阈值」来间接推断并发。那种写法要在 2s(串行)之下留阈值,而余量
+    要同时容纳两次 Python 子进程冷启动、两轮 HTTP、任务派发和 0.1s 的轮询粒度——全量测试满载时
+    必然溢出,于是这个测试会在与它无关的改动下随机变红。重叠是并发的**定义本身**,不受机器
+    快慢影响:串行时 c2 的开始必然晚于 c1 的结束,重叠为零。
+    """
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    sleeper = "import time\ntime.sleep(1.0)\noutput = 1"
+    # 输出 "开始,结束"。用字符串而不是 list:job.result 的上下文会经 _trim_outputs 收敛,
+    # list 会被折成 "[2 items]",时间戳就没了。
+    sleeper = "import time\n_s = time.time()\ntime.sleep(1.0)\noutput = f'{_s},{time.time()}'"
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {"params": {}}},
@@ -832,7 +840,6 @@ def test_parallel_branches_run_concurrently() -> None:
     }
     wf = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "并发", "graph": graph})
     assert wf.status_code == 200, wf.text
-    started = time.monotonic()
     run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
     deadline = time.monotonic() + 15
@@ -841,12 +848,17 @@ def test_parallel_branches_run_concurrently() -> None:
         if job["status"] in ("succeeded", "failed"):
             break
         time.sleep(0.1)
-    elapsed = time.monotonic() - started
     assert job["status"] == "succeeded", job
-    assert job["result"]["context"]["c1"]["output"] == 1
-    assert job["result"]["context"]["c2"]["output"] == 1
-    # 串行会 ≥ 2s;并发应明显更短。给足子进程/调度开销余量。
-    assert elapsed < 1.8, f"两条 1s 分支耗时 {elapsed:.2f}s,疑似未并发"
+    spans = {}
+    for node in ("c1", "c2"):
+        start, end = (float(x) for x in job["result"]["context"][node]["output"].split(","))
+        assert end - start >= 0.9, f"{node} 没真的睡满 1s({end - start:.2f}s)"
+        spans[node] = (start, end)
+    overlap = min(spans["c1"][1], spans["c2"][1]) - max(spans["c1"][0], spans["c2"][0])
+    assert overlap > 0.5, (
+        f"两条 1s 分支只重叠了 {overlap:.2f}s,疑似未并发;"
+        f"c1={spans['c1']} c2={spans['c2']}"
+    )
 
 
 def test_node_types_and_executor_registry_stay_in_lockstep() -> None:
@@ -896,7 +908,7 @@ def test_workflow_export_import_roundtrip() -> None:
     assert res.status_code == 200
     assert "attachment" in res.headers["content-disposition"]
     envelope = res.json()
-    assert envelope["format"] == "mibu-workflow" and envelope["version"] == 1
+    assert envelope["format"] == "openstudio-workflow" and envelope["version"] == 1
     assert envelope["name"] == "出海流程"
     assert envelope["graph"] == linear_graph()
 
@@ -911,6 +923,37 @@ def test_workflow_export_import_roundtrip() -> None:
     assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": envelope}).json()["name"] == "出海流程 (3)"
 
 
+def test_workflow_import_accepts_the_pre_rename_format() -> None:
+    """更名前导出的 .mibu-workflow.json 必须还能导入。
+
+    这个字符串已经躺在用户磁盘上的文件里了——只认新标识等于让他们此前导出的所有工作流
+    一夜之间打不开。导出一律写新名,导入两者都收。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    legacy_file = {
+        "format": "mibu-workflow",  # 旧标识,勿随全局替换改掉
+        "version": 1,
+        "name": "更名前导出的流程",
+        "graph": linear_graph(),
+    }
+    res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": legacy_file})
+    assert res.status_code == 200, res.text
+    assert res.json()["graph"] == linear_graph()
+
+
+def test_workflow_export_writes_the_current_format() -> None:
+    """导出只写新标识——兼容是单向的,不能让旧名靠导出重新繁殖。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    created = client.post(
+        "/api/workflows", json={"workspace_id": ws["id"], "name": "x", "graph": linear_graph()}
+    ).json()
+    res = client.get(f"/api/workflows/{created['id']}/export")
+    assert res.json()["format"] == "openstudio-workflow"
+    assert "openstudio-workflow.json" in res.headers["content-disposition"]
+
+
 def test_workflow_import_rejects_bad_files() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -919,19 +962,19 @@ def test_workflow_import_rejects_bad_files() -> None:
     assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "other"}}).status_code == 422
     assert (
         client.post(
-            "/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "mibu-workflow", "version": 1}}
+            "/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "openstudio-workflow", "version": 1}}
         ).status_code
         == 422
     )
 
     # 版本过新
-    too_new = {"format": "mibu-workflow", "version": 99, "name": "x", "graph": {"nodes": [], "edges": []}}
+    too_new = {"format": "openstudio-workflow", "version": 99, "name": "x", "graph": {"nodes": [], "edges": []}}
     res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": too_new})
     assert res.status_code == 422 and "版本" in res.json()["detail"]
 
     # 未知节点类型(伪造的新版文件)→ 明确报错而不是落一个坏图
     unknown_node = {
-        "format": "mibu-workflow",
+        "format": "openstudio-workflow",
         "version": 1,
         "name": "x",
         "graph": {"nodes": [{"id": "n1", "type": "not-a-node", "config": {}}], "edges": []},

@@ -618,6 +618,36 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
     return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 input 与体内节点"]
 
 
+# 「能在后端主机上跑任意代码」的节点类型。这类节点的写入权限不是内容权限,而是主机权限:
+# code 节点是子进程隔离 + 超时 + 输出上限,但**不是沙箱** —— 里面的 Python 能读写文件系统、
+# 发网络请求。单机安装下这无所谓(作者就是机器主人);团队/远程后端下,持有 edit 的 editor
+# 本来能存这样一张图,等于把「能改内容」升格成「能拿服务器」。落库入口因此额外要 instance-admin
+# (见 api/routes/workflows.py 的 ensure_graph_node_privileges 与 core/permissions.ensure_instance_admin)。
+PRIVILEGED_NODE_TYPES = frozenset({"code"})
+
+_MAX_GRAPH_SCAN_DEPTH = 16
+
+
+def privileged_nodes_in_graph(graph: Any, *, _depth: int = 0) -> set[str]:
+    """递归找出图里用到的特权节点类型(含 loop/subgraph 的内嵌体)。
+
+    必须递归:内嵌体是 config["body"] 里的一整张图,只查顶层的话,把 code 节点框选「折叠为子图」
+    就能绕过门禁。深度上限只是防御畸形/自引用输入——真实嵌套受 MAX_NEST_DEPTH 约束,远小于它。
+    """
+    if _depth > _MAX_GRAPH_SCAN_DEPTH or not isinstance(graph, dict):
+        return set()
+    found: set[str] = set()
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        ntype = str(node.get("type") or "")
+        if ntype in PRIVILEGED_NODE_TYPES:
+            found.add(ntype)
+        if ntype in NESTED_BODY_TYPES:
+            found |= privileged_nodes_in_graph((node.get("config") or {}).get("body"), _depth=_depth + 1)
+    return found
+
+
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
     """稳定拓扑序(按 nodes 数组原顺序打破平局)。假定 graph 已通过校验。"""
     nodes = list(graph.get("nodes") or [])

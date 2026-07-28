@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, ensure_graph_node_privileges
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.core.permissions import ensure_workspace_access
 from app.db.models import ToolConfirmation
@@ -53,6 +53,10 @@ def get_confirmation(confirmation_id: str, db: DbSession, user: CurrentUser) -> 
 @router.post("/confirmations/{confirmation_id}/approve", response_model=ConfirmationOut)
 def approve(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
     confirmation = _require(db, user, confirmation_id)
+    # create_workflow / update_workflow 卡片携带整份 graph,批准即落库——这是绕开
+    # /api/workflows 路由的第四条落库路径,同样要挡 code 节点。按**审批者**校验:
+    # 卡片是他批的,这次执行记在他头上。
+    ensure_graph_node_privileges(db, user, (confirmation.payload or {}).get("graph"))
     try:
         return approve_confirmation(db, confirmation)
     except ConfirmationError as exc:
