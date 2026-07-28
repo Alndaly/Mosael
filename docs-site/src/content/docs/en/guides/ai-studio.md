@@ -9,7 +9,7 @@ sidebar:
 
 ## Chat: the agent operates your project
 
-The agent uses Mibu's MCP tools to **see your project and propose changes**: searching media, arranging the timeline, kicking off generation, even publishing.
+The agent uses Open Studio's MCP tools to **see your project and propose changes**: searching media, arranging the timeline, kicking off generation, even publishing.
 
 ![AI Studio chat mode: agent environment panel on the right (context / session / capabilities)](../../../../assets/screens/ai-chat.png)
 
@@ -35,4 +35,4 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 ## Feishu (Lark) binding
 
-Settings → Feishu bot connects the agent to Feishu so you can chat from there; changes are still confirmed inside Mibu.
+Settings → Feishu bot connects the agent to Feishu so you can chat from there; changes are still confirmed inside Open Studio.

@@ -35,7 +35,7 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --draft --generate-notes --title "Mibu $GITHUB_REF_NAME"
+              --draft --generate-notes --title "Open Studio $GITHUB_REF_NAME"
 
   build:
     needs: [draft]
@@ -105,7 +105,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: mibu-${{ runner.os }}
+          name: open-studio-${{ runner.os }}
           path: ${{ matrix.asset_glob }}
           if-no-files-found: error
 

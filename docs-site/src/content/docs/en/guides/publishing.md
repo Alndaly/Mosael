@@ -24,7 +24,7 @@ The account matrix manages accounts across platforms; login state is persisted b
 - **Per-account proxy**: assign a proxy to a single account (right-click → Proxy).
 - **DevTools / inspect**: open devtools for one account when troubleshooting.
 
-Logins run in an embedded browser view with an address bar / back / forward / reload and a "Back to Mibu" button.
+Logins run in an embedded browser view with an address bar / back / forward / reload and a "Back to Open Studio" button.
 
 ## New publish
 

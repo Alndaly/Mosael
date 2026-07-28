@@ -42,7 +42,7 @@ const isDev = !app.isPackaged;
 let backend = null;
 let quitting = false;
 
-// 发布执行器(老版 mibu-video 移植):esbuild 打成的单文件 bundle,缺失/损坏不挡应用启动,
+// 发布执行器(老版前身项目移植):esbuild 打成的单文件 bundle,缺失/损坏不挡应用启动,
 // 但 publish:* IPC 会抛清晰错误(而不是渲染层遇到 "No handler registered" 直接崩)。
 let publish = null;
 let publishLoadError = null;
@@ -137,7 +137,9 @@ function stopBackend() {
 // macOS 未签名包装不上 Squirrel 自动安装(签名校验必失败),所以走「检查 + 提示 +
 // 打开发布页」的降级路线:GitHub Releases 比对版本号。日后具备 Developer ID 签名
 // 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
-const UPDATE_REPO = "Alndaly/open-studio";
+// 必须是 GitHub 上的规范仓库名(大小写一致)。写错大小写 API 会返回 301,虽然 fetch
+// 默认跟随重定向仍能work,但更新检查的失败是静默的——一旦重定向失效就再没人发现。
+const UPDATE_REPO = "Alndaly/OpenStudio";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -252,7 +254,7 @@ function createWindow() {
     minHeight: 640,
     title: "Open Studio",
     backgroundColor: "#f0f1f3",
-    // 无边框标题栏(参考 mibu-video):mac 红绿灯悬在左上侧栏顶部,
+    // 无边框标题栏(参考前身项目):mac 红绿灯悬在左上侧栏顶部,
     // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度 = 顶栏 44px)。
     titleBarStyle: "hidden",
     ...(isMac
@@ -281,7 +283,7 @@ function createWindow() {
   );
   // 全屏时系统窗口控件(mac 红绿灯 / Win 标题栏三键)消失,顶栏为它们预留的边距要撤掉。
   const sendFullscreen = () => {
-    if (!win.isDestroyed()) win.webContents.send("mibu:fullscreen", win.isFullScreen());
+    if (!win.isDestroyed()) win.webContents.send("openstudio:fullscreen", win.isFullScreen());
   };
   win.on("enter-full-screen", sendFullscreen);
   win.on("leave-full-screen", sendFullscreen);
@@ -410,7 +412,7 @@ app.whenReady().then(async () => {
 
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
-  ipcMain.handle("mibu:check-updates", async () => {
+  ipcMain.handle("openstudio:check-updates", async () => {
     try {
       return await checkForUpdates();
     } catch (error) {
@@ -422,7 +424,7 @@ app.whenReady().then(async () => {
       try {
         const info = await checkForUpdates();
         if (info.hasUpdate) {
-          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("mibu:update-available", info);
+          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("openstudio:update-available", info);
         }
       } catch {
         /* 静默 */
@@ -440,7 +442,7 @@ app.whenReady().then(async () => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
   // Win/Linux:标题栏三键叠层颜色随前端主题(openStudioDesktop.setTitleOverlay)。mac 无叠层。
-  ipcMain.on("mibu:title-overlay", (event, colors) => {
+  ipcMain.on("openstudio:title-overlay", (event, colors) => {
     if (process.platform === "darwin" || !colors) return;
     const win = BrowserWindow.fromWebContents(event.sender);
     try {

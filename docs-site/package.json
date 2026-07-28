@@ -1,9 +1,9 @@
 {
-  "name": "mibu-docs",
+  "name": "open-studio-docs",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Mibu 影像工作室文档站(Astro Starlight)——App 内可托管,亦可独立部署做 SEO。",
+  "description": "Open Studio 影像工作室文档站(Astro Starlight)——App 内可托管,亦可独立部署做 SEO。",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

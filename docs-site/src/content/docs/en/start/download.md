@@ -5,23 +5,23 @@ sidebar:
   order: 2
 ---
 
-Mibu is a local-first desktop app: editing, export and workflows all run offline; AI features (LLMs / voiceover / generation) need the corresponding API keys configured in Settings.
+Open Studio is a local-first desktop app: editing, export and workflows all run offline; AI features (LLMs / voiceover / generation) need the corresponding API keys configured in Settings.
 
 ## Download
 
-Installers are published on **[GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)**:
+Installers are published on **[GitHub Releases](https://github.com/Alndaly/OpenStudio/releases)**:
 
 | Platform | Artifact | Notes |
 | --- | --- | --- |
-| macOS | `Mibu-<version>-arm64.dmg` | Apple Silicon (M-series) |
-| Windows | `Mibu Setup <version>.exe` | Windows 10 / 11 (x64), NSIS installer |
+| macOS | `Open Studio-<version>-arm64.dmg` | Apple Silicon (M-series) |
+| Windows | `Open Studio Setup <version>.exe` | Windows 10 / 11 (x64), NSIS installer |
 
 The app silently checks Releases for a newer version after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version.
 
 :::note[Unsigned installers]
 Current installers are **not code-signed**:
 
-- **macOS**: if you see "cannot verify the developer" on first launch, **right-click the app → Open**, or run `xattr -cr /Applications/Mibu.app` and open again.
+- **macOS**: if you see "cannot verify the developer" on first launch, **right-click the app → Open**, or run `xattr -cr "/Applications/Open Studio.app"` and open again.
 - **Windows**: when SmartScreen appears, click "More info → Run anyway".
 :::
 
@@ -48,6 +48,6 @@ Official releases are built by CI: maintainers push a `v*` tag and GitHub Action
 
 ## Where your data lives
 
-Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.mibu-cut` (Windows: `C:\Users\<you>\.mibu-cut`), outside the app bundle — upgrades and reinstalls keep your data.
+Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.openstudio-cut` (Windows: `C:\Users\<you>\.openstudio-cut`), outside the app bundle — upgrades and reinstalls keep your data.
 
 Next: [Quick start](/en/start/quickstart/).

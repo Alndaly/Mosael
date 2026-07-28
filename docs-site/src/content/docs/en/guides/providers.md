@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Mibu's AI features (agent chat, text-to-image / video, voiceover, transcription) are bring-your-own-key. Keys are stored locally only; the settings API returns masked hints, never the plaintext.
+Open Studio's AI features (agent chat, text-to-image / video, voiceover, transcription) are bring-your-own-key. Keys are stored locally only; the settings API returns masked hints, never the plaintext.
 
 ## Configured per capability
 

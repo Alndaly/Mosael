@@ -7,10 +7,10 @@ sidebar:
 
 ## Source repository
 
-The source code is hosted on GitHub: **[Alndaly/mibu-cut](https://github.com/Alndaly/mibu-cut)**.
+The source code is hosted on GitHub: **[Alndaly/OpenStudio](https://github.com/Alndaly/OpenStudio)**.
 
-- Desktop installers: [GitHub Releases](https://github.com/Alndaly/mibu-cut/releases) (macOS arm64 `.dmg` / Windows x64 installer, built and uploaded by CI on every tag)
-- Bug reports / feature requests: [GitHub Issues](https://github.com/Alndaly/mibu-cut/issues)
+- Desktop installers: [GitHub Releases](https://github.com/Alndaly/OpenStudio/releases) (macOS arm64 `.dmg` / Windows x64 installer, built and uploaded by CI on every tag)
+- Bug reports / feature requests: [GitHub Issues](https://github.com/Alndaly/OpenStudio/issues)
 
 ## Author
 
@@ -18,7 +18,7 @@ The source code is hosted on GitHub: **[Alndaly/mibu-cut](https://github.com/Aln
 
 ## License
 
-Mibu is **source-available, not open source**, under a proprietary license (full text in the repository's [LICENSE](https://github.com/Alndaly/mibu-cut/blob/main/LICENSE)):
+Open Studio is **source-available, not open source**, under a proprietary license (full text in the repository's [LICENSE](https://github.com/Alndaly/OpenStudio/blob/main/LICENSE)):
 
 - Allowed: viewing the source, building and running locally for evaluation, learning and **personal non-commercial** use.
 - Not allowed: any commercial use (selling, paid services, SaaS hosting, embedding in commercial products) or redistribution.
@@ -31,7 +31,7 @@ Mibu is **source-available, not open source**, under a proprietary license (full
 | Desktop shell | Electron (with a built-in publish executor driving embedded browser views for logins / uploads) |
 | Frontend | Vite + React + TypeScript + Tailwind |
 | Backend | FastAPI (Python) + SQLite, single source of truth; packaged with PyInstaller |
-| AI agent | hosts an external coding-agent CLI (opencode-style) using Mibu's MCP server as its tool surface |
+| AI agent | hosts an external coding-agent CLI (opencode-style) using Open Studio's MCP server as its tool surface |
 | Docs site | Astro Starlight (this site) |
 
-All user data lives locally in `~/.mibu-cut` — no cloud dependency.
+All user data lives locally in `~/.openstudio-cut` — no cloud dependency.

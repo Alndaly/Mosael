@@ -1,4 +1,4 @@
-# Mibu 文档站(docs-site)
+# Open Studio 文档站(docs-site)
 
 基于 [Astro Starlight](https://starlight.astro.build/) 的文档站,双语(简体中文为默认,英文在 `src/content/docs/en/`)。
 
@@ -34,6 +34,7 @@ pnpm preview      # 本地预览 dist/
 部署前把站点域名设成真实地址,用于生成 `sitemap.xml` / canonical / og:
 
 ```bash
+# 默认已是 https://openstudio.team;部署到别的域名时才需要覆盖
 DOCS_SITE_URL="https://docs.你的域名.com" pnpm build
 ```
 

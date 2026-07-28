@@ -5,23 +5,23 @@ sidebar:
   order: 2
 ---
 
-Mibu 是本地优先的桌面应用:剪辑、导出、工作流全程可离线;AI 能力(大模型 / 配音 / 生成)需在设置里配好各自的 API Key。
+Open Studio 是本地优先的桌面应用:剪辑、导出、工作流全程可离线;AI 能力(大模型 / 配音 / 生成)需在设置里配好各自的 API Key。
 
 ## 下载
 
-安装包统一发布在 **[GitHub Releases](https://github.com/Alndaly/mibu-cut/releases)**:
+安装包统一发布在 **[GitHub Releases](https://github.com/Alndaly/OpenStudio/releases)**:
 
 | 平台 | 产物 | 说明 |
 | --- | --- | --- |
-| macOS | `Mibu-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
-| Windows | `Mibu Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
+| macOS | `Open Studio-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
+| Windows | `Open Studio Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
 
 应用启动后会静默比对 Releases 最新版本,发现新版会提示前往下载;设置 → 本地后端 → 版本 里也有「检查更新」按钮。
 
 :::note[未签名安装包提示]
 当前安装包**未做代码签名**:
 
-- **macOS**:首次打开若提示「无法验证开发者」,在 App 上**右键 → 打开**,或执行 `xattr -cr /Applications/Mibu.app` 后再打开。
+- **macOS**:首次打开若提示「无法验证开发者」,在 App 上**右键 → 打开**,或执行 `xattr -cr "/Applications/Open Studio.app"` 后再打开。
 - **Windows**:SmartScreen 提示时点「更多信息 → 仍要运行」。
 :::
 
@@ -48,6 +48,6 @@ pnpm dist:mac     # 同流程,产出 .dmg(分发时用)
 
 ## 数据在哪
 
-所有数据(账号 / 项目 / 素材 / 配置)都在**你自己机器**的 `~/.mibu-cut`(Windows:`C:\Users\<你>\.mibu-cut`),app 本体之外——升级 / 重装不丢数据。
+所有数据(账号 / 项目 / 素材 / 配置)都在**你自己机器**的 `~/.openstudio-cut`(Windows:`C:\Users\<你>\.openstudio-cut`),app 本体之外——升级 / 重装不丢数据。
 
 下一步:[快速上手](/start/quickstart/)。

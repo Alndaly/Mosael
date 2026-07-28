@@ -1,7 +1,7 @@
 /* ============================================================
-   Mibu 文档站主题
+   Open Studio 文档站主题
    风格:单色 neutral(近黑剪辑台底 + 白灰层次),无彩色装饰;强调=亮度对比而非色相。
-   首页所有样式 scoped 在 .mibu-home 下,不影响文档内容页。
+   首页所有样式 scoped 在 .openstudio-home 下,不影响文档内容页。
    ============================================================ */
 
 /* 0) 全站字体与底色 ------------------------------------------- */
@@ -13,18 +13,18 @@
 :root {
   --sl-font: "Outfit Variable", "Noto Sans SC Variable", ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --sl-font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
-  --mibu-font-display: "Fraunces Variable", "LXGW WenKai Screen", "Outfit Variable", "Noto Sans SC Variable", serif;
+  --openstudio-font-display: "Fraunces Variable", "LXGW WenKai Screen", "Outfit Variable", "Noto Sans SC Variable", serif;
 }
 /* 展示字体落点:文档标题层级、站名、首页 hero 与卡片标题。
    衬线/楷体天生比几何无衬线"大一号",字距回正、不再用负 tracking。 */
 .sl-markdown-content :is(h1, h2, h3, h4),
 .content-panel h1,
 .site-title span,
-.mibu-home .mibu-hero h1,
-.mibu-feat h3,
-.mibu-doc .txt b,
+.openstudio-home .openstudio-hero h1,
+.openstudio-feat h3,
+.openstudio-doc .txt b,
 .link-title {
-  font-family: var(--mibu-font-display);
+  font-family: var(--openstudio-font-display);
   letter-spacing: 0;
 }
 .sl-markdown-content :is(h1, h2) {
@@ -33,14 +33,14 @@
 /* 品牌色板(参考「AI 视频剪辑社区」设计稿):暖黑底 + 珊瑚橙主色 + 橙金渐变 + 青色点缀。
    珊瑚橙是绝对主色,橙金渐变用于强调/CTA,青色是唯二的冷色点缀(节点/链接活性)。 */
 :root {
-  --mibu-coral: #ff5a3c; /* 主色 */
-  --mibu-orange: #ff9f1c;
-  --mibu-gold: #ffd54a;
-  --mibu-cyan: #22d3ee; /* 冷色点缀 */
-  --mibu-mint: #34e89e;
-  --mibu-grad: linear-gradient(135deg, #ff5a3c, #ff9f1c);
-  --mibu-grad-gold: linear-gradient(135deg, #ffd54a, #ff9f1c);
-  --mibu-glow: rgba(255, 90, 60, 0.16);
+  --openstudio-coral: #ff5a3c; /* 主色 */
+  --openstudio-orange: #ff9f1c;
+  --openstudio-gold: #ffd54a;
+  --openstudio-cyan: #22d3ee; /* 冷色点缀 */
+  --openstudio-mint: #34e89e;
+  --openstudio-grad: linear-gradient(135deg, #ff5a3c, #ff9f1c);
+  --openstudio-grad-gold: linear-gradient(135deg, #ffd54a, #ff9f1c);
+  --openstudio-glow: rgba(255, 90, 60, 0.16);
 }
 
 /* 底色:暖调近黑(#0e0c0b 页底 / #17140f 面板),不是冷灰——去掉 Starlight 默认蓝灰调 */
@@ -65,7 +65,7 @@
   --sl-color-gray-6: #f3ede3;
   --sl-color-gray-7: #f8f3ea;
   --sl-color-black: #fdfbf6;
-  --mibu-glow: rgba(255, 90, 60, 0.1);
+  --openstudio-glow: rgba(255, 90, 60, 0.1);
 }
 
 /* 1) 全站强调色(侧边栏 / 链接 / 选中)—— 珊瑚橙,冷灰单色时代结束 */
@@ -80,7 +80,7 @@
   --sl-color-accent-high: #b8371d;
 }
 /* 正文链接:单色下靠下划线提供可点性 */
-.sl-markdown-content a:not(.mibu-btn):not(.mibu-doc) {
+.sl-markdown-content a:not(.openstudio-btn):not(.openstudio-doc) {
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-color: var(--sl-color-gray-4);
@@ -90,36 +90,36 @@
 }
 
 /* 2) 首页 ------------------------------------------------------ */
-.mibu-home {
+.openstudio-home {
   --mono: var(--sl-font-mono);
   --font: var(--sl-font);
   max-width: 64rem;
   margin-inline: auto;
 }
 /* 让首页突破 splash 的默认内容宽度 */
-.sl-markdown-content:has(.mibu-home) {
+.sl-markdown-content:has(.openstudio-home) {
   max-width: 100% !important;
 }
 /* splash 会渲染两个 .content-panel:第一个装(被我们隐藏的)页面大标题,第二个装内容且带
    顶部分隔线 + 24px 内边距 —— 在首页把空标题面板整块隐藏,并去掉内容面板顶部的横线与留白。 */
-body:has(.mibu-home) .content-panel:has(#_top) {
+body:has(.openstudio-home) .content-panel:has(#_top) {
   display: none;
 }
-body:has(.mibu-home) .content-panel:has(.mibu-home) {
+body:has(.openstudio-home) .content-panel:has(.openstudio-home) {
   border-top: 0; /* 去掉那条分隔横线 */
   padding-top: 2rem; /* 但保留一点顶部呼吸空间(不要贴着头部) */
 }
 /* 首页不要默认 markdown 元素间距干扰我们的布局 */
-.mibu-home :is(h1, h3, p) {
+.openstudio-home :is(h1, h3, p) {
   border: 0;
 }
 
 /* ---- HERO:居中极简,无装饰色,全靠排版与主题变量(双主题自动成立)---- */
-.mibu-hero {
+.openstudio-hero {
   text-align: center;
   padding: clamp(2.5rem, 6vw, 4.5rem) 1rem clamp(1.5rem, 3vw, 2.5rem);
 }
-.mibu-eyebrow {
+.openstudio-eyebrow {
   font-family: var(--mono);
   font-size: 0.74rem;
   letter-spacing: 0.16em;
@@ -129,26 +129,26 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   align-items: center;
   gap: 0.55rem;
 }
-.mibu-eyebrow::before {
+.openstudio-eyebrow::before {
   content: "";
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--mibu-coral);
-  box-shadow: 0 0 12px 2px var(--mibu-coral);
+  background: var(--openstudio-coral);
+  box-shadow: 0 0 12px 2px var(--openstudio-coral);
 }
 /* HERO 氛围:暖点阵网格 + 顶部珊瑚橙光晕(呼应设计稿的节点画布) */
-.mibu-home .mibu-hero {
+.openstudio-home .openstudio-hero {
   position: relative;
   isolation: isolate;
 }
-.mibu-home .mibu-hero::before {
+.openstudio-home .openstudio-hero::before {
   content: "";
   position: absolute;
   inset: -10% -20% 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 60% 50% at 50% 0%, var(--mibu-glow), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 50% 0%, var(--openstudio-glow), transparent 70%),
     radial-gradient(var(--sl-color-gray-5) 1px, transparent 1px);
   background-size: 100% 100%, 22px 22px;
   -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 20%, #000 40%, transparent 75%);
@@ -156,9 +156,9 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   opacity: 0.6;
   pointer-events: none;
 }
-/* .mibu-home 前缀提高优先级,压过 Starlight 的 .sl-markdown-content h1 颜色(否则浅色主题下变暗) */
-.mibu-home .mibu-hero h1 {
-  font-family: var(--mibu-font-display);
+/* .openstudio-home 前缀提高优先级,压过 Starlight 的 .sl-markdown-content h1 颜色(否则浅色主题下变暗) */
+.openstudio-home .openstudio-hero h1 {
+  font-family: var(--openstudio-font-display);
   font-weight: 640;
   font-size: clamp(2.4rem, 6vw, 4rem);
   line-height: 1.12;
@@ -167,35 +167,35 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   color: var(--sl-color-white);
 }
 /* 第二行:橙金渐变字,呼应设计稿的 linear-gradient(135deg,#ff5a3c,#ff9f1c) */
-.mibu-hero h1 .g {
-  background: var(--mibu-grad);
+.openstudio-hero h1 .g {
+  background: var(--openstudio-grad);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
-.mibu-sub {
+.openstudio-sub {
   margin: 1.1rem auto 0;
   max-width: 44ch;
   color: var(--sl-color-gray-3);
   font-size: 1.05rem;
   line-height: 1.7;
 }
-.mibu-cta {
+.openstudio-cta {
   display: flex;
   gap: 0.75rem;
   margin-top: 1.7rem;
   flex-wrap: wrap;
   justify-content: center;
 }
-.mibu-meta {
+.openstudio-meta {
   margin-top: 1.1rem;
   font-family: var(--mono);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   color: var(--sl-color-gray-4);
 }
-.mibu-btn {
+.openstudio-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -209,36 +209,36 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
     box-shadow 0.15s ease,
     border-color 0.15s ease;
 }
-.mibu-btn.primary {
-  background: var(--mibu-grad);
+.openstudio-btn.primary {
+  background: var(--openstudio-grad);
   color: #fff;
-  box-shadow: 0 8px 24px -10px var(--mibu-coral);
+  box-shadow: 0 8px 24px -10px var(--openstudio-coral);
 }
-.mibu-btn.ghost {
+.openstudio-btn.ghost {
   color: var(--sl-color-white);
   border: 1px solid var(--sl-color-gray-5);
   background: color-mix(in srgb, var(--sl-color-gray-6) 60%, transparent);
 }
-.mibu-btn:hover {
+.openstudio-btn:hover {
   transform: translateY(-2px);
 }
-.mibu-btn.primary:hover {
-  box-shadow: 0 14px 34px -10px var(--mibu-coral);
+.openstudio-btn.primary:hover {
+  box-shadow: 0 14px 34px -10px var(--openstudio-coral);
 }
-.mibu-btn.ghost:hover {
-  border-color: var(--mibu-coral);
-  color: var(--mibu-coral);
+.openstudio-btn.ghost:hover {
+  border-color: var(--openstudio-coral);
+  color: var(--openstudio-coral);
 }
 
 /* ---- 特性区(随主题自适应)---- */
-.mibu-features {
+.openstudio-features {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-auto-rows: 1fr; /* 所有卡片等高,不随文案长短参差 */
   gap: 14px;
   margin-top: 22px;
 }
-.mibu-feat {
+.openstudio-feat {
   position: relative;
   overflow: hidden;
   height: 100%; /* 配合 grid-auto-rows:1fr 撑满行高,四张卡严格等高 */
@@ -252,12 +252,12 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
     transform 0.15s ease,
     border-color 0.15s ease;
 }
-.mibu-feat:hover {
+.openstudio-feat:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--mibu-coral) 55%, var(--sl-color-gray-5));
-  box-shadow: 0 18px 46px -24px var(--mibu-coral);
+  border-color: color-mix(in srgb, var(--openstudio-coral) 55%, var(--sl-color-gray-5));
+  box-shadow: 0 18px 46px -24px var(--openstudio-coral);
 }
-.mibu-feat .lab {
+.openstudio-feat .lab {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -267,25 +267,25 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
   color: var(--sl-color-gray-3);
 }
 /* 节点状态灯:呼应设计稿的圆点,珊瑚 / 青交替,给单调标签一点活性 */
-.mibu-feat .lab::before {
+.openstudio-feat .lab::before {
   content: "";
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--mibu-coral);
-  box-shadow: 0 0 8px var(--mibu-coral);
+  background: var(--openstudio-coral);
+  box-shadow: 0 0 8px var(--openstudio-coral);
 }
-.mibu-feat:nth-child(even) .lab::before {
-  background: var(--mibu-cyan);
-  box-shadow: 0 0 8px var(--mibu-cyan);
+.openstudio-feat:nth-child(even) .lab::before {
+  background: var(--openstudio-cyan);
+  box-shadow: 0 0 8px var(--openstudio-cyan);
 }
-.mibu-feat h3 {
+.openstudio-feat h3 {
   margin: 0.5rem 0 0.4rem;
   font-size: 1.16rem;
   font-weight: 700;
   color: var(--sl-color-white);
 }
-.mibu-feat p {
+.openstudio-feat p {
   margin: 0;
   color: var(--sl-color-gray-3);
   font-size: 0.94rem;
@@ -293,24 +293,24 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
 }
 
 /* ---- 文档导航 ---- */
-.mibu-docs {
+.openstudio-docs {
   margin-top: 30px;
 }
-.mibu-docs > .lab {
+.openstudio-docs > .lab {
   font-family: var(--mono);
   font-size: 0.72rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--sl-color-gray-3);
 }
-.mibu-docgrid {
+.openstudio-docgrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-auto-rows: 1fr; /* 文档导航卡也等高 */
   gap: 10px;
   margin-top: 12px;
 }
-.mibu-doc {
+.openstudio-doc {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -326,51 +326,51 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
     transform 0.15s ease,
     border-color 0.15s ease;
 }
-.mibu-doc:hover {
+.openstudio-doc:hover {
   border-color: var(--sl-color-accent);
   transform: translateX(3px);
 }
-.mibu-doc .txt b {
+.openstudio-doc .txt b {
   display: block;
   font-weight: 650;
 }
-.mibu-doc .txt span {
+.openstudio-doc .txt span {
   color: var(--sl-color-gray-3);
   font-size: 0.85rem;
 }
-.mibu-doc .arr {
+.openstudio-doc .arr {
   color: var(--sl-color-gray-4);
   font-family: var(--mono);
 }
 
 @media (max-width: 640px) {
-  .mibu-features,
-  .mibu-docgrid {
+  .openstudio-features,
+  .openstudio-docgrid {
     grid-template-columns: 1fr;
   }
-  .mibu-mascot {
+  .openstudio-mascot {
     position: static;
     display: block;
     margin-bottom: 0.75rem;
   }
-  .mibu-hero h1 {
+  .openstudio-hero h1 {
     max-width: none;
   }
 }
 
 
 /* 首页真实产品截图(hero 下方) */
-.mibu-home .mibu-shot {
+.openstudio-home .openstudio-shot {
   margin-top: 1.25rem;
 }
-.mibu-home .mibu-shot img {
+.openstudio-home .openstudio-shot img {
   display: block;
   width: 100%;
   border-radius: 14px;
   border: 1px solid var(--sl-color-gray-5);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
-.mibu-home .mibu-shot-cap {
+.openstudio-home .openstudio-shot-cap {
   margin-top: 0.6rem;
   text-align: center;
   font-size: 0.78rem;
@@ -378,29 +378,29 @@ body:has(.mibu-home) .content-panel:has(.mibu-home) {
 }
 
 /* 首页双列小截图(特性区下方) */
-.mibu-home .mibu-shotgrid {
+.openstudio-home .openstudio-shotgrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
   margin-top: 22px;
 }
-.mibu-home .mibu-shotgrid figure {
+.openstudio-home .openstudio-shotgrid figure {
   margin: 0;
 }
-.mibu-home .mibu-shotgrid img {
+.openstudio-home .openstudio-shotgrid img {
   display: block;
   width: 100%;
   border-radius: 12px;
   border: 1px solid var(--sl-color-gray-5);
 }
-.mibu-home .mibu-shotgrid figcaption {
+.openstudio-home .openstudio-shotgrid figcaption {
   margin-top: 0.5rem;
   text-align: center;
   font-size: 0.76rem;
   color: var(--sl-color-gray-3);
 }
 @media (max-width: 640px) {
-  .mibu-home .mibu-shotgrid {
+  .openstudio-home .openstudio-shotgrid {
     grid-template-columns: 1fr;
   }
 }
