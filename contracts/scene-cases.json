@@ -1,0 +1,803 @@
+{
+  "contract": "scene",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "预览与导出必须字面一致的场景语义:t 时刻画面上有哪些层、按什么 z 序、谁是 base。后端 backend/tests/test_scene_parity.py 与前端 sceneModel.parity.test.ts 跑同一份语料。",
+  "cases": [
+    {
+      "name": "empty-timeline",
+      "why": "没有任何轨:两侧都必须给空层列表,而不是抛错或造一个空 base。",
+      "assets": {},
+      "tracks": [],
+      "samples": [
+        {
+          "t": 0,
+          "layers": []
+        }
+      ]
+    },
+    {
+      "name": "single-base-track",
+      "why": "最基本形态:唯一一条 video 轨上的片段就是 base,按 fill_mode 取景。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "t0",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "c1",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 0,
+          "layers": [
+            {
+              "clip": "c1",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 2.5,
+          "layers": [
+            {
+              "clip": "c1",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 5,
+          "layers": []
+        }
+      ]
+    },
+    {
+      "name": "z-order-bottom-to-top",
+      "why": "position 升序 = 时间线自上而下,所以 position 最大的是底轨=base;返回顺序必须 bottom→top(绘制序)。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "top",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cTop",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 10,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "mid",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cMid",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 10,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "bottom",
+          "kind": "video",
+          "position": 2,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cBot",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 10,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cBot",
+              "track": "bottom",
+              "isBase": true
+            },
+            {
+              "clip": "cMid",
+              "track": "mid",
+              "isBase": false
+            },
+            {
+              "clip": "cTop",
+              "track": "top",
+              "isBase": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "muted-video-track-still-shows-picture",
+      "why": "回归:轨道头的静音是喇叭图标,语义只关音频。曾经预览显示、导出整层丢失——给画中画轨静音会让那层画面在成片里消失。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "pip",
+          "kind": "video",
+          "position": 0,
+          "muted": true,
+          "clips": [
+            {
+              "id": "cPip",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 4,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "base",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cBase",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 8,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            },
+            {
+              "clip": "cPip",
+              "track": "pip",
+              "isBase": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "muted-base-track-still-shows-picture",
+      "why": "同上,base 轨也一样:静音不改画面。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "base",
+          "kind": "video",
+          "position": 0,
+          "muted": true,
+          "clips": [
+            {
+              "id": "cBase",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 3,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "empty-bottom-track-is-not-base",
+      "why": "回归:base 必须是最底「有画面片段」的轨。取字面最底轨会让导出变成「无片段可渲染」,或让预览把上层降级成 overlay 而丢掉 fill_mode 取景。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "hasMedia",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "c1",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 6,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "emptyBottom",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": []
+        }
+      ],
+      "samples": [
+        {
+          "t": 2,
+          "layers": [
+            {
+              "clip": "c1",
+              "track": "hasMedia",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "overlay-outlives-base",
+      "why": "回归:上层比底轨长时,超出部分不能被截断。总时长取所有画面轨的最大结束点,不是 base 轨的。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "over",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cOver",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 9,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "base",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cBase",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 4,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            },
+            {
+              "clip": "cOver",
+              "track": "over",
+              "isBase": false
+            }
+          ]
+        },
+        {
+          "t": 6,
+          "why": "base 已结束:只剩上层,而且它**不会**因此变成 base(取景不能突然改变)。",
+          "layers": [
+            {
+              "clip": "cOver",
+              "track": "over",
+              "isBase": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clip-boundary-is-half-open",
+      "why": "区间是 [start, end):交界处只有后一个片段命中。两侧若一开一闭,切换帧会画两层或一层都不画(曾表现为切换处闪黑)。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "t0",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "first",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 2,
+              "speed": 1
+            },
+            {
+              "id": "second",
+              "asset_id": "a",
+              "timeline_start": 2,
+              "src_in": 0,
+              "src_out": 2,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1.999,
+          "layers": [
+            {
+              "clip": "first",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 2,
+          "layers": [
+            {
+              "clip": "second",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "speed-shortens-timeline-span",
+      "why": "时间线时长 = 源区间 / 速度。两侧算法必须一致,否则 2 倍速片段的结束点会差一半。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "t0",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "fast",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 8,
+              "speed": 2
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 3.9,
+          "layers": [
+            {
+              "clip": "fast",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 4,
+          "layers": []
+        }
+      ]
+    },
+    {
+      "name": "clips-out-of-order-are-deterministic",
+      "why": "轨上片段数组顺序不保证:两侧都要先按 timeline_start 排序,否则同一时间线在两边给出不同结果。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "t0",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "later",
+              "asset_id": "a",
+              "timeline_start": 5,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            },
+            {
+              "id": "earlier",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "earlier",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 6,
+          "layers": [
+            {
+              "clip": "later",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "non-visual-tracks-and-clips-excluded",
+      "why": "音频轨、字幕轨、无 asset 的文本片段、以及指向音频素材的片段都不进画面层。",
+      "assets": {
+        "v": {
+          "kind": "video"
+        },
+        "snd": {
+          "kind": "audio"
+        }
+      },
+      "tracks": [
+        {
+          "id": "vid",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cv",
+              "asset_id": "v",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            },
+            {
+              "id": "cText",
+              "asset_id": null,
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            },
+            {
+              "id": "cAudioOnVideoTrack",
+              "asset_id": "snd",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "aud",
+          "kind": "audio",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "ca",
+              "asset_id": "snd",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 20,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "sub",
+          "kind": "subtitle",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cs",
+              "asset_id": null,
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 20,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cv",
+              "track": "vid",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "gap-between-clips-shows-nothing",
+      "why": "片段之间的空隙是黑场,不能让相邻片段延伸过去填补。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "t0",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "c1",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 2,
+              "speed": 1
+            },
+            {
+              "id": "c2",
+              "asset_id": "a",
+              "timeline_start": 5,
+              "src_in": 0,
+              "src_out": 2,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 3,
+          "layers": []
+        },
+        {
+          "t": 5,
+          "layers": [
+            {
+              "clip": "c2",
+              "track": "t0",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "overlay-starts-later-than-base",
+      "why": "上层片段有自己的入点:未到之前只有 base,到了之后才叠加。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "over",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cOver",
+              "asset_id": "a",
+              "timeline_start": 3,
+              "src_in": 0,
+              "src_out": 2,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "base",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cBase",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 10,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            }
+          ]
+        },
+        {
+          "t": 4,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            },
+            {
+              "clip": "cOver",
+              "track": "over",
+              "isBase": false
+            }
+          ]
+        },
+        {
+          "t": 6,
+          "layers": [
+            {
+              "clip": "cBase",
+              "track": "base",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "text-only-video-track-is-not-base",
+      "why": "纯花字轨(只有无 asset 的文本片段)不参与 base/overlay 判定,否则会被当成缺素材的画面片段。",
+      "assets": {
+        "a": {
+          "kind": "video"
+        }
+      },
+      "tracks": [
+        {
+          "id": "textOnly",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cText",
+              "asset_id": null,
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 9,
+              "speed": 1
+            }
+          ]
+        },
+        {
+          "id": "pic",
+          "kind": "video",
+          "position": 1,
+          "muted": false,
+          "clips": [
+            {
+              "id": "cPic",
+              "asset_id": "a",
+              "timeline_start": 0,
+              "src_in": 0,
+              "src_out": 5,
+              "speed": 1
+            }
+          ]
+        }
+      ],
+      "samples": [
+        {
+          "t": 1,
+          "layers": [
+            {
+              "clip": "cPic",
+              "track": "pic",
+              "isBase": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
