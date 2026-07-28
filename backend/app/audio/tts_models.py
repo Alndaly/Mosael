@@ -37,6 +37,9 @@ class TtsEngine:
     cache_dirs: tuple[str, ...]  # HF cache dir names to sum for install/progress
     expected_bytes: int
     module: str  # importable python module that proves the engine is installed
+    #: 装进托管 venv 的 pip 依赖。fish-speech 的 fish_speech 包不在 PyPI(靠 git 检出),
+    #: 所以这里只列它运行所需的第三方依赖。
+    pip_requirements: tuple[str, ...] = ()
 
 
 CATALOG: tuple[TtsEngine, ...] = (
@@ -47,6 +50,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         cache_dirs=("models--SWivid--F5-TTS", "models--charactr--vocos-mel-24khz"),
         expected_bytes=1_500_000_000,
         module="f5_tts",
+        pip_requirements=("f5-tts",),
     ),
     TtsEngine(
         id="fish-speech",
@@ -55,6 +59,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         cache_dirs=("models--fishaudio--s2-pro",),
         expected_bytes=4_000_000_000,
         module="fish_speech",
+        pip_requirements=("torch", "torchaudio", "transformers", "huggingface_hub", "hydra-core", "loguru"),
     ),
 )
 
@@ -130,12 +135,18 @@ def _worker_env() -> dict[str, str]:
 
 
 def candidate_pythons() -> list[Path]:
+    """探测顺序:用户显式覆盖 → App 托管 venv → 本进程解释器。
+
+    托管 venv 排在自动位:用户点过「下载」之后就该直接可用,不必再去设置里填路径——
+    那个输入框只是留给"我自己装好了、想用我的环境"的高级用法。
+    """
     from app.domain import tts_config
 
     candidates: list[Path] = []
     configured = tts_config.get().python_path
     if configured:
         candidates.append(Path(configured).expanduser())
+    candidates.append(tts_config.managed_venv_python())
     import sys
 
     candidates.append(Path(sys.executable))
@@ -298,6 +309,53 @@ def start_download(engine_id: str) -> dict[str, Any]:
 _FISH_SOURCE_URL = "https://github.com/fishaudio/fish-speech"
 
 
+def ensure_engine_runtime(engine_id: str) -> None:
+    """确保托管 venv 存在、且装好了该引擎的依赖。已就绪则直接返回。
+
+    这一步的存在,就是为了让用户**不必**去设置里指定 Python 解释器:点「下载」时由后端把环境
+    建好。重的依赖(torch 等 2.5–3.5GB)落在用户数据目录而不是安装包里——预装会让安装包涨到
+    约 4GB,而多数用户根本不用声音克隆。
+
+    失败一律抛 RuntimeError 并带上可读原因;调用方把它落到下载状态上显示给用户。
+    """
+    from app.domain import tts_config
+
+    engine = _BY_ID[engine_id]
+    if not engine.pip_requirements:
+        return
+    # 已经有解释器能 import 它了(托管 venv 装过,或用户自带环境)→ 什么都不用做。
+    if probe_interpreter(engine_id)["worker_ready"]:
+        return
+
+    venv_python = tts_config.managed_venv_python()
+    if not venv_python.is_file():
+        base = tts_config.base_python()
+        if not base:
+            raise RuntimeError(
+                "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
+            )
+        _store.set(engine_id, _Live(status="downloading", total=engine.expected_bytes, message="创建运行环境…"))
+        tts_config.MANAGED_TTS_VENV.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [base, "-m", "venv", str(tts_config.MANAGED_TTS_VENV)],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode != 0 or not venv_python.is_file():
+            raise RuntimeError(f"创建运行环境失败:{(result.stderr or result.stdout)[-300:]}")
+
+    _store.set(
+        engine_id,
+        _Live(status="downloading", total=engine.expected_bytes, message=f"安装 {engine.label} 运行依赖(数 GB,首次较慢)…"),
+    )
+    # 装到托管 venv 里。--upgrade 让重试能修好装了一半的环境;超时给足——torch 在慢网络下很久。
+    result = subprocess.run(
+        [str(venv_python), "-m", "pip", "install", "--upgrade", *engine.pip_requirements],
+        capture_output=True, text=True, timeout=7200, env=_worker_env(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"安装 {engine.label} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
+
+
 def _ensure_fish_source() -> None:
     """Clone the official Fish Speech source into the managed dir (its ``fish_speech`` package
     and ``tools.server.*`` modules aren't on PyPI, so real synthesis needs the checkout).
@@ -357,6 +415,9 @@ def _run_download(engine_id: str) -> None:
 def _download_body(engine_id: str) -> None:
     engine = _BY_ID[engine_id]
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    # 先备好运行环境(建 venv + 装引擎依赖),再拉权重。顺序不能反:权重是用那个环境里的
+    # huggingface_hub 拉的,环境不在就只能退回本后端解释器,拉下来也跑不了合成。
+    ensure_engine_runtime(engine_id)
     output_path = settings.data_dir / f"tts-warmup-{engine_id}.wav"
 
     env = _worker_env()

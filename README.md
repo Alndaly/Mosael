@@ -83,6 +83,7 @@ artifact,不碰 Releases)。
 | --- | --- |
 | `pnpm build:frontend` | Vite 构建前端 → `frontend/dist` |
 | `pnpm build:publisher` | esbuild 打包内嵌发布执行器 → `electron/publish.bundle.cjs` |
+| `pnpm fetch:tts-python` | 抓取随包分发的独立 CPython → `build/python`(声音克隆用,~48MB) |
 | `pnpm build:backend` | PyInstaller 打包后端 → `backend/dist/open-studio-backend` |
 | `pnpm build:mac` | 以上三者 + electron-builder 出 `.app` |
 | `pnpm dist:mac` | 同上,出 `.dmg` |

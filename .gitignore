@@ -28,3 +28,6 @@ electron/publish.bundle.cjs
 
 # TS 增量构建产物,每次构建都变
 *.tsbuildinfo
+
+# 随 App 分发的独立 CPython(构建期由 scripts/fetch-tts-python.mjs 抓取)
+/build/python/

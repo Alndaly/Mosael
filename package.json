@@ -11,12 +11,13 @@
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name open-studio-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on run_backend.py",
-    "build:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
-    "dist:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
+    "build:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
+    "dist:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
     "dev:backend": "cd backend && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port ${OPEN_STUDIO_BACKEND_PORT:-8800} --reload",
-    "dev": "pnpm --dir frontend electron:dev"
+    "dev": "pnpm --dir frontend electron:dev",
+    "fetch:tts-python": "node scripts/fetch-tts-python.mjs"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -49,6 +50,10 @@
       {
         "from": "agent-sidecar/dist/sidecar.cjs",
         "to": "agent-sidecar/sidecar.cjs"
+      },
+      {
+        "from": "build/python",
+        "to": "python"
       }
     ],
     "mac": {

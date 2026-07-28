@@ -114,6 +114,16 @@ async function ensureBackend() {
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
     backendEnv.OPEN_STUDIO_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
     backendEnv.OPEN_STUDIO_AGENT_BIN_NODE = process.execPath;
+    // 声音克隆的运行环境由后端在用户数据目录里自建(见 domain/tts_config.MANAGED_TTS_VENV),
+    // 但打包版后端是 PyInstaller 冻结二进制,建不了 venv——所以把随包分发的独立解释器指给它。
+    // 只带解释器(~40MB),torch 等数 GB 依赖点「下载」时才装,不进安装包。
+    const fsMod = require("node:fs");
+    const ttsPython = path.join(
+      process.resourcesPath,
+      "python",
+      process.platform === "win32" ? "python.exe" : path.join("bin", "python3"),
+    );
+    if (fsMod.existsSync(ttsPython)) backendEnv.OPEN_STUDIO_TTS_BASE_PYTHON = ttsPython;
   }
   backend = spawn(command, args, {
     cwd,

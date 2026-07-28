@@ -79,6 +79,22 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 - `browser_profiles` / `browser_sessions` / `browser_actions` — 浏览器池:持久登录身份、会话(租约)、待执行动作队列
 - `notifications` — 每用户一行,`type` 含 `team`(为协作申请预留)
 
+### 声音克隆的运行环境由 App 托管
+
+f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**。全部预装会把安装包
+从 ~700MB 顶到约 4GB,而多数用户不用声音克隆;但要求用户自己 `pip install` 再来设置里填解释器
+路径,又把一个可选功能变成了配置作业。所以拆成两半:
+
+- **随包只带解释器**(`build/python`,~48MB,由 `pnpm fetch:tts-python` 在构建期抓取)。
+  打包版后端是 PyInstaller 冻结二进制、`sys.executable` 指向自己**建不了 venv**,所以壳经
+  `OPEN_STUDIO_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。
+- **重的部分按需装**:用户点「下载」时 `ensure_engine_runtime` 用那个解释器在
+  `~/.open-studio/tts/venv` 建环境、装引擎依赖,再拉模型权重。顺序不能反——权重是用那个环境里的
+  huggingface_hub 拉的。
+
+探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
+之后自动可用。设置页的「TTS 解释器」因此是**高级覆盖项**,留空是常态。
+
 ## 预览与导出:两个渲染器,一份契约
 
 画面有两套渲染实现,而且**只能有两套**:

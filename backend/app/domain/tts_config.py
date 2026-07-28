@@ -10,6 +10,8 @@ from pathlib import Path
 
 from app.core.config import settings
 
+_WINDOWS = __import__("sys").platform == "win32"
+
 SINGLETON_ID = "default"
 
 # Model-download source → the HF endpoint the worker/download subprocess should use.
@@ -19,11 +21,46 @@ HF_ENDPOINTS = {
     "modelscope": "https://huggingface.co",  # f5-tts pulls from HF; modelscope is a fish path
 }
 
+# App 托管的 TTS 运行环境:两个引擎(f5-tts / fish-speech)共用这一个 venv。
+#
+# 用户**不需要**自己准备 Python。点「下载」时后端用随 App 分发的独立解释器在这里建 venv 并
+# 装引擎包,再拉模型权重。设置页那个「TTS 解释器」输入框因此降级为高级覆盖项——留空是常态。
+#
+# 为什么不把引擎包直接打进安装包:f5-tts / fish-speech 都要 torch + torchaudio + transformers,
+# 实测 2.5–3.5 GB。预装会让安装包从 ~700MB 涨到约 4GB,而绝大多数用户根本不用声音克隆。
+# 随包只带一个 ~40MB 的解释器,重的部分按需落到用户数据目录,是同样"零配置"下便宜十倍的做法。
+MANAGED_TTS_VENV = settings.data_dir / "tts" / "venv"
+
 # App-managed Fish Speech install: the one-click download fetches the official source
 # checkout + s2-pro weights here, so real synthesis works on a fresh machine without any
 # manual path config (Settings paths still override).
 MANAGED_FISH_REPO = settings.data_dir / "tts" / "fish-speech-src"
 MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
+
+
+def managed_venv_python() -> Path:
+    """托管 venv 里的解释器路径(不保证存在)。"""
+    return MANAGED_TTS_VENV / ("Scripts" if _WINDOWS else "bin") / ("python.exe" if _WINDOWS else "python")
+
+
+def base_python() -> str:
+    """用来**创建**托管 venv 的解释器。找不到可用的返回空串。
+
+    打包版的后端是 PyInstaller 冻结二进制,`sys.executable` 指向它自己,建不了 venv——所以壳
+    会把随包分发的独立解释器路径经 OPEN_STUDIO_TTS_BASE_PYTHON 注入进来。开发时退回本后端的
+    venv 解释器(它是真 Python,建得了 venv);都没有再退到系统 python3。
+    """
+    import os
+    import shutil
+    import sys
+
+    injected = os.environ.get("OPEN_STUDIO_TTS_BASE_PYTHON", "").strip()
+    if injected and Path(injected).is_file():
+        return injected
+    if not getattr(sys, "frozen", False) and Path(sys.executable).is_file():
+        return sys.executable
+    found = shutil.which("python3") or shutil.which("python")
+    return found or ""
 # Marker files that prove each managed dir is a real checkout / real weights (not a
 # half-cloned or empty dir): a module the worker actually imports, and the codec weights.
 # (fish_speech is an implicit-namespace package — no root __init__.py — so anchor deeper.)

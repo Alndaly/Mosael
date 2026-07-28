@@ -103,9 +103,7 @@ export function VoiceCloneSection() {
             <AlertDescription>
               {ready
                 ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
-                : t("voiceCloneNotReady")
-                    .replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")
-                    .replace("{install}", isFish ? t("voiceCloneInstallFish") : t("voiceCloneInstallF5"))}
+                : t("voiceCloneNotReady").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")}
             </AlertDescription>
           </Alert>
         )}
