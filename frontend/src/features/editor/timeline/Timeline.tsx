@@ -68,7 +68,9 @@ export function Timeline({
   onMoveTrack,
   onRemoveTrack,
   onDeleteClip,
+  onDeleteClips,
   onRippleDeleteClip,
+  onRippleDeleteClips,
   onSplitClip,
   onSplitClipAt,
   onDuplicateClip,
@@ -89,7 +91,10 @@ export function Timeline({
   /** Second argument is how many clips are on the track, so the caller can confirm first. */
   onRemoveTrack?: (trackId: string, clipCount: number) => void;
   onDeleteClip?: (clipId: string) => void;
+  /** 多选批量删除:一条操作、一步撤销。缺省时回落为逐个删(会变成 N 步撤销)。 */
+  onDeleteClips?: (clipIds: string[]) => void;
   onRippleDeleteClip?: (clipId: string) => void;
+  onRippleDeleteClips?: (clipIds: string[]) => void;
   onSplitClip?: (clipId: string) => void;
   onSplitClipAt?: (clipId: string, srcTime: number) => void;
   onDuplicateClip?: (clipId: string) => void;
@@ -695,7 +700,11 @@ export function Timeline({
                   size="icon"
                   className="h-7 w-7"
                   disabled={!selectedClipIds.length}
-                  onClick={() => selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))}
+                  onClick={() =>
+                    onRippleDeleteClips
+                      ? onRippleDeleteClips(selectedClipIds)
+                      : selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))
+                  }
                   aria-label={t("rippleDelete")}
                 >
                   <Waves size={14} />
@@ -712,7 +721,9 @@ export function Timeline({
                   size="icon"
                   className="h-7 w-7"
                   disabled={!selectedClipIds.length}
-                  onClick={() => selectedClipIds.forEach((clipId) => onDeleteClip(clipId))}
+                  onClick={() =>
+                    onDeleteClips ? onDeleteClips(selectedClipIds) : selectedClipIds.forEach((clipId) => onDeleteClip(clipId))
+                  }
                   aria-label={t("deleteClip")}
                 >
                   <Trash2 size={14} />

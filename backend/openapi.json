@@ -3945,6 +3945,112 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/delete-batch": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Delete Clips Batch",
+        "description": "多选后一次删除:一条操作,撤销一步全部找回。",
+        "operationId": "delete_clips_batch_api_sequences__sequence_id__clips_delete_batch_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipIdsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/ripple-delete-batch": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Ripple Delete Clips Batch",
+        "description": "多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。",
+        "operationId": "ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipIdsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/move-batch": {
       "patch": {
         "tags": [
@@ -12437,6 +12543,24 @@
         },
         "type": "object",
         "title": "BrowserProfileUpdate"
+      },
+      "ClipIdsRequest": {
+        "properties": {
+          "clip_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Clip Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_ids"
+        ],
+        "title": "ClipIdsRequest",
+        "description": "多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。"
       },
       "ClipMoveEntry": {
         "properties": {

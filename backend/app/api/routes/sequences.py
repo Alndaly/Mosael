@@ -14,6 +14,7 @@ from app.api.schemas import (
     InsertTextClipRequest,
     JobOut,
     MoveClipRequest,
+    ClipIdsRequest,
     MoveClipsBatchRequest,
     SequenceCreate,
     SequenceOut,
@@ -42,6 +43,8 @@ from app.domain.sequences.operations import (
     CutClipRange,
     CutClipRanges,
     DeleteClip,
+    DeleteClipsBatch,
+    RippleDeleteClipsBatch,
     InsertClip,
     GenerateSubtitles,
     InsertTextClip,
@@ -69,6 +72,8 @@ from app.domain.sequences.operations import (
     cut_clip_range as cut_clip_range_operation,
     cut_clip_ranges as cut_clip_ranges_operation,
     delete_clip as delete_clip_operation,
+    delete_clips_batch as delete_clips_batch_operation,
+    ripple_delete_clips_batch as ripple_delete_clips_batch_operation,
     remove_track as remove_track_operation,
     ripple_delete_clip as ripple_delete_clip_operation,
     detach_clip_audio as detach_clip_audio_operation,
@@ -176,6 +181,24 @@ def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession, user: 
 def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
+    return _sequence_response(_get_sequence(db, sequence_id))
+
+
+@router.post("/sequences/{sequence_id}/clips/delete-batch", response_model=SequenceOut)
+def delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: DbSession, user: CurrentUser) -> Response:
+    """多选后一次删除:一条操作,撤销一步全部找回。"""
+    require_sequence_access(db, user, sequence_id)
+    _apply(lambda: delete_clips_batch_operation(db, sequence_id, DeleteClipsBatch(clip_ids=tuple(body.clip_ids))))
+    return _sequence_response(_get_sequence(db, sequence_id))
+
+
+@router.post("/sequences/{sequence_id}/clips/ripple-delete-batch", response_model=SequenceOut)
+def ripple_delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: DbSession, user: CurrentUser) -> Response:
+    """多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。"""
+    require_sequence_access(db, user, sequence_id)
+    _apply(
+        lambda: ripple_delete_clips_batch_operation(db, sequence_id, RippleDeleteClipsBatch(clip_ids=tuple(body.clip_ids)))
+    )
     return _sequence_response(_get_sequence(db, sequence_id))
 
 

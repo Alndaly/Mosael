@@ -21,6 +21,8 @@ UNDOABLE_KINDS = (
     "move_clips_batch",
     "trim_clip",
     "delete_clip",
+    "delete_clips_batch",
+    "ripple_delete_clips_batch",
     "apply_transcript_edit",
     "add_track",
     "remove_track",
@@ -164,6 +166,16 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         _undo_ripple_room(db, payload)
     elif operation.kind == "delete_clip":
         _restore_clip_row(db, sequence, payload)
+    elif operation.kind == "delete_clips_batch":
+        for entry in payload["deleted"]:
+            _restore_clip_row(db, sequence, entry)
+    elif operation.kind == "ripple_delete_clips_batch":
+        # 逆序回放:删除时是从后往前删的,撤销要从前往后还原,位移才能层层退回。
+        for entry in reversed(payload["entries"]):
+            for shifted in entry["shifted"]:
+                clip = _require_clip_row(db, shifted["clip_id"])
+                clip.timeline_start = shifted["previous_timeline_start"]
+            _restore_clip_row(db, sequence, entry["original"])
     elif operation.kind == "move_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["previous_timeline_start"]
@@ -270,6 +282,15 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         _redo_ripple_room(db, sequence, payload)
     elif operation.kind == "delete_clip":
         _delete_clip_row(db, payload["clip_id"])
+    elif operation.kind == "delete_clips_batch":
+        for entry in payload["deleted"]:
+            _delete_clip_row(db, entry["clip_id"])
+    elif operation.kind == "ripple_delete_clips_batch":
+        for entry in payload["entries"]:
+            _delete_clip_row(db, entry["original"]["clip_id"])
+            for shifted in entry["shifted"]:
+                clip = _require_clip_row(db, shifted["clip_id"])
+                clip.timeline_start = shifted["timeline_start"]
     elif operation.kind == "move_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]

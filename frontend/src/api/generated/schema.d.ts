@@ -1415,6 +1415,46 @@ export interface paths {
         patch: operations["move_clip_api_sequences__sequence_id__clips__clip_id__move_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/delete-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Clips Batch
+         * @description 多选后一次删除:一条操作,撤销一步全部找回。
+         */
+        post: operations["delete_clips_batch_api_sequences__sequence_id__clips_delete_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/ripple-delete-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ripple Delete Clips Batch
+         * @description 多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。
+         */
+        post: operations["ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/move-batch": {
         parameters: {
             query?: never;
@@ -4038,6 +4078,14 @@ export interface components {
             proxy?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /**
+         * ClipIdsRequest
+         * @description 多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。
+         */
+        ClipIdsRequest: {
+            /** Clip Ids */
+            clip_ids: string[];
         };
         /** ClipMoveEntry */
         ClipMoveEntry: {
@@ -9753,6 +9801,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_clips_batch_api_sequences__sequence_id__clips_delete_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipIdsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipIdsRequest"];
             };
         };
         responses: {

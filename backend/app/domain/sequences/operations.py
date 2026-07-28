@@ -352,11 +352,95 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
 
 
 @dataclass(frozen=True)
+class DeleteClipsBatch:
+    """多选后一次删除。整批一条操作,撤销一步全部找回。"""
+
+    clip_ids: tuple[str, ...]
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
+class RippleDeleteClipsBatch:
+    """多选后一次波纹删除(删掉并让同轨后续左移补位)。"""
+
+    clip_ids: tuple[str, ...]
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
 class RippleDeleteClip:
     """Delete a clip and shift later clips on the same track left to close the gap."""
 
     clip_id: str
     actor_id: str | None = None
+
+
+def delete_clips_batch(db: Session, sequence_id: str, op: DeleteClipsBatch) -> Sequence:
+    """一次删除多个片段(多选后按 Delete)。
+
+    与 move_clips_batch 同理:循环调 delete_clip 会落成 N 条操作,撤销一次只找回一个,
+    删 5 段要按 5 次 ⌘Z。整批记一条,撤销一步全部找回。
+    """
+    sequence = _require_sequence(db, sequence_id)
+    if not op.clip_ids:
+        raise SequenceDomainError("No clips to delete")
+    # 全部先解析,任一不存在就整批不删——留下删了一半的时间线比直接报错更难收拾。
+    clips = [_require_clip(db, sequence_id, clip_id) for clip_id in dict.fromkeys(op.clip_ids)]
+    deleted = [_clip_payload(clip) for clip in clips]
+    for clip in clips:
+        db.delete(clip)
+    _record_operation(
+        db,
+        sequence,
+        kind="delete_clips_batch",
+        payload={"deleted": deleted},
+        summary={"operation": "delete_clips_batch", "count": len(deleted)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def ripple_delete_clips_batch(db: Session, sequence_id: str, op: RippleDeleteClipsBatch) -> Sequence:
+    """一次波纹删除多个片段:删掉并让同轨后续片段左移补位,整批一条操作。"""
+    sequence = _require_sequence(db, sequence_id)
+    if not op.clip_ids:
+        raise SequenceDomainError("No clips to delete")
+    clips = [_require_clip(db, sequence_id, clip_id) for clip_id in dict.fromkeys(op.clip_ids)]
+    # 从后往前删:先删靠前的会把后面的目标一起左移,后续的 anchor 就全错位了。
+    clips.sort(key=lambda c: c.timeline_start, reverse=True)
+
+    entries: list[dict[str, Any]] = []
+    for clip in clips:
+        gap = timeline_span(clip)
+        anchor = clip.timeline_start
+        original = _clip_payload(clip)
+        shifted: list[dict[str, Any]] = []
+        followers = db.scalars(
+            select(Clip).where(Clip.track_id == clip.track_id, Clip.id != clip.id, Clip.timeline_start >= anchor)
+        )
+        for other in followers:
+            new_start = max(anchor, other.timeline_start - gap)
+            if new_start == other.timeline_start:
+                continue
+            shifted.append(
+                {"clip_id": other.id, "previous_timeline_start": other.timeline_start, "timeline_start": new_start}
+            )
+            other.timeline_start = new_start
+        db.delete(clip)
+        db.flush()  # 让下一轮的 followers 查询看到本轮的位移与删除
+        entries.append({"original": original, "shifted": shifted})
+
+    _record_operation(
+        db,
+        sequence,
+        kind="ripple_delete_clips_batch",
+        payload={"entries": entries},
+        summary={"operation": "ripple_delete_clips_batch", "count": len(entries)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
 
 
 def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> Sequence:

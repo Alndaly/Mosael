@@ -361,6 +361,22 @@ export function moveClip(
   });
 }
 
+/** 多选批量删除:一条操作、一步撤销(逐个调 deleteClip 会变成 N 步撤销)。 */
+export function deleteClipsBatch(sequenceId: string, clipIds: string[]): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/delete-batch`, {
+    method: "POST",
+    body: JSON.stringify({ clip_ids: clipIds }),
+  });
+}
+
+/** 多选批量波纹删除:同轨后续左移补位,同样一条操作、一步撤销。 */
+export function rippleDeleteClipsBatch(sequenceId: string, clipIds: string[]): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/ripple-delete-batch`, {
+    method: "POST",
+    body: JSON.stringify({ clip_ids: clipIds }),
+  });
+}
+
 /** 框选整组拖动:一次请求、一条操作、一步撤销(逐个调 moveClip 会变成 N 步撤销)。 */
 export function moveClipsBatch(
   sequenceId: string,

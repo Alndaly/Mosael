@@ -318,6 +318,12 @@ class ClipMoveEntry(BaseModel):
     track_id: str | None = None
 
 
+class ClipIdsRequest(BaseModel):
+    """多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。"""
+
+    clip_ids: list[str] = Field(min_length=1)
+
+
 class MoveClipsBatchRequest(BaseModel):
     """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
 

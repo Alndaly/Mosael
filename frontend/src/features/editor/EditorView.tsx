@@ -17,7 +17,9 @@ import {
   cutClipRange,
   cutClipRanges,
   deleteClip,
+  deleteClipsBatch,
   rippleDeleteClip,
+  rippleDeleteClipsBatch,
   exportSequence,
   type ExportParams,
   importAsset,
@@ -327,21 +329,17 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const deleteClipsMutation = useMutation({
-    mutationFn: async (clipIds: string[]) => {
-      for (const clipId of clipIds) await deleteClip(sequence!.id, clipId);
-    },
+    // 一条请求、一条操作、一步撤销。逐个删会落成 N 条 SequenceOperation,⌘Z 一次只找回一段。
+    mutationFn: (clipIds: string[]) => deleteClipsBatch(sequence!.id, clipIds),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
     },
   });
   const rippleDeleteMutation = useMutation({
-    mutationFn: async (clipIds: string[]) => {
-      // Later clips first so earlier ripples don't move the remaining targets.
-      const byStart = new Map(allClips.map((clip) => [clip.id, clip.timeline_start]));
-      const ordered = [...clipIds].sort((a, b) => (byStart.get(b) ?? 0) - (byStart.get(a) ?? 0));
-      for (const clipId of ordered) await rippleDeleteClip(sequence!.id, clipId);
-    },
+    // 顺序由后端负责(它内部从后往前删,先删靠前的会把后面的目标带偏);这里只管整批提交,
+    // 换来一条操作、一步撤销。
+    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(sequence!.id, clipIds),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
@@ -1012,6 +1010,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           }}
           onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
           onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}
+          onDeleteClips={(clipIds) => deleteClipsMutation.mutate(clipIds)}
+          onRippleDeleteClips={(clipIds) => rippleDeleteMutation.mutate(clipIds)}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
