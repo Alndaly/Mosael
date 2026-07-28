@@ -85,7 +85,7 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 
 | | 预览 | 导出 |
 | --- | --- | --- |
-| 在哪 | 浏览器,`CanvasCompositor`(WebCodecs 解 720p 代理 → canvas 2D) | 后端,`render_plan.py` + `render_executor.py` → 单次 ffmpeg |
+| 在哪 | 浏览器,`CanvasCompositor`(WebCodecs 解 720p 代理 → canvas 2D)——**唯一路径,无 `<video>` 兜底** | 后端,`render_plan.py` + `render_executor.py` → 单次 ffmpeg |
 | 为什么不能挪 | 要本地同步跑到 60fps,要渲染**尚未提交**的拖拽草稿 | 要无头、跨重启存活、可被外部 worker 认领([ADR-0002](adr/0002-claim-report-worker-protocol.md)) |
 
 两个约束各自成立,所以合并成一个渲染器不是可选项。一致性按**谁是权威**分层处理
@@ -102,6 +102,12 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 - **文字 —— 已经同源一致**:导出侧 `text_render.TextRasterizer` 用无头 Chromium 加载
   **app 自己构建出的 CSS 与 @font-face** 渲成透明 PNG 再由 ffmpeg 叠加,字体环境与预览完全相同。
   拿不到 Chromium / 前端 dist 时优雅回落 libass。
+
+**预览侧不再有第二条画法**。曾经并存一条 `<video>`/`<img>` 元素路作兜底,两条路的取景、层级与
+调色都对不齐,「预览长什么样」于是取决于当时走了哪条。现在画不出来时**明说**而不是降级——
+`previewReadiness.ts` 把状态判定成 转码中 / 生成失败 / 本机解不动 / 环境不支持,由
+`PreviewUnavailable` 铺在监视器上,后两种给「重新生成代理」按钮,转码中按秒轮询自愈。
+判定只看**播放头当前要画的**素材,末尾一个还在转码的片段不会挡住开头能放的部分。
 
 > 想要逐像素精确的画面,行业惯例(PR / DaVinci)是**渲染预览**——走真正的导出管线渲一段来看,
 > 而不是让两套近似互相追。

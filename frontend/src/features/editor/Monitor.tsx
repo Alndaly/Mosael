@@ -8,11 +8,11 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
-import { AudioElement } from "@/features/editor/AudioElement";
-import { MonitorElement } from "@/features/editor/MonitorElement";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
 import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/WebAudioMixer";
-import { compositorSupported, useCompositorEnabled } from "@/features/editor/playback/compositorFlag";
+import { compositorSupported } from "@/features/editor/playback/compositorFlag";
+import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
+import { blockingPreviewState } from "@/features/editor/playback/previewReadiness";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform, type GainKeyframe } from "@/features/editor/keyframes";
@@ -20,9 +20,12 @@ import { TransformOverlay, readTransform, transformCss, type Transform } from "@
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
- * MVP preview: an rAF clock drives the playhead; the <video> element renders
- * whichever video-track clip sits under it and is continuously re-synced.
- * Gaps render as black, matching export semantics.
+ * 监视器。画面**只有一条路**:WebCodecs 解代理 → CanvasCompositor 合成到一张 canvas。
+ *
+ * 曾经还有一条 `<video>`/`<img>` 元素路作兜底,已删除——两条路的取景、层级、调色都对不齐,
+ * 于是"预览长什么样"取决于当时走了哪条,同一个问题要按两套语义各查一遍。画不出来时改为
+ * **明说**(PreviewUnavailable:转码中 / 失败 / 本机解不动 / 环境不支持),而不是悄悄退化成
+ * 另一套画法。播放头由 WebAudioMixer 的 AudioContext 驱动(唯一主时钟)。
  */
 /** How far ahead of the playhead to warm an upcoming clip's decoder. One short-GOP proxy's
     fetch+parse+first-GOP fits comfortably inside this, so a cut into it never flashes black. */
@@ -42,6 +45,7 @@ export function Monitor({
   assets,
   onSetTransform,
   onSetText,
+  onRefreshAssets,
 }: {
   sequence: Sequence;
   /** In-progress style from the subtitle panel, so dragging a slider previews live. */
@@ -50,6 +54,9 @@ export function Monitor({
   onSetTransform?: (clipId: string, transform: Transform) => void;
   /** 双击花字在画布上就地编辑文字后提交。 */
   onSetText?: (clipId: string, text: string) => void;
+  /** 重新拉取素材。代理转码中时按秒轮询,重试代理后也立刻调一次——服务端实体归 React Query
+      持有(见 ARCHITECTURE 的前端约定),所以 Monitor 只发信号,不自己取数。 */
+  onRefreshAssets?: () => void;
 }) {
   const t = useI18n();
   const playhead = useEditorStore((state) => state.playhead);
@@ -64,8 +71,6 @@ export function Monitor({
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const loadedAssetRef = React.useRef<string | null>(null);
 
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
   const videoTracks = React.useMemo(
@@ -135,7 +140,6 @@ export function Monitor({
     [sequence.width, sequence.height],
   );
   const fitStyle: React.CSSProperties = { objectFit: fillMode === "cover" ? "cover" : "contain" };
-  const bgVideoRef = React.useRef<HTMLVideoElement | null>(null);
   // On-canvas direct manipulation: while dragging a handle, `draft` overrides the selected clip's
   // saved transform so the media tracks the box live; committed on release via onSetTransform.
   // (selectedActive + clipTransformStyle are derived below, after the overlay elements.)
@@ -181,30 +185,10 @@ export function Monitor({
     return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
   const isImage = activeAsset?.kind === "image";
-  // WebCodecs compositor (opt-in): composite every active video/image clip onto one canvas.
-  // The base <video> stays mounted (hidden) for audio until WebAudio mixing lands in S3.
-  const compositorOn = useCompositorEnabled() && compositorSupported();
-  // Active audio played via <AudioElement> (non-compositor path): every audio-track clip PLUS
-  // every overlay video-track clip's audio. The bottom "base" video track's audio is carried by
-  // the base <video> element, so a clip on ANY track sounds — not just the base track.
-  const activeAudioClips = React.useMemo(() => {
-    const list: { clip: Clip; trackMuted: boolean }[] = [];
-    for (const track of videoTracks.slice(0, -1)) {
-      for (const clip of track.clips ?? []) {
-        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue;
-        if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) list.push({ clip, trackMuted: Boolean(track.muted) });
-      }
-    }
-    for (const track of audioTracks) {
-      for (const clip of track.clips ?? []) {
-        if (!clip.asset_id) continue;
-        if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) list.push({ clip, trackMuted: Boolean(track.muted) });
-      }
-    }
-    return list;
-  }, [videoTracks, audioTracks, assetById, playhead]);
-  // Every active clip on an overlay video track (V2+), z-ordered by track — each renders as a
-  // free canvas element (MonitorElement self-syncs). The base V1 clip stays the audio/scopes/blur owner.
+  // 画面引擎:WebCodecs 解代理 → 一张 canvas 合成全部活跃视频/图片片段。没有第二条路。
+  const webCodecsOk = compositorSupported();
+  // 上层视频轨(V2+)当前活跃的片段,按轨道 z 序。合成器把它们和 base 一起画在同一张 canvas 上;
+  // 这里保留这份列表是给变换手柄用的(选中哪个元素就把手柄挂到哪个上)。
   const activeOverlayClips = React.useMemo(
     () => overlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
     [overlayClips, playhead],
@@ -291,37 +275,30 @@ export function Monitor({
   const markUndecodable = React.useCallback((assetId: string) => {
     setUndecodable((current) => (current.has(assetId) ? current : new Set(current).add(assetId)));
   }, []);
-  // Which engine plays this SEQUENCE — deliberately not "what is under the playhead right now".
-  //
-  // Judging it per-frame meant every gap (no active layer) and every not-yet-proxied clip
-  // switched engines mid-playback. WebAudioMixer is mounted only on the compositor path and
-  // owns its AudioContext, so each switch closed the context and re-fetched and re-decoded
-  // every clip's audio from scratch — an audible dropout at every gap, a fresh AudioContext
-  // each time, and the master clock handed back and forth. It also defeated the idle decoder
-  // pool: unmounting the compositor closes every parked source, so scrubbing over a gap threw
-  // away exactly the cache that pool exists to keep.
-  //
-  // Audio cannot simply be decoupled from video here: the element path unmutes its <video>
-  // whenever the compositor is off, so a mixer running alongside it would play everything
-  // twice. The engine choice has to be one decision, and a stable one.
-  const compositorAssets = React.useMemo(() => {
+  // 播放头**当前真正要画**的素材。按整条序列判定过一次(为了让引擎选择稳定,避免每帧在
+  // 合成器/元素路之间来回切),但元素路删掉之后引擎只有一个,不会再切,所以这里回到逐帧判定
+  // ——时间线末尾一个还在转码的片段,不该把开头已经能放的部分一起挡住。
+  const activeVisualAssets = React.useMemo(() => {
     const seen = new Map<string, Asset>();
-    for (const track of videoTracks) {
-      for (const clip of track.clips ?? []) {
-        const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
-        if (asset && (asset.kind === "video" || asset.kind === "image")) seen.set(asset.id, asset);
-      }
+    for (const clip of [activeClip, ...activeOverlayClips]) {
+      const asset = clip?.asset_id ? assetById.get(clip.asset_id) : null;
+      if (asset && (asset.kind === "video" || asset.kind === "image")) seen.set(asset.id, asset);
     }
     return [...seen.values()];
-  }, [videoTracks, assetById]);
-  const compositorActive =
-    compositorOn &&
-    compositorAssets.every(
-      (asset) =>
-        asset.kind === "image" ||
-        ((asset.media_info as { proxy_status?: string } | undefined)?.proxy_status === "ready" &&
-          !undecodable.has(asset.id)),
-    );
+  }, [activeClip, activeOverlayClips, assetById]);
+  // 画不出来的原因(全部就绪则为 null)。环境不支持 WebCodecs 时压过一切:那是整个预览引擎缺失,
+  // 报某个素材"转码中"会把用户引到错误的方向。
+  const previewBlock = React.useMemo(
+    () => (webCodecsOk ? blockingPreviewState(activeVisualAssets, undecodable) : { state: "unsupported" as const, assets: [] }),
+    [webCodecsOk, activeVisualAssets, undecodable],
+  );
+  // 代理还在转时轮询素材:否则转好了界面也不会自己活过来,用户只能手动刷新。
+  const pendingProxy = previewBlock?.state === "transcoding";
+  React.useEffect(() => {
+    if (!pendingProxy || !onRefreshAssets) return;
+    const timer = window.setInterval(onRefreshAssets, 2000);
+    return () => window.clearInterval(timer);
+  }, [pendingProxy, onRefreshAssets]);
   // EVERY audio-bearing clip (base video-track video clips + all audio-track clips) fed to the
   // WebAudio mixer, which filters by the live playhead itself. Passing the full set — not just
   // the currently-active clips — means a clip that comes up under the advancing playhead is
@@ -353,70 +330,6 @@ export function Monitor({
     return list;
   }, [videoTracks, audioTracks, assetById]);
 
-  // Playback clock. Interval-based (not rAF) so it keeps running when the
-  // window is occluded or backgrounded — audio keeps playing there too.
-  // While the compositor is active the WebAudio mixer's AudioContext is the master
-  // clock instead, so this one stands down to avoid two clocks fighting.
-  React.useEffect(() => {
-    if (!playing || compositorActive) return;
-    let last = performance.now();
-    const interval = window.setInterval(() => {
-      const now = performance.now();
-      const dt = (now - last) / 1000;
-      last = now;
-      const state = useEditorStore.getState();
-      const next = state.playhead + dt * state.playbackRate;
-      if (totalDuration > 0 && next >= totalDuration) {
-        if (state.loop) {
-          state.setPlayhead(0);
-          return;
-        }
-        state.setPlayhead(totalDuration);
-        state.setPlaying(false);
-        return;
-      }
-      state.setPlayhead(next);
-    }, 40);
-    return () => window.clearInterval(interval);
-  }, [playing, totalDuration, compositorActive]);
-
-  // Keep the video element in lockstep with the clock.
-  React.useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (!activeClip || !activeAsset || isImage) {
-      if (!video.paused) video.pause();
-      return;
-    }
-    if (loadedAssetRef.current !== activeAsset.id) {
-      loadedAssetRef.current = activeAsset.id;
-      video.src = assetFileUrl(activeAsset.id);
-    }
-    const clipSpeed = activeClip.speed || 1;
-    const desired = activeClip.src_in + (playhead - activeClip.timeline_start) * clipSpeed;
-    if (Math.abs(video.currentTime - desired) > 0.18) {
-      video.currentTime = desired;
-    }
-    video.playbackRate = playbackRate * clipSpeed;
-    // The clip carries its own audio (like PR/DaVinci): fold its gain/mute into the master volume.
-    const clipGain = activeClip.muted ? 0 : Math.min(1, Math.max(0, activeClip.gain ?? 1));
-    video.volume = (masterMuted ? 0 : volume) * clipGain;
-    if (playing && video.paused) {
-      video.play().catch(() => undefined);
-    } else if (!playing && !video.paused) {
-      video.pause();
-    }
-    // 模糊背景:第二路静音视频松同步(装饰用,不必逐帧精确)
-    const bg = bgVideoRef.current;
-    if (bg && fillMode === "blur") {
-      if (bg.src !== video.src) bg.src = video.src;
-      if (Math.abs(bg.currentTime - desired) > 0.3) bg.currentTime = desired;
-      bg.playbackRate = video.playbackRate;
-      bg.muted = true;
-      if (playing && bg.paused) bg.play().catch(() => undefined);
-      else if (!playing && !bg.paused) bg.pause();
-    }
-  }, [playhead, playing, activeClip, activeAsset, isImage, playbackRate, volume, masterMuted]);
 
   const frameStep = 1 / (sequence.fps || 30);
   const seekFromScrub = (clientX: number) => {
@@ -454,24 +367,10 @@ export function Monitor({
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_auto]">
-      {/* Audio path: the WebAudio mixer owns everything (base clip + audio tracks) while the
-          compositor is active; otherwise one <audio> per active audio-track clip. */}
-      {compositorActive ? (
-        <WebAudioMixer sources={audioSources} totalDuration={totalDuration} />
-      ) : (
-        activeAudioClips.map(({ clip, trackMuted }) => (
-          <AudioElement
-            key={clip.id}
-            clip={clip}
-            playing={playing}
-            playhead={playhead}
-            playbackRate={playbackRate}
-            volume={volume}
-            masterMuted={masterMuted}
-            trackMuted={trackMuted}
-          />
-        ))
-      )}
+      {/* 音频只有一条路:WebAudio 混音器,它的 AudioContext 同时是时间线的主时钟。
+          曾经还有一条「每个活跃音频片段一个 <audio>」的元素路,随画面元素路一并删除——
+          两条路并存时混音器与 <video> 会各放一遍,所以引擎选择必须是唯一且稳定的一个。 */}
+      <WebAudioMixer sources={audioSources} totalDuration={totalDuration} />
       {/* 曲线预览滤镜:逐通道 feComponentTransfer 查表,cssFilter 里以 url(#id) 引用。 */}
       {curveTables && (
         <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
@@ -486,50 +385,20 @@ export function Monitor({
       )}
       <div className="grid min-h-0 place-items-center p-3 [container-type:size] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-black [&:fullscreen::backdrop]:bg-black" ref={monitorStageRef}>
         <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-sm bg-black [container-type:inline-size] w-[min(100cqw,calc(100cqh*var(--frame-ar,1.7778)))] [:fullscreen_&]:rounded-none" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
-          {fillMode === "blur" && activeClip && (
-            <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden>
-              {isImage && activeAsset ? (
-                <img className="h-full w-full scale-[1.15] object-cover [filter:blur(28px)_brightness(0.75)]" src={assetFileUrl(activeAsset.id)} alt="" />
-              ) : (
-                <video ref={bgVideoRef} className="h-full w-full scale-[1.15] object-cover [filter:blur(28px)_brightness(0.75)]" muted playsInline preload="auto" />
-              )}
-            </div>
-          )}
-          {/* Base video: hidden while the compositor is drawing (canvas covers it) but kept
-              mounted so it still carries preview audio until WebAudio mixing lands in S3. */}
-          <video
-            ref={videoRef}
+          {/* fillMode=blur 的模糊背景由 paintScene 直接画在同一张 canvas 上(见 scenePaint),
+              这里不再另铺一层 DOM 视频——那是元素路的做法,两者会叠出双重背景。 */}
+          <CanvasCompositor
+            onSourceFailed={markUndecodable}
+            layers={compositorLayers}
+            prewarmLayers={prewarmLayers}
+            width={sequence.width}
+            height={sequence.height}
+            fillMode={fillMode}
             className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
-            style={{
-              display: activeClip && !isImage ? "block" : "none",
-              opacity: compositorActive ? 0 : undefined,
-              filter: cssFilter || undefined,
-              ...fitStyle,
-              ...clipTransformStyle,
-            }}
-            muted={compositorActive}
-            playsInline
-            preload="auto"
+            style={fitStyle}
           />
-          {activeClip && isImage && activeAsset && !compositorActive && (
-            <img
-              className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
-              src={assetFileUrl(activeAsset.id)}
-              alt=""
-              style={{ filter: cssFilter || undefined, ...fitStyle, ...clipTransformStyle }}
-            />
-          )}
-          {compositorActive && (
-            <CanvasCompositor
-              onSourceFailed={markUndecodable}
-              layers={compositorLayers}
-              prewarmLayers={prewarmLayers}
-              width={sequence.width}
-              height={sequence.height}
-              fillMode={fillMode}
-              className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
-              style={fitStyle}
-            />
+          {previewBlock && (
+            <PreviewUnavailable state={previewBlock.state} assets={previewBlock.assets} onRetried={onRefreshAssets} />
           )}
           {!activeClip && (
             <div className="grid h-full w-full place-items-center bg-black object-contain">
@@ -624,23 +493,6 @@ export function Monitor({
               </div>
             );
           })}
-          {/* Overlay clips as free elements — skipped when the compositor draws them all on canvas. */}
-          {!compositorActive &&
-            activeOverlayClips.map((clip) => {
-              const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
-              if (!asset) return null;
-              return (
-                <MonitorElement
-                  key={clip.id}
-                  clip={clip}
-                  asset={asset}
-                  playhead={playhead}
-                  playing={playing}
-                  playbackRate={playbackRate}
-                  transformOverride={draftFor(clip.id)}
-                />
-              );
-            })}
           {selectedActive && onSetTransform && (
             <div className="pointer-events-none absolute inset-0 z-[4]" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay

@@ -943,6 +943,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           assets={assets.data ?? []}
           onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
           onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
+          onRefreshAssets={() => void qc.invalidateQueries({ queryKey: ["assets", workspace.id, project.id] })}
         />
       </section>
       {showInspector &&
