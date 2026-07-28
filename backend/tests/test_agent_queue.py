@@ -31,11 +31,21 @@ def _session(client):
 
 
 def _wait_idle(session_id: str, seconds: float = 8) -> str:
+    """真正空闲 = 状态非 running **且**队列已空。
+
+    只看状态是不够的:一个 turn 结束到队列里下一个 turn 启动之间有一段空隙,状态在那一瞬就是
+    idle。在那里返回,排队的 turn 就会在**下一个测试**里才真正跑起来——而下一个测试早已把
+    `host.run_turn` monkeypatch 成了自己的记录器,于是上个测试的提示词串进本测试的断言
+    (曾表现为 prompts == ['two', 'one', 'two', 'three'])。这类失败按测试顺序与机器速度
+    概率出现,查起来极贵,所以判据必须一次写对。
+    """
     deadline = time.time() + seconds
     while time.time() < deadline:
         with SessionLocal() as db:
-            status = db.get(AgentSession, session_id).status
-        if status != "running":
+            session = db.get(AgentSession, session_id)
+            status = session.status
+            pending = len(host.queued_messages(db, session))
+        if status != "running" and pending == 0:
             return status
         time.sleep(0.05)
     return "running"

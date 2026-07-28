@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.ai.agent.host import wait_for_idle_turns
 from app.core.config import settings
 from app.core.db import Base, engine, init_db
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key, issue_worker_key
@@ -42,6 +43,12 @@ def fresh_client(username: str = "tester") -> TestClient:
     exercising those routes means to assert.
     """
     _assert_disposable_data_dir()
+    # 先等在飞的 agent turn 跑完,再动 schema。turn 是 daemon 线程,请求返回后还在写库——
+    # 生产里无所谓(进程比 turn 活得久),但这里下一步就要 drop_all。不等的话上一个测试的 turn
+    # 会写进正在重建的库,表现为:turn 内部 FOREIGN KEY 失败、迁移时 duplicate column
+    # (inspect 读到的 schema 与实际不符)、或别的测试的消息串进本测试的断言里。
+    # 这三种症状都是概率性的,取决于测试顺序与机器速度——正是最难查的那类失败。
+    wait_for_idle_turns()
     Base.metadata.drop_all(bind=engine)
     init_db()
     issue_worker_key()

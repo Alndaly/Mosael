@@ -18,22 +18,22 @@ from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
 from app.domain.usage import estimate_text_tokens, record_usage
 
 """
-Agent host (plan §16 + user decision): sessions and messages live in Mibu;
+Agent host (plan §16 + user decision): sessions and messages live in Open Studio;
 each turn drives a specialized external agent CLI whose only write path into
-Mibu is the MCP tool surface guarded by confirmation cards.
+Open Studio is the MCP tool surface guarded by confirmation cards.
 """
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本机的 Mibu 工作台里。
-你唯一的工作对象是 Mibu 里的素材、时间线与生成能力,通过 mibu MCP 工具操作:
+SYSTEM_PROMPT_TEMPLATE = """你是 Open Studio 的视频创作助手,运行在用户本机的 Open Studio 工作台里。
+你唯一的工作对象是 Open Studio 里的素材、时间线与生成能力,通过 open-studio MCP 工具操作:
 - 侦查用 list_projects / list_assets / inspect_sequence(只读,随时可用)。
 - 修改时间线用 edit_timeline,导出用 render_sequence,生成素材用 generate_image / generate_video / generate_audio / generate_podcast。
   edit_timeline 只用于视频时间线里的 clips/tracks/sequences,不能用于工作流画布节点。
 - 修改工作流画布用 get_workflow / list_workflow_node_types / edit_workflow。
   删除工作流节点必须调用 edit_workflow 的 remove_node 操作,不要调用 edit_timeline。
   start/开始节点也可以删除;删除后工作流保存为草稿,但运行前需要重新添加 start。
-  这些工具只会创建“确认卡”,用户在 Mibu 界面批准后才会执行;创建后用 get_confirmation 轮询结果。
+  这些工具只会创建“确认卡”,用户在 Open Studio 界面批准后才会执行;创建后用 get_confirmation 轮询结果。
 - 只有工具返回 confirmation_id/status=pending 时,才可以说“已提交确认卡/等待确认”;
   如果工具返回 error 或 4xx,必须说明失败原因,不要声称已提交。
 - 提出修改前先 inspect_sequence 看清现状;修改后告诉用户你提交了什么等待确认。
@@ -56,13 +56,37 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mibu 的视频创作助手,运行在用户本
   对话里跟用户说清楚再做。
 - 所有已批准的时间线修改用户都可以撤销,不必过度谨慎,但一次确认卡只装一个连贯意图。
 工作区 ID: {workspace_id}。用用户使用的语言回复,简洁、面向创作者,不要提及内部实现细节。
-不要读写本机文件系统,不要执行 shell 命令;只使用 mibu 工具与对话。"""
+不要读写本机文件系统,不要执行 shell 命令;只使用 open-studio 工具与对话。"""
 
 _turn_callbacks: list[Callable[[str], None]] = []
 
 # Live token streams for in-flight turns, keyed by session id.
 _streams_lock = threading.Lock()
 _streams: dict[str, dict] = {}
+
+#: Turn threads carry this name so callers can find and drain them.
+#: A turn runs in a daemon thread that keeps writing to the DB after the request that started it
+#: returned. That is fine in production — the process outlives the turn. It is NOT fine for a test
+#: harness that drops and recreates the schema between tests: a leftover turn then writes into a
+#: half-rebuilt database, which surfaces as a FOREIGN KEY failure inside the turn, a stale-schema
+#: `duplicate column` during migration, or another test's message appearing in this test's list.
+#: See `wait_for_idle_turns` and its use in tests/util.fresh_client.
+TURN_THREAD_NAME = "agent-turn"
+
+
+def wait_for_idle_turns(timeout: float = 5.0) -> bool:
+    """Block until no agent turn thread is running. Returns False if `timeout` ran out.
+
+    Exists for the test harness, which must not tear the schema down under a live turn. Production
+    never needs it — nothing there rebuilds the database mid-flight.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        alive = [t for t in threading.enumerate() if t.name == TURN_THREAD_NAME and t.is_alive()]
+        if not alive:
+            return True
+        alive[0].join(timeout=max(0.0, deadline - time.monotonic()))
+    return not any(t.name == TURN_THREAD_NAME and t.is_alive() for t in threading.enumerate())
 
 
 def resolve_chat_provider(
@@ -348,7 +372,7 @@ def post_user_message(
     db.commit()
 
     token = _mint_service_token(db, user)
-    threading.Thread(target=_run_turn_thread, args=(session.id, prompt, token), daemon=True).start()
+    threading.Thread(target=_run_turn_thread, args=(session.id, prompt, token), daemon=True, name=TURN_THREAD_NAME).start()
     db.refresh(message)
     return message
 
@@ -594,7 +618,7 @@ def _drain_queue_locked(session_id: str) -> None:
         db.commit()
         token = _mint_service_token(db, owner)
         content = _prompt_with_context(message.content, (message.payload or {}).get("context"))
-    threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True).start()
+    threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True, name=TURN_THREAD_NAME).start()
 
 
 def reconcile_orphaned_agent_sessions(db: Session) -> int:
