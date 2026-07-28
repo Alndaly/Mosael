@@ -121,6 +121,17 @@ pnpm dev            # 仓库根目录;等价于 frontend 的 pnpm electron:dev
 
 若 Electron 报 `Electron failed to install correctly`(pnpm 有时漏跑其安装脚本):`pnpm rebuild electron`。
 
+若后端报 `bad interpreter: .../.venv/bin/python3: No such file or directory`:venv 的 console script
+把解释器路径**写死在 shebang 里**,仓库目录一改名(或整个搬到别的机器/路径)就全部失效。重建即可:
+
+```bash
+cd backend && uv venv --clear && uv sync
+```
+
+> 拉起后端的两处(`dev:backend` 脚本与 `main.cjs`)已改用 `.venv/bin/python -m uvicorn` ——
+> `python` 是符号链接、不经 shebang,所以它们本身不受路径变动影响;受影响的是直接调
+> `uvicorn` / `pytest` 等 console script 的用法。
+
 ### 测试与检查
 
 ```bash

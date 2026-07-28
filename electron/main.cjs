@@ -56,9 +56,12 @@ try {
 function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
+    // 走 `python -m uvicorn` 而不是 .venv/bin/uvicorn:后者是带 shebang 的 console script,
+    // 解释器路径在建 venv 时被**写死成绝对路径**——仓库目录一改名(mibu-cut → OpenStudio 就发生过),
+    // 53 个脚本同时变成 "bad interpreter",而 .venv/bin/python 是符号链接、照常可用。
     return {
-      command: path.join(backendDir, ".venv", "bin", "uvicorn"),
-      args: ["app.main:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
+      command: path.join(backendDir, ".venv", "bin", "python"),
+      args: ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
       cwd: backendDir,
     };
   }

@@ -15,7 +15,7 @@
     "dist:mac": "pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
-    "dev:backend": "cd backend && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port ${OPEN_STUDIO_BACKEND_PORT:-8800} --reload",
+    "dev:backend": "cd backend && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port ${OPEN_STUDIO_BACKEND_PORT:-8800} --reload",
     "dev": "pnpm --dir frontend electron:dev"
   },
   "devDependencies": {
