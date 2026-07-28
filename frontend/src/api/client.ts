@@ -361,6 +361,17 @@ export function moveClip(
   });
 }
 
+/** 框选整组拖动:一次请求、一条操作、一步撤销(逐个调 moveClip 会变成 N 步撤销)。 */
+export function moveClipsBatch(
+  sequenceId: string,
+  moves: { clip_id: string; timeline_start: number; track_id?: string | null }[],
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/move-batch`, {
+    method: "PATCH",
+    body: JSON.stringify({ moves }),
+  });
+}
+
 export function trimClip(
   sequenceId: string,
   clipId: string,

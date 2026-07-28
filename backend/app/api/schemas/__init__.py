@@ -312,6 +312,18 @@ class MoveClipRequest(BaseModel):
     ripple: bool = False
 
 
+class ClipMoveEntry(BaseModel):
+    clip_id: str
+    timeline_start: float
+    track_id: str | None = None
+
+
+class MoveClipsBatchRequest(BaseModel):
+    """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
+
+    moves: list[ClipMoveEntry] = Field(min_length=1)
+
+
 class TrimClipRequest(BaseModel):
     timeline_start: float
     src_in: float

@@ -24,6 +24,7 @@ import {
   insertClip,
   insertTextClip,
   moveClip,
+  moveClipsBatch,
   redoSequence,
   moveTrack,
   removeTrack,
@@ -295,6 +296,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       trackId?: string;
       ripple?: boolean;
     }) => moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
+    onSuccess: settleWith,
+    onError: resyncAfterFailedDrag,
+  });
+  /** 框选整组拖动。与单个移动共用 settle/resync,所以落位动画与失败回滚的行为完全一致。 */
+  const moveClipsMutation = useMutation({
+    mutationFn: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) =>
+      moveClipsBatch(
+        sequence!.id,
+        moves.map((move) => ({
+          clip_id: move.clipId,
+          timeline_start: move.timelineStart,
+          track_id: move.trackId ?? null,
+        })),
+      ),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
@@ -980,6 +995,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onMoveClip={(clipId, timelineStart, trackId, ripple) =>
             moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple })
           }
+          onMoveClips={(moves) => moveClipsMutation.mutate(moves)}
           onMoveClipToNewLayer={(clipId, timelineStart) =>
             moveClipToNewLayerMutation.mutate({ clipId, timelineStart })
           }

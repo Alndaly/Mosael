@@ -18,6 +18,7 @@ invalidates the redo stack (checked by revision ordering).
 UNDOABLE_KINDS = (
     "insert_clip",
     "move_clip",
+    "move_clips_batch",
     "trim_clip",
     "delete_clip",
     "apply_transcript_edit",
@@ -168,6 +169,12 @@ def _apply_inverse(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = payload["previous_timeline_start"]
         clip.track_id = payload.get("previous_track_id", clip.track_id)
         _undo_ripple_room(db, payload)
+    elif operation.kind == "move_clips_batch":
+        # 整组一步退回:组拖记的是一条操作,撤销就该把整组还原,而不是退回其中一个。
+        for entry in payload["moved"]:
+            clip = _require_clip_row(db, entry["clip_id"])
+            clip.timeline_start = entry["previous_timeline_start"]
+            clip.track_id = entry["previous_track_id"]
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         previous = payload["previous"]
@@ -268,6 +275,11 @@ def _apply_forward(db: Session, sequence: Sequence, operation: SequenceOperation
         clip.timeline_start = payload["timeline_start"]
         clip.track_id = payload["track_id"]
         _redo_ripple_room(db, sequence, payload)
+    elif operation.kind == "move_clips_batch":
+        for entry in payload["moved"]:
+            clip = _require_clip_row(db, entry["clip_id"])
+            clip.timeline_start = entry["timeline_start"]
+            clip.track_id = entry["track_id"]
     elif operation.kind == "trim_clip":
         clip = _require_clip_row(db, payload["clip_id"])
         clip.timeline_start = payload["timeline_start"]

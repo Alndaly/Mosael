@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AudioLines, BetweenHorizontalStart, ChevronDown, ChevronUp, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
-import { fetchWaveform, type Asset, type Sequence, type Track, type WaveformData } from "@/api/client";
+import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -61,6 +61,7 @@ export function Timeline({
   assets,
   onInsertClip,
   onMoveClip,
+  onMoveClips,
   onMoveClipToNewLayer,
   onTrimClip,
   onAddTrack,
@@ -79,6 +80,8 @@ export function Timeline({
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
   onMoveClip: (clipId: string, timelineStart: number, trackId?: string, ripple?: boolean) => void;
+  /** 组拖(框选多个后拖动)整组提交:一条操作、一步撤销。缺省时组拖降级为只移动锚点。 */
+  onMoveClips?: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) => void;
   onMoveClipToNewLayer?: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
@@ -157,6 +160,30 @@ export function Timeline({
       eq(committed.src_out, rawDragDraft.src_out);
     return caughtUp ? null : rawDragDraft;
   }, [rawDragDraft, allClips, tracks]);
+  // 草稿投影:clipId → 它此刻该画在哪。组拖时锚点与跟随者都在里面,渲染只查这张表,
+  // 不再逐处比对 `draft.clipId === clip.id`——那种写法天然只认一个片段,正是"框选后只拖动
+  // 鼠标底下那个"的来源。锚点带 src_in/src_out(裁剪也用这张表),跟随者只改位置。
+  const draftByClip = React.useMemo(() => {
+    const map = new Map<string, { trackId: string; timeline_start: number; src_in: number; src_out: number }>();
+    if (!dragDraft) return map;
+    map.set(dragDraft.clipId, {
+      trackId: dragDraft.trackId,
+      timeline_start: dragDraft.timeline_start,
+      src_in: dragDraft.src_in,
+      src_out: dragDraft.src_out,
+    });
+    for (const follower of dragDraft.followers ?? []) {
+      const source = allClips.find((item) => item.id === follower.clipId);
+      if (!source) continue;
+      map.set(follower.clipId, {
+        trackId: follower.trackId,
+        timeline_start: follower.timeline_start,
+        src_in: source.src_in,
+        src_out: source.src_out,
+      });
+    }
+    return map;
+  }, [dragDraft, allClips]);
   // 有草稿在场才开过渡 — 平时缩放/刷新保持零动画。草稿清掉后再多挂 220ms:
   // 落位滑行正在进行,过早摘掉过渡类会把动画掐断成瞬移。
   const [animateClips, setAnimateClips] = React.useState(false);
@@ -348,6 +375,20 @@ export function Timeline({
     if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
     const startX = event.clientX;
     const origin = { ...clip };
+    // 组拖:按住的那个是锚点,其余选中片段按**同一个时间增量**跟随(框选后拖动应当整组一起走,
+    // 而不是只拖鼠标底下那一个)。这里在起手时把跟随者连同它们的轨道索引一并快照——拖拽过程中
+    // 轨道数组会因跨轨预览而变化,现算会漂。
+    const laneIndexOf = (trackId: string) => tracks.findIndex((t) => t.id === trackId);
+    const anchorLane = laneIndexOf(track.id);
+    const followerOrigins = useEditorStore
+      .getState()
+      .selectedClipIds.filter((id) => id !== clip.id)
+      .map((id) => {
+        const owner = tracks.find((t) => (t.clips ?? []).some((c) => c.id === id));
+        const found = owner?.clips?.find((c) => c.id === id);
+        return owner && found ? { clip: found, trackId: owner.id, lane: laneIndexOf(owner.id) } : null;
+      })
+      .filter((entry): entry is { clip: Clip; trackId: string; lane: number } => entry !== null);
     // 两级吸附候选在起手时算好:每条轨一份边缘表(拖到哪条 lane,哪条就是第一
     // 优先级),播放头/零点与其余轨道的边缘降为次级 — 否则字幕轨的密集 cue 边界
     // 或播放头会比同轨邻居更近,把肉眼可见的对接"抢走"。
@@ -379,13 +420,31 @@ export function Timeline({
       const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
       const sets = snapSetsFor(lane?.id ?? (wantNewLayer ? null : track.id));
       const resolved = resolveMove(origin, rawStart, sets.primary, sets.secondary, pxPerSecond);
+      const anchorTrackId = lane?.id ?? track.id;
+      // 跟随者用锚点**吸附之后**的增量,整组保持相对位置——各自再吸附一次会让组内间距被拉变形。
+      const deltaTime = resolved - origin.timeline_start;
+      // 轨道位移同理取自锚点。只有当**每个**跟随者都能落到合法轨(存在、同类、未锁)时才整体换轨;
+      // 但凡有一个落不下,整组就只平移时间——部分换轨会把选中集拆散到不同轨上,比不换更难理解。
+      const laneDelta = wantNewLayer ? 0 : laneIndexOf(anchorTrackId) - anchorLane;
+      const followerTracks = followerOrigins.map((entry) => {
+        const target = tracks[entry.lane + laneDelta];
+        const ownerTrack = tracks[entry.lane];
+        return target && ownerTrack && target.kind === ownerTrack.kind && !target.locked ? target.id : null;
+      });
+      const groupCanChangeLane = laneDelta !== 0 && followerTracks.every((id) => id !== null);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
-        trackId: lane?.id ?? track.id,
+        trackId: anchorTrackId,
         timeline_start: resolved,
         src_in: origin.src_in,
         src_out: origin.src_out,
         kind: "move",
+        followers: followerOrigins.map((entry, index) => ({
+          clipId: entry.clip.id,
+          trackId: groupCanChangeLane ? (followerTracks[index] as string) : entry.trackId,
+          // 时间不能为负:整组左移撞到 0 时,锚点已被 resolveMove 夹住,跟随者也要各自夹一次。
+          timeline_start: Math.max(0, entry.clip.timeline_start + deltaTime),
+        })),
       });
     };
     const onUp = () => {
@@ -404,10 +463,20 @@ export function Timeline({
         draft.clipId === clip.id &&
         (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id)
       ) {
-        // Insert mode ripples the destination track's downstream clips aside.
-        const ripple = useEditorStore.getState().editMode === "insert";
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
-        onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple);
+        if (draft.followers?.length && onMoveClips) {
+          // 组拖走批量接口:一次手势落成一条操作,撤销一步还原整组。逐个调 onMoveClip 会产生
+          // N 条操作,用户得按 N 次 ⌘Z——与"一次拖动"的心智完全对不上。
+          // 组拖不支持插入模式的涟漪:一组(可能还跨轨)的片段要"挤开"什么没有唯一解,一律按覆盖。
+          onMoveClips([
+            { clipId: clip.id, timelineStart: draft.timeline_start, trackId: draft.trackId },
+            ...draft.followers.map((f) => ({ clipId: f.clipId, timelineStart: f.timeline_start, trackId: f.trackId })),
+          ]);
+        } else {
+          // Insert mode ripples the destination track's downstream clips aside.
+          const ripple = useEditorStore.getState().editMode === "insert";
+          onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple);
+        }
       } else {
         useEditorStore.getState().setDragDraft(null);
       }
@@ -878,38 +947,41 @@ export function Timeline({
                     }}
                   />
                 )}
-                {dragDraft &&
-                  dragDraft.kind === "move" &&
-                  dragDraft.trackId === track.id &&
-                  !(track.clips ?? []).some((item) => item.id === dragDraft.clipId) &&
-                  (() => {
-                    const source = allClips.find((item) => item.id === dragDraft.clipId);
-                    if (!source) return null;
-                    return (
-                      <TimelineClip
-                        key={`draft-${source.id}`}
-                        trackKind={track.kind}
-                        name={source.text_override ?? (source.asset_id ? assetById.get(source.asset_id)?.name ?? "" : "")}
-                        left={timeToPx(dragDraft.timeline_start, pxPerSecond)}
-                        width={Math.max(10, timeToPx((dragDraft.src_out - dragDraft.src_in) / (source.speed || 1), pxPerSecond))}
-                        selected
-                        dragging
-                        onPointerDown={() => undefined}
-                        onTrimPointerDown={() => undefined}
-                        onSelect={() => undefined}
-                      />
-                    );
-                  })()}
+                {/* 跨轨拖拽时,片段还留在原轨的数据里,得在目标轨先画一个草稿本体。
+                    组拖要对**每个**落到本轨的成员都画,不只锚点。 */}
+                {dragDraft?.kind === "move" &&
+                  [...draftByClip.entries()]
+                    .filter(([clipId, at]) => at.trackId === track.id && !(track.clips ?? []).some((c) => c.id === clipId))
+                    .map(([clipId, at]) => {
+                      const source = allClips.find((item) => item.id === clipId);
+                      if (!source) return null;
+                      return (
+                        <TimelineClip
+                          key={`draft-${clipId}`}
+                          trackKind={track.kind}
+                          name={source.text_override ?? (source.asset_id ? assetById.get(source.asset_id)?.name ?? "" : "")}
+                          left={timeToPx(at.timeline_start, pxPerSecond)}
+                          width={Math.max(10, timeToPx((at.src_out - at.src_in) / (source.speed || 1), pxPerSecond))}
+                          selected
+                          dragging
+                          onPointerDown={() => undefined}
+                          onTrimPointerDown={() => undefined}
+                          onSelect={() => undefined}
+                        />
+                      );
+                    })}
                 {(track.clips ?? []).map((clip) => {
-                  if (dragDraft && dragDraft.clipId === clip.id && dragDraft.trackId !== track.id) return null;
-                  const draft = dragDraft && dragDraft.clipId === clip.id ? dragDraft : null;
+                  const at = draftByClip.get(clip.id);
+                  // 已被拖到别的轨:本轨不画(目标轨的草稿本体负责显示)。
+                  if (at && at.trackId !== track.id) return null;
+                  const draft = at ?? null;
                   const display = draft ?? clip;
                   // Insert-mode preview: clips at/after the drop point slide right by the
                   // dragged clip's duration, showing where the ripple will land them.
                   const partingShift =
                     insertRipple &&
                     insertRipple.trackId === track.id &&
-                    clip.id !== dragDraft?.clipId &&
+                    !draftByClip.has(clip.id) &&
                     clip.timeline_start >= insertRipple.from - 1e-9
                       ? insertRipple.shift
                       : 0;
@@ -919,7 +991,8 @@ export function Timeline({
                   // 两个属性各自做 200ms 过渡 → 视觉位置 = left+shift 从"松手点"
                   // 平滑插值到"终点";服务端原样接受落点时两者恰好抵消,纹丝不动。
                   // 裁剪草稿仍直接渲染 left/width(裁的是边缘,transform 表达不了)。
-                  const isMoveDraft = Boolean(draft && draft.kind === "move");
+                  // 映射条目不带 kind:裁剪只可能作用在锚点上,所以整轮的种类看 dragDraft 即可。
+                  const isMoveDraft = Boolean(draft && dragDraft?.kind === "move");
                   const baseLeft = isMoveDraft ? clip.timeline_start : display.timeline_start;
                   const shiftTime = isMoveDraft ? display.timeline_start - clip.timeline_start : partingShift;
                   // 插入预览要切开的跨落点片段:头段就地收尾到落点(尾段由 lane 末尾的

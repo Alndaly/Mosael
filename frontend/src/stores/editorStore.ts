@@ -15,6 +15,11 @@ export interface DragDraft {
   /** 指针已松开、提交在途:草稿只为钉住落点等服务端回包,不再跟随指针。
    *  缓存追平草稿的那一帧把它视作已清,落位动画由该帧的过渡完成。 */
   settling?: boolean;
+  /** 组拖(框选多个后拖动)时,随锚点一起移动的其余选中片段。
+   *
+   *  锚点(clipId)保持单片段语义不变——裁剪、插入模式的涟漪预览、落位判定都只认它,
+   *  所以这些既有逻辑一行不用改;渲染侧另外把 followers 一并投影出去。 */
+  followers?: { clipId: string; trackId: string; timeline_start: number }[];
 }
 
 export const MIN_PX_PER_SECOND = 4;

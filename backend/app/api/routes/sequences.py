@@ -14,6 +14,7 @@ from app.api.schemas import (
     InsertTextClipRequest,
     JobOut,
     MoveClipRequest,
+    MoveClipsBatchRequest,
     SequenceCreate,
     SequenceOut,
     SetClipEffectsRequest,
@@ -44,7 +45,9 @@ from app.domain.sequences.operations import (
     InsertClip,
     GenerateSubtitles,
     InsertTextClip,
+    ClipMove,
     MoveClip,
+    MoveClipsBatch,
     MoveTrack,
     RemoveTrack,
     RippleDeleteClip,
@@ -84,6 +87,7 @@ from app.domain.sequences.operations import (
     set_clip_text as set_clip_text_operation,
     set_clip_texts_batch as set_clip_texts_batch_operation,
     move_clip as move_clip_operation,
+    move_clips_batch as move_clips_batch_operation,
     move_track as move_track_operation,
     trim_clip as trim_clip_operation,
 )
@@ -172,6 +176,15 @@ def insert_clip(sequence_id: str, body: InsertClipRequest, db: DbSession, user: 
 def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id)
     _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
+    return _sequence_response(_get_sequence(db, sequence_id))
+
+
+@router.patch("/sequences/{sequence_id}/clips/move-batch", response_model=SequenceOut)
+def move_clips_batch(sequence_id: str, body: MoveClipsBatchRequest, db: DbSession, user: CurrentUser) -> Response:
+    """框选后整组拖动:一次手势一条操作,撤销一步还原整组。"""
+    require_sequence_access(db, user, sequence_id)
+    moves = tuple(ClipMove(**move.model_dump()) for move in body.moves)
+    _apply(lambda: move_clips_batch_operation(db, sequence_id, MoveClipsBatch(moves=moves)))
     return _sequence_response(_get_sequence(db, sequence_id))
 
 

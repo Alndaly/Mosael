@@ -1415,6 +1415,26 @@ export interface paths {
         patch: operations["move_clip_api_sequences__sequence_id__clips__clip_id__move_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/move-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Move Clips Batch
+         * @description 框选后整组拖动:一次手势一条操作,撤销一步还原整组。
+         */
+        patch: operations["move_clips_batch_api_sequences__sequence_id__clips_move_batch_patch"];
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}/trim": {
         parameters: {
             query?: never;
@@ -4019,6 +4039,15 @@ export interface components {
             /** Enabled */
             enabled?: boolean | null;
         };
+        /** ClipMoveEntry */
+        ClipMoveEntry: {
+            /** Clip Id */
+            clip_id: string;
+            /** Timeline Start */
+            timeline_start: number;
+            /** Track Id */
+            track_id?: string | null;
+        };
         /** ClipOut */
         ClipOut: {
             /** Id */
@@ -4941,6 +4970,14 @@ export interface components {
              * @default false
              */
             ripple: boolean;
+        };
+        /**
+         * MoveClipsBatchRequest
+         * @description 框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。
+         */
+        MoveClipsBatchRequest: {
+            /** Moves */
+            moves: components["schemas"]["ClipMoveEntry"][];
         };
         /** MoveTrackRequest */
         MoveTrackRequest: {
@@ -9716,6 +9753,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_clips_batch_api_sequences__sequence_id__clips_move_batch_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveClipsBatchRequest"];
             };
         };
         responses: {

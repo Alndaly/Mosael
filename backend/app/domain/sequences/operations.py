@@ -37,6 +37,28 @@ class MoveClip:
 
 
 @dataclass(frozen=True)
+class MoveClipsBatch:
+    """一次手势移动多个片段(框选后整组拖动)。
+
+    刻意不是「循环调用 move_clip」:那样 N 个片段会产生 N 条 SequenceOperation,撤销一次
+    只退回一个,用户得按 N 次 ⌘Z 才能还原一次拖动。整组落成一条操作,撤销才与手势对齐。
+
+    也不支持 ripple:插入模式为单个片段"挤开下游"是明确的,一组跨轨片段要挤开什么则没有
+    唯一解。组拖一律按覆盖(overwrite)语义,与前端 startClipDrag 里的说明一致。
+    """
+
+    moves: tuple["ClipMove", ...]
+    actor_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ClipMove:
+    clip_id: str
+    timeline_start: float
+    track_id: str | None = None
+
+
+@dataclass(frozen=True)
 class TrimClip:
     clip_id: str
     timeline_start: float
@@ -227,6 +249,53 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
             "split": split,
         },
         summary={"operation": "move_clip", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Sequence:
+    """整组移动。逐个校验后一次性记账,失败则整组不落(校验先于任何写入)。"""
+    sequence = _require_sequence(db, sequence_id)
+    if not op.moves:
+        raise SequenceDomainError("No clips to move")
+
+    planned: list[tuple[Clip, float, str]] = []
+    for move in op.moves:
+        if move.timeline_start < 0:
+            raise SequenceDomainError("timeline_start must be non-negative")
+        clip = _require_clip(db, sequence_id, move.clip_id)
+        target_track_id = move.track_id or clip.track_id
+        if target_track_id != clip.track_id:
+            target = db.get(Track, target_track_id)
+            source = db.get(Track, clip.track_id)
+            if target is None or target.sequence_id != sequence_id:
+                raise SequenceDomainError("Target track not found")
+            if source is not None and target.kind != source.kind:
+                raise SequenceDomainError("Target track kind does not match clip track kind")
+        planned.append((clip, float(move.timeline_start), target_track_id))
+
+    moved: list[dict[str, Any]] = []
+    for clip, start, target_track_id in planned:
+        moved.append(
+            {
+                "clip_id": clip.id,
+                "timeline_start": start,
+                "track_id": target_track_id,
+                "previous_timeline_start": clip.timeline_start,
+                "previous_track_id": clip.track_id,
+            }
+        )
+        clip.timeline_start = start
+        clip.track_id = target_track_id
+
+    _record_operation(
+        db,
+        sequence,
+        kind="move_clips_batch",
+        payload={"moved": moved},
+        summary={"operation": "move_clips_batch", "count": len(moved)},
         actor_id=op.actor_id,
     )
     db.commit()

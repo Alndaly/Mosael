@@ -3945,6 +3945,59 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/move-batch": {
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Move Clips Batch",
+        "description": "框选后整组拖动:一次手势一条操作,撤销一步还原整组。",
+        "operationId": "move_clips_batch_api_sequences__sequence_id__clips_move_batch_patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveClipsBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}/trim": {
       "patch": {
         "tags": [
@@ -12385,6 +12438,35 @@
         "type": "object",
         "title": "BrowserProfileUpdate"
       },
+      "ClipMoveEntry": {
+        "properties": {
+          "clip_id": {
+            "type": "string",
+            "title": "Clip Id"
+          },
+          "timeline_start": {
+            "type": "number",
+            "title": "Timeline Start"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_id",
+          "timeline_start"
+        ],
+        "title": "ClipMoveEntry"
+      },
       "ClipOut": {
         "properties": {
           "id": {
@@ -14763,6 +14845,24 @@
           "timeline_start"
         ],
         "title": "MoveClipRequest"
+      },
+      "MoveClipsBatchRequest": {
+        "properties": {
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/ClipMoveEntry"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Moves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "moves"
+        ],
+        "title": "MoveClipsBatchRequest",
+        "description": "框选后整组拖动。没有 ripple —— 一组片段要\"挤开\"什么没有唯一解,组拖按覆盖语义。"
       },
       "MoveTrackRequest": {
         "properties": {
