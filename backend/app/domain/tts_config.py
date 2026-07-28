@@ -14,6 +14,15 @@ _WINDOWS = __import__("sys").platform == "win32"
 
 SINGLETON_ID = "default"
 
+#: pip 索引预设。装引擎依赖要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,所以给常见镜像。
+#: 空 = 官方 PyPI;不在表里的值当作用户自填的 index URL 直接用。
+PIP_INDEXES = {
+    "pypi": "",
+    "tsinghua": "https://pypi.tuna.tsinghua.edu.cn/simple",
+    "aliyun": "https://mirrors.aliyun.com/pypi/simple/",
+    "tencent": "https://mirrors.cloud.tencent.com/pypi/simple",
+}
+
 # Model-download source → the HF endpoint the worker/download subprocess should use.
 HF_ENDPOINTS = {
     "hf": "https://huggingface.co",
@@ -86,6 +95,20 @@ class TtsRuntimeConfig:
     source: str
     fish_repo_dir: str
     fish_model_dir: str
+    #: 装引擎依赖时用的 pip 索引(预设 key 或自定义 URL)。带默认值放最后:它是可选设置,
+    #: 不该逼所有构造点都改签名。
+    pip_index: str = ""
+
+    @property
+    def pip_index_url(self) -> str:
+        """要传给 pip 的 --index-url。空串表示用官方 PyPI(即不传这个参数)。"""
+        key = (self.pip_index or "").strip()
+        if not key:
+            return ""
+        if key in PIP_INDEXES:
+            return PIP_INDEXES[key]
+        # 不是预设 key → 当成用户自填的 index URL。只接受 http(s),避免把任意字符串塞进 argv。
+        return key if key.startswith(("http://", "https://")) else ""
 
     @property
     def hf_endpoint(self) -> str:
@@ -122,6 +145,7 @@ def _load() -> TtsRuntimeConfig:
                     engine=row.engine,
                     python_path=row.python_path,
                     source=row.source,
+                    pip_index=getattr(row, "pip_index", "") or "",
                     fish_repo_dir=row.fish_repo_dir or "",
                     fish_model_dir=row.fish_model_dir or "",
                 )
@@ -132,6 +156,7 @@ def _load() -> TtsRuntimeConfig:
         engine=settings.tts_engine,
         python_path=settings.tts_python,
         source="hf-mirror",
+        pip_index="",
         fish_repo_dir="",
         fish_model_dir="",
     )

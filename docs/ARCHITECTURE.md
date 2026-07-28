@@ -95,6 +95,10 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
 之后自动可用。设置页的「TTS 解释器」因此是**高级覆盖项**,留空是常态。
 
+**两个下载源是分开的**:「模型下载源」管 HF 权重(`HF_ENDPOINT`),「依赖下载源」管 pip 索引
+(`--index-url`)。装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,而它与权重镜像并不是
+同一件事。自定义 index 只接受 http(s),避免任意字符串进子进程 argv。
+
 ## 预览与导出:两个渲染器,一份契约
 
 画面有两套渲染实现,而且**只能有两套**:

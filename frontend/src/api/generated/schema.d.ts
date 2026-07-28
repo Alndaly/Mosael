@@ -6232,6 +6232,11 @@ export interface components {
              */
             source: string;
             /**
+             * Pip Index
+             * @default
+             */
+            pip_index: string;
+            /**
              * Fish Repo Dir
              * @default
              */
@@ -6266,6 +6271,11 @@ export interface components {
              * @default hf-mirror
              */
             source: string;
+            /**
+             * Pip Index
+             * @default
+             */
+            pip_index: string;
             /**
              * Fish Repo Dir
              * @default

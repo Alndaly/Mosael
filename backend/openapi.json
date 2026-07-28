@@ -18067,6 +18067,11 @@
             "title": "Source",
             "default": "hf-mirror"
           },
+          "pip_index": {
+            "type": "string",
+            "title": "Pip Index",
+            "default": ""
+          },
           "fish_repo_dir": {
             "type": "string",
             "title": "Fish Repo Dir",
@@ -18111,6 +18116,12 @@
             "pattern": "^(hf|hf-mirror|modelscope)$",
             "title": "Source",
             "default": "hf-mirror"
+          },
+          "pip_index": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Pip Index",
+            "default": ""
           },
           "fish_repo_dir": {
             "type": "string",

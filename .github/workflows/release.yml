@@ -80,6 +80,14 @@ jobs:
       - name: Install backend (uv)
         run: cd backend && uv sync --frozen --python 3.13
 
+      # 声音克隆随包分发的独立 CPython(~48MB)。必须在 electron-builder 之前:
+      # extraResources 打包时会读 build/python。失败即让构建红——缺了它,打包版后端
+      # (PyInstaller 冻结二进制)建不了 venv,声音克隆会退化成"要用户自己装 Python"。
+      # 解包用 tar:macOS 自带 bsdtar,Windows 10+ 也自带 tar.exe(同为 bsdtar),
+      # 两者都支持 --strip-components。
+      - name: Fetch bundled Python for voice cloning
+        run: pnpm fetch:tts-python
+
       - name: Build frontend / sidecar / publisher / backend
         run: |
           pnpm build:publisher

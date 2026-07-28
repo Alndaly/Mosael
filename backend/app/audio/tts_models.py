@@ -348,8 +348,14 @@ def ensure_engine_runtime(engine_id: str) -> None:
         _Live(status="downloading", total=engine.expected_bytes, message=f"安装 {engine.label} 运行依赖(数 GB,首次较慢)…"),
     )
     # 装到托管 venv 里。--upgrade 让重试能修好装了一半的环境;超时给足——torch 在慢网络下很久。
+    # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
+    # 直连 PyPI 拉 2.5–3.5GB 在国内常常慢到不可用,所以这一项值得单独可切。
+    pip_args = [str(venv_python), "-m", "pip", "install", "--upgrade"]
+    index_url = tts_config.get().pip_index_url
+    if index_url:
+        pip_args += ["--index-url", index_url]
     result = subprocess.run(
-        [str(venv_python), "-m", "pip", "install", "--upgrade", *engine.pip_requirements],
+        [*pip_args, *engine.pip_requirements],
         capture_output=True, text=True, timeout=7200, env=_worker_env(),
     )
     if result.returncode != 0:

@@ -721,6 +721,9 @@ class TtsConfig(Base):
     engine: Mapped[str] = mapped_column(String(32), nullable=False, default="f5-tts")  # f5-tts | fish-speech
     python_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")  # empty = autodetect
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="hf-mirror")  # hf | hf-mirror | modelscope
+    #: 装引擎依赖(torch 等 2.5–3.5GB)时用的 pip 索引。空 = 官方 PyPI。
+    #: 与 source 分开:那个管模型权重从哪拉(HuggingFace),这个管 Python 包从哪拉。
+    pip_index: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     # Fish Speech runs from a source checkout + a local weights dir (with codec.pth);
     # empty = fall back to the app-managed install. See domain/tts_config.py.
     fish_repo_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")

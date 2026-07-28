@@ -224,6 +224,7 @@ def _tts_config_out() -> dict:
         "engine": cfg.engine,
         "python_path": cfg.python_path,
         "source": cfg.source,
+        "pip_index": cfg.pip_index,
         "fish_repo_dir": cfg.fish_repo_dir,
         "fish_model_dir": cfg.fish_model_dir,
         **tts_models.probe_interpreter(cfg.engine),
@@ -249,6 +250,7 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     row.engine = body.engine
     row.python_path = body.python_path.strip()
     row.source = body.source
+    row.pip_index = body.pip_index.strip()
     row.fish_repo_dir = body.fish_repo_dir.strip()
     row.fish_model_dir = body.fish_model_dir.strip()
     db.commit()

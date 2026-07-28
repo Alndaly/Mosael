@@ -36,6 +36,21 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
 
 
 
+def _migrate_tts_pip_index() -> None:
+    """tts_config 新增 pip_index 列(装引擎依赖时用的 pip 镜像)。
+
+    create_all 只建新表,不给**已有**表补列——已装机的 tts_config 表没有这列,
+    读配置时会直接 OperationalError。加列即可,老行取默认空串(= 官方 PyPI)。
+    """
+    inspector = inspect(engine)
+    if "tts_config" not in set(inspector.get_table_names()):
+        return
+    if "pip_index" in {c["name"] for c in inspector.get_columns("tts_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tts_config ADD COLUMN pip_index VARCHAR(200) NOT NULL DEFAULT ''"))
+
+
 def _migrate_provider_capabilities() -> None:
     """加列迁移:provider_profiles 增加 capability_ids(档案级能力覆盖,None=沿用 vendor 默认)。"""
     inspector = inspect(engine)
@@ -136,6 +151,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
+    _migrate_tts_pip_index()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

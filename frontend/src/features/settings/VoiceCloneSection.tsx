@@ -34,7 +34,7 @@ function fmtSpeed(bps: number): string {
   return `${Math.round(bps / 1000)} KB/s`;
 }
 
-type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };
+type ConfigForm = { engine: string; python_path: string; source: string; pip_index: string; fish_repo_dir: string; fish_model_dir: string };
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
@@ -54,11 +54,12 @@ export function VoiceCloneSection() {
         engine: z.string(),
         python_path: z.string(),
         source: z.string(),
+        pip_index: z.string(),
         fish_repo_dir: z.string(),
         fish_model_dir: z.string(),
       }),
     ),
-    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", fish_repo_dir: "", fish_model_dir: "" },
+    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", pip_index: "", fish_repo_dir: "", fish_model_dir: "" },
   });
   React.useEffect(() => {
     if (config.data) {
@@ -66,6 +67,7 @@ export function VoiceCloneSection() {
         engine: config.data.engine,
         python_path: config.data.python_path,
         source: config.data.source,
+        pip_index: config.data.pip_index ?? "",
         fish_repo_dir: config.data.fish_repo_dir ?? "",
         fish_model_dir: config.data.fish_model_dir ?? "",
       });
@@ -162,6 +164,31 @@ export function VoiceCloneSection() {
                     </Select>
                   </FormControl>
                   {!isFish && <FormDescription>{t("voiceCloneF5NoPaths")}</FormDescription>}
+                </FormItem>
+              )}
+            />
+            {/* 与「模型下载源」分开:那个管 HF 权重从哪拉,这个管 Python 依赖从哪拉。
+                装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用。 */}
+            <FormField
+              control={form.control}
+              name="pip_index"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("voiceClonePipIndex")}</FormLabel>
+                  <FormControl>
+                    <Select value={field.value || "pypi"} onValueChange={(value) => field.onChange(value === "pypi" ? "" : value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pypi">{t("voiceClonePipPypi")}</SelectItem>
+                        <SelectItem value="tsinghua">{t("voiceClonePipTsinghua")}</SelectItem>
+                        <SelectItem value="aliyun">{t("voiceClonePipAliyun")}</SelectItem>
+                        <SelectItem value="tencent">{t("voiceClonePipTencent")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormDescription>{t("voiceClonePipIndexHint")}</FormDescription>
                 </FormItem>
               )}
             />

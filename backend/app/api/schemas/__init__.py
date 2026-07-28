@@ -758,6 +758,7 @@ class TtsConfigOut(BaseModel):
     engine: str
     python_path: str = ""
     source: str = "hf-mirror"
+    pip_index: str = ""  # 空 = 官方 PyPI
     fish_repo_dir: str = ""  # Fish Speech source checkout
     fish_model_dir: str = ""  # Fish Speech weights dir (contains codec.pth)
     worker_ready: bool = False  # an interpreter with the engine installed was found
@@ -768,6 +769,8 @@ class TtsConfigUpdate(BaseModel):
     engine: str = Field(pattern="^(f5-tts|fish-speech)$")
     python_path: str = ""
     source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
+    #: 预设 key(pypi/tsinghua/aliyun/tencent)或自定义 index URL;空 = 官方 PyPI。
+    pip_index: str = Field(default="", max_length=200)
     fish_repo_dir: str = ""
     fish_model_dir: str = ""
 

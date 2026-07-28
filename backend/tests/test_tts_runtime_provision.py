@@ -33,7 +33,7 @@ def test_explicit_override_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         tts_config, "get",
         lambda: tts_config.TtsRuntimeConfig(
-            engine="f5-tts", python_path="/custom/bin/python", source="hf-mirror",
+            engine="f5-tts", python_path="/custom/bin/python", source="hf-mirror", pip_index="",
             fish_repo_dir="", fish_model_dir="",
         ),
     )
@@ -114,3 +114,56 @@ def test_provision_surfaces_pip_failure(monkeypatch: pytest.MonkeyPatch, tmp_pat
     with pytest.raises(RuntimeError) as excinfo:
         tts_models.ensure_engine_runtime("f5-tts")
     assert "no matching distribution" in str(excinfo.value)
+
+
+def test_pip_mirror_is_passed_to_pip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """设置页选了镜像就必须真的传给 pip —— 直连 PyPI 拉 3GB 在国内常常慢到不可用。"""
+    venv_python = tmp_path / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    monkeypatch.setattr(
+        tts_config, "get",
+        lambda: tts_config.TtsRuntimeConfig(
+            engine="f5-tts", python_path="", source="hf-mirror", pip_index="tsinghua",
+            fish_repo_dir="", fish_model_dir="",
+        ),
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        tts_models.subprocess, "run",
+        lambda cmd, **kw: (calls.append([str(p) for p in cmd]), subprocess.CompletedProcess(cmd, 0, "", ""))[1],
+    )
+    tts_models.ensure_engine_runtime("f5-tts")
+    assert "--index-url" in calls[0]
+    assert calls[0][calls[0].index("--index-url") + 1] == tts_config.PIP_INDEXES["tsinghua"]
+
+
+def test_default_pip_index_passes_no_index_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """留空 = 官方 PyPI:不该塞一个空的 --index-url 进 argv。"""
+    venv_python = tmp_path / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        tts_models.subprocess, "run",
+        lambda cmd, **kw: (calls.append([str(p) for p in cmd]), subprocess.CompletedProcess(cmd, 0, "", ""))[1],
+    )
+    tts_models.ensure_engine_runtime("f5-tts")
+    assert "--index-url" not in calls[0]
+
+
+def test_a_bogus_custom_index_is_ignored() -> None:
+    """自定义 index 只接受 http(s):别把任意字符串塞进子进程 argv。"""
+    def cfg(value: str) -> tts_config.TtsRuntimeConfig:
+        return tts_config.TtsRuntimeConfig(
+            engine="f5-tts", python_path="", source="hf-mirror", pip_index=value,
+            fish_repo_dir="", fish_model_dir="",
+        )
+
+    assert cfg("https://example.com/simple").pip_index_url == "https://example.com/simple"
+    assert cfg("--upgrade-strategy eager").pip_index_url == ""
+    assert cfg("file:///etc").pip_index_url == ""
