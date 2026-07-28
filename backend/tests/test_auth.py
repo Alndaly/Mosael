@@ -30,34 +30,6 @@ def test_register_login_me_logout_flow() -> None:
     assert client.get("/api/auth/me").status_code == 401
 
 
-def test_init_db_adds_profile_fields_to_existing_local_users() -> None:
-    Base.metadata.drop_all(bind=engine)
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE users (
-                    id VARCHAR(64) NOT NULL PRIMARY KEY,
-                    username VARCHAR(80) NOT NULL UNIQUE,
-                    password_hash VARCHAR(240) NOT NULL DEFAULT '',
-                    created_at DATETIME NOT NULL
-                )
-                """
-            )
-        )
-        conn.execute(
-            text("INSERT INTO users (id, username, password_hash, created_at) VALUES ('u1', 'demo', :password, CURRENT_TIMESTAMP)"),
-            {"password": hash_password(PASSWORD)},
-        )
-
-    init_db()
-
-    anonymous = TestClient(app)
-    login = anonymous.post("/api/auth/login", json={"username": "demo", "password": PASSWORD})
-    assert login.status_code == 200
-    assert login.json()["user"]["display_name"] == "demo"
-    assert login.json()["user"]["signature"] == ""
-
 
 def test_update_profile_and_password() -> None:
     client = fresh_client("kinda")

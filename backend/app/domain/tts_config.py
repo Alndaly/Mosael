@@ -21,7 +21,7 @@ HF_ENDPOINTS = {
 
 # App-managed Fish Speech install: the one-click download fetches the official source
 # checkout + s2-pro weights here, so real synthesis works on a fresh machine without any
-# manual path config (Settings paths still override, sibling mibu-video is a dev fallback).
+# manual path config (Settings paths still override).
 MANAGED_FISH_REPO = settings.data_dir / "tts" / "fish-speech-src"
 MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
 # Marker files that prove each managed dir is a real checkout / real weights (not a
@@ -29,13 +29,6 @@ MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
 # (fish_speech is an implicit-namespace package — no root __init__.py — so anchor deeper.)
 FISH_REPO_MARKER = "fish_speech/utils/schema.py"
 FISH_MODEL_MARKER = "codec.pth"
-
-# Dev convenience: reuse a sibling mibu-video checkout's Fish Speech setup (source
-# clone + already-downloaded weights) so real synthesis works without re-downloading.
-_OPEN_STUDIO_NEW_ROOT = Path(__file__).resolve().parents[3]
-_SIBLING_VIDEO = _OPEN_STUDIO_NEW_ROOT.parent / "mibu-video" / "backend"
-_SIBLING_FISH_REPO = _SIBLING_VIDEO / "third_party" / "fish-speech"
-_SIBLING_FISH_MODEL = _SIBLING_VIDEO / "models" / "tts" / "fish-speech-s2-pro"
 
 
 def _resolve(configured: str, defaults: tuple[Path, ...], *, marker: str | None = None) -> str:
@@ -64,13 +57,13 @@ class TtsRuntimeConfig:
     @property
     def resolved_fish_repo(self) -> str:
         return _resolve(
-            self.fish_repo_dir, (MANAGED_FISH_REPO, _SIBLING_FISH_REPO), marker=FISH_REPO_MARKER
+            self.fish_repo_dir, (MANAGED_FISH_REPO,), marker=FISH_REPO_MARKER
         )
 
     @property
     def resolved_fish_model(self) -> str:
         return _resolve(
-            self.fish_model_dir, (MANAGED_FISH_MODEL, _SIBLING_FISH_MODEL), marker=FISH_MODEL_MARKER
+            self.fish_model_dir, (MANAGED_FISH_MODEL,), marker=FISH_MODEL_MARKER
         )
 
 

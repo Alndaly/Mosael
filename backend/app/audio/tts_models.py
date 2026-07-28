@@ -88,7 +88,7 @@ def _dir_size(path: Path) -> int:
 
 
 def _measure(engine: TtsEngine) -> int:
-    # Fish Speech reuses a local weights dir (configured / sibling mibu-video), not the
+    # Fish Speech reuses a local weights dir (configured / app-managed), not the
     # HF hub cache — measure that so a reused setup reads as installed, not "missing".
     if engine.id == "fish-speech":
         from app.domain import tts_config
@@ -136,8 +136,6 @@ def candidate_pythons() -> list[Path]:
     configured = tts_config.get().python_path
     if configured:
         candidates.append(Path(configured).expanduser())
-    repo_root = Path(__file__).resolve().parents[3]
-    candidates.append(repo_root.parent / "mibu-video" / "backend" / ".venv" / "bin" / "python")
     import sys
 
     candidates.append(Path(sys.executable))

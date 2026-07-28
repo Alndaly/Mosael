@@ -1,5 +1,5 @@
 [project]
-name = "mibu-new-backend"
+name = "open-studio-backend"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -8,7 +8,6 @@ dependencies = [
   "pydantic>=2.9",
   "pydantic-settings>=2.5",
   "sqlalchemy>=2.0",
-  "alembic>=1.13",
   "python-multipart>=0.0.9",
   "mcp>=1.28.1",
   "httpx>=0.28.1",

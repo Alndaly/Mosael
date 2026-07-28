@@ -89,13 +89,13 @@ class Settings(BaseSettings):
 
     # ASR (逐字稿转写). The heavy funasr/whisperx stack runs in a separate
     # interpreter so this backend stays light; empty asr_python autodetects
-    # (env → sibling mibu-video venv → this interpreter).
+    # (env → this interpreter).
     asr_python: str = ""
     asr_provider: str = "auto"  # "auto" | "funasr" | "whisperx"
     asr_whisper_model: str = "small"
 
     # TTS / voice cloning. Heavy f5-tts/fish-speech run in a separate interpreter
-    # (empty tts_python autodetects: env → sibling mibu-video venv → this one).
+    # (empty tts_python autodetects: env → this one).
     tts_python: str = ""
     tts_engine: str = "f5-tts"  # "f5-tts" | "fish-speech"
 
@@ -138,7 +138,9 @@ class Settings(BaseSettings):
 settings = Settings()
 
 _DEFAULT_DATA_DIR = Path.home() / ".open-studio"
-_LEGACY_DATA_DIRS = (Path.home() / ".mibu-cut", Path.home() / ".mibu-video", Path.home() / ".mibu-new")
+#: 只保留 .mibu-cut —— v0.1.0 / v0.2.0 是用它发布的,现有用户的数据都在那里。
+#: 更早的 .mibu-video / .mibu-new 属于本仓库之前的前身项目,从未公开发布过,已移除。
+_LEGACY_DATA_DIRS = (Path.home() / ".mibu-cut",)
 _DB_NAMES = ("open-studio.db", "mibu.db")
 
 
@@ -168,7 +170,7 @@ def _dir_has_user_data(directory: Path) -> bool:
 
 
 def _migrate_data_dir() -> None:
-    """项目历次更名(mibu-new → mibu-video → mibu-cut → open-studio)的数据目录迁移。
+    """数据目录更名迁移:.mibu-cut(v0.1.0 / v0.2.0 的发布路径)→ .open-studio。
 
     只在默认路径上做 —— OPEN_STUDIO_DATA_DIR 显式指过别处的部署不动。
 

@@ -79,7 +79,6 @@ def test_marker_guards_half_clone(tmp_path, monkeypatch) -> None:
     empty_repo = tmp_path / "fish-speech-src"
     empty_repo.mkdir()
     monkeypatch.setattr(tts_config, "MANAGED_FISH_REPO", empty_repo)
-    monkeypatch.setattr(tts_config, "_SIBLING_FISH_REPO", tmp_path / "nope")
     cfg = tts_config.TtsRuntimeConfig(
         engine="fish-speech", python_path="", source="hf-mirror", fish_repo_dir="", fish_model_dir=""
     )

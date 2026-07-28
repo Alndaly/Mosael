@@ -36,10 +36,6 @@ def _candidate_pythons() -> list[Path]:
     candidates: list[Path] = []
     if settings.asr_python:
         candidates.append(Path(settings.asr_python).expanduser())
-    # Dev convenience: reuse the sibling mibu-video venv (funasr + whisperx
-    # plus their model caches are already there).
-    repo_root = Path(__file__).resolve().parents[3]
-    candidates.append(repo_root.parent / "mibu-video" / "backend" / ".venv" / "bin" / "python")
     import sys
 
     candidates.append(Path(sys.executable))
@@ -196,7 +192,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
 
             asset = db.get(Asset, asset_id)
             source = resolve_key(asset.file_key)
-            with tempfile.TemporaryDirectory(prefix="mibu-asr-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="open-studio-asr-") as tmp:
                 wav = Path(tmp) / "audio.wav"
                 _extract_audio(source, wav)
                 job.progress = 0.25
