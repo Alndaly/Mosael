@@ -30,6 +30,17 @@ const RESULT_TIMEOUT = 2 * 60 * 1000;
 const ACTION_TIMEOUT = 30 * 1000;
 const HUMAN_INTERVENTION_TIMEOUT = 10 * 60 * 1000;
 
+/** 收尾判定失败时,把「当时页面究竟是什么」记下来:URL + 正文开头。
+ *
+ * 没有这条,故障在日志里只剩一句 `did not confirm publish`,而「平台改版导致文案/选择器失配」
+ * 和「按钮点了但没生效」是两种完全不同的原因,却长得一模一样——只能靠猜。 */
+async function plogPageState(tag: string, driver: PageDriver): Promise<void> {
+  const text = await driver
+    .evaluate<string>(`(document.body?.innerText || '').slice(0, 300)`)
+    .catch(() => "");
+  plog(tag, { url: driver.url(), text });
+}
+
 const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
 
 const escapeHtml = (value: string): string =>
@@ -201,12 +212,17 @@ export class DouyinAdapter implements PublishAdapter {
     // the looser match in case the button text carries extra decoration.
     await this.driver
       .clickByText(this.s.submitText, { exact: true })
-      .catch(() => this.driver.clickByText(this.s.submitText));
+      .then(() => plog("submit: clicked by text (exact)", this.s.submitText))
+      .catch(async () => {
+        await this.driver.clickByText(this.s.submitText);
+        plog("submit: clicked by text (loose)", this.s.submitText);
+      });
   }
 
   async waitResult(): Promise<void> {
     const ok = await this.driver.waitForUrl(this.s.isManageUrl, RESULT_TIMEOUT);
     if (!ok) {
+      await plogPageState("waitResult failed (douyin):", this.driver);
       throw new Error("Douyin did not confirm publish (no redirect to content management).");
     }
   }
@@ -364,19 +380,25 @@ export class XiaohongshuAdapter implements PublishAdapter {
       throw new Error("Xiaohongshu publish button is not clickable.");
     }
 
+    // 四条降级路径互为兜底。必须记下**走通的是哪一条**:小红书的发布按钮在自定义元素 + shadow DOM
+    // 里,改版时往往是前几条陆续失效、最后落到最脆的按文案点击,而表现只是「偶尔发不出去」。
     if (await this.driver.publishXiaohongshuCustomElement(this.s.submitHost)) {
+      plog("submit: via publishXiaohongshuCustomElement");
       return;
     }
     if (await this.driver.clickInShadow(this.s.submitHost, this.s.submitText)) {
+      plog("submit: via clickInShadow");
       return;
     }
     if (await this.driver.activateCustomElement(this.s.submitHost)) {
+      plog("submit: via activateCustomElement");
       return;
     }
     await this.driver.clickByText(this.s.submitText, {
       exact: true,
       selector: "button, [role=button], div, span",
     });
+    plog("submit: via clickByText (last resort)");
   }
 
   async waitResult(): Promise<void> {
@@ -395,6 +417,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       1_000,
     );
     if (!ok) {
+      await plogPageState("waitResult failed (xiaohongshu):", this.driver);
       throw new Error(
         "Xiaohongshu did not confirm publish (no success text and still on/near the publish editor).",
       );
@@ -496,7 +519,11 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     }
     await this.driver
       .clickByTextDeep(this.s.submitText, { exact: true })
-      .catch(() => this.driver.clickByText(this.s.submitText, { exact: true }));
+      .then(() => plog("submit: clicked deep", this.s.submitText))
+      .catch(async () => {
+        await this.driver.clickByText(this.s.submitText, { exact: true });
+        plog("submit: clicked flat", this.s.submitText);
+      });
     await this.waitForHumanGateIfNeeded();
     await this.assertCanPublish();
   }
@@ -522,6 +549,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
         10_000,
       ));
     if (!ok) {
+      await plogPageState("waitResult failed (weixin-channels):", this.driver);
       throw new Error("WeChat Channels did not confirm publish (no redirect to post list).");
     }
   }
@@ -606,19 +634,35 @@ export class BilibiliAdapter implements PublishAdapter {
 
     const donePattern = this.s.uploadDoneTexts.join("|");
     const failedPattern = this.s.uploadFailedTexts.join("|");
+
+    // 编辑表单在**选完文件的瞬间**就渲染出来,视频还在后台传——所以「标题框出现」不是上传完成。
+    // 旧实现把 `querySelector(titleInput)` 写进 settle 条件,而上面刚等过它可见,于是第一次轮询
+    // (0ms)就返回 true:填完表直接点「立即投稿」时视频往往才传了几秒,B 站不受理,表单原地不动,
+    // 再白等 waitResult 五分钟报「未确认发布」。大文件必挂、小文件碰巧传完就成功,表现为随机失败。
+    //
+    // 真信号有两个,任一即可(不互为前提):完成/失败文案,或「进度标记出现过又消失」。只认文案会
+    // 在 B 站改文案时全线挂死;只认进度标记会在它压根不渲染百分比时退化回旧 bug。
+    const progressExpr = `/上传中|正在上传|\\d+%/.test(document.body?.innerText || '')`; // i18n-ok
+    const started = await this.driver.waitForFunction(progressExpr, 15_000, 500);
     const settled = await this.driver.waitForFunction(
       `(() => {
         const text = document.body?.innerText || '';
         if (new RegExp(${JSON.stringify(failedPattern)}).test(text)) return true;
         if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
-        return Boolean(document.querySelector(${JSON.stringify(this.s.titleInput)}));
+        return ${started ? `!(${progressExpr})` : "false"};
       })()`,
       UPLOAD_TIMEOUT,
       1_000,
     );
     if (!settled) {
+      // 带上进度区文案:B 站改版导致信号失配时,一眼能看出该改哪个 pattern。
+      const seen = await this.driver
+        .evaluate<string>(`(document.body?.innerText || '').slice(0, 400)`)
+        .catch(() => "");
+      plog("uploadVideo not settled, page text:", JSON.stringify(seen));
       throw new Error("Bilibili upload did not complete in time.");
     }
+    plog("uploadVideo settled:", { started });
     if (
       await this.driver.waitForFunction(
         `new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`,
@@ -682,6 +726,7 @@ export class BilibiliAdapter implements PublishAdapter {
   async submit(): Promise<void> {
     if (await this.driver.cssVisible(this.s.submitButton, 5_000)) {
       await this.driver.clickCenterCss(this.s.submitButton);
+      plog("submit: clicked", this.s.submitButton);
       return;
     }
     for (const text of this.s.submitTexts) {
@@ -693,6 +738,7 @@ export class BilibiliAdapter implements PublishAdapter {
         .then(() => true)
         .catch(() => false);
       if (clicked) {
+        plog("submit: clicked by text", text);
         return;
       }
     }

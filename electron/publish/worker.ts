@@ -151,11 +151,16 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     }
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
 
+    // 每步都记一笔:这段之前完全不打日志,一次「表单填好了却没投出去」的故障在日志里只表现为
+    // checkLogin 之后静默五分钟,无从判断卡在上传、填表还是提交。
     await adapter.uploadVideo(t.videoPath);
+    plog("runTask uploaded:", bt.id);
     await delay(stepDelay());
     await adapter.fillTitle(t.title);
+    plog("runTask title filled:", bt.id);
     await delay(stepDelay());
     await adapter.fillTags(t.tags);
+    plog("runTask tags filled:", bt.id);
     await delay(stepDelay());
 
     if (t.platformOptions.dryRun === true) {
@@ -166,6 +171,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
       return;
     }
     await adapter.submit();
+    plog("runTask submitted:", bt.id);
     await delay(stepDelay());
     await adapter.waitResult();
     await backend.reportTask(t.id, { status: "success" });
