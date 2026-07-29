@@ -1,373 +1,330 @@
 #!/usr/bin/env python3
-"""Open Studio 宣传片生成器 —— 全程用代码生成,不依赖录屏/截屏。
+"""Open Studio 宣传片生成器。
 
-流程:每张幻灯片用 SVG 排版(品牌配色 + 节点式 M logo)→ rsvg-convert 渲成 PNG →
-ffmpeg 逐片加缓慢推近(Ken Burns)+ 交叉溶解(xfade)+ 低音环境垫 → 输出 promo.mp4。
-改文案/配色/时长只改这一个文件重跑即可。
+与上一版的根本区别:**上一版是九张纯 SVG 幻灯片,没有一帧真实产品画面**——观众看完不知道
+这东西长什么样、能不能用。这一版反过来,真实素材占主体,生成的图形只做连接与强调:
+
+  · 产品界面   gen/screens/*.png(优先)或 docs-site 的那套 —— 真实界面截图
+  · 排版图形   本文件内的 SVG                       —— 开场、痛点、本地优先、收尾
+
+节奏:痛点(0-6s)→ 四段能力(6-23s)→ 差异化(23-27s)→ CTA(27-30s)。
+配色取 tokens.css 的浅色「暖纸面」主题,与真实截图一致。
+
+用法:
+    python3 docs/media/gen/build_promo.py            # → docs/media/open-studio-promo.mp4
+    python3 docs/media/gen/build_promo.py --preview  # 只出分镜联络图,快速看构图
 """
 from __future__ import annotations
-import os, subprocess, math, textwrap
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SLIDES = os.path.join(HERE, "slides")
-os.makedirs(SLIDES, exist_ok=True)
-W, H = 1920, 1080
+REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+SHOTS = os.path.join(HERE, "shots")
+#: 产品界面截图来源。优先用 gen/screens/(你自己截的最新界面),没有再回退到文档站那套。
+#: 文档站那批是 2026-07-24 的,已经过时:智能体面板是空的、发布页是空状态、还带旧品牌名。
+#: 想换成新的,把同名 png 丢进 gen/screens/ 重跑即可,不用改代码。
+MEDIA = os.path.join(REPO, "docs", "media")
+SCREENS_LOCAL = os.path.join(HERE, "screens")
+SCREENS_FALLBACK = os.path.join(REPO, "docs-site", "src", "assets", "screens")
 
-# ---- 品牌配色(取自 frontend/src/design/tokens.css 暗色主题)----
-BG0, BG1 = "#141218", "#1c1a23"
-PANEL, PANEL2 = "#1c1a23", "#232029"
-BORDER = "#332f3d"
-INK = "#e9e6f0"       # 主文字
-MUTE = "#9a93a8"      # 次文字
-PRIMARY = "#8a7bf0"   # 品牌紫
-PRIMARY_D = "#6a5cd8"
-GOOD = "#4ec58a"
+
+def screen(name: str) -> str:
+    local = os.path.join(SCREENS_LOCAL, name)
+    return local if os.path.isfile(local) else os.path.join(SCREENS_FALLBACK, name)
+
+W, H, FPS = 1920, 1080, 30
+XFADE = 0.35
+
+# ---- 品牌配色(tokens.css 浅色「暖纸面」)----
+BG = "#f6f4f0"
+CARD = "#fdfcfa"
+INK = "#2c2a33"
+MUTE = "#756f80"
+PRIMARY = "#6a5cd8"
+ACCENT = "#ece9fb"
+BORDER = "#e6e1d8"
+WARN = "#c2410c"
 FONT = "PingFang SC, Hiragino Sans GB, STHeiti, sans-serif"
 MONO = "SF Mono, Menlo, monospace"
-
-# 平台色
-PLAT = [("抖音", "#111"), ("B站", "#fb7299"), ("小红书", "#ff2442"), ("视频号", "#07c160")]
 
 
 def esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def node_m(cx: float, cy: float, s: float, color: str, glow: bool = True) -> str:
-    """节点式 M(5 个节点连成 M)。原始 viewBox 22 26 76 72,中心约 (60,62)。"""
-    def P(px, py):
-        return f"{cx + (px - 60) * s:.1f} {cy + (py - 62) * s:.1f}"
-    sw = 9 * s
-    r = 10 * s
-    pts = [(34, 38), (60, 62), (86, 38), (34, 86), (86, 86)]
-    circles = "".join(f'<circle cx="{cx+(px-60)*s:.1f}" cy="{cy+(py-62)*s:.1f}" r="{r:.1f}"/>' for px, py in pts)
-    filt = ' filter="url(#glow)"' if glow else ""
-    return f'''<g{filt}>
-      <path d="M{P(34,86)} L{P(34,38)} L{P(60,62)} L{P(86,38)} L{P(86,86)}"
-            stroke="{color}" stroke-width="{sw:.1f}" fill="none" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>
-      <g fill="{color}">{circles}</g>
-    </g>'''
+def run(cmd: list[str]) -> None:
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise SystemExit(f"命令失败({proc.returncode}):{' '.join(cmd[:6])}…\n{proc.stderr[-800:]}")
 
 
-def new_badge(x: float = 1618, y: float = 150) -> str:
-    return f'''<g>
-      <rect x="{x}" y="{y}" width="102" height="46" rx="23" fill="none" stroke="{PRIMARY}" stroke-width="2"/>
-      <circle cx="{x+26}" cy="{y+23}" r="5" fill="{PRIMARY}"/>
-      <text x="{x+62}" y="{y+31}" font-family="{FONT}" font-size="22" font-weight="700" fill="{PRIMARY}" text-anchor="middle" letter-spacing="1">NEW</text>
-    </g>'''
+# ---------------------------------------------------------------- SVG 基件
 
 
-def head(defs_extra: str = "") -> str:
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-<defs>
-  <radialGradient id="bg" cx="38%" cy="30%" r="90%">
-    <stop offset="0%" stop-color="{BG1}"/><stop offset="100%" stop-color="{BG0}"/>
-  </radialGradient>
-  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="{PRIMARY}"/><stop offset="100%" stop-color="{PRIMARY_D}"/>
-  </linearGradient>
-  <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-    <feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="10" stdDeviation="22" flood-color="#000" flood-opacity="0.45"/></filter>
-  {defs_extra}
-</defs>
-<rect width="{W}" height="{H}" fill="url(#bg)"/>
-<g opacity="0.5">{dot_grid()}</g>'''
+def svg(body: str) -> str:
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
+        f"<defs>"
+        f'<linearGradient id="warm" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0" stop-color="{BG}"/><stop offset="1" stop-color="#efeae1"/></linearGradient>'
+        f'<filter id="soft" x="-40%" y="-40%" width="180%" height="180%">'
+        f'<feGaussianBlur stdDeviation="30"/></filter>'
+        f"</defs>"
+        f'<rect width="{W}" height="{H}" fill="url(#warm)"/>{body}</svg>'
+    )
 
 
-def dot_grid() -> str:
-    d = []
-    for gy in range(80, H, 96):
-        for gx in range(80, W, 96):
-            d.append(f'<circle cx="{gx}" cy="{gy}" r="1.4" fill="{BORDER}"/>')
-    return "".join(d)
+def logo(cx: float, cy: float, s: float = 1.0, glow: bool = True) -> str:
+    """节点式 M:三竖两连,呼应工作流画布。"""
+    u = 26 * s
+    pts = [(-2.2, 0.9), (-1.1, -1.0), (0.0, 0.9), (1.1, -1.0), (2.2, 0.9)]
+    out = ""
+    for i in range(len(pts) - 1):
+        x1, y1 = cx + pts[i][0] * u, cy + pts[i][1] * u
+        x2, y2 = cx + pts[i + 1][0] * u, cy + pts[i + 1][1] * u
+        out += (f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                f'stroke="{PRIMARY}" stroke-width="{5*s:.1f}" stroke-linecap="round" opacity="0.5"/>')
+    for px, py in pts:
+        x, y = cx + px * u, cy + py * u
+        if glow:
+            out += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{17*s:.1f}" fill="{PRIMARY}" opacity="0.15"/>'
+        out += f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{8*s:.1f}" fill="{PRIMARY}"/>'
+    return out
 
 
-def kicker(x, y, text, color=PRIMARY):
-    return (f'<rect x="{x}" y="{y-22}" width="30" height="4" rx="2" fill="{color}"/>'
-            f'<text x="{x+44}" y="{y-9}" font-family="{FONT}" font-size="24" font-weight="600" '
-            f'letter-spacing="3" fill="{color}">{esc(text)}</text>')
+def centered(text: str, y: float, size: int, color: str = INK, weight: int = 700,
+             spacing: float = 1, family: str = FONT) -> str:
+    return (f'<text x="{W/2}" y="{y}" font-family="{family}" font-size="{size}" '
+            f'font-weight="{weight}" fill="{color}" text-anchor="middle" '
+            f'letter-spacing="{spacing}">{esc(text)}</text>')
 
 
-def pill(x, y, w, h, label, fill=PANEL, stroke=BORDER, tcolor=INK, fs=30, icon=None):
-    ic = f'<text x="{x+34}" y="{y+h/2+11}" font-size="{fs+4}" text-anchor="middle">{icon}</text>' if icon else ""
-    tx = x + (58 if icon else w/2)
-    anchor = "start" if icon else "middle"
-    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{h/2}" fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>'
-            f'{ic}<text x="{tx}" y="{y+h/2+11}" font-family="{FONT}" font-size="{fs}" font-weight="600" fill="{tcolor}" text-anchor="{anchor}">{esc(label)}</text>')
+def lower_third(kicker: str, line: str) -> str:
+    """压在真实截图左下的字幕条。不铺满整宽——要让观众仍看得见界面。"""
+    return (
+        f'<g transform="translate(92,{H-278})">'
+        f'<rect x="0" y="0" width="1216" height="184" rx="20" fill="{CARD}" opacity="0.95"/>'
+        f'<rect x="0" y="0" width="8" height="184" rx="4" fill="{PRIMARY}"/>'
+        f'<text x="48" y="64" font-family="{FONT}" font-size="27" fill="{PRIMARY}" '
+        f'letter-spacing="4" font-weight="600">{esc(kicker)}</text>'
+        f'<text x="48" y="134" font-family="{FONT}" font-size="50" font-weight="600" '
+        f'fill="{INK}">{esc(line)}</text></g>'
+    )
 
 
-def foot() -> str:
-    return "</svg>"
+# ---------------------------------------------------------------- 分镜
 
 
-# ---------------- 幻灯片 ----------------
-
-def slide_hero():
-    return head() + f'''
-    {node_m(W/2, 400, 3.4, PRIMARY)}
-    <text x="{W/2}" y="640" font-family="{FONT}" font-size="96" font-weight="800" fill="{INK}" text-anchor="middle" letter-spacing="1">Open Studio</text>
-    <text x="{W/2}" y="712" font-family="{FONT}" font-size="34" font-weight="500" fill="{PRIMARY}" text-anchor="middle" letter-spacing="6">AI NATIVE VIDEO STUDIO</text>
-    <text x="{W/2}" y="800" font-family="{FONT}" font-size="30" fill="{MUTE}" text-anchor="middle">本地优先 · 一个桌面应用,跑通 从素材到矩阵发布 的全链路</text>
-    ''' + foot()
+def shot_open() -> str:
+    return svg(
+        f'<circle cx="{W/2}" cy="424" r="250" fill="{PRIMARY}" opacity="0.08" filter="url(#soft)"/>'
+        + logo(W / 2, 424, 1.5)
+        + centered("Open Studio", 700, 104, spacing=2)
+        + centered("本地优先的 AI 视频创作工作室", 774, 34, MUTE, 400, spacing=6)
+    )
 
 
-def flow_arrow(x, y, w=54):
-    return f'<path d="M{x} {y} l{w-14} 0 m-16 -9 l16 9 l-16 9" stroke="{PRIMARY}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-
-
-def slide_pipeline():
-    steps = ["素材导入", "逐字剪辑", "AI 成片", "矩阵发布"]
-    y = 520; bw = 320; bh = 150; gap = 96; x0 = (W - (bw*4 + gap*3))/2
-    boxes = []
-    for i, label in enumerate(steps):
-        x = x0 + i*(bw+gap)
-        cx = x + bw/2
-        boxes.append(f'''<g filter="url(#soft)"><rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="22" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/>
-          <circle cx="{cx}" cy="{y+56}" r="28" fill="{PRIMARY}" opacity="0.16"/>
-          <text x="{cx}" y="{y+67}" font-family="{FONT}" font-size="32" font-weight="800" fill="{PRIMARY}" text-anchor="middle">{i+1}</text>
-          <text x="{cx}" y="{y+124}" font-family="{FONT}" font-size="32" font-weight="700" fill="{INK}" text-anchor="middle">{label}</text></g>''')
-        if i < 3:
-            boxes.append(flow_arrow(x+bw+21, y+bh/2, gap-42))
-    return head() + f'''
-    {kicker(x0, 380, "END-TO-END")}
-    <text x="{x0}" y="452" font-family="{FONT}" font-size="72" font-weight="800" fill="{INK}">从素材到发布,一条流水线</text>
-    {"".join(boxes)}
-    <text x="{W/2}" y="740" font-family="{FONT}" font-size="28" fill="{MUTE}" text-anchor="middle">可由工作流与定时触发器全自动串起来 —— 一次搭好,持续产出</text>
-    ''' + foot()
-
-
-def slide_nle():
-    # 迷你时间线
-    tx, ty, tw = 200, 470, 1520
-    tracks = [("#8a7bf0", [(0,340),(360,300),(700,480)]), ("#4ec58a", [(120,520),(680,360)]), ("#e0a44b", [(0,1180)])]
-    rows = []
-    for ti,(col,clips) in enumerate(tracks):
-        ry = ty + ti*96
-        rows.append(f'<rect x="{tx}" y="{ry}" width="{tw}" height="78" rx="10" fill="{PANEL2}"/>')
-        for cx,cw in clips:
-            rows.append(f'<rect x="{tx+16+cx}" y="{ry+10}" width="{cw}" height="58" rx="9" fill="{col}" opacity="0.9"/>')
-    playhead = tx + 540
-    return head() + f'''
-    {kicker(tx, 360, "NLE 内核")}
-    <text x="{tx}" y="432" font-family="{FONT}" font-size="72" font-weight="800" fill="{INK}">专业剪辑,不必学时间线</text>
-    <g filter="url(#soft)"><rect x="{tx-24}" y="{ty-30}" width="{tw+48}" height="360" rx="20" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/></g>
-    {"".join(rows)}
-    <line x1="{playhead}" y1="{ty-14}" x2="{playhead}" y2="{ty+300}" stroke="{PRIMARY}" stroke-width="3"/>
-    <circle cx="{playhead}" cy="{ty-14}" r="9" fill="{PRIMARY}"/>
-    <text x="{tx}" y="890" font-family="{FONT}" font-size="30" fill="{MUTE}">多轨时间线 · 逐字剪辑 · 关键帧调色 · 恒定帧率一键导出</text>
-    ''' + foot()
-
-
-def slide_ai():
-    px, py, pw, ph = 200, 430, 900, 430
-    bubbles = [
-        (PRIMARY, "把这段素材剪成 30 秒高光,配字幕", "#fff", True),
-        (PANEL2, "已读懂 6 段素材情绪,自动分割 + 转场 + 花字 ✨", INK, False),
-    ]
-    by = py+40; bl = []
-    for col, txt, tc, right in bubbles:
-        bw = 620; bx = px+pw-bw-40 if right else px+40
-        bl.append(f'<rect x="{bx}" y="{by}" width="{bw}" height="90" rx="20" fill="{col}"/>'
-                  f'<text x="{bx+30}" y="{by+55}" font-family="{FONT}" font-size="27" fill="{tc}">{esc(txt)}</text>')
-        by += 130
-    return head() + f'''
-    {kicker(px, 340, "AI 应用中心 + 创作型智能体")}
-    <text x="{px}" y="412" font-family="{FONT}" font-size="66" font-weight="800" fill="{INK}">动动嘴,就把片子剪了</text>
-    <g filter="url(#soft)"><rect x="{px}" y="{py}" width="{pw}" height="{ph}" rx="24" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/></g>
-    {"".join(bl)}
-    <g transform="translate(1320,560)">{node_m(0,0,2.2,PRIMARY)}</g>
-    <text x="1320" y="740" font-family="{FONT}" font-size="27" fill="{MUTE}" text-anchor="middle">文生图 · 图生视频 · 配音</text>
-    <text x="1320" y="778" font-family="{FONT}" font-size="27" fill="{MUTE}" text-anchor="middle">智能体直接操作时间线</text>
-    ''' + foot()
-
-
-def graph_node(x, y, label, col=PANEL, tc=INK, w=190, h=70):
-    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14" fill="{col}" stroke="{BORDER}" stroke-width="1.5"/>'
-            f'<circle cx="{x+14}" cy="{y+h/2}" r="5" fill="{PRIMARY}"/><circle cx="{x+w-14}" cy="{y+h/2}" r="5" fill="{GOOD}"/>'
-            f'<text x="{x+w/2}" y="{y+h/2+9}" font-family="{FONT}" font-size="25" font-weight="600" fill="{tc}" text-anchor="middle">{esc(label)}</text>')
-
-
-def edge(x1,y1,x2,y2):
-    mx=(x1+x2)/2
-    return f'<path d="M{x1} {y1} C{mx} {y1} {mx} {y2} {x2} {y2}" stroke="{PRIMARY}" stroke-width="2.5" fill="none" opacity="0.7"/>'
-
-
-def slide_workflow():
-    ox, oy = 200, 300
-    # 主图 + 一个折叠成的子图节点
-    n = []
-    n.append(edge(390,460,560,400)); n.append(edge(390,460,560,540))
-    n.append(edge(750,400,910,460)); n.append(edge(750,540,910,460))
-    n.append(edge(1100,460,1270,460))
-    body = (graph_node(200,425,"开始") + graph_node(560,365,"AI 生成") + graph_node(560,505,"转写")
-            + graph_node(910,425,"子图 · 成片", col="#241f38", tc=INK) + graph_node(1270,425,"调用工作流·发布", w=250))
-    # 折叠虚线框
-    fold = f'<rect x="890" y="405" width="230" height="110" rx="16" fill="none" stroke="{PRIMARY}" stroke-width="2" stroke-dasharray="7 6"/>'
-    return head() + f'''
-    {kicker(ox, 250, "工作流引擎")} {new_badge()}
-    <text x="{ox}" y="322" font-family="{FONT}" font-size="70" font-weight="800" fill="{INK}">把创作编排成流程</text>
-    <g filter="url(#soft)"><rect x="150" y="360" width="1620" height="300" rx="22" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5" opacity="0.5"/></g>
-    {"".join(n)}{body}{fold}
-    <text x="{ox}" y="760" font-family="{FONT}" font-size="30" fill="{MUTE}">框选「折叠为子图」· 调用工作流(工作流即工具)· 循环 · 条件分支 · 定时触发</text>
-    <text x="{ox}" y="806" font-family="{FONT}" font-size="24" fill="{PRIMARY}">参考 ComfyUI 与 dify,子图可任意嵌套,循环体与顶层同一套并行引擎</text>
-    ''' + foot()
-
-
-def slide_pool():
-    ox = 200
-    # 左:两类档案;中:池;右:被 工作流/智能体 复用
-    prof = [("发布账号 · B站", PRIMARY, "已登录"), ("发布账号 · 抖音", PRIMARY, "已登录"), ("通用档案 · 任意站点", GOOD, "可复用")]
-    cards = []
-    for i,(name,col,tag) in enumerate(prof):
-        y = 380 + i*128
-        cards.append(f'''<g filter="url(#soft)"><rect x="{ox}" y="{y}" width="560" height="104" rx="18" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/>
-          <circle cx="{ox+52}" cy="{y+52}" r="22" fill="{col}" opacity="0.25"/><circle cx="{ox+52}" cy="{y+52}" r="9" fill="{col}"/>
-          <text x="{ox+100}" y="{y+48}" font-family="{FONT}" font-size="30" font-weight="700" fill="{INK}">{name}</text>
-          <text x="{ox+100}" y="{y+82}" font-family="{FONT}" font-size="22" fill="{MUTE}">{tag} · 持久登录</text></g>''')
-    def icon_flow(cx, cy):
-        return (f'<g stroke="{PRIMARY}" stroke-width="3.5" fill="{PRIMARY}" stroke-linecap="round">'
-                f'<line x1="{cx-16}" y1="{cy-18}" x2="{cx+14}" y2="{cy}"/><line x1="{cx+14}" y1="{cy}" x2="{cx-16}" y2="{cy+18}"/>'
-                f'<circle cx="{cx-16}" cy="{cy-18}" r="7"/><circle cx="{cx+14}" cy="{cy}" r="7"/><circle cx="{cx-16}" cy="{cy+18}" r="7"/></g>')
-    reuse = []
-    for i, lab in enumerate(["工作流复用", "智能体复用"]):
-        y = 430 + i*180
-        ico = icon_flow(1340, y+65) if i == 0 else node_m(1340, y+65, 0.62, PRIMARY, glow=False)
-        reuse.append(f'''<g filter="url(#soft)"><rect x="1280" y="{y}" width="440" height="130" rx="20" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/></g>
-          {ico}
-          <text x="1400" y="{y+62}" font-family="{FONT}" font-size="30" font-weight="700" fill="{INK}">{lab}</text>
-          <text x="1400" y="{y+96}" font-family="{FONT}" font-size="22" fill="{MUTE}">复用登录态跑任务</text>''')
-        reuse.append(edge(830, 490, 1280, y+65))
-    return head() + f'''
-    {kicker(ox, 300, "浏览器池")} {new_badge()}
-    <text x="{ox}" y="352" font-family="{FONT}" font-size="66" font-weight="800" fill="{INK}">统一你的登录身份</text>
-    {"".join(cards)}
-    {"".join(reuse)}
-    <text x="{ox}" y="920" font-family="{FONT}" font-size="29" fill="{MUTE}">发布账号 + 任意站点登录,一处管理;工作流与智能体都能安全复用 —— 不再只服务自媒体</text>
-    ''' + foot()
-
-
-def slide_matrix():
-    ox = 200
-    badges = []
-    x = ox
-    for name,col in PLAT:
-        w = 260
-        badges.append(f'''<g filter="url(#soft)"><rect x="{x}" y="470" width="{w}" height="150" rx="22" fill="{PANEL}" stroke="{BORDER}" stroke-width="1.5"/>
-          <circle cx="{x+w/2}" cy="530" r="30" fill="{col}"/>
-          <text x="{x+w/2}" y="600" font-family="{FONT}" font-size="34" font-weight="700" fill="{INK}" text-anchor="middle">{name}</text></g>''')
-        x += w + 60
-    return head() + f'''
-    {kicker(ox, 380, "自媒体矩阵发布")}
-    <text x="{ox}" y="452" font-family="{FONT}" font-size="72" font-weight="800" fill="{INK}">一次成片,全平台分发</text>
-    {"".join(badges)}
-    <text x="{W/2}" y="740" font-family="{FONT}" font-size="30" fill="{MUTE}" text-anchor="middle">内嵌浏览器执行器自动上传;标题/简介/封面一次填好,矩阵账号并发投稿</text>
-    ''' + foot()
-
-
-def slide_security():
-    ox = 200
-    card_x, card_y = 1120, 400
-    return head() + f'''
-    {kicker(ox, 330, "安全 · 可控")} {new_badge()}
-    <text x="{ox}" y="404" font-family="{FONT}" font-size="66" font-weight="800" fill="{INK}">你的登录,你说了算</text>
-    <text x="{ox}" y="500" font-family="{FONT}" font-size="34" fill="{MUTE}">智能体能用你的登录身份跑任务,</text>
-    <text x="{ox}" y="556" font-family="{FONT}" font-size="34" fill="{MUTE}">但每次都要你在确认卡上<tspan fill="{PRIMARY}" font-weight="700">显式授权</tspan>。</text>
-    <text x="{ox}" y="640" font-family="{FONT}" font-size="27" fill="{MUTE}">· 未授权的身份,它一个都动不了</text>
-    <text x="{ox}" y="686" font-family="{FONT}" font-size="27" fill="{MUTE}">· 页面内容只当数据,绝不输入密码 / 支付</text>
-    <text x="{ox}" y="732" font-family="{FONT}" font-size="27" fill="{MUTE}">· 发帖 / 提交前,先跟你说清楚</text>
-    <g filter="url(#soft)"><rect x="{card_x}" y="{card_y}" width="600" height="290" rx="24" fill="{PANEL}" stroke="{PRIMARY}" stroke-width="2"/>
-      <text x="{card_x+40}" y="{card_y+70}" font-size="40">🔐</text>
-      <text x="{card_x+110}" y="{card_y+78}" font-family="{FONT}" font-size="30" font-weight="700" fill="{INK}">授权请求</text>
-      <line x1="{card_x+40}" y1="{card_y+110}" x2="{card_x+560}" y2="{card_y+110}" stroke="{BORDER}"/>
-      <text x="{card_x+40}" y="{card_y+165}" font-family="{FONT}" font-size="26" fill="{INK}">⚠️ 智能体请求复用你的浏览器</text>
-      <text x="{card_x+40}" y="{card_y+205}" font-family="{FONT}" font-size="26" fill="{INK}">档案「B站主号」的登录身份跑任务</text>
-      <rect x="{card_x+300}" y="{card_y+235}" width="120" height="46" rx="23" fill="{PANEL2}"/>
-      <text x="{card_x+360}" y="{card_y+265}" font-family="{FONT}" font-size="24" fill="{MUTE}" text-anchor="middle">拒绝</text>
-      <rect x="{card_x+440}" y="{card_y+235}" width="120" height="46" rx="23" fill="{PRIMARY}"/>
-      <text x="{card_x+500}" y="{card_y+265}" font-family="{FONT}" font-size="24" fill="#fff" text-anchor="middle">允许</text></g>
-    ''' + foot()
-
-
-def slide_cta():
-    return head() + f'''
-    {node_m(W/2, 380, 2.6, PRIMARY)}
-    <text x="{W/2}" y="600" font-family="{FONT}" font-size="64" font-weight="800" fill="{INK}" text-anchor="middle">Open Studio</text>
-    <text x="{W/2}" y="676" font-family="{FONT}" font-size="34" fill="{MUTE}" text-anchor="middle">本地优先 · 全链路 AI 视频创作工作室</text>
-    <rect x="{W/2-230}" y="760" width="460" height="72" rx="36" fill="none" stroke="{BORDER}" stroke-width="1.5"/>
-    <text x="{W/2}" y="806" font-family="{MONO}" font-size="28" fill="{PRIMARY}" text-anchor="middle">1142704468@qq.com</text>
-    ''' + foot()
-
-
-SLIDE_FUNCS = [
-    ("01_hero", slide_hero, 3.6),
-    ("02_pipeline", slide_pipeline, 3.8),
-    ("03_nle", slide_nle, 3.6),
-    ("04_ai", slide_ai, 3.8),
-    ("05_workflow", slide_workflow, 4.2),
-    ("06_pool", slide_pool, 4.4),
-    ("07_matrix", slide_matrix, 3.6),
-    ("08_security", slide_security, 4.4),
-    ("09_cta", slide_cta, 4.0),
-]
-XFADE = 0.7  # 交叉溶解时长
-
-
-def render_slides():
-    pngs = []
-    for name, fn, _ in SLIDE_FUNCS:
-        svg_path = os.path.join(SLIDES, name + ".svg")
-        png_path = os.path.join(SLIDES, name + ".png")
-        with open(svg_path, "w") as f:
-            f.write(fn())
-        subprocess.run(["rsvg-convert", "-w", str(W*2), "-h", str(H*2), svg_path, "-o", png_path], check=True)
-        pngs.append((png_path, dict(SLIDE_FUNCS_D)[name]))
-    return pngs
-
-
-SLIDE_FUNCS_D = {n: d for n, _, d in SLIDE_FUNCS}
-
-
-def build_video():
-    pngs = render_slides()
-    out = os.path.join(HERE, "open-studio-promo.mp4")
-    # 每片:loop 成时长 dur 的片段 + 缓慢推近(zoompan)。fps 30。
-    inputs = []
-    filters = []
-    for i, (png, dur) in enumerate(pngs):
-        inputs += ["-loop", "1", "-t", f"{dur}", "-i", png]
-        frames = int(dur * 30)
-        # 轻微推近:1.0 → 1.06
-        filters.append(
-            f"[{i}:v]scale={W*2}:{H*2},zoompan=z='min(zoom+0.0006,1.06)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps=30,"
-            f"setsar=1,format=yuv420p[v{i}]"
+def shot_problem() -> str:
+    tools = ["剪辑", "配音", "字幕", "分发"]
+    cards = ""
+    for i, name in enumerate(tools):
+        x = 178 + i * 400
+        cards += (
+            f'<g transform="translate({x},432)">'
+            f'<rect width="292" height="204" rx="20" fill="{CARD}" stroke="{BORDER}" stroke-width="2"/>'
+            f'<text x="146" y="122" font-family="{FONT}" font-size="48" font-weight="600" '
+            f'fill="{INK}" text-anchor="middle">{esc(name)}</text></g>'
         )
-    # xfade 链
-    chain = ""
-    prev = "v0"
-    offset = 0.0
-    for i in range(1, len(pngs)):
-        dur_prev = pngs[i-1][1]
-        offset += dur_prev - XFADE
-        outp = f"x{i}"
-        chain += f"[{prev}][v{i}]xfade=transition=fade:duration={XFADE}:offset={offset:.3f}[{outp}];"
-        prev = outp
-    total = sum(d for _, d in pngs) - XFADE * (len(pngs) - 1)
-    fc = ";".join(filters) + ";" + chain.rstrip(";")
-    # 音频:两层低频正弦做柔和垫底 + 整体淡入淡出
-    audio_fc = (f"aevalsrc=0.06*sin(2*PI*146.83*t)+0.045*sin(2*PI*220*t):s=44100:d={total:.2f},"
-                f"tremolo=f=0.15:d=0.5,afade=t=in:st=0:d=1.2,afade=t=out:st={total-1.5:.2f}:d=1.5,"
-                f"lowpass=f=900,volume=0.5[a]")
-    cmd = ["ffmpeg", "-y", *inputs,
-           "-filter_complex", fc + ";" + audio_fc,
-           "-map", f"[{prev}]", "-map", "[a]",
-           "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-b:a", "160k",
-           "-t", f"{total:.2f}", out]
-    subprocess.run(cmd, check=True)
-    print("OUT", out, f"{total:.1f}s")
+        if i < 3:
+            ax = x + 292 + 22
+            cards += (
+                f'<path d="M{ax} 534 L{ax+64} 534" stroke="{WARN}" stroke-width="4" '
+                f'stroke-dasharray="9 9" stroke-linecap="round" opacity="0.85"/>'
+                f'<text x="{ax+32}" y="502" font-family="{FONT}" font-size="24" fill="{WARN}" '
+                f'text-anchor="middle">导出</text>'
+            )
+    return svg(
+        centered("四个软件,四次导出", 258, 78)
+        + cards
+        + centered("每一步之间都在等进度条", 800, 34, MUTE, 400)
+    )
+
+
+def shot_local() -> str:
+    rings = "".join(
+        f'<circle cx="{W/2}" cy="424" r="{292+i*88}" fill="none" stroke="{PRIMARY}" '
+        f'stroke-width="1.5" opacity="{0.17-i*0.05:.2f}"/>'
+        for i in range(3)
+    )
+    device = (
+        f'<g transform="translate({W/2-152},318)">'
+        f'<rect width="304" height="212" rx="22" fill="{CARD}" stroke="{BORDER}" stroke-width="3"/>'
+        f'<rect x="26" y="26" width="252" height="142" rx="10" fill="{ACCENT}"/>'
+        + logo(152, 97, 0.62, glow=False)
+        + f'<rect x="114" y="184" width="76" height="12" rx="6" fill="{BORDER}"/></g>'
+    )
+    return svg(
+        f'<circle cx="{W/2}" cy="424" r="220" fill="{PRIMARY}" opacity="0.09" filter="url(#soft)"/>'
+        + rings + device
+        + centered("素材、工程、登录态,都在你自己的机器上", 790, 56)
+        + centered("离线可用 · 不上传 · 也可切到自己的服务器", 858, 31, MUTE, 400)
+    )
+
+
+def shot_cta() -> str:
+    return svg(
+        logo(W / 2, 396, 1.25)
+        + centered("Open Studio", 612, 90, spacing=2)
+        + centered("openstudio.team", 702, 42, PRIMARY, 600, spacing=2, family=MONO)
+        + centered("macOS · Windows   |   源码可见", 792, 28, MUTE, 400, spacing=1)
+    )
+
+
+GRAPHIC_SHOTS = {
+    "00-open": (2.6, shot_open),
+    "01-problem": (3.6, shot_problem),
+    "06-local": (3.6, shot_local),
+    "07-cta": (3.4, shot_cta),
+}
+
+FOOTAGE_SHOTS = {
+    "02-edit": (5.0, "editor.png", "in", "剪辑", "多轨、画中画、字幕,一条时间线做完"),
+    "03-agent": (4.2, "ai-chat.png", "left", "智能体", "AI 直接改你的工程,每次改动先出确认卡"),
+    "04-flow": (4.2, "workflows.png", "right", "工作流", "框选折叠成子图,整条流程可嵌套复用"),
+    "05-publish": (3.8, "publish.png", "in", "分发", "一次导出,抖音 / B站 / 小红书 / 视频号"),
+}
+
+ORDER = ["00-open", "01-problem", "02-edit", "03-agent", "04-flow", "05-publish", "06-local", "07-cta"]
+
+
+# ---------------------------------------------------------------- 渲染
+
+
+def rasterize(name: str, markup: str, transparent: bool = False) -> str:
+    svg_path = os.path.join(SHOTS, f"{name}.svg")
+    png_path = os.path.join(SHOTS, f"{name}.png")
+    with open(svg_path, "w", encoding="utf-8") as fh:
+        fh.write(markup)
+    run(["rsvg-convert", "-w", str(W), "-h", str(H), svg_path, "-o", png_path])
+    return png_path
+
+
+def _drift(src: str, dur: float, out: str, sw: int, sh: int, dx: float, dy: float) -> None:
+    """把一张比画幅大的图铺在 1920×1080 上,逐帧位移 —— 缓慢漂移的运镜。
+
+    不用 zoompan:它每帧都要重做超采样,8 个分镜跑了 17 分钟。overlay 的 x/y 支持逐帧表达式,
+    只是整数平移,同样的活儿几秒钟就完了。代价是没有真正的缩放,但这种慢速推移本来也看不出。
+    """
+    x = f"(W-w)/2+({dx})*(t/{dur}-0.5)"
+    y = f"(H-h)/2+({dy})*(t/{dur}-0.5)"
+    fc = (f"[0:v]scale={sw}:{sh}[img];"
+          f"color=c=0x{BG[1:]}:s={W}x{H}:d={dur}:r={FPS}[bgc];"
+          f"[bgc][img]overlay=x='{x}':y='{y}':eval=frame,format=yuv420p[v]")
+    run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-framerate", str(FPS), "-t", f"{dur}", "-i", src,
+         "-filter_complex", fc, "-map", "[v]", "-t", f"{dur}",
+         "-c:v", "libx264", "-preset", "medium", "-crf", "18", out])
+
+
+def clip_graphic(png: str, dur: float, out: str) -> None:
+    """图形分镜:略微放大后极慢漂移,避免完全静止的呆板感。"""
+    _drift(png, dur, out, int(W * 1.06), int(H * 1.06), 26, 16)
+
+
+def clip_footage(png: str, dur: float, motion: str, overlay: str, out: str) -> None:
+    """真实界面截图 → 漂移运镜 + 叠字幕条。
+
+    截图放大到略宽于画幅,按 motion 决定漂移方向:横向漂移展示宽界面(时间线、画布),
+    纵向微漂用于信息密集的页面。
+    """
+    dx, dy = {"in": (18, 12), "left": (-150, 0), "right": (150, 0)}[motion]
+    tmp = out.replace(".mp4", "-bg.mp4")
+    _drift(png, dur, tmp, int(W * 1.10), int(W * 1.10 * 0.625), dx, dy)
+    fc = "[0:v][1:v]overlay=0:0:format=auto,format=yuv420p[v]"
+    run(["ffmpeg", "-y", "-v", "error", "-i", tmp,
+         "-loop", "1", "-framerate", str(FPS), "-t", f"{dur}", "-i", overlay,
+         "-filter_complex", fc, "-map", "[v]", "-t", f"{dur}",
+         "-c:v", "libx264", "-preset", "medium", "-crf", "18", out])
+    os.remove(tmp)
+
+
+def build_shots() -> list[tuple[str, float]]:
+    os.makedirs(SHOTS, exist_ok=True)
+    made: list[tuple[str, float]] = []
+    for name in ORDER:
+        out = os.path.join(SHOTS, f"{name}.mp4")
+        if name in GRAPHIC_SHOTS:
+            dur, maker = GRAPHIC_SHOTS[name]
+            clip_graphic(rasterize(name, maker()), dur, out)
+        else:
+            dur, src_name, motion, kicker, line = FOOTAGE_SHOTS[name]
+            src = screen(src_name)
+            if not os.path.isfile(src):
+                raise SystemExit(f"缺少真实截图:{src}")
+            ov = rasterize(f"{name}-ov",
+                           f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}">'
+                           f"{lower_third(kicker, line)}</svg>")
+            clip_footage(src, dur, motion, ov, out)
+        made.append((out, dur))
+        print(f"  {name:12s} {dur:>4.1f}s")
+    return made
+
+
+def build() -> str:
+    made = build_shots()
+    inputs: list[str] = []
+    for path, _ in made:
+        inputs += ["-i", path]
+    chain, prev, offset = "", "0:v", 0.0
+    for i in range(1, len(made)):
+        offset += made[i - 1][1] - XFADE
+        chain += f"[{prev}][{i}:v]xfade=transition=fade:duration={XFADE}:offset={offset:.3f}[x{i}];"
+        prev = f"x{i}"
+    total = sum(d for _, d in made) - XFADE * (len(made) - 1)
+    # 低频环境垫:三层正弦 + 缓慢颤音。无版权风险,也不喧宾夺主。
+    audio = (f"aevalsrc=0.055*sin(2*PI*146.83*t)+0.04*sin(2*PI*220*t)+0.018*sin(2*PI*293.66*t):"
+             f"s=44100:d={total:.2f},tremolo=f=0.13:d=0.45,lowpass=f=1100,"
+             f"afade=t=in:st=0:d=1.4,afade=t=out:st={total-1.6:.2f}:d=1.6,volume=0.45[a]")
+    out = os.path.join(MEDIA, "open-studio-promo.mp4")
+    run(["ffmpeg", "-y", "-v", "error", *inputs,
+         "-filter_complex", chain.rstrip(";") + ";" + audio,
+         "-map", f"[{prev}]", "-map", "[a]",
+         "-c:v", "libx264", "-preset", "slow", "-crf", "19", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart",
+         "-t", f"{total:.2f}", out])
+    print(f"\n成片:{out}\n     {total:.1f}s  {os.path.getsize(out)/1e6:.1f} MB")
+    return out
+
+
+def contact_sheet() -> str:
+    """分镜联络图(2×4):快速判断构图是否成立,不必看完整片。"""
+    build_shots()
+    frames = []
+    for name in ORDER:
+        dst = os.path.join(SHOTS, f"cs-{name}.png")
+        run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", os.path.join(SHOTS, f"{name}.mp4"),
+             "-frames:v", "1", "-vf", "scale=480:270", dst])
+        frames.append(dst)
+    inputs: list[str] = []
+    for f in frames:
+        inputs += ["-i", f]
+    out = os.path.join(SHOTS, "contact.png")
+    run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex",
+         "[0][1][2][3]hstack=inputs=4[t];[4][5][6][7]hstack=inputs=4[b];[t][b]vstack",
+         "-frames:v", "1", out])
+    print("联络图:", out)
     return out
 
 
 if __name__ == "__main__":
-    build_video()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--preview", action="store_true", help="只出分镜联络图")
+    args = ap.parse_args()
+    for tool in ("rsvg-convert", "ffmpeg"):
+        if not shutil.which(tool):
+            sys.exit(f"缺少依赖:{tool}")
+    contact_sheet() if args.preview else build()
