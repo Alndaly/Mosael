@@ -36,10 +36,14 @@ interface OpenStudioUpdateInfo {
   error?: string;
 }
 
-/** 自动化浏览器(RPA / 智能体)的实时预览帧。 */
+/** 自动化浏览器的实时预览帧。RPA / 智能体会话与发布任务共用这一条通道和同一个面板。 */
 interface BrowserFrame {
   sessionId: string;
-  dataUrl: string;
+  /** 画面。发布任务的后台视图常常取不到像素(见 worker.ts LiveMirror),此时只有步骤文案。 */
+  dataUrl?: string;
+  /** 当前步骤,如「B站 · 上传视频」。发布任务会带;RPA 会话不带。 */
+  label?: string;
+  url?: string;
 }
 
 interface Window {

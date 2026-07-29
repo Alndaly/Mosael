@@ -19,6 +19,7 @@ import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
 import { resolvePlatform } from "./platforms";
+import type { PageDriver } from "./pageDriver";
 import type { PublishTask, ViewState } from "./types";
 import * as backend from "./backend";
 
@@ -45,6 +46,93 @@ let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
 // 一条任务跑到终态/受阻时回调主进程(发系统通知 + 更新 dock 角标)。
 export type SettleInfo = { status: string; title: string; accountName: string; dryRun: boolean };
 let onSettled: ((info: SettleInfo) => void) | null = null;
+
+/** 实时镜像帧。与 browserWorker 的 BrowserFrame 同形状,复用同一条 IPC 通道和同一个前端面板——
+ *  对用户来说"自动化浏览器正在做什么"是一件事,不该因为内部分了两个 worker 就出现两个窗口。 */
+export interface PublishFrame {
+  sessionId: string;
+  /** 画面。取不到就没有——见 LiveMirror 里为何不能保证。 */
+  dataUrl?: string;
+  /** 当前步骤,如「B站 · 上传视频」。 */
+  label: string;
+  url?: string;
+}
+let onFrame: ((frame: PublishFrame) => void) | null = null;
+
+const LIVE_TICK_MS = 1000;
+// 「镜像单槽」:同时最多镜像一个账号。与前台单槽同一个道理——并发时多账号轮流推帧,面板只会来回
+// 跳,反而一条都看不清;截图也不便宜,多开纯属浪费。
+let mirroring: string | null = null;
+
+/**
+ * 任务执行期间把后台账号视图镜像给前端。
+ *
+ * **画面是尽力而为,步骤文案才是保证项。** Chromium 只为真正参与合成的视图产生像素:
+ * electron 冒烟实测,未加入窗口的 WebContentsView 上 screencast 0 帧、capturePage 空图、
+ * CDP Page.captureScreenshot 直接挂起;窗口隐藏或被遮挡时同样取不到。而发布任务跑的时候视图
+ * 正是「不在窗口里」这个状态——只有失败现场被 requestFront 亮出来后才稳定有画面。
+ * (线上确有后台任务成功截到图的例子,所以不是必然失败,但不能当作保证。)
+ *
+ * 因此这里每拍推一帧,画面拿到就带上、拿不到就只带步骤:哪怕一个像素都没有,用户也能看到
+ * 「B站 · 上传视频」停了五分钟——那正是这次故障真正需要被看见的信息。
+ */
+class LiveMirror {
+  private label: string;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private held = false;
+  private capturing = false;
+
+  constructor(
+    private readonly accountId: string,
+    private readonly driver: PageDriver,
+    label: string,
+  ) {
+    this.label = label;
+  }
+
+  start(): void {
+    if (!onFrame || mirroring) return;
+    mirroring = this.accountId;
+    this.held = true;
+    this.timer = setInterval(() => void this.tick(), LIVE_TICK_MS);
+  }
+
+  /** 切换当前步骤文案。光看画面分不清「正在上传」和「卡住了」,步骤名才分得清。 */
+  step(label: string): void {
+    this.label = label;
+    if (this.held) void this.tick();
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    if (!this.held) return;
+    this.held = false;
+    if (mirroring === this.accountId) mirroring = null;
+  }
+
+  private async tick(): Promise<void> {
+    if (!onFrame || !this.held || this.capturing) return;
+    this.capturing = true;
+    let dataUrl: string | undefined;
+    try {
+      // captureBase64 内部已对 capturePage 竞速超时,绝不挂起;取不到返回 null。
+      dataUrl = (await this.driver.captureBase64()) ?? undefined;
+    } catch {
+      /* 镜像是观测手段,不是发布的一部分:取不到就只推文字,绝不连累任务 */
+    } finally {
+      this.capturing = false;
+    }
+    if (!onFrame || !this.held) return;
+    let url: string | undefined;
+    try {
+      url = this.driver.url();
+    } catch {
+      /* webContents 已销毁 */
+    }
+    onFrame({ sessionId: this.accountId, dataUrl, label: this.label, url });
+  }
+}
 function settle(t: PublishTask, status: string, dryRun: boolean): void {
   try {
     onSettled?.({ status, title: t.title, accountName: t.accountName, dryRun });
@@ -128,13 +216,24 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   plog("runTask start:", bt.id, bt.platform, bt.video_path);
   const t = toAdapterTask(bt);
   const driver = views.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
+  const platformLabel = resolvePlatform(t.platform).label;
+  const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("准备中")}`);
+  // 每一步同时进日志和实时窗口。这段之前完全不留痕:一次「表单填好了却没投出去」的故障,日志里
+  // 只表现为 checkLogin 之后静默五分钟,画面上也什么都看不到,无从判断卡在上传、填表还是提交。
+  const step = (label: string): void => {
+    plog("runTask step:", bt.id, label);
+    mirror.step(`${platformLabel} · ${label}`);
+  };
   try {
+    mirror.start();
     await views.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
+    step(tr("打开创作页"));
     await adapter.openCreatorPage();
     plog("runTask creator page opened:", bt.id, driver.url());
     await delay(stepDelay());
 
+    step(tr("检查登录态"));
     const loggedIn = await adapter.checkLogin();
     plog("runTask checkLogin:", bt.id, loggedIn);
     if (!loggedIn) {
@@ -151,35 +250,38 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     }
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
 
-    // 每步都记一笔:这段之前完全不打日志,一次「表单填好了却没投出去」的故障在日志里只表现为
-    // checkLogin 之后静默五分钟,无从判断卡在上传、填表还是提交。
+    step(tr("上传视频"));
     await adapter.uploadVideo(t.videoPath);
-    plog("runTask uploaded:", bt.id);
     await delay(stepDelay());
+    step(tr("填写标题"));
     await adapter.fillTitle(t.title);
-    plog("runTask title filled:", bt.id);
     await delay(stepDelay());
+    step(tr("填写标签与简介"));
     await adapter.fillTags(t.tags);
-    plog("runTask tags filled:", bt.id);
     await delay(stepDelay());
 
     if (t.platformOptions.dryRun === true) {
+      step(tr("已填好,待确认"));
       await backend.reportTask(t.id, { status: "prepared" });
       settle(t, "prepared", true);
       // 准备好待确认:请求前台让用户直接确认 / 点真发。抢不到前台也无妨(表单已填好,任务行可再亮)。
       requestFront(t.accountId);
       return;
     }
+    step(tr("提交投稿"));
     await adapter.submit();
-    plog("runTask submitted:", bt.id);
     await delay(stepDelay());
+    step(tr("等待平台确认"));
     await adapter.waitResult();
+    step(tr("发布成功"));
     await backend.reportTask(t.id, { status: "success" });
     plog("runTask success:", t.id);
     settle(t, "success", false);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     plog("runTask error:", t.id, error instanceof Error ? error : message);
+    // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
+    mirror.step(`${platformLabel} · ${tr("失败")}`);
     const screenshot = await captureFailure(t.id, driver);
     const blocked = resolveBlockedStatus(error);
     if (blocked === "login_required")
@@ -215,6 +317,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     })();
     if (hasLive) requestFront(t.accountId);
   } finally {
+    mirror.stop();
     running.delete(t.accountId);
     driver.setAbortSignal(null);
     // 后台任务默认从不 show;占了前台的(准备好/失败现场)留着供查看,这里不主动 hide。
@@ -323,12 +426,14 @@ export function startPublishWorker(opts: {
   onViewChanged?: (state: ViewState) => void;
   getAccountName?: (accountId: string) => string | null;
   onTaskSettled?: (info: SettleInfo) => void;
+  onFrame?: (frame: PublishFrame) => void;
 }): void {
   if (views) return;
   stopped = false;
   generation += 1; // 新一代:旧代在途的 loop/登录轮询不会复活成重复链
   running.clear();
   onSettled = opts.onTaskSettled ?? null;
+  onFrame = opts.onFrame ?? null;
   views = new AccountViewManager(opts.onViewChanged);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   plog("worker started, generation", generation);
@@ -349,6 +454,8 @@ export function stopPublishWorker(): void {
   // 在磁盘分区里(persist:openstudio-<id>),销毁视图不丢登录态。
   views?.destroyAll();
   views = null;
+  onFrame = null;
+  mirroring = null;
   running.clear();
   onSettled = null;
 }

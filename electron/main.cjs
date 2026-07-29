@@ -322,6 +322,12 @@ function createWindow() {
         onViewChanged: (state) => {
           if (!win.isDestroyed()) win.webContents.send("publish:view", state);
         },
+        // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
+        // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
+        // 因为内部分了两个 worker 就冒出两个窗口。
+        onFrame: (frame) => {
+          if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
+        },
         onTaskSettled: (info) => {
           const titles = {
             success: "发布成功",

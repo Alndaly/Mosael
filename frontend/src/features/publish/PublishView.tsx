@@ -218,75 +218,79 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
     (platforms.data ?? []).find((item) => item.platform === task.platform)?.executor === "browser";
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
+    // 标题与下面的字段是同一个对象的两部分,所以共用一张卡:标题当卡头(略深底色 + 分隔线),
+    // 而不是浮在卡外面——那样读起来像页面/标签级标题,和表单割裂。
     <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
-      <header className="flex items-start justify-between gap-3 px-0.5">
-        <div className="min-w-0">
-          <h2 className="m-0 text-[16px] font-[650] leading-[1.35] tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title || task.asset_name}</h2>
-          <p className="mb-0 mt-1 text-[12.5px] text-muted-foreground">
-            {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {ACTIVE.has(task.status) ? (
-            <Loader2 size={14} className="animate-openstudio-spin" />
-          ) : ok ? (
-            <CheckCircle2 size={14} className="text-[#16a34a]" />
-          ) : BLOCKED.has(task.status) ? (
-            <CircleAlert size={14} className="text-[#d97706]" />
-          ) : (
-            <CircleAlert size={14} className="text-destructive" />
-          )}
-          {isBrowser && window.openStudioPublish && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                window.openStudioPublish
-                  ?.openPage(task.account_id, task.platform)
-                  .catch((error: Error) => toast.error(error.message))
-              }
-            >
-              <ExternalLink size={13} /> {t("publishOpenPage")}
+      <section className="overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)]">
+        <header className="flex items-start justify-between gap-3 border-b border-border bg-panel-subtle px-3 py-2.5">
+          <div className="min-w-0">
+            <h2 className="m-0 text-[16px] font-[650] leading-[1.35] tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title || task.asset_name}</h2>
+            <p className="mb-0 mt-1 text-[12.5px] text-muted-foreground">
+              {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {ACTIVE.has(task.status) ? (
+              <Loader2 size={14} className="animate-openstudio-spin" />
+            ) : ok ? (
+              <CheckCircle2 size={14} className="text-[#16a34a]" />
+            ) : BLOCKED.has(task.status) ? (
+              <CircleAlert size={14} className="text-[#d97706]" />
+            ) : (
+              <CircleAlert size={14} className="text-destructive" />
+            )}
+            {isBrowser && window.openStudioPublish && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  window.openStudioPublish
+                    ?.openPage(task.account_id, task.platform)
+                    .catch((error: Error) => toast.error(error.message))
+                }
+              >
+                <ExternalLink size={13} /> {t("publishOpenPage")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
+              <Trash2 size={13} /> {t("delete")}
             </Button>
+          </div>
+        </header>
+        <dl className="m-0 grid [&>*+*]:border-t [&>*+*]:border-border">
+          <InfoRow label={t("publishAsset")} description={t("publishAssetDesc")}>
+            <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
+          </InfoRow>
+          {task.description && (
+            <InfoRow label={t("publishDescription")}>
+              <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{task.description}</p>
+            </InfoRow>
           )}
-          <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
-            <Trash2 size={13} /> {t("delete")}
-          </Button>
-        </div>
-      </header>
-      <dl className="m-0 grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">
-        <InfoRow label={t("publishAsset")} description={t("publishAssetDesc")}>
-          <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
-        </InfoRow>
-        {task.description && (
-          <InfoRow label={t("publishDescription")}>
-            <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{task.description}</p>
-          </InfoRow>
-        )}
-        {task.tags.length > 0 && (
-          <InfoRow label={t("publishTags")}>
-            <div className="flex flex-wrap gap-1">
-              {task.tags.map((tag) => (
-                <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </InfoRow>
-        )}
-        {task.status === "succeeded" && task.result.target != null && (
-          <InfoRow label={t("publishResult")} description={t("publishResultDesc")}>
-            <code className="timecode inline-flex items-center gap-[5px] text-xs text-muted-foreground [overflow-wrap:anywhere]" title={String(task.result.target)}>
-              <FolderOutput size={12} className="shrink-0" /> {String(task.result.target)}
-            </code>
-          </InfoRow>
-        )}
-        {task.status === "failed" && task.error && (
-          <InfoRow label={t("publishError")}>
-            <p className="m-0 whitespace-pre-wrap text-destructive [overflow-wrap:anywhere]">{task.error}</p>
-          </InfoRow>
-        )}
-      </dl>
+          {task.tags.length > 0 && (
+            <InfoRow label={t("publishTags")}>
+              <div className="flex flex-wrap gap-1">
+                {task.tags.map((tag) => (
+                  <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </InfoRow>
+          )}
+          {task.status === "succeeded" && task.result.target != null && (
+            <InfoRow label={t("publishResult")} description={t("publishResultDesc")}>
+              <code className="timecode inline-flex items-center gap-[5px] text-xs text-muted-foreground [overflow-wrap:anywhere]" title={String(task.result.target)}>
+                <FolderOutput size={12} className="shrink-0" /> {String(task.result.target)}
+              </code>
+            </InfoRow>
+          )}
+          {task.status === "failed" && task.error && (
+            <InfoRow label={t("publishError")}>
+              <p className="m-0 whitespace-pre-wrap text-destructive [overflow-wrap:anywhere]">{task.error}</p>
+            </InfoRow>
+          )}
+        </dl>
+      </section>
     </div>
   );
 }
