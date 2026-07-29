@@ -60,6 +60,9 @@ export interface PublishFrame {
 let onFrame: ((frame: PublishFrame) => void) | null = null;
 
 const LIVE_TICK_MS = 1000;
+// 后台任务给视图强制的视口尺寸。与 RPA 会话窗口(browserSessions.ts)取同一档,平台页面按桌面版
+// 布局,不会掉进移动端/窄屏分支。
+const BACKGROUND_VIEWPORT = { width: 1280, height: 800 };
 // 「镜像单槽」:同时最多镜像一个账号。与前台单槽同一个道理——并发时多账号轮流推帧,面板只会来回
 // 跳,反而一条都看不清;截图也不便宜,多开纯属浪费。
 let mirroring: string | null = null;
@@ -226,6 +229,9 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   };
   try {
     mirror.start();
+    // 后台视图没有布局(视口 0×0),坐标点击会静默落空——先造一个真实视口出来。
+    // 见 PageDriver.setMetricsOverride:这是保住「可信输入」又不用把窗口闪出来的唯一办法。
+    await driver.setMetricsOverride(BACKGROUND_VIEWPORT.width, BACKGROUND_VIEWPORT.height);
     await views.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
     step(tr("打开创作页"));
@@ -318,6 +324,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     if (hasLive) requestFront(t.accountId);
   } finally {
     mirror.stop();
+    // 撤销视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着覆盖会和窗口尺寸对不上。
+    await driver.clearMetricsOverride().catch(() => undefined);
     running.delete(t.accountId);
     driver.setAbortSignal(null);
     // 后台任务默认从不 show;占了前台的(准备好/失败现场)留着供查看,这里不主动 hide。

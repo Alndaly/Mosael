@@ -60,6 +60,24 @@ export class PageDriver {
 
   /** 拟人化点击:落点在元素中心附近随机偏移(仍落在元素内),鼠标分几步移过去而非瞬移,按下到抬起
    *  之间有微停顿。替代「每次精确命中像素中心 + 零位移瞬时点击」这一强自动化特征。 */
+  /**
+   * 坐标点击的前提:视图**有真实布局**。
+   *
+   * 后台跑任务的发布账号视图没有挂进窗口,视口就是 0×0——此时 `scrollIntoView` 会把元素"居中"
+   * 到负坐标,`sendInputEvent` 打过去落在空处,**点了等于没点,而且不报错**。上传(CDP)、填表
+   * (JS)都不用坐标所以照常成功,于是表现成「表单填得好好的,就是发不出去」。
+   *
+   * electron 实测:未挂载 / 挂载但 bounds 移出屏幕 / 挂在窗口可视区下方,视口一律 0×0;只有真正
+   * 在可视区内的挂载视图才有布局。所以这里必须**显式失败**,让调用方走 `el.click()` 那条不依赖
+   * 坐标的兜底——而不是静默地什么都没做。
+   */
+  private ensurePointerUsable(viewport: { vw: number; vh: number }, what: string): void {
+    if (viewport.vw > 0 && viewport.vh > 0) return;
+    throw new Error(
+      `${what}: view has no layout (viewport ${viewport.vw}x${viewport.vh}); pointer coordinates are meaningless`,
+    );
+  }
+
   private async humanClickAt(rect: {
     x: number;
     y: number;
@@ -302,11 +320,14 @@ export class PageDriver {
   }
 
   async clickCenterCss(selector: string): Promise<void> {
-    const rect = await this.evaluate<{
+    // 视口尺寸和 rect 一起取回:同一次 evaluate,不多花一个来回。
+    const found = await this.evaluate<{
       x: number;
       y: number;
       width: number;
       height: number;
+      vw: number;
+      vh: number;
     } | null>(
       `(() => {
         ${this.deepQueryPrelude(selector)}
@@ -315,13 +336,14 @@ export class PageDriver {
         el.scrollIntoView({ block: 'center', inline: 'nearest' });
         const r = el.getBoundingClientRect();
         if (r.width <= 0 || r.height <= 0) return null;
-        return { x: r.x, y: r.y, width: r.width, height: r.height };
+        return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
       })()`,
     );
-    if (!rect) {
+    if (!found) {
       throw new Error(`clickCenterCss: element not found: ${selector}`);
     }
-    await this.humanClickAt(rect);
+    this.ensurePointerUsable(found, "clickCenterCss");
+    await this.humanClickAt(found);
   }
 
   /** Focus a (CSS) element and place the caret at the end — for contenteditable editors. */
@@ -463,6 +485,8 @@ export class PageDriver {
       y: number;
       width: number;
       height: number;
+      vw: number;
+      vh: number;
     } | null>(`(() => {
       const els = [...document.querySelectorAll(${selector})];
       const visible = (e) => {
@@ -479,11 +503,12 @@ export class PageDriver {
       const el = matches[0];
       el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
+      return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
     })()`);
     if (!rect) {
       throw new Error(`clickCenterByText: no visible element with text: ${text}`);
     }
+    this.ensurePointerUsable(rect, "clickCenterByText");
     await this.humanClickAt(rect);
   }
 
@@ -502,6 +527,8 @@ export class PageDriver {
       y: number;
       w: number;
       h: number;
+      vw: number;
+      vh: number;
     } | null>(`(() => {
       const target = ${t};
       const visible = (el) => {
@@ -533,11 +560,12 @@ export class PageDriver {
       const el = matches[0];
       el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, w: r.width, h: r.height };
+      return { x: r.x, y: r.y, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight };
     })()`);
     if (!rect) {
       throw new Error(`clickByTextDeep: no visible element with text: ${text}`);
     }
+    this.ensurePointerUsable(rect, "clickByTextDeep");
     await this.humanClickAt({ x: rect.x, y: rect.y, width: rect.w, height: rect.h });
   }
 
@@ -980,13 +1008,48 @@ export class PageDriver {
     })()`);
   }
 
-  private async findFileInputNode(selector: string): Promise<number> {
-    this.throwIfAborted();
-    // debugger 可能已被 accountViews 为注入 stealth 提前 attach:复用即可,别二次 attach(会抛)。
+  /** debugger 可能已被 accountViews 为注入 stealth 提前 attach:复用即可,别二次 attach(会抛)。 */
+  private ensureDebugger(): void {
     if (!this.debuggerAttached && !this.wc.debugger.isAttached()) {
       this.wc.debugger.attach("1.3");
       this.debuggerAttached = true;
     }
+  }
+
+  /**
+   * 给「没有布局」的后台视图造一个真实视口。
+   *
+   * 未挂进窗口的 WebContentsView 视口是 0×0(实测:挂进窗口但 bounds 移出屏幕、或摆到可视区
+   * 下方,同样是 0×0——只有真正在可视区内才有布局)。视口为 0 时所有基于坐标的输入都落空:
+   * `scrollIntoView` 把元素"居中"到负坐标,`sendInputEvent` 打过去点不到任何东西,**而且不报错**
+   * ——表现成「表单填得好好的,就是发不出去」。
+   *
+   * 为什么不干脆改用 `el.click()`:那样事件 `isTrusted === false`,风控一眼能认出来。B 站和
+   * 微信视频号的提交按钮特意走真实输入(见 humanClickAt 的拟人化点击)正是为了这个。
+   * `Emulation.setDeviceMetricsOverride` 与控件实际大小无关,能让页面按给定尺寸真正布局——
+   * 实测后台视图加了它之后 sendInputEvent 能命中,且事件仍然 isTrusted。两头都保住。
+   */
+  async setMetricsOverride(width: number, height: number): Promise<void> {
+    this.ensureDebugger();
+    await this.wc.debugger.sendCommand("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+  }
+
+  /** 撤销视口覆盖。视图被亮到前台前必须撤,否则页面会被锁在覆盖尺寸上、和窗口对不上。 */
+  async clearMetricsOverride(): Promise<void> {
+    if (!this.debuggerAttached && !this.wc.debugger.isAttached()) return;
+    await this.wc.debugger
+      .sendCommand("Emulation.clearDeviceMetricsOverride")
+      .catch(() => undefined);
+  }
+
+  private async findFileInputNode(selector: string): Promise<number> {
+    this.throwIfAborted();
+    this.ensureDebugger();
     await this.wc.debugger.sendCommand("DOM.enable");
     const doc = (await this.wc.debugger.sendCommand("DOM.getDocument", { depth: -1 })) as {
       root: { nodeId: number };

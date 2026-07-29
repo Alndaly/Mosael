@@ -750,26 +750,32 @@ export class BilibiliAdapter implements PublishAdapter {
     // 旧实现先 waitForUrl(稿件管理页) 干等满 RESULT_TIMEOUT 再看文本——URL 永远不变,于是每次成功都要
     // 白卡约 2 分钟,慢一点还会误报「未确认发布」。改为单循环并发判断:成功页文案(强信号)/ 老流程
     // 跳转(兜底)/ 明确失败提示 任一出现即结束。提交处理可达 ~2 分钟,给足 5 分钟余量。
+    //
+    // 成功判定必须**同时**满足「出现成功文案」和「编辑表单已消失」。只认文案会误报:实测有一次
+    // 自动化的点击根本没落到按钮上(后台视图视口 0×0,见 PageDriver.setMetricsOverride),用户
+    // 自己手动点了投稿,页面弹出「投稿成功」——于是这里把**别人完成的发布**记成了自己的成果,
+    // 上报 success、发通知、工作流收工。「什么都没发却报成功」是最坏的失败模式,宁可多等到超时。
+    // 编辑表单还在就说明没投出去:B 站成功后是原地把编辑页换成成功页,提交按钮不会留着。
     const RESULT_WAIT = 5 * 60 * 1000;
+    const probe = `(() => {
+      const t = (document.body && document.body.innerText) || '';
+      const formGone = !document.querySelector(${JSON.stringify(this.s.submitButton)});
+      const success = /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t) && formGone;
+      const redirected = /upload-manager|content-manager|article/.test(location.href);
+      const m = t.match(/投稿失败|提交失败|发布失败|标题重复/);
+      return { ok: success || redirected, fail: m ? m[0] : null, formGone: formGone, url: location.href };
+    })()`;
     const settled = await this.driver.waitForFunction(
-      `(() => {
-        const t = (document.body && document.body.innerText) || '';
-        return /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t)
-          || /upload-manager|content-manager|article/.test(location.href)
-          || /投稿失败|提交失败|发布失败|标题重复/.test(t);
-      })()`,
+      `(() => { const s = ${probe}; return s.ok || s.fail; })()`,
       RESULT_WAIT,
       1_000,
     );
-    const state = await this.driver.evaluate<{ ok: boolean; fail: string | null; url: string }>(
-      `(() => {
-        const t = (document.body && document.body.innerText) || '';
-        const ok = /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t)
-          || /upload-manager|content-manager|article/.test(location.href);
-        const m = t.match(/投稿失败|提交失败|发布失败|标题重复/);
-        return { ok: ok, fail: ok ? null : (m ? m[0] : null), url: location.href };
-      })()`,
-    );
+    const state = await this.driver.evaluate<{
+      ok: boolean;
+      fail: string | null;
+      formGone: boolean;
+      url: string;
+    }>(probe);
     plog("waitResult:", { settled, ...state });
     if (state.ok) return;
     if (state.fail) throw new Error(`B 站投稿被拒:${state.fail}`);

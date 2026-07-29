@@ -112,10 +112,13 @@ export class AccountViewManager {
 
   /** Bring an account's view to the front of the window and size it. */
   show(accountId: string): void {
-    const { view } = this.ensure(accountId);
+    const { view, driver } = this.ensure(accountId);
     if (!this.window || this.window.isDestroyed()) {
       return;
     }
+    // 后台跑任务时视图被强制了视口尺寸(见 PageDriver.setMetricsOverride);一旦亮到前台,
+    // 它有真实布局了,覆盖必须撤掉,否则页面锁在 1280×800 上、和窗口尺寸对不上。
+    void driver.clearMetricsOverride();
     if (this.visibleId && this.visibleId !== accountId) {
       this.detachView(this.visibleId);
     }
