@@ -328,6 +328,10 @@ export class PageDriver {
       height: number;
       vw: number;
       vh: number;
+      hit: boolean;
+      at: string;
+      target: string;
+      disabled: boolean;
     } | null>(
       `(() => {
         ${this.deepQueryPrelude(selector)}
@@ -336,13 +340,42 @@ export class PageDriver {
         el.scrollIntoView({ block: 'center', inline: 'nearest' });
         const r = el.getBoundingClientRect();
         if (r.width <= 0 || r.height <= 0) return null;
-        return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
+        const cx = Math.round(r.x + r.width / 2), cy = Math.round(r.y + r.height / 2);
+        // 落点上**实际**是谁。选择器命中不等于点得到:浮层/遮罩/粘性页脚都会把点击截走,
+        // 而 sendInputEvent 打的是坐标,截走了也没人报错。
+        const at = document.elementFromPoint(cx, cy);
+        const describe = (n) => n
+          ? n.tagName + '.' + String(n.className || '').slice(0, 40) + '|' + (n.textContent || '').trim().slice(0, 24)
+          : 'null';
+        return {
+          x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight,
+          hit: Boolean(at && (at === el || el.contains(at) || at.contains(el))),
+          at: describe(at), target: describe(el),
+          disabled: Boolean(el.disabled) || el.getAttribute('aria-disabled') === 'true'
+            || /disabled/.test(String(el.className || '')),
+        };
       })()`,
     );
     if (!found) {
       throw new Error(`clickCenterCss: element not found: ${selector}`);
     }
     this.ensurePointerUsable(found, "clickCenterCss");
+    plog("clickCenterCss:", selector, {
+      target: found.target,
+      at: found.at,
+      hit: found.hit,
+      disabled: found.disabled,
+      rect: [Math.round(found.x), Math.round(found.y), Math.round(found.width), Math.round(found.height)],
+      viewport: [found.vw, found.vh],
+    });
+    // 点不到就别假装点了:抛出去让调用方走 el.click() 一类不受遮挡影响的兜底,
+    // 而不是打一发空枪再等五分钟超时。
+    if (!found.hit) {
+      throw new Error(`clickCenterCss: point is covered by ${found.at} (target ${found.target})`);
+    }
+    if (found.disabled) {
+      throw new Error(`clickCenterCss: target is disabled: ${found.target}`);
+    }
     await this.humanClickAt(found);
   }
 

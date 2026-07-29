@@ -723,26 +723,64 @@ export class BilibiliAdapter implements PublishAdapter {
     await this.selectRecommendedCover();
   }
 
+  /**
+   * 「点了」不等于「投出去了」。
+   *
+   * 旧实现点完就 return,于是一次空点(按钮被浮层截走 / 命中的是别的元素 / 真实输入落在无效坐标)
+   * 的代价是白等 waitResult 五分钟再报「未确认发布」,而且日志里看不出点击到底有没有生效。
+   * 改成每种点法之后都确认页面是否真的开始响应,没响应就换下一种。
+   */
   async submit(): Promise<void> {
-    if (await this.driver.cssVisible(this.s.submitButton, 5_000)) {
-      await this.driver.clickCenterCss(this.s.submitButton);
-      plog("submit: clicked", this.s.submitButton);
-      return;
-    }
-    for (const text of this.s.submitTexts) {
-      const clicked = await this.driver
-        .clickByText(text, {
-          exact: true,
-          selector: "button, [role=button], a, div, span",
-        })
-        .then(() => true)
-        .catch(() => false);
-      if (clicked) {
-        plog("submit: clicked by text", text);
+    const attempts: Array<[string, () => Promise<void>]> = [
+      // 坐标点击优先:事件 isTrusted,风控友好(见 PageDriver.humanClickAt)。
+      [`css ${this.s.submitButton}`, () => this.driver.clickCenterCss(this.s.submitButton)],
+      // 兜底走 el.click():isTrusted 为 false,但不受遮挡与坐标影响,点得到。
+      ...this.s.submitTexts.map(
+        (text): [string, () => Promise<void>] => [
+          `text ${text}`,
+          () => this.driver.clickByText(text, { exact: true, selector: "button, [role=button], a, div, span" }),
+        ],
+      ),
+    ];
+
+    let clickedAny = false;
+    for (const [label, click] of attempts) {
+      const clicked = await click().then(
+        () => true,
+        (error: unknown) => {
+          plog("submit: attempt failed", label, String(error).slice(0, 150));
+          return false;
+        },
+      );
+      if (!clicked) continue;
+      clickedAny = true;
+      plog("submit: clicked via", label);
+      if (await this.submitAccepted()) {
+        plog("submit: accepted via", label);
         return;
       }
+      // 没有任何响应才换下一种——B 站点下去会立刻禁用按钮/显示处理中,8 秒足够。这样既不会
+      // 因为平台慢就重复提交,也不会一次空点就把整条任务拖死。
+      plog("submit: no reaction, trying next after", label);
     }
-    throw new Error("Bilibili publish button was not found.");
+    throw new Error(
+      clickedAny
+        ? "Bilibili publish button was clicked but the page never reacted."
+        : "Bilibili publish button was not found.",
+    );
+  }
+
+  /** 点击是否被受理:提交按钮离场,或页面出现处理中/成功文案。 */
+  private async submitAccepted(): Promise<boolean> {
+    return this.driver.waitForFunction(
+      `(() => {
+        const t = (document.body && document.body.innerText) || '';
+        if (/稿件投递成功|投稿成功|稿件投稿成功|投稿完成|正在投稿|提交中|上传中的稿件/.test(t)) return true;
+        return !document.querySelector(${JSON.stringify(this.s.submitButton)});
+      })()`,
+      8_000,
+      500,
+    );
   }
 
   async waitResult(): Promise<void> {
