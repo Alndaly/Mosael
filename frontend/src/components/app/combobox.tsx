@@ -90,8 +90,11 @@ export function Combobox({
                 value={`${option.label ?? option.value} ${option.value}`}
                 onSelect={() => choose(option.value)}
               >
-                <Check className={cn("size-4", option.value === value ? "opacity-100" : "opacity-0")} />
-                <span className="truncate">{option.label ?? option.value}</span>
+                {/* 勾在右端、且只在选中时渲染。此前是左侧一个 opacity-0 的占位勾:为了"选中态切换时
+                    文字不跳",代价是**每一行**都白缩进一个图标宽——而列表里最多只有一行是选中的,
+                    放右边就既不跳也不缩进。 */}
+                <span className="min-w-0 flex-1 truncate">{option.label ?? option.value}</span>
+                {option.value === value && <Check className="size-4 shrink-0 text-primary" />}
               </CommandItem>
             ))}
           </CommandList>

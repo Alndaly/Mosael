@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useModalPointerEventsGuard } from "@/lib/modalPointerGuard"
+import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
 const Dialog = DialogPrimitive.Root
 
@@ -34,8 +34,8 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // 菜单里打开的对话框关闭后 body 卡在 pointer-events:none(radix#2122),见 hook 注释。
-  useModalPointerEventsGuard()
+  // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
+  useModalTeardownGuard()
   return (
   <DialogPortal>
     <DialogOverlay />

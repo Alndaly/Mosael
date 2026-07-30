@@ -67,8 +67,10 @@ export function SearchableSelect({
                   setOpen(false);
                 }}
               >
-                <Check size={14} className={cn("mr-2 shrink-0", item.value === value ? "opacity-100" : "opacity-0")} />
-                <span className="truncate">{item.label}</span>
+                {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
+                    而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
               </CommandItem>
             ))}
           </CommandList>

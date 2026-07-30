@@ -4,7 +4,7 @@ import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
-import { useModalPointerEventsGuard } from "@/lib/modalPointerGuard"
+import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 import { buttonVariants } from "@/components/ui/button"
 
 const AlertDialog = AlertDialogPrimitive.Root
@@ -32,8 +32,8 @@ const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => {
-  // 右键菜单里打开的确认框关闭后 body 卡在 pointer-events:none(radix#2122),见 hook 注释。
-  useModalPointerEventsGuard()
+  // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
+  useModalTeardownGuard()
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
