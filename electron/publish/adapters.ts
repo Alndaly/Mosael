@@ -2,7 +2,14 @@ import type { PublishTask } from "./types";
 import { resolvePlatform } from "./platforms";
 import type { PageDriver } from "./pageDriver";
 import { AutomationBlockedError } from "./errors";
-import { SELECTORS } from "./selectors";
+import { MANAGE_URL_PATTERNS, SELECTORS } from "./selectors";
+import {
+  PROCESSING_TEXTS,
+  commitClick,
+  domAttempt,
+  pageReacted,
+  pointerAttempt,
+} from "./clickChain";
 import { plog } from "./log";
 
 export interface PublishAdapter {
@@ -208,15 +215,23 @@ export class DouyinAdapter implements PublishAdapter {
 
   async submit(): Promise<void> {
     await this.driver.removeElements(this.s.overlays); // shepherd.js onboarding overlays
-    // Exact match first so 发布 can't hit e.g. 定时发布/发布设置; fall back to
-    // the looser match in case the button text carries extra decoration.
-    await this.driver
-      .clickByText(this.s.submitText, { exact: true })
-      .then(() => plog("submit: clicked by text (exact)", this.s.submitText))
-      .catch(async () => {
-        await this.driver.clickByText(this.s.submitText);
-        plog("submit: clicked by text (loose)", this.s.submitText);
-      });
+    await commitClick({
+      what: "douyin submit",
+      attempts: [
+        // 精确匹配优先,免得「发布」命中「定时发布」/「发布设置」;宽松匹配兜底(按钮文案可能带装饰)。
+        domAttempt(`text ${this.s.submitText} (exact)`, () =>
+          this.driver.clickByText(this.s.submitText, { exact: true }),
+        ),
+        domAttempt(`text ${this.s.submitText} (loose)`, () =>
+          this.driver.clickByText(this.s.submitText),
+        ),
+      ],
+      // 抖音成功后跳转内容管理页,URL 变化是最强的受理信号。
+      accepted: pageReacted(this.driver, {
+        texts: [...PROCESSING_TEXTS, this.s.uploadFailedText],
+        urlPattern: MANAGE_URL_PATTERNS.douyin,
+      }),
+    });
   }
 
   async waitResult(): Promise<void> {
@@ -380,25 +395,40 @@ export class XiaohongshuAdapter implements PublishAdapter {
       throw new Error("Xiaohongshu publish button is not clickable.");
     }
 
-    // 四条降级路径互为兜底。必须记下**走通的是哪一条**:小红书的发布按钮在自定义元素 + shadow DOM
-    // 里,改版时往往是前几条陆续失效、最后落到最脆的按文案点击,而表现只是「偶尔发不出去」。
-    if (await this.driver.publishXiaohongshuCustomElement(this.s.submitHost)) {
-      plog("submit: via publishXiaohongshuCustomElement");
-      return;
-    }
-    if (await this.driver.clickInShadow(this.s.submitHost, this.s.submitText)) {
-      plog("submit: via clickInShadow");
-      return;
-    }
-    if (await this.driver.activateCustomElement(this.s.submitHost)) {
-      plog("submit: via activateCustomElement");
-      return;
-    }
-    await this.driver.clickByText(this.s.submitText, {
-      exact: true,
-      selector: "button, [role=button], div, span",
+    // 四条降级路径互为兜底:发布按钮是 shadow DOM 里的自定义元素,外面 querySelector 不到,
+    // 改版时往往是前几条陆续失效、最后落到最脆的按文案点击,而表现只是「偶尔发不出去」——
+    // 所以走通的是哪一条必须记下来。这些路径全是派发事件,不依赖坐标,故都算 dom 类。
+    await commitClick({
+      what: "xiaohongshu submit",
+      attempts: [
+        domAttempt("publishXiaohongshuCustomElement", () =>
+          this.expectTrue(this.driver.publishXiaohongshuCustomElement(this.s.submitHost)),
+        ),
+        domAttempt("clickInShadow", () =>
+          this.expectTrue(this.driver.clickInShadow(this.s.submitHost, this.s.submitText)),
+        ),
+        domAttempt("activateCustomElement", () =>
+          this.expectTrue(this.driver.activateCustomElement(this.s.submitHost)),
+        ),
+        domAttempt(`text ${this.s.submitText}`, () =>
+          this.driver.clickByText(this.s.submitText, {
+            exact: true,
+            selector: "button, [role=button], div, span",
+          }),
+        ),
+      ],
+      accepted: pageReacted(this.driver, {
+        gone: this.s.submitHost,
+        texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts],
+      }),
     });
-    plog("submit: via clickByText (last resort)");
+  }
+
+  /** 把「返回 false 表示没点到」的原语转成抛错,以便统一进 commitClick 的降级链。 */
+  private async expectTrue(result: Promise<boolean>): Promise<void> {
+    if (!(await result)) {
+      throw new Error("target not present");
+    }
   }
 
   async waitResult(): Promise<void> {
@@ -517,13 +547,23 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     if (!ready) {
       throw new Error("WeChat Channels publish button is not clickable.");
     }
-    await this.driver
-      .clickByTextDeep(this.s.submitText, { exact: true })
-      .then(() => plog("submit: clicked deep", this.s.submitText))
-      .catch(async () => {
-        await this.driver.clickByText(this.s.submitText, { exact: true });
-        plog("submit: clicked flat", this.s.submitText);
-      });
+    await commitClick({
+      what: "weixin-channels submit",
+      attempts: [
+        // 可信优先:clickByTextDeep 走真实鼠标事件,能穿 shadow root 找到目标。
+        pointerAttempt(`deep text ${this.s.submitText}`, () =>
+          this.driver.clickByTextDeep(this.s.submitText, { exact: true }),
+        ),
+        // 降级:el.click(),不受视口与遮挡影响。
+        domAttempt(`text ${this.s.submitText}`, () =>
+          this.driver.clickByText(this.s.submitText, { exact: true }),
+        ),
+      ],
+      accepted: pageReacted(this.driver, {
+        texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts],
+        urlPattern: MANAGE_URL_PATTERNS.weixinChannels,
+      }),
+    });
     await this.waitForHumanGateIfNeeded();
     await this.assertCanPublish();
   }
@@ -723,64 +763,30 @@ export class BilibiliAdapter implements PublishAdapter {
     await this.selectRecommendedCover();
   }
 
-  /**
-   * 「点了」不等于「投出去了」。
-   *
-   * 旧实现点完就 return,于是一次空点(按钮被浮层截走 / 命中的是别的元素 / 真实输入落在无效坐标)
-   * 的代价是白等 waitResult 五分钟再报「未确认发布」,而且日志里看不出点击到底有没有生效。
-   * 改成每种点法之后都确认页面是否真的开始响应,没响应就换下一种。
-   */
   async submit(): Promise<void> {
-    const attempts: Array<[string, () => Promise<void>]> = [
-      // 坐标点击优先:事件 isTrusted,风控友好(见 PageDriver.humanClickAt)。
-      [`css ${this.s.submitButton}`, () => this.driver.clickCenterCss(this.s.submitButton)],
-      // 兜底走 el.click():isTrusted 为 false,但不受遮挡与坐标影响,点得到。
-      ...this.s.submitTexts.map(
-        (text): [string, () => Promise<void>] => [
-          `text ${text}`,
-          () => this.driver.clickByText(text, { exact: true, selector: "button, [role=button], a, div, span" }),
-        ],
-      ),
-    ];
-
-    let clickedAny = false;
-    for (const [label, click] of attempts) {
-      const clicked = await click().then(
-        () => true,
-        (error: unknown) => {
-          plog("submit: attempt failed", label, String(error).slice(0, 150));
-          return false;
-        },
-      );
-      if (!clicked) continue;
-      clickedAny = true;
-      plog("submit: clicked via", label);
-      if (await this.submitAccepted()) {
-        plog("submit: accepted via", label);
-        return;
-      }
-      // 没有任何响应才换下一种——B 站点下去会立刻禁用按钮/显示处理中,8 秒足够。这样既不会
-      // 因为平台慢就重复提交,也不会一次空点就把整条任务拖死。
-      plog("submit: no reaction, trying next after", label);
-    }
-    throw new Error(
-      clickedAny
-        ? "Bilibili publish button was clicked but the page never reacted."
-        : "Bilibili publish button was not found.",
-    );
-  }
-
-  /** 点击是否被受理:提交按钮离场,或页面出现处理中/成功文案。 */
-  private async submitAccepted(): Promise<boolean> {
-    return this.driver.waitForFunction(
-      `(() => {
-        const t = (document.body && document.body.innerText) || '';
-        if (/稿件投递成功|投稿成功|稿件投稿成功|投稿完成|正在投稿|提交中|上传中的稿件/.test(t)) return true;
-        return !document.querySelector(${JSON.stringify(this.s.submitButton)});
-      })()`,
-      8_000,
-      500,
-    );
+    await commitClick({
+      what: "bilibili submit",
+      attempts: [
+        // 可信优先:真实鼠标事件(isTrusted),B 站风控最紧。
+        pointerAttempt(`css ${this.s.submitButton}`, () =>
+          this.driver.clickCenterCss(this.s.submitButton),
+        ),
+        // 降级:el.click() 不受视口与遮挡影响,点得到。
+        ...this.s.submitTexts.map((text) =>
+          domAttempt(`text ${text}`, () =>
+            this.driver.clickByText(text, {
+              exact: true,
+              selector: "button, [role=button], a, div, span",
+            }),
+          ),
+        ),
+      ],
+      accepted: pageReacted(this.driver, {
+        gone: this.s.submitButton,
+        texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts, ...this.s.uploadFailedTexts],
+        urlPattern: MANAGE_URL_PATTERNS.bilibili,
+      }),
+    });
   }
 
   async waitResult(): Promise<void> {

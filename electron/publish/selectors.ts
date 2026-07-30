@@ -8,6 +8,17 @@ import { resolvePlatform } from "./platforms";
  * pass against each login page; post-upload form selectors still warrant a
  * confirmation pass after a real in-app login.
  */
+/**
+ * 「发布成功后会跳到哪里」的 URL 模式。提到模块级共用:`isManageUrl`/`isListUrl` 用它做终态判定,
+ * 适配器的 commitClick 受理判定也用它——同一个语义写两遍必然会分叉。
+ */
+export const MANAGE_URL_PATTERNS = {
+  douyin: /content\/manage/,
+  xiaohongshu: /creator\.xiaohongshu\.com\/(new\/notes|publish\/success)/,
+  weixinChannels: /platform\/post\/list/,
+  bilibili: /upload-manager|content-manager|article/,
+} as const;
+
 export const SELECTORS = {
   douyin: {
     uploadUrl: resolvePlatform("douyin").publishUrl,
@@ -21,7 +32,7 @@ export const SELECTORS = {
     loggedOutTexts: ["扫码登录", "手机号登录", "二维码失效"], // i18n-ok
     loggedInTexts: ["高清发布", "发布视频", "作品管理", "内容管理", "创作者中心"], // i18n-ok
     isPublishUrl: (u: string): boolean => /content\/(publish|post\/video)/.test(u),
-    isManageUrl: (u: string): boolean => /content\/manage/.test(u),
+    isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.douyin.test(u),
   },
   xiaohongshu: {
     publishUrl: resolvePlatform("xiaohongshu").publishUrl,
@@ -61,7 +72,7 @@ export const SELECTORS = {
     loginLanding:
       '.login-view, .login-qrcode-wrap, .qrcode-wrap, iframe[src*="login-for-iframe"], iframe[src*="login"]',
     isLoginUrl: (u: string): boolean => /login/.test(u),
-    isListUrl: (u: string): boolean => /platform\/post\/list/.test(u),
+    isListUrl: (u: string): boolean => MANAGE_URL_PATTERNS.weixinChannels.test(u),
   },
   bilibili: {
     uploadUrl: resolvePlatform("bilibili").publishUrl,
@@ -86,6 +97,6 @@ export const SELECTORS = {
     uploadFailedTexts: ["上传失败", "上传出错", "重新上传"], // i18n-ok
     publishDoneTexts: ["投稿成功", "提交成功", "发布成功", "审核中", "稿件投递成功"], // i18n-ok
     isLoginUrl: (u: string): boolean => /passport\.bilibili\.com|\/login/.test(u),
-    isManageUrl: (u: string): boolean => /upload-manager|content-manager|article/.test(u),
+    isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.bilibili.test(u),
   },
 } as const;
