@@ -84,7 +84,9 @@ interface Window {
     checkUpdates?: () => Promise<OpenStudioUpdateInfo>;
     onUpdateAvailable?: (callback: (info: OpenStudioUpdateInfo) => void) => () => void;
     /** 把运行中的任务数推给主进程:托盘文案 + 有任务时阻止系统睡眠。 */
-    reportStatus?: (status: { runningJobs: number }) => void;
+    reportStatus?: (status: { runningJobs: number; progress?: number | null }) => void;
+    /** 任务结束时告知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。 */
+    notifyTask?: (notice: { title: string; body?: string }) => void;
     getOpenAtLogin?: () => Promise<boolean | null>;
     setOpenAtLogin?: (enabled: boolean) => Promise<boolean | null>;
   };

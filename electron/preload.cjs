@@ -11,6 +11,11 @@ ipcRenderer.on("openstudio:fullscreen", (_event, value) => {
   lastFullscreen = Boolean(value);
 });
 
+// 通知点击 → 主进程要求打开任务中心。TaskCenter 监听的是 window 事件,这里做转发。
+ipcRenderer.on("openstudio:open-tasks", () => {
+  window.dispatchEvent(new CustomEvent("openstudio:open-tasks"));
+});
+
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
 contextBridge.exposeInMainWorld("openStudioDesktop", {
@@ -19,6 +24,8 @@ contextBridge.exposeInMainWorld("openStudioDesktop", {
   // 系统能力:reportStatus 把「有几个任务在跑」推给主进程(托盘文案 + 有任务时阻止系统睡眠)。
   // 只推、不问 —— 系统层不认识后端,业务状态由知道它的这一侧负责告知。
   reportStatus: (status) => ipcRenderer.send("system:status", status),
+  // 任务结束时通知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。
+  notifyTask: (notice) => ipcRenderer.send("system:notify", notice),
   getOpenAtLogin: () => ipcRenderer.invoke("system:getOpenAtLogin"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("system:setOpenAtLogin", enabled),
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。

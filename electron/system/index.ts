@@ -1,4 +1,6 @@
 import { getOpenAtLogin, isHiddenLaunch, setOpenAtLogin } from "./loginItem";
+import { badge } from "./badge";
+import { notify, showTaskNotification } from "./notify";
 import { power } from "./power";
 import { isQuitting, markQuitting, residency } from "./residency";
 import { tray } from "./tray";
@@ -16,7 +18,7 @@ import { EMPTY_STATUS, type Capability, type CapabilityHandle, type SystemContex
  * 始终能被单独测。
  */
 
-const CAPABILITIES: Capability[] = [residency, power, tray];
+const CAPABILITIES: Capability[] = [residency, power, tray, badge, notify];
 
 export interface SystemHandle {
   pushStatus: (status: SystemStatus) => void;
@@ -59,5 +61,5 @@ export function registerSystemCapabilities(ctx: SystemContext): SystemHandle {
   };
 }
 
-export { getOpenAtLogin, isHiddenLaunch, isQuitting, markQuitting, setOpenAtLogin };
+export { getOpenAtLogin, isHiddenLaunch, isQuitting, markQuitting, setOpenAtLogin, showTaskNotification };
 export type { SystemContext, SystemStatus };

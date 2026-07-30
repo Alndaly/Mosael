@@ -368,11 +368,17 @@ function createWindow() {
             permission_required: "账号权限不足",
             blocked: "发布被拦截",
           };
-          if (Notification.isSupported()) {
-            new Notification({
-              title: titles[info.status] || `发布 ${info.status}`,
-              body: `${info.accountName} · ${info.title || "未命名"}`,
-            }).show();
+          const notice = {
+            title: titles[info.status] || `发布 ${info.status}`,
+            body: `${info.accountName} · ${info.title || "未命名"}`,
+          };
+          // 走系统能力层的统一入口:那里带「窗口有焦点就不发」的规则。发布任务在渲染层的
+          // TaskCenter 里也会弹应用内 toast,两边都无条件弹的话,你正看着界面时同一件事会
+          // 被告知两遍。系统能力没加载时退回直接弹(总比不提示强)。
+          if (system) {
+            system.showTaskNotification(notice);
+          } else if (Notification.isSupported()) {
+            new Notification(notice).show();
           }
         },
       });
@@ -526,6 +532,10 @@ app.whenReady().then(async () => {
     });
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
     ipcMain.on("system:status", (_e, status) => systemHandle?.pushStatus(status || {}));
+    // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
+    ipcMain.on("system:notify", (_e, notice) => {
+      if (notice?.title) system.showTaskNotification({ title: String(notice.title), body: String(notice.body || "") });
+    });
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
     // dev 下 process.execPath 是 Electron 二进制,写进登录项等于让开发机开机启动一个裸 Electron。
     ipcMain.handle("system:getOpenAtLogin", () => (isDev ? null : system.getOpenAtLogin()));

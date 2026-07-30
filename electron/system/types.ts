@@ -21,6 +21,8 @@ export interface SystemContext {
 export interface SystemStatus {
   /** 正在跑的任务数(渲染/发布/生成/工作流合计)。 */
   runningJobs: number;
+  /** 运行中任务的整体进度 0..1;后端还没报进度时给 null(此时任务栏走不确定态)。 */
+  progress?: number | null;
 }
 
 export const EMPTY_STATUS: SystemStatus = { runningJobs: 0 };

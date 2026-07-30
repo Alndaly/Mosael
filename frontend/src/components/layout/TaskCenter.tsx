@@ -86,9 +86,16 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   // 把「有几个任务在跑」推给桌面端(托盘文案 + 有任务时阻止系统睡眠)。放这里是因为这个组件
   // 本来就在按活跃度自适应轮询 /api/jobs,不必为此再拉一个查询;也因为方向必须是「知道业务的
   // 这一侧告诉系统层」,而不是让主进程反过来查后端。
+  // 进度取活跃任务的均值:Windows 任务栏进度条要一个 0..1。都还没报进度(全 0)时给 null,
+  // 让系统层走不确定态 —— 显示 0% 会看起来像卡住了,而它其实只是还没开始报。
+  const aggregateProgress = React.useMemo(() => {
+    if (active.length === 0) return null;
+    const sum = active.reduce((acc, job) => acc + (typeof job.progress === "number" ? job.progress : 0), 0);
+    return sum > 0 ? sum / active.length : null;
+  }, [active]);
   React.useEffect(() => {
-    window.openStudioDesktop?.reportStatus?.({ runningJobs: active.length });
-  }, [active.length]);
+    window.openStudioDesktop?.reportStatus?.({ runningJobs: active.length, progress: aggregateProgress });
+  }, [active.length, aggregateProgress]);
 
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
   // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
@@ -118,6 +125,12 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         const label = t((KIND_META[job.kind]?.labelKey ?? "jobKindOther") as never);
         if (job.status === "succeeded") toast.success(`${label} · ${t("jobDone")}`);
         else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });
+        // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
+        // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
+        window.openStudioDesktop?.notifyTask?.({
+          title: `${label} · ${job.status === "succeeded" ? t("jobDone") : t("jobFailed")}`,
+          body: job.error ?? job.message ?? "",
+        });
       }
       prevStatuses.current.set(job.id, job.status);
     }
