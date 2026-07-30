@@ -77,7 +77,23 @@ def request_confirmation(
     db.add(confirmation)
     db.commit()
     db.refresh(confirmation)
+    _announce(db, confirmation)
     return confirmation
+
+
+def _announce(db: Session, confirmation: ToolConfirmation) -> None:
+    """把新卡推到它该出现的地方。
+
+    目前只有飞书一处:从飞书驱动的会话,确认卡应当回到那个飞书会话里,而不是只躺在桌面端的
+    确认中心等人切回去。延迟导入 + 吞异常 —— 领域层不该为了一个外部渠道而在导入期就依赖它,
+    渠道推送失败也不该让确认本身建不出来(退化成「切回 App 批准」,而不是整个动作失败)。
+    """
+    try:
+        from app.integrations.feishu.service import announce_confirmation
+
+        announce_confirmation(db, confirmation)
+    except Exception:  # noqa: BLE001 — 见 docstring
+        pass
 
 
 def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
