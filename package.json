@@ -73,7 +73,12 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "shortcutName": "Open Studio",
+      "createStartMenuShortcut": true,
+      "menuCategory": false,
+      "uninstallDisplayName": "Open Studio"
     }
   }
 }
