@@ -72,7 +72,12 @@ const archive = path.join(OUT, "python.tar.gz");
 await pipeline(Readable.fromWeb(res.body), createWriteStream(archive));
 
 // 压缩包里是一层 `python/`,--strip-components=1 把它摊平到 build/python/ 下。
-await run("tar", ["-xzf", archive, "-C", OUT, "--strip-components", "1"]);
+//
+// 传**相对路径**并把 cwd 设到 OUT,而不是把 `D:\a\...` 这种绝对路径交给 tar:GNU tar(Windows
+// runner 上 PATH 里通常是 Git 自带的那个)会把带冒号的路径当成远程主机规格 `host:path`,于是
+// 报 `tar (child): Cannot connect to D: resolve failed` —— v0.3.0 的 Windows 构建就是这么挂的。
+// 相对路径没有冒号,GNU tar 与 Windows 自带的 bsdtar 都能正确处理。
+await run("tar", ["-xzf", "python.tar.gz", "--strip-components", "1"], { cwd: OUT });
 await rm(archive, { force: true });
 
 if (!(await exists(interpreter))) {
