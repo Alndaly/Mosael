@@ -156,6 +156,14 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         {beginScan.isError && <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>}
 
         {hasBots && (
+          /* 一次性的后台配置,只能人工去开(飞书没开放改事件订阅的接口)。放在列表下方常驻,
+             而不是等用户点了卡片没反应再去猜 —— 真撞上时后端还会把原因写进机器人状态那行小字。 */
+          <p className="m-0 rounded-md border border-border bg-panel-subtle px-2.5 py-2 text-[11.5px] leading-[1.6] text-muted-foreground">
+            {t("feishuCardSetup")}
+          </p>
+        )}
+
+        {hasBots && (
           <div className="grid gap-1.5">
             {(bots.data ?? []).map((bot) => (
               <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-border bg-panel px-3 py-2" key={bot.id}>

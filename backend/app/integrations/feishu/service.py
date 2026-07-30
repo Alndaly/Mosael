@@ -530,11 +530,23 @@ def _feishu_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str]
     return (bot, parts[2]) if bot is not None else None
 
 
-def announce_confirmation(db: Session, confirmation: Any) -> None:
-    """把新建的确认卡推到它所属的飞书会话。非飞书来源、或推送失败都只记日志。
+#: 开发者后台没开交互卡片 / 没订阅 card.action.trigger 时,发卡片会撞上这个码。
+#: 这两个开关**没有接口可以配**(事件订阅是后台配置项,且改完要重新发布应用),所以一键创建
+#: 也代劳不了 —— 能做的是撞上时说清楚,而不是让用户对着一张点了没反应的卡片猜。
+CARD_CAPABILITY_ERROR = "200340"
 
-    best-effort 是有意的:飞书那边出问题不该让确认本身建不出来 —— 桌面端的确认中心仍然收得到
-    这张卡,链路只是退化回「切回 App 批准」,而不是整个动作失败。
+_CARD_SETUP_HINT = (
+    "在飞书开发者后台为本应用:①「事件订阅」添加 card.action.trigger;"
+    "②「应用功能 > 机器人」打开「交互卡片」;③ 重新发布应用。"
+)
+
+
+def announce_confirmation(db: Session, confirmation: Any) -> None:
+    """把新建的确认卡推到它所属的飞书会话。
+
+    推送失败一律降级、绝不抛:飞书那边出问题不该让确认本身建不出来。降级分两层 ——
+    先退成纯文本(至少让飞书里的人知道「有东西等你确认」并给出原因),再不行就只剩桌面端的
+    确认中心兜底,链路退化回「切回 App 批准」。
     """
     try:
         origin = _feishu_origin(db, confirmation.session_id)
@@ -543,18 +555,33 @@ def announce_confirmation(db: Session, confirmation: Any) -> None:
         bot, chat_id = origin
         from app.integrations.feishu import cards
 
-        send_card(
-            bot,
-            chat_id,
-            cards.confirmation_card(
-                confirmation_id=confirmation.id,
-                tool=confirmation.tool,
-                summary=confirmation.summary,
-                requested_by=confirmation.requested_by,
-            ),
-        )
+        try:
+            send_card(
+                bot,
+                chat_id,
+                cards.confirmation_card(
+                    confirmation_id=confirmation.id,
+                    tool=confirmation.tool,
+                    summary=confirmation.summary,
+                    requested_by=confirmation.requested_by,
+                ),
+            )
+            return
+        except FeishuError as exc:
+            missing_capability = CARD_CAPABILITY_ERROR in str(exc)
+            logger.warning("feishu card send failed, falling back to text: %s", exc)
+
+        summary = confirmation.summary or confirmation.tool
+        tail = f"\n\n(飞书内直接批准需要:{_CARD_SETUP_HINT})" if missing_capability else ""
+        send_text(bot, chat_id, f"有一个变更等待确认:{summary}\n请到 Open Studio 里批准。{tail}")
+        if missing_capability:
+            # 写进机器人状态,设置页那行小字会显示 —— 否则用户只在聊天里看到一次就过去了。
+            bot_row = db.get(FeishuBot, bot.id)
+            if bot_row is not None and CARD_CAPABILITY_ERROR not in (bot_row.status_detail or ""):
+                bot_row.status_detail = f"交互卡片未开启({CARD_CAPABILITY_ERROR}):{_CARD_SETUP_HINT}"[:400]
+                db.commit()
     except Exception:  # noqa: BLE001 — 见 docstring
-        logger.exception("feishu confirmation card failed confirmation=%s", getattr(confirmation, "id", "?"))
+        logger.exception("feishu confirmation notice failed confirmation=%s", getattr(confirmation, "id", "?"))
 
 
 class CardDecision(dict):
