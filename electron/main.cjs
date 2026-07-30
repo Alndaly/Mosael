@@ -59,8 +59,14 @@ function backendCommand() {
     // 走 `python -m uvicorn` 而不是 .venv/bin/uvicorn:后者是带 shebang 的 console script,
     // 解释器路径在建 venv 时被**写死成绝对路径**——仓库目录一改名(mibu-cut → OpenStudio 就发生过),
     // 53 个脚本同时变成 "bad interpreter",而 .venv/bin/python 是符号链接、照常可用。
+    // venv 布局分平台:POSIX 是 .venv/bin/python,Windows 是 .venv\Scripts\python.exe。
+    // 之前写死了 bin/python,Windows 上开发模式压根拉不起后端。
+    const venvPython =
+      process.platform === "win32"
+        ? path.join(backendDir, ".venv", "Scripts", "python.exe")
+        : path.join(backendDir, ".venv", "bin", "python");
     return {
-      command: path.join(backendDir, ".venv", "bin", "python"),
+      command: venvPython,
       args: ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
       cwd: backendDir,
     };
@@ -129,6 +135,15 @@ async function ensureBackend() {
     cwd,
     env: backendEnv,
     stdio,
+    // Windows:后端是 PyInstaller 的 console 子系统 exe(spec 里 console=True),被 spawn 时
+    // 系统会**另开一个真实的控制台窗口**,而且它活到后端退出为止——用户看到的就是"启动 App
+    // 跟着弹一个黑框终端且关不掉"。windowsHide 走 CREATE_NO_WINDOW 把它压掉。
+    //
+    // 不改成 --noconsole 打包:那样 exe 会变成 windowed 子系统,手动双击跑它排查问题时也
+    // 看不到任何输出,且 Python 往失效的 stdout 句柄写会抛异常。保持它是普通控制台程序、
+    // 只在我们 spawn 时隐藏窗口(输出照常进 userData/logs/backend.log)。
+    // 非 Windows 上该字段被忽略。
+    windowsHide: true,
   });
   backend.on("exit", (code) => {
     backend = null;
