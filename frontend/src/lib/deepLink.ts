@@ -23,3 +23,35 @@ export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey
 export function gotoSettings(section: string): void {
   gotoRecord("/settings", "openstudio:open-settings", section);
 }
+
+/** openstudio:// 深链里 view → 打开单条记录的事件名。没有对应事件的页面就只跳页。 */
+const VIEW_RECORD_EVENTS: Record<string, string> = {
+  workflows: "openstudio:open-workflow",
+  publish: "openstudio:open-publish-task",
+  settings: "openstudio:open-settings",
+};
+
+/**
+ * 挂上 openstudio:// 深链与「拖到应用图标上的文件」的监听。桌面端 preload 把主进程的
+ * IPC 转成同名 window 事件,这里是渲染层这一侧的落点。
+ *
+ * 深链只导航:主进程那边已经把 view 限死在白名单里、id 限死了字符集(见
+ * electron/system/deepLink.ts 头部关于「为什么只导航不执行」的说明),这里不再放宽。
+ */
+export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () => void {
+  const onLink = (event: Event) => {
+    const link = (event as CustomEvent<{ view?: string; id?: string }>).detail;
+    if (!link?.view) return;
+    gotoRecord(`/${link.view}`, VIEW_RECORD_EVENTS[link.view], link.id);
+  };
+  const onOpenFiles = (event: Event) => {
+    const paths = (event as CustomEvent<string[]>).detail;
+    if (Array.isArray(paths) && paths.length) onFiles(paths);
+  };
+  window.addEventListener("openstudio:deep-link", onLink);
+  window.addEventListener("openstudio:open-files", onOpenFiles);
+  return () => {
+    window.removeEventListener("openstudio:deep-link", onLink);
+    window.removeEventListener("openstudio:open-files", onOpenFiles);
+  };
+}

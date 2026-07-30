@@ -480,6 +480,14 @@ class NotificationListOut(BaseModel):
     unread: int
 
 
+class LocalImportRequest(BaseModel):
+    """按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。"""
+
+    workspace_id: str
+    path: str
+    project_id: str | None = None
+
+
 class AnalyzeAssetRequest(BaseModel):
     question: str = Field(default="", max_length=2000)
     profile_id: str | None = None

@@ -294,6 +294,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** 桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」:后端按本机绝对路径入库。
+ *  只有桌面端自带的后端提供这个接口(团队服务器上 404)。 */
+export async function importLocalAsset(workspaceId: string, path: string, projectId?: string): Promise<Asset> {
+  return api<Asset>("/api/assets/import-local", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, path, project_id: projectId ?? null }),
+  });
+}
+
 export function assetFileUrl(assetId: string): string {
   // Media elements cannot send headers, so these URLs carry the token.
   const suffix = authToken ? `?token=${authToken}` : "";

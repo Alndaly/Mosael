@@ -16,6 +16,15 @@ ipcRenderer.on("openstudio:open-tasks", () => {
   window.dispatchEvent(new CustomEvent("openstudio:open-tasks"));
 });
 
+// openstudio:// 深链与「拖到应用图标上的文件」。同样转成 window 事件,复用前端已有的
+// 深链通道(lib/deepLink 的 gotoRecord / openstudio:open-* 那套),不另起一套路由。
+ipcRenderer.on("openstudio:deep-link", (_event, link) => {
+  window.dispatchEvent(new CustomEvent("openstudio:deep-link", { detail: link }));
+});
+ipcRenderer.on("openstudio:open-files", (_event, paths) => {
+  window.dispatchEvent(new CustomEvent("openstudio:open-files", { detail: paths }));
+});
+
 // 桌面环境标识:前端据此加 is-desktop / is-mac 类,适配无边框窗(红绿灯占位、拖拽区)。
 // setTitleOverlay:Win/Linux 的标题栏三键叠层颜色随主题切换(mac 无此叠层,调用为 no-op)。
 contextBridge.exposeInMainWorld("openStudioDesktop", {

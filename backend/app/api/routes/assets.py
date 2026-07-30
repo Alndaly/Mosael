@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut
 from app.audio.service import AsrError, start_transcription
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Transcript
-from app.domain.assets import import_uploaded_asset
+from app.core.config import settings
+from app.domain.assets import import_local_file, import_uploaded_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
@@ -49,6 +51,39 @@ def import_asset(
         name=name,
         upload=file,
     )
+
+
+# 桌面端拖进来的文件能有的后缀。白名单而不是"什么都收":这个接口收的是一个由客户端指定的
+# **本机绝对路径**,能读什么必须收窄到媒体文件,不能变成一个通用的任意文件读取器。
+_LOCAL_IMPORT_SUFFIXES = {
+    ".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi",
+    ".mp3", ".wav", ".m4a", ".aac", ".flac",
+    ".png", ".jpg", ".jpeg", ".webp", ".gif",
+}
+
+
+@router.post("/assets/import-local", response_model=AssetOut)
+def import_local_asset(
+    body: LocalImportRequest,
+    db: DbSession,
+    user: CurrentUser,
+) -> Asset:
+    """按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」)。
+
+    **只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接
+    404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。
+    标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。
+    """
+    if not settings.local_desktop:
+        raise HTTPException(status_code=404, detail="Not found")
+    ensure_workspace_perm(db, user, body.workspace_id, "upload")
+
+    path = Path(body.path).expanduser()
+    if not path.is_absolute() or not path.is_file():
+        raise HTTPException(status_code=422, detail="路径不存在或不是文件")
+    if path.suffix.lower() not in _LOCAL_IMPORT_SUFFIXES:
+        raise HTTPException(status_code=422, detail=f"不支持的文件类型:{path.suffix}")
+    return import_local_file(db, workspace_id=body.workspace_id, project_id=body.project_id, path=path)
 
 
 @router.get("/assets", response_model=list[AssetOut])

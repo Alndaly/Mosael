@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # 不配的话 app.* 日志会冒泡到没挂 handler 的 root 被丢弃——见 core/logging.py。
     log_level: str = "INFO"
     scheduler_enabled: bool = True
+    # 由桌面端(Electron)拉起时置 1。用来门控「按本机绝对路径导入素材」这类
+    # 只在「后端与用户文件在同一台机器上」才成立的能力 —— 团队服务器部署不会有这个标记,
+    # 于是客户端也就无法让服务器去读它自己的文件系统。
+    local_desktop: bool = False
     feishu_autostart: bool = True
     # 第三方登录(留空 = 对应按钮不出现)。Google 用「Web 应用」型客户端并把
     # http://127.0.0.1:8800/api/auth/oauth/google/callback 登记为重定向 URI;

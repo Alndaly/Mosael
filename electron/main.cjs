@@ -63,6 +63,28 @@ try {
   console.warn("[system] 系统能力加载失败(electron/system.bundle.cjs 是否已构建?):", e.message);
 }
 
+// 单实例:第二次启动不再开一个新应用,而是把参数交给已经在跑的这个并把它唤到前台。
+//
+// 这不只是为了协议唤起(Windows/Linux 上 openstudio:// 与「用 Open Studio 打开某文件」都是
+// 靠再启动一个进程、把 URL/路径放进 argv 传过来)。没有这把锁,双击两次图标就会有两个实例:
+// 两个发布 worker 抢同一批任务、两套内嵌浏览器争同一个登录分区(分区有单会话租约,后到的
+// 会被拒),而后端因为 ensureBackend 见端口健康就复用,反而看起来"没问题"——很难查。
+//
+// 必须在 app ready 之前调用。
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    if (system) system.adoptSecondInstance(argv);
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+  });
+}
+
 function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
@@ -125,7 +147,13 @@ async function ensureBackend() {
       stdio = "ignore";
     }
   }
-  const backendEnv = { ...process.env, OPEN_STUDIO_BACKEND_PORT: String(BACKEND_PORT) };
+  // LOCAL_DESKTOP 标记后端「和用户文件在同一台机器上」,门控 /api/assets/import-local
+  // (拖到应用图标上的文件由后端直接按路径读)。团队服务器不会有这个标记,那个接口在那边 404。
+  const backendEnv = {
+    ...process.env,
+    OPEN_STUDIO_BACKEND_PORT: String(BACKEND_PORT),
+    OPEN_STUDIO_LOCAL_DESKTOP: "1",
+  };
   if (!isDev) {
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
     backendEnv.OPEN_STUDIO_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");

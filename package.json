@@ -81,6 +81,38 @@
       "createStartMenuShortcut": true,
       "menuCategory": false,
       "uninstallDisplayName": "Open Studio"
-    }
+    },
+    "protocols": [
+      {
+        "name": "Open Studio",
+        "schemes": [
+          "openstudio"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp4",
+          "mov",
+          "m4v",
+          "mkv",
+          "webm"
+        ],
+        "name": "视频",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "mp3",
+          "wav",
+          "m4a",
+          "aac",
+          "flac"
+        ],
+        "name": "音频",
+        "role": "Editor"
+      }
+    ]
   }
 }

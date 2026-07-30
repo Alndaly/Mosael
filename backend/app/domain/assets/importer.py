@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import BinaryIO
 
 from fastapi import UploadFile
 from sqlalchemy import select
@@ -103,15 +104,69 @@ def import_uploaded_asset(
     upload: UploadFile,
     name: str | None = None,
 ) -> Asset:
+    return _import_stream(
+        db,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        stream=upload.file,
+        original=Path(upload.filename or "upload.bin").name,
+        content_type=upload.content_type,
+        name=name,
+    )
+
+
+def import_local_file(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    path: Path,
+    name: str | None = None,
+) -> Asset:
+    """从本机绝对路径导入(拖到应用图标上 / 「用 Open Studio 打开」)。
+
+    走这条而不是让桌面端把字节送上来,是因为渲染层根本拿不到文件内容:主窗口的 preload 是
+    沙箱的(Electron 20+ 默认),没有 node:fs;而即便关掉沙箱,fs.openAsBlob 的 Blob 穿过
+    contextBridge 之后也不再是真 Blob(FormData 会拒绝)。桌面场景下后端和文件本来就在同一台
+    机器上,让后端直接读是唯一不需要把几个 GB 搬过两次进程边界的做法。
+
+    调用方(路由)负责门控 settings.local_desktop —— 团队服务器上这个接口必须不可用。
+    """
+    with path.open("rb") as handle:
+        return _import_stream(
+            db,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            stream=handle,
+            original=path.name,
+            content_type=None,
+            name=name,
+        )
+
+
+def _import_stream(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    stream: BinaryIO,
+    original: str,
+    content_type: str | None,
+    name: str | None,
+) -> Asset:
+    """入库的公共实现:落盘 → 探测 → 缩略图/波形 → 建记录。
+
+    上传(UploadFile)和本机路径导入(拖到应用图标上的文件)只在「字节从哪来」上不同,
+    后面探测、缩略图、波形、建记录的步骤完全一样,所以拆出这一层复用。
+    """
     asset_id = new_id()
-    original = Path(upload.filename or "upload.bin").name
     target_dir = asset_dir(workspace_id, asset_id)
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / original
     with target.open("wb") as out:
-        shutil.copyfileobj(upload.file, out)
+        shutil.copyfileobj(stream, out)
 
-    kind = guess_kind(target, upload.content_type)
+    kind = guess_kind(target, content_type)
     media_info = _probe_with_duration_repair(target, kind)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}

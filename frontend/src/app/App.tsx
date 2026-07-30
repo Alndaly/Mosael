@@ -2,7 +2,7 @@ import React from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ChevronLeft, ChevronRight, Film, FolderPlus, Loader2, RotateCw, X } from "lucide-react";
 
-import { api, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, importLocalAsset, type ProjectWithStats, type Workspace } from "@/api/client";
 import { createMutationCache } from "@/app/mutationErrors";
 import { AuthProvider, useAuth } from "@/app/auth";
 import { AppearanceProvider } from "@/app/appearance";
@@ -18,6 +18,7 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/components/layout/BrowserPreview";
 import { LivePanels } from "@/components/layout/LivePanels";
 import { Input } from "@/components/ui/input";
+import { listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
@@ -312,6 +313,8 @@ function Studio({
   workspaces: Workspace[];
   onSelectWorkspace: (id: string) => void;
 }) {
+  const t = useI18n();
+  const qc = useQueryClient();
   const initial = React.useMemo(readHash, []);
   const [view, setView] = React.useState<StudioView>(initial.view);
   const [projectId, setProjectId] = React.useState<string | null>(initial.projectId);
@@ -357,6 +360,22 @@ function Studio({
   // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);
+
+  // 桌面端外部唤起:openstudio:// 深链(只导航)与拖到应用图标上的媒体文件(入库)。
+  // 挂在 App 这一层,是因为它要跨页面生效——不能等某个页面挂载了才开始听。
+  React.useEffect(() => {
+    return listenDesktopDeepLinks((paths) => {
+      void Promise.allSettled(paths.map((p) => importLocalAsset(workspace.id, p))).then((settled) => {
+        const ok = settled.filter((r) => r.status === "fulfilled").length;
+        if (ok) {
+          void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
+          toast.success(t("importedAssets").replace("{n}", String(ok)));
+        }
+        const failed = settled.length - ok;
+        if (failed) toast.error(t("importFailed").replace("{n}", String(failed)));
+      });
+    });
+  }, [workspace.id, qc, t]);
 
   return (
     <AppShell
