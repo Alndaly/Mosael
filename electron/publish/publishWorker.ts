@@ -52,6 +52,8 @@ const LIVE_TICK_MS = 1000;
 // 后台任务给视图强制的视口尺寸。与 RPA 会话窗口(browserSessions.ts)取同一档,平台页面按桌面版
 // 布局,不会掉进移动端/窄屏分支。
 const BACKGROUND_VIEWPORT = { width: 1280, height: 800 };
+// 连续这么多次取不到画面就放弃取像(见 LiveMirror.tick)。
+const CAPTURE_ATTEMPTS = 3;
 // 「镜像单槽」:同时最多镜像一个账号。与前台单槽同一个道理——并发时多账号轮流推帧,面板只会来回
 // 跳,反而一条都看不清;截图也不便宜,多开纯属浪费。
 let mirroring: string | null = null;
@@ -74,6 +76,8 @@ class LiveMirror {
   private timer: ReturnType<typeof setInterval> | null = null;
   private held = false;
   private capturing = false;
+  private captureMisses = 0;
+  private captureBroken = false;
 
   constructor(
     private readonly accountId: string,
@@ -108,16 +112,35 @@ class LiveMirror {
 
   private async tick(): Promise<void> {
     if (!onFrame || !this.held || this.capturing) return;
-    this.capturing = true;
     let dataUrl: string | undefined;
+    // 连续取不到就彻底放弃取像,后面只推文字。
+    //
+    // captureBase64 对 capturePage 做了竞速超时,但超时只结束**我们这边的 promise** —— 底层请求
+    // 仍挂在那个 webContents 上。后台视图根本不产生像素,于是每秒攒一个永不完成的请求,一条任务
+    // 下来几十个,足以把渲染状态搞坏:任务结束后用户点「查看页面」看到的是**白屏**。
+    // 试够 CAPTURE_ATTEMPTS 次仍拿不到,就认定这个视图这轮取不到像素,不再骚扰它。
+    if (this.captureBroken) {
+      this.push(undefined);
+      return;
+    }
+    this.capturing = true;
     try {
-      // captureBase64 内部已对 capturePage 竞速超时,绝不挂起;取不到返回 null。
       dataUrl = (await this.driver.captureBase64()) ?? undefined;
+      this.captureMisses = dataUrl ? 0 : this.captureMisses + 1;
+      if (!dataUrl && this.captureMisses >= CAPTURE_ATTEMPTS) {
+        this.captureBroken = true;
+        plog("live mirror: 放弃取像(视图不产生像素),后续只推步骤文案", this.accountId);
+      }
     } catch {
       /* 镜像是观测手段,不是发布的一部分:取不到就只推文字,绝不连累任务 */
+      this.captureMisses += 1;
     } finally {
       this.capturing = false;
     }
+    this.push(dataUrl);
+  }
+
+  private push(dataUrl: string | undefined): void {
     if (!onFrame || !this.held) return;
     let url: string | undefined;
     try {
@@ -280,23 +303,26 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     plog("runTask error:", t.id, error instanceof Error ? error : message);
     // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
     mirror.step(`${platformLabel} · ${tr("失败")}`, true);
+    // 回报失败是这一段里**唯一不能被跳过**的事:它没送到,后端就永远停在 running,前台看到的是
+    // 「一直在跑」。所以它前面的每一步都必须既有界又不抛 —— 线上就出过 captureFailure 里
+    // capturePage 挂死、把回报一起拖没的情况(见 PageDriver.screenshot 的注释)。
     const screenshot = await captureFailure(t.id, driver);
     const blocked = resolveBlockedStatus(error);
-    if (blocked === "login_required")
-      await backend.patchAccount(t.accountId, {
-        binding_status: "login_required",
-        last_error: message,
-      });
-    else if (blocked === "waiting_manual")
-      await backend.patchAccount(t.accountId, {
-        binding_status: "manual_required",
-        last_error: message,
-      });
-    else if (blocked === "permission_required")
-      await backend.patchAccount(t.accountId, {
-        binding_status: "permission_required",
-        last_error: message,
-      });
+    const bindingStatus =
+      blocked === "login_required"
+        ? "login_required"
+        : blocked === "waiting_manual"
+          ? "manual_required"
+          : blocked === "permission_required"
+            ? "permission_required"
+            : null;
+    if (bindingStatus) {
+      await backend
+        .patchAccount(t.accountId, { binding_status: bindingStatus, last_error: message })
+        .catch((patchError: unknown) =>
+          plog("runTask patchAccount failed (报告继续):", t.id, String(patchError).slice(0, 120)),
+        );
+    }
     await backend.reportTask(t.id, {
       status: blocked ?? "failed",
       error_message: message,

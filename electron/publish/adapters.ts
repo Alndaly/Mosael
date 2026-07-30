@@ -913,7 +913,12 @@ export class BilibiliAdapter implements PublishAdapter {
         pointerAttempt(`css ${this.s.submitButton}`, () =>
           this.driver.pointerClickCss(this.s.submitButton),
         ),
-        // 降级:el.click() 不受视口与遮挡影响,点得到。
+        // 降级一:完整指针事件序列。「立即投稿」是个 span,处理器很可能挂在 pointerdown/mousedown
+        // 上,只发 click 不动 —— 这一条事件齐全又不依赖命中测试,是目前最可能真正生效的一条。
+        domAttempt(`full-click ${this.s.submitButton}`, () =>
+          this.driver.dispatchFullClickCss(this.s.submitButton),
+        ),
+        // 降级二:纯 el.click()。按文案找,兼容 B 站换掉 .submit-add 这个类名的情况。
         ...this.s.submitTexts.map((text) =>
           domAttempt(`text ${text}`, () =>
             this.driver.clickByText(text, {

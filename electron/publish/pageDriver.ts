@@ -86,6 +86,22 @@ export class PageDriver {
    * 在可视区内的挂载视图才有布局。所以这里必须**显式失败**,让调用方走 `el.click()` 那条不依赖
    * 坐标的兜底——而不是静默地什么都没做。
    */
+  /** 等元素位置连续两拍不变(平滑滚动停下来了)。最多等 1.2s,等不稳也照常继续。 */
+  private async waitForRectStable(selector: string): Promise<void> {
+    const readTop = `(() => {
+      ${this.deepQueryPrelude(selector)}
+      const el = find(document);
+      return el ? Math.round(el.getBoundingClientRect().top) : null;
+    })()`;
+    let previous: number | null = null;
+    for (let i = 0; i < 8; i++) {
+      const top = await this.evaluate<number | null>(readTop).catch(() => null);
+      if (top !== null && top === previous) return;
+      previous = top;
+      await this.wait(150);
+    }
+  }
+
   private ensurePointerUsable(viewport: { vw: number; vh: number }, what: string): void {
     if (viewport.vw > 0 && viewport.vh > 0) return;
     throw new Error(
@@ -340,7 +356,56 @@ export class PageDriver {
     }
   }
 
+  /**
+   * 在元素上派发**完整的指针事件序列**(pointerover → pointerdown → mousedown → pointerup →
+   * mouseup → click),全程不依赖坐标命中测试。
+   *
+   * 为什么需要它:`el.click()` 只发一个 `click` 事件。B 站的「立即投稿」是个
+   * `<span class="submit-add">`,处理器挂在 pointerdown / mousedown 上时,只发 click 就**毫无反应**
+   * ——线上实测:上传已完成、按钮可见未禁用、可信指针点击与 el.click() 都送达过,页面依然不动。
+   * 而真实指针点击又依赖视口与命中测试,后台视图里容易落空。这一条把两边的短板都避开:事件齐全,
+   * 且不需要"点得中"。代价是 isTrusted 为 false,所以它排在可信点击之后当降级。
+   */
+  async dispatchFullClickCss(selector: string): Promise<void> {
+    const ok = await this.evaluate<boolean>(`(() => {
+      ${this.deepQueryPrelude(selector)}
+      const el = find(document);
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = el.getBoundingClientRect();
+      const base = {
+        bubbles: true, cancelable: true, composed: true, view: window,
+        clientX: r.x + r.width / 2, clientY: r.y + r.height / 2,
+        button: 0, detail: 1,
+      };
+      const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+      const fire = (Ctor, type, extra) => el.dispatchEvent(new Ctor(type, { ...extra }));
+      fire(PointerEvent, 'pointerover', { ...pointer, buttons: 0 });
+      fire(MouseEvent, 'mouseover', { ...base, buttons: 0 });
+      fire(PointerEvent, 'pointerdown', { ...pointer, buttons: 1 });
+      fire(MouseEvent, 'mousedown', { ...base, buttons: 1 });
+      if (typeof el.focus === 'function') el.focus();
+      fire(PointerEvent, 'pointerup', { ...pointer, buttons: 0 });
+      fire(MouseEvent, 'mouseup', { ...base, buttons: 0 });
+      fire(MouseEvent, 'click', { ...base, buttons: 0 });
+      return true;
+    })()`);
+    if (!ok) {
+      throw new Error(`dispatchFullClickCss: element not found: ${selector}`);
+    }
+  }
+
   async pointerClickCss(selector: string): Promise<void> {
+    // scrollIntoView 之后必须**等滚动停下来**再读 rect:页面若是平滑滚动,同步读到的是滚动前的
+    // 位置,而 humanClickAt 还要花 100–200ms 移动鼠标,真正点下去时按钮早已不在那儿 —— 命中测试
+    // 在 t0 通过、在点击时刻却落空,且不报错。先滚,再等位置稳定,最后才取 rect 与命中测试。
+    await this.evaluate(`(() => {
+      ${this.deepQueryPrelude(selector)}
+      const el = find(document);
+      if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    })()`);
+    await this.waitForRectStable(selector);
+
     // 视口尺寸和 rect 一起取回:同一次 evaluate,不多花一个来回。
     const found = await this.evaluate<{
       x: number;
@@ -358,7 +423,6 @@ export class PageDriver {
         ${this.deepQueryPrelude(selector)}
         const el = find(document);
         if (!el) return null;
-        el.scrollIntoView({ block: 'center', inline: 'nearest' });
         const r = el.getBoundingClientRect();
         if (r.width <= 0 || r.height <= 0) return null;
         const cx = Math.round(r.x + r.width / 2), cy = Math.round(r.y + r.height / 2);
@@ -1032,8 +1096,21 @@ export class PageDriver {
     );
   }
 
+  /**
+   * 存一张 PNG。**必须带超时**:后台账号视图不参与合成,`capturePage()` 在这种视图上可能永不
+   * resolve(不是返回空图 —— 是挂住)。而这个方法的唯一调用点 captureFailure 位于失败分支里、
+   * 在 reportTask **之前**:一挂就连锁成「日志已记 runTask error,但后端永远收不到回报」——
+   * 任务永久停在 running、finally 不执行、镜像不停推帧、账号从 running 集合里再也放不出来。
+   * 线上确实这么挂过,所以这里与 captureBase64 用同一套竞速。
+   */
   async screenshot(path: string): Promise<void> {
-    const image = await this.wc.capturePage();
+    const image = await Promise.race([
+      this.wc.capturePage(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+    ]);
+    if (!image || image.isEmpty()) {
+      throw new Error("capturePage produced no image (view is not composited?)");
+    }
     await writeFile(path, image.toPNG());
   }
 
