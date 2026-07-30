@@ -48,6 +48,33 @@ async function plogPageState(tag: string, driver: PageDriver): Promise<void> {
   plog(tag, { url: driver.url(), text });
 }
 
+/**
+ * 填字段:**优先真实按键**(isTrusted=true),落不稳再退回 DOM 事件那条。
+ *
+ * 为什么值得:`fillCss` / `fillField` / `insertText` 都是「native value setter + 派发 input/change」
+ * 或 `dispatchEvent`,事件 isTrusted=false —— 而标题、简介恰恰是平台最会审查的字段。真实按键走的是
+ * 和人手打字同一条输入管线。
+ *
+ * 为什么必须能降级:真实输入会触发平台自己的输入处理 —— @提及 / #话题 的自动补全弹层、长度截断、
+ * 富文本编辑器改写,都可能让最终文本和期望不一致。typeInto 因此自带校验,校验不过就抛;这里接住并
+ * 降级。**宁可 isTrusted=false,也不能把文案写坏。**
+ */
+async function typeOrFill(
+  driver: PageDriver,
+  what: string,
+  selector: string,
+  text: string,
+  fallback: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await driver.typeInto(selector, text);
+    plog(`${what}: typed (trusted)`);
+  } catch (error) {
+    plog(`${what}: 真实按键未落稳,降级到 DOM 事件 —`, String(error).replace(/^Error: /, "").slice(0, 130));
+    await fallback();
+  }
+}
+
 const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
 
 const escapeHtml = (value: string): string =>
@@ -169,14 +196,22 @@ export class DouyinAdapter implements PublishAdapter {
 
   async fillTitle(title: string): Promise<void> {
     await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    await this.driver.fillCss(this.s.titleInput, title.slice(0, 30));
+    const value = title.slice(0, 30);
+    await typeOrFill(this.driver, "douyin title", this.s.titleInput, value, () =>
+      this.driver.fillCss(this.s.titleInput, value),
+    );
   }
 
   async fillTags(tags: string[]): Promise<void> {
     const description = stringOption(this.task, "description");
     if (description) {
       await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
-      await this.driver.insertText(this.s.descEditor, description);
+      await typeOrFill(this.driver, "douyin desc", this.s.descEditor, description, async () => {
+        // 降级前必须先清空:typeInto 可能已敲进去一部分,而 insertText 是在光标处插入,
+        // 不清就会把残留和完整文案叠在一起。
+        await this.driver.focusAndClearField(this.s.descEditor);
+        await this.driver.insertText(this.s.descEditor, description);
+      });
     }
     if (!tags.length) {
       return;
@@ -214,7 +249,7 @@ export class DouyinAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
-    await this.driver.removeElements(this.s.overlays); // shepherd.js onboarding overlays
+    await this.dismissOnboarding();
     await commitClick({
       what: "douyin submit",
       attempts: [
@@ -232,6 +267,34 @@ export class DouyinAdapter implements PublishAdapter {
         urlPattern: MANAGE_URL_PATTERNS.douyin,
       }),
     });
+  }
+
+  /**
+   * 关掉 shepherd.js 的新手引导浮层 —— **优先可信手段**。
+   *
+   * 原先直接 removeElements 删节点:那不是"交互",而且比"关掉"更可疑(MutationObserver 看得见,
+   * 还会让 shepherd 内部状态以为引导仍在进行)。人会按 Esc 或点关闭按钮,两者都是真实输入。
+   * 都不成才退回删节点。
+   */
+  private async dismissOnboarding(): Promise<void> {
+    const gone = async (): Promise<boolean> => !(await this.driver.cssVisible(this.s.overlays, 300));
+    if (await gone()) return;
+
+    await this.driver.pressKey("Escape"); // shepherd 默认 exitOnEsc
+    if (await gone()) {
+      plog("douyin onboarding: dismissed by Escape (trusted)");
+      return;
+    }
+    const clicked = await this.driver
+      .pointerClickCss(".shepherd-cancel-icon, .shepherd-element button[aria-label], .shepherd-button")
+      .then(() => true)
+      .catch(() => false);
+    if (clicked && (await gone())) {
+      plog("douyin onboarding: dismissed by trusted click");
+      return;
+    }
+    plog("douyin onboarding: 可信手段关不掉,退回删除节点");
+    await this.driver.removeElements(this.s.overlays);
   }
 
   async waitResult(): Promise<void> {
@@ -297,7 +360,9 @@ export class XiaohongshuAdapter implements PublishAdapter {
   async fillTitle(title: string): Promise<void> {
     const value = title.slice(0, 20);
     await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    await this.driver.fillCss(this.s.titleInput, value);
+    await typeOrFill(this.driver, "xiaohongshu title", this.s.titleInput, value, () =>
+      this.driver.fillCss(this.s.titleInput, value),
+    );
     const accepted = await this.driver.waitForFunction(
       `(() => {
         const el = document.querySelector(${JSON.stringify(this.s.titleInput)});
@@ -316,7 +381,10 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const description = stringOption(this.task, "description");
     if (description) {
       await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-      await this.driver.insertText(this.s.contentEditor, description);
+      await typeOrFill(this.driver, "xiaohongshu desc", this.s.contentEditor, description, async () => {
+        await this.driver.focusAndClearField(this.s.contentEditor);
+        await this.driver.insertText(this.s.contentEditor, description);
+      });
       await this.driver.insertText(this.s.contentEditor, " ");
       const accepted = await this.driver.waitForFunction(
         `(() => (document.querySelector(${JSON.stringify(
@@ -401,6 +469,12 @@ export class XiaohongshuAdapter implements PublishAdapter {
     await commitClick({
       what: "xiaohongshu submit",
       attempts: [
+        // 可信优先:pointerClickByTextDeep 发真实鼠标事件,且能穿 open shadow root 找到目标 ——
+        // 小红书的发布按钮正是 shadow DOM 里的自定义元素。下面三条派发 DOM 事件(isTrusted=false),
+        // 只当兜底。
+        pointerAttempt(`deep text ${this.s.submitText}`, () =>
+          this.driver.pointerClickByTextDeep(this.s.submitText, { exact: true }),
+        ),
         domAttempt("dispatchPublishEvent", () =>
           this.expectTrue(this.dispatchPublishEvent(this.s.submitHost)),
         ),
@@ -635,7 +709,10 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     const description = stringOption(this.task, "description") ?? title;
     const shortTitle = stringOption(this.task, "shortTitle") ?? title;
     await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
-    await this.driver.insertText(this.s.descEditor, description);
+    await typeOrFill(this.driver, "weixin-channels desc", this.s.descEditor, description, async () => {
+      await this.driver.focusAndClearField(this.s.descEditor);
+      await this.driver.insertText(this.s.descEditor, description);
+    });
     // Optional short title (best effort; skipped if the field is absent).
     if (await this.driver.cssVisible(this.s.shortTitleInput, 2_000)) {
       await this.driver
@@ -859,7 +936,9 @@ export class BilibiliAdapter implements PublishAdapter {
   async fillTitle(title: string): Promise<void> {
     const value = title.slice(0, 80);
     await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    await this.driver.fillField(this.s.titleInput, value);
+    await typeOrFill(this.driver, "bilibili title", this.s.titleInput, value, () =>
+      this.driver.fillField(this.s.titleInput, value),
+    );
     const current = await this.driver.cssValue(this.s.titleInput);
     if (!current?.includes(value)) {
       throw new Error("Bilibili title input did not accept the filled value.");
@@ -872,7 +951,9 @@ export class BilibiliAdapter implements PublishAdapter {
     const description = stringOption(this.task, "description");
     if (description) {
       if (await this.driver.cssVisible(this.s.descEditor, 5_000)) {
-        await this.driver.fillField(this.s.descEditor, description);
+        await typeOrFill(this.driver, "bilibili desc", this.s.descEditor, description, () =>
+          this.driver.fillField(this.s.descEditor, description),
+        );
       } else {
         await this.driver.fillInputNearText("简介", description).catch(() => false); // i18n-ok
       }

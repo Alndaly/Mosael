@@ -75,17 +75,6 @@ export class PageDriver {
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  /**
-   * 坐标点击的前提:视图**有真实布局**。
-   *
-   * 后台跑任务的发布账号视图没有挂进窗口,视口就是 0×0——此时 `scrollIntoView` 会把元素"居中"
-   * 到负坐标,`sendInputEvent` 打过去落在空处,**点了等于没点,而且不报错**。上传(CDP)、填表
-   * (JS)都不用坐标所以照常成功,于是表现成「表单填得好好的,就是发不出去」。
-   *
-   * electron 实测:未挂载 / 挂载但 bounds 移出屏幕 / 挂在窗口可视区下方,视口一律 0×0;只有真正
-   * 在可视区内的挂载视图才有布局。所以这里必须**显式失败**,让调用方走 `el.click()` 那条不依赖
-   * 坐标的兜底——而不是静默地什么都没做。
-   */
   /** 等元素位置连续两拍不变(平滑滚动停下来了)。最多等 1.2s,等不稳也照常继续。 */
   private async waitForRectStable(selector: string): Promise<void> {
     const readTop = `(() => {
@@ -102,6 +91,17 @@ export class PageDriver {
     }
   }
 
+  /**
+   * 坐标点击的前提:视图**有真实布局**。
+   *
+   * 后台跑任务的发布账号视图没有挂进窗口,视口就是 0×0——此时 `scrollIntoView` 会把元素"居中"
+   * 到负坐标,`sendInputEvent` 打过去落在空处,**点了等于没点,而且不报错**。上传(CDP)、填表
+   * (JS)都不用坐标所以照常成功,于是表现成「表单填得好好的,就是发不出去」。
+   *
+   * electron 实测:未挂载 / 挂载但 bounds 移出屏幕 / 挂在窗口可视区下方,视口一律 0×0;只有真正
+   * 在可视区内的挂载视图才有布局。所以这里必须**显式失败**,让调用方走 `el.click()` 那条不依赖
+   * 坐标的兜底——而不是静默地什么都没做。
+   */
   private ensurePointerUsable(viewport: { vw: number; vh: number }, what: string): void {
     if (viewport.vw > 0 && viewport.vh > 0) return;
     throw new Error(
@@ -933,6 +933,88 @@ export class PageDriver {
     this.wc.sendInputEvent({ type: "char", keyCode: key === "Space" ? " " : code });
     this.wc.sendInputEvent({ type: "keyUp", keyCode: code });
     await this.wait(60);
+  }
+
+  /**
+   * 用真实按键清空当前焦点字段(isTrusted=true,不碰 value setter)。
+   *
+   * 修饰键名必须是 `meta`,不是 `cmd` —— Electron 的 sendInputEvent 只认
+   * shift/control/alt/meta,写 `cmd` 会被当成未知修饰键**静默忽略**:全选没发生,退格只删掉一个
+   * 字符,新文本追加在旧文本后面。这条是实测踩出来的。
+   *
+   * 全选删除之后再校验一次:某些编辑器不响应全选(富文本、自定义 keymap),此时退回逐个退格 ——
+   * 仍然全程是真实按键。
+   */
+  private async clearFocusedField(selector: string): Promise<void> {
+    const accel = process.platform === "darwin" ? "meta" : "control";
+    for (const type of ["keyDown", "keyUp"] as const) {
+      this.wc.sendInputEvent({ type, keyCode: "a", modifiers: [accel] });
+    }
+    await this.wait(40);
+    for (const type of ["keyDown", "keyUp"] as const) {
+      this.wc.sendInputEvent({ type, keyCode: "Backspace" });
+    }
+    await this.wait(60);
+
+    const left = (await this.fieldText(selector).catch(() => "")) ?? "";
+    if (!left.length) return;
+    // 全选没吃到:逐个退格。上限防止在「删不掉」的字段上无限敲。
+    for (let i = 0; i < Math.min(left.length + 4, 400); i++) {
+      this.throwIfAborted();
+      for (const type of ["keyDown", "keyUp"] as const) {
+        this.wc.sendInputEvent({ type, keyCode: "Backspace" });
+      }
+      if (i % 20 === 19) await this.wait(20);
+    }
+    await this.wait(80);
+  }
+
+  /** 字段当前的文本:`<input>`/`<textarea>` 读 value,contenteditable 读 innerText。 */
+  private async fieldText(selector: string): Promise<string | null> {
+    return this.evaluate<string | null>(`(() => {
+      ${this.deepQueryPrelude(selector)}
+      const el = find(document);
+      if (!el) return null;
+      return typeof el.value === 'string' ? el.value : (el.innerText || el.textContent || '');
+    })()`);
+  }
+
+  /**
+   * 用**真实按键**把文本敲进字段(全程 isTrusted=true)。
+   *
+   * 为什么值得费这个劲:`fillCss` / `fillField` / `insertText` 都是「native value setter + 派发
+   * input/change」或 `dispatchEvent`,事件 `isTrusted === false` —— 平台风控一查就知道不是人打的。
+   * 而标题、简介这些字段恰恰是最容易被审查的。这里改成落焦点(优先可信点击)→ 真实按键全选删除 →
+   * 逐字符真实按键输入,和人手打字走的是同一条输入管线。
+   *
+   * **必须校验**:真实输入会触发平台自己的输入处理 —— @提及 / #话题 的自动补全弹层、长度截断、
+   * 富文本编辑器的改写,都可能让最终文本和期望不一致。校验不过就抛错,让调用方降级回 DOM 事件那条
+   * (宁可 isTrusted=false,也不能把简介写坏)。
+   */
+  async typeInto(selector: string, text: string): Promise<void> {
+    // 落焦点:优先可信点击(等于人先点一下输入框);点不到再退回 el.focus()。
+    await this.pointerClickCss(selector).catch(async () => {
+      const focused = await this.evaluate<boolean>(`(() => {
+        ${this.deepQueryPrelude(selector)}
+        const el = find(document);
+        if (!el || typeof el.focus !== 'function') return false;
+        el.focus();
+        return true;
+      })()`);
+      if (!focused) throw new Error(`typeInto: element not found or not focusable: ${selector}`);
+    });
+    await this.clearFocusedField(selector);
+    await this.type(text);
+    await this.wait(120);
+    const landed = (await this.fieldText(selector).catch(() => null)) ?? "";
+    // 平台常有长度上限,所以按「前缀一致」判定而不是全等;差得多就说明被弹层/改写搅了。
+    const expected = text.trim();
+    const actual = landed.trim();
+    if (!actual.startsWith(expected.slice(0, Math.min(expected.length, 12))) || actual.length < expected.length * 0.6) {
+      throw new Error(
+        `typeInto: text did not land (want ${JSON.stringify(expected.slice(0, 24))}…, got ${JSON.stringify(actual.slice(0, 24))}…)`,
+      );
+    }
   }
 
   // ---- file upload via CDP ------------------------------------------------
