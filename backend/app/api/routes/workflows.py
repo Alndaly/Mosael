@@ -6,7 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession, ensure_graph_node_privileges
+from app.api.deps import CurrentUser, DbSession
 from typing import TYPE_CHECKING
 
 from app.api.schemas import (
@@ -21,7 +21,7 @@ from app.api.schemas import (
     WorkflowRunRequest,
     WorkflowUpdate,
 )
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_access
 from app.db.models import Job, Workflow
 from app.domain.workflows import (
     NODE_TYPES,

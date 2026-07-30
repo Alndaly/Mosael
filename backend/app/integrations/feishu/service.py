@@ -605,13 +605,11 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
 
     失败一律回 toast:原卡保持可点,好让真正有权限的人接手。
     """
-    from app.api.deps import ensure_graph_node_privileges
-    from app.core.permissions import ensure_workspace_access
     from app.db.models import ToolConfirmation
     from app.domain.agent.confirmations import (
         ConfirmationError,
-        approve_confirmation,
-        reject_confirmation,
+        authorize_and_approve,
+        authorize_and_reject,
     )
     from app.integrations.feishu import cards
 
@@ -630,19 +628,16 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
         user = _resolve_sender(db, confirmation.workspace_id, open_id) if open_id else None
         if user is None:
             return _toast("请先在 Open Studio 的「飞书机器人」里绑定你的账号")
-        try:
-            ensure_workspace_access(db, user, confirmation.workspace_id)
-        except Exception:  # noqa: BLE001 — 权限库抛的是 HTTPException,这里只需转成 toast
-            return _toast("你没有这个工作区的权限")
 
         summary, tool = confirmation.summary, confirmation.tool
         try:
+            # 校验与执行都在 authorize_and_*(和 HTTP 路由共用同一份)。这一层只负责:
+            # 把 open_id 认成人、把领域异常翻成 toast。
             if action == cards.ACTION_APPROVE:
-                ensure_graph_node_privileges(db, user, (confirmation.payload or {}).get("graph"))
-                approve_confirmation(db, confirmation)
+                authorize_and_approve(db, user, confirmation)
                 decision = "approved"
             else:
-                reject_confirmation(db, confirmation)
+                authorize_and_reject(db, user, confirmation)
                 decision = "rejected"
         except ConfirmationError as exc:
             return _toast(str(exc))

@@ -5,7 +5,8 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import PublishAccount, Sequence, ToolConfirmation, now
+from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_access
+from app.db.models import PublishAccount, Sequence, ToolConfirmation, User, now
 from app.domain.sequences import operations as seq_ops
 
 """
@@ -79,6 +80,31 @@ def request_confirmation(
     db.refresh(confirmation)
     _announce(db, confirmation)
     return confirmation
+
+
+def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmation) -> ToolConfirmation:
+    """批准一张确认卡 —— **所有入口的唯一实现**。
+
+    入口不止一个:桌面端走 HTTP 路由(bearer token 认身份),飞书走卡片回调(open_id 经账号
+    绑定认身份)。身份怎么认由入口负责,认出来之后「这个人能不能批、批了会发生什么」必须只有
+    一份 —— 之前是两边各抄一遍,谁往路由里加第四道校验,飞书那条就会静默漏掉,而这恰恰是授权
+    路径,漏掉等于越权。
+
+    两道闸门缺一不可:
+      - ensure_workspace_access:他得是这个工作区的人。
+      - ensure_graph_node_privileges:create_workflow / update_workflow 的卡片带着整份 graph,
+        批准即落库,是绕开 /api/workflows 的又一条落库路径,同样要挡 code 节点。按**审批者**
+        校验:卡是他批的,这次执行记在他头上。
+    """
+    ensure_workspace_access(db, user, confirmation.workspace_id)
+    ensure_graph_node_privileges(db, user, (confirmation.payload or {}).get("graph"))
+    return approve_confirmation(db, confirmation)
+
+
+def authorize_and_reject(db: Session, user: User, confirmation: ToolConfirmation) -> ToolConfirmation:
+    """拒绝一张确认卡。不落库任何东西,所以只需要工作区归属这一道。"""
+    ensure_workspace_access(db, user, confirmation.workspace_id)
+    return reject_confirmation(db, confirmation)
 
 
 def _announce(db: Session, confirmation: ToolConfirmation) -> None:

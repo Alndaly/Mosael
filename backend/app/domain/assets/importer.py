@@ -65,35 +65,18 @@ def register_file_asset(
     name: str,
     source: str = "exported",
 ) -> Asset:
-    """Copy an existing local file into asset storage and register it."""
-    asset_id = new_id()
-    target_dir = asset_dir(workspace_id, asset_id)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / source_path.name
-    shutil.copy2(source_path, target)
-
-    kind = guess_kind(target)
-    media_info = _probe_with_duration_repair(target, kind)
-    if generate_thumbnail(target, kind, target_dir) is not None:
-        media_info = {**media_info, "has_thumbnail": True}
-    if generate_waveform(target, kind, target_dir) is not None:
-        media_info = {**media_info, "has_waveform": True}
-    asset = Asset(
-        id=asset_id,
-        workspace_id=workspace_id,
-        project_id=project_id,
-        kind=kind,
-        source=source,
-        name=name,
-        original_filename=source_path.name,
-        file_key=asset_key(workspace_id, asset_id, source_path.name),
-        media_info=media_info,
-    )
-    db.add(asset)
-    db.commit()
-    db.refresh(asset)
-    start_proxy_job(db, asset)  # 720p preview proxy for the compositor (no-op unless video)
-    return asset
+    """把一个已经存在的本机文件登记进素材库(渲染成片、配音产出、AI 生成结果都走这条)。"""
+    with source_path.open("rb") as handle:
+        return _import_stream(
+            db,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            stream=handle,
+            original=source_path.name,
+            content_type=None,
+            name=name,
+            source=source,
+        )
 
 
 def import_uploaded_asset(
@@ -115,33 +98,6 @@ def import_uploaded_asset(
     )
 
 
-def import_local_file(
-    db: Session,
-    *,
-    workspace_id: str,
-    project_id: str | None,
-    path: Path,
-    name: str | None = None,
-) -> Asset:
-    """从本机绝对路径导入(拖到应用图标上 / 「用 Open Studio 打开」)。
-
-    走这条而不是让桌面端把字节送上来,是因为渲染层根本拿不到文件内容:主窗口的 preload 是
-    沙箱的(Electron 20+ 默认),没有 node:fs;而即便关掉沙箱,fs.openAsBlob 的 Blob 穿过
-    contextBridge 之后也不再是真 Blob(FormData 会拒绝)。桌面场景下后端和文件本来就在同一台
-    机器上,让后端直接读是唯一不需要把几个 GB 搬过两次进程边界的做法。
-
-    调用方(路由)负责门控 settings.local_desktop —— 团队服务器上这个接口必须不可用。
-    """
-    with path.open("rb") as handle:
-        return _import_stream(
-            db,
-            workspace_id=workspace_id,
-            project_id=project_id,
-            stream=handle,
-            original=path.name,
-            content_type=None,
-            name=name,
-        )
 
 
 def _import_stream(
@@ -153,11 +109,13 @@ def _import_stream(
     original: str,
     content_type: str | None,
     name: str | None,
+    source: str = "imported",
 ) -> Asset:
-    """入库的公共实现:落盘 → 探测 → 缩略图/波形 → 建记录。
+    """入库的**唯一实现**:落盘 → 探测 → 缩略图/波形 → 建记录 → 起 proxy。
 
-    上传(UploadFile)和本机路径导入(拖到应用图标上的文件)只在「字节从哪来」上不同,
-    后面探测、缩略图、波形、建记录的步骤完全一样,所以拆出这一层复用。
+    三个入口(浏览器上传、本机路径注册、渲染/配音/生成产出的文件)只在「字节从哪来」和
+    source 标签上不同,后面的步骤完全一样。曾经上传走一份、按路径注册走另一份逐行重复的副本,
+    改探测逻辑要记得改两处 —— 现在只有这一处。
     """
     asset_id = new_id()
     target_dir = asset_dir(workspace_id, asset_id)
@@ -177,7 +135,7 @@ def _import_stream(
         workspace_id=workspace_id,
         project_id=project_id,
         kind=kind,
-        source="imported",
+        source=source,
         name=(name or original).strip() or original,
         original_filename=original,
         file_key=asset_key(workspace_id, asset_id, original),

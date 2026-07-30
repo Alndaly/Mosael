@@ -13,7 +13,7 @@ from app.audio.service import AsrError, start_transcription
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Transcript
 from app.core.config import settings
-from app.domain.assets import import_local_file, import_uploaded_asset
+from app.domain.assets import import_uploaded_asset, register_file_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
@@ -83,7 +83,16 @@ def import_local_asset(
         raise HTTPException(status_code=422, detail="路径不存在或不是文件")
     if path.suffix.lower() not in _LOCAL_IMPORT_SUFFIXES:
         raise HTTPException(status_code=422, detail=f"不支持的文件类型:{path.suffix}")
-    return import_local_file(db, workspace_id=body.workspace_id, project_id=body.project_id, path=path)
+    # 复用「登记一个已存在的本机文件」这条既有路径 —— 渲染成片、配音产出、AI 生成结果
+    # 走的都是它。拖进来的文件只是 source 标签不同。
+    return register_file_asset(
+        db,
+        workspace_id=body.workspace_id,
+        project_id=body.project_id,
+        source_path=path,
+        name=path.name,
+        source="imported",
+    )
 
 
 @router.get("/assets", response_model=list[AssetOut])

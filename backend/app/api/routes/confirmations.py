@@ -3,14 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession, ensure_graph_node_privileges
+from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.core.permissions import ensure_workspace_access
 from app.db.models import ToolConfirmation
 from app.domain.agent.confirmations import (
     ConfirmationError,
-    approve_confirmation,
-    reject_confirmation,
+    authorize_and_approve,
+    authorize_and_reject,
     request_confirmation,
 )
 
@@ -70,31 +70,36 @@ def get_confirmation(confirmation_id: str, db: DbSession, user: CurrentUser) -> 
     return confirmation
 
 
+# 路由这一层只做两件事:认身份(CurrentUser)、把领域异常翻译成 HTTP 码。
+# 「能不能批、批了会发生什么」在 domain/agent/confirmations.authorize_and_* 里,
+# 和飞书卡片那条入口共用同一份 —— 校验规则不该按入口各写一遍。
 @router.post("/confirmations/{confirmation_id}/approve", response_model=ConfirmationOut)
 def approve(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
-    confirmation = _require(db, user, confirmation_id)
-    # create_workflow / update_workflow 卡片携带整份 graph,批准即落库——这是绕开
-    # /api/workflows 路由的第四条落库路径,同样要挡 code 节点。按**审批者**校验:
-    # 卡片是他批的,这次执行记在他头上。
-    ensure_graph_node_privileges(db, user, (confirmation.payload or {}).get("graph"))
+    confirmation = _get_or_404(db, confirmation_id)
     try:
-        return approve_confirmation(db, confirmation)
+        return authorize_and_approve(db, user, confirmation)
     except ConfirmationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/confirmations/{confirmation_id}/reject", response_model=ConfirmationOut)
 def reject(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
-    confirmation = _require(db, user, confirmation_id)
+    confirmation = _get_or_404(db, confirmation_id)
     try:
-        return reject_confirmation(db, confirmation)
+        return authorize_and_reject(db, user, confirmation)
     except ConfirmationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-def _require(db: DbSession, user: CurrentUser, confirmation_id: str) -> ToolConfirmation:
+def _get_or_404(db: DbSession, confirmation_id: str) -> ToolConfirmation:
+    """只管存在性。归属校验交给调用方 —— 读走 _require,写走 authorize_and_*。"""
     confirmation = db.get(ToolConfirmation, confirmation_id)
     if confirmation is None:
         raise HTTPException(status_code=404, detail="Not found")
+    return confirmation
+
+
+def _require(db: DbSession, user: CurrentUser, confirmation_id: str) -> ToolConfirmation:
+    confirmation = _get_or_404(db, confirmation_id)
     ensure_workspace_access(db, user, confirmation.workspace_id)
     return confirmation

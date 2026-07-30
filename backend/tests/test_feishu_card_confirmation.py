@@ -188,3 +188,37 @@ def test_card_send_failure_never_breaks_confirmation(ctx, monkeypatch) -> None:
 
     cid = _make_confirmation(client, ws)
     assert _status(cid) == "pending"
+
+
+def test_both_entries_share_one_authorization(ctx, monkeypatch) -> None:
+    """HTTP 路由与飞书卡片必须走同一份 authorize_and_approve。
+
+    这两条链路终点相同、身份来源不同:一个 bearer token,一个 open_id 经账号绑定。身份怎么认
+    由入口各管各的,但「能不能批」只能有一份 —— 之前是两边各抄一遍校验,谁给路由加了第四道,
+    飞书那条就会静默漏掉。这里把它钉住:打桩共用函数后,两个入口都必须打不通。
+    """
+    from app.domain.agent import confirmations as domain
+
+    client, ws, user_id, _ = ctx
+    _bind(ws, OTHER_OPEN_ID, user_id)
+
+    calls: list[str] = []
+    real = domain.authorize_and_approve
+
+    def spy(db, user, confirmation):
+        calls.append(confirmation.id)
+        return real(db, user, confirmation)
+
+    monkeypatch.setattr(domain, "authorize_and_approve", spy)
+    # 路由与飞书模块都是在函数内延迟导入的,所以打桩模块属性就够,不必逐个改引用。
+    import app.api.routes.confirmations as route_mod
+
+    monkeypatch.setattr(route_mod, "authorize_and_approve", spy)
+
+    via_http = _make_confirmation(client, ws)
+    assert client.post(f"/api/confirmations/{via_http}/approve").status_code == 200
+
+    via_card = _make_confirmation(client, ws)
+    handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": via_card})
+
+    assert calls == [via_http, via_card], f"两条入口没有都走共用实现:{calls}"
