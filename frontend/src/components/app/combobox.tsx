@@ -11,6 +11,17 @@ export type ComboboxOption = {
   label?: string;
 };
 
+/**
+ * 为什么 Popover 必须带 `modal`(不是可选优化):
+ *
+ * Dialog 用 react-remove-scroll 锁背景滚动,而它**只放行自己 shard(DialogContent)内**的滚轮事件。
+ * PopoverContent 走 Portal 渲染到 body,天然落在 shard 之外 —— 于是列表明明是 overflow-y-auto、
+ * 滚动条也画出来了,滚轮却完全无效(拖滚动条、按方向键仍可用,这个组合就是它的特征)。
+ *
+ * 加上 modal 后 Popover 自己建立滚动锁,并把自己的内容作为放行区,列表就能滚。在对话框外用也一致:
+ * 打开期间锁住背景滚动,与原生 select 的行为相同。
+ */
+
 export function Combobox({
   value,
   options,
@@ -50,7 +61,9 @@ export function Combobox({
   };
 
   return (
+    // modal 见组件顶部注释:不加就在对话框里滚不动。
     <Popover
+      modal
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);

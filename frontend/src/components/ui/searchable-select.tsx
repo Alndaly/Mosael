@@ -10,6 +10,11 @@ type Option = { value: string; label: string };
 /**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
  * 可能上百项)。Popover + cmdk:输入即过滤,列表封顶高度内滚动,宽度对齐触发器。
+ *
+ * Popover 必须带 `modal`:Dialog 用 react-remove-scroll 锁背景滚动,只放行自己 shard
+ * (DialogContent)内的滚轮,而 PopoverContent 走 Portal 渲染到 body、落在 shard 之外——不加 modal
+ * 时列表明明可滚、滚动条也在,滚轮却完全无效(拖滚动条/方向键仍可用,是这个故障的特征组合)。
+ * 加了之后 Popover 自建滚动锁并把自己的内容作为放行区;对话框外的行为也一致(与原生 select 相同)。
  */
 export function SearchableSelect({
   value,
@@ -37,7 +42,7 @@ export function SearchableSelect({
   const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
   const selected = items.find((item) => item.value === value);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         {trigger ?? (
           <button
