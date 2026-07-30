@@ -55,14 +55,6 @@ def _get_driver() -> Any:
 _MAX_PARALLEL_EXTRACT = 4
 
 
-def extract_entities(db: Session, text: str) -> list[dict[str, str]]:
-    """LLM 实体抽取;没有可用模型或解析失败返回空。"""
-    profile = _entity_profile(db)
-    if profile is None:
-        return []
-    return _extract_with(profile, text)
-
-
 def _entity_profile(db: Session):
     """The provider used for entity extraction, read on the CALLING thread.
 

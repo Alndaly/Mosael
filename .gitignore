@@ -1,35 +1,61 @@
-.DS_Store
+# Open Studio 忽略规则。
+#
+# 分区排列,每区说明「为什么」而不只是「忽略什么」——这份文件之前是逐次追加长出来的,
+# 出现过 `build/` 先被整体忽略、再逐条 `!` 放行图标的绕法,新人很难看出哪些是有意的。
+#
+# 子项目另有各自的 .gitignore(agent-sidecar/、docs-site/、.codegraph/),那里的规则不在这里重复。
+
+# ---------------------------------------------------------------- 依赖与虚拟环境
+node_modules/
 .venv/
+
+# ---------------------------------------------------------------- 语言运行时产物
 __pycache__/
 *.pyc
-node_modules/
-dist/
-build/
-.vite/
-*.db
-*.db-shm
-*.db-wal
-.env
+*.tsbuildinfo
 
-release/
+# ---------------------------------------------------------------- 构建产物
+# 前端 / sidecar / 文档站的构建输出
+dist/
+.vite/
+
+# esbuild 单文件 bundle:main.cjs 在运行时 require 它们,由 build:publisher / build:system 生成。
+# 不入库是因为它们是纯产物;代价是**新克隆必须先构建**,所以 dev 脚本(frontend 的 electron:dev)
+# 里两个都要构建到位,否则跑起来会静默缺少发布执行器或系统能力层。
+electron/publish.bundle.cjs
+electron/system.bundle.cjs
+
+# 后端 PyInstaller:dist/ 是冻结二进制,build/ 是中间件,.spec 每次按 --name 重新生成。
 backend/build/
 backend/dist/
 *.spec
 
-# App icon sources for electron-builder packaging (root build/ is otherwise ignored)
-!/build/
+# electron-builder 的安装包输出
+release/
+
+# 根 build/ 既是构建暂存区(随包分发的 CPython 落在这里),又存着少数**必须入库**的打包输入。
+# 所以整体忽略、逐个放行——放行的这三个是源文件,不是产物:
+#   icon.png   应用图标源 + 运行时托盘图标(见 electron/system/tray.ts,已在 package.json 的 files 里)
+#   icon.icns  macOS 图标
+#   installer.nsh  NSIS 定制脚本(卸载前 taskkill 后端进程)
 /build/*
 !/build/icon.png
 !/build/icon.icns
 !/build/installer.nsh
 
-# esbuild 产物(build:publisher / watch:publisher 现生成)
-electron/publish.bundle.cjs
-electron/system.bundle.cjs
+# ---------------------------------------------------------------- 工具缓存
+.pytest_cache/
+.ruff_cache/
+.astro/
 .claude/
 
-# TS 增量构建产物,每次构建都变
-*.tsbuildinfo
+# ---------------------------------------------------------------- 本机数据与密钥
+# SQLite 库(含 -shm/-wal 旁挂文件)与环境变量文件:前者是用户数据,后者含 API key。
+*.db
+*.db-shm
+*.db-wal
+.env
 
-# 随 App 分发的独立 CPython(构建期由 scripts/fetch-tts-python.mjs 抓取)
-/build/python/
+# ---------------------------------------------------------------- 操作系统垃圾
+.DS_Store
+Thumbs.db

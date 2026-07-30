@@ -212,13 +212,6 @@ def close_session(db: Session, session_id: str) -> None:
     db.commit()
 
 
-def list_sessions(db: Session, workspace_id: str, *, include_closed: bool = False) -> list[BrowserSession]:
-    stmt = select(BrowserSession).where(BrowserSession.workspace_id == workspace_id)
-    if not include_closed:
-        stmt = stmt.where(BrowserSession.status == "open")
-    return list(db.scalars(stmt.order_by(BrowserSession.created_at.desc())))
-
-
 def run_action(
     session_id: str,
     action: str,

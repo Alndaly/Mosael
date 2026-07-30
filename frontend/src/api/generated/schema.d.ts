@@ -752,6 +752,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/import-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Local Asset
+         * @description 按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」)。
+         *
+         *     **只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接
+         *     404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。
+         *     标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。
+         */
+        post: operations["import_local_asset_api_assets_import_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}": {
         parameters: {
             query?: never;
@@ -1993,7 +2017,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Job Events */
+        /**
+         * List Job Events
+         * @description 一次运行的事件流(按时间正序)。
+         *
+         *     上限按**最早**截断,不是最新 30 条。工作流详情靠 workflow.node.started / finished 配对还原
+         *     每个节点的状态,取最新 N 条会把早期的 started 挤掉 —— 表现为「旧任务只剩最后一个节点、
+         *     前面的步骤全没了」,而最后那个节点因为丢了 started 反而显示成一直在跑。
+         */
         get: operations["list_job_events_api_jobs__job_id__events_get"];
         put?: never;
         post?: never;
@@ -3216,6 +3247,30 @@ export interface paths {
         put?: never;
         /** Scan Plugin Manifests */
         post: operations["scan_plugin_manifests_api_plugins_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/dir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plugins Directory
+         * @description 插件目录的**真实绝对路径**,给前端的空态引导用。
+         *
+         *     以前这条路径是写死在前端文案里的(`~/.open-studio/plugins/`)。那是 POSIX 写法:
+         *     Windows 上 Path.home() 是 C:\Users\<用户名>,`~/` 对用户没有任何意义,照着找是找不到的。
+         *     路径由谁算就由谁报,免得两边各写一份、还各写错一份。
+         */
+        get: operations["plugins_directory_api_plugins_dir_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4986,6 +5041,18 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * LocalImportRequest
+         * @description 按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。
+         */
+        LocalImportRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Path */
+            path: string;
+            /** Project Id */
+            project_id?: string | null;
+        };
         /** LutOut */
         LutOut: {
             /** Id */
@@ -5677,11 +5744,6 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
-            /**
-             * Executor
-             * @default local
-             */
-            executor: string;
             /**
              * Title Max
              * @default 300
@@ -8453,6 +8515,39 @@ export interface operations {
             };
         };
     };
+    import_local_asset_api_assets_import_local_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_asset_api_assets__asset_id__get: {
         parameters: {
             query?: never;
@@ -10988,7 +11083,9 @@ export interface operations {
     };
     list_job_events_api_jobs__job_id__events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 job_id: string;
@@ -13996,6 +14093,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plugins_directory_api_plugins_dir_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */

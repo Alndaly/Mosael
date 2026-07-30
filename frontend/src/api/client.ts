@@ -267,7 +267,6 @@ export type PublishAccount = components["schemas"]["PublishAccountOut"];
 export type PublishTask = components["schemas"]["PublishTaskOut"];
 export type PublishCopy = components["schemas"]["PublishCopyResponse"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
-export type WorkflowAiEditResponse = components["schemas"]["WorkflowAiEditResponse"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
@@ -613,19 +612,6 @@ export interface WorkflowGraph {
   }>;
 }
 
-export type AgentSessionInfo = components["schemas"]["AgentSessionOut"];
-
-export function workflowAgentSession(workflowId: string): Promise<AgentSessionInfo> {
-  return api<AgentSessionInfo>(`/api/workflows/${workflowId}/agent-session`, { method: "POST" });
-}
-
-export function listWorkflowAgentSessions(workflowId: string): Promise<AgentSessionInfo[]> {
-  return api<AgentSessionInfo[]>(`/api/workflows/${workflowId}/agent-sessions`);
-}
-
-export function createWorkflowAgentSession(workflowId: string): Promise<AgentSessionInfo> {
-  return api<AgentSessionInfo>(`/api/workflows/${workflowId}/agent-sessions`, { method: "POST" });
-}
 
 export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
   return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
@@ -671,16 +657,6 @@ export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
 /** Execution history — this workflow's run jobs, newest first. */
 export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);
-}
-
-export function aiEditWorkflow(
-  workflowId: string,
-  body: { instruction: string; graph?: WorkflowGraph },
-): Promise<WorkflowAiEditResponse> {
-  return api<WorkflowAiEditResponse>(`/api/workflows/${workflowId}/ai-edit`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
 }
 
 export interface AppNotification {

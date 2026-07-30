@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
-from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, set_turn_queue, steer_turn
+from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, steer_turn
 from app.ai.agent.textclean import decode_byte_fallback
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -57,8 +55,6 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Open Studio 的视频创作助手,运行在�
 - 所有已批准的时间线修改用户都可以撤销,不必过度谨慎,但一次确认卡只装一个连贯意图。
 工作区 ID: {workspace_id}。用用户使用的语言回复,简洁、面向创作者,不要提及内部实现细节。
 不要读写本机文件系统,不要执行 shell 命令;只使用 open-studio 工具与对话。"""
-
-_turn_callbacks: list[Callable[[str], None]] = []
 
 # Live token streams for in-flight turns, keyed by session id.
 _streams_lock = threading.Lock()
@@ -262,11 +258,6 @@ def _turn_metering(prompt: str, text: str, adapter_usage: dict | None = None) ->
         metering["total_tokens"] = input_tokens + output_tokens
         metering["token_estimate"] = True
     return metering
-
-
-def on_turn_finished(callback: Callable[[str], None]) -> None:
-    """Register a listener (e.g. the Feishu worker) fired with session_id after each turn."""
-    _turn_callbacks.append(callback)
 
 
 def default_adapter() -> str:
@@ -571,11 +562,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 logger.warning("Could not finalise session %s; it may have been deleted", session_id)
                 db.rollback()
             _stream_finish(session_id, final_text)
-    for callback in list(_turn_callbacks):
-        try:
-            callback(session_id)
-        except Exception:
-            logger.exception("Turn callback failed")
     # Outside the session block on purpose: the drain opens its own session and starts the
     # next turn, and doing that while this one still held the connection would nest them.
     _drain_queue(session_id)
