@@ -6,11 +6,18 @@ packages:
 # 漏了会让 `pnpm install --frozen-lockfile` 直接失败(ERR_PNPM_IGNORED_BUILDS),CI 也一样,
 # 所以升级引入新的带脚本依赖时必须同步更新这里。
 allowBuilds:
-  '@google/genai': false        # 只是 analytics 之类的 postinstall,不需要
-  electron: true                # 下载对应平台的 Electron 二进制
-  electron-winstaller: true     # electron-builder 26 引入;Windows NSIS 安装包要用
-  esbuild: true                 # 下载平台原生二进制
+  '@google/genai': false # 只是 analytics 之类的 postinstall,不需要
+  electron: true # 下载对应平台的 Electron 二进制
+  electron-winstaller: true # electron-builder 26 引入;Windows NSIS 安装包要用
+  esbuild: true # 下载平台原生二进制
   protobufjs: false
+
+minimumReleaseAgeExclude:
+  - '@earendil-works/pi-agent-core@0.83.0'
+  - '@earendil-works/pi-ai@0.83.0'
+  - '@vitejs/plugin-react@6.0.5'
+  - lucide-react@1.28.0
+  - vite@8.2.0
 
 onlyBuiltDependencies:
   - electron

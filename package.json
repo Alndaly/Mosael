@@ -6,7 +6,7 @@
   "description": "Open Studio — AI video creative studio",
   "repository": "https://github.com/Alndaly/OpenStudio",
   "main": "electron/main.cjs",
-  "packageManager": "pnpm@11.15.0",
+  "packageManager": "pnpm@11.18.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",

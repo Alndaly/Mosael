@@ -48,21 +48,23 @@ export default defineConfig({
         root: { label: "简体中文", lang: "zh-CN" },
         en: { label: "English", lang: "en" },
       },
+      // autogenerate 必须嵌在 items 里,不能与 label 平级 —— 平级写法在旧版能过,
+      // Starlight 0.41 的 schema 校验会直接拒(sidebar.N: Did not match union)。
       sidebar: [
         {
           label: "开始",
           translations: { en: "Get started" },
-          autogenerate: { directory: "start" },
+          items: [{ autogenerate: { directory: "start" } }],
         },
         {
           label: "使用指南",
           translations: { en: "Guides" },
-          autogenerate: { directory: "guides" },
+          items: [{ autogenerate: { directory: "guides" } }],
         },
         {
           label: "关于",
           translations: { en: "About" },
-          autogenerate: { directory: "about" },
+          items: [{ autogenerate: { directory: "about" } }],
         },
       ],
     }),

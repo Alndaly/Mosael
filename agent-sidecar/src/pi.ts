@@ -5,7 +5,17 @@
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createModels, createProvider, type Model, type Models } from "@earendil-works/pi-ai";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+// 从 `compat` 而不是 `api/openai-completions.lazy` 引入 —— 这是**打包场景下唯一可用的路径**。
+//
+// pi-ai 0.82 起重排了模块:`.lazy` 入口是 `() => import(...)` 的包装,esbuild 打单文件时会把
+// createModels 提到顶层、却把它引用的 ModelsImpl 留在惰性块 init_models 里,而全包唯一一处
+// init_models() 又恰在 openai-completions 块内部。于是 createModels() 先跑,拿到 undefined,
+// 每一轮对话都报 `TypeError: ModelsImpl is not a constructor`。
+//
+// compat 在 pi-ai 的 sideEffects 白名单里(不会被摇掉)且重导出全部 API,顺序因此被固定。
+// 代价是产物含全部 provider 实现(6.4MB),但那本来就是 0.82 之前的体积。
+// 判据见 test/bundle.smoke.mjs:同版本同配置下 `.lazy` 判红、`compat` 判绿。
+import { openAICompletionsApi } from "@earendil-works/pi-ai/compat";
 
 const PROVIDER_ID = "open-studio";
 
