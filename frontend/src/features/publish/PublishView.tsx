@@ -24,7 +24,6 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { DeliveryTargets } from "@/features/publish/DeliveryTargets";
 import { gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
@@ -140,11 +139,6 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
               }
             />
           </div>
-      {/* 交付目标(本地目录 / Webhook):和平台账号并列陈列在发布页,而不是塞进浏览器池的
-          「添加账号」里 —— 它们不需要登录身份,进池子只会留下永远不会有登录态的空壳档案。 */}
-      <div className="mt-2 border-t border-border pt-2.5">
-        <DeliveryTargets workspace={workspace} />
-      </div>
         </div>
         {dialogs}
       </div>
@@ -197,11 +191,6 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       </div>
-      {/* 交付目标(本地目录 / Webhook):和平台账号并列陈列在发布页,而不是塞进浏览器池的
-          「添加账号」里 —— 它们不需要登录身份,进池子只会留下永远不会有登录态的空壳档案。 */}
-      <div className="mt-2 border-t border-border pt-2.5">
-        <DeliveryTargets workspace={workspace} />
-      </div>
       </div>
       {dialogs}
     </div>
@@ -224,8 +213,7 @@ function InfoRow({ label, description, children }: { label: string; description?
 
 function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => void }) {
   const t = useI18n();
-  // 不再需要问「这个平台是不是浏览器平台」:发布任务现在只可能是平台账号发布,
-  // 本地目录 / Webhook 已经是交付目标(见 domain/delivery),走另一条列表。
+  // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
     // 标题与下面的字段是同一个对象的两部分,所以共用一张卡:标题当卡头(略深底色 + 分隔线),

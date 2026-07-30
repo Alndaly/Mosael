@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.core.db import _migrate_delivery_targets, engine
+from app.core.db import _migrate_drop_local_publish_accounts, engine
 from tests.util import fresh_client
 
 
@@ -34,23 +34,16 @@ def _insert_legacy_account(conn, *, account_id: str, ws: str, platform: str, pro
     )
 
 
-def test_migration_moves_targets_and_deletes_shell_profiles() -> None:
+def test_cleanup_drops_local_accounts_and_their_shell_profiles() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with engine.begin() as conn:
         _insert_legacy_account(conn, account_id="acc-folder", ws=ws, platform="folder", profile_id="prof-folder")
         _insert_legacy_account(conn, account_id="acc-hook", ws=ws, platform="webhook", profile_id="prof-hook")
 
-    _migrate_delivery_targets()
+    _migrate_drop_local_publish_accounts()
 
     with engine.begin() as conn:
-        targets = conn.execute(
-            text("SELECT id, kind, name, config FROM delivery_targets ORDER BY id")
-        ).mappings().all()
-        assert [t["id"] for t in targets] == ["acc-folder", "acc-hook"], "应保留原 id(历史发布任务还指着它)"
-        assert {t["kind"] for t in targets} == {"folder", "webhook"}
-        assert "directory" in targets[0]["config"]
-
         # 账号表里不该再有它们
         left = conn.execute(
             text("SELECT COUNT(*) FROM publish_accounts WHERE platform IN ('folder','webhook')")
@@ -64,7 +57,7 @@ def test_migration_moves_targets_and_deletes_shell_profiles() -> None:
         assert shells == 0, "空壳浏览器档案没有被清理"
 
 
-def test_migration_is_idempotent_and_leaves_real_accounts_alone() -> None:
+def test_cleanup_is_idempotent_and_leaves_real_accounts_alone() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with engine.begin() as conn:
@@ -72,11 +65,10 @@ def test_migration_is_idempotent_and_leaves_real_accounts_alone() -> None:
         # 一个真平台账号:它的档案是真的登录身份,绝不能被这次迁移碰到
         _insert_legacy_account(conn, account_id="acc-douyin", ws=ws, platform="douyin", profile_id="prof-douyin")
 
-    _migrate_delivery_targets()
-    _migrate_delivery_targets()  # 再跑一次:必须幂等
+    _migrate_drop_local_publish_accounts()
+    _migrate_drop_local_publish_accounts()  # 再跑一次:必须幂等
 
     with engine.begin() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM delivery_targets")).scalar() == 1
         assert conn.execute(
             text("SELECT COUNT(*) FROM publish_accounts WHERE id = 'acc-douyin'")
         ).scalar() == 1

@@ -126,17 +126,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["result"],
     },
-    "delivery": {
-        "label": "交付",
-        "description": "把成片送到本地目录,或 POST 给外部自动化(n8n / Zapier / 自建服务)。不需要登录。",
-        "config": {
-            "target_id": {"type": "string", "required": True, "description": "交付目标 id(发布页可查)"},
-            "asset_id": {"type": "template", "required": True},
-            "title": {"type": "template"},
-            "description": {"type": "template"},
-        },
-        "outputs": ["result"],
-    },
     "condition": {
         "label": "条件分支",
         "description": "按条件把流程导向「真」或「假」分支(连线时从对应端点拉出)。",

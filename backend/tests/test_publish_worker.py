@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.test_publish import make_video_asset
+from tests.util import make_video_asset
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key
 from tests.util import fresh_client
 

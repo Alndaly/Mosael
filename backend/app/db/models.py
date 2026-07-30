@@ -478,55 +478,6 @@ class PublishAccount(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
-class DeliveryTarget(Base):
-    """交付目标:把成片和文案**送到某处**,不涉及平台账号、不需要登录态。
-
-    从 PublishAccount 里拆出来的。原先 folder / webhook 是伪装成「发布账号」的两个平台,
-    但它们和真平台(抖音/B站/…)没有任何一个字段是共通的:profile_id 恒为空壳、config 承载
-    全部信息(真平台的 config 恒为 {})、proxy 无意义、状态机也不一样。一张表装两个不相交的
-    形状,代价是 `executor == "browser"` 的判断散在领域层、worker 和两个前端组件里共 9 处。
-
-    更糟的是 create_account 无条件给每个账号建一个 BrowserProfile —— 于是每建一个「本地目录」
-    就在浏览器池里塞一个永远不会有登录态的档案,外加一个永远不会被使用的 Chromium 分区名。
-
-    拆开之后:发布 = 带登录态去平台上传;交付 = 把文件送到目录 / POST 给外部自动化。
-    """
-
-    __tablename__ = "delivery_targets"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    #: folder | webhook(见 domain/delivery.DELIVERY_KINDS)
-    kind: Mapped[str] = mapped_column(String(40), nullable=False)
-    name: Mapped[str] = mapped_column(String(160), nullable=False)
-    config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
-
-
-class DeliveryTask(Base):
-    """一次交付。
-
-    **刻意没有 status 列** —— 状态就是 job 的状态。发布任务需要自己的状态机是因为浏览器链路有
-    login_required / waiting_manual 这类 job 表达不了的中间态;交付没有,它只有排队/进行/成功/失败。
-    原来两条链路挤在 PublishTask 里,于是 task_with_status 得靠 is_browser 决定「状态该从
-    task.status 读还是从 job.status 读」。这里不留这个岔路。
-    """
-
-    __tablename__ = "delivery_tasks"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    target_id: Mapped[str] = mapped_column(ForeignKey("delivery_targets.id", ondelete="CASCADE"), nullable=False)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
-    title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-
-
 class PublishTask(Base):
     """一次发布(计划 §6.9 publish_tasks):成片素材 + 文案元数据 + 目标账号,
     执行状态挂在任务总线 job 上。"""

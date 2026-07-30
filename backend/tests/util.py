@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -79,3 +80,33 @@ def second_client(username: str = "other") -> TestClient:
     client = TestClient(app)
     login_as(client, username)
     return client
+
+
+def make_video_asset(client, workspace_id: str) -> dict:
+    """入库一个最小可发布素材(直接写文件,不跑 ffmpeg)。"""
+    media = settings.media_dir / "test-publish"
+    media.mkdir(parents=True, exist_ok=True)
+    source = media / "clip.mp4"
+    source.write_bytes(b"fake-video-bytes")
+    created = client.post(
+        "/api/assets",
+        json={
+            "workspace_id": workspace_id,
+            "kind": "video",
+            "name": "成片A",
+            "file_key": "media/test-publish/clip.mp4",
+        },
+    )
+    assert created.status_code == 200, created.text
+    return created.json()
+
+
+def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
+    deadline = time.monotonic() + timeout
+    status = "queued"
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/jobs/{job_id}").json()["status"]
+        if status in ("succeeded", "failed"):
+            return status
+        time.sleep(0.15)
+    return status

@@ -108,31 +108,3 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
     final = wait_for_job(task.job_id or "")
     return {"result": final.result or {}}
 
-
-@register("delivery")
-def delivery(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    """交付节点:把成片送到本地目录 / POST 给外部自动化。
-
-    和 publish 节点分开而不是在一个节点里按目标类型分派 —— 两者要填的表单、能出的状态、
-    失败后的处置都不一样。分派留在节点层(用户选哪个节点),不再渗回数据模型。
-    """
-    from app.db.models import Asset, DeliveryTarget
-    from app.domain.delivery import start_delivery
-
-    target = db.get(DeliveryTarget, str(config.get("target_id", "")))
-    if target is None or target.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("交付目标不存在")
-    asset = db.get(Asset, str(config.get("asset_id", "")))
-    if asset is None or asset.workspace_id != workflow.workspace_id:
-        raise WorkflowDomainError("交付素材不存在")
-    task = start_delivery(
-        db,
-        workspace_id=workflow.workspace_id,
-        target=target,
-        asset=asset,
-        title=str(config.get("title", "")),
-        description=str(config.get("description", "")),
-        tags=[],
-    )
-    final = wait_for_job(task.job_id or "")
-    return {"result": final.result or {}}

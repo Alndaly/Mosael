@@ -162,56 +162,30 @@ def _backfill_browser_pool() -> None:
             )
 
 
-def _migrate_delivery_targets() -> None:
-    """folder / webhook 的发布账号 → 交付目标(delivery_targets)。
+def _migrate_drop_local_publish_accounts() -> None:
+    """清掉 platform 为 folder / webhook 的「发布账号」及其空壳浏览器档案。
 
-    这两个从来不是「账号」:没有登录身份、没有平台、没有风控。它们混在 publish_accounts 里的
-    副作用是 create_account 会**无条件**给每一行建一个 BrowserProfile —— 于是浏览器池里躺着
-    一堆永远不会有登录态的空壳档案。所以这里不只是搬行,还要把它们连带产生的空壳档案删掉。
+    这两个从来不是账号:没有登录身份、没有平台、没有风控,却因为 create_account 无条件建档,
+    每存在一个就在浏览器池里留一个永远不会有登录态的空壳,还占一个永远不会被使用的 Chromium
+    分区名。它们代表的能力(拷到目录 / POST 给外部自动化)已从产品中移除,所以这里直接清理,
+    而不是搬到别处。
 
-    保留原 id:历史 publish_tasks 行仍以 account_id 指向它们,换 id 会把那些历史记录指空。
-    幂等:目标表里已存在同 id 的行就跳过,可以反复跑。
+    幂等:匹配不到就什么都不做,可反复跑。
     """
     inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
-    if "publish_accounts" not in tables or "delivery_targets" not in tables:
+    if "publish_accounts" not in set(inspector.get_table_names()):
         return
     with engine.begin() as conn:
         rows = conn.execute(
-            text(
-                "SELECT id, workspace_id, platform, name, config, enabled, profile_id, created_at "
-                "FROM publish_accounts WHERE platform IN ('folder', 'webhook')"
-            )
+            text("SELECT id, profile_id FROM publish_accounts WHERE platform IN ('folder', 'webhook')")
         ).mappings().all()
         if not rows:
             return
         for row in rows:
-            exists = conn.execute(
-                text("SELECT 1 FROM delivery_targets WHERE id = :id"), {"id": row["id"]}
-            ).first()
-            if not exists:
-                conn.execute(
-                    text(
-                        "INSERT INTO delivery_targets (id, workspace_id, kind, name, config, enabled, created_at, updated_at) "
-                        "VALUES (:id, :ws, :kind, :name, :config, :enabled, :created, :created)"
-                    ),
-                    {
-                        "id": row["id"],
-                        "ws": row["workspace_id"],
-                        "kind": row["platform"],
-                        "name": row["name"],
-                        "config": row["config"],
-                        "enabled": row["enabled"],
-                        "created": row["created_at"],
-                    },
-                )
-            # 空壳档案:这些账号从来没有、也不可能有登录态,档案纯属 create_account 的副产品。
             if row["profile_id"]:
-                conn.execute(
-                    text("DELETE FROM browser_profiles WHERE id = :pid"), {"pid": row["profile_id"]}
-                )
+                conn.execute(text("DELETE FROM browser_profiles WHERE id = :pid"), {"pid": row["profile_id"]})
         conn.execute(text("DELETE FROM publish_accounts WHERE platform IN ('folder', 'webhook')"))
-        logger.info("交付目标迁移:搬走 %d 个 folder/webhook 账号并清掉它们的空壳浏览器档案", len(rows))
+        logger.info("清理 %d 个 folder/webhook 发布账号及其空壳浏览器档案", len(rows))
 
 
 def init_db() -> None:
@@ -227,7 +201,7 @@ def init_db() -> None:
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)
     _migrate_partition_rename()
-    _migrate_delivery_targets()
+    _migrate_drop_local_publish_accounts()
     _backfill_browser_pool()
 
 

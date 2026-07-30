@@ -9,7 +9,7 @@ import pytest
 from app.ai.analysis import service
 from app.core.db import SessionLocal
 from app.db.models import Asset, ProviderProfile
-from tests.test_publish import make_video_asset
+from tests.util import make_video_asset
 from tests.util import fresh_client
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
