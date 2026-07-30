@@ -390,18 +390,26 @@ function createWindow() {
         onFrame: (frame) => {
           if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
         },
+        // 只报**任务中心看不到的那些状态**。
+        //
+        // 发布状态会被映射到 job(见 domain/publish/worker._sync_job):success/prepared →
+        // succeeded,failed/cancelled → failed,其余一律停在 running。而渲染层的 TaskCenter
+        // 是按 job 的终态跃迁发通知的 —— 所以这四个成败状态两边都会报,同一件事弹两条系统通知。
+        //
+        // 反过来,login_required / waiting_manual 这类「需要人介入」的中间态,job 还是 running,
+        // TaskCenter 永远看不到,只有这里能报。按这条线切开,两边就没有重叠了。
         onTaskSettled: (info) => {
           const titles = {
-            success: "发布成功",
             prepared: "发布已准备好,待确认",
-            failed: "发布失败",
             login_required: "账号需要登录",
             waiting_manual: "发布需要人工处理",
             permission_required: "账号权限不足",
             blocked: "发布被拦截",
           };
+          // success / failed / cancelled 交给 TaskCenter(它按 job 终态发,标签和其它任务一致)。
+          if (!titles[info.status]) return;
           const notice = {
-            title: titles[info.status] || `发布 ${info.status}`,
+            title: titles[info.status],
             body: `${info.accountName} · ${info.title || "未命名"}`,
           };
           // 走系统能力层的统一入口:那里带「窗口有焦点就不发」的规则。发布任务在渲染层的

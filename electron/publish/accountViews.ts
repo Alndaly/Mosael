@@ -25,15 +25,29 @@ const LEGACY_PARTITION_PREFIX = "mibu";
 export function migrateLegacyPartitionDir(partition: string): void {
   const name = partition.startsWith("persist:") ? partition.slice("persist:".length) : partition;
   if (!name.startsWith(`${PARTITION_PREFIX}-`)) return;
+  const root = path.join(app.getPath("userData"), "Partitions");
+  const target = path.join(root, name);
+  const legacy = path.join(root, `${LEGACY_PARTITION_PREFIX}-${name.slice(PARTITION_PREFIX.length + 1)}`);
   try {
-    const root = path.join(app.getPath("userData"), "Partitions");
-    const target = path.join(root, name);
-    if (fs.existsSync(target)) return;
-    const legacy = path.join(root, `${LEGACY_PARTITION_PREFIX}-${name.slice(PARTITION_PREFIX.length + 1)}`);
-    if (fs.existsSync(legacy)) fs.renameSync(legacy, target);
+    if (!fs.existsSync(legacy)) return; // 没有遗留目录 = 早就迁完了,或本来就是新装
+    if (fs.existsSync(target)) {
+      // 目标已存在**不代表迁移完成**。Chromium 一旦碰过这个分区就会把目录建出来,所以只要有
+      // 任何一次「在改名之前先用上了分区」(或上次改名失败后又被用过),就会留下一个空的新目录,
+      // 而真正的登录数据还躺在老目录里 —— 原来的 `existsSync(target) → return` 会让这个状态
+      // **永久锁死**:老目录一直在,却永远不会被搬过去,用户只看到「所有平台都要重新登录」。
+      // 所以这里只在目标是空目录时才认定它是那个占位,清掉后继续搬。
+      if (fs.readdirSync(target).length > 0) return; // 目标有内容 = 真的迁完了
+      fs.rmSync(target, { recursive: true, force: true });
+    }
+    fs.renameSync(legacy, target);
   } catch (err) {
-    // 迁移失败不该挡住登录流程:最坏情况是这个档案要重新登录一次。
-    console.warn("[open-studio] partition dir migration skipped", partition, err);
+    // 跨进程没法做成原子:分区名记在数据库(后端改)和磁盘(这里改)。惰性迁移已经让**顺序**
+    // 不重要,但改名本身仍可能失败(目录被占用、权限)。失败时唯一的正确做法是让它可见 ——
+    // 静默吞掉的话,用户看到的是「莫名其妙全部掉登录」,而登录数据其实还完好地躺在老目录里。
+    console.error(
+      `[open-studio] 登录分区目录迁移失败,该账号需要重新登录;原数据仍在 ${legacy}`,
+      err,
+    );
   }
 }
 
