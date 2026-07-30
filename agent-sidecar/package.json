@@ -7,11 +7,12 @@
   "main": "dist/sidecar.cjs",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/sidecar.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:bundle": "node test/bundle.smoke.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.82.1",
-    "@earendil-works/pi-ai": "0.82.1"
+    "@earendil-works/pi-agent-core": "0.80.10",
+    "@earendil-works/pi-ai": "0.80.10"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
