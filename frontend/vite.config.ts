@@ -4,7 +4,11 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 
-const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8")) as { version: string };
+// 版本号只有一个来源:**仓库根** package.json。它是 electron-builder 打包用的版本,也是
+// app.getVersion() 的返回值,发版 CI(release.yml 的 Sync app version from tag)也只 bump 它。
+// 之前这里读的是 frontend/package.json —— 那个没人 bump,于是 v0.3.0 的包在设置页显示
+// "v0.1.0",而同一页的「检查更新」(走 app.getVersion())却正确地说"已是最新版本"。
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "..", "package.json"), "utf-8")) as { version: string };
 
 export default defineConfig({
   // Relative asset paths so the packaged Electron shell can loadFile() dist.
