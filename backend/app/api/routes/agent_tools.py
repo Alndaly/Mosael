@@ -65,7 +65,8 @@ def list_agent_tools(user: CurrentUser) -> list[ToolSpec]:
         ToolSpec(
             name=tool.name,
             description=tool.description or "",
-            parameters=tool.inputSchema or {"type": "object", "properties": {}},
+            # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
+            parameters=tool.input_schema or {"type": "object", "properties": {}},
             confirmation=tool.name in registry.CONFIRMATION_TOOLS,
         )
         for tool in tools

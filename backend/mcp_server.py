@@ -17,7 +17,8 @@ import os
 from typing import Any
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+# mcp 2.0 把 FastMCP 改名为 MCPServer(mcp.server.fastmcp 整个模块已移除),装饰器与 run() 不变。
+from mcp.server.mcpserver import MCPServer
 
 #: Where the tool bodies call back to. Bound per context for the same reason the token is:
 #: as a stdio MCP server the environment settles it, but in-process (the pi sidecar path) the
@@ -55,7 +56,7 @@ def _auth_headers() -> dict[str, str]:
     token = _API_TOKEN.get()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
-mcp = FastMCP("open-studio")
+mcp = MCPServer("open-studio")
 
 
 def _raise_with_detail(response: httpx.Response) -> None:
