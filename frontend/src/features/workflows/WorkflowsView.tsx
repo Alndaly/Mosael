@@ -313,6 +313,67 @@ function WfNode({ data, selected }: NodeProps) {
 
 const NODE_COMPONENT_TYPES = { wf: WfNode };
 
+
+/** 贴靠面板的几何:宽度固定,高度自适应但封顶;与节点之间留 10px 间隙,离窗口边至少 12px。 */
+const ANCHOR = { width: 320, gap: 10, margin: 12, maxHeight: 560 } as const;
+
+export type AnchorBox = { left: number; top: number; maxHeight: number };
+
+/**
+ * 把面板贴到**节点旁边**浮现的定位计算。
+ *
+ * 为什么不固定在右侧:画布上的节点可能在任何位置,而固定面板逼着视线在「节点」和「屏幕另一头的
+ * 表单」之间来回跳;工作流页右侧已经挤了 AI 助手、执行历史等好几层。贴着节点浮现则是「改哪儿看哪儿」。
+ *
+ * 摆放优先右侧,右边放不下翻左侧,左右都放不下就落到节点下方(再不行放上方),最后统一夹进窗口。
+ * 位置随视口变化重算(平移/缩放时面板跟着节点走),所以调用方要在 onMove 时让依赖变化。
+ */
+export function anchorToNode(
+  instance: ReactFlowInstance | null,
+  nodeId: string | null,
+  /** 可视区尺寸。作为入参而不是直接读 window:这样这段摆放逻辑是纯函数,可以直接单测
+   *  (仓库里没装 jsdom,其余测试也都是纯逻辑)。 */
+  viewport: { width: number; height: number },
+): AnchorBox | null {
+  if (!instance || !nodeId) return null;
+  const node = instance.getNode(nodeId);
+  if (!node) return null;
+  // v12:measured 是渲染后的真实尺寸;没测到时用节点默认宽度兜底,别让面板贴到错的地方。
+  const width = node.measured?.width ?? node.width ?? 200;
+  const height = node.measured?.height ?? node.height ?? 60;
+  const topLeft = instance.flowToScreenPosition({ x: node.position.x, y: node.position.y });
+  const bottomRight = instance.flowToScreenPosition({
+    x: node.position.x + width,
+    y: node.position.y + height,
+  });
+
+  const { width: viewW, height: viewH } = viewport;
+  const maxHeight = Math.min(ANCHOR.maxHeight, viewH - ANCHOR.margin * 2);
+
+  // 侧放只有**真的能放在节点旁边**才算数。早先的写法在左右都放不下时用「节点左缘」兜底,
+  // 结果面板压在节点身上,而随后的判定只看窗口边界、不看是否避开了节点 —— 于是「落到下方」
+  // 这条分支永远不会触发。单测正是在这里发现的。
+  const rightLeft = bottomRight.x + ANCHOR.gap;
+  const leftLeft = topLeft.x - ANCHOR.gap - ANCHOR.width;
+  let left: number;
+  let top = topLeft.y;
+  if (rightLeft + ANCHOR.width <= viewW - ANCHOR.margin) {
+    left = rightLeft; // 首选:节点右侧
+  } else if (leftLeft >= ANCHOR.margin) {
+    left = leftLeft; // 次选:翻到左侧
+  } else {
+    // 左右都放不下(节点很宽或窗口很窄):落到节点下方,下方也放不下就放上方。
+    left = topLeft.x;
+    const below = bottomRight.y + ANCHOR.gap;
+    top = below + maxHeight <= viewH - ANCHOR.margin ? below : topLeft.y - ANCHOR.gap - maxHeight;
+  }
+  return {
+    left: Math.min(Math.max(ANCHOR.margin, left), Math.max(ANCHOR.margin, viewW - ANCHOR.width - ANCHOR.margin)),
+    top: Math.min(Math.max(ANCHOR.margin, top), Math.max(ANCHOR.margin, viewH - maxHeight - ANCHOR.margin)),
+    maxHeight,
+  };
+}
+
 /** 配置字段 key → 人类可读标签键(Dify 式:面板不暴露裸 config key)。 */
 const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   prompt: "wffPrompt",
@@ -756,18 +817,21 @@ function WorkflowEditor({
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   // 首次 fitView 前隐藏画布(挂载首帧节点在默认视口的错误位置,直接可见会闪一下)
   const [viewReady, setViewReady] = React.useState(false);
+  // 贴靠面板按节点的**屏幕**位置摆放,视口一动就要重算(平移/缩放时面板跟着节点走)。
+  const [viewportTick, setViewportTick] = React.useState(0);
 
   /**
-   * 把视口居中到某坐标上。x 方向右移半个检查器宽度(约 150px),让节点落在被检查器
-   * 遮挡之外的可视区。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
+   * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
    * getNode 会取空;而 setCenter 只改视口变换,不依赖节点已登记。
+   *
+   * 不再为「躲开右侧检查器」额外右移:配置面板已改为贴着节点浮现(见 anchorToNode),
+   * 右侧不再有常驻遮挡,再偏移反而把节点推离视觉中心。
    */
   const focusPosition = React.useCallback((x: number, y: number, duration = 350) => {
     const instance = rfRef.current;
     if (!instance) return;
     const zoom = Math.max(instance.getZoom(), 0.6);
-    // +150/zoom:把节点从画布中心再往左推半个检查器宽度,躲开右侧悬浮检查器。
-    instance.setCenter(x + 210 / 2 + 150 / zoom, y + 72 / 2, { zoom, duration });
+    instance.setCenter(x + 210 / 2, y + 72 / 2, { zoom, duration });
   }, []);
 
   /** 选中并聚焦某节点(节点搜索用;从当前 graph 取坐标)。 */
@@ -1170,6 +1234,19 @@ function WorkflowEditor({
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
+  // viewportTick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
+  const anchor = React.useMemo(
+    () =>
+      dragging
+        ? null
+        : anchorToNode(rfRef.current, selectedNodeId, {
+            width: window.innerWidth,
+            height: window.innerHeight,
+          }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedNodeId, dragging, viewportTick, graph],
+  );
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
 
@@ -1440,6 +1517,7 @@ function WorkflowEditor({
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onMove={() => setViewportTick((n) => n + 1)}
             onNodeDragStart={() => setDragging(true)}
             onNodeDragStop={() => setDragging(false)}
             onConnect={onConnect}
@@ -1524,8 +1602,9 @@ function WorkflowEditor({
           })()}
         {/* 钻进循环体时不渲染外层检查器:它和覆盖层同为 z-index:30 且在 DOM 里更靠后,会盖住
             子画布头部(返回/面包屑/添加节点)。子画布有自己的检查器;外层节点回主流程再编辑。 */}
-        {selectedNode && !editingLoopId && (
+        {selectedNode && !editingLoopId && anchor && (
           <NodeInspector
+            anchor={anchor}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
@@ -1906,6 +1985,7 @@ function LoopBodyEditor({
 }
 
 function NodeInspector({
+  anchor,
   node,
   meta,
   graph,
@@ -1916,6 +1996,8 @@ function NodeInspector({
   onDelete,
   onClose,
 }: {
+  /** 贴靠几何:给出就浮现在节点旁(见 anchorToNode);不给就沿用贴右边占满高度的老样式。 */
+  anchor?: AnchorBox | null;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -2181,7 +2263,16 @@ function NodeInspector({
   };
 
   return (
-    <aside className="absolute bottom-2 right-2 top-2 z-30 grid min-h-0 w-[min(300px,calc(100%-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]" aria-label={node.name || meta?.label || node.type}>
+    <aside
+      className={cn(
+        "z-30 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
+        anchor
+          ? "fixed w-[320px] max-w-[calc(100vw-24px)]"
+          : "absolute bottom-2 right-2 top-2 w-[min(300px,calc(100%-32px))]",
+      )}
+      style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight } : undefined}
+      aria-label={node.name || meta?.label || node.type}
+    >
       <div className="flex min-h-[38px] items-center justify-between gap-2 border-b border-border px-2.5">
         <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[node.type] } as React.CSSProperties}>
           {NODE_ICONS[node.type] ?? <Type size={13} />}
