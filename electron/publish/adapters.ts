@@ -932,9 +932,11 @@ export class BilibiliAdapter implements PublishAdapter {
           ),
         ),
       ],
-      // 受理判定里**绝不能**放页面上常驻的文案。此前混进了 uploadFailedTexts,而其中的「重新上传」
-      // 在上传完成后永久显示 —— 于是 accepted 在点击后 1 毫秒就为真,这个验证等于没做(实测日志:
-      // clicked 与 accepted 相隔 1ms)。上传失败的判定归 uploadVideo,不该混到提交受理里来。
+      // 受理判定里不放上传失败文案(uploadFailedTexts):那是 uploadVideo 的职责,而其中的「重新上传」
+      // 一旦在某个版本变成常驻按钮,这里就会恒为真、验证等于没做 —— 这类「判定恒为真」的短路在本项目
+      // 已经出现过两次(uploadDoneTexts 的 querySelector 兜底、coverSelected 的泛选择器),提前拆掉。
+      // (注:曾据此推断线上那次「点击后 1ms 就受理」是它造成的,但实测快照显示 B 站页面上并没有
+      //  「重新上传」字样,那次 1ms 受理更可能是点击生效后提交按钮短暂消失所致。见下面 RESULT_WAIT。)
       accepted: pageReacted(this.driver, {
         gone: this.s.submitButton,
         texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts],
@@ -1027,10 +1029,12 @@ export class BilibiliAdapter implements PublishAdapter {
     // 自己手动点了投稿,页面弹出「投稿成功」——于是这里把**别人完成的发布**记成了自己的成果,
     // 上报 success、发通知、工作流收工。「什么都没发却报成功」是最坏的失败模式,宁可多等到超时。
     // 编辑表单还在就说明没投出去:B 站成功后是原地把编辑页换成成功页,提交按钮不会留着。
-    // 15 分钟,不是 5 分钟。实测:点「立即投稿」后 B 站不是立刻翻成功页,而是先在后台走
-    // 上传→转码(360P/480P/720P/1080P 逐档)→审核,全部走完才把编辑页替换成「稿件投递成功」。
-    // 一条推广视频实测超过 5 分钟——旧的 5 分钟窗口到点就报「未确认发布」,而稿件其实**已经投成了**。
-    // 用户于是重试,而重试会再投一稿。宁可多等,也不能把成功报成失败。
+    // 15 分钟,不是 5 分钟。B 站确认投稿的延迟**方差极大**,实测同一个视频两次:
+    //   ・一次点击后 11 秒就出现成功页(formGone + 成功文案);
+    //   ・另一次点击已被受理(提交按钮随即消失),却过了 5 分钟还没翻成功页 —— 旧窗口到点就报
+    //     「未确认发布」,而稿件其实**已经投成了**;用户于是重试,重试又再投一稿。
+    // 差别应该来自后台的上传→转码(360P/480P/720P/1080P 逐档)→审核要走多久。宁可多等,
+    // 也不能把成功报成失败:误报失败的代价是重复投稿,而多等只是多占一会儿账号槽。
     const RESULT_WAIT = 15 * 60 * 1000;
     const probe = `(() => {
       const t = (document.body && document.body.innerText) || '';
