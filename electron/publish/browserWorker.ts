@@ -1,8 +1,8 @@
 // 浏览器自动化 worker:与发布 worker 并列的第二个拉取循环。轮询 /api/browser/worker/claim 认领
 // 动作,用 PageDriver 在会话隔离视图上执行,回报结果;并把「最近操作的会话」定时截帧推给前端做
 // 实时预览(这些自动化视图是离屏的,用户否则看不到)。
-import type { BaseWindow } from "electron";
 
+import type { LiveViewFrame } from "./types";
 import { BrowserSessionManager } from "./browserSessions";
 import { executeBrowserAction } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
@@ -14,22 +14,17 @@ const PREVIEW_MS = 500; // 预览截帧节奏(~2fps)
 const PREVIEW_WINDOW_MS = 15_000; // 最近一次动作后持续预览的时长,之后停帧省资源
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-export interface BrowserFrame {
-  sessionId: string;
-  dataUrl: string;
-}
-
 let manager: BrowserSessionManager | null = null;
 let generation = 0; // 递增即令旧 loop/预览自然退出
-let onFrame: ((frame: BrowserFrame) => void) | null = null;
+let onFrame: ((frame: LiveViewFrame) => void) | null = null;
 let activeSessionId: string | null = null; // 预览跟随最近操作的会话
 let lastActionAt = 0;
 let previewTimer: ReturnType<typeof setInterval> | null = null;
 let capturing = false;
 
-export function startBrowserWorker(opts: { window: BaseWindow; onFrame?: (frame: BrowserFrame) => void }): void {
+export function startBrowserWorker(opts: { onFrame?: (frame: LiveViewFrame) => void } = {}): void {
   stopBrowserWorker();
-  manager = new BrowserSessionManager(opts.window);
+  manager = new BrowserSessionManager();
   onFrame = opts.onFrame ?? null;
   const gen = ++generation;
   plog("browser worker started, generation", gen);

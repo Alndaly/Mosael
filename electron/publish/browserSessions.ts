@@ -1,11 +1,11 @@
 import path from "node:path";
 
-import { BrowserWindow, type BaseWindow } from "electron";
+import { BrowserWindow } from "electron";
 
 import { PageDriver } from "./pageDriver";
 
 // 复用发布视图的反检测补丁(navigator.webdriver/plugins/WebGL 等),RPA 打防御站点同样受益。
-const RPA_VIEW_PRELOAD = path.join(__dirname, "accountview-preload.cjs");
+const RPA_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
 const stripElectron = (ua: string): string => ua.replace(/ Electron\/[0-9.]+/g, "");
 
 /**
@@ -19,8 +19,9 @@ export class BrowserSessionManager {
   private windows = new Map<string, BrowserWindow>();
   private drivers = new Map<string, PageDriver>();
 
-  // window 参数保留(未来若做「挂到主窗口预览区」的方案会用),当前 OSR 方案用不到。
-  constructor(private readonly window: BaseWindow) {}
+  // 不需要宿主窗口:RPA 会话用的是 offscreen BrowserWindow,离屏渲染本身就持续出帧(见
+  // browserWorker.capturePreview),不必挂到主窗口里参与合成——发布账号视图那条路才有这个约束。
+  constructor() {}
 
   ensure(sessionId: string, partition: string): PageDriver {
     const existing = this.drivers.get(sessionId);

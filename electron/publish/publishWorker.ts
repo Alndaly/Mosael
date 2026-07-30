@@ -12,7 +12,6 @@ import { app, type BaseWindow } from "electron";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-// @ts-expect-error CJS 词典无类型声明;esbuild 会内联(tsconfig 不含 electron/)。
 import { tr } from "./i18n";
 import { AccountViewManager } from "./accountViews";
 import { plog } from "./log";
@@ -20,8 +19,8 @@ import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
 import { resolvePlatform } from "./platforms";
 import type { PageDriver } from "./pageDriver";
-import type { PublishTask, ViewState } from "./types";
-import * as backend from "./backend";
+import type { LiveViewFrame, PublishTask, ViewState } from "./types";
+import * as backend from "./publishBackend";
 
 let views: AccountViewManager | null = null;
 // 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
@@ -47,17 +46,7 @@ let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
 export type SettleInfo = { status: string; title: string; accountName: string; dryRun: boolean };
 let onSettled: ((info: SettleInfo) => void) | null = null;
 
-/** 实时镜像帧。与 browserWorker 的 BrowserFrame 同形状,复用同一条 IPC 通道和同一个前端面板——
- *  对用户来说"自动化浏览器正在做什么"是一件事,不该因为内部分了两个 worker 就出现两个窗口。 */
-export interface PublishFrame {
-  sessionId: string;
-  /** 画面。取不到就没有——见 LiveMirror 里为何不能保证。 */
-  dataUrl?: string;
-  /** 当前步骤,如「B站 · 上传视频」。 */
-  label: string;
-  url?: string;
-}
-let onFrame: ((frame: PublishFrame) => void) | null = null;
+let onFrame: ((frame: LiveViewFrame) => void) | null = null;
 
 const LIVE_TICK_MS = 1000;
 // 后台任务给视图强制的视口尺寸。与 RPA 会话窗口(browserSessions.ts)取同一档,平台页面按桌面版
@@ -434,7 +423,7 @@ export function startPublishWorker(opts: {
   onViewChanged?: (state: ViewState) => void;
   getAccountName?: (accountId: string) => string | null;
   onTaskSettled?: (info: SettleInfo) => void;
-  onFrame?: (frame: PublishFrame) => void;
+  onFrame?: (frame: LiveViewFrame) => void;
 }): void {
   if (views) return;
   stopped = false;

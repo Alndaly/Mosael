@@ -10,7 +10,7 @@
 - `electron/publish/adapters.ts`
 - `electron/publish/selectors.ts`
 - `electron/publish/pageDriver.ts`
-- `electron/publish/worker.ts`
+- `electron/publish/publishWorker.ts`
 
 **Problem**
 
@@ -19,7 +19,7 @@
 
 - `adapters.ts` 曾同时承载 `PublishAdapter` Interface、平台页面选择器契约、四个平台 Adapter 实现。
 - `pageDriver.ts` 是通用 WebContents Driver,但已经长出小红书等平台命名 helper,说明平台知识开始反向泄漏。
-- `worker.ts` 同时处理 claim/report、并发、前台占用、截图、失败分类和单任务执行脚本。
+- `publishWorker.ts` 同时处理 claim/report、并发、前台占用、截图、失败分类和单任务执行脚本。
 
 **Started**
 
@@ -31,7 +31,7 @@
 1. 把 `BilibiliAdapter` + B 站专属 DOM script 移到 `electron/publish/adapters/bilibili.ts`,
    `createAdapter` 保持行为不变。
 2. 把 `PageDriver` 里的平台命名 helper 移回对应平台 Adapter,让 Driver 只保留导航、CSS/text 探测、输入事件、CDP 文件上传、截图、取消。
-3. 抽出 `runPublishTask(...)` Module: `worker.ts` 只留轮询/并发;单条任务的状态回报、截图、blocked 映射集中到一个测试 surface。
+3. 抽出 `runPublishTask(...)` Module: `publishWorker.ts` 只留轮询/并发;单条任务的状态回报、截图、blocked 映射集中到一个测试 surface。
 
 ## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 

@@ -1,0 +1,23 @@
+{
+  "// 说明": [
+    "发布执行器(electron/publish/**)的类型检查配置。",
+    "运行时由 esbuild 打成 publish.bundle.cjs,而 esbuild **不做类型检查**——在这个文件存在之前,",
+    "这些源码从未被 tsc 看过一眼,于是积累了失效的 @ts-expect-error 和无人发现的类型问题。",
+    "noEmit:只检查,产物仍由 esbuild 出。"
+  ],
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "typeRoots": ["../frontend/node_modules/@types"]
+  },
+  "include": ["publish/**/*.ts"]
+}

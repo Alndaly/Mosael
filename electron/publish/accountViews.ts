@@ -5,9 +5,9 @@ import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 
 const noop = (): void => undefined;
-// 账号视图 preload:注入「← 返回 Open Studio」悬浮按钮(见 electron/accountview-preload.cjs)。运行时
+// 账号视图 preload:注入「← 返回 Open Studio」悬浮按钮(见 electron/account-view-preload.cjs)。运行时
 // 该文件与打包出的 publish.bundle.cjs 同在 electron/ 下,故按 __dirname 定位。
-const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "accountview-preload.cjs");
+const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
 
 /** 发布账号登录分区前缀(完整名 persist:<PARTITION_PREFIX>-<accountId>)。
  *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。 */

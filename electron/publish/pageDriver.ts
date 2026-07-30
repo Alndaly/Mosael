@@ -20,6 +20,23 @@ const KEY_MAP: Record<string, string> = {
  *  - real keystrokes via sendInputEvent (for topic dropdowns / confirm keys)
  *  - file inputs via the CDP debugger (DOM.setFileInputFiles), since JS cannot
  *    populate <input type=file> for security reasons
+ *
+ * ## 点击方法的命名约定:`pointerClick*` 前缀
+ *
+ * 两类点击的能力和风险**完全不同**,所以特例必须在名字上看得见:
+ *
+ *  - `pointerClick*`(pointerClickCss / pointerClickByText / pointerClickByTextDeep)
+ *    发**真实鼠标事件**(sendInputEvent → humanClickAt)。事件 `isTrusted === true`,风控友好,
+ *    是关键动作(提交/投稿)的首选。代价:需要视图有真实布局(后台视图视口 0×0 时坐标无意义),
+ *    而且要做命中测试——被浮层遮挡就点不到。这两种情况都会**显式抛错**,让调用方降级。
+ *  - 其余 click*(clickCss / clickByText / clickInShadow / activateCustomElement)派发 **DOM 事件**
+ *    (`el.click()` / `dispatchEvent`)。不受视口与遮挡影响,点得到,但 `isTrusted === false`。
+ *
+ * 前缀只加在 pointer 一族:它是受约束的特例,DOM 事件是默认。
+ *
+ * 这个约定是有代价换来的:`clickByTextDeep` 曾经只比 `clickByText` 多一个 `Deep`,读起来像
+ * 「穿透 shadow 的同款」,实际上机制换了。微信视频号的提交用的正是它,于是和 B 站一样受视口
+ * 影响——而这个潜伏 bug 之所以长期没被发现,很大程度就是名字掩盖了差异。
  */
 export class PageDriver {
   private debuggerAttached = false;
@@ -58,8 +75,6 @@ export class PageDriver {
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  /** 拟人化点击:落点在元素中心附近随机偏移(仍落在元素内),鼠标分几步移过去而非瞬移,按下到抬起
-   *  之间有微停顿。替代「每次精确命中像素中心 + 零位移瞬时点击」这一强自动化特征。 */
   /**
    * 坐标点击的前提:视图**有真实布局**。
    *
@@ -78,6 +93,8 @@ export class PageDriver {
     );
   }
 
+  /** 拟人化点击:落点在元素中心附近随机偏移(仍落在元素内),鼠标分几步移过去而非瞬移,按下到抬起
+   *  之间有微停顿。替代「每次精确命中像素中心 + 零位移瞬时点击」这一强自动化特征。 */
   private async humanClickAt(rect: {
     x: number;
     y: number;
@@ -176,7 +193,11 @@ export class PageDriver {
 
   // ---- CSS-based queries -------------------------------------------------
 
-  private deepQueryPrelude(selector: string): string {
+  /**
+   * 生成一段 JS 前缀,注入后可用 `find(root)` 取到匹配 `selector` 的元素——会**穿透 open shadow
+   * root** 递归查找,并优先返回可见的那个。平台无关,适配器写平台专有脚本时也要用,故公开。
+   */
+  deepQueryPrelude(selector: string): string {
     const s = JSON.stringify(selector);
     return `const isVisible = (el) => {
       const r = el.getBoundingClientRect();
@@ -319,7 +340,7 @@ export class PageDriver {
     }
   }
 
-  async clickCenterCss(selector: string): Promise<void> {
+  async pointerClickCss(selector: string): Promise<void> {
     // 视口尺寸和 rect 一起取回:同一次 evaluate,不多花一个来回。
     const found = await this.evaluate<{
       x: number;
@@ -357,10 +378,10 @@ export class PageDriver {
       })()`,
     );
     if (!found) {
-      throw new Error(`clickCenterCss: element not found: ${selector}`);
+      throw new Error(`pointerClickCss: element not found: ${selector}`);
     }
-    this.ensurePointerUsable(found, "clickCenterCss");
-    plog("clickCenterCss:", selector, {
+    this.ensurePointerUsable(found, "pointerClickCss");
+    plog("pointerClickCss:", selector, {
       target: found.target,
       at: found.at,
       hit: found.hit,
@@ -371,10 +392,10 @@ export class PageDriver {
     // 点不到就别假装点了:抛出去让调用方走 el.click() 一类不受遮挡影响的兜底,
     // 而不是打一发空枪再等五分钟超时。
     if (!found.hit) {
-      throw new Error(`clickCenterCss: point is covered by ${found.at} (target ${found.target})`);
+      throw new Error(`pointerClickCss: point is covered by ${found.at} (target ${found.target})`);
     }
     if (found.disabled) {
-      throw new Error(`clickCenterCss: target is disabled: ${found.target}`);
+      throw new Error(`pointerClickCss: target is disabled: ${found.target}`);
     }
     await this.humanClickAt(found);
   }
@@ -504,7 +525,7 @@ export class PageDriver {
     }
   }
 
-  async clickCenterByText(
+  async pointerClickByText(
     text: string,
     options: { exact?: boolean; selector?: string } = {},
   ): Promise<void> {
@@ -539,9 +560,9 @@ export class PageDriver {
       return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
     })()`);
     if (!rect) {
-      throw new Error(`clickCenterByText: no visible element with text: ${text}`);
+      throw new Error(`pointerClickByText: no visible element with text: ${text}`);
     }
-    this.ensurePointerUsable(rect, "clickCenterByText");
+    this.ensurePointerUsable(rect, "pointerClickByText");
     await this.humanClickAt(rect);
   }
 
@@ -552,7 +573,7 @@ export class PageDriver {
    * match is scrolled into view and clicked with a real mouse event at its
    * center, so it works regardless of how the component wires its handlers.
    */
-  async clickByTextDeep(text: string, options: { exact?: boolean } = {}): Promise<void> {
+  async pointerClickByTextDeep(text: string, options: { exact?: boolean } = {}): Promise<void> {
     const t = JSON.stringify(text);
     const exact = options.exact !== false;
     const rect = await this.evaluate<{
@@ -596,9 +617,9 @@ export class PageDriver {
       return { x: r.x, y: r.y, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight };
     })()`);
     if (!rect) {
-      throw new Error(`clickByTextDeep: no visible element with text: ${text}`);
+      throw new Error(`pointerClickByTextDeep: no visible element with text: ${text}`);
     }
-    this.ensurePointerUsable(rect, "clickByTextDeep");
+    this.ensurePointerUsable(rect, "pointerClickByTextDeep");
     await this.humanClickAt({ x: rect.x, y: rect.y, width: rect.w, height: rect.h });
   }
 
@@ -716,121 +737,6 @@ export class PageDriver {
       fire('mouseup');
       fire('pointerup');
       fire('click');
-      return true;
-    })()`);
-    if (ok) {
-      await this.wait(120);
-    }
-    return ok;
-  }
-
-  async hasXiaohongshuTopic(tag: string): Promise<boolean> {
-    const normalized = JSON.stringify(tag.replace(/^#/, "").trim());
-    return this.evaluate<boolean>(`(() => { // i18n-ok 平台页面的匹配文案/选择器/注入脚本,非产品文案
-      const target = ${normalized};
-      return [...document.querySelectorAll('a.tiptap-topic')].some((el) => {
-        const data = el.getAttribute('data-topic') || '';
-        const text = (el.textContent || '').replace('[话题]#', '').replace(/^#/, '').trim();
-        return text === target || data.includes('"name":"' + target + '"');
-      });
-    })()`);
-  }
-
-  async clickXiaohongshuTopicCandidate(tag: string): Promise<boolean> {
-    const normalized = JSON.stringify(tag.replace(/^#/, "").trim());
-    const ok = await this.evaluate<boolean>(`(() => { // i18n-ok
-      const target = ${normalized};
-      const topicText = '#' + target;
-      const visible = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-      };
-      const containers = [
-        ...document.querySelectorAll(
-          '#creator-editor-topic-container, [data-tippy-root], .tippy-box, .tippy-content'
-        )
-      ].filter(visible);
-      const pool = containers.flatMap((container) => [
-        ...container.querySelectorAll('.item, [role=option], button, [role=button], div, span')
-      ]);
-      const matches = pool.filter((el) => {
-        if (!visible(el)) return false;
-        const text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
-        return text === topicText ||
-          text.startsWith(topicText + ' ') ||
-          text.includes(topicText + '新建话题') ||
-          text.includes('新建话题');
-      });
-      if (!matches.length) return false;
-      const score = (el) => {
-        const cls = (el.className || '').toString();
-        const tagName = el.tagName.toLowerCase();
-        let value = 0;
-        if (/\\bitem\\b/.test(cls)) value -= 40;
-        if (/is-selected/.test(cls)) value -= 30;
-        if (tagName === 'button' || el.getAttribute('role') === 'button') value -= 10;
-        if ((el.textContent || '').trim().startsWith(topicText)) value -= 5;
-        const r = el.getBoundingClientRect();
-        value += Math.max(0, r.width * r.height) / 10000;
-        return value;
-      };
-      matches.sort((a, b) => score(a) - score(b));
-      const el = matches[0];
-      el.scrollIntoView({ block: 'center', inline: 'nearest' });
-      const r = el.getBoundingClientRect();
-      const init = {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        view: window,
-        clientX: r.left + r.width / 2,
-        clientY: r.top + r.height / 2,
-        button: 0
-      };
-      const fire = (type) => {
-        const EventCtor = type.startsWith('pointer') && window.PointerEvent
-          ? window.PointerEvent
-          : window.MouseEvent;
-        el.dispatchEvent(new EventCtor(type, init));
-      };
-      fire('pointerdown');
-      fire('mousedown');
-      if (typeof el.click === 'function') {
-        el.click();
-      } else {
-        fire('click');
-      }
-      fire('mouseup');
-      fire('pointerup');
-      fire('click');
-      return true;
-    })()`);
-    if (ok) {
-      await this.wait(120);
-    }
-    return ok;
-  }
-
-  async publishXiaohongshuCustomElement(selector: string): Promise<boolean> {
-    const ok = await this.evaluate<boolean>(`(() => {
-      ${this.deepQueryPrelude(selector)}
-      const host = find(document);
-      if (!host) return false;
-      const rect = host.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return false;
-      if (
-        host.getAttribute('submit-disabled') === 'true' ||
-        host.getAttribute('disabled') === 'true' ||
-        host.getAttribute('aria-disabled') === 'true'
-      ) {
-        return false;
-      }
-      host.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (typeof host._onPublish === 'function') {
-        host._onPublish();
-      } else {
-        host.dispatchEvent(new CustomEvent('publish', { bubbles: true, composed: true }));
-      }
       return true;
     })()`);
     if (ok) {

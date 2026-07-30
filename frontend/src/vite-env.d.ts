@@ -37,9 +37,9 @@ interface OpenStudioUpdateInfo {
 }
 
 /** 自动化浏览器的实时预览帧。RPA / 智能体会话与发布任务共用这一条通道和同一个面板。 */
-interface BrowserFrame {
+interface LiveViewFrame {
   sessionId: string;
-  /** 画面。发布任务的后台视图常常取不到像素(见 worker.ts LiveMirror),此时只有步骤文案。 */
+  /** 画面。发布任务的后台视图常常取不到像素(见 electron/publish/publishWorker.ts 的 LiveMirror),此时只有步骤文案。 */
   dataUrl?: string;
   /** 当前步骤,如「B站 · 上传视频」。发布任务会带;RPA 会话不带。 */
   label?: string;
@@ -49,7 +49,7 @@ interface BrowserFrame {
 interface Window {
   openStudioPublish?: OpenStudioPublishBridge;
   openStudioBrowser?: {
-    onFrame: (callback: (frame: BrowserFrame) => void) => () => void;
+    onFrame: (callback: (frame: LiveViewFrame) => void) => () => void;
     /** 通用池档案登录:在该档案分区开 app 内嵌视图登任意站点(与发布登录同一套视图),cookie 落分区。 */
     openLogin?: (opts: { partition: string; url: string; name?: string; proxy?: string | null }) => Promise<{ ok: boolean; error?: string }>;
   };

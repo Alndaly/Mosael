@@ -357,7 +357,6 @@ function createWindow() {
     try {
       publish.stopBrowserWorker();
       publish.startBrowserWorker({
-        window: win,
         onFrame: (frame) => {
           if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
         },
@@ -420,7 +419,7 @@ app.whenReady().then(async () => {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  // 账号视图里注入的「返回 Open Studio」按钮(accountview-preload.cjs)→ 收起内嵌视图。
+  // 账号视图里注入的「返回 Open Studio」按钮(account-view-preload.cjs)→ 收起内嵌视图。
   ipcMain.on("publish:exit", () => {
     try {
       requirePublish().hidePublishView();

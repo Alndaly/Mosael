@@ -12,7 +12,7 @@ import { useI18n } from "@/app/preferences";
  */
 export function BrowserPreview() {
   const t = useI18n();
-  const [frame, setFrame] = React.useState<BrowserFrame | null>(null);
+  const [frame, setFrame] = React.useState<LiveViewFrame | null>(null);
   const [dismissed, setDismissed] = React.useState(false);
   const hideTimer = React.useRef<number | null>(null);
 
@@ -55,7 +55,7 @@ export function BrowserPreview() {
       {frame.dataUrl ? (
         <img src={frame.dataUrl} alt="" className="block w-full bg-black" />
       ) : (
-        // 后台视图取不到像素是常态(见 worker.ts LiveMirror),此时面板退化成「步骤 + 地址」。
+        // 后台视图取不到像素是常态(见 electron/publish/publishWorker.ts 的 LiveMirror),此时面板退化成「步骤 + 地址」。
         // 整块消失反而更糟:那正是用户以为「卡死了」的时刻,更需要看到它还在跑。
         <div className="grid gap-1 px-2.5 py-3">
           <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">

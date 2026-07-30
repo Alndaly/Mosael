@@ -191,7 +191,7 @@ export class DouyinAdapter implements PublishAdapter {
       await this.driver.insertText(this.s.descEditor, ` ${topicText}`);
       await wait(800);
       const pickedTopic = await this.driver
-        .clickCenterByText(topicText, {
+        .pointerClickByText(topicText, {
           selector: '[class*="mention-suggest"] div, [class*="mention-suggest"] span',
         })
         .then(() => true)
@@ -356,7 +356,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         200,
       );
       const picked =
-        (await this.driver.clickXiaohongshuTopicCandidate(normalizedTag)) ||
+        (await this.clickTopicCandidate(normalizedTag)) ||
         (await this.driver
           .clickByText(TEXT_NEW_TOPIC, {
             exact: true,
@@ -378,7 +378,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         5_000,
         300,
       );
-      if (!selected && !(await this.driver.hasXiaohongshuTopic(normalizedTag))) {
+      if (!selected && !(await this.hasTopicChip(normalizedTag))) {
         throw new Error(`Xiaohongshu topic was not selected: #${normalizedTag}`);
       }
       await this.driver.insertText(this.s.contentEditor, " ");
@@ -401,8 +401,8 @@ export class XiaohongshuAdapter implements PublishAdapter {
     await commitClick({
       what: "xiaohongshu submit",
       attempts: [
-        domAttempt("publishXiaohongshuCustomElement", () =>
-          this.expectTrue(this.driver.publishXiaohongshuCustomElement(this.s.submitHost)),
+        domAttempt("dispatchPublishEvent", () =>
+          this.expectTrue(this.dispatchPublishEvent(this.s.submitHost)),
         ),
         domAttempt("clickInShadow", () =>
           this.expectTrue(this.driver.clickInShadow(this.s.submitHost, this.s.submitText)),
@@ -422,6 +422,128 @@ export class XiaohongshuAdapter implements PublishAdapter {
         texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts],
       }),
     });
+  }
+
+
+  // ---- 小红书专有的页面细节 ------------------------------------------------
+  //
+  // 这三段原先住在 PageDriver 上,方法名里带着 Xiaohongshu —— 通用页面驱动却写死一个平台的
+  // 选择器(a.tiptap-topic / #creator-editor-topic-container / .tippy-box / <xhs-publish-btn>)。
+  // 名字只是症状,病根是位置不对;改成通用名会更误导,所以搬到这里,顺带去掉冗余的平台前缀。
+
+  private async hasTopicChip(tag: string): Promise<boolean> {
+    const normalized = JSON.stringify(tag.replace(/^#/, "").trim());
+    return this.driver.evaluate<boolean>(`(() => { // i18n-ok 平台页面的匹配文案/选择器/注入脚本,非产品文案
+      const target = ${normalized};
+      return [...document.querySelectorAll('a.tiptap-topic')].some((el) => {
+        const data = el.getAttribute('data-topic') || '';
+        const text = (el.textContent || '').replace('[话题]#', '').replace(/^#/, '').trim();
+        return text === target || data.includes('"name":"' + target + '"');
+      });
+    })()`);
+  }
+
+  private async clickTopicCandidate(tag: string): Promise<boolean> {
+    const normalized = JSON.stringify(tag.replace(/^#/, "").trim());
+    const ok = await this.driver.evaluate<boolean>(`(() => { // i18n-ok
+      const target = ${normalized};
+      const topicText = '#' + target;
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      const containers = [
+        ...document.querySelectorAll(
+          '#creator-editor-topic-container, [data-tippy-root], .tippy-box, .tippy-content'
+        )
+      ].filter(visible);
+      const pool = containers.flatMap((container) => [
+        ...container.querySelectorAll('.item, [role=option], button, [role=button], div, span')
+      ]);
+      const matches = pool.filter((el) => {
+        if (!visible(el)) return false;
+        const text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+        return text === topicText ||
+          text.startsWith(topicText + ' ') ||
+          text.includes(topicText + '新建话题') ||
+          text.includes('新建话题');
+      });
+      if (!matches.length) return false;
+      const score = (el) => {
+        const cls = (el.className || '').toString();
+        const tagName = el.tagName.toLowerCase();
+        let value = 0;
+        if (/\\bitem\\b/.test(cls)) value -= 40;
+        if (/is-selected/.test(cls)) value -= 30;
+        if (tagName === 'button' || el.getAttribute('role') === 'button') value -= 10;
+        if ((el.textContent || '').trim().startsWith(topicText)) value -= 5;
+        const r = el.getBoundingClientRect();
+        value += Math.max(0, r.width * r.height) / 10000;
+        return value;
+      };
+      matches.sort((a, b) => score(a) - score(b));
+      const el = matches[0];
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = el.getBoundingClientRect();
+      const init = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: r.left + r.width / 2,
+        clientY: r.top + r.height / 2,
+        button: 0
+      };
+      const fire = (type) => {
+        const EventCtor = type.startsWith('pointer') && window.PointerEvent
+          ? window.PointerEvent
+          : window.MouseEvent;
+        el.dispatchEvent(new EventCtor(type, init));
+      };
+      fire('pointerdown');
+      fire('mousedown');
+      if (typeof el.click === 'function') {
+        el.click();
+      } else {
+        fire('click');
+      }
+      fire('mouseup');
+      fire('pointerup');
+      fire('click');
+      return true;
+    })()`);
+    if (ok) {
+      await wait(120);
+    }
+    return ok;
+  }
+
+  private async dispatchPublishEvent(selector: string): Promise<boolean> {
+    const ok = await this.driver.evaluate<boolean>(`(() => {
+      ${this.driver.deepQueryPrelude(selector)}
+      const host = find(document);
+      if (!host) return false;
+      const rect = host.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      if (
+        host.getAttribute('submit-disabled') === 'true' ||
+        host.getAttribute('disabled') === 'true' ||
+        host.getAttribute('aria-disabled') === 'true'
+      ) {
+        return false;
+      }
+      host.scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (typeof host._onPublish === 'function') {
+        host._onPublish();
+      } else {
+        host.dispatchEvent(new CustomEvent('publish', { bubbles: true, composed: true }));
+      }
+      return true;
+    })()`);
+    if (ok) {
+      await wait(120);
+    }
+    return ok;
   }
 
   /** 把「返回 false 表示没点到」的原语转成抛错,以便统一进 commitClick 的降级链。 */
@@ -550,9 +672,9 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     await commitClick({
       what: "weixin-channels submit",
       attempts: [
-        // 可信优先:clickByTextDeep 走真实鼠标事件,能穿 shadow root 找到目标。
+        // 可信优先:pointerClickByTextDeep 走真实鼠标事件,能穿 shadow root 找到目标。
         pointerAttempt(`deep text ${this.s.submitText}`, () =>
-          this.driver.clickByTextDeep(this.s.submitText, { exact: true }),
+          this.driver.pointerClickByTextDeep(this.s.submitText, { exact: true }),
         ),
         // 降级:el.click(),不受视口与遮挡影响。
         domAttempt(`text ${this.s.submitText}`, () =>
@@ -769,7 +891,7 @@ export class BilibiliAdapter implements PublishAdapter {
       attempts: [
         // 可信优先:真实鼠标事件(isTrusted),B 站风控最紧。
         pointerAttempt(`css ${this.s.submitButton}`, () =>
-          this.driver.clickCenterCss(this.s.submitButton),
+          this.driver.pointerClickCss(this.s.submitButton),
         ),
         // 降级:el.click() 不受视口与遮挡影响,点得到。
         ...this.s.submitTexts.map((text) =>

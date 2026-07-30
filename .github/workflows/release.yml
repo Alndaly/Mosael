@@ -88,6 +88,11 @@ jobs:
       - name: Fetch bundled Python for voice cloning
         run: pnpm fetch:tts-python
 
+      # esbuild 只打包、不做类型检查:发布执行器的源码在此之前从未被 tsc 看过,
+      # 于是攒下了失效的 @ts-expect-error 和没人发现的死参数。放在构建前,坏了就别出包。
+      - name: Typecheck publisher
+        run: pnpm typecheck:electron
+
       - name: Build frontend / sidecar / publisher / backend
         run: |
           pnpm build:publisher
