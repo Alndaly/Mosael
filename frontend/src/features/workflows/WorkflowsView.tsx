@@ -1531,6 +1531,13 @@ function WorkflowEditor({
                 setEditingLoopId(node.id);
             }}
             onPaneClick={() => setSelectedNodeId(null)}
+            /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
+               React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
+               于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
+               所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
+            panOnScroll
+            zoomOnScroll={false}
+            zoomOnPinch
             defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
@@ -1940,6 +1947,13 @@ function LoopBodyEditor({
           onConnect={onConnect}
           onNodeClick={(_event, node) => setSelectedId(node.id)}
           onPaneClick={() => setSelectedId(null)}
+          /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
+             React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
+             于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
+             所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
+          panOnScroll
+          zoomOnScroll={false}
+          zoomOnPinch
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           deleteKeyCode={["Backspace", "Delete"]}
           onInit={(instance) =>
