@@ -516,7 +516,11 @@ function UpdateCheckButton() {
               duration: 12000,
               action: { label: t("updateView"), onClick: () => window.open(info.url, "_blank") },
             });
-          } else toast.success(t("updateUpToDate"));
+          } else {
+            // 带上比对到的版本号:光说「已是最新」在版本号本身有问题时毫无信息量,
+            // 用户没法判断它到底比了什么。
+            toast.success(`${t("updateUpToDate")} · v${info.latest ?? info.current ?? ""}`);
+          }
         } finally {
           setChecking(false);
         }

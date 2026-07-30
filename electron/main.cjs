@@ -224,11 +224,15 @@ async function checkForUpdates() {
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
   const release = await res.json();
   const latest = String(release.tag_name || "").replace(/^v/i, "");
+  // 解析不出版本号就报错,不要静默当成「已是最新」。原来是 `Boolean(latest) && ...`,
+  // 于是响应形状一变(字段缺失、返回了别的 JSON),用户看到的是一句让人安心的
+  // 「已是最新版本」——而实际上这次检查根本没成功。宁可说失败,也不要给假的安心。
+  if (!latest) throw new Error("GitHub 返回里没有 tag_name");
   const current = app.getVersion();
   return {
     current,
     latest,
-    hasUpdate: Boolean(latest) && compareVersions(latest, current) > 0,
+    hasUpdate: compareVersions(latest, current) > 0,
     url: release.html_url || `https://github.com/${UPDATE_REPO}/releases`,
   };
 }
