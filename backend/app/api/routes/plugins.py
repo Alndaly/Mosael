@@ -38,6 +38,17 @@ def scan_plugin_manifests(db: DbSession, user: CurrentUser) -> list[Plugin]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/plugins/dir")
+def plugins_directory(user: CurrentUser) -> dict[str, str]:
+    """插件目录的**真实绝对路径**,给前端的空态引导用。
+
+    以前这条路径是写死在前端文案里的(`~/.open-studio/plugins/`)。那是 POSIX 写法:
+    Windows 上 Path.home() 是 C:\\Users\\<用户名>,`~/` 对用户没有任何意义,照着找是找不到的。
+    路径由谁算就由谁报,免得两边各写一份、还各写错一份。
+    """
+    return {"path": str(settings.plugins_dir)}
+
+
 @router.get("/plugins", response_model=list[PluginOut])
 def list_plugins(db: DbSession) -> list[Plugin]:
     stmt = select(Plugin).order_by(Plugin.name)

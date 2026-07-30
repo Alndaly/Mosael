@@ -26,6 +26,14 @@ export function PluginsView() {
     queryKey: ["plugins"],
     queryFn: () => api<Plugin[]>("/api/plugins"),
   });
+  // 插件目录由后端算、后端报:它是 Path.home()/".open-studio"/"plugins",在 Windows 上
+  // 展开成 C:\Users\<用户名>\.open-studio\plugins。文案里写死 `~/.open-studio/plugins/`
+  // 只在 macOS/Linux 上说得通,Windows 用户照着那个写法根本找不到地方。
+  const pluginsDir = useQuery({
+    queryKey: ["plugins-dir"],
+    queryFn: () => api<{ path: string }>("/api/plugins/dir"),
+    staleTime: Infinity,
+  });
   const scanPlugins = useMutation({
     mutationFn: () => api<Plugin[]>("/api/plugins/scan", { method: "POST" }),
     onSuccess: () => {
@@ -45,7 +53,7 @@ export function PluginsView() {
         <EmptyState
           icon={<Plug size={22} />}
           title={t("noPlugins")}
-          body={t("noPluginsGuide")}
+          body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}
           action={
             <Button disabled={scanPlugins.isPending} onClick={() => scanPlugins.mutate()}>
               <RefreshCcw size={15} /> {t("scanPlugins")}
