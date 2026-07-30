@@ -26,7 +26,7 @@ const active = new Map<string, Agent>();
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
   if (msg.provider?.baseUrl && msg.model) {
-    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId);
+    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId, msg.sessionId);
     const result = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,

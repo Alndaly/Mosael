@@ -874,10 +874,18 @@ class FeishuBindCode(Base):
 
 class ToolConfirmation(Base):
     __tablename__ = "tool_confirmations"
-    __table_args__ = (Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),)
+    __table_args__ = (
+        Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),
+        Index("idx_tool_confirmations_session", "session_id", "status"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 发起这张确认卡的智能体会话。**可空**:MCP / 飞书等外部智能体没有会话,它们的卡由右上角
+    #: 全局确认中心兜底。有会话的卡只在**它自己那次对话**里内联出现 —— 否则同工作区的其它对话会
+    #: 把它显示出来,更糟的是会被那边的「本会话始终允许」自动批准(授权范围逃逸)。
+    #: 不设外键:会话删除后这张卡的归属仍然有意义(审计),也不该级联删掉历史。
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=False)
     tool: Mapped[str] = mapped_column(String(80), nullable=False)
     permission: Mapped[str] = mapped_column(String(40), nullable=False)
     summary: Mapped[str] = mapped_column(String(500), nullable=False, default="")

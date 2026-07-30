@@ -1262,11 +1262,14 @@ class ConfirmationCreate(BaseModel):
     tool: str = Field(min_length=1, max_length=80)
     payload: dict = Field(default_factory=dict)
     requested_by: str = Field(default="external-agent", max_length=120)
+    #: 发起会话;外部智能体(MCP / 飞书)没有会话,留空即可。
+    session_id: str | None = Field(default=None, max_length=64)
 
 
 class ConfirmationOut(OrmModel):
     id: str
     workspace_id: str
+    session_id: str | None
     tool: str
     permission: str
     summary: str

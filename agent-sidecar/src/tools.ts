@@ -104,7 +104,12 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 /** All Open Studio tools for a turn, generated from the backend manifest. */
-export async function buildAllTools(apiBase: string, token: string, workspaceId: string): Promise<AgentTool[]> {
+export async function buildAllTools(
+  apiBase: string,
+  token: string,
+  workspaceId: string,
+  sessionId?: string,
+): Promise<AgentTool[]> {
   let specs: ToolSpec[];
   try {
     specs = (await apiGet(apiBase, token, "/api/agent/tools")) as ToolSpec[];
@@ -136,6 +141,9 @@ export async function buildAllTools(apiBase: string, token: string, workspaceId:
           const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
             arguments: args,
             requested_by: "pi-agent",
+            // 确认卡归属:只在发起它的那次对话里内联出现,不会串到别的会话去(也就不会被那边的
+            // 「本会话始终允许」自动批准)。
+            session_id: sessionId ?? "",
           })) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
           if (!spec.confirmation) return jsonResult(response?.result ?? null);

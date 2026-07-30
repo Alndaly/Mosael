@@ -24,6 +24,7 @@ type Confirmation = components["schemas"]["ConfirmationOut"];
  * 挂载期间对匹配的 pending 卡自动批准——与 Claude Code 的 session allowlist 同构,
  * 后端确认内核不感知也不需要感知。
  */
+/** `allowKey` 就是**会话 id**:既做「本会话始终允许」的 localStorage 键,也做确认卡的归属筛选键。 */
 export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: string; allowKey: string }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -45,12 +46,18 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
     });
   };
 
-  // 挂载登记:全局 ConfirmationCenter 据此让位,避免同一张卡出现两份。
-  React.useEffect(() => registerInlineConfirmSurface(), []);
+  // 挂载登记:全局中心据此知道**这个会话**的卡已经有人管了,不再重复显示(其余照常兜底)。
+  React.useEffect(() => registerInlineConfirmSurface(allowKey), [allowKey]);
 
+  // **只取本会话的卡**。此前拉的是整个工作区的 pending —— 于是同工作区其它对话、工作流节点、
+  // MCP/飞书外部智能体的确认卡都会挤进当前对话;更糟的是下面那段「本会话始终允许」的自动批准
+  // 会把它们一并静默批掉,用户以为授的是「这次对话」,实际授的是「这个工作区里所有人的这个工具」。
   const pending = useQuery({
-    queryKey: ["confirmations", workspaceId, "pending"],
-    queryFn: () => api<Confirmation[]>(`/api/confirmations?workspace_id=${workspaceId}&status=pending`),
+    queryKey: ["confirmations", workspaceId, "pending", allowKey],
+    queryFn: () =>
+      api<Confirmation[]>(
+        `/api/confirmations?workspace_id=${workspaceId}&status=pending&session_id=${encodeURIComponent(allowKey)}`,
+      ),
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
@@ -60,6 +67,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
       api<Confirmation>(`/api/confirmations/${id}/${action}`, { method: "POST" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
+      void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "unowned"] });
       void qc.invalidateQueries({ queryKey: ["sequences"] });
       void qc.invalidateQueries({ queryKey: ["assets"] });
       void qc.invalidateQueries({ queryKey: ["jobs"] });

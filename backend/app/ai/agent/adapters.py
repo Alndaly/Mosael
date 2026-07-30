@@ -201,6 +201,8 @@ def _run_pi(
         "prompt": prompt,
         "systemPrompt": system_prompt,
         "workspaceId": workspace_id,
+        # 确认卡据此归属到本次会话,只在它自己那次对话里内联出现(见 mcp_server._SESSION_ID)。
+        "sessionId": session_id,
         "apiBase": api_base,
         "token": token,
         "provider": {

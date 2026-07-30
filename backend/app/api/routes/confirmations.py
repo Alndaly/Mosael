@@ -27,6 +27,7 @@ def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUs
             tool=body.tool,
             payload=body.payload,
             requested_by=body.requested_by,
+            session_id=body.session_id,
         )
     except ConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -34,10 +35,29 @@ def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUs
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])
 def list_confirmations(
-    workspace_id: str, db: DbSession, user: CurrentUser, status: str | None = None, limit: int = 30
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    status: str | None = None,
+    limit: int = 30,
+    session_id: str | None = None,
+    unowned: bool = False,
 ) -> list[ToolConfirmation]:
+    """待确认列表。
+
+    确认卡按**发起会话**归属:
+      - `session_id=X` —— 只要该会话的卡。聊天里的内联确认卡用这个,否则同工作区其它对话、
+        工作流节点、外部智能体的卡都会挤进当前对话,更糟的是会被这边的「本会话始终允许」
+        自动批准(授权范围逃逸)。
+      - `unowned=true` —— 只要**没有会话**的卡(MCP / 飞书等外部智能体)。全局确认中心用这个。
+      - 都不传 —— 全部,供调试/审计。
+    """
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(ToolConfirmation).where(ToolConfirmation.workspace_id == workspace_id)
+    if session_id:
+        stmt = stmt.where(ToolConfirmation.session_id == session_id)
+    elif unowned:
+        stmt = stmt.where(ToolConfirmation.session_id.is_(None))
     if status:
         stmt = stmt.where(ToolConfirmation.status == status)
     stmt = stmt.order_by(ToolConfirmation.created_at.desc()).limit(min(limit, 100))

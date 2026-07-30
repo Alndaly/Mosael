@@ -59,6 +59,7 @@ def request_confirmation(
     tool: str,
     payload: dict[str, Any],
     requested_by: str = "external-agent",
+    session_id: str | None = None,
 ) -> ToolConfirmation:
     definition = TOOL_DEFS.get(tool)
     if definition is None:
@@ -71,6 +72,7 @@ def request_confirmation(
         summary=_summarize(tool, payload),
         payload=payload,
         requested_by=requested_by,
+        session_id=session_id,
     )
     db.add(confirmation)
     db.commit()

@@ -52,6 +52,8 @@ class ToolInvocation(BaseModel):
     arguments: dict[str, Any] = {}
     # 确认卡上显示的请求方(如 "pi-agent");留空用注册表默认("mcp-agent")。
     requested_by: str = ""
+    # 发起这次调用的智能体会话:确认卡据此只在**它自己那次对话**里内联出现。留空 = 外部智能体。
+    session_id: str = ""
 
 
 @router.get("/agent/tools", response_model=list[ToolSpec])
@@ -99,6 +101,7 @@ def invoke_agent_tool(
 
     base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
     requested_by_reset = registry.set_requested_by(body.requested_by) if body.requested_by else None
+    session_reset = registry.set_session_id(body.session_id) if body.session_id else None
     try:
         result = fn(**body.arguments)
     except TypeError as exc:  # wrong/missing arguments from the model, not a server fault
@@ -111,4 +114,6 @@ def invoke_agent_tool(
         registry._API_BASE.reset(base_reset)
         if requested_by_reset is not None:
             registry._REQUESTED_BY.reset(requested_by_reset)
+        if session_reset is not None:
+            registry._SESSION_ID.reset(session_reset)
     return {"result": result}

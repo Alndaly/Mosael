@@ -16,6 +16,8 @@ export interface RunTurnRequest {
   /** Prior turns, already trimmed by the backend (may be empty). */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   workspaceId: string;
+  /** 发起本轮的智能体会话。工具调用带上它,确认卡才能只在这次对话里内联出现。 */
+  sessionId?: string;
   /** Base URL + bearer token for calling Open Studio's HTTP API from tools (S3+). */
   apiBase: string;
   token: string;

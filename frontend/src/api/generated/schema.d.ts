@@ -3007,7 +3007,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Confirmations */
+        /**
+         * List Confirmations
+         * @description 待确认列表。
+         *
+         *     确认卡按**发起会话**归属:
+         *       - `session_id=X` —— 只要该会话的卡。聊天里的内联确认卡用这个,否则同工作区其它对话、
+         *         工作流节点、外部智能体的卡都会挤进当前对话,更糟的是会被这边的「本会话始终允许」
+         *         自动批准(授权范围逃逸)。
+         *       - `unowned=true` —— 只要**没有会话**的卡(MCP / 飞书等外部智能体)。全局确认中心用这个。
+         *       - 都不传 —— 全部,供调试/审计。
+         */
         get: operations["list_confirmations_api_confirmations_get"];
         put?: never;
         /** Create Confirmation */
@@ -4162,6 +4172,8 @@ export interface components {
              * @default external-agent
              */
             requested_by: string;
+            /** Session Id */
+            session_id?: string | null;
         };
         /** ConfirmationOut */
         ConfirmationOut: {
@@ -4169,6 +4181,8 @@ export interface components {
             id: string;
             /** Workspace Id */
             workspace_id: string;
+            /** Session Id */
+            session_id: string | null;
             /** Tool */
             tool: string;
             /** Permission */
@@ -6061,6 +6075,11 @@ export interface components {
              * @default
              */
             requested_by: string;
+            /**
+             * Session Id
+             * @default
+             */
+            session_id: string;
         };
         /** ToolSpec */
         ToolSpec: {
@@ -13493,6 +13512,8 @@ export interface operations {
                 workspace_id: string;
                 status?: string | null;
                 limit?: number;
+                session_id?: string | null;
+                unowned?: boolean;
             };
             header?: never;
             path?: never;

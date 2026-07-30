@@ -36,6 +36,21 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
 
 
 
+def _migrate_tool_confirmations_session() -> None:
+    """tool_confirmations 新增 session_id 列(确认卡归属于哪次智能体会话)。
+
+    create_all 只建新表,不给**已有**表补列。这列可空:MCP / 飞书等外部智能体没有会话。
+    老行留空 → 它们照旧由全局确认中心兜底,不会突然从某个对话里消失。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    if "session_id" in {c["name"] for c in inspector.get_columns("tool_confirmations")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
+
+
 def _migrate_tts_pip_index() -> None:
     """tts_config 新增 pip_index 列(装引擎依赖时用的 pip 镜像)。
 
@@ -151,6 +166,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
+    _migrate_tool_confirmations_session()
     _migrate_tts_pip_index()
     _migrate_job_parent()
     _migrate_browser_pool()

@@ -315,3 +315,36 @@ def test_invalid_payloads_rejected() -> None:
         json={"workspace_id": ws["id"], "tool": "edit_timeline", "payload": {"sequence_id": "nope", "operations": []}},
     )
     assert empty_ops.status_code == 422
+
+
+def test_confirmations_scoped_by_session() -> None:
+    """确认卡按发起会话归属,列表能据此筛。
+
+    此前只有 workspace_id:同工作区任何来源的待确认都会被每个对话的内联确认卡拉到,
+    而内联卡的「本会话始终允许」会自动批准它们 —— 用户以为授的是「这次对话」,
+    实际授的是「这个工作区里所有人的这个工具」。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    # 用 browser_open:它不校验外部实体,测的是归属与筛选本身,不牵扯时间线。
+    base = {"workspace_id": ws["id"], "tool": "browser_open", "payload": {"url": "https://example.com"}}
+
+    a = client.post("/api/confirmations", json={**base, "session_id": "sess-a"}).json()
+    b = client.post("/api/confirmations", json={**base, "session_id": "sess-b"}).json()
+    ext = client.post("/api/confirmations", json=base).json()  # 外部智能体:没有会话
+
+    assert a["session_id"] == "sess-a"
+    assert ext["session_id"] is None
+
+    def ids(**params: str) -> set[str]:
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        rows = client.get(f"/api/confirmations?workspace_id={ws['id']}&status=pending&{query}").json()
+        return {row["id"] for row in rows}
+
+    # 各自只看得到自己的
+    assert ids(session_id="sess-a") == {a["id"]}
+    assert ids(session_id="sess-b") == {b["id"]}
+    # 全局中心只兜没有会话的那些
+    assert ids(unowned="true") == {ext["id"]}
+    # 不带筛选仍是全部(调试/审计)
+    assert ids() == {a["id"], b["id"], ext["id"]}

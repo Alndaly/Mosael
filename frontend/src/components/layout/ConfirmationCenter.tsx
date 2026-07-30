@@ -6,7 +6,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useInlineConfirmSurfaceOpen } from "@/components/agent/confirmSurface";
+import { useInlineConfirmSessions } from "@/components/agent/confirmSurface";
 
 type Confirmation = components["schemas"]["ConfirmationOut"];
 
@@ -36,12 +36,17 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     },
   });
 
-  // 聊天面板打开时确认卡走对话内联(InlineConfirmations),这里让位——
-  // 否则同一张卡出现两份,而且这层 fixed 卡曾被 z-index 更高的 AI 助手浮窗整块盖住。
-  const inlineOpen = useInlineConfirmSurfaceOpen();
+  // 按**归属**分工,而不是「有内联面就整体让位」:
+  //  - 卡属于某个正开着的对话 → 那边内联显示,这里跳过(否则同一张卡出现两份);
+  //  - 卡没有会话(MCP / 飞书等外部智能体)或它那次对话没开着 → 这里兜底,否则没人显示,
+  //    智能体会一直干等。
+  // 旧写法是「只要有任何内联面就整体返回 null」,于是一开聊天面板,外部智能体的卡也跟着被藏掉。
+  const handledSessions = useInlineConfirmSessions();
 
-  const items = pending.data ?? [];
-  if (inlineOpen || items.length === 0) return null;
+  const items = (pending.data ?? []).filter(
+    (item) => !item.session_id || !handledSessions.includes(item.session_id),
+  );
+  if (items.length === 0) return null;
 
   return (
     <div className="fixed right-4 top-14 z-[60] grid w-[340px] gap-2" role="region" aria-label={t("confirmTitle")}>
