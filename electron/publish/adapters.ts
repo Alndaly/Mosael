@@ -906,6 +906,10 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
+    // 点之前先体检一遍必填项。B 站在必填项没齐时点「立即投稿」是**静默无反应**的——没有 toast、
+    // 没有报错、表单原地不动,和「按钮点不动」长得一模一样。此前的快照只取到表单下半部分,
+    // 恰好漏掉了标题/创作声明/分区/封面这些必填项所在的上半部分。
+    plog("bilibili submit: readiness", JSON.stringify(await this.submitReadiness()));
     await commitClick({
       what: "bilibili submit",
       attempts: [
@@ -946,6 +950,46 @@ export class BilibiliAdapter implements PublishAdapter {
    *  - 是否有校验提示/错误浮层(我们的受理判定认不出的那种);
    *  - 提交元素自身的状态(它是个 span,禁用态可能只体现在 class/cursor 上)。
    */
+  /**
+   * 提交前的必填项体检。
+   *
+   * B 站的必填项在页面上用红色 `*` 标记(标题 / 创作声明 / 分区),封面另算。任何一项没齐,点
+   * 「立即投稿」都是静默无反应 —— 所以这里逐项报出**实际值**,而不是再去猜。
+   * `starred` 直接从 DOM 里找带 `*` 的标签、连带取它旁边控件的当前值,这样即使 B 站加了新的必填项
+   * 也能一起报出来,不必等我们更新选择器。
+   */
+  private async submitReadiness(): Promise<unknown> {
+    return this.driver
+      .evaluate(
+        `(() => {
+          const val = (el) => !el ? null
+            : (el.value ?? el.getAttribute('value') ?? (el.innerText || '').trim()).slice(0, 60);
+          // 带 * 的必填标签 → 取同一行/父块里第一个 input 或下拉的当前值
+          const starred = [...document.querySelectorAll('span,label,div')]
+            .filter((el) => el.children.length === 0 && (el.textContent || '').trim() === '*')
+            .map((star) => {
+              const row = star.closest('div');
+              const label = ((row && row.innerText) || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
+              const field = row ? row.querySelector('input, textarea, [class*="select"], [class*="dropdown"]') : null;
+              return { label: label, value: val(field) };
+            })
+            .slice(0, 8);
+          const cover = document.querySelector('.cover');
+          return {
+            starred: starred,
+            title: val(document.querySelector('input[maxlength="80"], input[maxlength="100"]')),
+            statement: val(document.querySelector(${JSON.stringify(this.s.statementInput)})),
+            coverSelectedCount: document.querySelectorAll(${JSON.stringify(this.s.coverSelected)}).length,
+            coverCandidates: document.querySelectorAll(${JSON.stringify(this.s.coverRecommendation)}).length,
+            coverText: cover ? (cover.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 120) : null,
+            // 表单上半部分:此前的 textTail 只取尾部,漏掉了必填项区域
+            textHead: (document.body?.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 420),
+          };
+        })()`,
+      )
+      .catch((error: unknown) => ({ evaluateFailed: String(error).slice(0, 120) }));
+  }
+
   private async submitSnapshot(): Promise<unknown> {
     return this.driver
       .evaluate(
@@ -1164,7 +1208,21 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   private async selectRecommendedCover(): Promise<void> {
+    // 每条分支都要留痕。此前两处静默 return 没有任何日志,于是「封面到底选上了没」在事后完全不可知
+    // ——而封面是 B 站的必填项,没选就点「立即投稿」是**静默无反应**的。
+    // 另外 coverSelected 的第一个候选 `.cover .cover-item` 很泛:它若只是容器而非「已选中」标记,
+    // alreadySelected 就恒为真、这个方法直接返回,封面永远不会被选(与 uploadDoneTexts 那处短路同类)。
+    // 所以这里把两个选择器各自的命中数都记下来,一眼能看出是不是这个情况。
+    const counts = await this.driver
+      .evaluate<{ selected: number; candidates: number }>(
+        `({
+          selected: document.querySelectorAll(${JSON.stringify(this.s.coverSelected)}).length,
+          candidates: document.querySelectorAll(${JSON.stringify(this.s.coverRecommendation)}).length,
+        })`,
+      )
+      .catch(() => ({ selected: -1, candidates: -1 }));
     const alreadySelected = await this.driver.cssVisible(this.s.coverSelected, 2_000);
+    plog("selectRecommendedCover:", { ...counts, alreadySelected });
     if (alreadySelected) {
       return;
     }
@@ -1202,6 +1260,7 @@ export class BilibiliAdapter implements PublishAdapter {
     })()`);
 
     if (!clicked) {
+      plog("selectRecommendedCover: 没有可点的候选封面,跳过");
       return;
     }
 
@@ -1209,6 +1268,13 @@ export class BilibiliAdapter implements PublishAdapter {
     if (!selected) {
       throw new Error("Bilibili recommended cover did not become selected.");
     }
+    // 选中 ≠ 处理完:B 站选完封面还要上传/裁切一下,期间点投稿同样静默无反应。等它安静下来。
+    const quiet = await this.driver.waitForFunction(
+      `!/上传中|处理中|裁剪中|\\d+%/.test(document.querySelector('.cover')?.innerText || '')`, // i18n-ok
+      15_000,
+      500,
+    );
+    plog("selectRecommendedCover: 已选中", { coverQuiet: quiet });
   }
 
   private async waitForTagChip(tag: string): Promise<boolean> {
