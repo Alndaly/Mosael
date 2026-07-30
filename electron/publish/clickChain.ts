@@ -110,10 +110,6 @@ export class CommitClickError extends Error {
 }
 
 /**
- * 按序尝试各种点法,每点一次都确认受理;全部失败抛 CommitClickError。
- * 返回最终生效的那次尝试的 label。
- */
-/**
  * 受理判定的**自检**:点击之前先量一次。
  *
  * 如果它在点击**之前**就已经为真,那它区分不了任何东西 —— 之后无论点没点、点成没成,它都会立刻
@@ -139,6 +135,10 @@ async function acceptancePreflight(
   return alreadyTrue;
 }
 
+/**
+ * 按序尝试各种点法,每点一次都确认受理;全部失败抛 CommitClickError。
+ * 返回最终生效的那次尝试的 label。
+ */
 export async function commitClick(opts: {
   /** 这件事叫什么,用于日志与错误信息,如 `bilibili submit`。 */
   what: string;
