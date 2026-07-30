@@ -297,13 +297,19 @@ function ToolCard({
   return (
     <div className="overflow-hidden rounded-md border border-border bg-panel">
       <button type="button" className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-[9px] text-left hover:bg-secondary" onClick={() => setOpen((value) => !value)}>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        <Terminal size={14} />
-        <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-[12.5px] [&_strong]:font-semibold">
+        <Terminal size={14} className="shrink-0" />
+        <div className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-[12.5px] [&_strong]:font-semibold">
           <strong>{tool.name}</strong>
           <small>{tool.description ?? ""}</small>
         </div>
-        {!runnable && <small className="ml-auto whitespace-nowrap text-[10.5px] text-muted-foreground">{t("toolBlockedHint")}</small>}
+        {!runnable && <small className="whitespace-nowrap text-[10.5px] text-muted-foreground">{t("toolBlockedHint")}</small>}
+        {/* 展开箭头放行尾:放在最左时它和工具图标挤在一起,两个符号抢同一个视觉起点,
+            而左缘该留给「这一行是什么」(图标 + 名称)。行尾是通用的展开位。 */}
+        {open ? (
+          <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+        )}
       </button>
       {open && (
         <div className="grid gap-1.5 border-t border-border p-2">
