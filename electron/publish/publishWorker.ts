@@ -70,6 +70,7 @@ let mirroring: string | null = null;
  */
 class LiveMirror {
   private label: string;
+  private settled = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private held = false;
   private capturing = false;
@@ -89,9 +90,11 @@ class LiveMirror {
     this.timer = setInterval(() => void this.tick(), LIVE_TICK_MS);
   }
 
-  /** 切换当前步骤文案。光看画面分不清「正在上传」和「卡住了」,步骤名才分得清。 */
-  step(label: string): void {
+  /** 切换当前步骤文案。光看画面分不清「正在上传」和「卡住了」,步骤名才分得清。
+   *  settled 标记终态:面板据此停掉「运行中」的转圈。 */
+  step(label: string, settled = false): void {
     this.label = label;
+    this.settled = settled;
     if (this.held) void this.tick();
   }
 
@@ -122,7 +125,7 @@ class LiveMirror {
     } catch {
       /* webContents 已销毁 */
     }
-    onFrame({ sessionId: this.accountId, dataUrl, label: this.label, url });
+    onFrame({ sessionId: this.accountId, dataUrl, label: this.label, url, settled: this.settled });
   }
 }
 function settle(t: PublishTask, status: string, dryRun: boolean): void {
@@ -212,9 +215,9 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("准备中")}`);
   // 每一步同时进日志和实时窗口。这段之前完全不留痕:一次「表单填好了却没投出去」的故障,日志里
   // 只表现为 checkLogin 之后静默五分钟,画面上也什么都看不到,无从判断卡在上传、填表还是提交。
-  const step = (label: string): void => {
+  const step = (label: string, settled = false): void => {
     plog("runTask step:", bt.id, label);
-    mirror.step(`${platformLabel} · ${label}`);
+    mirror.step(`${platformLabel} · ${label}`, settled);
   };
   try {
     mirror.start();
@@ -268,7 +271,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await delay(stepDelay());
     step(tr("等待平台确认"));
     await adapter.waitResult();
-    step(tr("发布成功"));
+    step(tr("发布成功"), true);
     await backend.reportTask(t.id, { status: "success" });
     plog("runTask success:", t.id);
     settle(t, "success", false);
@@ -276,7 +279,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     plog("runTask error:", t.id, error instanceof Error ? error : message);
     // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
-    mirror.step(`${platformLabel} · ${tr("失败")}`);
+    mirror.step(`${platformLabel} · ${tr("失败")}`, true);
     const screenshot = await captureFailure(t.id, driver);
     const blocked = resolveBlockedStatus(error);
     if (blocked === "login_required")

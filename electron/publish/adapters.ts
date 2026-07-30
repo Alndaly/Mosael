@@ -806,16 +806,36 @@ export class BilibiliAdapter implements PublishAdapter {
     // 在 B 站改文案时全线挂死;只认进度标记会在它压根不渲染百分比时退化回旧 bug。
     const progressExpr = `/上传中|正在上传|\\d+%/.test(document.body?.innerText || '')`; // i18n-ok
     const started = await this.driver.waitForFunction(progressExpr, 15_000, 500);
-    const settled = await this.driver.waitForFunction(
-      `(() => {
-        const text = document.body?.innerText || '';
-        if (new RegExp(${JSON.stringify(failedPattern)}).test(text)) return true;
-        if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
-        return ${started ? `!(${progressExpr})` : "false"};
-      })()`,
-      UPLOAD_TIMEOUT,
-      1_000,
-    );
+
+    // 「进度标记消失」这一条必须**连续数拍都成立**才算数。B 站的进度区文案是跳变的
+    // (百分比、速度、剩余时间轮换),单拍不匹配太常见——按单拍判定会在上传刚开始几秒就误判完成,
+    // 然后带着没传完的视频去点投稿,而 B 站此时点投稿是**静默无反应**的,查起来极难。
+    const STABLE_POLLS = 3;
+    const stateExpr = `(() => {
+      const text = document.body?.innerText || '';
+      if (new RegExp(${JSON.stringify(failedPattern)}).test(text)) return 'failed';
+      if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return 'done-text';
+      return ${started ? `(${progressExpr}) ? 'in-progress' : 'quiet'` : "'no-signal'"};
+    })()`;
+    const deadline = Date.now() + UPLOAD_TIMEOUT;
+    let quietPolls = 0;
+    let settleReason = "";
+    let settled = false;
+    while (Date.now() < deadline) {
+      const state = await this.driver.evaluate<string>(stateExpr).catch(() => "unknown");
+      if (state === "failed" || state === "done-text") {
+        settleReason = state;
+        settled = true;
+        break;
+      }
+      quietPolls = state === "quiet" ? quietPolls + 1 : 0;
+      if (quietPolls >= STABLE_POLLS) {
+        settleReason = `quiet x${quietPolls}`;
+        settled = true;
+        break;
+      }
+      await wait(1_000);
+    }
     if (!settled) {
       // 带上进度区文案:B 站改版导致信号失配时,一眼能看出该改哪个 pattern。
       const seen = await this.driver
@@ -824,7 +844,7 @@ export class BilibiliAdapter implements PublishAdapter {
       plog("uploadVideo not settled, page text:", JSON.stringify(seen));
       throw new Error("Bilibili upload did not complete in time.");
     }
-    plog("uploadVideo settled:", { started });
+    plog("uploadVideo settled:", { started, reason: settleReason });
     if (
       await this.driver.waitForFunction(
         `new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`,
@@ -908,7 +928,40 @@ export class BilibiliAdapter implements PublishAdapter {
         texts: [...PROCESSING_TEXTS, ...this.s.publishDoneTexts, ...this.s.uploadFailedTexts],
         urlPattern: MANAGE_URL_PATTERNS.bilibili,
       }),
+      snapshot: () => this.submitSnapshot(),
     });
+  }
+
+  /**
+   * 「点到了却没反应」时的页面现场。
+   *
+   * 已知不是点击侧的问题:落点自检显示元素可见、未禁用、elementFromPoint 命中的正是它自己,
+   * 可信指针点击与 el.click() 都送达过。那答案只可能在页面上,而后台视图截不到图,只能取文本:
+   *  - 上传是否真的完成(B 站在上传未完成时点投稿是**静默无反应**的,这是首要怀疑);
+   *  - 是否有校验提示/错误浮层(我们的受理判定认不出的那种);
+   *  - 提交元素自身的状态(它是个 span,禁用态可能只体现在 class/cursor 上)。
+   */
+  private async submitSnapshot(): Promise<unknown> {
+    return this.driver
+      .evaluate(
+        `(() => {
+          const text = (document.body && document.body.innerText) || '';
+          const el = document.querySelector(${JSON.stringify(this.s.submitButton)});
+          const cs = el ? getComputedStyle(el) : null;
+          const pick = (re) => { const m = text.match(re); return m ? m[0] : null; };
+          return {
+            uploadDone: /上传完成|上传成功/.test(text),
+            uploadProgress: pick(/(上传中|正在上传)[^\\n]{0,24}|\\d+%/),
+            hint: pick(/[^\\n]{0,40}(请|不能|不可|失败|错误|未|需要|超过|重复)[^\\n]{0,40}/),
+            submitOuter: el ? el.outerHTML.slice(0, 160) : null,
+            submitCursor: cs ? cs.cursor : null,
+            submitPointerEvents: cs ? cs.pointerEvents : null,
+            parentClass: el && el.parentElement ? String(el.parentElement.className).slice(0, 80) : null,
+            textTail: text.slice(-260),
+          };
+        })()`,
+      )
+      .catch((error: unknown) => ({ evaluateFailed: String(error).slice(0, 120) }));
   }
 
   async waitResult(): Promise<void> {

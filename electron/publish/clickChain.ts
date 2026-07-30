@@ -118,6 +118,14 @@ export async function commitClick(opts: {
   what: string;
   attempts: readonly ClickAttempt[];
   accepted: () => Promise<boolean>;
+  /**
+   * 点了但没反应时,记下当时的页面现场。
+   *
+   * 「元素找到了、可见、未禁用、落点也命中它,点下去却毫无反应」这种情况,光靠点击侧的信息是查不动的
+   * ——真相在页面上(校验没过的提示、上传其实没完成、平台弹了别的东西)。而后台视图截不到图
+   * (capturePage 对未参与合成的视图返回空图),所以只能靠文本快照。
+   */
+  snapshot?: () => Promise<unknown>;
 }): Promise<string> {
   const tried: string[] = [];
   let clickedAny = false;
@@ -140,6 +148,12 @@ export async function commitClick(opts: {
       return attempt.label;
     }
     plog(`${opts.what}: no reaction, trying next after`, attempt.label);
+    if (opts.snapshot) {
+      const state = await opts
+        .snapshot()
+        .catch((error: unknown) => ({ snapshotFailed: String(error).slice(0, 120) }));
+      plog(`${opts.what}: page state`, JSON.stringify(state));
+    }
   }
   throw new CommitClickError(opts.what, clickedAny, tried);
 }

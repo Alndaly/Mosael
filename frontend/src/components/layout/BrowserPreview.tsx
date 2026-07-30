@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2, MonitorPlay, X } from "lucide-react";
+import { Loader2, MonitorPlay, Square, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 
@@ -13,7 +13,10 @@ import { useI18n } from "@/app/preferences";
 export function BrowserPreview() {
   const t = useI18n();
   const [frame, setFrame] = React.useState<LiveViewFrame | null>(null);
-  const [dismissed, setDismissed] = React.useState(false);
+  // 关掉的是**哪一个会话**。此前存的是布尔值并在每帧 setDismissed(false),而发布任务是 1 帧/秒 ——
+  // 于是点了 X 会在下一帧被撤销,面板根本关不掉。改成记住被关掉的 sessionId:同一条任务后续的帧
+  // 一律不再弹出,换了别的会话(新任务)才重新出现。
+  const [dismissedSession, setDismissedSession] = React.useState<string | null>(null);
   const hideTimer = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -21,7 +24,6 @@ export function BrowserPreview() {
     if (!bridge) return;
     const off = bridge.onFrame((next) => {
       setFrame(next);
-      setDismissed(false);
       if (hideTimer.current) window.clearTimeout(hideTimer.current);
       hideTimer.current = window.setTimeout(() => setFrame(null), 3000);
     });
@@ -31,7 +33,8 @@ export function BrowserPreview() {
     };
   }, []);
 
-  if (!frame || dismissed) return null;
+  if (!frame || frame.sessionId === dismissedSession) return null;
+  const settled = frame.settled === true;
   return (
     <div className="fixed bottom-4 right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-raised)]">
       <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
@@ -47,7 +50,7 @@ export function BrowserPreview() {
           type="button"
           className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
           aria-label={t("close")}
-          onClick={() => setDismissed(true)}
+          onClick={() => setDismissedSession(frame.sessionId)}
         >
           <X size={12} />
         </button>
@@ -59,8 +62,13 @@ export function BrowserPreview() {
         // 整块消失反而更糟:那正是用户以为「卡死了」的时刻,更需要看到它还在跑。
         <div className="grid gap-1 px-2.5 py-3">
           <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-            <Loader2 size={12} className="animate-openstudio-spin" />
-            <span>{t("browserPreviewNoPixels")}</span>
+            {/* 终态(成功/失败)就别再转圈了 —— 之前「失败」配着「后台运行中」的正文自相矛盾。 */}
+            {settled ? (
+              <Square size={12} className="shrink-0" />
+            ) : (
+              <Loader2 size={12} className="animate-openstudio-spin" />
+            )}
+            <span>{settled ? t("browserPreviewNoPixelsDone") : t("browserPreviewNoPixels")}</span>
           </div>
           {frame.url && <div className="truncate text-[11px] text-muted-foreground/80">{frame.url}</div>}
         </div>

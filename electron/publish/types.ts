@@ -38,6 +38,8 @@ export interface LiveViewFrame {
   /** 当前步骤,如「B站 · 上传视频」。发布任务会带,RPA 会话不带。 */
   label?: string;
   url?: string;
+  /** 已到终态(成功/失败)。面板据此停掉「运行中」的转圈,免得「失败」配着「后台运行中」自相矛盾。 */
+  settled?: boolean;
 }
 
 export const EMBED_HEADER_HEIGHT = 48;
