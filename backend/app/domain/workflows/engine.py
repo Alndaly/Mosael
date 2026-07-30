@@ -219,6 +219,14 @@ def execute_graph(
                 if job.status == "failed":
                     cancelled = True
                     event("workflow.cancelled", {"pending": len(futures)})
+                    # 在飞的节点必须补一条终态事件再走。否则它们只有 started 没有收尾,
+                    # 前端(WorkflowRunHistory.toSteps 按 started/finished 配对)会把它们永远
+                    # 停在 running —— 转圈不停、耗时按「现在 − 开始」一直往上走(线上见过 95590s)。
+                    for pending_nid in futures.values():
+                        event(
+                            "workflow.node.failed",
+                            {"node_id": pending_nid, "name": node_label(pending_nid), "error": "已取消"},
+                        )
                     break
             completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
             for future in completed:

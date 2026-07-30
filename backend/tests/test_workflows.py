@@ -780,6 +780,23 @@ def test_cancel_running_workflow() -> None:
     again = client.post(f"/api/jobs/{job_id}/cancel")
     assert again.status_code == 409
 
+    # 在飞的节点必须有终态事件:只有 started 没有收尾的话,前端(按 started/finished 配对)
+    # 会把它永远显示成运行中,耗时按「现在 − 开始」一直往上走。
+    events = client.get(f"/api/jobs/{job_id}/events").json()
+    by_node: dict[str, set[str]] = {}
+    for e in events:
+        nid = (e.get("payload") or {}).get("node_id")
+        if nid:
+            by_node.setdefault(nid, set()).add(e["type"])
+    assert "slow" in by_node, f"没有 slow 节点的事件: {[e['type'] for e in events]}"
+    assert by_node["slow"] & {"workflow.node.finished", "workflow.node.failed"}, (
+        f"取消时在飞的节点没有终态事件: {by_node['slow']}"
+    )
+    # 事件按时间**正序**返回,且早期事件不被截断(旧实现取最新 30 条,会把开头的 started 挤掉)
+    assert [e["created_at"] for e in events] == sorted(e["created_at"] for e in events)
+    assert any(e["type"] == "workflow.node.started" and (e.get("payload") or {}).get("node_id") == "start"
+               for e in events), "最早的节点事件被截断了"
+
 def test_parallel_fanout_and_join() -> None:
     """纯分流并发:start 拉两条控制边到 a/b(都跑),再各拉一条到 join(join 只跑一次、在两者之后)。"""
     client = fresh_client()

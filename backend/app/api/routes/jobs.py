@@ -71,7 +71,13 @@ def cancel_job_route(job_id: str, db: DbSession, user: CurrentUser) -> Job:
 
 
 @router.get("/jobs/{job_id}/events", response_model=list[TaskEventOut])
-def list_job_events(job_id: str, db: DbSession, user: CurrentUser) -> list[TaskEvent]:
+def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 500) -> list[TaskEvent]:
+    """一次运行的事件流(按时间正序)。
+
+    上限按**最早**截断,不是最新 30 条。工作流详情靠 workflow.node.started / finished 配对还原
+    每个节点的状态,取最新 N 条会把早期的 started 挤掉 —— 表现为「旧任务只剩最后一个节点、
+    前面的步骤全没了」,而最后那个节点因为丢了 started 反而显示成一直在跑。
+    """
     job = db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -80,8 +86,8 @@ def list_job_events(job_id: str, db: DbSession, user: CurrentUser) -> list[TaskE
         db.scalars(
             select(TaskEvent)
             .where(TaskEvent.job_id == job_id)
-            .order_by(TaskEvent.created_at.desc())
-            .limit(30)
+            .order_by(TaskEvent.created_at.asc())
+            .limit(max(1, min(limit, 2000)))
         )
     )
-    return list(reversed(events))
+    return events

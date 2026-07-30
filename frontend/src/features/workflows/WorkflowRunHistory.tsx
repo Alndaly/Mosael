@@ -101,6 +101,15 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
     enabled: !!selectedId,
     refetchInterval: selected && RUNNING.has(selected.status) ? 1500 : false,
   });
+  // 运行**结束后**必须再拉一次。轮询是「run 还在跑才开」,而 run 的状态先翻成终态、最后那批
+  // node.finished 事件随后才落库 —— 只靠轮询会停在结束前的那张快照上,最后一个节点(通常是最慢的
+  // 那个)于是永远显示在转圈。用 run 的终态 + updated_at 当依赖,翻终态时补一次。
+  const settledKey = selected && !RUNNING.has(selected.status) ? `${selected.id}:${selected.updated_at}` : null;
+  React.useEffect(() => {
+    if (settledKey) void events.refetch();
+    // events.refetch 引用稳定由 react-query 保证
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledKey]);
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
 
   // 数据 2s 一轮询,但耗时显示要每秒走字:运行中的 run/节点用 now 与开始时间实时求差,

@@ -445,7 +445,13 @@ export class PageDriver {
           : 'null';
         return {
           x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight,
-          hit: Boolean(at && (at === el || el.contains(at) || at.contains(el))),
+          // 命中 = 落点上是目标**本身或它的后代**。
+          //
+          // 不能把「祖先包含目标」也算命中(原来还有一条 at.contains(el)):祖先包含目标恰恰说明
+          // 点击落到了目标**之外**,而 <html>/<body> 包含一切,于是任何脱靶都会被判成命中。
+          // 线上真踩过:B 站提交按钮的落点上 elementFromPoint 返回的是 <html>,护栏照样放行,
+          // 于是可信点击空发一次、白等 8 秒才降级 —— 本该当场抛错、立刻换下一种点法。
+          hit: Boolean(at && (at === el || el.contains(at))),
           at: describe(at), target: describe(el),
           disabled: Boolean(el.disabled) || el.getAttribute('aria-disabled') === 'true'
             || /disabled/.test(String(el.className || '')),
@@ -467,7 +473,13 @@ export class PageDriver {
     // 点不到就别假装点了:抛出去让调用方走 el.click() 一类不受遮挡影响的兜底,
     // 而不是打一发空枪再等五分钟超时。
     if (!found.hit) {
-      throw new Error(`pointerClickCss: point is covered by ${found.at} (target ${found.target})`);
+      // 两种情况要分开说:落点上压根没有元素(元素在视口之外 / 页面没绘制到那儿),
+      // 和落点被别的元素盖住 —— 排查时的下一步完全不同。
+      throw new Error(
+        found.at === "null"
+          ? `pointerClickCss: nothing at click point (target ${found.target} is outside the viewport?)`
+          : `pointerClickCss: point is covered by ${found.at} (target ${found.target})`,
+      );
     }
     if (found.disabled) {
       throw new Error(`pointerClickCss: target is disabled: ${found.target}`);
