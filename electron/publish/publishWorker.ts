@@ -665,6 +665,16 @@ export function viewReload(): void {
 }
 
 /** 收起内嵌视图,把窗口还给 React UI。 */
+/** 渲染层拖动/缩放悬浮面板后落到这里(几何由主进程持有:layout() 要用,还要落盘)。 */
+export function setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): void {
+  views?.setPanelLayout(patch);
+}
+
+/** 手动关闭某块悬浮面板:只撤面板,任务/会话照常继续跑(它不依赖面板)。 */
+export function closePanel(id: string): void {
+  views?.panelDetach(id);
+}
+
 export function hidePublishView(): void {
   views?.hide();
 }

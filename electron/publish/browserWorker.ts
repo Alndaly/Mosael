@@ -13,6 +13,12 @@ import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
 
 const IDLE_MS = 1200;
+/**
+ * 会话面板的空闲自动关闭时长。智能体用完浏览器往往**不发 close 动作**就去干别的了,面板就会一直
+ * 占着;每个动作 touch 一次,超过这个时长没动作就自动撤。发布任务不设这个(它在 finally 里显式撤)——
+ * 因为发布会在 waitResult 里合理地静默十几分钟,按空闲扫会把还在跑的任务收掉。
+ */
+const PANEL_IDLE_MS = 90_000;
 const BUSY_MS = 150;
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -73,10 +79,12 @@ async function handleAction(action: ClaimedAction): Promise<void> {
     const driver = views.registerSession(action.session_id, action.partition);
     // 挂成右下角面板:用户能看见智能体在做什么,同时视图获得真实布局与命中测试(可信输入的前提)。
     // 挂不上(面板已达上限 / 宿主窗口没了)不影响执行 —— RPA 动作走的是 DOM 事件,不依赖布局。
-    if (!panelled.has(action.session_id) && views.panelAttach(action.session_id)) {
+    if (!panelled.has(action.session_id) && views.panelAttach(action.session_id, { idleMs: PANEL_IDLE_MS })) {
       panelled.add(action.session_id);
       plog("browser session panelled:", action.session_id);
     }
+    views.touchPanel(action.session_id); // 刷新空闲计时
+
 
     const outcome = await executeBrowserAction(driver, action.action, action.args);
     await browserBackend.report(action.id, {

@@ -74,6 +74,13 @@ const PANEL = {
  */
 const MAX_PANELS = 4;
 
+/** 面板最小尺寸:再小就既看不清、也让标题条上的手柄挤成一团。 */
+const PANEL_MIN = { width: 240, height: 160 } as const;
+/** 空闲清扫的检查间隔。 */
+const IDLE_SWEEP_MS = 5_000;
+/** 用户拖动/缩放后的面板几何存这儿,重启后接着用。 */
+const LAYOUT_FILE = "panel-layout.json";
+
 const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
@@ -106,6 +113,26 @@ export class AccountViewManager {
   private names = new Map<string, string>();
   // 正在以悬浮面板形式挂载的账号,按挂载顺序 —— 决定叠放次序(后挂的在上)。
   private panels: string[] = [];
+  /**
+   * 用户拖动/缩放后的面板几何。x/y 为 null 表示「贴右下角」(默认),拖过之后就记住绝对位置。
+   * 卡片堆仍从这个锚点向上错开。
+   */
+  private panelLayout: { x: number | null; y: number | null; width: number; height: number } = {
+    x: null,
+    y: null,
+    width: PANEL.width,
+    height: PANEL.height,
+  };
+  /**
+   * 自动关闭:面板 → 允许空闲多久(毫秒)。
+   *
+   * **不能用「页面没动」当空闲判据** —— 发布任务在 waitResult 里合理地静默十几分钟(B 站在后台
+   * 转码审核),按页面活动扫会把还在跑的任务的面板收掉。所以空闲由**所有者主动 touch** 表达:
+   * 发布任务不设超时(它在 finally 里显式撤面板),RPA 会话设超时(智能体可能永远不发 close)。
+   */
+  private panelIdleMs = new Map<string, number>();
+  private panelTouchedAt = new Map<string, number>();
+  private idleTimer: ReturnType<typeof setInterval> | null = null;
   private window: BaseWindow | null = null;
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
@@ -119,6 +146,8 @@ export class AccountViewManager {
     this.window = window;
     this.nameOf = nameResolver;
     window.on("resize", () => this.layout());
+    this.loadPanelLayout();
+    if (!this.idleTimer) this.idleTimer = setInterval(() => this.sweepIdlePanels(), IDLE_SWEEP_MS);
   }
 
   getDriver(accountId: string): PageDriver {
@@ -226,7 +255,7 @@ export class AccountViewManager {
    * 挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
    * 见 PANEL 常量的说明。已在前台全屏显示的账号不动它(它本来就在合成)。
    */
-  panelAttach(accountId: string): boolean {
+  panelAttach(accountId: string, opts?: { idleMs?: number }): boolean {
     if (!this.window || this.window.isDestroyed() || this.visibleId === accountId) {
       return false;
     }
@@ -234,11 +263,86 @@ export class AccountViewManager {
       if (this.panels.length >= MAX_PANELS) return false; // 见 MAX_PANELS:超额不挂,但任务照跑
       this.panels.push(accountId);
     }
+    if (opts?.idleMs) this.panelIdleMs.set(accountId, opts.idleMs);
+    this.panelTouchedAt.set(accountId, Date.now());
     const { view } = this.ensure(accountId);
     this.window.contentView.addChildView(view);
-    view.webContents.setZoomFactor(AccountViewManager.panelZoom());
+    view.webContents.setZoomFactor(this.panelZoom());
     this.layout();
     return true;
+  }
+
+  /**
+   * 用户拖动/缩放面板后调这个。x/y 传绝对坐标(卡片左上角),不传则保持「贴右下角」。
+   * 会夹到窗口内并尊重最小尺寸,然后落盘,重启后接着用。
+   */
+  setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): void {
+    const next = { ...this.panelLayout };
+    if (patch.width !== undefined) next.width = Math.max(PANEL_MIN.width, Math.round(patch.width));
+    if (patch.height !== undefined) next.height = Math.max(PANEL_MIN.height, Math.round(patch.height));
+    if (patch.x !== undefined) next.x = Math.round(patch.x);
+    if (patch.y !== undefined) next.y = Math.round(patch.y);
+
+    if (this.window && !this.window.isDestroyed()) {
+      const [w, h] = this.window.getContentSize();
+      next.width = Math.min(next.width, w - PANEL.margin * 2);
+      next.height = Math.min(next.height, h - EMBED_HEADER_HEIGHT - PANEL.margin);
+      if (next.x !== null) next.x = Math.min(Math.max(0, next.x), Math.max(0, w - next.width));
+      if (next.y !== null) {
+        next.y = Math.min(Math.max(EMBED_HEADER_HEIGHT, next.y), Math.max(EMBED_HEADER_HEIGHT, h - next.height));
+      }
+    }
+    this.panelLayout = next;
+    // 尺寸变了 → 缩放要跟着变(布局视口必须恒为 layoutWidth),所以每块面板都补一次。
+    for (const id of this.panels) this.applyPanelZoom(id);
+    this.layout();
+    this.savePanelLayout();
+  }
+
+  /** 面板被用到了 —— 刷新空闲计时(自动关闭的判据由所有者主动 touch 表达,见 panelIdleMs)。 */
+  touchPanel(accountId: string): void {
+    if (this.panels.includes(accountId)) this.panelTouchedAt.set(accountId, Date.now());
+  }
+
+  /** 空闲超时的面板自动撤下(只对声明了 idleMs 的,比如 RPA 会话 —— 智能体可能永远不发 close)。 */
+  private sweepIdlePanels(): void {
+    const now = Date.now();
+    for (const accountId of [...this.panels]) {
+      const idleMs = this.panelIdleMs.get(accountId);
+      if (!idleMs) continue; // 没声明超时的(发布任务)由所有者自己撤
+      const touchedAt = this.panelTouchedAt.get(accountId) ?? now;
+      if (now - touchedAt > idleMs) {
+        console.info("[open-studio:view] panel auto-closed (idle)", { accountId, idleMs });
+        this.panelDetach(accountId);
+      }
+    }
+  }
+
+  private layoutFilePath(): string {
+    return path.join(app.getPath("userData"), LAYOUT_FILE);
+  }
+
+  private loadPanelLayout(): void {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.layoutFilePath(), "utf8")) as Partial<typeof this.panelLayout>;
+      // 只接受数值/null,并且照常过一遍 setPanelLayout 的夹取 —— 窗口尺寸可能比上次小。
+      this.setPanelLayout({
+        x: typeof raw.x === "number" ? raw.x : undefined,
+        y: typeof raw.y === "number" ? raw.y : undefined,
+        width: typeof raw.width === "number" ? raw.width : undefined,
+        height: typeof raw.height === "number" ? raw.height : undefined,
+      });
+    } catch {
+      /* 没存过 / 文件坏了:用默认的贴右下角 */
+    }
+  }
+
+  private savePanelLayout(): void {
+    try {
+      fs.writeFileSync(this.layoutFilePath(), JSON.stringify(this.panelLayout));
+    } catch {
+      /* 落盘失败不影响使用,下次重启回到默认位置而已 */
+    }
   }
 
   /** 该账号当前是否以悬浮面板形式挂着(挂上了才有真实布局,调用方据此决定是否还需要视口覆盖)。 */
@@ -246,9 +350,10 @@ export class AccountViewManager {
     return this.panels.includes(accountId);
   }
 
-  /** 面板模式的缩放:视图实际宽度 / 期望布局宽度。 */
-  private static panelZoom(): number {
-    return (PANEL.width - PANEL.inset * 2) / PANEL.layoutWidth;
+  /** 面板模式的缩放:视图实际宽度 / 期望布局宽度。用户缩放面板后这个值随之变化,
+   *  所以布局视口恒为 layoutWidth —— 平台页面永远按桌面版排版,不随面板大小掉进窄屏分支。 */
+  private panelZoom(): number {
+    return (this.panelLayout.width - PANEL.inset * 2) / PANEL.layoutWidth;
   }
 
   /** 把面板缩放重新设一遍。同源缩放策略下每次导航都要补,见 ensure() 里 sync 的说明。 */
@@ -256,7 +361,7 @@ export class AccountViewManager {
     if (this.visibleId === accountId || !this.panels.includes(accountId)) return;
     const view = this.views.get(accountId);
     if (!view || view.webContents.isDestroyed()) return;
-    const zoom = AccountViewManager.panelZoom();
+    const zoom = this.panelZoom();
     if (Math.abs(view.webContents.getZoomFactor() - zoom) > 1e-6) {
       view.webContents.setZoomFactor(zoom);
     }
@@ -266,6 +371,8 @@ export class AccountViewManager {
   panelDetach(accountId: string): void {
     const index = this.panels.indexOf(accountId);
     if (index >= 0) this.panels.splice(index, 1);
+    this.panelIdleMs.delete(accountId);
+    this.panelTouchedAt.delete(accountId);
     if (this.visibleId === accountId) return;
     const view = this.views.get(accountId);
     if (view) view.webContents.setZoomFactor(1);
@@ -361,6 +468,10 @@ export class AccountViewManager {
   }
 
   destroyAll(): void {
+    if (this.idleTimer) {
+      clearInterval(this.idleTimer);
+      this.idleTimer = null;
+    }
     for (const accountId of [...this.views.keys()]) {
       this.destroy(accountId);
     }
@@ -459,7 +570,10 @@ export class AccountViewManager {
     // 悬浮面板:右下角卡片堆,后挂的在上、每层向上错开一点,好看出同时有几路在跑。
     // 面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds 移出屏幕的视图视口是 0×0,
     // 布局与命中测试双双失效,可信输入就白费了。所以错开量有上限,不让底层被推出窗口。
-    const maxStack = Math.max(1, Math.floor((height - PANEL.height - PANEL.margin * 2) / PANEL.stackOffset) + 1);
+    const { width: cardW, height: cardH } = this.panelLayout;
+    const anchorX = this.panelLayout.x ?? Math.max(0, width - cardW - PANEL.margin);
+    const anchorY = this.panelLayout.y ?? Math.max(EMBED_HEADER_HEIGHT, height - cardH - PANEL.margin);
+    const maxStack = Math.max(1, Math.floor((anchorY - EMBED_HEADER_HEIGHT) / PANEL.stackOffset) + 1);
     const cards: PanelCard[] = [];
     this.panels.forEach((accountId, index) => {
       if (accountId === this.visibleId) return; // 已在前台全屏,别再按面板摆
@@ -469,10 +583,10 @@ export class AccountViewManager {
       // 卡片外廓:渲染层照这个矩形画圆角、边框、阴影和标题条。
       const card = {
         id: accountId,
-        x: Math.max(0, width - PANEL.width - PANEL.margin),
-        y: Math.max(EMBED_HEADER_HEIGHT, height - PANEL.height - PANEL.margin - depth * PANEL.stackOffset),
-        width: PANEL.width,
-        height: PANEL.height,
+        x: anchorX,
+        y: Math.max(EMBED_HEADER_HEIGHT, anchorY - depth * PANEL.stackOffset),
+        width: cardW,
+        height: cardH,
         header: PANEL.header,
         radius: PANEL.radius,
       };
@@ -481,8 +595,8 @@ export class AccountViewManager {
       view.setBounds({
         x: card.x + PANEL.inset,
         y: card.y + PANEL.header,
-        width: PANEL.width - PANEL.inset * 2,
-        height: PANEL.height - PANEL.header - PANEL.inset,
+        width: cardW - PANEL.inset * 2,
+        height: cardH - PANEL.header - PANEL.inset,
       });
     });
     this.onPanelsChanged(cards);

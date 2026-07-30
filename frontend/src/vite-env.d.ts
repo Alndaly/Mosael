@@ -27,6 +27,10 @@ interface OpenStudioPublishBridge {
   onViewState: (callback: (state: PublishViewState) => void) => () => void;
   /** 悬浮卡片几何(主进程按窗口尺寸/叠放算好),渲染层照它画圆角、阴影与标题条。 */
   onPanels?: (callback: (cards: LivePanelCard[]) => void) => () => void;
+  /** 拖动/缩放悬浮面板。x/y 是卡片左上角的绝对坐标;主进程会夹到窗口内并落盘。 */
+  setPanelLayout?: (patch: { x?: number; y?: number; width?: number; height?: number }) => Promise<void>;
+  /** 手动关闭某块面板:只撤面板,任务照常继续跑。 */
+  closePanel?: (id: string) => Promise<void>;
 }
 
 /**

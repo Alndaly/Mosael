@@ -12,6 +12,8 @@ export {
   viewForward,
   viewReload,
   hidePublishView,
+  setPanelLayout,
+  closePanel,
 } from "./publishWorker";
 // 浏览器自动化 worker(RPA / 智能体):与发布 worker 并列的第二个拉取循环。
 export { startBrowserWorker, stopBrowserWorker } from "./browserWorker";

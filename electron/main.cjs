@@ -407,6 +407,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("publish:forward", () => requirePublish().viewForward());
   ipcMain.handle("publish:reload", () => requirePublish().viewReload());
   ipcMain.handle("publish:hideView", () => requirePublish().hidePublishView());
+  // 悬浮面板:渲染层拖动/缩放/关闭。几何由主进程持有(layout() 要用,还要落盘)。
+  ipcMain.handle("publish:panelLayout", (_e, patch) => requirePublish().setPanelLayout(patch || {}));
+  ipcMain.handle("publish:closePanel", (_e, { id }) => requirePublish().closePanel(id));
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。
   ipcMain.handle("browser:openLogin", async (_e, { partition, url, name, proxy }) => {

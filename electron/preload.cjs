@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld("openStudioPublish", {
     return () => ipcRenderer.removeListener("publish:view", listener);
   },
   /** 悬浮卡片几何(见 main.cjs onPanels):渲染层照它画圆角/阴影/标题条。 */
+  /** 拖动/缩放悬浮面板(几何由主进程持有并落盘)。 */
+  setPanelLayout: (patch) => ipcRenderer.invoke("publish:panelLayout", patch),
+  /** 手动关闭某块面板:只撤面板,任务照常继续。 */
+  closePanel: (id) => ipcRenderer.invoke("publish:closePanel", { id }),
   onPanels: (callback) => {
     const listener = (_event, cards) => callback(cards);
     ipcRenderer.on("publish:panels", listener);
