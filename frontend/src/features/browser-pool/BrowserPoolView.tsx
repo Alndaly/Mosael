@@ -18,7 +18,7 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -313,7 +313,7 @@ function LoginUrlDialog({
   };
   return (
     <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolLoginTitle").replace("{name}", profile.name)}>
-      <div className="grid gap-2 p-3">
+      <div className="grid gap-2.5">
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -349,13 +349,13 @@ function CreateProfileDialog({
   const [proxy, setProxy] = React.useState("");
   return (
     <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolCreate")}>
-      <div className="grid gap-2 p-3">
-        <label className="grid gap-1 text-xs text-muted-foreground">
-          {t("poolNameLabel")}
+      <div className="grid gap-2.5">
+        <label className={DIALOG_FIELD}>
+          <span>{t("poolNameLabel")}</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("poolNamePlaceholder")} autoFocus />
         </label>
-        <label className="grid gap-1 text-xs text-muted-foreground">
-          {t("publishProxySet")}
+        <label className={DIALOG_FIELD}>
+          <span>{t("publishProxySet")}</span>
           <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" />
         </label>
         <div className="mt-1 flex justify-end gap-2">
@@ -386,7 +386,7 @@ function ProxyDialog({
   const [proxy, setProxy] = React.useState(initial);
   return (
     <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("publishProxySet")}>
-      <div className="grid gap-2 p-3">
+      <div className="grid gap-2.5">
         <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" autoFocus />
         <small className="text-[11px] text-muted-foreground">{t("poolProxyHint")}</small>
         <div className="mt-1 flex justify-end gap-2">

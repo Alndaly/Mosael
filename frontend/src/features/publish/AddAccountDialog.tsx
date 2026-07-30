@@ -6,12 +6,9 @@ import { toast } from "sonner";
 import { createPublishAccount, listPublishPlatforms, type PublishPlatform, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { ModalShell } from "@/components/app/modals";
+import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const FIELD =
-  "grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
 
 /** 添加发布账号(= 挂平台的浏览器池档案):选平台 + 配置 + 代理。归口「浏览器池」——账号的「增」和
  *  「管」都在池里,发布页专心做发布。建成后同时刷新 publish-accounts 与 browser-profiles 两处列表。 */
@@ -64,7 +61,7 @@ export function AddAccountDialog({
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishAccountAdd")}>
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <label className={FIELD}>
+        <label className={DIALOG_FIELD}>
           <span>{t("publishPlatform")}</span>
           <Select
             value={platform}
@@ -86,12 +83,12 @@ export function AddAccountDialog({
           </Select>
           {meta && <small>{meta.description}</small>}
         </label>
-        <label className={FIELD}>
+        <label className={DIALOG_FIELD}>
           <span>{t("publishAccountName")}</span>
           <Input value={name} placeholder={meta?.label} onChange={(event) => setName(event.target.value)} />
         </label>
         {configSpecs.map(([key, spec]) => (
-          <label className={FIELD} key={key}>
+          <label className={DIALOG_FIELD} key={key}>
             <span>
               {key}
               {spec?.required ? " *" : ""}
@@ -104,7 +101,7 @@ export function AddAccountDialog({
           </label>
         ))}
         {isBrowser && (
-          <label className={FIELD}>
+          <label className={DIALOG_FIELD}>
             <span>{t("publishProxy")}</span>
             <Input
               value={proxy}
