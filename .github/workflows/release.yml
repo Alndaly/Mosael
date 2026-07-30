@@ -96,6 +96,7 @@ jobs:
       - name: Build frontend / sidecar / publisher / backend
         run: |
           pnpm build:publisher
+          pnpm build:system
           pnpm build:frontend
           pnpm build:sidecar
           pnpm build:backend

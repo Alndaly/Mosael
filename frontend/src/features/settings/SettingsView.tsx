@@ -465,6 +465,34 @@ function profileKey(profile: { username: string; display_name: string; signature
   return `${profile.username}\n${profile.display_name}\n${profile.signature}`;
 }
 
+/** 开机自启(仅桌面端渲染,且开发模式下主进程不暴露——那时 execPath 是裸 Electron)。
+ *  和「关窗收进托盘」是一对:后者让应用关窗后还活着,前者让它开机就活着。定时任务依赖
+ *  后端进程存活(后端是主进程 spawn 的子进程),两者缺一,到点就不会触发。 */
+function StartupRow() {
+  const t = useI18n();
+  const get = window.openStudioDesktop?.getOpenAtLogin;
+  const set = window.openStudioDesktop?.setOpenAtLogin;
+  // null = 还没问到;false/true = 支持且当前值;"unsupported" = 主进程说这个环境不提供
+  // (开发模式:execPath 是裸 Electron,写进登录项会污染开发机)。
+  const [enabled, setEnabled] = React.useState<boolean | null | "unsupported">(null);
+  React.useEffect(() => {
+    if (!get) return;
+    void get().then((value) => setEnabled(value === null || value === undefined ? "unsupported" : value));
+  }, [get]);
+  if (!get || !set || enabled === "unsupported") return null;
+  return (
+    <SettingsRow label={t("settingsStartup")} description={t("settingsStartupDesc")}>
+      <Switch
+        checked={enabled ?? false}
+        disabled={enabled === null}
+        // 用系统回读的值落地,而不是乐观置位:写登录项可能被系统策略拒绝(受管理的设备上
+        // 常见),那时开关该弹回去,而不是显示成开着、实际没生效。
+        onCheckedChange={(next) => void set(next).then((value) => setEnabled(value ?? "unsupported"))}
+      />
+    </SettingsRow>
+  );
+}
+
 /** 检查更新(仅桌面端渲染):查 GitHub Releases 比对版本,发现新版给「查看」入口。
  *  未签名的 mac 包装不了静默自动安装,这里是诚实的降级——提示 + 打开发布页。 */
 function UpdateCheckButton() {
@@ -742,6 +770,7 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
         <SettingsRow label={t("settingsWorkspace")} description={t("settingsWorkspaceDesc")}>
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{workspace.id}</code>
         </SettingsRow>
+        <StartupRow />
         <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">v{__APP_VERSION__}</code>
           <UpdateCheckButton />

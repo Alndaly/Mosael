@@ -53,6 +53,16 @@ try {
   console.warn("[publish] 执行器加载失败(electron/publish.bundle.cjs 是否已构建?):", e.message);
 }
 
+// 系统能力层(托盘 / 常驻 / 开机自启 / 防睡眠):同样是 esbuild 单文件 bundle,同样不挡启动
+// —— 托盘建不出来时应用还能正常用,只是退化成「关窗即退」的老行为。
+let system = null;
+let systemHandle = null;
+try {
+  system = require("./system.bundle.cjs");
+} catch (e) {
+  console.warn("[system] 系统能力加载失败(electron/system.bundle.cjs 是否已构建?):", e.message);
+}
+
 function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
@@ -494,14 +504,48 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // 系统能力:窗口建好之后再注册(residency 要挂到窗口的 close 上)。
+  if (system) {
+    const showWindow = () => {
+      let win = BrowserWindow.getAllWindows()[0];
+      if (!win || win.isDestroyed()) {
+        createWindow();
+        win = BrowserWindow.getAllWindows()[0];
+      }
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    };
+    systemHandle = system.registerSystemCapabilities({
+      getWindow: () => BrowserWindow.getAllWindows()[0] ?? null,
+      showWindow,
+      isDev,
+      iconPath: path.join(__dirname, "..", "build", "icon.png"),
+    });
+    // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
+    ipcMain.on("system:status", (_e, status) => systemHandle?.pushStatus(status || {}));
+    // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
+    // dev 下 process.execPath 是 Electron 二进制,写进登录项等于让开发机开机启动一个裸 Electron。
+    ipcMain.handle("system:getOpenAtLogin", () => (isDev ? null : system.getOpenAtLogin()));
+    ipcMain.handle("system:setOpenAtLogin", (_e, enabled) => (isDev ? null : system.setOpenAtLogin(Boolean(enabled))));
+
+    // 开机自启拉起时静默驻留托盘,不弹窗口。
+    if (system.isHiddenLaunch()) BrowserWindow.getAllWindows()[0]?.hide();
+  }
 });
 
+// 关窗不退:窗口只是隐藏(见 system/residency),托盘是应用还活着的可见入口。定时任务
+// 依赖后端进程活着,而后端是主进程 spawn 的子进程 —— 以前这里 app.quit() 等于「关窗就把
+// 定时任务一起关了」。系统能力没加载成功时退回老行为,否则应用会变成关不掉的幽灵进程。
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (!system && process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
   quitting = true;
+  systemHandle?.dispose();
   stopBackend();
 });
 

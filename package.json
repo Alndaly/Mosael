@@ -11,14 +11,15 @@
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name open-studio-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on run_backend.py",
-    "build:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
-    "dist:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
+    "build:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
+    "dist:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
     "dev:backend": "cd backend && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port ${OPEN_STUDIO_BACKEND_PORT:-8800} --reload",
     "dev": "pnpm --dir frontend electron:dev",
     "fetch:tts-python": "node scripts/fetch-tts-python.mjs",
-    "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json"
+    "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json",
+    "build:system": "esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -41,7 +42,8 @@
     "files": [
       "electron/**",
       "frontend/dist/**",
-      "package.json"
+      "package.json",
+      "build/icon.png"
     ],
     "extraResources": [
       {

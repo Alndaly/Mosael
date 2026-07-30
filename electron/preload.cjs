@@ -16,6 +16,11 @@ ipcRenderer.on("openstudio:fullscreen", (_event, value) => {
 contextBridge.exposeInMainWorld("openStudioDesktop", {
   platform: process.platform,
   setTitleOverlay: (colors) => ipcRenderer.send("openstudio:title-overlay", colors),
+  // 系统能力:reportStatus 把「有几个任务在跑」推给主进程(托盘文案 + 有任务时阻止系统睡眠)。
+  // 只推、不问 —— 系统层不认识后端,业务状态由知道它的这一侧负责告知。
+  reportStatus: (status) => ipcRenderer.send("system:status", status),
+  getOpenAtLogin: () => ipcRenderer.invoke("system:getOpenAtLogin"),
+  setOpenAtLogin: (enabled) => ipcRenderer.invoke("system:setOpenAtLogin", enabled),
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => ipcRenderer.invoke("openstudio:check-updates"),
   onUpdateAvailable: (callback) => {

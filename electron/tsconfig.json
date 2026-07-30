@@ -9,7 +9,10 @@
     "noEmit": true,
     "strict": true,
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "skipLibCheck": true,
@@ -17,7 +20,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "typeRoots": ["../frontend/node_modules/@types"]
+    "typeRoots": [
+      "../frontend/node_modules/@types"
+    ]
   },
-  "include": ["publish/**/*.ts"]
+  "include": [
+    "publish/**/*.ts",
+    "system/**/*.ts"
+  ]
 }

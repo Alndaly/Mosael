@@ -83,6 +83,13 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     setDetailJob(null);
   };
 
+  // 把「有几个任务在跑」推给桌面端(托盘文案 + 有任务时阻止系统睡眠)。放这里是因为这个组件
+  // 本来就在按活跃度自适应轮询 /api/jobs,不必为此再拉一个查询;也因为方向必须是「知道业务的
+  // 这一侧告诉系统层」,而不是让主进程反过来查后端。
+  React.useEffect(() => {
+    window.openStudioDesktop?.reportStatus?.({ runningJobs: active.length });
+  }, [active.length]);
+
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
   // 首次加载时只记录基线,避免刷新后把历史任务全部弹一遍。
   const prevStatuses = React.useRef<Map<string, string> | null>(null);

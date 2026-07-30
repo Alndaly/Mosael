@@ -83,5 +83,9 @@ interface Window {
     onFullscreen?: (callback: (fullscreen: boolean) => void) => () => void;
     checkUpdates?: () => Promise<OpenStudioUpdateInfo>;
     onUpdateAvailable?: (callback: (info: OpenStudioUpdateInfo) => void) => () => void;
+    /** 把运行中的任务数推给主进程:托盘文案 + 有任务时阻止系统睡眠。 */
+    reportStatus?: (status: { runningJobs: number }) => void;
+    getOpenAtLogin?: () => Promise<boolean | null>;
+    setOpenAtLogin?: (enabled: boolean) => Promise<boolean | null>;
   };
 }
