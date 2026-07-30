@@ -47,6 +47,12 @@ contextBridge.exposeInMainWorld("openStudioPublish", {
     ipcRenderer.on("publish:view", listener);
     return () => ipcRenderer.removeListener("publish:view", listener);
   },
+  /** 悬浮卡片几何(见 main.cjs onPanels):渲染层照它画圆角/阴影/标题条。 */
+  onPanels: (callback) => {
+    const listener = (_event, cards) => callback(cards);
+    ipcRenderer.on("publish:panels", listener);
+    return () => ipcRenderer.removeListener("publish:panels", listener);
+  },
 });
 
 // 自动化浏览器(RPA / 智能体)的实时预览帧:离屏视图截帧,前端画成缩略预览。

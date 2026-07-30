@@ -25,6 +25,24 @@ interface OpenStudioPublishBridge {
   reload: () => Promise<void>;
   hideView: () => Promise<void>;
   onViewState: (callback: (state: PublishViewState) => void) => () => void;
+  /** 悬浮卡片几何(主进程按窗口尺寸/叠放算好),渲染层照它画圆角、阴影与标题条。 */
+  onPanels?: (callback: (cards: LivePanelCard[]) => void) => () => void;
+}
+
+/**
+ * 自动化任务悬浮卡片的几何。原生 WebContentsView 画不了圆角与阴影(Electron 32 的 View 只有
+ * setBackgroundColor / setBounds / setVisible),所以外壳由渲染层画在视图**下方** —— 子视图永远盖在
+ * 宿主页面之上,于是卡片的圆角边框会在内嵌视图的四周露出来。坐标是窗口内容区的 CSS 像素。
+ */
+interface LivePanelCard {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 顶部给标题条留出的高度 —— 原生视图从这条下面开始。 */
+  header: number;
+  radius: number;
 }
 
 /** 应用更新检查结果(Electron 主进程查 GitHub Releases)。 */

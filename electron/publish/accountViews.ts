@@ -40,15 +40,32 @@ export function migrateLegacyPartitionDir(partition: string): void {
 /**
  * 后台任务的「悬浮面板」几何。
  *
- * 面板 384×240 + zoomFactor 0.3 → 页面**布局视口是 1280×800**(384/0.3),也就是平台页面按桌面版
- * 排版,而显示只占右下角一小块。这不是美观取舍,是必要条件:面板若不缩放地做成 384 宽,B 站会
- * 渲染窄屏版布局,选择器与整个流程都会变。
+ * 卡片外廓 384×244,里面嵌一个内缩 4px、让出 26px 标题条的原生视图;缩放按「视图宽 / layoutWidth」
+ * 反算,于是页面**布局视口恒为 1280 宽**,平台页面按桌面版排版,显示只占右下角一小块。这不是美观
+ * 取舍,是必要条件:面板若不缩放地做成 384 宽,B 站会渲染窄屏版布局,选择器与整个流程都会变。
  *
  * 为什么要挂进窗口而不是留在后台:只有**参与合成**的视图才有真实布局和可用的命中测试 —— 挂上去
  * 之后真实指针输入(isTrusted=true)才生效,同时画面也是真的,不必再靠截图镜像。实测三个面板
  * 叠放(后加的压住先加的)时,被完全遮挡的那个照样有 1280×800 视口、照样能被可信点击命中。
  */
-const PANEL = { width: 384, height: 240, zoom: 0.3, margin: 16, stackOffset: 20 } as const;
+const PANEL = {
+  /** 卡片(含标题条与边框)的外廓尺寸。 */
+  width: 384,
+  height: 244,
+  /** React 在卡片顶部画的标题条高度 —— 原生视图从这条下面开始。 */
+  header: 26,
+  /** 视图四周相对卡片内缩。卡片圆角 R 时,内缩需 ≥ 0.293R 才不让视图的直角戳出圆弧;
+   *  R=12 → 3.5px,取 4px。原生 View 没有 setBorderRadius(Electron 32 只有 setBackgroundColor /
+   *  setBounds / setVisible),圆角与阴影只能由渲染层画在视图**下方**(子视图永远盖在宿主页面之上)。 */
+  inset: 4,
+  /** 卡片圆角,渲染层与这里必须一致(经 IPC 下发,见 emitPanels)。 */
+  radius: 12,
+  margin: 16,
+  stackOffset: 22,
+  /** 页面要按这个宽度布局(桌面版)。缩放由「视图实际宽度 / 这个值」反算,而不是写死 0.3 —— 卡片
+   *  尺寸一改,写死的比例就会让布局视口偏掉。 */
+  layoutWidth: 1280,
+} as const;
 
 /**
  * 同时挂载的面板上限。挂载的视图是真在合成的页面,不是免费的 —— 智能体可能开很多路会话,全挂上去
@@ -60,6 +77,17 @@ const MAX_PANELS = 4;
 const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
+
+/** 悬浮卡片的几何,下发给渲染层去画圆角/阴影/标题条(原生 View 画不了这些)。 */
+export interface PanelCard {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  header: number;
+  radius: number;
+}
 
 /**
  * Owns one embedded WebContentsView per account. Each view uses a persistent
@@ -82,7 +110,10 @@ export class AccountViewManager {
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
 
-  constructor(private readonly onViewChanged: (state: ViewState) => void = noop) {}
+  constructor(
+    private readonly onViewChanged: (state: ViewState) => void = noop,
+    private readonly onPanelsChanged: (cards: PanelCard[]) => void = () => undefined,
+  ) {}
 
   attachWindow(window: BaseWindow, nameResolver: (accountId: string) => string | null): void {
     this.window = window;
@@ -156,7 +187,7 @@ export class AccountViewManager {
     if (!this.window || this.window.isDestroyed()) {
       return;
     }
-    // 面板模式把 zoomFactor 压到 0.3;亮到前台必须还原成 1,否则整页缩成三成大小。
+    // 面板模式把 zoomFactor 压到不到三成;亮到前台必须还原成 1,否则整页缩成一小块。
     // zoomFactor 是**按 origin 持久化**的(实测会泄漏到同源的其它视图),所以必须显式设回。
     view.webContents.setZoomFactor(1);
     void driver.clearMetricsOverride();
@@ -205,7 +236,7 @@ export class AccountViewManager {
     }
     const { view } = this.ensure(accountId);
     this.window.contentView.addChildView(view);
-    view.webContents.setZoomFactor(PANEL.zoom);
+    view.webContents.setZoomFactor(AccountViewManager.panelZoom());
     this.layout();
     return true;
   }
@@ -213,6 +244,22 @@ export class AccountViewManager {
   /** 该账号当前是否以悬浮面板形式挂着(挂上了才有真实布局,调用方据此决定是否还需要视口覆盖)。 */
   isPanelled(accountId: string): boolean {
     return this.panels.includes(accountId);
+  }
+
+  /** 面板模式的缩放:视图实际宽度 / 期望布局宽度。 */
+  private static panelZoom(): number {
+    return (PANEL.width - PANEL.inset * 2) / PANEL.layoutWidth;
+  }
+
+  /** 把面板缩放重新设一遍。同源缩放策略下每次导航都要补,见 ensure() 里 sync 的说明。 */
+  private applyPanelZoom(accountId: string): void {
+    if (this.visibleId === accountId || !this.panels.includes(accountId)) return;
+    const view = this.views.get(accountId);
+    if (!view || view.webContents.isDestroyed()) return;
+    const zoom = AccountViewManager.panelZoom();
+    if (Math.abs(view.webContents.getZoomFactor() - zoom) > 1e-6) {
+      view.webContents.setZoomFactor(zoom);
+    }
   }
 
   /** 撤下悬浮面板。若期间它被 show() 亮到了前台,留着不动 —— 那是用户要看的。 */
@@ -359,11 +406,17 @@ export class AccountViewManager {
       // 地址/加载态变化 → 刷新工具栏(仅当前可见视图才广播)。
       const sync = () => {
         if (this.visibleId === accountId) this.emit();
+        // 导航后必须**重新**设一次面板缩放。Chromium 的缩放策略是 same-origin(Electron 文档原话:
+        // "The zoom policy at the Chromium level is same-origin"),所以挂面板时设的 0.3 只对当时那个
+        // 域名有效 —— 一 goto 到新域名就回到 1,页面按 1:1 渲染再被 384×240 裁掉,只能看见左上角一块。
+        // 线上就是这么表现的(百度导航栏字号正常、内容被切)。
+        this.applyPanelZoom(accountId);
       };
       view.webContents.on("did-navigate", sync);
       view.webContents.on("did-navigate-in-page", sync);
       view.webContents.on("did-start-loading", sync);
       view.webContents.on("did-stop-loading", sync);
+      view.webContents.on("did-finish-load", sync);
       view.setBackgroundColor("#ffffff");
       this.views.set(accountId, view);
       this.drivers.set(accountId, new PageDriver(view.webContents));
@@ -407,18 +460,32 @@ export class AccountViewManager {
     // 面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds 移出屏幕的视图视口是 0×0,
     // 布局与命中测试双双失效,可信输入就白费了。所以错开量有上限,不让底层被推出窗口。
     const maxStack = Math.max(1, Math.floor((height - PANEL.height - PANEL.margin * 2) / PANEL.stackOffset) + 1);
+    const cards: PanelCard[] = [];
     this.panels.forEach((accountId, index) => {
       if (accountId === this.visibleId) return; // 已在前台全屏,别再按面板摆
       const view = this.views.get(accountId);
       if (!view) return;
       const depth = Math.min(this.panels.length - 1 - index, maxStack - 1);
-      view.setBounds({
+      // 卡片外廓:渲染层照这个矩形画圆角、边框、阴影和标题条。
+      const card = {
+        id: accountId,
         x: Math.max(0, width - PANEL.width - PANEL.margin),
         y: Math.max(EMBED_HEADER_HEIGHT, height - PANEL.height - PANEL.margin - depth * PANEL.stackOffset),
         width: PANEL.width,
         height: PANEL.height,
+        header: PANEL.header,
+        radius: PANEL.radius,
+      };
+      cards.push(card);
+      // 原生视图嵌在卡片里:让出标题条,四周内缩,于是卡片的圆角边框在视图外侧露出来。
+      view.setBounds({
+        x: card.x + PANEL.inset,
+        y: card.y + PANEL.header,
+        width: PANEL.width - PANEL.inset * 2,
+        height: PANEL.height - PANEL.header - PANEL.inset,
       });
     });
+    this.onPanelsChanged(cards);
   }
 
   private emit(): void {
@@ -454,8 +521,11 @@ function normalizeAddress(input: string): string | null {
 // 问题要在两处分别解决(见已删除的 browserSessions.ts)。
 let shared: AccountViewManager | null = null;
 
-export function createSharedViews(onViewChanged?: (state: ViewState) => void): AccountViewManager {
-  shared = new AccountViewManager(onViewChanged);
+export function createSharedViews(
+  onViewChanged?: (state: ViewState) => void,
+  onPanelsChanged?: (cards: PanelCard[]) => void,
+): AccountViewManager {
+  shared = new AccountViewManager(onViewChanged, onPanelsChanged);
   return shared;
 }
 

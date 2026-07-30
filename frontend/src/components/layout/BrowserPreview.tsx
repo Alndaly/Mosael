@@ -4,12 +4,12 @@ import { Loader2, MonitorPlay, Square, X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 
 /**
- * 自动化任务的**步骤指示**。
+ * **没挂上悬浮面板**的自动化任务的进度条子。
  *
- * 画面本身不再由这里负责:发布任务与 RPA / 智能体会话的视图现在都挂成主窗口右下角的悬浮面板
- * (见 electron/publish/accountViews.ts 的 PANEL),用户看到的是**真实渲染的页面**,不是截图镜像。
- * 保留这个条子是因为画面看不出语义 —— 光看页面分不清「正在上传」和「卡住了」,步骤名才分得清;
- * 面板挂不上(超出上限 / 窗口没了)时它也是唯一的进度来源。dataUrl 因此现在通常是空的。
+ * 挂上了面板的任务由 LivePanels 负责:那是真实渲染的页面 + 卡片标题条上的步骤名。而面板有数量上限
+ * (见 accountViews 的 MAX_PANELS),超额的会话、以及宿主窗口不在时的任务,一个像素都拿不到 ——
+ * 那种情况下这个条子是唯一的进度来源,所以留着。已挂面板的会话在这里会被跳过,免得和卡片堆重叠。
+ * dataUrl 因此通常是空的(取像需要视图参与合成,而没挂面板就不合成)。
  * 停帧 ~3s 无新帧就淡出;可手动关掉。非 Electron 环境 window.openStudioBrowser 不存在,组件自然什么都不渲染。
  */
 export function BrowserPreview() {
@@ -20,6 +20,15 @@ export function BrowserPreview() {
   // 一律不再弹出,换了别的会话(新任务)才重新出现。
   const [dismissedSession, setDismissedSession] = React.useState<string | null>(null);
   const hideTimer = React.useRef<number | null>(null);
+  // 已挂面板的会话交给 LivePanels;这里只补它覆盖不到的那些。
+  const [panelled, setPanelled] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    const off = window.openStudioPublish?.onPanels?.((cards) =>
+      setPanelled(new Set(cards.map((card) => card.id))),
+    );
+    return () => off?.();
+  }, []);
 
   React.useEffect(() => {
     const bridge = window.openStudioBrowser;
@@ -35,10 +44,11 @@ export function BrowserPreview() {
     };
   }, []);
 
-  if (!frame || frame.sessionId === dismissedSession) return null;
+  if (!frame || frame.sessionId === dismissedSession || panelled.has(frame.sessionId)) return null;
   const settled = frame.settled === true;
   return (
-    <div className="fixed bottom-4 right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-raised)]">
+    <div style={{ bottom: panelled.size ? 16 + 244 + 12 : 16 }}
+      className="fixed right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-raised)]">
       <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
         <MonitorPlay size={13} className="shrink-0 text-primary" />
         <span className="shrink-0 text-[12px] font-semibold">{t("browserPreviewTitle")}</span>

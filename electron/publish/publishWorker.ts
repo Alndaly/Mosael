@@ -14,7 +14,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { tr } from "./i18n";
-import { createSharedViews, destroySharedViews, type AccountViewManager } from "./accountViews";
+import { createSharedViews, destroySharedViews, type AccountViewManager, type PanelCard } from "./accountViews";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
@@ -466,6 +466,8 @@ export function startPublishWorker(opts: {
   getAccountName?: (accountId: string) => string | null;
   onTaskSettled?: (info: SettleInfo) => void;
   onFrame?: (frame: LiveViewFrame) => void;
+  /** 悬浮卡片几何变化 —— 渲染层照它画圆角/阴影/标题条(原生 View 画不了)。 */
+  onPanels?: (cards: PanelCard[]) => void;
 }): void {
   if (views) return;
   stopped = false;
@@ -474,7 +476,7 @@ export function startPublishWorker(opts: {
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
   // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
-  views = createSharedViews(opts.onViewChanged);
+  views = createSharedViews(opts.onViewChanged, opts.onPanels);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/components/layout/BrowserPreview";
+import { LivePanels } from "@/components/layout/LivePanels";
 import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
@@ -85,6 +86,7 @@ export function App() {
                 <AppToaster />
                 <PublishViewBar />
                 <BrowserPreview />
+                <LivePanels />
               </ImagePreviewProvider>
             </AuthProvider>
           </TooltipProvider>
