@@ -75,6 +75,25 @@ async function typeOrFill(
   }
 }
 
+/**
+ * 按文案点击:**先可信、后降级**。
+ *
+ * pointerClickByText 发真实鼠标事件(isTrusted=true),但依赖真实布局与命中测试 —— 视图挂成悬浮面板
+ * 之后才具备(见 publishWorker 里 panelAttach 早于 openCreatorPage)。挂不上或被遮挡时它会**显式抛错**,
+ * 这里接住并退回 el.click():isTrusted 为 false,但点得到。
+ */
+async function clickTextPreferTrusted(
+  driver: PageDriver,
+  text: string,
+  options?: { exact?: boolean; selector?: string },
+): Promise<void> {
+  try {
+    await driver.pointerClickByText(text, options);
+  } catch {
+    await driver.clickByText(text, options);
+  }
+}
+
 const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
 
 const escapeHtml = (value: string): string =>
@@ -153,12 +172,10 @@ export class DouyinAdapter implements PublishAdapter {
     await this.driver.goto(this.s.uploadUrl);
     const uploadReady = await this.driver.fileInputAttached(this.s.fileInput, 6_000);
     if (!uploadReady && (await this.driver.hasText(TEXT_PUBLISH_VIDEO))) {
-      await this.driver
-        .clickByText(TEXT_PUBLISH_VIDEO, {
-          exact: true,
-          selector: "button, [role=button], a, div, span",
-        })
-        .catch(() => undefined);
+      await clickTextPreferTrusted(this.driver, TEXT_PUBLISH_VIDEO, {
+        exact: true,
+        selector: "button, [role=button], a, div, span",
+      }).catch(() => undefined);
     }
   }
 
@@ -253,6 +270,10 @@ export class DouyinAdapter implements PublishAdapter {
     await commitClick({
       what: "douyin submit",
       attempts: [
+        // 可信优先:真实鼠标事件(isTrusted=true)。视图已挂成悬浮面板,有真实布局与命中测试。
+        pointerAttempt(`pointer text ${this.s.submitText}`, () =>
+          this.driver.pointerClickByText(this.s.submitText, { exact: true }),
+        ),
         // 精确匹配优先,免得「发布」命中「定时发布」/「发布设置」;宽松匹配兜底(按钮文案可能带装饰)。
         domAttempt(`text ${this.s.submitText} (exact)`, () =>
           this.driver.clickByText(this.s.submitText, { exact: true }),
@@ -317,12 +338,10 @@ export class XiaohongshuAdapter implements PublishAdapter {
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.publishUrl);
     // Default tab is image-text; switch to the video uploader if present.
-    await this.driver
-      .clickByText(this.s.videoTabText, {
-        exact: true,
-        selector: "button, [role=button], a, div, span",
-      })
-      .catch(() => undefined);
+    await clickTextPreferTrusted(this.driver, this.s.videoTabText, {
+      exact: true,
+      selector: "button, [role=button], a, div, span",
+    }).catch(() => undefined);
   }
 
   async checkLogin(): Promise<boolean> {
@@ -425,11 +444,10 @@ export class XiaohongshuAdapter implements PublishAdapter {
       );
       const picked =
         (await this.clickTopicCandidate(normalizedTag)) ||
-        (await this.driver
-          .clickByText(TEXT_NEW_TOPIC, {
-            exact: true,
-            selector: "#creator-editor-topic-container *, [data-tippy-root] *, .tippy-content *",
-          })
+        (await clickTextPreferTrusted(this.driver, TEXT_NEW_TOPIC, {
+          exact: true,
+          selector: "#creator-editor-topic-container *, [data-tippy-root] *, .tippy-content *",
+        })
           .then(() => true)
           .catch(() => false));
       if (!picked) {
