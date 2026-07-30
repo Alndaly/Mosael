@@ -7,6 +7,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.core.permissions import ensure_workspace_access
 from app.db.models import ToolConfirmation
+from app.integrations.feishu.service import announce_confirmation
 from app.domain.agent.confirmations import (
     ConfirmationError,
     authorize_and_approve,
@@ -21,7 +22,7 @@ router = APIRouter(tags=["confirmations"])
 def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUser) -> ToolConfirmation:
     ensure_workspace_access(db, user, body.workspace_id)
     try:
-        return request_confirmation(
+        confirmation = request_confirmation(
             db,
             workspace_id=body.workspace_id,
             tool=body.tool,
@@ -31,6 +32,13 @@ def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUs
         )
     except ConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # 把新卡推到它该出现的地方(目前只有飞书:从飞书驱动的会话,卡片应当回到那个飞书会话)。
+    #
+    # 放在**路由层**而不是领域层:领域回调集成层会形成 confirmations ⇄ feishu.service 的循环
+    # 依赖,只能靠函数内延迟导入绕开。路由是组合层,认识集成层是它的本分。request_confirmation
+    # 全项目只有这一个调用方,所以挪上来覆盖面一点不减。
+    announce_confirmation(db, confirmation)
+    return confirmation
 
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])
