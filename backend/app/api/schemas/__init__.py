@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -478,6 +478,67 @@ class NotificationOut(OrmModel):
 class NotificationListOut(BaseModel):
     items: list[NotificationOut]
     unread: int
+
+
+class DeliveryKindOut(BaseModel):
+    """一种交付方式(folder / webhook):驱动前端表单与校验。"""
+
+    kind: str
+    label: str
+    description: str
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeliveryTargetCreate(BaseModel):
+    workspace_id: str
+    kind: str
+    name: str = ""
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeliveryTargetUpdate(BaseModel):
+    name: str | None = None
+    config: dict[str, Any] | None = None
+    enabled: bool | None = None
+
+
+class DeliveryTargetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    workspace_id: str
+    kind: str
+    name: str
+    config: dict[str, Any]
+    enabled: bool
+    created_at: datetime
+
+
+class DeliveryStartRequest(BaseModel):
+    workspace_id: str
+    target_id: str
+    asset_id: str
+    title: str = ""
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class DeliveryTaskOut(BaseModel):
+    id: str
+    workspace_id: str
+    target_id: str
+    target_name: str
+    kind: str
+    asset_id: str
+    asset_name: str
+    title: str
+    description: str
+    tags: list[str]
+    job_id: str | None
+    status: str
+    error: str | None
+    result: dict[str, Any]
+    created_at: datetime
 
 
 class LocalImportRequest(BaseModel):

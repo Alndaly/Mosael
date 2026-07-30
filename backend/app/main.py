@@ -34,6 +34,7 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
+from app.api.routes.delivery import router as delivery_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.job_worker import router as job_worker_router
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
     app.include_router(publish_router, prefix="/api", dependencies=protected)
+    app.include_router(delivery_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
