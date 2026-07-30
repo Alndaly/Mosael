@@ -2,12 +2,26 @@ packages:
   - "frontend"
   - "agent-sidecar"
 
+# 依赖的 install 脚本默认不跑(pnpm 的安全默认值),需要跑的在这里逐个点名。
+# 漏了会让 `pnpm install --frozen-lockfile` 直接失败(ERR_PNPM_IGNORED_BUILDS),CI 也一样,
+# 所以升级引入新的带脚本依赖时必须同步更新这里。
 allowBuilds:
-  '@google/genai': false
-  electron: true
-  esbuild: true
+  '@google/genai': false        # 只是 analytics 之类的 postinstall,不需要
+  electron: true                # 下载对应平台的 Electron 二进制
+  electron-winstaller: true     # electron-builder 26 引入;Windows NSIS 安装包要用
+  esbuild: true                 # 下载平台原生二进制
   protobufjs: false
 
 onlyBuiltDependencies:
   - electron
+  - electron-winstaller
   - esbuild
+
+# electron-builder 26.15.3 的依赖声明有缺陷:app-builder-lib 代码里用了
+# `ElectronDownloadCacheMode`(只存在于 @electron/get 5.x),依赖却声明成 `^3.0.0`。
+# 于是 pnpm 严格解析出 3.0.0,打包在 resolveCacheMode 处炸:
+#   TypeError: Cannot read properties of undefined (reading 'ReadWrite')
+# npm/yarn 的扁平化会碰巧提升到 5.x 而看不出问题,pnpm 会如实暴露。这里钉到 5.x。
+# electron-builder 修正声明后即可移除。
+overrides:
+  "@electron/get": "^5.1.0"
