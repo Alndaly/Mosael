@@ -113,6 +113,30 @@ export class CommitClickError extends Error {
  * 按序尝试各种点法,每点一次都确认受理;全部失败抛 CommitClickError。
  * 返回最终生效的那次尝试的 label。
  */
+/**
+ * 受理判定的**自检**:点击之前先量一次。
+ *
+ * 如果它在点击**之前**就已经为真,那它区分不了任何东西 —— 之后无论点没点、点成没成,它都会立刻
+ * 说「受理了」。线上踩过:B 站的受理判定里混进了 uploadFailedTexts,而其中的「重新上传」在上传完成后
+ * **永久显示**,于是 accepted 在点击后 1 毫秒就返回 true,这个验证等于没做。
+ *
+ * 这类「判定条件恒为真」的短路在这个项目里已经出现三次(uploadDoneTexts 的 querySelector 兜底、
+ * coverSelected 的泛选择器、这里的 uploadFailedTexts),所以做成通用自检:一旦发现,大声记日志,
+ * 并且**不再依据它重复点击**(否则会拿一个坏判定去重复投稿,代价比漏判大得多)。
+ */
+async function acceptancePreflight(
+  what: string,
+  accepted: () => Promise<boolean>,
+): Promise<boolean> {
+  const alreadyTrue = await accepted().catch(() => false);
+  if (alreadyTrue) {
+    plog(
+      `${what}: 受理判定在点击前就为真 —— 它无法区分成功与失败,本次只点一次,结果交给 waitResult`,
+    );
+  }
+  return alreadyTrue;
+}
+
 export async function commitClick(opts: {
   /** 这件事叫什么,用于日志与错误信息,如 `bilibili submit`。 */
   what: string;
@@ -129,6 +153,8 @@ export async function commitClick(opts: {
 }): Promise<string> {
   const tried: string[] = [];
   let clickedAny = false;
+  // 判定坏了就不能再靠它决定「换下一种点法」——否则一个恒为真的判定会变成重复投稿的开关。
+  const acceptanceBlind = await acceptancePreflight(opts.what, opts.accepted);
   for (const attempt of opts.attempts) {
     tried.push(attempt.label);
     const clicked = await attempt.click().then(
@@ -143,6 +169,11 @@ export async function commitClick(opts: {
     if (!clicked) continue;
     clickedAny = true;
     plog(`${opts.what}: clicked`, attempt.label, `(${attempt.kind})`);
+    if (acceptanceBlind) {
+      // 判定不可信:点一次就收,别拿坏判定去重复投稿。成功与否交给 waitResult 判。
+      plog(`${opts.what}: 判定不可信,点击已送达,后续交给结果等待`, attempt.label);
+      return attempt.label;
+    }
     if (await opts.accepted()) {
       plog(`${opts.what}: accepted`, attempt.label, `(${attempt.kind})`);
       return attempt.label;
