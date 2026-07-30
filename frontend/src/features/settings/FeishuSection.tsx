@@ -96,6 +96,11 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
 
   // Account binding: the bot acts with the bound member's permissions, so a Feishu user
   // must bind first. Member issues a code, then DMs it to the bot.
+  // 开关状态与内容状态分开。曾经是 open={Boolean(bindCode)} —— 关闭时必须把 bindCode 置空
+  // 才能让弹窗关上,可一置空,绑定码和绑定列表就立刻渲染成空,而 DialogContent 还有 200ms
+  // 退场动画在屏幕上:用户看到的是「弹窗还在,内容先没了」,像是刚才那些东西被一起清掉了。
+  // 现在内容状态在关闭后原样留着(下次发码时自然被覆盖),只有 bindOpen 这个布尔在动。
+  const [bindOpen, setBindOpen] = React.useState(false);
   const [bindBotId, setBindBotId] = React.useState<string | null>(null);
   const [bindCode, setBindCode] = React.useState<BindCode | null>(null);
   const issueCode = useMutation({
@@ -103,13 +108,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     onSuccess: (code, botId) => {
       setBindBotId(botId);
       setBindCode(code);
+      setBindOpen(true);
     },
   });
   const bindings = useQuery({
     queryKey: ["feishu-bindings", bindBotId],
-    enabled: Boolean(bindBotId),
+    // 轮询跟着弹窗开关走:关上就停,省掉后台空转;query key 用的 bindBotId 不清空,
+    // 所以缓存里的列表在退场动画期间照常显示。
+    enabled: Boolean(bindBotId) && bindOpen,
     queryFn: () => api<Binding[]>(`/api/feishu/bots/${bindBotId}/bindings`),
-    // 弹窗开着就轮询:用户在飞书里发绑定码,回来这里应当实时看到绑定成功,不用手动刷新。
     refetchInterval: 2000,
     refetchOnWindowFocus: true,
   });
@@ -267,13 +274,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       </ModalShell>
 
       <ModalShell
-        open={Boolean(bindCode)}
-        onOpenChange={(next) => {
-          if (!next) {
-            setBindCode(null);
-            setBindBotId(null);
-          }
-        }}
+        open={bindOpen}
+        onOpenChange={(next) => !next && setBindOpen(false)}
         title={t("feishuBindTitle")}
       >
         <div className="grid gap-3">
