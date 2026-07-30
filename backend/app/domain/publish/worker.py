@@ -46,7 +46,9 @@ def worker_online() -> bool:
 
 
 def _browser_platforms() -> list[str]:
-    return [key for key, meta in PUBLISH_PLATFORMS.items() if meta.get("executor") == "browser"]
+    # 注册表里现在只剩需要登录态的真平台 —— 不需要浏览器的 folder/webhook 已经拆到
+    # domain/delivery。所以这里不再筛选,全部都是桌面执行器要认领的。
+    return list(PUBLISH_PLATFORMS)
 
 
 # 一条 running 任务最长允许多久没有任何回报;超过即视为发布器悬挂。短片上传通常几分钟内

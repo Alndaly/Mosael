@@ -38,65 +38,20 @@ def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
     return status
 
 
-def test_folder_publish_flow(tmp_path: Path) -> None:
+def test_workflow_delivery_node(tmp_path: Path) -> None:
+    """工作流里「送到本地目录」走 delivery 节点。
+
+    以前它走 publish 节点 + 一个 platform=folder 的「发布账号」。folder 拆到交付域之后,
+    分派留在节点层:用户选 publish 还是 delivery,数据模型上不再有 executor 这种岔路。
+    """
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset = make_video_asset(client, ws["id"])
-
-    platforms = client.get("/api/publish/platforms").json()
-    assert {item["platform"] for item in platforms} >= {"folder", "webhook"}
-    assert "mock" not in {item["platform"] for item in platforms}
-
-    # 缺必填配置 → 422
-    bad = client.post(
-        "/api/publish/accounts",
-        json={"workspace_id": ws["id"], "platform": "folder", "name": "坏账号", "config": {}},
-    )
-    assert bad.status_code == 422
-
-    out_dir = tmp_path / "out"
-    account = client.post(
-        "/api/publish/accounts",
+    target = client.post(
+        "/api/delivery/targets",
         json={
             "workspace_id": ws["id"],
-            "platform": "folder",
-            "name": "本地交付",
-            "config": {"directory": str(out_dir)},
-        },
-    ).json()
-
-    task = client.post(
-        "/api/publish/tasks",
-        json={
-            "workspace_id": ws["id"],
-            "account_id": account["id"],
-            "asset_id": asset["id"],
-            "title": "夏日海边混剪",
-            "description": "蓝色大海与晚霞。",
-            "tags": ["海边", "旅行"],
-        },
-    )
-    assert task.status_code == 200, task.text
-    assert wait_status(client, task.json()["job_id"]) == "succeeded"
-
-    listed = client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()
-    assert listed[0]["status"] == "succeeded"
-    target = Path(listed[0]["result"]["target"])
-    assert target.exists() and target.read_bytes() == b"fake-video-bytes"
-    sidecar = json.loads(Path(listed[0]["result"]["sidecar"]).read_text(encoding="utf-8"))
-    assert sidecar["title"] == "夏日海边混剪"
-    assert sidecar["tags"] == ["海边", "旅行"]
-
-
-def test_workflow_publish_node(tmp_path: Path) -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    asset = make_video_asset(client, ws["id"])
-    account = client.post(
-        "/api/publish/accounts",
-        json={
-            "workspace_id": ws["id"],
-            "platform": "folder",
+            "kind": "folder",
             "name": "工作流交付",
             "config": {"directory": str(tmp_path / "wf-out")},
         },
@@ -112,11 +67,11 @@ def test_workflow_publish_node(tmp_path: Path) -> None:
                     {"id": "start", "type": "start", "config": {"params": {"asset": asset["id"]}}},
                     {
                         "id": "pub",
-                        "type": "publish",
+                        "type": "delivery",
                         "config": {
-                            "account_id": account["id"],
+                            "target_id": target["id"],
                             "asset_id": "{{start.asset}}",
-                            "title": "工作流发布",
+                            "title": "工作流交付",
                         },
                     },
                 ],
@@ -130,6 +85,6 @@ def test_workflow_publish_node(tmp_path: Path) -> None:
     assert run.status_code == 200, run.text
     assert wait_status(client, run.json()["id"]) == "succeeded"
 
-    publishes = client.get(f"/api/publish/tasks?workspace_id={ws['id']}").json()
-    assert publishes[0]["title"] == "工作流发布"
-    assert publishes[0]["status"] == "succeeded"
+    tasks = client.get(f"/api/delivery/tasks?workspace_id={ws['id']}").json()
+    assert tasks[0]["title"] == "工作流交付"
+    assert tasks[0]["status"] == "succeeded"

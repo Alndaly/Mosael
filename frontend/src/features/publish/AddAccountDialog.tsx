@@ -23,7 +23,7 @@ export function AddAccountDialog({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [platform, setPlatform] = React.useState("folder");
+  const [platform, setPlatform] = React.useState("douyin");
   const [name, setName] = React.useState("");
   const [config, setConfig] = React.useState<Record<string, string>>({});
   const [proxy, setProxy] = React.useState("");
@@ -35,7 +35,6 @@ export function AddAccountDialog({
   };
 
   const meta = (platforms.data ?? []).find((item) => item.platform === platform) ?? null;
-  const isBrowser = meta?.executor === "browser";
   const configSpecs = Object.entries((meta?.config ?? {}) as Record<string, { description?: string; required?: boolean }>);
 
   const create = useMutation({
@@ -45,7 +44,7 @@ export function AddAccountDialog({
         platform,
         name: name.trim() || meta?.label || platform,
         config,
-        proxy: isBrowser ? proxy.trim() || null : null,
+        proxy: proxy.trim() || null,
       }),
     onSuccess: () => {
       setName("");
@@ -100,18 +99,16 @@ export function AddAccountDialog({
             {spec?.description && <small>{spec.description}</small>}
           </label>
         ))}
-        {isBrowser && (
-          <label className={DIALOG_FIELD}>
-            <span>{t("publishProxy")}</span>
-            <Input
-              value={proxy}
-              placeholder="http://user:pass@host:port"
-              spellCheck={false}
-              onChange={(event) => setProxy(event.target.value)}
-            />
-            <small>{t("publishProxyHint")}</small>
-          </label>
-        )}
+        <label className={DIALOG_FIELD}>
+          <span>{t("publishProxy")}</span>
+          <Input
+            value={proxy}
+            placeholder="http://user:pass@host:port"
+            spellCheck={false}
+            onChange={(event) => setProxy(event.target.value)}
+          />
+          <small>{t("publishProxyHint")}</small>
+        </label>
         <div className="mt-1 flex justify-end gap-1.5">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("close")}

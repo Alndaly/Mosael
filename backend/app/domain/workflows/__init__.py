@@ -117,9 +117,20 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "publish": {
         "label": "发布",
-        "description": "把素材发布到指定账号(本地目录 / Webhook / 各视频平台)。",
+        "description": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。",
         "config": {
-            "account_id": {"type": "string", "required": True, "description": "发布账号 id(发布页可查)"},
+            "account_id": {"type": "string", "required": True, "description": "发布账号 id(浏览器池可查)"},
+            "asset_id": {"type": "template", "required": True},
+            "title": {"type": "template"},
+            "description": {"type": "template"},
+        },
+        "outputs": ["result"],
+    },
+    "delivery": {
+        "label": "交付",
+        "description": "把成片送到本地目录,或 POST 给外部自动化(n8n / Zapier / 自建服务)。不需要登录。",
+        "config": {
+            "target_id": {"type": "string", "required": True, "description": "交付目标 id(发布页可查)"},
             "asset_id": {"type": "template", "required": True},
             "title": {"type": "template"},
             "description": {"type": "template"},

@@ -1157,7 +1157,6 @@ class PublishPlatformOut(BaseModel):
     label: str
     description: str
     config: dict
-    executor: str = "local"
     title_max: int = 300
     short_title: bool = False
 

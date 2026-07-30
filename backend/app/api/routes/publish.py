@@ -36,7 +36,6 @@ def platforms() -> list[dict]:
             "label": meta["label"],
             "description": meta["description"],
             "config": meta["config"],
-            "executor": meta.get("executor", "local"),
             "title_max": meta.get("title_max", 300),
             "short_title": meta.get("short_title", False),
         }

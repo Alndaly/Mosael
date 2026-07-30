@@ -296,6 +296,78 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** 桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」:后端按本机绝对路径入库。
  *  只有桌面端自带的后端提供这个接口(团队服务器上 404)。 */
+/** 交付目标:把成片送到本地目录 / POST 给外部自动化。和「发布账号」是两回事——
+ *  交付不需要登录身份,所以它不在浏览器池里,也不会产生浏览器档案。 */
+export interface DeliveryKind {
+  kind: string;
+  label: string;
+  description: string;
+  config: Record<string, { description?: string; required?: boolean }>;
+}
+
+export interface DeliveryTarget {
+  id: string;
+  workspace_id: string;
+  kind: string;
+  name: string;
+  config: Record<string, string>;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface DeliveryTask {
+  id: string;
+  target_id: string;
+  target_name: string;
+  kind: string;
+  asset_id: string;
+  asset_name: string;
+  title: string;
+  description: string;
+  tags: string[];
+  job_id: string | null;
+  status: string;
+  error: string | null;
+  result: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function listDeliveryKinds(): Promise<DeliveryKind[]> {
+  return api<DeliveryKind[]>("/api/delivery/kinds");
+}
+
+export async function listDeliveryTargets(workspaceId: string): Promise<DeliveryTarget[]> {
+  return api<DeliveryTarget[]>(`/api/delivery/targets?workspace_id=${workspaceId}`);
+}
+
+export async function createDeliveryTarget(body: {
+  workspace_id: string;
+  kind: string;
+  name: string;
+  config: Record<string, string>;
+}): Promise<DeliveryTarget> {
+  return api<DeliveryTarget>("/api/delivery/targets", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function deleteDeliveryTarget(id: string): Promise<void> {
+  await api(`/api/delivery/targets/${id}`, { method: "DELETE" });
+}
+
+export async function listDeliveryTasks(workspaceId: string): Promise<DeliveryTask[]> {
+  return api<DeliveryTask[]>(`/api/delivery/tasks?workspace_id=${workspaceId}`);
+}
+
+export async function startDelivery(body: {
+  workspace_id: string;
+  target_id: string;
+  asset_id: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+}): Promise<DeliveryTask> {
+  return api<DeliveryTask>("/api/delivery/start", { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function importLocalAsset(workspaceId: string, path: string, projectId?: string): Promise<Asset> {
   return api<Asset>("/api/assets/import-local", {
     method: "POST",
