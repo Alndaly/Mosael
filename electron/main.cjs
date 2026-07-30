@@ -352,15 +352,12 @@ function createWindow() {
   }
 
   // 浏览器自动化执行器(RPA / 智能体):与发布并列,独立会话/分区,不碰发布登录。
-  // onFrame 把「最近操作的会话」的截帧推给前端做实时预览(离屏自动化视图否则看不到)。
+  // 会话视图与发布账号视图共用同一套内嵌视图与右下角面板(见 accountViews.createSharedViews),
+  // 画面是真实渲染的,不再需要截帧推送 —— 所以这里也不再传 onFrame。
   if (publish && publish.startBrowserWorker) {
     try {
       publish.stopBrowserWorker();
-      publish.startBrowserWorker({
-        onFrame: (frame) => {
-          if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
-        },
-      });
+      publish.startBrowserWorker();
     } catch (e) {
       console.warn("[browser] 启动执行器失败:", e.message);
     }

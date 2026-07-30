@@ -14,7 +14,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { tr } from "./i18n";
-import { AccountViewManager } from "./accountViews";
+import { createSharedViews, destroySharedViews, type AccountViewManager } from "./accountViews";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
@@ -50,8 +50,8 @@ let onSettled: ((info: SettleInfo) => void) | null = null;
 let onFrame: ((frame: LiveViewFrame) => void) | null = null;
 
 const LIVE_TICK_MS = 1000;
-// 后台任务给视图强制的视口尺寸。与 RPA 会话窗口(browserSessions.ts)取同一档,平台页面按桌面版
-// 布局,不会掉进移动端/窄屏分支。
+// 面板挂不上时的兜底视口尺寸(CDP Emulation)。与面板模式的布局视口(384/0.3 = 1280×800)取同一档,
+// 平台页面按桌面版布局,不会掉进移动端/窄屏分支。
 const BACKGROUND_VIEWPORT = { width: 1280, height: 800 };
 // 连续这么多次取不到画面就放弃取像(见 LiveMirror.tick)。
 const CAPTURE_ATTEMPTS = 3;
@@ -473,7 +473,8 @@ export function startPublishWorker(opts: {
   running.clear();
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
-  views = new AccountViewManager(opts.onViewChanged);
+  // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
+  views = createSharedViews(opts.onViewChanged);
   views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
@@ -491,7 +492,7 @@ export function stopPublishWorker(): void {
   }
   // 销毁并清空 views,让下次 startPublishWorker 能重新绑定新窗口(mac 关窗→重新激活)。持久化会话
   // 在磁盘分区里(persist:openstudio-<id>),销毁视图不丢登录态。
-  views?.destroyAll();
+  destroySharedViews();
   views = null;
   onFrame = null;
   mirroring = null;

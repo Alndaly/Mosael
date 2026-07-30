@@ -1,63 +1,37 @@
-// 浏览器自动化 worker:与发布 worker 并列的第二个拉取循环。轮询 /api/browser/worker/claim 认领
-// 动作,用 PageDriver 在会话隔离视图上执行,回报结果;并把「最近操作的会话」定时截帧推给前端做
-// 实时预览(这些自动化视图是离屏的,用户否则看不到)。
-
-import type { LiveViewFrame } from "./types";
-import { BrowserSessionManager } from "./browserSessions";
+// 浏览器自动化 worker:与发布 worker 并列的第二个拉取循环。轮询 /api/browser/worker/claim 认领动作,
+// 在会话隔离的内嵌视图上执行,回报结果。
+//
+// 会话视图与发布账号视图**共用同一套** AccountViewManager(见 accountViews 的 createSharedViews):
+// 同一套内嵌视图、同一套右下角面板叠放、同一套可信输入。此前 RPA 自己起离屏(OSR)BrowserWindow 并
+// 定时截帧推给前端做预览 —— 那是"看不见就只能截图"时代的产物。现在动作到来时把视图挂成面板:
+// 画面是真实渲染的(不必截帧),而且视图参与合成之后**可信指针输入可用**,智能体的点击不再只有
+// isTrusted=false 那一条路。分区照旧严格隔离:ephemeral-*(内存态)/ persist:rpa-* 与发布的
+// persist:openstudio-* 互不相干。
+import { sharedViews } from "./accountViews";
 import { executeBrowserAction } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
 
 const IDLE_MS = 1200;
 const BUSY_MS = 150;
-const PREVIEW_MS = 500; // 预览截帧节奏(~2fps)
-const PREVIEW_WINDOW_MS = 15_000; // 最近一次动作后持续预览的时长,之后停帧省资源
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-let manager: BrowserSessionManager | null = null;
-let generation = 0; // 递增即令旧 loop/预览自然退出
-let onFrame: ((frame: LiveViewFrame) => void) | null = null;
-let activeSessionId: string | null = null; // 预览跟随最近操作的会话
-let lastActionAt = 0;
-let previewTimer: ReturnType<typeof setInterval> | null = null;
-let capturing = false;
+let generation = 0; // 递增即令旧 loop 自然退出
+// 本 worker 挂过面板的会话,停机时要撤干净(视图本身归共享管理器,不在这里销毁)。
+const panelled = new Set<string>();
 
-export function startBrowserWorker(opts: { onFrame?: (frame: LiveViewFrame) => void } = {}): void {
+export function startBrowserWorker(): void {
   stopBrowserWorker();
-  manager = new BrowserSessionManager();
-  onFrame = opts.onFrame ?? null;
   const gen = ++generation;
   plog("browser worker started, generation", gen);
   void loop(gen);
-  previewTimer = setInterval(() => void capturePreview(gen), PREVIEW_MS);
 }
 
 export function stopBrowserWorker(): void {
   generation++;
-  if (previewTimer) {
-    clearInterval(previewTimer);
-    previewTimer = null;
-  }
-  manager?.destroyAll();
-  manager = null;
-  onFrame = null;
-  activeSessionId = null;
-}
-
-async function capturePreview(gen: number): Promise<void> {
-  if (gen !== generation || !manager || !onFrame || capturing) return;
-  if (!activeSessionId || Date.now() - lastActionAt > PREVIEW_WINDOW_MS) return;
-  const driver = manager.getDriver(activeSessionId);
-  if (!driver) return;
-  capturing = true;
-  try {
-    const dataUrl = await driver.captureBase64();
-    if (dataUrl && onFrame && gen === generation) onFrame({ sessionId: activeSessionId, dataUrl });
-  } catch {
-    /* 截帧失败忽略,下一拍再来 */
-  } finally {
-    capturing = false;
-  }
+  const views = sharedViews();
+  for (const sessionId of panelled) views?.panelDetach(sessionId);
+  panelled.clear();
 }
 
 async function loop(gen: number): Promise<void> {
@@ -78,18 +52,32 @@ async function loop(gen: number): Promise<void> {
 }
 
 async function handleAction(action: ClaimedAction): Promise<void> {
-  const mgr = manager;
-  if (!mgr) return;
-  activeSessionId = action.session_id; // 预览切到当前操作的会话
-  lastActionAt = Date.now();
+  const views = sharedViews();
+  if (!views) {
+    // 共享视图管理器由发布执行器创建(startPublishWorker)。它没起来说明宿主窗口还没就绪,
+    // 明确回报失败而不是静默丢弃 —— 否则后端那条动作会一直挂在 running。
+    await browserBackend
+      .report(action.id, { status: "failed", error: "view host not ready" })
+      .catch(() => undefined);
+    return;
+  }
   try {
     if (action.action === "close") {
-      mgr.destroy(action.session_id);
-      if (activeSessionId === action.session_id) activeSessionId = null;
+      views.panelDetach(action.session_id);
+      panelled.delete(action.session_id);
+      views.destroy(action.session_id);
       await browserBackend.report(action.id, { status: "done", result: {} });
       return;
     }
-    const driver = mgr.ensure(action.session_id, action.partition);
+
+    const driver = views.registerSession(action.session_id, action.partition);
+    // 挂成右下角面板:用户能看见智能体在做什么,同时视图获得真实布局与命中测试(可信输入的前提)。
+    // 挂不上(面板已达上限 / 宿主窗口没了)不影响执行 —— RPA 动作走的是 DOM 事件,不依赖布局。
+    if (!panelled.has(action.session_id) && views.panelAttach(action.session_id)) {
+      panelled.add(action.session_id);
+      plog("browser session panelled:", action.session_id);
+    }
+
     const outcome = await executeBrowserAction(driver, action.action, action.args);
     await browserBackend.report(action.id, {
       status: "done",

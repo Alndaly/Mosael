@@ -50,6 +50,13 @@ export function migrateLegacyPartitionDir(partition: string): void {
  */
 const PANEL = { width: 384, height: 240, zoom: 0.3, margin: 16, stackOffset: 20 } as const;
 
+/**
+ * 同时挂载的面板上限。挂载的视图是真在合成的页面,不是免费的 —— 智能体可能开很多路会话,全挂上去
+ * 既吃 GPU 也把卡片堆推出窗口。超出上限的视图不挂载:它照样能跑(RPA 的动作走的是 DOM 事件,不
+ * 依赖布局与命中测试),只是没有画面、也用不上可信输入。
+ */
+const MAX_PANELS = 4;
+
 const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
@@ -125,6 +132,24 @@ export class AccountViewManager {
     if (url) void view.webContents.loadURL(url);
   }
 
+  /**
+   * 登记一个「非发布账号」的会话视图:显式指定分区,建好视图与驱动,但**不亮出来**。
+   *
+   * 供 RPA / 智能体会话复用同一套内嵌视图(此前它们自己起离屏 BrowserWindow —— 见已删除的
+   * browserSessions.ts)。分区照旧严格隔离:ephemeral-*(内存态)/ persist:rpa-* 与发布的
+   * persist:openstudio-* 互不相干。
+   */
+  registerSession(viewId: string, partition: string): PageDriver {
+    migrateLegacyPartitionDir(partition);
+    this.partitions.set(viewId, partition);
+    return this.ensure(viewId).driver;
+  }
+
+  /** 已建好的驱动(不新建)。 */
+  existingDriver(viewId: string): PageDriver | null {
+    return this.drivers.get(viewId) ?? null;
+  }
+
   /** Bring an account's view to the front of the window and size it. */
   show(accountId: string): void {
     const { view, driver } = this.ensure(accountId);
@@ -170,15 +195,19 @@ export class AccountViewManager {
    * 挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
    * 见 PANEL 常量的说明。已在前台全屏显示的账号不动它(它本来就在合成)。
    */
-  panelAttach(accountId: string): void {
+  panelAttach(accountId: string): boolean {
     if (!this.window || this.window.isDestroyed() || this.visibleId === accountId) {
-      return;
+      return false;
+    }
+    if (!this.panels.includes(accountId)) {
+      if (this.panels.length >= MAX_PANELS) return false; // 见 MAX_PANELS:超额不挂,但任务照跑
+      this.panels.push(accountId);
     }
     const { view } = this.ensure(accountId);
-    if (!this.panels.includes(accountId)) this.panels.push(accountId);
     this.window.contentView.addChildView(view);
     view.webContents.setZoomFactor(PANEL.zoom);
     this.layout();
+    return true;
   }
 
   /** 该账号当前是否以悬浮面板形式挂着(挂上了才有真实布局,调用方据此决定是否还需要视口覆盖)。 */
@@ -416,4 +445,26 @@ function normalizeAddress(input: string): string | null {
     return `https://${value}`;
   }
   return `https://www.bing.com/search?q=${encodeURIComponent(value)}`;
+}
+
+// ---- 共享实例 ------------------------------------------------------------
+//
+// 发布执行器与浏览器(RPA/智能体)执行器**共用同一个** AccountViewManager:同一套内嵌视图、同一套
+// 面板叠放、同一套可信输入。此前两者各自持有一个管理器,RPA 那个还是离屏 BrowserWindow,于是同类
+// 问题要在两处分别解决(见已删除的 browserSessions.ts)。
+let shared: AccountViewManager | null = null;
+
+export function createSharedViews(onViewChanged?: (state: ViewState) => void): AccountViewManager {
+  shared = new AccountViewManager(onViewChanged);
+  return shared;
+}
+
+/** 当前共享实例;尚未创建(发布执行器还没启动)时为 null。 */
+export function sharedViews(): AccountViewManager | null {
+  return shared;
+}
+
+export function destroySharedViews(): void {
+  shared?.destroyAll();
+  shared = null;
 }
