@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Download, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -72,12 +72,34 @@ import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeli
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 
-export function EditorView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+export function EditorView({
+  workspace,
+  project,
+  onCreateProject,
+  creatingProject,
+}: {
+  workspace: Workspace;
+  project: Project | null;
+  onCreateProject: () => void;
+  creatingProject: boolean;
+}) {
   const t = useI18n();
   if (!project) {
+    // 空态必须给出口:一个项目都没有时顶栏的项目切换器压根不渲染(AppShell 里
+    // `projects.length > 0` 才挂),这个按钮就是剪辑页唯一能新建的地方——否则用户
+    // 只看到「没有项目」,得自己猜要回首页。
     return (
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
-        <EmptyState icon={<Scissors size={22} />} title={t("emptyProject")} body={t("homeEmptyBody")} />
+        <EmptyState
+          icon={<Scissors size={22} />}
+          title={t("emptyProject")}
+          body={t("homeEmptyBody")}
+          action={
+            <Button onClick={onCreateProject} disabled={creatingProject}>
+              <FolderPlus size={15} /> {t("createProject")}
+            </Button>
+          }
+        />
       </div>
     );
   }

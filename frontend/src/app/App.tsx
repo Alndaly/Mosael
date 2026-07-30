@@ -18,6 +18,7 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/components/layout/BrowserPreview";
 import { LivePanels } from "@/components/layout/LivePanels";
 import { Input } from "@/components/ui/input";
+import { useCreateProject } from "@/lib/useCreateProject";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
@@ -353,6 +354,9 @@ function Studio({
     setProjectId(id);
     setView("editor");
   };
+  // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
+  // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
+  const createProject = useCreateProject(workspace.id, openProject);
 
   return (
     <AppShell
@@ -366,10 +370,27 @@ function Studio({
       projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
       currentProjectId={project?.id ?? null}
       onSwitchProject={openProject}
+      onCreateProject={() => createProject.mutate()}
+      creatingProject={createProject.isPending}
     >
-      {view === "home" && <HomeView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
+      {view === "home" && (
+        <HomeView
+          workspace={workspace}
+          projects={projects.data ?? []}
+          onOpenProject={openProject}
+          onCreateProject={() => createProject.mutate()}
+          creatingProject={createProject.isPending}
+        />
+      )}
       {view === "media" && <MediaLibraryView workspace={workspace} />}
-      {view === "editor" && <EditorView workspace={workspace} project={project} />}
+      {view === "editor" && (
+        <EditorView
+          workspace={workspace}
+          project={project}
+          onCreateProject={() => createProject.mutate()}
+          creatingProject={createProject.isPending}
+        />
+      )}
       {view === "ai" && <AiStudio workspace={workspace} />}
       {view === "publish" && <PublishView workspace={workspace} />}
       {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}

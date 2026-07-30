@@ -18,7 +18,7 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react";
 
-import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
 import {
@@ -45,10 +45,14 @@ export function HomeView({
   workspace,
   projects,
   onOpenProject,
+  onCreateProject,
+  creatingProject,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
   onOpenProject: (projectId: string) => void;
+  onCreateProject: () => void;
+  creatingProject: boolean;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -99,24 +103,6 @@ export function HomeView({
   }, [projects, search, sortKey]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
 
-  const createProject = useMutation({
-    mutationFn: () =>
-      api<Project>("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: workspace.id, name: `${t("projectDefault")} ${projects.length + 1}` }),
-      }),
-    onSuccess: (created) => {
-      // 先把新项目塞进列表缓存,再跳它的剪辑页:App 侧解析项目用
-      // `find(projectId) ?? list[0]` 兜底,列表还没刷出新 id 的间隙里
-      // 编辑器会悄悄落到第一个(旧)项目上 —"新项目打开却是旧时间线"。
-      qc.setQueryData<ProjectWithStats[]>(["projects", workspace.id], (old) => [
-        { ...created, asset_count: 0, sequence_count: 0, timeline_duration: 0 },
-        ...(old ?? []),
-      ]);
-      void refresh();
-      onOpenProject(created.id);
-    },
-  });
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameProject(id, name),
     onSuccess: () => {
@@ -290,7 +276,7 @@ export function HomeView({
             </SelectContent>
           </Select>
         </div>
-        <Button size="sm" onClick={() => createProject.mutate()}>
+        <Button size="sm" onClick={onCreateProject} disabled={creatingProject}>
           <FolderPlus size={13} /> {t("createProject")}
         </Button>
       </div>
@@ -301,7 +287,7 @@ export function HomeView({
           title={t("homeEmptyTitle")}
           body={t("homeEmptyBody")}
           action={
-            <Button onClick={() => createProject.mutate()}>
+            <Button onClick={onCreateProject} disabled={creatingProject}>
               <FolderPlus size={15} /> {t("createProject")}
             </Button>
           }

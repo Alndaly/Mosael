@@ -85,6 +85,8 @@ export function AppShell({
   projects = [],
   currentProjectId,
   onSwitchProject,
+  onCreateProject,
+  creatingProject,
   actions,
   children,
 }: {
@@ -99,6 +101,8 @@ export function AppShell({
   projects?: { id: string; name: string }[];
   currentProjectId?: string | null;
   onSwitchProject?: (id: string) => void;
+  onCreateProject?: () => void;
+  creatingProject?: boolean;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -142,7 +146,13 @@ export function AppShell({
                   <span className="text-border-strong">/</span>
                   {projectName ? (
                     onSwitchProject && projects.length > 0 ? (
-                      <ProjectSwitcher projects={projects} currentProjectId={currentProjectId ?? null} onSwitchProject={onSwitchProject} />
+                      <ProjectSwitcher
+                        projects={projects}
+                        currentProjectId={currentProjectId ?? null}
+                        onSwitchProject={onSwitchProject}
+                        onCreateProject={onCreateProject}
+                        creatingProject={creatingProject}
+                      />
                     ) : (
                       <strong className="truncate font-semibold text-foreground">{projectName}</strong>
                     )
@@ -230,18 +240,22 @@ export function AppShell({
   );
 }
 
-/** 面包屑首段的工作区切换器:始终是可点的下拉(单工作区也要有「能切换/能新建」
-    的可见线索,否则没人知道工作区可以换),列表底部带「新建工作区」入口。 */
 /** In-editor timeline switcher: the project name in the breadcrumb becomes a dropdown of the
-    workspace's projects (each = a timeline), so you can jump between timelines without going home. */
+    workspace's projects (each = a timeline), so you can jump between timelines without going home.
+    列表底部同样带「新建项目」入口 —— 理由和工作区切换器那条一样:不给可见线索,就没人
+    知道这里能新建,只能绕回首页。 */
 function ProjectSwitcher({
   projects,
   currentProjectId,
   onSwitchProject,
+  onCreateProject,
+  creatingProject,
 }: {
   projects: { id: string; name: string }[];
   currentProjectId: string | null;
   onSwitchProject: (id: string) => void;
+  onCreateProject?: () => void;
+  creatingProject?: boolean;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -277,6 +291,23 @@ function ProjectSwitcher({
             {p.id === currentProjectId && <Check size={13} />}
           </button>
         ))}
+        {onCreateProject && (
+          <>
+            <div className="mx-0.5 my-1 h-px bg-border" />
+            <button
+              type="button"
+              disabled={creatingProject}
+              className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-60 [&_svg]:shrink-0"
+              onClick={() => {
+                setOpen(false);
+                onCreateProject();
+              }}
+            >
+              <FolderPlus size={13} />
+              {t("createProject")}
+            </button>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
