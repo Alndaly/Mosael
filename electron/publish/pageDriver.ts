@@ -117,10 +117,21 @@ export class PageDriver {
     width: number;
     height: number;
   }): Promise<void> {
+    // rect 来自页面的 getBoundingClientRect,单位是**CSS 像素**;sendInputEvent 收的是控件的
+    // DIP 坐标。两者只有在 zoomFactor = 1 时相等。悬浮面板模式下页面被缩到 0.3(小面板里保住
+    // 桌面版布局,见 accountViews 的 PANEL),不换算就会点到左上角去 —— 实测:不乘 zoom 完全脱靶,
+    // 乘上就命中。
+    const zoom = (() => {
+      try {
+        return this.wc.getZoomFactor() || 1;
+      } catch {
+        return 1; // webContents 已销毁,数值无意义,让后续调用自己去抛
+      }
+    })();
     const jitterX = Math.min(rect.width / 4, 6);
     const jitterY = Math.min(rect.height / 4, 6);
-    const tx = Math.round(rect.x + rect.width / 2 + (Math.random() * 2 - 1) * jitterX);
-    const ty = Math.round(rect.y + rect.height / 2 + (Math.random() * 2 - 1) * jitterY);
+    const tx = Math.round((rect.x + rect.width / 2 + (Math.random() * 2 - 1) * jitterX) * zoom);
+    const ty = Math.round((rect.y + rect.height / 2 + (Math.random() * 2 - 1) * jitterY) * zoom);
     const steps = this.rand(3, 6);
     const sx = tx - this.rand(20, 60);
     const sy = ty - this.rand(20, 60);

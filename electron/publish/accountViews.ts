@@ -37,6 +37,19 @@ export function migrateLegacyPartitionDir(partition: string): void {
   }
 }
 
+/**
+ * 后台任务的「悬浮面板」几何。
+ *
+ * 面板 384×240 + zoomFactor 0.3 → 页面**布局视口是 1280×800**(384/0.3),也就是平台页面按桌面版
+ * 排版,而显示只占右下角一小块。这不是美观取舍,是必要条件:面板若不缩放地做成 384 宽,B 站会
+ * 渲染窄屏版布局,选择器与整个流程都会变。
+ *
+ * 为什么要挂进窗口而不是留在后台:只有**参与合成**的视图才有真实布局和可用的命中测试 —— 挂上去
+ * 之后真实指针输入(isTrusted=true)才生效,同时画面也是真的,不必再靠截图镜像。实测三个面板
+ * 叠放(后加的压住先加的)时,被完全遮挡的那个照样有 1280×800 视口、照样能被可信点击命中。
+ */
+const PANEL = { width: 384, height: 240, zoom: 0.3, margin: 16, stackOffset: 20 } as const;
+
 const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
@@ -56,6 +69,8 @@ export class AccountViewManager {
   // 沿用 persist:openstudio-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
   private partitions = new Map<string, string>();
   private names = new Map<string, string>();
+  // 正在以悬浮面板形式挂载的账号,按挂载顺序 —— 决定叠放次序(后挂的在上)。
+  private panels: string[] = [];
   private window: BaseWindow | null = null;
   private visibleId: string | null = null;
   private nameOf: (accountId: string) => string | null = () => null;
@@ -116,11 +131,12 @@ export class AccountViewManager {
     if (!this.window || this.window.isDestroyed()) {
       return;
     }
-    // 后台跑任务时视图被强制了视口尺寸(见 PageDriver.setMetricsOverride);一旦亮到前台,
-    // 它有真实布局了,覆盖必须撤掉,否则页面锁在 1280×800 上、和窗口尺寸对不上。
+    // 面板模式把 zoomFactor 压到 0.3;亮到前台必须还原成 1,否则整页缩成三成大小。
+    // zoomFactor 是**按 origin 持久化**的(实测会泄漏到同源的其它视图),所以必须显式设回。
+    view.webContents.setZoomFactor(1);
     void driver.clearMetricsOverride();
     if (this.visibleId && this.visibleId !== accountId) {
-      this.detachView(this.visibleId);
+      this.demote(this.visibleId);
     }
     this.visibleId = accountId;
     this.layout();
@@ -139,10 +155,55 @@ export class AccountViewManager {
   /** Hide whatever view is currently shown (returns the window to the React UI). */
   hide(): void {
     if (this.visibleId) {
-      this.detachView(this.visibleId);
+      // 顺序要紧:先清 visibleId 再 demote。panelAttach 对「正在前台的账号」有早退保护
+      // (它不该去动前台视图),先 demote 就会被这条保护挡掉,任务还在跑却收不回面板。
+      const previous = this.visibleId;
       this.visibleId = null;
+      this.demote(previous);
       this.emit();
     }
+  }
+
+  /**
+   * 把某账号视图挂成右下角的悬浮面板(任务执行期间的默认形态)。
+   *
+   * 挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
+   * 见 PANEL 常量的说明。已在前台全屏显示的账号不动它(它本来就在合成)。
+   */
+  panelAttach(accountId: string): void {
+    if (!this.window || this.window.isDestroyed() || this.visibleId === accountId) {
+      return;
+    }
+    const { view } = this.ensure(accountId);
+    if (!this.panels.includes(accountId)) this.panels.push(accountId);
+    this.window.contentView.addChildView(view);
+    view.webContents.setZoomFactor(PANEL.zoom);
+    this.layout();
+  }
+
+  /** 该账号当前是否以悬浮面板形式挂着(挂上了才有真实布局,调用方据此决定是否还需要视口覆盖)。 */
+  isPanelled(accountId: string): boolean {
+    return this.panels.includes(accountId);
+  }
+
+  /** 撤下悬浮面板。若期间它被 show() 亮到了前台,留着不动 —— 那是用户要看的。 */
+  panelDetach(accountId: string): void {
+    const index = this.panels.indexOf(accountId);
+    if (index >= 0) this.panels.splice(index, 1);
+    if (this.visibleId === accountId) return;
+    const view = this.views.get(accountId);
+    if (view) view.webContents.setZoomFactor(1);
+    this.detachView(accountId);
+    this.layout();
+  }
+
+  /** 从前台撤下:仍在面板列表里的沉回面板形态(任务还在跑,画面不能断),否则整个移出窗口。 */
+  private demote(accountId: string): void {
+    if (this.panels.includes(accountId)) {
+      this.panelAttach(accountId);
+      return;
+    }
+    this.detachView(accountId);
   }
 
   get visibleAccountId(): string | null {
@@ -297,19 +358,37 @@ export class AccountViewManager {
   }
 
   private layout(): void {
-    if (!this.window || this.window.isDestroyed() || !this.visibleId) {
-      return;
-    }
-    const view = this.views.get(this.visibleId);
-    if (!view) {
+    if (!this.window || this.window.isDestroyed()) {
       return;
     }
     const [width, height] = this.window.getContentSize();
-    view.setBounds({
-      x: 0,
-      y: EMBED_HEADER_HEIGHT,
-      width,
-      height: Math.max(0, height - EMBED_HEADER_HEIGHT),
+
+    // 前台全屏视图:铺满内容区(顶部留出渲染层自己画的工具条)。
+    const visible = this.visibleId ? this.views.get(this.visibleId) : null;
+    if (visible) {
+      visible.setBounds({
+        x: 0,
+        y: EMBED_HEADER_HEIGHT,
+        width,
+        height: Math.max(0, height - EMBED_HEADER_HEIGHT),
+      });
+    }
+
+    // 悬浮面板:右下角卡片堆,后挂的在上、每层向上错开一点,好看出同时有几路在跑。
+    // 面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds 移出屏幕的视图视口是 0×0,
+    // 布局与命中测试双双失效,可信输入就白费了。所以错开量有上限,不让底层被推出窗口。
+    const maxStack = Math.max(1, Math.floor((height - PANEL.height - PANEL.margin * 2) / PANEL.stackOffset) + 1);
+    this.panels.forEach((accountId, index) => {
+      if (accountId === this.visibleId) return; // 已在前台全屏,别再按面板摆
+      const view = this.views.get(accountId);
+      if (!view) return;
+      const depth = Math.min(this.panels.length - 1 - index, maxStack - 1);
+      view.setBounds({
+        x: Math.max(0, width - PANEL.width - PANEL.margin),
+        y: Math.max(EMBED_HEADER_HEIGHT, height - PANEL.height - PANEL.margin - depth * PANEL.stackOffset),
+        width: PANEL.width,
+        height: PANEL.height,
+      });
     });
   }
 

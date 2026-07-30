@@ -2,8 +2,9 @@
 // (上传/填表/发表)→ 回报状态。任务状态源在后端,这里只做「浏览器驱动」这件只有 Electron 能做的事。
 //
 // 并发模型:「跨账号并发、同账号串行 + 前台单槽」。
-//  - 发布任务默认在**后台不可见**的账号视图里跑(上传走 CDP、填表走 JS、点击走 sendInputEvent,都
-//    不需要视图 attach 到窗口)。同时最多 MAX_CONCURRENT 条(不同账号)。
+//  - 发布任务默认把账号视图挂成**右下角悬浮面板**(384×240 + zoom 0.3 → 布局仍是 1280×800 桌面版)。
+//    挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
+//    多条并发就叠成卡片堆;实测被完全遮挡的那层照样有布局、照样点得中。同时最多 MAX_CONCURRENT 条。
 //  - 一个账号共享一个内嵌视图,不能并发两条任务:认领时把「正在跑的账号」传给后端排除(claimTask)。
 //  - 「前台可见槽」至多一个(视图 attach 到窗口):留给需要用户在场的时刻——登录扫码、dry_run 准备好
 //    待确认、失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
@@ -113,6 +114,12 @@ class LiveMirror {
   private async tick(): Promise<void> {
     if (!onFrame || !this.held || this.capturing) return;
     let dataUrl: string | undefined;
+    // 已挂成悬浮面板时,真实画面就在屏幕右下角,再截一遍纯属浪费(capturePage 不便宜,
+    // 而且在这种视图上曾经把渲染状态搞坏过)。此时只推步骤文案。
+    if (views?.isPanelled(this.accountId)) {
+      this.push(undefined);
+      return;
+    }
     // 连续取不到就彻底放弃取像,后面只推文字。
     //
     // captureBase64 对 capturePage 做了竞速超时,但超时只结束**我们这边的 promise** —— 底层请求
@@ -243,10 +250,14 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     mirror.step(`${platformLabel} · ${label}`, settled);
   };
   try {
+    // 把视图挂成右下角悬浮面板:参与合成 → 有真实布局与命中测试 → **可信指针输入可用**,
+    // 而且画面是真的(不必再截图镜像)。挂不上(窗口没了)时退回 CDP 视口覆盖:那样至少有布局,
+    // 点击会自动降级到 DOM 事件。
+    views.panelAttach(t.accountId);
+    if (!views.isPanelled(t.accountId)) {
+      await driver.setMetricsOverride(BACKGROUND_VIEWPORT.width, BACKGROUND_VIEWPORT.height);
+    }
     mirror.start();
-    // 后台视图没有布局(视口 0×0),坐标点击会静默落空——先造一个真实视口出来。
-    // 见 PageDriver.setMetricsOverride:这是保住「可信输入」又不用把窗口闪出来的唯一办法。
-    await driver.setMetricsOverride(BACKGROUND_VIEWPORT.width, BACKGROUND_VIEWPORT.height);
     await views.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
     step(tr("打开创作页"));
@@ -342,7 +353,9 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     if (hasLive) requestFront(t.accountId);
   } finally {
     mirror.stop();
-    // 撤销视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着覆盖会和窗口尺寸对不上。
+    // 撤面板 + 撤视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着面板缩放或覆盖
+    // 都会和窗口尺寸对不上。panelDetach 会顺手把 zoomFactor 还原成 1(它按 origin 持久化)。
+    views?.panelDetach(t.accountId);
     await driver.clearMetricsOverride().catch(() => undefined);
     running.delete(t.accountId);
     driver.setAbortSignal(null);
