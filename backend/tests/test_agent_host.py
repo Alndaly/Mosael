@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 
 from app.ai.agent import adapters, host
-from app.ai.agent.adapters import TurnResult, build_claude_command, open_studio_mcp_config
+from app.ai.agent.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
 from tests.util import fresh_client
@@ -18,19 +18,6 @@ def wait_idle(client, session_id: str, seconds: float = 8) -> str:
             return status
         time.sleep(0.05)
     return status
-
-
-def test_claude_command_and_mcp_config_shape() -> None:
-    config = open_studio_mcp_config("http://127.0.0.1:8800", "tok123")
-    server = config["mcpServers"]["open-studio"]
-    assert server["env"]["OPEN_STUDIO_TOKEN"] == "tok123"
-    assert server["args"][0].endswith("mcp_server.py")
-
-    command = build_claude_command("hi", "sys", "/tmp/cfg.json", "sess-1")
-    assert "--resume" in command and "sess-1" in command
-    assert "mcp__open-studio" in command  # 必须与 mcpServers 的键一致,否则白名单匹配不到任何工具
-    assert command[command.index("--mcp-config") + 1] == "/tmp/cfg.json"
-
 
 def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     """The workflow side panel asks the same general agent to edit a graph. The global
@@ -81,11 +68,11 @@ def test_stream_timeline_preserves_text_tool_text_order() -> None:
 def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     calls: dict = {}
 
-    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, adapter_session_id, on_delta=None, **_):
+    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, on_delta=None, **_):
         calls.update(
-            adapter=adapter, prompt=prompt, system=system_prompt, token=token, prev=adapter_session_id
+            adapter=adapter, prompt=prompt, system=system_prompt, token=token
         )
-        return TurnResult(text=f"echo: {prompt}", adapter_session_id="cli-sess-9")
+        return TurnResult(text=f"echo: {prompt}")
 
     monkeypatch.setattr(host, "run_turn", fake_run_turn)
 
@@ -119,7 +106,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
 def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypatch) -> None:
     calls: dict = {}
 
-    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, adapter_session_id, on_delta=None, **_):
+    def fake_run_turn(adapter, *, prompt, system_prompt, api_base, token, on_delta=None, **_):
         calls["prompt"] = prompt
         return TurnResult(text=f"echo: {prompt}")
 

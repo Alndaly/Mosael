@@ -78,7 +78,6 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 
 「Mibu → Open Studio」改了名却没同步的地方,已经出过下面这些**功能性**问题——全都不是文案问题:
 
-- `--allowedTools mcp__mibu` 与 mcpServers 的键 `open-studio` 对不上 → claude 适配器的 MCP 工具**一个都用不了**
 - `create_account` 仍造 `persist:mibu-<id>` 分区 → 每个新发布账号一出生就是"待迁移的旧数据"
 - npm dev 脚本只认 `MIBU_BACKEND_PORT`,而 `main.cjs` 只认 `OPEN_STUDIO_BACKEND_PORT` → 设新变量会让后端与壳连到**不同端口**
 - `usePersistentTab` 写 `mibu:tab:*`,而 storageMigration 每次启动把它搬走 → tab 状态反复迁移

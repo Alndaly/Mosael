@@ -797,8 +797,8 @@ class AgentSession(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
-    adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="claude")
-    adapter_session_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: 跑这次会话的运行时。目前只有 "pi";留列是为了旧会话仍能被正确解读。
+    adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="pi")
     # 对话用的供应商 + 模型(pi 适配器);空则回退第一个启用供应商及其默认模型
     provider_profile_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True

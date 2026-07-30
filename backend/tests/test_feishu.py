@@ -58,7 +58,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         assert service._redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
 
     sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材", adapter_session_id="s1"))
+    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
 
     service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1", "ou_sender")
@@ -68,7 +68,6 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         session = db.query(AgentSession).filter_by(external_key=f"feishu:{bot['id']}:oc_chat_1").one()
         assert session.origin == "feishu"
         assert session.status == "idle"
-        assert session.adapter_session_id == "s1"
         roles = [m.role for m in session.messages]
         assert roles == ["user", "assistant"]
 

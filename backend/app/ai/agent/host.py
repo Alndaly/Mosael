@@ -270,9 +270,13 @@ def on_turn_finished(callback: Callable[[str], None]) -> None:
 
 
 def default_adapter() -> str:
-    """The CLI backing the agent — `pi` is the standard. OPEN_STUDIO_AGENT_CLI can override it
-    (e.g. `claude`) for machines where that's what's installed."""
-    return os.environ.get("OPEN_STUDIO_AGENT_CLI", "pi")
+    """智能体运行时。目前只有 pi(agent-sidecar 里嵌 pi-agent-core)。
+
+    这里保留一层间接:会话表记着自己是被哪个运行时跑的,换运行时时旧会话仍能被正确解读。
+    曾经还有一条「把 Claude Code CLI 当后端」的路(--mcp-config 起子进程),因为长期没人走、
+    且缺少会话归属与工具回调而删除。
+    """
+    return "pi"
 
 
 def create_session(
@@ -427,7 +431,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 system_prompt=system_prompt,
                 api_base=api_base,
                 token=token,
-                adapter_session_id=session.adapter_session_id,
                 on_delta=lambda delta: _stream_append(session_id, delta),
                 on_tool=lambda event: _stream_tool_event(session_id, event),
                 provider=provider_dict,
@@ -490,8 +493,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     "usage": usage,
                     **({"timeline": timeline} if timeline else {}),
                 }
-            if result.adapter_session_id:
-                session.adapter_session_id = result.adapter_session_id
         except AdapterError as exc:
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", None)

@@ -5,14 +5,13 @@ import threading
 import os
 import shutil
 import subprocess
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 """
 Agent CLI adapters: Open Studio hosts a specialized external coding-agent (pi — the
-`claude` adapter is an alternative) instead of a homegrown loop. The agent gets
+instead of a homegrown loop. The agent gets
 Open Studio's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
@@ -36,24 +35,8 @@ class AdapterError(RuntimeError):
 @dataclass(frozen=True)
 class TurnResult:
     text: str
-    adapter_session_id: str | None = None
     adapter_state: object | None = None  # pi: 序列化的消息数组,用于下一轮多轮记忆
     usage: dict | None = None
-
-
-def open_studio_mcp_config(api_base: str, token: str) -> dict:
-    backend_dir = Path(__file__).resolve().parents[3]
-    python = backend_dir / ".venv" / "bin" / "python"
-    return {
-        "mcpServers": {
-            "open-studio": {
-                "command": str(python if python.exists() else "python3"),
-                "args": [str(backend_dir / "mcp_server.py")],
-                "env": {"OPEN_STUDIO_API": api_base, "OPEN_STUDIO_TOKEN": token},
-            }
-        }
-    }
-
 
 def run_turn(
     adapter: str,
@@ -63,7 +46,6 @@ def run_turn(
     system_prompt: str,
     api_base: str,
     token: str,
-    adapter_session_id: str | None,
     on_delta: "Callable[[str], None] | None" = None,
     provider: dict | None = None,
     model: str | None = None,
@@ -71,8 +53,6 @@ def run_turn(
     adapter_state: object | None = None,
     on_tool: "Callable[[dict], None] | None" = None,
 ) -> TurnResult:
-    if adapter == "claude":
-        return _run_claude_streaming(prompt, system_prompt, api_base, token, adapter_session_id, on_delta)
     if adapter == "pi":
         return _run_pi(
             prompt,
@@ -283,103 +263,12 @@ def _run_pi(
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
-        return TurnResult(text=result_text, adapter_session_id=None, adapter_state=result_state, usage=result_usage)
+        return TurnResult(text=result_text, adapter_state=result_state, usage=result_usage)
     if not result_text.strip() and not saw_tool:
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
         raise AdapterError(stderr_tail or f"模型没有返回任何内容。{_PROVIDER_HINT}")
     return TurnResult(text=result_text.strip(), adapter_state=result_state, usage=result_usage)
-
-
-def build_claude_command(
-    prompt: str, system_prompt: str, mcp_config_path: str, adapter_session_id: str | None
-) -> list[str]:
-    binary = os.environ.get("OPEN_STUDIO_AGENT_BIN_CLAUDE") or shutil.which("claude") or "claude"
-    command = [
-        binary,
-        "-p", prompt,
-        "--output-format", "json",
-        "--append-system-prompt", system_prompt,
-        "--mcp-config", mcp_config_path,
-        "--strict-mcp-config",
-        # 前缀必须与 open_studio_mcp_config 里 mcpServers 的键一致——Claude CLI 按配置键给工具
-        # 加命名空间,写错就等于白名单一个工具都匹配不上(MCP 工具全部不可用)。
-        "--allowedTools", "mcp__open-studio",
-    ]
-    if adapter_session_id:
-        command += ["--resume", adapter_session_id]
-    return command
-
-
-def _run_claude_streaming(
-    prompt: str,
-    system_prompt: str,
-    api_base: str,
-    token: str,
-    adapter_session_id: str | None,
-    on_delta: Callable[[str], None] | None = None,
-) -> TurnResult:
-    """stream-json mode: emits token-level text deltas via on_delta while running."""
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
-        json.dump(open_studio_mcp_config(api_base, token), handle)
-        config_path = handle.name
-    try:
-        command = build_claude_command(prompt, system_prompt, config_path, adapter_session_id)
-        stream_index = command.index("json")
-        command[stream_index] = "stream-json"
-        command += ["--include-partial-messages", "--verbose"]
-
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env={**os.environ},
-        )
-        result_text: str | None = None
-        session_id: str | None = None
-        is_error = False
-        assert process.stdout is not None
-        child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
-        for line in child.lines():
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            kind = event.get("type")
-            if kind == "stream_event" and on_delta is not None:
-                inner = event.get("event") or {}
-                if inner.get("type") == "content_block_delta":
-                    delta = inner.get("delta") or {}
-                    if delta.get("type") == "text_delta" and delta.get("text"):
-                        on_delta(str(delta["text"]))
-            elif kind == "result":
-                result_text = str(event.get("result", ""))
-                session_id = event.get("session_id")
-                is_error = bool(event.get("is_error"))
-        stderr_tail = _tail(child.finish())
-        if child.timed_out:
-            raise AdapterError(
-                f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。"
-                + (f"\n{stderr_tail}" if stderr_tail else "")
-            )
-        # 优先透传 CLI 自己给出的结果错误(如 "Not logged in · Please run /login"),
-        # 否则非零退出只会显示无意义的 "exited with code 1"。
-        if is_error and result_text:
-            raise AdapterError(_tail(result_text))
-        if process.returncode != 0:
-            raise AdapterError(stderr_tail or f"agent exited with code {process.returncode}")
-        if result_text is None:
-            raise AdapterError("Agent produced no result event")
-        if is_error:
-            raise AdapterError(_tail(result_text or "agent error"))
-        return TurnResult(text=result_text.strip(), adapter_session_id=session_id)
-    finally:
-        Path(config_path).unlink(missing_ok=True)
-
-
-
-
 def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]

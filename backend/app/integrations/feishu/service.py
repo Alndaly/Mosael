@@ -206,8 +206,8 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
         append_message(db, session.id, role="user", content=text)
         session.status = "running"
         token = mint_service_session(db, user.id)  # 铸造即提交,连同上面的消息与状态
-        session_id, adapter, adapter_session_id, workspace_id, capability = (
-            session.id, session.adapter, session.adapter_session_id, bot.workspace_id, bot.capability
+        session_id, adapter, workspace_id, capability = (
+            session.id, session.adapter, bot.workspace_id, bot.capability
         )
         adapter_state = session.adapter_state  # pi 多轮记忆:与 AI Studio 同一套回环
         # 供应商解析必须在这里做(与 AI Studio 同一助手):裸调 run_turn 不带 provider,
@@ -246,7 +246,6 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
             system_prompt=system_prompt,
             api_base=api_base,
             token=token,
-            adapter_session_id=adapter_session_id,
             provider=provider_dict,
             model=agent_model,
             workspace_id=workspace_id,
@@ -254,7 +253,6 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
             session_key=session_id,
         )
         reply_text = result.text or "(空回复)"
-        new_adapter_session = result.adapter_session_id
         new_adapter_state = result.adapter_state
     except AdapterError as exc:
         # 适配器错误本就是给人看的中文(没配供应商/缺模型/sidecar 未构建)——
@@ -270,8 +268,6 @@ def handle_incoming(bot_id: str, chat_id: str, text: str, message_id: str, sende
         session = db.get(AgentSession, session_id)
         if session is not None:
             append_message(db, session.id, role="assistant", content=reply_text, error=error)
-            if new_adapter_session:
-                session.adapter_session_id = new_adapter_session
             if new_adapter_state is not None:
                 session.adapter_state = new_adapter_state
             session.status = "idle"

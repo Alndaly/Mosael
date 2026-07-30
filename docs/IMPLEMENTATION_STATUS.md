@@ -67,15 +67,15 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 ### UI refinement pass + agent capabilities
 
-- Token-level streaming chat: claude adapter in stream-json mode with partial deltas → per-session SSE endpoint → live bubble; Streamdown renders all assistant markdown (tables/code/CJK, unterminated-block safe).
+- Token-level streaming chat: pi sidecar streams partial deltas → per-session SSE endpoint → live bubble; Streamdown renders all assistant markdown (tables/code/CJK, unterminated-block safe).
 - Context menus everywhere (projects/assets/pool/sessions/clips) with rename/delete modals (no native dialogs); full CRUD APIs for projects/assets (in-use guard)/sessions; scheduler rows gain pause/enable + delete; empty states center vertically.
 - Provider profiles (schema): multiple named provider accounts with vendor presets (DashScope/ARK/Kimi/MiniMax/OpenAI/compatible), base_url + default model, enable toggle; legacy credentials remain as fallback; Settings UI rebuilt around profiles.
 - Asset analysis: images direct, videos frame-sampled (ffmpeg) into OpenAI-compatible multimodal chat — works with Kimi & MiniMax profiles; POST /assets/{id}/analyze + analyze_asset MCP tool; chat composer supports file attachments that land as assets and are referenced in the message for the agent.
 
 ### Agent host layer + Feishu binding
 
-- Open Studio hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (schema), claude CLI adapter (headless JSON mode, MCP config injection with minted service token, --resume continuity, specialized system prompt teaching the confirmation contract) + best-effort opencode adapter; single-flight turns, errors become assistant messages.
-- Chat Workspace in AI Studio (对话/生成 tabs): sessions, bubble thread, thinking indicator, composer. Verified with a real claude turn calling mibu list_assets.
+- Open Studio hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (schema), pi sidecar adapter (Node embedding pi-agent-core; tools call back over REST with a minted service token; continuity via serialized adapter_state; specialized system prompt teaching the confirmation contract); single-flight turns, errors become assistant messages.
+- Chat Workspace in AI Studio (对话/生成 tabs): sessions, bubble thread, thinking indicator, composer. Verified with a real agent turn calling list_assets.
 - Feishu binding ported from mibu-video: lark-oapi long-connection worker (one child process per bot), tenant-token send, message dedupe + mention stripping, chats map to agent sessions (external_key feishu:bot:chat) with capability-tier prompts; 扫码一键创建 via device-authorization grant + manual App ID/Secret; Settings section with QR, bot list, status, capability; autostart on app launch, cleanup on shutdown.
 
 ### Mutating MCP tools + confirmation cards (plan §16.2/§17.2/§17.4)
