@@ -502,7 +502,7 @@ export const messages = {
     wfProviderMissing: "该节点引用的模型服务已不存在,请重新选择或去配置。",
     wfNoGenModels: "生成能力还没有默认供应商与模型,请在设置里的「默认供应商」下配置。",
     wfGenModelMissing: "该节点引用的生成模型已失效,请重新选择或去配置。",
-    wfModelPresetHint: "选择模型自动填 provider/model/kind",
+    wfModelPresetHint: "选择或输入模型",
     wfPickOption: "请选择",
     wfInsertVar: "插入到光标处",
     // 就绪检查 / 画布角标
@@ -1957,7 +1957,7 @@ export const messages = {
     wfProviderMissing: "This node references a model provider that no longer exists — reselect or configure one.",
     wfNoGenModels: "Generation is missing its default provider and model. Configure it under Default providers in Settings.",
     wfGenModelMissing: "This node's generation model is gone — reselect or configure one.",
-    wfModelPresetHint: "Pick a model to fill provider/model/kind",
+    wfModelPresetHint: "Pick or type a model",
     wfChecklist: "Readiness",
     wfChecklistReadyShort: "Ready",
     wfChecklistReady: "All set — ready to run",

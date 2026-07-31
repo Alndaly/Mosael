@@ -1685,6 +1685,8 @@ interface ConfigSpec {
   description?: string;
   required?: boolean;
   options?: string[];
+  /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
+  default?: string;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -2048,7 +2050,8 @@ function NodeInspector({
   const t = useI18n();
   const config = (node.config ?? {}) as Record<string, unknown>;
   const specs = Object.entries((meta?.config ?? {}) as Record<string, ConfigSpec>);
-  const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+  // 变量插入要按光标位置写回,input 和 textarea 都有 selectionStart,两者都收。
+  const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
   // 每字段的输入方式:手动填写 vs 连接上游输出(ComfyUI 式)。默认从值推断(纯引用=连接)。
   const variables = React.useMemo(
     () => upstreamVariables(graph, node.id, registry),
@@ -2398,7 +2401,7 @@ function NodeInspector({
           </button>
         )}
       </div>
-      <div className="grid min-h-0 content-start gap-2 overflow-y-auto p-2.5">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-x-hidden overflow-y-auto p-2.5">
         {meta && <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{meta.description}</p>}
         {bindingNotice && (
           <ConfigNotice
@@ -2447,7 +2450,9 @@ function NodeInspector({
           </div>
         )}
         {node.type === "ai_generate" && (
-          <div className="grid gap-[9px] rounded-lg border border-border bg-[color-mix(in_srgb,var(--muted)_58%,transparent)] p-[9px]">
+          // 不套卡片:模型和参数就是这个表单里的普通字段,加个外框会让它看着像另一类东西。
+          // (LLM 节点那边套框是因为里面是一组"高级参数",与主字段确实分属两层。)
+          <div className="grid min-w-0 gap-2">
             <div className={FIELD_BOX}>
               <span>{t("wfModelPreset")}</span>
               <Combobox
@@ -2772,15 +2777,29 @@ function NodeInspector({
                 <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
               ) : spec?.type === "code" ? (
                 <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
-              ) : (
+              ) : spec?.type === "template" ? (
+                // 只有模板字段需要多行:它要放 {{变量}}、要支持 `/` 唤起变量菜单。
                 <VarTextarea
                   textareaRef={(el) => {
                     fieldRefs.current[key] = el;
                   }}
-                  rows={spec?.type === "template" ? 2 : 1}
+                  rows={2}
                   value={String(value ?? "")}
                   onChange={(next) => setConfig(key, next)}
                   variables={variables}
+                />
+              ) : (
+                // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里
+                // 并排出现三种控件(Select / Combobox / 带拖拽手柄的文本域),看着像没做完。
+                // 控件跟着字段声明的类型走。
+                <Input
+                  ref={(el) => {
+                    fieldRefs.current[key] = el;
+                  }}
+                  type={spec?.type === "number" ? "number" : "text"}
+                  value={String(value ?? "")}
+                  placeholder={spec?.default ? String(spec.default) : ""}
+                  onChange={(event) => setConfig(key, event.target.value)}
                 />
               )}
               {!connected && spec?.type === "template" && variables.length > 0 && (
