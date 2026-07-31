@@ -1629,7 +1629,15 @@ function WorkflowEditor({
             onClose={() => setAgentOpen(false)}
           />
         )}
-        {showHistory && <WorkflowRunHistory workflowId={workflow.id} onClose={() => setShowHistory(false)} />}
+        {showHistory && (
+          <WorkflowRunHistory
+            workflowId={workflow.id}
+            // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
+            // 是就渲染成缩略图/播放器而不是一串裸 id。
+            nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
         {editingLoopId &&
           (() => {
             const loopNode = graph.nodes.find((item) => item.id === editingLoopId);

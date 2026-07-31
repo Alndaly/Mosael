@@ -1,9 +1,11 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, SkipForward, X, XCircle } from "lucide-react";
 
-import { listJobEvents, listWorkflowRuns, type Job, type TaskEvent } from "@/api/client";
+import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEvent } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { outputType } from "@/features/workflows/analyze";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
@@ -66,6 +68,51 @@ function toSteps(events: TaskEvent[]): Step[] {
   return order.map((nid) => byNode.get(nid)!).filter(Boolean);
 }
 
+/** 这一步输出里声明为素材的那些(节点注册表里 outputType === "asset")。
+ *
+ *  以前历史面板把 `asset_id: 535f288eaeb4…` 一串裸十六进制直接铺在文本块里 —— 同一次生成,
+ *  在智能体对话里是一张图,在执行历史里却要用户自己拿着 id 去素材库翻。 */
+function assetOutputs(nodeType: string, outputs: Record<string, unknown>): string[] {
+  if (!nodeType) return [];
+  return Object.entries(outputs)
+    .filter(([key, value]) => outputType(nodeType, key) === "asset" && typeof value === "string" && value.trim())
+    .map(([, value]) => String(value));
+}
+
+/** 素材产出的预览条。素材可能已被删除(取不到就不渲染),所以查询失败是正常路径不是错误。 */
+function StepAssets({ assetIds }: { assetIds: string[] }) {
+  const assets = useQueries({
+    queries: assetIds.map((id) => ({
+      queryKey: ["asset", id],
+      queryFn: () => api<Asset>(`/api/assets/${id}`),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
+  if (ready.length === 0) return null;
+  return (
+    <div className="mx-1.5 mb-1 mt-0.5 flex flex-wrap gap-1.5">
+      {ready.map((asset) => (
+        <AssetInlinePreview
+          key={asset.id}
+          assetId={asset.id}
+          name={asset.name || asset.original_filename}
+          kind={asset.kind}
+          // 历史面板是窄列,压到缩略图刻度。
+          className={
+            asset.kind === "image"
+              ? "block max-h-[120px] w-auto max-w-full object-contain"
+              : asset.kind === "video"
+                ? "max-h-[140px] max-w-full rounded-md border border-border bg-black"
+                : "w-full max-w-[240px]"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 /** 输出摘要拼成可读文本:字符串原样(引擎侧已截断),其余 JSON 化。 */
 function outputsText(outputs: Record<string, unknown>): string {
   return Object.entries(outputs)
@@ -80,7 +127,17 @@ function RunIcon({ status }: { status: string }) {
   return <CircleDashed size={13} />;
 }
 
-export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string; onClose: () => void }) {
+export function WorkflowRunHistory({
+  workflowId,
+  nodeTypeById = {},
+  onClose,
+}: {
+  workflowId: string;
+  /** 节点 id → 类型。用来查这一步的输出里哪些是素材(见 OUTPUT_TYPES)。
+   *  历史里的节点可能已被删改,查不到就退回纯文本 —— 不猜。 */
+  nodeTypeById?: Record<string, string>;
+  onClose: () => void;
+}) {
   const t = useI18n();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
@@ -224,6 +281,9 @@ export function WorkflowRunHistory({ workflowId, onClose }: { workflowId: string
                         <p className="mx-1.5 mb-1 mt-0.5 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] px-2 py-1.5 text-[10.5px] leading-[1.5] text-destructive">
                           {s.error}
                         </p>
+                      )}
+                      {open && s.outputs && assetOutputs(nodeTypeById[s.nid] ?? "", s.outputs).length > 0 && (
+                        <StepAssets assetIds={assetOutputs(nodeTypeById[s.nid] ?? "", s.outputs)} />
                       )}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
                         <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10.5px] leading-[1.55] text-muted-foreground">
