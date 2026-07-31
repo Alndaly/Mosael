@@ -978,6 +978,22 @@ function WorkflowEditor({
   // 自己保存引发的那次 refetch 不能重建画布(重建会丢掉 React Flow 的实测尺寸、造成闪烁与
   // 拖拽中断)。不靠比对 updated_at 字符串——两端序列化只要差一点就会误判。
   const selfSaveRef = React.useRef(false);
+  /** 用新图重建画布节点,**保留 React Flow 的选中态**。
+   *
+   *  这条必须只有一处实现:重建节点的路径有两条(本地编辑走 applyGraph,服务端回传走同步
+   *  effect),两条都会把 selection 冲掉。第一次只修了前者,于是"拖完节点过一会儿焦点自己没了"
+   *  又冒了出来 —— 因为拖动会触发自动保存,保存回来的 updated_at 走的是后者。 */
+  const rebuildNodes = React.useCallback(
+    (next: WorkflowGraph) =>
+      setNodes((current) => {
+        const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
+        return toFlowNodes(next, registry).map((node) =>
+          selectedIds.has(node.id) ? { ...node, selected: true } : node,
+        );
+      }),
+    [registry],
+  );
+
   React.useEffect(() => {
     if (workflow.updated_at === lastSyncedRef.current) return;
     if (selfSaveRef.current) {
@@ -993,26 +1009,19 @@ function WorkflowEditor({
       lastSyncedRef.current = workflow.updated_at;
       const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
       setGraph(next);
-      setNodes(toFlowNodes(next, registry));
+      rebuildNodes(next);
       setEdges(toFlowEdges(next));
     }
-  }, [workflow.updated_at, workflow.graph, dirty, registry]);
+  }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   const applyGraph = React.useCallback(
     (next: WorkflowGraph) => {
       setGraph(next);
-      // 重建节点时保留 React Flow 的选中态:否则改配置/加节点/连边(都走这里)会把 selection 冲掉,
-      // 当前选中的节点立刻失去焦点(用户报的"点击节点立马失去焦点、无法聚焦")。
-      setNodes((current) => {
-        const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
-        return toFlowNodes(next, registry).map((node) =>
-          selectedIds.has(node.id) ? { ...node, selected: true } : node,
-        );
-      });
+      rebuildNodes(next);
       setEdges(toFlowEdges(next));
       setDirty(true);
     },
-    [registry],
+    [rebuildNodes],
   );
 
   // 框选 → 折叠为子图(ComfyUI 式):把选中节点收进一个 subgraph 节点,进出边界的引用/数据边自动重写。
