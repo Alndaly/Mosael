@@ -19,12 +19,14 @@
     "dev": "pnpm --dir frontend electron:dev",
     "fetch:tts-python": "node scripts/fetch-tts-python.mjs",
     "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json",
-    "build:system": "esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs"
+    "build:system": "esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs",
+    "gen:api": "openapi-typescript backend/openapi.json -o frontend/src/api/generated/schema.d.ts"
   },
   "devDependencies": {
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "openapi-typescript": "^7.13.0"
   },
   "build": {
     "appId": "dev.openstudio.app",

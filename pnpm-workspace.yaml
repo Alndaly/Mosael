@@ -32,3 +32,12 @@ onlyBuiltDependencies:
 # electron-builder 修正声明后即可移除。
 overrides:
   "@electron/get": "^5.1.0"
+
+# 另一处依赖布局上的坑(修在 package.json,记在这里以便一起看):`openapi-typescript`(API
+# 类型生成)必须挂在**根**的 devDependencies,不能挂在 frontend。它到 7.13 为止 peer 仍是
+# typescript ^5.x,走 `ts.factory` 这套旧编译器 API;而 TypeScript 7 的 npm 包换成了原生实现,
+# `ts.factory` 是 undefined,`pnpm gen:api` 起手就崩:
+#   TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')
+# 挂在 frontend 时 peer 会被 frontend 自己的 TS 7 满足;挂在根(根不声明 typescript)则由
+# pnpm 自动装一份 TS 5 给它。overrides 和 packageExtensions 都改不了 peer 的解析,试过。
+# openapi-typescript 支持 TS 7 后可挪回 frontend。

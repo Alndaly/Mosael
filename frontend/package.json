@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
-    "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
+    "gen:api": "pnpm -w gen:api",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "electron:dev": "pnpm --dir .. build:publisher && pnpm --dir .. build:system && concurrently -k -n vite,bundle,backend,electron -c cyan,yellow,magenta,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"pnpm --dir .. dev:backend\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:${OPEN_STUDIO_BACKEND_PORT:-8800}/api/health && node ../electron/brand-dev.cjs && electron ../electron/main.cjs\"",
     "test": "vitest run"
@@ -77,7 +77,6 @@
     "concurrently": "^10.0.4",
     "electron": "^43.2.0",
     "jsdom": "^30.0.1",
-    "openapi-typescript": "^7.13.0",
     "vitest": "^4.1.10",
     "wait-on": "^9.1.0"
   }
