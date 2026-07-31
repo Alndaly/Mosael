@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
@@ -34,7 +34,9 @@ async function bundle(entry, outfile, external = []) {
     external,
     outfile,
   });
-  return outfile;
+  // 返回 file:// URL 而不是裸路径:Windows 上 `import("D:\\...")` 会被 ESM loader 当成
+  // 协议名 'd:' 拒掉(ERR_UNSUPPORTED_ESM_URL_SCHEME)。同样是本地 macOS 全绿、Windows CI 红。
+  return pathToFileURL(outfile).href;
 }
 
 // installProxyFromEnv 要在装载时读环境,所以得能控制装载时机 —— 现打一份再动态 import。
