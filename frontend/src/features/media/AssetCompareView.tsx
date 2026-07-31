@@ -352,7 +352,12 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
   const shown = grid ? images : [images[pair[0]], images[pair[1]]].filter(Boolean);
 
   return (
-    <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)] bg-[rgb(10_10_12)]">
+    // no-drag 是必需的,不是保险:左侧栏整块声明了 -webkit-app-region: drag 且纵向贯穿整窗,
+    // 而拖拽区是 Blink 算好交给系统、由系统在页面之前截走输入的 —— 用 fixed inset-0 盖在上面
+    // 不管用,z-index 与绘制顺序对它无效,只有显式 no-drag 能把这块减掉。不加的话这一层
+    // 最左 56px 是一条纵贯的死区:候选条第一张的左半边点不动、悬浮态也出不来。
+    // 顶栏自己再声明回 drag(它在 DOM 里更靠后,后者生效),盖住标题栏后窗口才还能拖。
+    <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)] bg-[rgb(10_10_12)] [.is-desktop_&]:[-webkit-app-region:no-drag]">
       {/* 系统窗口控件避让:沿用 AppShell 顶栏的同一套约定 —— macOS 红绿灯在左上、Windows 控件在
           右上,全屏时都收回。这层是全屏覆盖,顶到了标题栏位置,不让位就会压在系统按钮上。
           顺带让它可拖窗(按钮自身 no-drag),否则盖住标题栏后窗口就挪不动了。 */}
@@ -450,11 +455,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
        * 角标常驻而不是只在 hover 时出现:它回答的是"现在比的是哪两张",这个问题在鼠标
        * 不在条子上的时候同样要能回答。左右两半的 A/B 提示才是 hover 才给的。 */}
       {mode !== "grid" && images.length > 2 && (
-        // 左下留够 16px:这个视图是 fixed inset-0 铺满整窗的,而无边框窗口在窗框内侧有一圈
-        // 系统保留的缩放热区,**角上的斜向区比边上宽得多**。原来第一张距左 8px、距下 6px,
-        // 正压在左下角那块热区里 —— 光标进去由系统接管,网页收不到鼠标事件,:hover 当场丢,
-        // A/B 覆盖层就一闪一闪。其余缩略图只贴下边一条,边缘热区窄,所以只有第一张有事。
-        <div className="flex gap-1.5 overflow-x-auto border-t border-border px-4 pb-4 pt-2">
+        <div className="flex gap-1.5 overflow-x-auto border-t border-border px-2 py-1.5">
           {images.map((asset, index) => {
             const slot = pair[0] === index ? 0 : pair[1] === index ? 1 : null;
             return (
