@@ -32,67 +32,16 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
+import { useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type WorkflowAgentMode = "docked" | "floating";
 
-// v2:默认尺寸加大 + 八向缩放手柄。升键让老用户存下的 320×460 小窗让位给新默认(仅一次)。
+/** 悬浮窗几何记忆的键。v2:默认尺寸加大 + 八向缩放手柄(升键让老用户的小窗让位一次)。 */
 const RECT_KEY = "openstudio.wf.agent.rect.v2";
 
-interface FloatRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-const MIN_W = 320;
-const MIN_H = 380;
-
-function clampRect(rect: FloatRect): FloatRect {
-  const w = Math.min(Math.max(rect.w, MIN_W), window.innerWidth - 24);
-  const h = Math.min(Math.max(rect.h, MIN_H), window.innerHeight - 24);
-  return {
-    w,
-    h,
-    x: Math.min(Math.max(rect.x, 8), window.innerWidth - w - 8),
-    y: Math.min(Math.max(rect.y, 8), window.innerHeight - 60),
-  };
-}
-
-function defaultRect(): FloatRect {
-  // 随视口取,小屏不顶满、大屏不寒酸;落位右下角。
-  const w = Math.min(480, window.innerWidth - 48);
-  const h = Math.min(640, window.innerHeight - 96);
-  return { x: window.innerWidth - w - 20, y: window.innerHeight - h - 44, w, h };
-}
-
-function loadRect(): FloatRect {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(RECT_KEY) ?? "");
-    return clampRect({ x: Number(parsed.x), y: Number(parsed.y), w: Number(parsed.w), h: Number(parsed.h) });
-  } catch {
-    return clampRect(defaultRect());
-  }
-}
-
-/** 八向缩放:每个手柄声明它拉动哪几条边。 */
-const RESIZE_EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
-
-/* 八向缩放手柄:6px 隐形命中区骑在边框上;右下角给两道弧线的可见暗示 */
-const WF_AGENT_RS_CLASSES: Record<string, string> = {
-  n: "left-2.5 right-2.5 top-[-3px] h-1.5 cursor-ns-resize",
-  s: "bottom-[-3px] left-2.5 right-2.5 h-1.5 cursor-ns-resize",
-  e: "bottom-2.5 right-[-3px] top-2.5 w-1.5 cursor-ew-resize",
-  w: "bottom-2.5 left-[-3px] top-2.5 w-1.5 cursor-ew-resize",
-  ne: "right-[-3px] top-[-3px] h-3 w-3 cursor-nesw-resize",
-  sw: "bottom-[-3px] left-[-3px] h-3 w-3 cursor-nesw-resize",
-  nw: "left-[-3px] top-[-3px] h-3 w-3 cursor-nwse-resize",
-  se: "bottom-[-3px] right-[-3px] h-3 w-3 cursor-nwse-resize after:absolute after:bottom-1 after:right-1 after:h-[7px] after:w-[7px] after:rounded-br-[3px] after:border-b-2 after:border-r-2 after:border-border-strong after:opacity-70 after:content-['']",
-};
-type ResizeEdge = (typeof RESIZE_EDGES)[number];
 
 /**
  * 工作流常驻智能体面板:它不是第二套 AI,而是全局 AI 助手的工作流入口。
@@ -158,67 +107,11 @@ export function WorkflowAgentChat({
   const threadRef = React.useRef<HTMLDivElement | null>(null);
   const isFloating = mode === "floating";
 
-  // 悬浮窗:标题栏拖动 + 原生右下角缩放,位置尺寸记忆。
-  const [rect, setRect] = React.useState<FloatRect>(loadRect);
-  const panelRef = React.useRef<HTMLElement | null>(null);
-  const persistRect = React.useCallback((next: FloatRect) => {
-    window.localStorage.setItem(RECT_KEY, JSON.stringify(next));
-  }, []);
-
-  const startDrag = (event: React.PointerEvent) => {
-    if (!isFloating) return;
-    if ((event.target as HTMLElement).closest("button,input,textarea,a,[role='combobox'],[data-no-drag]")) return;
-    event.preventDefault();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const origin = { ...rect };
-    const onMove = (moveEvent: PointerEvent) => {
-      setRect(clampRect({ ...origin, x: origin.x + (moveEvent.clientX - startX), y: origin.y + (moveEvent.clientY - startY) }));
-    };
-    const onUp = (upEvent: PointerEvent) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      persistRect(clampRect({ ...origin, x: origin.x + (upEvent.clientX - startX), y: origin.y + (upEvent.clientY - startY) }));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-
-  // 八向缩放:拖 n/w 边时同步移动 x/y(锚定对边),clampRect 统一夹取。
-  // 用自定义手柄而不是原生 resize: both——原生只有右下一个不显眼的小角,
-  // 且在 position: fixed + 手动定位下无法向上/向左扩展。
-  const startResize = (edge: ResizeEdge) => (event: React.PointerEvent) => {
-    if (!isFloating) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const origin = { ...rect };
-    const apply = (clientX: number, clientY: number): FloatRect => {
-      const dx = clientX - startX;
-      const dy = clientY - startY;
-      let { x, y, w, h } = origin;
-      if (edge.includes("e")) w = origin.w + dx;
-      if (edge.includes("s")) h = origin.h + dy;
-      if (edge.includes("w")) {
-        w = Math.min(Math.max(origin.w - dx, MIN_W), origin.x + origin.w - 8);
-        x = origin.x + origin.w - w;
-      }
-      if (edge.includes("n")) {
-        h = Math.min(Math.max(origin.h - dy, MIN_H), origin.y + origin.h - 8);
-        y = origin.y + origin.h - h;
-      }
-      return clampRect({ x, y, w, h });
-    };
-    const onMove = (moveEvent: PointerEvent) => setRect(apply(moveEvent.clientX, moveEvent.clientY));
-    const onUp = (upEvent: PointerEvent) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      persistRect(apply(upEvent.clientX, upEvent.clientY));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
+  // 悬浮窗的拖动/缩放/位置记忆走共用 hook —— 执行历史面板用的是同一套。
+  const { style: floatStyle, startDrag, handles } = useFloatingPanel({
+    storageKey: RECT_KEY,
+    floating: isFloating,
+  });
 
   // 多会话:工作流入口复用全局 AI 会话池,只共享选中的 session id。
   const sessionKey = agentSessionSelectionKey(workspaceId);
@@ -504,21 +397,17 @@ export function WorkflowAgentChat({
 
   return (
     <aside
-      ref={panelRef}
       className={cn(
         "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border-strong bg-panel",
         isFloating
           ? "fixed z-[55] min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
           : "relative z-[1] h-full w-full min-h-0 min-w-0 rounded-lg border-border shadow-none",
       )}
-      style={isFloating ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : undefined}
+      style={floatStyle}
       role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfAgentTitle")}
     >
-      {isFloating &&
-        RESIZE_EDGES.map((edge) => (
-          <div key={edge} className={cn("absolute z-[2]", WF_AGENT_RS_CLASSES[edge])} onPointerDown={startResize(edge)} />
-        ))}
+      {handles}
       <div className={cn("flex cursor-default select-none touch-none items-center gap-1.5 border-b border-border py-1.5 pl-2.5 pr-2 [&_h2]:m-0 [&_h2]:text-[12.5px] [&_h2]:font-semibold", isFloating && "cursor-move")} onPointerDown={startDrag}>
         <h2 className="inline-flex items-center gap-1.5">
           <Bot size={14} /> {t("wfAgentTitle")}

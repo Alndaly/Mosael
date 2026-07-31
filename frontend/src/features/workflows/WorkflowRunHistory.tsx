@@ -1,12 +1,14 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, SkipForward, X, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
 import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEvent } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { outputType } from "@/features/workflows/analyze";
 import { parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
+import { useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import type { WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
@@ -85,14 +87,28 @@ function RunIcon({ status }: { status: string }) {
 export function WorkflowRunHistory({
   workflowId,
   nodeTypeById = {},
+  mode,
+  onModeChange,
   onClose,
 }: {
   workflowId: string;
   /** 节点 id → 类型。用来查这一步的输出里哪些是素材(见 OUTPUT_TYPES)。
    *  历史里的节点可能已被删改,查不到就退回纯文本 —— 不猜。 */
   nodeTypeById?: Record<string, string>;
+  /** 与 AI 助手同一套:停靠在右栏,或浮成可拖动、可八向缩放的小窗。 */
+  mode: WorkflowAgentMode;
+  onModeChange: (mode: WorkflowAgentMode) => void;
   onClose: () => void;
 }) {
+  const isFloating = mode === "floating";
+  const { style: floatStyle, startDrag, handles } = useFloatingPanel({
+    storageKey: "openstudio.wf.history.rect.v1",
+    floating: isFloating,
+    // 历史是列表,窄一点就够;高度给足,一屏能看到步骤和产物。
+    preferredW: 400,
+    preferredH: 620,
+    minW: 300,
+  });
   const t = useI18n();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
@@ -146,11 +162,37 @@ export function WorkflowRunHistory({
   // 和 AI 助手一样停靠在右栏,不再是盖在画布上的悬浮层:悬浮会挡住正在跑的节点,
   // 而运行时恰恰要同时看见画布和这里。
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label={t("wfHistory")}>
-      <div className="flex h-[34px] items-center border-b border-border pl-2.5 pr-1.5 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold">
+    <aside
+      className={cn(
+        "flex flex-col overflow-hidden rounded-lg border border-border bg-panel",
+        isFloating
+          ? "fixed z-[55] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
+          : "relative min-h-0 min-w-0",
+      )}
+      style={floatStyle}
+      role={isFloating ? "dialog" : "complementary"}
+      aria-label={t("wfHistory")}
+    >
+      {handles}
+      <div
+        className={cn(
+          "flex h-[34px] select-none touch-none items-center border-b border-border pl-2.5 pr-1.5 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold",
+          isFloating && "cursor-move",
+        )}
+        onPointerDown={startDrag}
+      >
         <h2>
           <History size={14} /> {t("wfHistory")}
         </h2>
+        <button
+          type="button"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
+          aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
+          onClick={() => onModeChange(isFloating ? "docked" : "floating")}
+        >
+          {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
+        </button>
         <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>

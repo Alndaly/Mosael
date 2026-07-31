@@ -887,6 +887,8 @@ function WorkflowEditor({
     localStorage.setItem(AGENT_PANEL_KEY, agentOpen ? "1" : "0");
   }, [agentOpen]);
   const [agentMode, setAgentMode] = React.useState<WorkflowAgentMode>("docked");
+  /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
+  const [historyMode, setHistoryMode] = React.useState<WorkflowAgentMode>("docked");
   const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
   const [nodeSearch, setNodeSearch] = React.useState("");
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
@@ -1385,7 +1387,19 @@ function WorkflowEditor({
    *  这正是运行时最想一眼看清的东西。 */
   const dockedAgent = agentOpen && agentMode === "docked";
   /** 右栏里停靠着几个面板(助手 / 执行历史)。0 就不开这一列。 */
-  const rightPanels = (dockedAgent ? 1 : 0) + (showHistory ? 1 : 0);
+  const dockedHistory = showHistory && historyMode === "docked";
+  const historyPanel = (
+    <WorkflowRunHistory
+      workflowId={workflow.id}
+      // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
+      // 是就渲染成缩略图/播放器而不是一串裸 id。
+      nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
+      mode={historyMode}
+      onModeChange={setHistoryMode}
+      onClose={() => setShowHistory(false)}
+    />
+  );
+  const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
 
   const displayEdges = React.useMemo(() => {
     if (Object.keys(runByNode).length === 0) return edges;
@@ -1706,11 +1720,11 @@ function WorkflowEditor({
         </div>
         {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
             一边翻某一步的输出。助手切到浮动模式时自己脱离文档流,所以只按停靠中的个数分行。 */}
-        {(dockedAgent || showHistory) && (
+        {(dockedAgent || dockedHistory) && (
           <div
             className={cn(
               "grid min-h-0 min-w-0 gap-2",
-              dockedAgent && showHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
+              dockedAgent && dockedHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
             )}
           >
             {agentOpen && (
@@ -1723,18 +1737,12 @@ function WorkflowEditor({
                 onClose={() => setAgentOpen(false)}
               />
             )}
-            {showHistory && (
-              <WorkflowRunHistory
-                workflowId={workflow.id}
-                // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
-                // 是就渲染成缩略图/播放器而不是一串裸 id。
-                nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
-                onClose={() => setShowHistory(false)}
-              />
-            )}
+            {dockedHistory && historyPanel}
           </div>
         )}
-        {/* 助手处于浮动模式时不在右栏里,单独挂。 */}
+        {/* 浮动的面板不在右栏里(fixed 定位,自己脱离文档流),单独挂 —— 挂在栏内的话,
+            两个都浮动时右栏根本不渲染,面板就跟着消失了。 */}
+        {showHistory && !dockedHistory && historyPanel}
         {agentOpen && !dockedAgent && (
           <WorkflowAgentChat
             workflowId={workflow.id}
