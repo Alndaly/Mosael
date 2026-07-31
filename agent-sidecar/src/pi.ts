@@ -140,9 +140,47 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     | undefined;
   return {
     text: full,
-    usage: { requests: 1 },
+    usage: collectUsage(messages),
     sessionState: messages,
     errorMessage: aborted ? undefined : failed?.errorMessage,
     aborted,
   };
+}
+
+/**
+ * 把本轮真实的 token 用量汇总出来。
+ *
+ * 以前这里只回 `{ requests: 1 }`,一个 token 数都没有 —— 于是后端的 `_turn_metering` 走兜底分支,
+ * **按字符数估算**并打上 `token_estimate: true`。也就是说用量图表与费用统计一直是估算值,
+ * 而 pi 本来就在每条助手消息上带着供应商回报的真实数字。
+ *
+ * 一轮可能有多条助手消息(工具调用会触发后续 LLM 调用),所以要累加而不是取最后一条。
+ * 字段名对齐后端 `_turn_metering` 认的那组(input_tokens / output_tokens / total_tokens),
+ * 认到了就不会再估算。cacheRead/cacheWrite 另记:它们计价不同,压平进 input 会让费用偏高。
+ */
+function collectUsage(messages: readonly unknown[]): Record<string, number> {
+  let input = 0, output = 0, cacheRead = 0, cacheWrite = 0, reasoning = 0, requests = 0;
+  for (const message of messages) {
+    const usage = (message as { role?: string; usage?: Record<string, number> }).usage;
+    if (!usage || (message as { role?: string }).role !== "assistant") continue;
+    requests += 1;
+    input += usage.input ?? 0;
+    output += usage.output ?? 0;
+    cacheRead += usage.cacheRead ?? 0;
+    cacheWrite += usage.cacheWrite ?? 0;
+    reasoning += usage.reasoning ?? 0;
+  }
+  // 一条都没读到就别硬报 0:那会让后端以为拿到了真实用量而跳过估算,结果是费用恒为 0
+  // —— 比估算更糟。宁可退回估算。
+  if (requests === 0) return { requests: 1 };
+  const out: Record<string, number> = {
+    requests,
+    input_tokens: input,
+    output_tokens: output,
+    total_tokens: input + output,
+  };
+  if (cacheRead) out.cache_read_tokens = cacheRead;
+  if (cacheWrite) out.cache_write_tokens = cacheWrite;
+  if (reasoning) out.reasoning_tokens = reasoning;
+  return out;
 }

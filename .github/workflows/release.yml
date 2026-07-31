@@ -103,7 +103,7 @@ jobs:
           pnpm build:frontend
           pnpm build:sidecar
           # 打包产物的初始化顺序只有跑起来才看得出(见 test/bundle.smoke.mjs 的说明)。
-          pnpm --dir agent-sidecar test:bundle
+          pnpm --dir agent-sidecar test
           pnpm build:backend
 
       - name: Package (electron-builder)
