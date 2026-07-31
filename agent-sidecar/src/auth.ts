@@ -24,6 +24,8 @@ registerBunOAuthFlows();
 
 /** 等待用户作答的 prompt:key = promptId。 */
 const pending = new Map<string, (answer: string) => void>();
+/** 单调递增,不用 pending.size —— 那个值在上一问答完后会退回去,连续两个同类型提问会撞 id。 */
+let promptSeq = 0;
 
 export function answerAuthPrompt(promptId: string, answer: string): boolean {
   const resolve = pending.get(promptId);
@@ -57,7 +59,7 @@ export async function runAuthLogin(input: AuthLoginInput, signal: AbortSignal): 
   const interaction = {
     signal,
     prompt: (prompt: AuthPrompt): Promise<string> => {
-      const promptId = `${loginId}:${pending.size}:${prompt.type}`;
+      const promptId = `${loginId}:${(promptSeq += 1)}:${prompt.type}`;
       send({
         type: "auth_prompt",
         loginId,

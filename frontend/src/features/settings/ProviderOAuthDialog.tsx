@@ -90,6 +90,78 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
   return <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">{message}</p>;
 }
 
+type Prompt = NonNullable<LoginState["prompt"]>;
+
+/**
+ * 一步提问的输入区。
+ *
+ * 抽出来是因为它漏过一次:select 类型(如 Codex 的「浏览器授权 / 设备码」)和文本类型
+ * 共用了一个输入框,用户看到的是一个**空框**,得凭空猜出 "browser" 这个 id 才能往下走。
+ * 单独成组件才测得到。
+ */
+export function AuthPromptField({
+  prompt,
+  pending,
+  submitLabel,
+  onSubmit,
+}: {
+  prompt: Prompt;
+  pending?: boolean;
+  submitLabel: string;
+  onSubmit: (value: string) => void;
+}) {
+  const [answer, setAnswer] = React.useState("");
+
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-[11.5px] text-foreground">{prompt.message}</span>
+      {prompt.prompt_type === "select" ? (
+        // 提交的是选项 id,不是它的显示文案。
+        <div className="grid gap-1">
+          {(prompt.options ?? []).map((option) => {
+            const row = option as Record<string, unknown>;
+            const id = String(row.id ?? "");
+            const label = String(row.label ?? id);
+            const description = typeof row.description === "string" ? row.description : "";
+            return (
+              <Button
+                key={id}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-auto justify-start py-1.5 text-left"
+                disabled={pending}
+                onClick={() => onSubmit(id)}
+              >
+                <span className="grid gap-px">
+                  <span className="text-[12px] font-medium">{label}</span>
+                  {description && <span className="text-[10.5px] font-normal text-muted-foreground">{description}</span>}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <Input
+            autoFocus
+            type={prompt.prompt_type === "secret" ? "password" : "text"}
+            placeholder={prompt.placeholder || ""}
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && answer.trim()) onSubmit(answer.trim());
+            }}
+          />
+          <Button type="button" size="sm" disabled={!answer.trim() || pending} onClick={() => onSubmit(answer.trim())}>
+            {submitLabel}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProviderOAuthDialog({
   profileId,
   profileName,
@@ -163,29 +235,12 @@ export function ProviderOAuthDialog({
         ))}
 
         {prompt && status === "running" && (
-          <div className="grid gap-1.5">
-            <span className="text-[11.5px] text-foreground">{prompt.message}</span>
-            <div className="flex items-center gap-1.5">
-              <Input
-                autoFocus
-                type={prompt.prompt_type === "secret" ? "password" : "text"}
-                placeholder={prompt.placeholder || ""}
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && answer.trim()) submitAnswer.mutate(answer.trim());
-                }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!answer.trim() || submitAnswer.isPending}
-                onClick={() => submitAnswer.mutate(answer.trim())}
-              >
-                {t("providerOauthSubmit")}
-              </Button>
-            </div>
-          </div>
+          <AuthPromptField
+            prompt={prompt}
+            pending={submitAnswer.isPending}
+            submitLabel={t("providerOauthSubmit")}
+            onSubmit={(value) => submitAnswer.mutate(value)}
+          />
         )}
 
         {status === "running" && !prompt && (
