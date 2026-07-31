@@ -450,15 +450,17 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
        * 角标常驻而不是只在 hover 时出现:它回答的是"现在比的是哪两张",这个问题在鼠标
        * 不在条子上的时候同样要能回答。左右两半的 A/B 提示才是 hover 才给的。 */}
       {mode !== "grid" && images.length > 2 && (
-        <div className="flex gap-1.5 overflow-x-auto border-t border-border px-2 py-1.5">
+        // 左下留够 16px:这个视图是 fixed inset-0 铺满整窗的,而无边框窗口在窗框内侧有一圈
+        // 系统保留的缩放热区,**角上的斜向区比边上宽得多**。原来第一张距左 8px、距下 6px,
+        // 正压在左下角那块热区里 —— 光标进去由系统接管,网页收不到鼠标事件,:hover 当场丢,
+        // A/B 覆盖层就一闪一闪。其余缩略图只贴下边一条,边缘热区窄,所以只有第一张有事。
+        <div className="flex gap-1.5 overflow-x-auto border-t border-border px-4 pb-4 pt-2">
           {images.map((asset, index) => {
             const slot = pair[0] === index ? 0 : pair[1] === index ? 1 : null;
             return (
-              // 这里**不能**挂原生 title:缩略图贴在窗口最底部,鼠标在它上面移动时气泡会反复
-              // 隐藏重弹,而底边附近的气泡会翻到指针上方、正好压住缩略图 —— 每弹一次就把
-              // 指针从元素上夺走一帧,表现就是 A/B 覆盖层一闪一闪。名字在窗格页脚里有。
               <div
                 key={asset.id}
+                title={asset.name || asset.original_filename}
                 className={cn(
                   "group relative h-12 w-16 shrink-0 overflow-hidden rounded border bg-black",
                   slot === null ? "border-border opacity-60 hover:opacity-100" : "border-primary",
