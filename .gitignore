@@ -40,6 +40,8 @@ release/
 #   installer.nsh  NSIS 定制脚本(卸载前 taskkill 后端进程)
 /build/*
 !/build/icon.png
+!/build/trayTemplate.png
+!/build/trayTemplate@2x.png
 !/build/icon.icns
 !/build/installer.nsh
 

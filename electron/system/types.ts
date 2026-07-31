@@ -15,6 +15,9 @@ export interface SystemContext {
   isDev: boolean;
   /** 打包时随包分发的托盘图标绝对路径。 */
   iconPath: string;
+  /** 菜单栏/通知区域用的图标。macOS 走模板图像(黑色字形+透明底,系统自动按明暗反色);
+   *  Windows 托盘的惯例仍是彩色图标,那边继续用 iconPath。 */
+  trayIconPath?: string;
 }
 
 /** 渲染层推上来的运行状态。系统层只消费,不生产。 */

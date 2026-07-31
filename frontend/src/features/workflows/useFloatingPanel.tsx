@@ -10,6 +10,11 @@ import { cn } from "@/lib/utils";
  *
  * 停靠态不接管任何几何:面板在网格里填满自己的格子。只有悬浮态才 fixed 定位。
  */
+/** 两个面板共用的标题栏刻度:同样的高度、内边距、按钮间距。
+ *  各写各的时候,并排放在右栏里按钮疏密一眼就能看出不一样。 */
+export const PANEL_HEADER_CLASS =
+  "flex h-[34px] cursor-default select-none touch-none items-center gap-1 border-b border-border pl-2.5 pr-1.5 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold";
+
 export interface FloatRect {
   x: number;
   y: number;

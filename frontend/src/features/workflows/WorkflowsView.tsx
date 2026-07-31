@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
   Background,
@@ -96,6 +96,7 @@ import {
   listWorkflows,
   runWorkflow,
   updateWorkflow,
+  type Asset,
   type GenerationModel,
   type TaskEvent,
   type Workflow,
@@ -143,8 +144,9 @@ import {
   type DataType,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
-import { stepsByNode } from "@/features/workflows/runSteps";
+import { assetOutputs, stepsByNode } from "@/features/workflows/runSteps";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -230,11 +232,49 @@ interface WfNodeData extends Record<string, unknown> {
   outputs?: string[];
   /** 本次运行到这一步的状态。运行结束后保留,方便回看这次跑成什么样。 */
   run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string } | null;
+  /** 这一步产出的素材(节点注册表里声明为 asset 的输出)。节点上直接出缩略图。 */
+  runAssets?: string[];
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
     条件节点右侧是「真/假」两个分支端点,其余节点单一出口。
     缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
+/** 节点上的产出预览:这一步生成了什么,直接摆在节点里 —— 不用再点开历史面板去找。
+ *  素材可能已被删除(取不到就不渲染),所以查询失败是正常路径。 */
+function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
+  const assets = useQueries({
+    queries: assetIds.slice(0, 2).map((id) => ({
+      queryKey: ["asset", id],
+      queryFn: () => api<Asset>(`/api/assets/${id}`),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
+  if (ready.length === 0) return null;
+  return (
+    // nodrag:在缩略图上按下不该把节点拖走(视频还要能点播放条)。
+    <div className="nodrag flex gap-1.5 pt-0.5">
+      {ready.map((asset) => (
+        <AssetInlinePreview
+          key={asset.id}
+          assetId={asset.id}
+          name={asset.name || asset.original_filename}
+          kind={asset.kind}
+          lazy={false}
+          className={
+            asset.kind === "image"
+              ? "block h-[84px] w-auto max-w-full object-contain"
+              : asset.kind === "video"
+                ? "max-h-[84px] max-w-full rounded-md border border-border bg-black"
+                : "w-[180px] max-w-full"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 function WfNode({ data, selected }: NodeProps) {
   const t = useI18n();
   const d = data as WfNodeData;
@@ -295,6 +335,7 @@ function WfNode({ data, selected }: NodeProps) {
           {d.label !== d.typeLabel && <small>{d.typeLabel}</small>}
         </span>
       </div>
+      <NodeResultPreview assetIds={d.runAssets ?? []} />
       {badge && (
         <span
           className={cn(
@@ -1315,7 +1356,10 @@ function WorkflowEditor({
     queryKey: ["job-events", runJobId],
     queryFn: () => listJobEvents(runJobId ?? ""),
     enabled: Boolean(runJobId),
-    // 跑动时勤快些,结束后停下来。判据是「有没有节点还在跑」而不是 job 状态:
+    // 窗口没聚焦也要继续轮询:把应用放在一边看着工作流跑是常态,默认行为会暂停轮询,
+    // 于是回头一看画布还停在半小时前的那一步。
+    refetchIntervalInBackground: true,
+    // 跑动时勤快些,结束后停下来。判据是「有没有收尾事件」而不是 job 状态:
     // 后者要等整条流程收尾,中间那段画布就不动了。
     refetchInterval: (q) => {
       const list = (q.state.data as TaskEvent[] | undefined) ?? [];
@@ -1388,6 +1432,16 @@ function WorkflowEditor({
   const dockedAgent = agentOpen && agentMode === "docked";
   /** 右栏里停靠着几个面板(助手 / 执行历史)。0 就不开这一列。 */
   const dockedHistory = showHistory && historyMode === "docked";
+  const agentPanel = (
+    <WorkflowAgentChat
+      workflowId={workflow.id}
+      workflowName={workflow.name}
+      workspaceId={workflow.workspace_id}
+      mode={agentMode}
+      onModeChange={setAgentMode}
+      onClose={() => setAgentOpen(false)}
+    />
+  );
   const historyPanel = (
     <WorkflowRunHistory
       workflowId={workflow.id}
@@ -1435,6 +1489,7 @@ function WorkflowEditor({
             ...node.data,
             badge,
             run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
+            runAssets: step?.outputs ? assetOutputs(node.data.nodeType as string, step.outputs) : [],
           },
         };
       }),
@@ -1727,32 +1782,14 @@ function WorkflowEditor({
               dockedAgent && dockedHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
             )}
           >
-            {agentOpen && (
-              <WorkflowAgentChat
-                workflowId={workflow.id}
-                workflowName={workflow.name}
-                workspaceId={workflow.workspace_id}
-                mode={agentMode}
-                onModeChange={setAgentMode}
-                onClose={() => setAgentOpen(false)}
-              />
-            )}
+            {dockedAgent && agentPanel}
             {dockedHistory && historyPanel}
           </div>
         )}
         {/* 浮动的面板不在右栏里(fixed 定位,自己脱离文档流),单独挂 —— 挂在栏内的话,
             两个都浮动时右栏根本不渲染,面板就跟着消失了。 */}
         {showHistory && !dockedHistory && historyPanel}
-        {agentOpen && !dockedAgent && (
-          <WorkflowAgentChat
-            workflowId={workflow.id}
-            workflowName={workflow.name}
-            workspaceId={workflow.workspace_id}
-            mode={agentMode}
-            onModeChange={setAgentMode}
-            onClose={() => setAgentOpen(false)}
-          />
-        )}
+        {agentOpen && !dockedAgent && agentPanel}
         {editingLoopId &&
           (() => {
             const loopNode = graph.nodes.find((item) => item.id === editingLoopId);

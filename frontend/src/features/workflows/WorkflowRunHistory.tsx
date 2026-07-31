@@ -5,9 +5,8 @@ import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, 
 import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEvent } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
-import { outputType } from "@/features/workflows/analyze";
-import { parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
-import { useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
+import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import type { WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { cn } from "@/lib/utils";
 
@@ -25,16 +24,6 @@ function ms(a: string, b: string): number {
 }
 
 
-/** 这一步输出里声明为素材的那些(节点注册表里 outputType === "asset")。
- *
- *  以前历史面板把 `asset_id: 535f288eaeb4…` 一串裸十六进制直接铺在文本块里 —— 同一次生成,
- *  在智能体对话里是一张图,在执行历史里却要用户自己拿着 id 去素材库翻。 */
-function assetOutputs(nodeType: string, outputs: Record<string, unknown>): string[] {
-  if (!nodeType) return [];
-  return Object.entries(outputs)
-    .filter(([key, value]) => outputType(nodeType, key) === "asset" && typeof value === "string" && value.trim())
-    .map(([, value]) => String(value));
-}
 
 /** 素材产出的预览条。素材可能已被删除(取不到就不渲染),所以查询失败是正常路径不是错误。 */
 function StepAssets({ assetIds }: { assetIds: string[] }) {
@@ -176,7 +165,7 @@ export function WorkflowRunHistory({
       {handles}
       <div
         className={cn(
-          "flex h-[34px] select-none touch-none items-center border-b border-border pl-2.5 pr-1.5 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold",
+          PANEL_HEADER_CLASS,
           isFloating && "cursor-move",
         )}
         onPointerDown={startDrag}

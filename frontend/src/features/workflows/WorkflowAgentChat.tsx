@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   CornerDownRight,
-  GripHorizontal,
   Loader2,
   Move,
   PanelRight,
@@ -32,7 +31,7 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
-import { useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -408,7 +407,7 @@ export function WorkflowAgentChat({
       aria-label={t("wfAgentTitle")}
     >
       {handles}
-      <div className={cn("flex cursor-default select-none touch-none items-center gap-1.5 border-b border-border py-1.5 pl-2.5 pr-2 [&_h2]:m-0 [&_h2]:text-[12.5px] [&_h2]:font-semibold", isFloating && "cursor-move")} onPointerDown={startDrag}>
+      <div className={cn(PANEL_HEADER_CLASS, isFloating && "cursor-move")} onPointerDown={startDrag}>
         <h2 className="inline-flex items-center gap-1.5">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
@@ -485,7 +484,6 @@ export function WorkflowAgentChat({
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </button>
-        {isFloating && <GripHorizontal size={13} className="text-muted-foreground opacity-60" />}
         <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>

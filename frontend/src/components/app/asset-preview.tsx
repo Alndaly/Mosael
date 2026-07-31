@@ -18,12 +18,16 @@ export function AssetInlinePreview({
   name,
   kind,
   className,
+  lazy = true,
 }: {
   assetId: string;
   name: string;
   kind: string;
   /** 覆盖媒体元素的尺寸约束。默认按对话气泡的刻度。 */
   className?: string;
+  /** 懒加载。**画布节点里必须关掉**:React Flow 的视口是 transform 变换过的,浏览器据此
+   *  判断"还没进视野"而迟迟不发请求,图片就一直是 0×0,节点上看着像没产出。 */
+  lazy?: boolean;
 }) {
   const { openImagePreview } = useImagePreview();
   const src = assetFileUrl(assetId);
@@ -39,7 +43,7 @@ export function AssetInlinePreview({
         <img
           src={src}
           alt={name}
-          loading="lazy"
+          loading={lazy ? "lazy" : "eager"}
           className={className ?? "block max-h-[180px] w-auto max-w-full object-contain"}
         />
       </button>

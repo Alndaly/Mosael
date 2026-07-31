@@ -15,16 +15,25 @@ import type { Capability, SystemContext, SystemStatus } from "./types";
 /** 托盘图标像素尺寸:menu bar / 通知区域都按小图标渲染,给原图会糊或过大。 */
 const ICON_SIZE = 18;
 
-function buildIcon(iconPath: string) {
-  const image = nativeImage.createFromPath(iconPath);
+function buildIcon(ctx: SystemContext) {
+  // macOS 的菜单栏图标惯例是**单色字形**,由系统按明暗菜单栏自动反色、并在非活动窗口时变淡。
+  // 直接塞彩色应用图标,在一排单色图标里像块补丁,深色菜单栏下还容易糊成一团。
+  // Windows/Linux 的托盘惯例相反(彩色),继续用应用图标。
+  const template = process.platform === "darwin" && ctx.trayIconPath;
+  const image = nativeImage.createFromPath(template ? ctx.trayIconPath! : ctx.iconPath);
   if (image.isEmpty()) return image;
+  if (template) {
+    // 模板图像交给系统着色,自己不要再 resize:@2x 那份会被一起丢掉,Retina 上就糊了。
+    image.setTemplateImage(true);
+    return image;
+  }
   return image.resize({ width: ICON_SIZE, height: ICON_SIZE });
 }
 
 export const tray: Capability = {
   name: "tray",
   register(ctx: SystemContext) {
-    const icon = buildIcon(ctx.iconPath);
+    const icon = buildIcon(ctx);
     if (icon.isEmpty()) {
       // 图标缺失就不要建托盘:一个空图标的托盘项在 Windows 上是一块看不见的占位,
       // 用户既看不到它、也点不到它,比没有更糟。
