@@ -528,6 +528,9 @@ class ProviderProfileCreate(BaseModel):
     #: 服务端从既有档案复制 secret 字段(如同一把方舟 Key 配到另一能力的独立档案),
     #: 密钥全程不出后端、不下发前端。仅在本档案未显式提供该字段时生效。
     copy_credentials_from: str | None = None
+    #: 鉴权方式("oauth" / "api_key");不传则取该 vendor 的默认(见 default_auth_type)。
+    #: 非该 vendor 支持的值会被收敛掉,而不是报错——UI 只会给出支持的选项。
+    auth_type: str | None = None
 
 
 class ProviderProfileUpdate(BaseModel):
@@ -537,6 +540,7 @@ class ProviderProfileUpdate(BaseModel):
     #: 档案级能力覆盖;传 [] 清空(=显式声明"无能力"),传 null / 不传则不改动。
     capability_ids: list[str] | None = None
     enabled: bool | None = None
+    auth_type: str | None = None
 
 
 class VendorFieldOut(BaseModel):
@@ -568,6 +572,9 @@ class ProviderProfileOut(OrmModel):
     extra: dict[str, str] = Field(default_factory=dict)
     #: Masked, adapter-shaped config for the settings form; secret fields are hints only.
     config: dict[str, str] = Field(default_factory=dict)
+    auth_type: str = "api_key"
+    #: OAuth 档案是否已登录。**只回布尔**,令牌本身任何接口都不下发。
+    oauth_linked: bool = False
 
     #: ORM 列 capability_ids 可为 None(=沿用 vendor 默认);model_validate 时先归一成 []。
     #: 路由 _profile_out 随后会覆写成实际生效能力(effective_capability_ids)。
@@ -819,6 +826,8 @@ class VendorPresetOut(BaseModel):
     #: Adapter-specific configuration inputs. The form renders these, so adding a vendor stays
     #: a one-dict-entry change.
     fields: list[VendorFieldOut] = Field(default_factory=list)
+    #: 支持的鉴权方式,顺序即优先级。含 "oauth" 的档案表单渲染「登录」而不是密钥输入框。
+    auth: list[str] = Field(default_factory=lambda: ["api_key"])
 
 
 class GenerationModelOut(OrmModel):

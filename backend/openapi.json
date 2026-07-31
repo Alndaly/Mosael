@@ -11248,6 +11248,148 @@
         }
       }
     },
+    "/api/agent/provider-credentials/{profile_id}/acquire": {
+      "post": {
+        "tags": [
+          "agent-credentials"
+        ],
+        "summary": "Acquire Credential Lease",
+        "description": "取得该档案凭据的独占刷新权。等不到(另一次刷新还没结束)返回 409,调用方稍后重试。",
+        "operationId": "acquire_credential_lease_api_agent_provider_credentials__profile_id__acquire_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/provider-credentials/{profile_id}/commit": {
+      "post": {
+        "tags": [
+          "agent-credentials"
+        ],
+        "summary": "Commit Credential Lease",
+        "description": "持租约写回刷新结果并释放。租约已超时被顶替时返回 409 —— 此时写回会覆盖别人的新凭据。",
+        "operationId": "commit_credential_lease_api_agent_provider_credentials__profile_id__commit_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/provider-credentials/{profile_id}/release": {
+      "post": {
+        "tags": [
+          "agent-credentials"
+        ],
+        "summary": "Release Credential Lease",
+        "description": "刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。",
+        "operationId": "release_credential_lease_api_agent_provider_credentials__profile_id__release_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent-browser/act": {
       "post": {
         "tags": [
@@ -12850,6 +12992,44 @@
           "session_id"
         ],
         "title": "CloseRequest"
+      },
+      "CommitIn": {
+        "properties": {
+          "lease": {
+            "type": "string",
+            "title": "Lease"
+          },
+          "credential": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lease"
+        ],
+        "title": "CommitIn"
+      },
+      "CommitOut": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "CommitOut"
       },
       "ConfirmationCreate": {
         "properties": {
@@ -14982,6 +15162,37 @@
         ],
         "title": "KbUrlImportRequest"
       },
+      "LeaseOut": {
+        "properties": {
+          "lease": {
+            "type": "string",
+            "title": "Lease"
+          },
+          "credential": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lease",
+          "credential",
+          "version"
+        ],
+        "title": "LeaseOut"
+      },
       "LocalImportRequest": {
         "properties": {
           "workspace_id": {
@@ -16270,6 +16481,17 @@
               }
             ],
             "title": "Copy Credentials From"
+          },
+          "auth_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Type"
           }
         },
         "type": "object",
@@ -16335,6 +16557,16 @@
             },
             "type": "object",
             "title": "Config"
+          },
+          "auth_type": {
+            "type": "string",
+            "title": "Auth Type",
+            "default": "api_key"
+          },
+          "oauth_linked": {
+            "type": "boolean",
+            "title": "Oauth Linked",
+            "default": false
           }
         },
         "type": "object",
@@ -16402,6 +16634,17 @@
               }
             ],
             "title": "Enabled"
+          },
+          "auth_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Type"
           }
         },
         "type": "object",
@@ -18680,6 +18923,13 @@
             },
             "type": "array",
             "title": "Fields"
+          },
+          "auth": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Auth"
           }
         },
         "type": "object",

@@ -4,7 +4,18 @@
  * Agent and stream text deltas back out. Tools/hooks come in S3+.
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { createModels, createProvider, type Model, type Models } from "@earendil-works/pi-ai";
+import {
+  createModels,
+  createProvider,
+  type Api,
+  type Credential,
+  type CredentialStore,
+  type Model,
+  type Models,
+  type Provider,
+} from "@earendil-works/pi-ai";
+
+import { BackendCredentialStore } from "./credentials.js";
 // 规范入口(不是 `/compat` —— 那是上游标注为「临时、将随 ModelManager 迁移删除」的兼容层)。
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
@@ -72,12 +83,71 @@ function buildModels(
   return { models, model };
 }
 
+/** 订阅计划:vendor id → pi 内置的 Provider 工厂。
+ *
+ * **这里刻意只有一张映射表**。端点、模型目录(含真实 contextWindow)、设备码 / PKCE 授权流程
+ * 全在 pi 自己的 Provider 定义里,我们一个字段都不重描:各家差异极大(Copilot 的 endpoint
+ * 随凭据变,Codex 走自己的 responses API),照抄进来就等于把六家协议维护在这边,上游一改就
+ * 悄悄失效。后端 VENDOR_PRESETS 里的 `pi_provider` 就是这张表的键。
+ */
+const SUBSCRIPTION_PROVIDERS: Record<string, () => Promise<Provider>> = {
+  anthropic: async () => (await import("@earendil-works/pi-ai/providers/anthropic")).anthropicProvider(),
+  "kimi-coding": async () => (await import("@earendil-works/pi-ai/providers/kimi-coding")).kimiCodingProvider(),
+  "openai-codex": async () => (await import("@earendil-works/pi-ai/providers/openai-codex")).openaiCodexProvider(),
+  "github-copilot": async () =>
+    (await import("@earendil-works/pi-ai/providers/github-copilot")).githubCopilotProvider(),
+  xai: async () => (await import("@earendil-works/pi-ai/providers/xai")).xaiProvider(),
+  openrouter: async () => (await import("@earendil-works/pi-ai/providers/openrouter")).openrouterProvider(),
+};
+
+export function isSubscriptionProvider(piProvider: string): boolean {
+  return Boolean(SUBSCRIPTION_PROVIDERS[piProvider]);
+}
+
+/** 订阅计划的 Models:用 pi 现成的 Provider + 后端托管的凭据存储。 */
+async function buildSubscriptionModels(
+  piProvider: string,
+  modelId: string,
+  credentials: CredentialStore,
+): Promise<{ models: Models; model: Model<Api> }> {
+  const factory = SUBSCRIPTION_PROVIDERS[piProvider];
+  if (!factory) throw new Error(`未知的订阅供应商:${piProvider}`);
+  const provider = await factory();
+  const models = createModels({ credentials });
+  models.setProvider(provider);
+  // 目录里没有这个 id 时不猜:报出来比拿一个别的模型悄悄跑掉好。
+  const model = models.getModel(provider.id, modelId);
+  if (!model) {
+    const known = provider
+      .getModels()
+      .slice(0, 8)
+      .map((m) => m.id)
+      .join("、");
+    throw new Error(`供应商「${provider.name}」没有模型 ${modelId};可用的有:${known}…`);
+  }
+  return { models, model };
+}
+
 export interface PiTurnInput {
   systemPrompt: string;
   prompt: string;
-  provider: { baseUrl: string; apiKey: string; contextWindow?: number | null; maxOutputTokens?: number | null };
+  provider: {
+    baseUrl: string;
+    apiKey: string;
+    contextWindow?: number | null;
+    maxOutputTokens?: number | null;
+    /** 非空 = 订阅计划,用 pi 现成的 Provider(见 SUBSCRIPTION_PROVIDERS)。 */
+    piProvider?: string;
+    /** 订阅计划的当前凭据(pi 的 Credential 原样),随帧发下来省一次网络往返。 */
+    credential?: Credential | null;
+    /** 凭据写回后端时用;订阅计划必填。 */
+    profileId?: string;
+  };
   model: string;
   tools: AgentTool[];
+  /** 回连 Open Studio 的地址与凭证 —— 订阅计划刷新令牌时要写回后端。 */
+  apiBase: string;
+  token: string;
   /** pi 上轮序列化的消息数组(多轮记忆);首轮为空。 */
   sessionState?: unknown;
   /** Called with the Agent once built, so the caller can steer or abort the running turn. */
@@ -107,7 +177,19 @@ export interface PiTurnHandlers {
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
 export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<PiTurnResult> {
-  const { models, model } = buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  const piProvider = input.provider.piProvider ?? "";
+  const { models, model } = piProvider
+    ? await buildSubscriptionModels(
+        piProvider,
+        input.model,
+        new BackendCredentialStore(
+          input.apiBase,
+          input.token,
+          input.provider.profileId ?? "",
+          input.provider.credential ?? undefined,
+        ),
+      )
+    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const priorMessages = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
   const agent = new Agent({
     initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },

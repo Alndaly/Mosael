@@ -580,6 +580,17 @@ class ProviderProfile(Base):
     vendor: Mapped[str] = mapped_column(String(60), nullable=False)  # alibaba|bytedance|openai|moonshot|minimax|openai-compatible|...
     base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     api_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    #: 鉴权方式。"api_key" = 上面那把;"oauth" = 订阅计划(Claude Pro/Max、Kimi Code 等),
+    #: 密钥在 oauth_credential 里,api_key 留空。哪些方式可用由 VENDOR_PRESETS 声明。
+    auth_type: Mapped[str] = mapped_column(String(20), nullable=False, default="api_key")
+    #: pi 的 Credential **原样**存放({type, access, refresh, expires, ...})。刻意不拆成列:
+    #: 各家 OAuth 的附加字段(Copilot 的 endpoint、Codex 的 account_id)由 pi 自己解释,
+    #: 这边拆一次就等于把各家协议复制进 Python,下次上游加字段就悄悄丢了。
+    oauth_credential: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    #: 乐观并发版本号。多个会话可以同时开对话,各自 spawn 一个 sidecar;若两个同时刷新
+    #: 同一份 OAuth 凭据,后写的会把已被服务端轮换作废的 refresh token 覆盖回去 ——
+    #: 表现为用户莫名其妙被登出。写入时带上读到的版本,不匹配就拒绝(见 credentials 路由)。
+    credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
     #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for

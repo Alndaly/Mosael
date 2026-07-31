@@ -3663,6 +3663,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/provider-credentials/{profile_id}/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acquire Credential Lease
+         * @description 取得该档案凭据的独占刷新权。等不到(另一次刷新还没结束)返回 409,调用方稍后重试。
+         */
+        post: operations["acquire_credential_lease_api_agent_provider_credentials__profile_id__acquire_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/provider-credentials/{profile_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Credential Lease
+         * @description 持租约写回刷新结果并释放。租约已超时被顶替时返回 409 —— 此时写回会覆盖别人的新凭据。
+         */
+        post: operations["commit_credential_lease_api_agent_provider_credentials__profile_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/provider-credentials/{profile_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Credential Lease
+         * @description 刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。
+         */
+        post: operations["release_credential_lease_api_agent_provider_credentials__profile_id__release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-browser/act": {
         parameters: {
             query?: never;
@@ -4220,6 +4280,20 @@ export interface components {
             workspace_id: string;
             /** Session Id */
             session_id: string;
+        };
+        /** CommitIn */
+        CommitIn: {
+            /** Lease */
+            lease: string;
+            /** Credential */
+            credential?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** CommitOut */
+        CommitOut: {
+            /** Version */
+            version: number;
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -5050,6 +5124,17 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** LeaseOut */
+        LeaseOut: {
+            /** Lease */
+            lease: string;
+            /** Credential */
+            credential: {
+                [key: string]: unknown;
+            } | null;
+            /** Version */
+            version: number;
+        };
         /**
          * LocalImportRequest
          * @description 按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。
@@ -5545,6 +5630,8 @@ export interface components {
             capability_ids?: string[] | null;
             /** Copy Credentials From */
             copy_credentials_from?: string | null;
+            /** Auth Type */
+            auth_type?: string | null;
         };
         /** ProviderProfileOut */
         ProviderProfileOut: {
@@ -5580,6 +5667,16 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
+            /**
+             * Auth Type
+             * @default api_key
+             */
+            auth_type: string;
+            /**
+             * Oauth Linked
+             * @default false
+             */
+            oauth_linked: boolean;
         };
         /** ProviderProfileUpdate */
         ProviderProfileUpdate: {
@@ -5593,6 +5690,8 @@ export interface components {
             capability_ids?: string[] | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Auth Type */
+            auth_type?: string | null;
         };
         /** ProviderUsageEventOut */
         ProviderUsageEventOut: {
@@ -6594,6 +6693,8 @@ export interface components {
             capabilities: string;
             /** Fields */
             fields?: components["schemas"]["VendorFieldOut"][];
+            /** Auth */
+            auth?: string[];
         };
         /** VoiceFromSpeakerRequest */
         VoiceFromSpeakerRequest: {
@@ -14978,6 +15079,105 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acquire_credential_lease_api_agent_provider_credentials__profile_id__acquire_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_credential_lease_api_agent_provider_credentials__profile_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_credential_lease_api_agent_provider_credentials__profile_id__release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

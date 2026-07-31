@@ -192,6 +192,10 @@ def _run_pi(
             # 供应商目录给了才带上;没有就不传,由 sidecar 用保守回退而不是硬编一个大数。
             "contextWindow": provider.get("context_window"),
             "maxOutputTokens": provider.get("max_output_tokens"),
+            # 订阅计划(OAuth):pi 内置 Provider 的 id + 当前凭据。刷新后由 sidecar 写回后端。
+            "piProvider": provider.get("pi_provider", ""),
+            "credential": provider.get("credential"),
+            "profileId": provider.get("profile_id", ""),
         },
         "model": model,
         "sessionState": adapter_state,

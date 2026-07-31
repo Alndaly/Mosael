@@ -80,6 +80,29 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
+def _migrate_provider_auth() -> None:
+    """加列迁移:provider_profiles 增加 auth_type / oauth_credential / credential_version。
+
+    老档案全部是 API Key,默认值即正确语义,不需要回填。credential_version 从 0 起,
+    它只在同一进程组内比较大小,不依赖历史值。
+    """
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
+    additions = [
+        ("auth_type", "ALTER TABLE provider_profiles ADD COLUMN auth_type VARCHAR(20) NOT NULL DEFAULT 'api_key'"),
+        ("oauth_credential", "ALTER TABLE provider_profiles ADD COLUMN oauth_credential JSON"),
+        ("credential_version", "ALTER TABLE provider_profiles ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0"),
+    ]
+    missing = [sql for name, sql in additions if name not in columns]
+    if not missing:
+        return
+    with engine.begin() as conn:
+        for sql in missing:
+            conn.execute(text(sql))
+
+
 def _migrate_job_parent() -> None:
     """加列迁移:jobs 增加 parent_job_id —— 工作流派生的子任务归到父工作流下,
     任务中心不再把子任务与父工作流平铺成两行。老行留 NULL 即顶层任务,语义正确。"""
@@ -195,6 +218,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
+    _migrate_provider_auth()
     _migrate_tool_confirmations_session()
     _migrate_tts_pip_index()
     _migrate_job_parent()

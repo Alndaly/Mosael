@@ -6,6 +6,7 @@
  * one per line. stdout carries ONLY protocol JSON — all human/debug logging
  * goes to stderr (see log()).
  */
+import type { Credential } from "@earendil-works/pi-ai";
 
 /** Backend -> sidecar. */
 export interface RunTurnRequest {
@@ -29,6 +30,12 @@ export interface RunTurnRequest {
     /** 来自供应商 /models 目录;端点没给就缺省,由 pi.ts 用保守回退。 */
     contextWindow?: number | null;
     maxOutputTokens?: number | null;
+    /** 订阅计划:pi 内置 Provider 的 id(端点/模型目录/授权流程都在它里面)。 */
+    piProvider?: string;
+    /** 订阅计划的当前 OAuth 凭据(pi 的 Credential 原样)。 */
+    credential?: Credential | null;
+    /** 凭据刷新后写回后端时定位档案。 */
+    profileId?: string;
   };
   model?: string;
   /** Opaque pi session/compaction state to resume (S5+). */

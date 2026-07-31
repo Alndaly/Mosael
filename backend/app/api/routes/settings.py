@@ -33,8 +33,10 @@ from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.providers import (
     VENDOR_PRESETS,
+    auth_types_for_vendor,
     capability_ids_for_vendor,
     effective_capability_ids,
+    normalize_auth_type,
     normalize_capability_ids,
     supports_capability,
 )
@@ -49,6 +51,8 @@ def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
     out.extra = _masked_extra(profile)
     out.config = _masked_config(profile)
+    # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
+    out.oauth_linked = bool(profile.oauth_credential)
     return out
 
 
@@ -200,6 +204,7 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
             default_model=preset.get("default_model", ""),
             capabilities=preset.get("capabilities", ""),
             fields=[VendorFieldOut(**spec) for spec in preset.get("fields", [])],  # type: ignore[arg-type]
+            auth=auth_types_for_vendor(vendor),
         )
         for vendor, preset in VENDOR_PRESETS.items()
     ]
@@ -214,7 +219,12 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     ensure_instance_admin(db, user, "credentials")
-    profile = ProviderProfile(name=body.name, vendor=body.vendor, capability_ids=normalize_capability_ids(body.capability_ids))
+    profile = ProviderProfile(
+        name=body.name,
+        vendor=body.vendor,
+        capability_ids=normalize_capability_ids(body.capability_ids),
+        auth_type=normalize_auth_type(body.vendor, body.auth_type),
+    )
     # 服务端凭据复制:同一把 Key 要配到另一能力的独立档案时,密钥从既有档案
     # 直接拷进新行,不经前端往返(设置接口对密钥只回打码提示,前端本就拿不到)。
     # 先注入 secret 字段,再走常规配置应用 —— 显式传入的值仍可覆盖,必填校验共用。
@@ -255,6 +265,16 @@ def update_provider_profile(
     # 显式传了 capability_ids 才动:[] = 清空能力,null = 回落 vendor 默认,不传 = 不改。
     if "capability_ids" in patch:
         profile.capability_ids = normalize_capability_ids(body.capability_ids)
+    if "auth_type" in patch and body.auth_type is not None:
+        # 切换鉴权方式时清掉另一侧的凭据:留着的那份既不会被用到,又会让「已登录」的显示说谎。
+        next_auth = normalize_auth_type(profile.vendor, body.auth_type)
+        if next_auth != profile.auth_type:
+            profile.auth_type = next_auth
+            if next_auth == "api_key":
+                profile.oauth_credential = None
+            else:
+                profile.api_key = ""
+            profile.credential_version = (profile.credential_version or 0) + 1
     incoming = _config_from_body(body)
     if incoming:
         _apply_profile_config(profile, incoming, creating=False)

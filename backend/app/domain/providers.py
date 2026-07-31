@@ -13,6 +13,17 @@ Provider adapter configuration.
 Each vendor preset declares the exact fields its adapter needs. The database
 still stores the resolved values in ProviderProfile columns/extra for now, but
 the public contract is adapter config, not a generic "credential" shape.
+
+预设还声明**鉴权方式**(`auth`):
+  - "api_key" —— 用户自己填的密钥,走本文件里描述的 base_url / fields;
+  - "oauth"   —— 订阅计划(Claude Pro/Max、Kimi Code、ChatGPT Plus/Pro……),没有可填的密钥,
+                 令牌由授权流程换取、会过期、刷新时还会轮换。
+
+订阅制这一档带 `pi_provider`:sidecar 直接用 pi 现成的 Provider 定义(端点、模型目录、
+上下文窗口、各家 OAuth 的设备码/PKCE 流程全在里面),这边**一个字段都不重描**。理由是各家
+OAuth 的差异极大(Copilot 的 endpoint 随凭据变、Codex 用自己的 responses API),照抄一份进
+Python 就等于把六家协议维护在我们这儿,上游一改就悄悄失效。这里只留 vendor id → pi provider id
+这一张映射表。
 """
 
 VENDOR_PRESETS: dict[str, dict[str, Any]] = {
@@ -266,6 +277,57 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    # ── 订阅计划(OAuth)────────────────────────────────────────────────────────
+    # 这一组刻意只声明「是哪家 + 能力」:端点、模型目录、授权流程都取自 pi 的同名 Provider。
+    # fields 为空是对的 —— 用户要做的是点「登录」,不是找一把 Key 粘进来。
+    "anthropic": {
+        "label": "Anthropic Claude(Pro/Max 订阅或 API Key)",
+        "capabilities": "对话。可用 Claude Pro/Max 订阅登录,也可填 Anthropic API Key。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth", "api_key"],
+        "pi_provider": "anthropic",
+        "fields": [],
+    },
+    "kimi-coding": {
+        "label": "Kimi Code(订阅)",
+        "capabilities": "对话。走 Kimi Code 订阅计划,设备码授权。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth", "api_key"],
+        "pi_provider": "kimi-coding",
+        "fields": [],
+    },
+    "openai-codex": {
+        "label": "OpenAI Codex(ChatGPT Plus/Pro 订阅)",
+        "capabilities": "对话。用 ChatGPT 账号授权,不需要 API Key。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth"],
+        "pi_provider": "openai-codex",
+        "fields": [],
+    },
+    "github-copilot": {
+        "label": "GitHub Copilot",
+        "capabilities": "对话。用 GitHub 账号授权,模型随订阅档位变化。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth", "api_key"],
+        "pi_provider": "github-copilot",
+        "fields": [],
+    },
+    "xai": {
+        "label": "xAI Grok(SuperGrok / X Premium 或 API Key)",
+        "capabilities": "对话。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth", "api_key"],
+        "pi_provider": "xai",
+        "fields": [],
+    },
+    "openrouter": {
+        "label": "OpenRouter",
+        "capabilities": "对话。一个账号聚合数百个模型;可 OAuth 授权,也可填 API Key。",
+        "capability_ids": ["chat"],
+        "auth": ["oauth", "api_key"],
+        "pi_provider": "openrouter",
+        "fields": [],
+    },
     "kuaishou": {
         "label": "快手 (Kling)",
         "base_url": "https://api.klingai.com",
@@ -292,6 +354,33 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         ],
     },
 }
+
+
+#: 已知鉴权方式。顺序即 UI 上的优先级(订阅制排前面,因为不需要用户去找 Key)。
+AUTH_TYPES = ("oauth", "api_key")
+
+
+def auth_types_for_vendor(vendor: str) -> list[str]:
+    """该 vendor 支持的鉴权方式;没声明的一律是纯 API Key(现存的十几个都是)。"""
+    declared = VENDOR_PRESETS.get(vendor, {}).get("auth")
+    if not declared:
+        return ["api_key"]
+    return [value for value in declared if value in AUTH_TYPES] or ["api_key"]
+
+
+def default_auth_type(vendor: str) -> str:
+    return auth_types_for_vendor(vendor)[0]
+
+
+def pi_provider_id(vendor: str) -> str:
+    """该 vendor 对应的 pi 内置 Provider id;非订阅制的返回空串(走自建的 OpenAI 兼容 provider)。"""
+    return str(VENDOR_PRESETS.get(vendor, {}).get("pi_provider", ""))
+
+
+def normalize_auth_type(vendor: str, value: str | None) -> str:
+    """把用户传入的鉴权方式收敛到该 vendor 真正支持的集合,非法值回落到默认。"""
+    allowed = auth_types_for_vendor(vendor)
+    return value if value in allowed else allowed[0]
 
 
 # 已知能力全集(建/改档案时校验覆盖值,过滤掉无意义的能力名)。

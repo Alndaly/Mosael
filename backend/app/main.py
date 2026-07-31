@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.agent_credentials import router as agent_credentials_router
 from app.api.routes.agent_tools import router as agent_tools_router
 from app.api.routes.agent_browser import router as agent_browser_router
 from app.api.routes.browser_profiles import router as browser_profiles_router
@@ -186,6 +187,7 @@ def create_app() -> FastAPI:
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
     app.include_router(agent_tools_router, prefix="/api", dependencies=protected)
+    app.include_router(agent_credentials_router, prefix="/api", dependencies=protected)
     app.include_router(agent_browser_router, prefix="/api", dependencies=protected)
     app.include_router(browser_profiles_router, prefix="/api", dependencies=protected)
     return app

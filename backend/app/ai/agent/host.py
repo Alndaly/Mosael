@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, steer_turn
 from app.ai.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import find_model
+from app.domain.provider_auth import read_credential
+from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
@@ -115,15 +117,21 @@ def resolve_chat_provider(
             f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
             "或在对话框的模型选择器里选一个。"
         )
-    # 上下文窗口来自供应商目录(带 TTL 缓存);端点没列出这个模型就留 None,由 sidecar 用保守回退。
-    catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
     provider_dict = {
         "base_url": profile.base_url,
         "api_key": profile.api_key,
         "vendor": profile.vendor,
-        "context_window": catalog.context_window if catalog else None,
-        "max_output_tokens": catalog.max_output_tokens if catalog else None,
+        "profile_id": profile.id,
     }
+    if profile.auth_type == "oauth":
+        # 订阅计划:端点、模型目录、上下文窗口都在 pi 的 Provider 定义里,这边只递身份。
+        provider_dict["pi_provider"] = pi_provider_id(profile.vendor)
+        provider_dict["credential"] = read_credential(profile)
+    else:
+        # 上下文窗口来自供应商目录(带 TTL 缓存);端点没列出这个模型就留 None,由 sidecar 用保守回退。
+        catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
+        provider_dict["context_window"] = catalog.context_window if catalog else None
+        provider_dict["max_output_tokens"] = catalog.max_output_tokens if catalog else None
     return provider_dict, agent_model, profile
 
 

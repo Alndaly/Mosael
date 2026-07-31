@@ -25,15 +25,18 @@ const active = new Map<string, Agent>();
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
-  if (msg.provider?.baseUrl && msg.model) {
+  // 订阅计划(piProvider)没有用户填的 baseUrl —— 端点在 pi 的 Provider 定义里。
+  if ((msg.provider?.baseUrl || msg.provider?.piProvider) && msg.model) {
     const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId, msg.sessionId);
     const result = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,
         prompt,
-        provider: { baseUrl: msg.provider.baseUrl, apiKey: msg.provider.apiKey },
+        provider: msg.provider,
         model: msg.model,
         tools,
+        apiBase: msg.apiBase,
+        token: msg.token,
         sessionState: msg.sessionState,
         onAgentReady: (agent) => active.set(turnId, agent),
       },
