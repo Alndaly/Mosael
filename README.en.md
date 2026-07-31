@@ -14,6 +14,20 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ### Recently added
 
+**Runs in the tray** — closing the window no longer quits. Scheduled tasks run inside the local
+backend, which is a child process of the app: on Windows/Linux, closing the window used to stop
+them silently while users assumed they were still running. The tray icon is the visible proof the
+app is alive; turn on **Launch at login** in Settings to have it standing by from boot. While a
+task is running the app blocks system sleep (a laptop closing mid-render suspends ffmpeg with it),
+and finished tasks raise a system notification — but **not while the window is focused**, so the
+same event is never announced twice.
+
+**Approve confirmation cards inside Feishu** — when a turn is driven from Feishu, changes that
+need confirmation arrive as a card in that same chat; approve or reject without switching back to
+the desktop app. Who may approve follows the account binding: the person tapping the button must
+already be bound to an Open Studio account and still be a member of the workspace. Everyone in a
+group chat can see the card; seeing it is not permission to approve it.
+
 **Workflow nesting (à la ComfyUI / dify)** — marquee-select nodes on the canvas and collapse them into a subgraph in one click; boundary references rewire automatically. Subgraphs nest arbitrarily, `call_workflow` reuses a whole flow as a tool, and loop bodies run on the same parallel engine as the top level.
 
 ![Marquee → collapse to subgraph](docs/media/collapse-subgraph.gif)
@@ -138,9 +152,15 @@ cd frontend && pnpm gen:api              # regenerate TS types after backend Ope
 | `~/.open-studio/open-studio.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
 | `~/.open-studio/media/` | Imported and exported media files |
 | `~/.open-studio/kb_vectors.db` | Knowledge-base vectors (Milvus Lite; remote configurable) |
-| `~/Library/Application Support/Open Studio/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
-| `~/Library/Application Support/Open Studio/logs/backend.log` | Packaged-backend stdout/stderr |
-| `~/Library/Application Support/Open Studio/Partitions/` | Persistent login sessions per publishing account |
+| `<userData>/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
+| `<userData>/logs/backend.log` | Packaged-backend stdout/stderr |
+| `<userData>/Partitions/` | Persistent login sessions per publishing account |
+
+`~/.open-studio` lives under `Path.home()`, which on Windows is `C:\Users\<name>\.open-studio`.
+`<userData>` is Electron's user-data directory: `~/Library/Application Support/Open Studio` on
+macOS, `%APPDATA%\Open Studio` on Windows. The plugin directory follows the same rule — you never
+need to assemble it by hand, the Plugins page shows the **actual resolved path** reported by the
+backend.
 
 For publishing issues, start with `publisher.log` — every step is recorded.
 
@@ -170,6 +190,7 @@ plugins/          local plugins (subprocess + MCP)
 - [docs/MCP.md](docs/MCP.md) — the agent's MCP tools and confirmation cards
 - [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) — plugin manifest format and permissions
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) — implemented capabilities and frontend conventions
+- [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) — known maintenance risk areas, and **what to run after touching them**
 
 ## Third-party sign-in (optional)
 

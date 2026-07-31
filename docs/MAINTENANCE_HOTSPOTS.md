@@ -52,9 +52,14 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-`WorkflowsView.tsx`(2.3k 行)、`EditorView.tsx`(1.1k)、`Timeline.tsx`(1.0k)。
-功能与测试都健康,但改动 Locality 差。切分方向:画布 / 节点检查器 / 节点表单(Workflows),
-面板编排 / 变换与合成 / mutations(Editor)。低优先,顺手做,不专项大拆。
+`WorkflowsView.tsx`(2.7k 行)、`EditorView.tsx`(1.3k)、`Timeline.tsx`(1.2k)。
+
+按函数量过一遍之后,这三个要分开看 —— **大而内聚**的不必拆:`Timeline` 虽然 1.0k+,但只有
+6 个 state、3 个 effect、**0 个查询**,主体是交互数学与绘制,拆开反而更难读。真正该拆的是
+`WorkflowEditor`(929 行 / **15 个 state**:图编辑、面板开关、重命名删除弹窗、画布几何、
+内嵌视图就绪状态混在一起)和 `Editor`(954 行 / **38 处 useQuery/useMutation**)。
+切分方向:画布 / 节点检查器 / 节点表单;面板编排 / 变换与合成 / mutations。
+低优先,顺手做,不专项大拆。
 
 ## 5. 预览与导出 — ✅ 已按契约收口(2026-07-28)
 
@@ -96,6 +101,29 @@ grep -rniE "mibu" . | grep -vE "node_modules|/\.git/|pnpm-lock|publish\.bundle\.
 **别忘了生成物**:改了后端默认值/字段要重跑 `cd frontend && pnpm gen:api`,改了 `pyproject.toml` 的
 包名要重跑 `uv lock`——否则旧名会从生成文件里长回来。
 
+## 8. 打包产物的初始化顺序:类型和单测都看不见
+
+pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,`createModels()` 会在
+`ModelsImpl` 所在的惰性块初始化之前就跑,于是**每一轮对话**都报 `is not a constructor` ——
+而源码正确、tsc 全绿、822 个后端测试全绿。这类故障只有把产物真正跑起来才看得见。
+
+- 从 `@earendil-works/pi-ai/compat` 引入(它在包的 `sideEffects` 白名单里,不会被摇掉),
+  不要用 `api/*.lazy`。换入口即绿,是**入口**问题不是版本问题。
+- `agent-sidecar/test/bundle.smoke.mjs` 已接进发版 CI。它要求**正面证据**(必须走到发起网络
+  请求),而不是「某个错误串没出现」—— 后者会把「进程一启动就崩」也判成通过,我就这么骗过
+  自己一次。任何只做否定断言的冒烟都要按这条重写。
+
+## 9. 授权规则一旦有第二个入口,就必须收敛成一份
+
+确认卡现在有两个入口:HTTP 路由(bearer token)和飞书卡片(open_id → 账号绑定)。身份来源不同
+是合理的,但「能不能批、批了会发生什么」只能有一份实现(`authorize_and_approve`)。
+
+一度是两边各抄一遍。那种状态下**今天是一致的**,但谁往路由里加第四道校验,另一条就会静默漏掉
+—— 在授权路径上,静默漏掉等于越权。`tests/test_feishu_card_confirmation.py` 打桩共用函数、
+断言两个入口都经过它,把这件事钉住。
+
+以后再加入口(比如 Slack、命令行)照此办理:入口只负责认身份和翻译错误。
+
 ## Verification rule
 
 每个 slice 至少跑:
@@ -104,4 +132,6 @@ grep -rniE "mibu" . | grep -vE "node_modules|/\.git/|pnpm-lock|publish\.bundle\.
 - `cd frontend && pnpm exec tsc -b --noEmit && pnpm vitest run` when touching frontend
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
   测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么
+- `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
+- `cd docs-site && pnpm run build` when touching docs-site(它不在 release CI 里,坏了不会有人告诉你)
 - targeted browser smoke only when the change affects actual platform page driving

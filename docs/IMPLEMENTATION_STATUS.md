@@ -171,7 +171,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 
 ### Publish + account matrix (plan §6.9, Phase 13)
 
-- Platform registry with `executor` local (folder/webhook/mock) vs browser (douyin/bilibili/xiaohongshu/weixin-channels); per-platform `title_max` enforced at create; Chinese aliases.
+- Platform registry holds **only login-bearing real platforms** (douyin/bilibili/xiaohongshu/weixin-channels), all browser-driven; per-platform `title_max` enforced at create; Chinese aliases. The old `executor` split (`local` = folder/webhook/mock) is gone — see the 2026-07-31 entry.
 - Full Electron publisher ported from mibu-video: per-account persistent session partitions, CDP file upload, adapters, foreground/background view management, cross-account concurrency with same-account serialization.
 - Worker queue protocol (claim / report rich statuses / claim-check / mark-due / heartbeat) — see [PUBLISHING.md](PUBLISHING.md) for the protocol and the **hard constraints** learned the hard way.
 - Account matrix moved out of the Publish page into the **浏览器池** tab (see below): binding badges, platform nickname, last-check time, login / recheck / enable / rename / delete; checking-deadlock self-heal. The Publish page now shows publish records + 新建发布 only.
@@ -206,7 +206,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - **Login redesigned**: split-screen photo hero (`public/login-hero.jpg`, gradient fallback), labeled form fields, Terms of Service / Privacy Policy dialogs (`features/auth/legal.tsx`, zh/en) with an implicit-consent line on registration.
 - **Global search (⌘K) fixed**: palette does its own CJK/pinyin/server matching so cmdk's value-filter is disabled, manual empty state waits out in-flight searches, controlled first-item highlight restores Enter, deep links retry at 80/300/800ms.
 - **Long dynamic dropdowns are searchable** (shared Combobox): publish asset/account, batch & scheduler workflow pickers, dubbing target, workflow-node resource fields.
-- **Publish**: demo/mock platform removed from the registry (folder/webhook + real browser platforms remain).
+- **Publish**: demo/mock platform removed from the registry (folder/webhook removed later — see 2026-07-31).
 - **Workspace/project UX**: breadcrumb switcher always visible with a create-workspace entry; created workspaces/projects seed the query cache before navigation (kills the stale-list bounce-back); project creation jumps straight into its empty editor.
 
 ### 2026-07-28: preview↔export parity by contract, and a dead-code sweep
@@ -265,3 +265,40 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - Vertical stacks use grid/flex + `gap`, never `space-y` (Tailwind v4 puts it on the previous child's margin-bottom — a no-op for inline children like labels).
 - Elements positioned by inline styles must not also carry Tailwind translate/inset classes (v4's standalone `translate` property composes with inline `transform`).
 - Dynamic long-list dropdowns use the shared searchable Combobox; drag interactions use dnd-kit.
+
+### 2026-07-31: system capability layer, Feishu-side approvals, and an executor split undone
+
+- **`electron/system/`** — one module per capability behind a uniform `register(ctx)`; `main.cjs` only
+  iterates. Tray + close-to-tray + launch-at-login (scheduled tasks live in the backend, which is a
+  child process — closing the window used to stop them silently), `prevent-app-suspension` while jobs
+  run, dock badge / taskbar progress, task-finished notifications suppressed while the window has
+  focus, `openstudio://` (navigation only, whitelisted views), video/audio file associations, one
+  global shortcut, and a single-instance lock. State is **pushed in** (`runningJobs`), never pulled:
+  the layer knows nothing about the backend, which is what keeps it separately testable.
+- **Confirmations can be approved from Feishu.** A turn started in Feishu gets its card posted back
+  into that chat. Authorisation reuses `feishu_bindings` (open_id → account, still a workspace
+  member) — seeing a card in a group does not confer the right to approve it. Both entries call one
+  `authorize_and_approve`; they used to hand-copy the same checks, which on an authorisation path is
+  a privilege escape waiting to happen.
+- **folder/webhook publishing removed.** They were never accounts: no login identity, no platform —
+  yet `create_account` unconditionally provisioned a `BrowserProfile`, so every one of them left a
+  shell profile in the browser pool that could never hold a login. Briefly split into a `delivery`
+  domain, then dropped entirely as low value. The `executor` field and its 9 branches (domain, worker,
+  two frontend components) are deleted, not rewritten. Migration cleans up old rows and shell profiles.
+- **Structural constraints are now tests** (`tests/test_import_layering.py`): lower layers never
+  import `app.api`; the top-level import graph is acyclic; with lazy imports counted, only the
+  SQLAlchemy `core.db ⇄ db.models` cycle is allowed. Cheap to state, easy to break by accident.
+- **Frontend can finally test components.** vitest had no DOM environment, so all 24 test files were
+  pure functions and every UI regression had to be checked by hand in a browser. jsdom +
+  testing-library added; DOM tests opt in per file (`/** @vitest-environment jsdom */`) since vitest 4
+  dropped `environmentMatchGlobs`. Caveat worth knowing: exit-animation bugs (content clearing while
+  the dialog is still on screen) are **invisible** in jsdom — Radix unmounts immediately without
+  animation, so those still need a real browser.
+- **Sidecar bundle smoke test** (`agent-sidecar/test/bundle.smoke.mjs`, wired into release CI): drives
+  the built artifact over stdio and demands *positive* evidence it reached the network. Added after
+  pi-ai 0.82 shipped a module layout whose `.lazy` entrypoint, once bundled, left `ModelsImpl`
+  undefined — every turn failed with `is not a constructor` while types and unit tests stayed green.
+  Fix was the entrypoint (`@earendil-works/pi-ai/compat`, which is in the package's `sideEffects`
+  allowlist), not the version.
+- **Dependencies current across the board**: Electron 43, TypeScript 7, Vite 8, mcp 2.0 (`FastMCP` →
+  `MCPServer`, `inputSchema` → `input_schema`), pi 0.83, Astro 7 / Starlight 0.41 for the docs site.

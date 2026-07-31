@@ -10,7 +10,7 @@ Open Studio is a **local-first desktop app** that folds the four legs of content
 1. **Editing** — a professional multi-timeline, multi-track editor: ripple editing, speed ramps, transcript-driven cuts, color grading (curves / presets / LUT / scopes), subtitles and filters, one-click export.
 2. **AI generation** — a conversational agent operates your project through tools; text-to-image / text-to-video results land in the media library.
 3. **Orchestration** — visual workflows chain retrieval, generation, transcription, export and publishing into one graph, triggered manually, on a schedule, or via webhook.
-4. **Publishing** — push a finished cut to a local folder, webhook, or Douyin / RedNote / WeChat Channels / Bilibili with persistent multi-account logins.
+4. **Publishing** — push a finished cut to Douyin / RedNote / WeChat Channels / Bilibili with persistent multi-account logins; the desktop app's embedded browser performs the real upload.
 
 ![Open Studio home: workspace overview, 14-day task / publish / AI cost stats and project list](../../../../assets/screens/home.png)
 

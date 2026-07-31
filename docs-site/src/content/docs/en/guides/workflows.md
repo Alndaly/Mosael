@@ -45,6 +45,15 @@ LLM nodes use a **generation style** (precise / balanced / creative) instead of 
 
 Workflows can be bound to scheduled tasks: manual, cron, or webhook. Batch runs of the same workflow are supported.
 
+:::caution[Scheduled tasks need the app running]
+The scheduler runs inside the local backend, which is a child process of Open Studio — **fully
+quitting the app stops scheduled tasks from firing at all.**
+
+That is why closing the window only tucks the app into the tray rather than quitting; use the tray
+menu or ⌘Q to actually exit. To have it standing by from boot, turn on **Launch at login** under
+Settings → Local backend. Tasks missed while the app was closed run once on next start (the next
+occurrence is recomputed from now, so missed runs do not pile up).
+
 ## Let AI build it
 
 The toolbar's **AI assistant** is a persistent session: describe the flow you want in natural language and it builds / edits nodes for you; changes go through confirmation cards.

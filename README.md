@@ -14,6 +14,15 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 ### 近期新增
 
+**桌面常驻** —— 关窗只是收进托盘,不再退出。定时任务跑在本机后端里,而后端是应用的子进程:
+以前 Windows/Linux 上关个窗就把定时任务一起关了,而用户以为它还在跑。托盘是应用还活着的可见
+入口,想让它开机就守着可在设置里打开「开机时启动」。任务在跑时会阻止系统睡眠(渲染到一半合盖
+会把 ffmpeg 一起挂起),完成时发系统通知——但**窗口有焦点时不发**,免得同一件事说两遍。
+
+**在飞书里批准确认卡** —— 从飞书驱动智能体时,需要确认的改动会以卡片发回同一个飞书会话,
+就地点「同意 / 拒绝」,不用切回桌面端。谁能批准取决于账号绑定:点按钮的人必须已绑定 Open Studio
+账号且仍是该工作区成员——卡片在群里谁都看得见,但看得见不等于能批。
+
 **工作流嵌套(参考 ComfyUI / dify)** —— 框选画布上的节点,一键「折叠为子图」,进出边界的引用自动重连;子图可任意嵌套,`调用工作流`把整条流程当工具复用,循环体与顶层共用同一套并行引擎。
 
 ![框选 → 折叠为子图](docs/media/collapse-subgraph.gif)
@@ -149,9 +158,14 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 | `~/.open-studio/open-studio.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…;旧装机的 `mibu.db` 首次启动自动改名) |
 | `~/.open-studio/media/` | 导入与导出的媒体文件 |
 | `~/.open-studio/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
-| `~/Library/Application Support/Open Studio/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
-| `~/Library/Application Support/Open Studio/logs/backend.log` | 打包版后端 stdout/stderr |
-| `~/Library/Application Support/Open Studio/Partitions/` | 各发布账号的持久登录会话 |
+| `<userData>/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |
+| `<userData>/logs/backend.log` | 打包版后端 stdout/stderr |
+| `<userData>/Partitions/` | 各发布账号的持久登录会话 |
+
+`~/.open-studio` 是 `Path.home()` 下的目录,Windows 上即 `C:\Users\<用户名>\.open-studio`。
+`<userData>` 是 Electron 的用户数据目录:mac 为 `~/Library/Application Support/Open Studio`,
+Windows 为 `%APPDATA%\Open Studio`。插件目录同理——不必照着这里拼,插件页会直接显示后端
+解析出的**真实路径**。
 
 排查发布问题先看 `publisher.log`,每一步都有记录。
 
@@ -182,6 +196,7 @@ plugins/          本地插件(子进程 + MCP 暴露)
 - [docs/MCP.md](docs/MCP.md) — 智能体的 MCP 工具与确认卡
 - [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) — 插件清单格式与权限
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) — 已完成能力清单与前端规约
+- [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) — 已知维护风险区,以及**改动后至少要跑什么**
 
 ## 第三方登录(可选)
 

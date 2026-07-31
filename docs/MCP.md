@@ -24,11 +24,40 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 ## Confirmation flow (plan §16.2/§17.2)
 
 Mutating tools never execute directly. They create a pending confirmation;
-a card appears in the Open Studio UI showing the requesting agent, permission level,
-and operation details. Only user approval executes the action — timeline
-edits run through SequenceOperations and stay undoable (⌘Z). Agents poll
-`get_confirmation` until the status is terminal; `result` then carries the
-new revision or job id.
+a card appears showing the requesting agent, permission level, and operation
+details. Only user approval executes the action — timeline edits run through
+SequenceOperations and stay undoable (⌘Z). Agents poll `get_confirmation` until
+the status is terminal; `result` then carries the new revision or job id.
+
+### Where the card appears — and who may approve it
+
+Two entry points, one implementation:
+
+| Entry | Identity comes from |
+| --- | --- |
+| Desktop UI (`POST /confirmations/{id}/approve`) | bearer token |
+| **Feishu interactive card** | the clicker's `open_id`, resolved through the account binding |
+
+A turn started from Feishu gets its card posted back into that same Feishu chat, so the
+approval happens where the request was made rather than forcing a switch to the desktop app.
+
+Authorisation reuses the existing account model — it is **not** a second scheme. The clicker
+must already be bound to an Open Studio account (`feishu_bindings`) **and still be a member of
+the workspace**. Seeing the card in a group chat does not confer the right to approve it.
+Binding is keyed by `open_id`, never `user_id` — mixing the two silently rejects people who did
+bind.
+
+Both entries call `domain/agent/confirmations.authorize_and_approve` / `authorize_and_reject`.
+Identity resolution belongs to the entry; "may this person approve, and what happens when they
+do" has exactly one implementation. It used to be hand-copied on both sides, which meant a
+fourth check added to the HTTP route would silently not apply to the Feishu path — on an
+authorisation path that is a privilege escape. `tests/test_feishu_card_confirmation.py` pins
+this by stubbing the shared function and asserting both entries go through it.
+
+Feishu cards need two developer-console settings (subscribe to `card.action.trigger`; enable
+Interactive Card; then republish). Neither is settable via API, so one-click bot creation cannot
+do it for you. When they are missing the send fails with `200340` and the backend degrades to a
+plain-text notice that says which switches to flip — it does not fail silently.
 
 `edit_timeline` operation kinds: `insert_clip`, `move_clip`, `trim_clip`,
 `delete_clip`, `cut_clip_range`, `add_track` (`track_kind`), `remove_track`,

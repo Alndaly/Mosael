@@ -2,17 +2,22 @@
 
 自媒体矩阵运营是核心卖点:多平台账号集中管理 + 成片自动分发。
 
-## 两类执行器
+## 只有一类执行器
 
-平台注册表在 `backend/app/domain/publish/__init__.py`(`PUBLISH_PLATFORMS`),每个平台声明 `executor`:
+平台注册表在 `backend/app/domain/publish/__init__.py`(`PUBLISH_PLATFORMS`),现在只有需要登录态的
+真平台:`douyin` `bilibili` `xiaohongshu` `weixin-channels`,一律由**桌面端内嵌浏览器**驱动真实
+平台页面。
 
-| executor | 平台 | 怎么执行 |
-| --- | --- | --- |
-| `local` | `folder`(投递到本地目录)、`webhook`、`mock` | 后端线程内直接完成 |
-| `browser` | `douyin` `bilibili` `xiaohongshu` `weixin-channels` | **桌面端内嵌浏览器**驱动真实平台页面 |
+后端只负责入队(`status=pending`),真正干活的是 Electron 里的发布执行器。所以**网页版无法发布**
+——UI 会提示"需要桌面端"。
 
-`browser` 类平台的任务后端只负责入队(`status=pending`),真正干活的是 Electron 里的发布执行器。
-所以**网页版无法发布到真实平台**——UI 会提示"需要桌面端"。
+> 曾经还有一个 `executor` 字段区分 `local`(`folder` 投递到本地目录、`webhook` POST 给外部自动化)
+> 与 `browser`。那两个从来不是「账号」:没有登录身份、没有平台,却因为 `create_account` 无条件建档,
+> 每存在一个就在浏览器池里留一个永远不会有登录态的空壳。它们代表的能力已从产品中移除,`executor`
+> 字段连同散在领域层、worker 与两个前端组件里的 9 处分叉一并删除。升级时自动清理旧数据。
+>
+> 注意别和**定时任务的 webhook 触发器**搞混——那个仍然存在,是「外部 POST 进来触发工作流」,
+> 与「发布到 webhook」是相反方向的两件事。
 
 平台元数据里还有 `title_max`(抖音 30 / 小红书 20 / 视频号 16 / B站 80,创建任务时即校验)、
 `short_title`(视频号需要)、`PLATFORM_ALIASES`(接受"抖音"/"b站"/"xhs"/"视频号"等中文别名)。

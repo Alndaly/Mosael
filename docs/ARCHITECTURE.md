@@ -22,9 +22,9 @@
 | `render.py` | 序列 → RenderPlan(纯函数)→ ffmpeg 执行导出 |
 | `transcripts/` | 逐字稿:ASR 导入、token 级编辑、投影到时间线(删句 = 剪源区间) |
 | `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 统一并行调度引擎(`execute_graph`);新增节点 = 元数据 + 一个执行器文件,引擎不动。**嵌套**:`subgraph`(内嵌可复用子图)、`call_workflow`(调另一工作流当子流程,子 job 收纳 + 级联取消 + 防递归/过深)、`output`(声明工作流输出契约);子图与循环体都跑在同一套引擎上(并行/条件一致) |
-| `publish/` | 发布:平台注册表、任务队列、worker 协议、本地适配器;账号即挂平台的浏览器档案(`profile_id`) |
+| `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`) |
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
-| `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流 |
+| `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:CLI 适配器 + 流式 + 记忆 |
 | `kb/` | 知识库:FTS5 trigram + 向量(Milvus Lite)+ 图谱(Neo4j,可选) |
 | `generation/` | 文生图/视频:供应商契约 + 适配器 |
@@ -157,6 +157,34 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 
 - 无边框窗:顶栏全宽横贯,mac 红绿灯落在顶栏左侧(面包屑让位 88px),Win/Linux 用 `titleBarOverlay` 并给顶栏右侧留位。
 - 拖拽区:顶栏与侧栏可拖窗(`-webkit-app-region: drag`),其中交互元素必须 `no-drag`,否则点击被当成拖窗吃掉。
+
+### 系统能力层(`electron/system/`)
+
+每个能力一个模块 + 统一 `register(ctx)`,`main.cjs` 只负责遍历;esbuild 打成
+`system.bundle.cjs`,缺失不挡启动(只是退化)。
+
+| 能力 | 解决什么 |
+| --- | --- |
+| `residency` | **关窗 = 收进托盘,不退出**。后端是主进程 spawn 的子进程,退出即随之停止 —— 在此之前 Windows/Linux 关个窗就把定时任务一起关了,而用户以为它还在跑 |
+| `tray` | 关窗不退之后,应用还活着的**唯一可见证据**;只做前者就是关不掉的幽灵进程,两者必须成对 |
+| `loginItem` | 开机自启(带 `--hidden` 静默驻留)。和 residency 是一对:一个让它开机就活着,一个让它一直活着 |
+| `power` | 有任务在跑时 `prevent-app-suspension`。渲染/发布是分钟到小时级,机器合盖会把 ffmpeg 一起挂起 |
+| `badge` | mac/Linux 角标数字、Windows 任务栏进度。切走之后也看得到进度 |
+| `notify` | 任务完成通知,**窗口有焦点时不发**(应用内已有 toast,否则同一件事说两遍) |
+| `protocol` | `openstudio://` 唤起 + 视频/音频文件关联 + 全局快捷键 |
+
+两条贯穿性的约束:
+
+- **状态是推进来的,不是拉出去的。** 系统层不认识后端、也不知道「任务」是什么,只知道有个数字叫
+  `runningJobs`(渲染层的 TaskCenter 本就在轮询 `/api/jobs`,顺手推给它)。托盘文案、角标、防睡眠
+  吃同一份快照。这条单向依赖是这一层能被单独测、也能被整体摘掉的原因。
+- **协议只导航,不执行。** 自定义协议是外部输入面:任何网页 `location = "openstudio://…"` 就能触发,
+  不需要用户确认。所以只支持「打开某个页面」(view 走白名单、id 限字符集),不支持「运行工作流」
+  —— 后者意味着随便访问一个网站就能静默驱动你的自动化。将来要做,正确形态是链接只发起一个
+  **待确认请求**,由应用内弹确认卡。
+
+单实例锁在 `main.cjs`(必须早于 app ready):没有它,双击两次图标就有两个实例 —— 两个发布 worker
+抢同一批任务、两套内嵌浏览器争同一个登录分区,而后端因为端口健康检查会复用,表面上「没问题」。
 
 ## 智能体与 MCP
 

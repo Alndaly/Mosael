@@ -35,4 +35,16 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 ## Feishu (Lark) binding
 
-Settings → Feishu bot connects the agent to Feishu so you can chat from there; changes are still confirmed inside Open Studio.
+Settings → Feishu bot connects the agent to Feishu so you can chat from there.
+
+**Changes that need confirmation arrive as a card in that same Feishu chat — approve or reject
+without leaving Feishu.**
+
+Who may approve follows the account binding: whoever taps the button must already have their
+Feishu account bound to an Open Studio account, and must still be a member of the workspace.
+Everyone in a group chat can see the card; seeing it is not permission to approve it.
+
+Two developer-console settings are required for this (neither is settable via API, so one-click
+bot creation cannot do it for you): subscribe to `card.action.trigger` under Event Subscriptions,
+enable **Interactive Card** under App Features → Bot, then republish the app. Until then the bot
+falls back to a plain-text notice telling you which switches to flip.

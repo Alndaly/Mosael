@@ -1,6 +1,6 @@
 ---
 title: Publishing & account matrix
-description: One-click distribution to local folders / webhooks / social platforms, with persistent multi-account logins and proxies.
+description: One-click distribution to Douyin / RedNote / WeChat Channels / Bilibili, with persistent multi-account logins and proxies.
 sidebar:
   order: 7
 ---
@@ -30,7 +30,7 @@ Logins run in an embedded browser view with an address bar / back / forward / re
 
 Pick a finished cut, set title, description and tags, choose targets:
 
-- **Local folder** / **Webhook** / signed-in **social accounts**.
+- A signed-in **social account** (Douyin / RedNote / WeChat Channels / Bilibili). The desktop app's embedded browser does the upload using your session, so **publishing is unavailable in the browser build**.
 - Copy can be **AI-written**.
 - The workflow **publish** node automates the same thing.
 
