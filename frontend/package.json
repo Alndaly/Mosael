@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "gen:api": "pnpm -w gen:api",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "electron:dev": "pnpm --dir .. build:publisher && pnpm --dir .. build:system && concurrently -k -n vite,bundle,backend,electron -c cyan,yellow,magenta,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"pnpm --dir .. dev:backend\" \"wait-on http://127.0.0.1:5173 http://127.0.0.1:${OPEN_STUDIO_BACKEND_PORT:-8800}/api/health && node ../electron/brand-dev.cjs && electron ../electron/main.cjs\"",
+    "//electron:dev": "wait-on 前面那串清空代理的变量不是可有可无的:回环探活不需要代理,而开发者 shell 里导出了 HTTP_PROXY、NO_PROXY 又没覆盖回环时,wait-on 会把 127.0.0.1 的探活送进代理,连接一直挂着不返回 —— Electron 那一步永远不开始,且整个 [electron] 栏一个字都不打印,现象是「启动看着正常但 app 没打开」,极难往代理上想。",
+    "electron:dev": "pnpm --dir .. build:publisher && pnpm --dir .. build:system && concurrently -k -n vite,bundle,backend,electron -c cyan,yellow,magenta,green \"pnpm dev\" \"pnpm --dir .. watch:publisher\" \"pnpm --dir .. dev:backend\" \"HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= http_proxy= https_proxy= all_proxy= NO_PROXY=localhost,127.0.0.1,::1 no_proxy=localhost,127.0.0.1,::1 wait-on http://127.0.0.1:5173 http://127.0.0.1:${OPEN_STUDIO_BACKEND_PORT:-8800}/api/health && node ../electron/brand-dev.cjs && electron ../electron/main.cjs\"",
     "test": "vitest run"
   },
   "dependencies": {
