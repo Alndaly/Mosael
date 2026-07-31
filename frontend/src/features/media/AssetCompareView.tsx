@@ -274,7 +274,10 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
 
   return (
     <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)] bg-[rgb(10_10_12)]">
-      <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
+      {/* 系统窗口控件避让:沿用 AppShell 顶栏的同一套约定 —— macOS 红绿灯在左上、Windows 控件在
+          右上,全屏时都收回。这层是全屏覆盖,顶到了标题栏位置,不让位就会压在系统按钮上。
+          顺带让它可拖窗(按钮自身 no-drag),否则盖住标题栏后窗口就挪不动了。 */}
+      <div className="flex items-center gap-1.5 border-b border-border px-3 py-2 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag] [.is-desktop.is-mac_&]:pl-[84px] [.is-desktop.is-mac.is-fullscreen_&]:pl-3 [.is-desktop.is-win_&]:pr-[148px] [.is-desktop.is-win.is-fullscreen_&]:pr-3">
         <span className="mr-auto text-[12.5px] font-semibold text-white">
           {t("mediaCompare")}
           <span className="ml-1.5 font-normal text-white/55">{images.length}</span>
