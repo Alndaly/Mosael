@@ -1,10 +1,11 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { saveAssetToDisk } from "@/lib/download";
 import { useI18n } from "@/app/preferences";
+import { AssetCompareView } from "@/features/media/AssetCompareView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -58,6 +59,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [sortKey, setSortKey] = React.useState<SortKey>("created");
   const [selectMode, setSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [comparing, setComparing] = React.useState(false);
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const [recorderOpen, setRecorderOpen] = React.useState(false);
@@ -66,6 +68,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     queryKey: ["assets", workspace.id],
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
+  /** 选中项里能参与对比的(只有图片)。 */
+  const comparable = React.useMemo(
+    () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id) && asset.kind === "image"),
+    [assets.data, selectedIds],
+  );
   const refresh = () => qc.invalidateQueries({ queryKey: ["assets"] });
 
   // Cmd+K 面板选中素材后跳转到本页并直接打开预览。
@@ -279,6 +286,16 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   ? t("mediaDeselectAll")
                   : t("mediaSelectAll")}
               </Button>
+              {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={comparable.length < 2}
+                title={comparable.length < 2 ? t("mediaCompareHint") : undefined}
+                onClick={() => setComparing(true)}
+              >
+                <Columns2 size={13} /> {t("mediaCompare")}
+              </Button>
               <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
                 <Tag size={13} /> {t("addTags")}
               </Button>
@@ -418,6 +435,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onCancel={() => setBatchDeleting(false)}
         onConfirm={() => batchRemove.mutate()}
       />
+      {comparing && comparable.length >= 2 && (
+        <AssetCompareView assets={comparable} onClose={() => setComparing(false)} />
+      )}
     </div>
   );
 }
