@@ -23,8 +23,21 @@ function compactContext(messages: AgentMessage[]): AgentMessage[] {
   return start > 0 ? messages.slice(start) : messages;
 }
 
+/** 端点没告诉我们上下文窗口时的回退。
+ *
+ * 取**小**值是刻意的:这个数只用于 pi 决定何时压缩上下文,估大了会把超窗的请求原样发出去,
+ * 由服务端拒掉(用户看到的是一次失败的对话);估小了只是压缩得早一点。以前这里硬编 128000,
+ * 配 8k 上下文的本地模型时就是前一种。真实值现在由后端从供应商 /models 目录取。 */
+const FALLBACK_CONTEXT_WINDOW = 32000;
+const FALLBACK_MAX_TOKENS = 4096;
+
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
-function buildModels(baseUrl: string, apiKey: string, modelId: string): { models: Models; model: Model<"openai-completions"> } {
+function buildModels(
+  baseUrl: string,
+  apiKey: string,
+  modelId: string,
+  limits: { contextWindow?: number | null; maxOutputTokens?: number | null } = {},
+): { models: Models; model: Model<"openai-completions"> } {
   const model: Model<"openai-completions"> = {
     id: modelId,
     name: modelId,
@@ -34,8 +47,8 @@ function buildModels(baseUrl: string, apiKey: string, modelId: string): { models
     reasoning: false,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 8000,
+    contextWindow: limits.contextWindow ?? FALLBACK_CONTEXT_WINDOW,
+    maxTokens: limits.maxOutputTokens ?? FALLBACK_MAX_TOKENS,
     // Ollama / vLLM / LM Studio 等本地 OpenAI 兼容服务不认 developer role 与 reasoning_effort
     compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
   };
@@ -62,7 +75,7 @@ function buildModels(baseUrl: string, apiKey: string, modelId: string): { models
 export interface PiTurnInput {
   systemPrompt: string;
   prompt: string;
-  provider: { baseUrl: string; apiKey: string };
+  provider: { baseUrl: string; apiKey: string; contextWindow?: number | null; maxOutputTokens?: number | null };
   model: string;
   tools: AgentTool[];
   /** pi 上轮序列化的消息数组(多轮记忆);首轮为空。 */
@@ -94,7 +107,7 @@ export interface PiTurnHandlers {
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
 export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<PiTurnResult> {
-  const { models, model } = buildModels(input.provider.baseUrl, input.provider.apiKey, input.model);
+  const { models, model } = buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const priorMessages = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
   const agent = new Agent({
     initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },

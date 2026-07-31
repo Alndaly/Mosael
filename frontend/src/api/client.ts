@@ -295,6 +295,18 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** 桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」:后端按本机绝对路径入库。
  *  只有桌面端自带的后端提供这个接口(团队服务器上 404)。 */
+/** 供应商端点上的一个可用模型。context_window / max_output_tokens 端点没给就是 null —— 不要
+ *  用默认值填补,那正是智能体侧硬编 128000 的来源。 */
+export interface ProviderModel {
+  id: string;
+  context_window: number | null;
+  max_output_tokens: number | null;
+}
+
+export async function listProviderModels(profileId: string): Promise<ProviderModel[]> {
+  return api<ProviderModel[]>(`/api/settings/providers/${profileId}/models`);
+}
+
 export async function importLocalAsset(workspaceId: string, path: string, projectId?: string): Promise<Asset> {
   return api<Asset>("/api/assets/import-local", {
     method: "POST",

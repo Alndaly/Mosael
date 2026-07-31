@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, listProviderModels } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
@@ -66,13 +66,13 @@ function DefaultRow({
   // chat:该供应商的 LLM 列表
   const chatModels = useQuery({
     queryKey: ["provider-models", providerId],
-    queryFn: () => api<string[]>(`/api/settings/providers/${providerId}/models`),
+    queryFn: () => listProviderModels(providerId),
     enabled: capability === "chat" && Boolean(providerId),
     staleTime: 60_000,
   });
   const modelOptions =
     capability === "chat"
-      ? chatModels.data ?? []
+      ? (chatModels.data ?? []).map((m) => m.id)
       : generationModelSuggestions(selectedProfile, genModels, model);
 
   const save = useMutation({

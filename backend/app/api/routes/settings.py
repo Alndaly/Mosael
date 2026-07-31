@@ -3,13 +3,14 @@ from __future__ import annotations
 import threading
 import logging
 
-import httpx
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.permissions import ensure_instance_admin
+from app.ai.model_catalog import fetch_models
 from app.api.schemas import (
+    ProviderModelOut,
     AiRuntimeConfigOut,
     AiRuntimeConfigUpdate,
     KbEmbeddingConfigOut,
@@ -383,29 +384,29 @@ def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser)
     return Response(status_code=204)
 
 
-@router.get("/settings/providers/{profile_id}/models", response_model=list[str])
-def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[str]:
-    ensure_instance_admin(db, user, "credentials")
+@router.get("/settings/providers/{profile_id}/models", response_model=list[ProviderModelOut])
+def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[ProviderModelOut]:
     """列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
-    取不到时回退到该供应商的默认模型,保证选择器至少有一项。"""
+
+    除模型 id 外还带回上下文窗口与最大输出 —— 同一份响应里本来就有,以前被丢掉,于是智能体侧
+    只能硬编 128000/8000。目录的抓取与解析在 `app.ai.model_catalog`,和智能体启动一轮时取
+    contextWindow 用的是同一份(带 TTL 缓存),不另开一条链路。
+
+    取不到列表时回退到默认模型,保证选择器至少有一项。
+    """
+    ensure_instance_admin(db, user, "credentials")
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
-    fallback = [profile.default_model] if profile.default_model else []
-    if not profile.base_url:
-        return fallback
-    try:
-        resp = httpx.get(
-            f"{profile.base_url.rstrip('/')}/models",
-            headers={"Authorization": f"Bearer {profile.api_key}"},
-            timeout=8,
+    models = fetch_models(profile.base_url or "", profile.api_key or "")
+    if not models:
+        return [ProviderModelOut(id=profile.default_model)] if profile.default_model else []
+    return [
+        ProviderModelOut(
+            id=m.id, context_window=m.context_window, max_output_tokens=m.max_output_tokens
         )
-        resp.raise_for_status()
-        data = resp.json().get("data", [])
-        models = sorted({str(item["id"]) for item in data if item.get("id")})
-        return models or fallback
-    except Exception:  # noqa: BLE001 - 取不到就降级到默认模型
-        return fallback
+        for m in models
+    ]
 
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)

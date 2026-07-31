@@ -189,6 +189,9 @@ def _run_pi(
             "baseUrl": provider.get("base_url", ""),
             "apiKey": provider.get("api_key", ""),
             "vendor": provider.get("vendor", ""),
+            # 供应商目录给了才带上;没有就不传,由 sidecar 用保守回退而不是硬编一个大数。
+            "contextWindow": provider.get("context_window"),
+            "maxOutputTokens": provider.get("max_output_tokens"),
         },
         "model": model,
         "sessionState": adapter_state,

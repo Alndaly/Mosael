@@ -480,6 +480,18 @@ class NotificationListOut(BaseModel):
     unread: int
 
 
+class ProviderModelOut(BaseModel):
+    """供应商端点上一个可用模型。
+
+    元数据来自 OpenAI 兼容 `/models` 的响应,**取不到就留空**:contextWindow 之类硬编一个
+    默认值(曾经是 128000)会让配了小上下文的本地模型在真正请求时才被服务端拒绝。
+    """
+
+    id: str
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+
+
 class LocalImportRequest(BaseModel):
     """按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。"""
 

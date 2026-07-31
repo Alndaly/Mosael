@@ -22,7 +22,14 @@ export interface RunTurnRequest {
   apiBase: string;
   token: string;
   /** Resolved provider for pi-ai (S2+): OpenAI-compatible endpoint + model. */
-  provider?: { baseUrl: string; apiKey: string; vendor: string };
+  provider?: {
+    baseUrl: string;
+    apiKey: string;
+    vendor: string;
+    /** 来自供应商 /models 目录;端点没给就缺省,由 pi.ts 用保守回退。 */
+    contextWindow?: number | null;
+    maxOutputTokens?: number | null;
+  };
   model?: string;
   /** Opaque pi session/compaction state to resume (S5+). */
   sessionState?: unknown;
@@ -63,6 +70,7 @@ export interface AbortRequest {
 }
 
 export type Request = RunTurnRequest | SteerRequest | QueueRequest | AbortRequest;
+
 
 /** Sidecar -> backend events. */
 export type Event =

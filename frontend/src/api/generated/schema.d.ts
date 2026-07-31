@@ -2982,7 +2982,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Provider Models */
+        /**
+         * List Provider Models
+         * @description 列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
+         *
+         *     除模型 id 外还带回上下文窗口与最大输出 —— 同一份响应里本来就有,以前被丢掉,于是智能体侧
+         *     只能硬编 128000/8000。目录的抓取与解析在 `app.ai.model_catalog`,和智能体启动一轮时取
+         *     contextWindow 用的是同一份(带 TTL 缓存),不另开一条链路。
+         *
+         *     取不到列表时回退到默认模型,保证选择器至少有一项。
+         */
         get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
         put?: never;
         post?: never;
@@ -5398,6 +5407,21 @@ export interface components {
              * @default
              */
             model: string;
+        };
+        /**
+         * ProviderModelOut
+         * @description 供应商端点上一个可用模型。
+         *
+         *     元数据来自 OpenAI 兼容 `/models` 的响应,**取不到就留空**:contextWindow 之类硬编一个
+         *     默认值(曾经是 128000)会让配了小上下文的本地模型在真正请求时才被服务端拒绝。
+         */
+        ProviderModelOut: {
+            /** Id */
+            id: string;
+            /** Context Window */
+            context_window?: number | null;
+            /** Max Output Tokens */
+            max_output_tokens?: number | null;
         };
         /** ProviderPricingRuleCreate */
         ProviderPricingRuleCreate: {
@@ -13465,7 +13489,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["ProviderModelOut"][];
                 };
             };
             /** @description Validation Error */

@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, listProviderModels } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -35,13 +35,13 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   const modelQueries = useQueries({
     queries: enabled.map((profile) => ({
       queryKey: ["provider-models", profile.id],
-      queryFn: () => api<string[]>(`/api/settings/providers/${profile.id}/models`),
+      queryFn: () => listProviderModels(profile.id),
       staleTime: 60_000,
     })),
   });
 
   const options = enabled.flatMap((profile, index) => {
-    const models = new Set(modelQueries[index].data ?? []);
+    const models = new Set((modelQueries[index].data ?? []).map((m) => m.id));
     if (profile.default_model) models.add(profile.default_model);
     if (defaultChat?.provider_profile_id === profile.id && defaultChat.model) models.add(defaultChat.model);
     if (session?.provider_profile_id === profile.id && session.model) models.add(session.model);
