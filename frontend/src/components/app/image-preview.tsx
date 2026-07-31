@@ -4,6 +4,7 @@ import { PhotoSlider } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 
 type ImagePreviewImage = {
   src: string;
@@ -55,7 +56,12 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         onClose={close}
         afterClose={reset}
         // react-photo-view 自带样式不在 cascade layer 里,会压过 utilities layer——覆盖其内部结构一律加 `!`。
-        className="z-[150]! [&_.PhotoView-Slider\_\_BannerWrap]:h-12! [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)]! [&_.PhotoView-Slider\_\_Counter]:font-mono! [&_.PhotoView-Slider\_\_Counter]:text-[11px]! [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)]! [&_.PhotoView-Slider\_\_toolbarIcon]:h-9! [&_.PhotoView-Slider\_\_toolbarIcon]:w-9! [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)]! [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]!"
+        // 关闭后这层还会在 DOM 里留一会儿(等它自己的收尾动画),期间虽然看不见却仍然接管
+        // 点击 —— 表现为「关掉大图后有一小段时间画布点不动、节点拖不了」。不可见就不该拦事件。
+        className={cn(
+          !visible && "pointer-events-none!",
+          "z-[150]! [&_.PhotoView-Slider\_\_BannerWrap]:h-12! [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)]! [&_.PhotoView-Slider\_\_Counter]:font-mono! [&_.PhotoView-Slider\_\_Counter]:text-[11px]! [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)]! [&_.PhotoView-Slider\_\_toolbarIcon]:h-9! [&_.PhotoView-Slider\_\_toolbarIcon]:w-9! [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)]! [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]!",
+        )}
         maskClassName="will-change-[opacity]"
         photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"
         maskOpacity={0.88}

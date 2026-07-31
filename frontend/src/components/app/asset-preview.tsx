@@ -2,6 +2,7 @@ import React from "react";
 import { Paperclip } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
+import { cn } from "@/lib/utils";
 import { useImagePreview } from "@/components/app/image-preview";
 
 /**
@@ -19,12 +20,15 @@ export function AssetInlinePreview({
   kind,
   className,
   lazy = true,
+  plain = false,
 }: {
   assetId: string;
   name: string;
   kind: string;
   /** 覆盖媒体元素的尺寸约束。默认按对话气泡的刻度。 */
   className?: string;
+  /** 去掉自带的边框与黑底。画布节点里由外层容器统一收边,元素各带一圈边框会显得碎。 */
+  plain?: boolean;
   /** 懒加载。**画布节点里必须关掉**:React Flow 的视口是 transform 变换过的,浏览器据此
    *  判断"还没进视野"而迟迟不发请求,图片就一直是 0×0,节点上看着像没产出。 */
   lazy?: boolean;
@@ -37,7 +41,10 @@ export function AssetInlinePreview({
       <button
         type="button"
         title={name}
-        className="block w-fit max-w-full cursor-zoom-in overflow-hidden rounded-lg border border-border bg-black p-0"
+        className={cn(
+          "block max-w-full cursor-zoom-in overflow-hidden p-0",
+          plain ? "w-full border-0 bg-transparent" : "w-fit rounded-lg border border-border bg-black",
+        )}
         onClick={() => openImagePreview({ src, title: name })}
       >
         <img
@@ -51,16 +58,23 @@ export function AssetInlinePreview({
   }
   if (kind === "video") {
     return (
+      // nodrag:播放条要能点、能拖进度,不能让画布把 pointerdown 抢去拖节点。
+      // 图片不加 —— 那会让占了半个节点的缩略图变成"拖不动的死区"。
       <video
         src={src}
         controls
         preload="metadata"
-        className={className ?? "max-h-[200px] max-w-full rounded-lg border border-border bg-black"}
+        className={cn(
+          "nodrag",
+          className ?? (plain ? "max-w-full bg-black" : "max-h-[200px] max-w-full rounded-lg border border-border bg-black"),
+        )}
       />
     );
   }
   if (kind === "audio") {
-    return <audio src={src} controls preload="metadata" className={className ?? "w-[260px] max-w-full"} />;
+    return (
+      <audio src={src} controls preload="metadata" className={cn("nodrag", className ?? "w-[260px] max-w-full")} />
+    );
   }
   return (
     <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-[11.5px] text-muted-foreground">

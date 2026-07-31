@@ -253,8 +253,12 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
   const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
   if (ready.length === 0) return null;
   return (
-    // nodrag:在缩略图上按下不该把节点拖走(视频还要能点播放条)。
-    <div className="nodrag flex gap-1.5 pt-0.5">
+    // 铺满卡片宽度、统一高度、object-cover —— 让它看着是节点的一部分,而不是贴上去的一张方图。
+    //
+    // **只有视频/音频挂 nodrag**。整块都挂的话,缩略图占了节点大半个身体,从图上按下就拖不动
+    // 节点了 —— 用户感觉像"焦点卡住",换个地方按又好了。图片不需要:拖动不会触发 click,
+    // 原地点一下照样打开大图。
+    <div className="grid grid-flow-col justify-stretch gap-1 overflow-hidden rounded-md border border-border">
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -262,12 +266,13 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
           name={asset.name || asset.original_filename}
           kind={asset.kind}
           lazy={false}
+          plain
           className={
             asset.kind === "image"
-              ? "block h-[84px] w-auto max-w-full object-contain"
+              ? "block h-[62px] w-full object-cover"
               : asset.kind === "video"
-                ? "max-h-[84px] max-w-full rounded-md border border-border bg-black"
-                : "w-[180px] max-w-full"
+                ? "h-[62px] w-full bg-black object-cover"
+                : "w-full"
           }
         />
       ))}
