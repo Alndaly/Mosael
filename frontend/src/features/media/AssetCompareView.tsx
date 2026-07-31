@@ -12,12 +12,12 @@ import { cn } from "@/lib/utils";
  * **联动缩放平移是这个功能的灵魂**:不联动的并排就是两个缩略图,用户自己开两个窗口也一样,
  * 不值得做。两张图共享同一个 {scale, x, y},放大到 300% 看细节时两边看的是同一处。
  *
- * 刻意**没做**滑动分割(before/after 那种拉滑杆的):它只在同构图时成立(放大、修复、图生图),
- * 而素材库里任意两张的构图通常不同,拉滑杆只会看到两个不相干的半张图,反而误导。等真有
- * source→result 的成对关系时再单独开放。
+ * 三种模式:并排(两张各自一屏一半)、滑动分割(两张叠在同一画面里擦除)、多图对比
+ * (全部铺开,底部候选条指派 A/B)。分割在构图不同的两张上更像"擦除对照"而非严格的
+ * before/after,但仍比并排更容易看出同一处的差异。
  */
 
-/** 并排 / 滑动分割 / 多图筛选。 */
+/** 并排 / 滑动分割 / 多图对比。 */
 type CompareMode = "two" | "split" | "grid";
 
 interface Transform {
@@ -37,6 +37,64 @@ function dimensionsOf(asset: Asset): { w: number; h: number } | null {
   return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : null;
 }
 
+/** 网格里单元格的最小可用高度。低于这个值就不再硬塞进一屏,改为滚动。 */
+const MIN_CELL = 150;
+const GRID_GAP = 8;
+
+/**
+ * 多图网格的铺排:在容器里挑一个**让单张图最大**的列数。
+ *
+ * `auto-fit + minmax` 做不到这件事 —— 它只按宽度切列,不知道容器有多高。4 张图在宽屏上
+ * 会被摊成一行,每张宽 1/4、下面留一大片空白;而 2×2 时每张能大得多(格子从 496×1080
+ * 变成 992×540,等比塞进去的边长 496 → 540)。所以列数必须同时看高度。
+ *
+ * 评分用「等比缩放后的渲染高度」而不是格子面积:图是 object-contain,格子再宽也只是给它
+ * 加黑边,真正决定"看得清不清"的是短边。
+ *
+ * 张数多到单元格低于 MIN_CELL 时放弃铺满,退回定高滚动 —— 硬塞一屏的结果是每张都小到
+ * 分辨不出差异,而这个视图存在的意义就是分辨差异。
+ */
+function useBestFit(count: number, aspect: number) {
+  // 回调 ref 而不是 useRef:切到滑动分割再切回来,这个 div 是重新挂载的新节点,
+  // 空依赖的 effect 不会重新观察它,尺寸会永远停在切走前的那一份。
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+  const [box, setBox] = React.useState({ w: 0, h: 0 });
+
+  React.useLayoutEffect(() => {
+    if (!node) return;
+    // 尺寸没变就返回原对象。少了这道判等,每次观察器回调都是一次新 {w,h} → 一次重渲染,
+    // 而重渲染改栅格、改栅格又触发观察器 —— 自激的循环。它不表现为卡死而是"一直在闪":
+    // 组件每帧重渲染,悬浮态的过渡和原生 title 气泡被反复打断重放。
+    const measure = () => {
+      const w = node.clientWidth;
+      const h = node.clientHeight;
+      setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+
+  const layout = React.useMemo(() => {
+    if (count <= 0 || box.w <= 0 || box.h <= 0) return null;
+    let best = { cols: 1, rows: count, score: -1 };
+    for (let cols = 1; cols <= count; cols += 1) {
+      const rows = Math.ceil(count / cols);
+      const cellW = (box.w - GRID_GAP * (cols - 1)) / cols;
+      const cellH = (box.h - GRID_GAP * (rows - 1)) / rows;
+      if (cellW <= 0 || cellH <= 0) continue;
+      const score = Math.min(cellW / aspect, cellH);
+      if (score > best.score) best = { cols, rows, score };
+    }
+    const cellH = (box.h - GRID_GAP * (best.rows - 1)) / best.rows;
+    return { ...best, scroll: cellH < MIN_CELL };
+  }, [count, box, aspect]);
+
+  return { ref: setNode, layout };
+}
+
 /** 一个对比窗格。变换由外部给,自己只负责渲染与手势上报。 */
 function Pane({
   asset,
@@ -45,7 +103,6 @@ function Pane({
   onFocus,
   active,
   label,
-  compact = false,
 }: {
   asset: Asset;
   transform: Transform;
@@ -53,9 +110,6 @@ function Pane({
   onFocus: () => void;
   active: boolean;
   label?: string;
-  /** 网格(多图筛选)模式。图片区要给确定高度 —— 自动行高下 minmax(0,1fr) 算成 0,
-   *  而 img 是绝对定位撑不起父容器,窗格会塌成只剩页脚那一条。 */
-  compact?: boolean;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLDivElement | null>(null);
@@ -100,10 +154,7 @@ function Pane({
     >
       <div
         ref={ref}
-        className={cn(
-          "relative cursor-grab overflow-hidden active:cursor-grabbing",
-          compact ? "aspect-square" : "min-h-0",
-        )}
+        className="relative min-h-0 cursor-grab overflow-hidden active:cursor-grabbing"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
       >
@@ -241,8 +292,33 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
   // 只比图片:视频要同步播放/逐帧,是另一套设计,不硬塞进来。
   const images = React.useMemo(() => assets.filter((asset) => asset.kind === "image"), [assets]);
   const [pair, setPair] = React.useState<[number, number]>([0, 1]);
+
+  /** 把第 index 张放进 A(side=0)或 B(side=1)。
+   *
+   * 目标图正占着**另一侧**时改为对调,而不是让两侧变成同一张 —— 同一张自己跟自己比,
+   * 并排是两块一样的画面、分割是一条擦不出差异的线,都是纯粹的死状态。而"点了对面那张"
+   * 恰恰几乎总是"想把左右调个个儿"。 */
+  const assignSlot = React.useCallback((side: 0 | 1, index: number) => {
+    setPair((current) => {
+      const other = current[side === 0 ? 1 : 0];
+      const next: [number, number] = [...current];
+      if (other === index) next[side === 0 ? 1 : 0] = current[side];
+      next[side] = index;
+      return next;
+    });
+  }, []);
   const [mode, setMode] = React.useState<CompareMode>(() => (images.length > 2 ? "grid" : "two"));
   const grid = mode === "grid";
+  /** 铺排用的代表性宽高比:取中位数,一两张异形图不该带偏整屏的列数。 */
+  const aspect = React.useMemo(() => {
+    const ratios = images
+      .map(dimensionsOf)
+      .filter((dim): dim is { w: number; h: number } => dim !== null)
+      .map((dim) => dim.w / dim.h)
+      .sort((a, b) => a - b);
+    return ratios.length ? ratios[Math.floor(ratios.length / 2)] : 1;
+  }, [images]);
+  const { ref: gridRef, layout: fit } = useBestFit(grid ? images.length : 0, aspect);
   /** 滑动分割的分割线位置(百分比)。 */
   const [split, setSplit] = React.useState(50);
   const [synced, setSynced] = React.useState(true);
@@ -325,55 +401,89 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
         </div>
       ) : (
       <div
+        ref={gridRef}
         className={cn(
           "grid min-h-0 gap-2 p-2",
-          grid ? "grid-cols-[repeat(auto-fit,minmax(220px,1fr))] content-start overflow-y-auto" : "grid-cols-2",
+          !grid
+            ? "grid-cols-2"
+            : // 还没量到尺寸时的兜底:按宽度铺,至少不会塌成单列一张张往下排。
+              fit
+              ? fit.scroll && "content-start overflow-y-auto"
+              : "grid-cols-[repeat(auto-fit,minmax(220px,1fr))] content-start overflow-y-auto",
         )}
+        style={
+          grid && fit
+            ? fit.scroll
+              ? { gridTemplateColumns: `repeat(${fit.cols}, minmax(0,1fr))`, gridAutoRows: `${MIN_CELL}px` }
+              : {
+                  gridTemplateColumns: `repeat(${fit.cols}, minmax(0,1fr))`,
+                  gridTemplateRows: `repeat(${fit.rows}, minmax(0,1fr))`,
+                }
+            : undefined
+        }
       >
         {shown.map((asset, index) => (
           <Pane
             key={asset.id}
             asset={asset}
-            active={!grid && active === index}
-            compact={grid}
+            active={active === index}
             transform={transformOf(asset.id)}
             onTransform={(next) => applyTransform(asset.id, next)}
-            onFocus={() => {
-              setActive(index);
-              // 网格里点一张 = 把它放进并排的左位,接着挑下一张 —— Lightroom 的收敛节奏。
-              if (grid) {
-                const at = images.findIndex((item) => item.id === asset.id);
-                setPair(([, right]) => [at, at === right ? (at + 1) % images.length : right]);
-                setMode("two");
-              }
-            }}
+            // 网格里点一张只是选中它(可以接着滚轮放大细看),不跳走。此前点一下会直接切到
+            // 并排模式,而多图对比里点图的意图通常就是"看这张",跳模式等于把整屏换掉。
+            onFocus={() => setActive(index)}
             label={grid ? undefined : index === 0 ? "A" : "B"}
           />
         ))}
       </div>
       )}
 
-      {/* 并排模式下的候选条:换掉右边那张,继续和左边比 —— 这是 Compare 的核心节奏。 */}
+      {/* 候选条:一张缩略图分左右两个命中区,左半边送进 A、右半边送进 B。
+       *
+       * 之前不管点哪张都只替换 B,想换左边那张就没有任何入口;而且 A、B 两张顶着同一种高亮,
+       * 光看条子也分不出哪张正在左边。命中区按左右分,是因为它和画面里的位置一一对应 ——
+       * 并排时 A 在左 B 在右,分割时 A 在分割线左侧 —— 不用再记住哪个字母是哪边。
+       *
+       * 角标常驻而不是只在 hover 时出现:它回答的是"现在比的是哪两张",这个问题在鼠标
+       * 不在条子上的时候同样要能回答。左右两半的 A/B 提示才是 hover 才给的。 */}
       {mode !== "grid" && images.length > 2 && (
         <div className="flex gap-1.5 overflow-x-auto border-t border-border px-2 py-1.5">
-          {images.map((asset, index) => (
-            <button
-              key={asset.id}
-              type="button"
-              title={asset.name || asset.original_filename}
-              className={cn(
-                "h-12 w-16 shrink-0 cursor-pointer overflow-hidden rounded border bg-black p-0",
-                pair.includes(index) ? "border-primary" : "border-border opacity-60 hover:opacity-100",
-              )}
-              onClick={() => setPair(([left]) => (index === left ? [left, index] : [left, index]))}
-            >
-              <img
-                src={assetFileUrl(asset.id)}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </button>
-          ))}
+          {images.map((asset, index) => {
+            const slot = pair[0] === index ? 0 : pair[1] === index ? 1 : null;
+            return (
+              <div
+                key={asset.id}
+                title={asset.name || asset.original_filename}
+                className={cn(
+                  "group relative h-12 w-16 shrink-0 overflow-hidden rounded border bg-black",
+                  slot === null ? "border-border opacity-60 hover:opacity-100" : "border-primary",
+                )}
+              >
+                <img src={assetFileUrl(asset.id)} alt="" className="h-full w-full object-cover" />
+                {slot !== null && (
+                  <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-primary px-1 text-[9.5px] font-bold leading-[14px] text-primary-foreground">
+                    {slot === 0 ? "A" : "B"}
+                  </span>
+                )}
+                <div className="absolute inset-0 flex opacity-0 transition-opacity group-hover:opacity-100">
+                  {([0, 1] as const).map((side) => (
+                    <button
+                      key={side}
+                      type="button"
+                      aria-label={`${side === 0 ? "A" : "B"} · ${asset.name || asset.original_filename}`}
+                      className={cn(
+                        "grid flex-1 cursor-pointer place-items-center bg-[rgb(0_0_0/0.55)] text-[11px] font-bold text-white hover:bg-[rgb(0_0_0/0.75)]",
+                        side === 0 ? "border-r border-white/25" : "",
+                      )}
+                      onClick={() => assignSlot(side, index)}
+                    >
+                      {side === 0 ? "A" : "B"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
