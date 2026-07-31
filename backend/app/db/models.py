@@ -725,6 +725,23 @@ class AiRuntimeConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class NetworkConfig(Base):
+    """Singleton (id='default') 出站网络代理。
+
+    空 proxy_url = 直连。一处配置,后端 httpx / sidecar / 内嵌浏览器都遵守 —— 见
+    app/domain/network.py(里面也说明了为什么回环永远不走代理)。
+    """
+
+    __tablename__ = "network_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    #: 形如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080;空串 = 直连。
+    proxy_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    #: 额外绕过代理的主机,逗号分隔。回环由代码强制补上,不依赖这里填对。
+    no_proxy: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class TtsConfig(Base):
     """Singleton (id='default') runtime config for voice cloning: which engine,
     the external interpreter that has f5-tts/fish-speech installed, and the model

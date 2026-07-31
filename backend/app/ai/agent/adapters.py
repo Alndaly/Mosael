@@ -145,6 +145,16 @@ def abort_turn(session_id: str) -> bool:
     return live.send({"type": "abort", "turnId": live.turn_id})
 
 
+def _proxy_env(base: dict[str, str]) -> dict[str, str]:
+    """给 sidecar 的环境补上代理设置。自开一个会话:调用方持有的那个 db 可能正处在
+    一次回合的事务里,而这里只是读一行配置,不该被卷进去。"""
+    from app.core.db import SessionLocal
+    from app.domain.network import subprocess_env
+
+    with SessionLocal() as db:
+        return subprocess_env(db, base)
+
+
 def pi_sidecar_command() -> tuple[str, str]:
     """跑 sidecar 用的 (node, 脚本路径)。登录流程也起同一个 sidecar,所以这里是公开的。"""
     node = os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE") or shutil.which("node") or "node"
@@ -206,6 +216,8 @@ def _run_pi(
     env = {**os.environ}
     if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
+    # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
+    env = _proxy_env(env)
     process = subprocess.Popen(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )

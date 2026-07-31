@@ -719,6 +719,20 @@ class KbEmbeddingConfigUpdate(BaseModel):
     dim: int = Field(ge=1, le=8192)
 
 
+class NetworkConfigOut(BaseModel):
+    """出站代理设置。空 proxy_url = 直连。"""
+
+    proxy_url: str = ""
+    no_proxy: str = ""
+    #: 实际生效的绕过列表(= 用户填的 + 强制补上的回环)。回显出来,省得用户以为本机回连也被代理了。
+    effective_no_proxy: str = ""
+
+
+class NetworkConfigUpdate(BaseModel):
+    proxy_url: str | None = None
+    no_proxy: str | None = None
+
+
 class AiRuntimeConfigOut(BaseModel):
     max_retries: int = 3
 

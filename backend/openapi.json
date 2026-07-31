@@ -9527,6 +9527,77 @@
         }
       }
     },
+    "/api/settings/network": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Network Config",
+        "operationId": "get_network_config_api_settings_network_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Network Config",
+        "description": "改出站代理。立刻对本进程生效;sidecar 是每次新起的进程,下一次调用就带上新设置。\n\n内嵌浏览器由 Electron 侧自己拉取(桌面端启动时和改动后各取一次)——主进程与后端是两个\n进程,共享不了环境变量,只能各自读同一份配置。",
+        "operationId": "update_network_config_api_settings_network_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/ai-runtime": {
       "get": {
         "tags": [
@@ -15666,6 +15737,56 @@
           "direction"
         ],
         "title": "MoveTrackRequest"
+      },
+      "NetworkConfigOut": {
+        "properties": {
+          "proxy_url": {
+            "type": "string",
+            "title": "Proxy Url",
+            "default": ""
+          },
+          "no_proxy": {
+            "type": "string",
+            "title": "No Proxy",
+            "default": ""
+          },
+          "effective_no_proxy": {
+            "type": "string",
+            "title": "Effective No Proxy",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "NetworkConfigOut",
+        "description": "出站代理设置。空 proxy_url = 直连。"
+      },
+      "NetworkConfigUpdate": {
+        "properties": {
+          "proxy_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Url"
+          },
+          "no_proxy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Proxy"
+          }
+        },
+        "type": "object",
+        "title": "NetworkConfigUpdate"
       },
       "NotificationListOut": {
         "properties": {

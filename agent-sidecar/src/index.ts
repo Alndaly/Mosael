@@ -13,6 +13,7 @@ import type { Agent } from "@earendil-works/pi-agent-core";
 
 import { answerAuthPrompt, runAuthLogin } from "./auth.js";
 import { log, send, type Request } from "./protocol.js";
+import { installProxyFromEnv } from "./proxy.js";
 import { runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
 
@@ -66,6 +67,8 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
 }
 
 async function main(): Promise<void> {
+  // 必须在任何请求之前:setGlobalDispatcher 只影响之后发起的请求。
+  installProxyFromEnv();
   const rl = readline.createInterface({ input: process.stdin });
   send({ type: "ready" });
   log("started; awaiting run_turn frames on stdin");

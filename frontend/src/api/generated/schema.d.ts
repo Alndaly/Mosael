@@ -3117,6 +3117,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Network Config */
+        get: operations["get_network_config_api_settings_network_get"];
+        /**
+         * Update Network Config
+         * @description 改出站代理。立刻对本进程生效;sidecar 是每次新起的进程,下一次调用就带上新设置。
+         *
+         *     内嵌浏览器由 Electron 侧自己拉取(桌面端启动时和改动后各取一次)——主进程与后端是两个
+         *     进程,共享不了环境变量,只能各自读同一份配置。
+         */
+        put: operations["update_network_config_api_settings_network_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/ai-runtime": {
         parameters: {
             query?: never;
@@ -5304,6 +5328,34 @@ export interface components {
         MoveTrackRequest: {
             /** Direction */
             direction: string;
+        };
+        /**
+         * NetworkConfigOut
+         * @description 出站代理设置。空 proxy_url = 直连。
+         */
+        NetworkConfigOut: {
+            /**
+             * Proxy Url
+             * @default
+             */
+            proxy_url: string;
+            /**
+             * No Proxy
+             * @default
+             */
+            no_proxy: string;
+            /**
+             * Effective No Proxy
+             * @default
+             */
+            effective_no_proxy: string;
+        };
+        /** NetworkConfigUpdate */
+        NetworkConfigUpdate: {
+            /** Proxy Url */
+            proxy_url?: string | null;
+            /** No Proxy */
+            no_proxy?: string | null;
         };
         /** NotificationListOut */
         NotificationListOut: {
@@ -14011,6 +14063,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KbEmbeddingConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_network_config_api_settings_network_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_network_config_api_settings_network_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkConfigOut"];
                 };
             };
             /** @description Validation Error */

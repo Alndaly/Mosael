@@ -67,6 +67,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ProviderUsageEvent": ("app/domain/usage.py",),
     "KbEmbeddingConfig": ("app/domain/kb/",),
     "AiRuntimeConfig": ("app/api/routes/settings.py",),
+    # 单例行由 network 域按需创建(get_config),路由只负责改值。
+    "NetworkConfig": ("app/domain/network.py", "app/api/routes/settings.py"),
     "TtsConfig": ("app/domain/tts_config.py",),
     # 智能体/集成
     "AgentSession": ("app/ai/agent/", "app/domain/agent/"),

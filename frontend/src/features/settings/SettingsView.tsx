@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Camera, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RefreshCw, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -8,6 +8,8 @@ import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearan
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import type { components } from "@/api/generated/schema";
+
+type NetworkConfig = components["schemas"]["NetworkConfigOut"];
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
@@ -755,6 +757,62 @@ function ServerSwitchRow() {
   );
 }
 
+/** 出站代理。挂在「本地后端」下:它和端点、开机自启一样是实例级的基础设施设置,
+ *  为一个字段单开一个导航项不值得。 */
+function ProxySection() {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const config = useQuery({
+    queryKey: ["network-config"],
+    queryFn: () => api<NetworkConfig>("/api/settings/network"),
+  });
+  const [form, setForm] = React.useState<{ proxy_url: string; no_proxy: string } | null>(null);
+  const current = form ?? {
+    proxy_url: config.data?.proxy_url ?? "",
+    no_proxy: config.data?.no_proxy ?? "",
+  };
+  const save = useMutation({
+    mutationFn: () =>
+      api<NetworkConfig>("/api/settings/network", { method: "PUT", body: JSON.stringify(current) }),
+    onSuccess: (next) => {
+      setForm(null);
+      qc.setQueryData(["network-config"], next);
+    },
+  });
+  const dirty =
+    form !== null &&
+    (form.proxy_url !== (config.data?.proxy_url ?? "") || form.no_proxy !== (config.data?.no_proxy ?? ""));
+
+  return (
+    <SettingsGroup title={t("proxyTitle")} description={t("proxyDesc")}>
+      <SettingsRow label={t("proxyUrl")} description={t("proxyUrlDesc")}>
+        <Input
+          className="w-[320px] max-w-full"
+          placeholder="http://127.0.0.1:7890"
+          value={current.proxy_url}
+          onChange={(e) => setForm({ ...current, proxy_url: e.target.value })}
+        />
+      </SettingsRow>
+      <SettingsRow label={t("proxyNoProxy")} description={t("proxyNoProxyDesc")}>
+        <Input
+          className="w-[320px] max-w-full"
+          placeholder="example.com, 10.0.0.0/8"
+          value={current.no_proxy}
+          onChange={(e) => setForm({ ...current, no_proxy: e.target.value })}
+        />
+      </SettingsRow>
+      <SettingsRow label={t("proxyEffective")} description="">
+        <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">
+          {config.data?.effective_no_proxy || "…"}
+        </code>
+        <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+          {t("save")}
+        </Button>
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
+
 function BackendSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const kbStatus = useQuery({
@@ -780,6 +838,7 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
           <UpdateCheckButton />
         </SettingsRow>
       </SettingsGroup>
+      <ProxySection />
       <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>
         <SettingsRow label={t("kbStatusEngine")} description={t("kbStatusEngineDesc")}>
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{kbStatus.data?.convert_engine ?? "…"}</code>
