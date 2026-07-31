@@ -272,12 +272,15 @@ function SplitPane({
         <img src={assetFileUrl(b.id)} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
       </div>
 
+      {/* 命中区 12px、可见线 1px:分割线越细,两侧的差异越是紧挨着可比;而 1px 宽的东西
+          用鼠标是抓不住的,所以把"看得见的"和"抓得住的"分成两层。 */}
       <div
-        className="absolute inset-y-0 z-[2] w-1 -translate-x-1/2 cursor-ew-resize bg-white/85"
+        className="absolute inset-y-0 z-[2] w-3 -translate-x-1/2 cursor-ew-resize"
         style={{ left: `${split}%` }}
         onPointerDown={startDivider}
       >
-        <span className="absolute left-1/2 top-1/2 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-black/55 text-white backdrop-blur-[6px]">
+        <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/80" />
+        <span className="absolute left-1/2 top-1/2 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/60 bg-black/50 text-white backdrop-blur-[6px]">
           <FlipHorizontal size={13} />
         </span>
       </div>
@@ -451,9 +454,11 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
           {images.map((asset, index) => {
             const slot = pair[0] === index ? 0 : pair[1] === index ? 1 : null;
             return (
+              // 这里**不能**挂原生 title:缩略图贴在窗口最底部,鼠标在它上面移动时气泡会反复
+              // 隐藏重弹,而底边附近的气泡会翻到指针上方、正好压住缩略图 —— 每弹一次就把
+              // 指针从元素上夺走一帧,表现就是 A/B 覆盖层一闪一闪。名字在窗格页脚里有。
               <div
                 key={asset.id}
-                title={asset.name || asset.original_filename}
                 className={cn(
                   "group relative h-12 w-16 shrink-0 overflow-hidden rounded border bg-black",
                   slot === null ? "border-border opacity-60 hover:opacity-100" : "border-primary",
