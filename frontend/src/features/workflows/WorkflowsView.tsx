@@ -22,6 +22,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  ChevronRight,
   AlignLeft,
   AlertTriangle,
   AudioLines,
@@ -327,6 +328,9 @@ function WfNode({ data, selected }: NodeProps) {
  *  新写的部分先用这个常量,避免再多复制一遍。 */
 const FIELD_BOX =
   "grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
+
+/** 助手面板的开合记忆。 */
+const AGENT_PANEL_KEY = "openstudio:workflow-agent-open";
 
 const NODE_COMPONENT_TYPES = { wf: WfNode };
 
@@ -841,7 +845,12 @@ function WorkflowEditor({
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  const [agentOpen, setAgentOpen] = React.useState(true);
+  // 默认关闭:进工作流页是来看画布的,助手默认占掉右侧近一半、把节点挤到看不见。
+  // 需要时点顶栏「AI 助手」;开关状态记住,下次进来照旧。
+  const [agentOpen, setAgentOpen] = React.useState(() => localStorage.getItem(AGENT_PANEL_KEY) === "1");
+  React.useEffect(() => {
+    localStorage.setItem(AGENT_PANEL_KEY, agentOpen ? "1" : "0");
+  }, [agentOpen]);
   const [agentMode, setAgentMode] = React.useState<WorkflowAgentMode>("docked");
   const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
   const [nodeSearch, setNodeSearch] = React.useState("");
@@ -1700,6 +1709,8 @@ interface ConfigSpec {
   options?: string[];
   /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
   default?: string;
+  /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
+  advanced?: boolean;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -2375,6 +2386,159 @@ function NodeInspector({
     return null;
   };
 
+  // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
+  const visibleSpecs = specs
+    .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
+    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)));
+  // 分级:留空也能跑的专业旋钮收进折叠区(由后端 NODE_TYPES 的 advanced 声明),第一眼只留下
+  // 决定「这个节点在做什么」的字段 —— 十几个采样参数一上来就糊到脸上,新手根本无从下手。
+  const basicSpecs = visibleSpecs.filter(([, spec]) => !spec?.advanced);
+  const advancedSpecs = visibleSpecs.filter(([, spec]) => Boolean(spec?.advanced));
+
+  /** 一个配置字段的渲染。抽出来是因为要渲染两遍:基础项直接铺开,高级项收进折叠区。 */
+  const renderField = ([key, spec]: [string, ConfigSpec]) => {
+          // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
+          if (spec?.type === "graph") {
+            const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
+            const isSubgraph = node.type === "subgraph";
+            return (
+              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
+                <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
+                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-[11.5px] leading-normal text-muted-foreground">{t(isSubgraph ? "wfSubgraphBodyNote" : "wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
+              </div>
+            );
+          }
+          const value = config[key];
+          const isObject = spec?.type === "object";
+          const options = spec?.options
+            ? spec.options.map((option) => ({ value: option, label: option }))
+            : dynamicOptions(key);
+          const labelKey = FIELD_LABEL_KEYS[key];
+          // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
+          const canConnect = !isObject;
+          const connected = canConnect && connectedInputs.includes(key);
+          const boundEdge = connected ? dataEdgeFor(key) : null;
+          const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
+          return (
+            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
+              <span>
+                {labelKey ? t(labelKey) : key}
+                {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
+                {canConnect && (
+                  <button
+                    type="button"
+                    className={cn(
+                      "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-[10px] font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
+                      connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
+                    )}
+                    title={t("wfInputModeHint")}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setConnected(key, !connected);
+                    }}
+                  >
+                    {connected ? <Link2 size={11} /> : <PenLine size={11} />}
+                    {connected ? t("wfInputRef") : t("wfInputManual")}
+                  </button>
+                )}
+              </span>
+              {connected ? (
+                <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
+                  <Select
+                    value={boundValue}
+                    onValueChange={(next) => {
+                      const dot = next.indexOf(".");
+                      bindInput(key, next.slice(0, dot), next.slice(dot + 1));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("wfPickUpstream")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {upstreamOptions.map((option) => (
+                        <SelectItem key={option.ref} value={`${option.sourceId}.${option.output}`}>
+                          {option.sourceId}.{option.output}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : options ? (
+                spec?.options ? (
+                  <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("wfPickOption")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
+                  <Combobox
+                    value={String(value ?? "")}
+                    options={options}
+                    placeholder={t("wfPickOption")}
+                    emptyText={t("cmdkEmpty")}
+                    allowCustomValue={allowsCustomValue(key)}
+                    className="w-full"
+                    onValueChange={(next) => setConfig(key, next)}
+                  />
+                )
+              ) : isObject ? (
+                <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
+              ) : spec?.type === "code" ? (
+                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
+              ) : spec?.type === "template" ? (
+                // 只有模板字段需要多行:它要放 {{变量}}、要支持 `/` 唤起变量菜单。
+                <VarTextarea
+                  textareaRef={(el) => {
+                    fieldRefs.current[key] = el;
+                  }}
+                  rows={2}
+                  value={String(value ?? "")}
+                  onChange={(next) => setConfig(key, next)}
+                  variables={variables}
+                />
+              ) : (
+                // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里
+                // 并排出现三种控件(Select / Combobox / 带拖拽手柄的文本域),看着像没做完。
+                // 控件跟着字段声明的类型走。
+                <Input
+                  ref={(el) => {
+                    fieldRefs.current[key] = el;
+                  }}
+                  type={spec?.type === "number" ? "number" : "text"}
+                  value={String(value ?? "")}
+                  placeholder={spec?.default ? String(spec.default) : ""}
+                  onChange={(event) => setConfig(key, event.target.value)}
+                />
+              )}
+              {!connected && spec?.type === "template" && variables.length > 0 && (
+                <div className="flex flex-wrap gap-[3px]">
+                  {variables.map((ref) => (
+                    <button
+                      key={ref}
+                      type="button"
+                      className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
+                      title={t("wfInsertVar")}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => insertVariable(key, ref)}
+                    >
+                      {ref.replace(/[{}]/g, "")}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {spec?.description && <small>{spec.description}</small>}
+            </div>
+          );
+  };
+
   return (
     <aside
       className={cn(
@@ -2728,151 +2892,19 @@ function NodeInspector({
             )}
           </div>
         )}
-        {specs
-          .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
-          .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)))
-          .map(([key, spec]) => {
-          // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
-          if (spec?.type === "graph") {
-            const bodyNodes = ((config[key] as { nodes?: unknown[] } | undefined)?.nodes ?? []).length;
-            const isSubgraph = node.type === "subgraph";
-            return (
-              <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
-                <label>{t(isSubgraph ? "wfSubgraphBody" : "wfLoopBody")}</label>
-                <div className="rounded-md border border-dashed border-border bg-muted px-2.5 py-2 text-[11.5px] leading-normal text-muted-foreground">{t(isSubgraph ? "wfSubgraphBodyNote" : "wfLoopBodyNote").replace("{n}", String(bodyNodes))}</div>
-              </div>
-            );
-          }
-          const value = config[key];
-          const isObject = spec?.type === "object";
-          const options = spec?.options
-            ? spec.options.map((option) => ({ value: option, label: option }))
-            : dynamicOptions(key);
-          const labelKey = FIELD_LABEL_KEYS[key];
-          // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
-          const canConnect = !isObject;
-          const connected = canConnect && connectedInputs.includes(key);
-          const boundEdge = connected ? dataEdgeFor(key) : null;
-          const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
-          return (
-            <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" key={key}>
-              <span>
-                {labelKey ? t(labelKey) : key}
-                {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
-                {canConnect && (
-                  <button
-                    type="button"
-                    className={cn(
-                      "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-[10px] font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
-                      connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
-                    )}
-                    title={t("wfInputModeHint")}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setConnected(key, !connected);
-                    }}
-                  >
-                    {connected ? <Link2 size={11} /> : <PenLine size={11} />}
-                    {connected ? t("wfInputRef") : t("wfInputManual")}
-                  </button>
-                )}
-              </span>
-              {connected ? (
-                <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
-                  <Select
-                    value={boundValue}
-                    onValueChange={(next) => {
-                      const dot = next.indexOf(".");
-                      bindInput(key, next.slice(0, dot), next.slice(dot + 1));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("wfPickUpstream")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {upstreamOptions.map((option) => (
-                        <SelectItem key={option.ref} value={`${option.sourceId}.${option.output}`}>
-                          {option.sourceId}.{option.output}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : options ? (
-                spec?.options ? (
-                  <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("wfPickOption")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
-                  <Combobox
-                    value={String(value ?? "")}
-                    options={options}
-                    placeholder={t("wfPickOption")}
-                    emptyText={t("cmdkEmpty")}
-                    allowCustomValue={allowsCustomValue(key)}
-                    className="w-full"
-                    onValueChange={(next) => setConfig(key, next)}
-                  />
-                )
-              ) : isObject ? (
-                <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
-              ) : spec?.type === "code" ? (
-                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
-              ) : spec?.type === "template" ? (
-                // 只有模板字段需要多行:它要放 {{变量}}、要支持 `/` 唤起变量菜单。
-                <VarTextarea
-                  textareaRef={(el) => {
-                    fieldRefs.current[key] = el;
-                  }}
-                  rows={2}
-                  value={String(value ?? "")}
-                  onChange={(next) => setConfig(key, next)}
-                  variables={variables}
-                />
-              ) : (
-                // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里
-                // 并排出现三种控件(Select / Combobox / 带拖拽手柄的文本域),看着像没做完。
-                // 控件跟着字段声明的类型走。
-                <Input
-                  ref={(el) => {
-                    fieldRefs.current[key] = el;
-                  }}
-                  type={spec?.type === "number" ? "number" : "text"}
-                  value={String(value ?? "")}
-                  placeholder={spec?.default ? String(spec.default) : ""}
-                  onChange={(event) => setConfig(key, event.target.value)}
-                />
-              )}
-              {!connected && spec?.type === "template" && variables.length > 0 && (
-                <div className="flex flex-wrap gap-[3px]">
-                  {variables.map((ref) => (
-                    <button
-                      key={ref}
-                      type="button"
-                      className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-[10px] text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
-                      title={t("wfInsertVar")}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => insertVariable(key, ref)}
-                    >
-                      {ref.replace(/[{}]/g, "")}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {spec?.description && <small>{spec.description}</small>}
+        {basicSpecs.map(renderField)}
+        {advancedSpecs.length > 0 && (
+          <details className="group min-w-0 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)]">
+            <summary className="flex cursor-pointer list-none items-center gap-1 px-2 py-1.5 text-[11.5px] font-semibold text-muted-foreground marker:content-none hover:text-foreground">
+              <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+              {t("wfAdvanced")}
+              <span className="font-normal opacity-60">{advancedSpecs.length}</span>
+            </summary>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-border p-2">
+              {advancedSpecs.map(renderField)}
             </div>
-          );
-        })}
+          </details>
+        )}
         {meta && (
           <div className="grid gap-[5px] border-t border-border pt-2.5 [&>span]:text-[11px] [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>

@@ -71,11 +71,12 @@ export function SearchableSelect({
             type="button"
             disabled={disabled}
             className={cn(
-              "flex h-8 w-full items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
+              "flex h-8 w-full min-w-0 items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
               className,
             )}
           >
-            <span className="truncate">{selected?.label ?? placeholder ?? ""}</span>
+            {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。 */}
+            <span className="min-w-0 truncate">{selected?.label ?? placeholder ?? ""}</span>
             <ChevronDown size={14} className="shrink-0 opacity-50" />
           </button>
         )}

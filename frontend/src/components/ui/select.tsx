@@ -4,6 +4,7 @@ import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
+import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger"
 import { cn } from "@/lib/utils"
 
 const Select = SelectPrimitive.Root
@@ -18,13 +19,7 @@ const SelectTrigger = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
-    className={cn(
-      // 两级 min-w-0 缺一不可:值 span 是 flex 子项,触发器自身又常是 grid/flex 子项
-      // (min-width:auto 会把它钉在内容最小宽,长模型 id 直接把面板顶穿)。都归零后
-      // w-full 才真正生效,长文本在 span 上截断出省略号。
-      "flex h-9 w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-sm  ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate",
-      className
-    )}
+    className={cn(FIELD_TRIGGER_CLASS, className)}
     {...props}
   >
     {children}

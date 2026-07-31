@@ -1,9 +1,10 @@
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger"
 import { cn } from "@/lib/utils";
 
 export type ComboboxOption = {
@@ -93,22 +94,21 @@ export function Combobox({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
+        {/* 不用 <Button variant="outline">:它的默认尺寸是 rounded-full px-4 的胶囊,
+            和旁边的 Select 并排时圆角、左右留白、箭头全都对不上。共用 FIELD_TRIGGER_CLASS。 */}
+        <button
           ref={triggerRef}
           type="button"
-          variant="outline"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn("justify-between rounded-md border-input bg-field font-normal hover:bg-field hover:text-foreground", className)}
+          className={cn(FIELD_TRIGGER_CLASS, "cursor-pointer text-left", className)}
         >
-          {/* min-w-0:flex 子项默认 min-width:auto,不肯收缩 —— truncate 就失效,
-              长模型名会顶穿按钮边框、把右侧箭头挤没。 */}
-          <span className={cn("min-w-0 truncate", value ? "text-foreground" : "text-muted-foreground")}>
+          <span className={value ? "text-foreground" : "text-muted-foreground"}>
             {selected?.label ?? (value || placeholder)}
           </span>
-          <ChevronsUpDown size={14} className="shrink-0 opacity-60" />
-        </Button>
+          <ChevronDown size={14} className="shrink-0 opacity-60" />
+        </button>
       </PopoverTrigger>
       <PopoverContent className={cn("w-[var(--radix-popover-trigger-width)] p-0", contentClassName)} align="start">
         <Command shouldFilter>

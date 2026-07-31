@@ -30,6 +30,11 @@ class WorkflowDomainError(RuntimeError):
 
 # 节点类型注册表:同时驱动后端校验、前端节点面板和智能体的图编辑提示。
 # outputs 是节点执行后写入上下文的键;config 描述每个可配置字段。
+#: 配置项可以标 `"advanced": True`。
+#:
+#: 判据是「留空也能把这个节点跑起来吗」——能,就是高级项。编辑器把它们收进折叠的「高级选项」,
+#: 不在用户第一眼就把十几个采样参数糊到脸上;AI 助手也读同一份声明,不会替用户瞎填。
+#: 反过来:required 的、以及决定这个节点在做什么的字段(提示词、模型、URL),永远留在外面。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "label": "开始",
@@ -50,21 +55,21 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "profile_id": {"type": "string", "description": "供应商配置 id,留空自动选择"},
             "model": {"type": "string", "description": "模型名,留空用配置默认"},
-            "temperature": {"type": "number", "description": "采样温度 0-2;留空跟随生成风格"},
-            "top_p": {"type": "number", "description": "核采样 0-1;留空不传"},
-            "max_tokens": {"type": "number", "description": "最大输出 token;留空不传"},
-            "frequency_penalty": {"type": "number", "description": "频率惩罚 -2 到 2;留空不传"},
-            "presence_penalty": {"type": "number", "description": "存在惩罚 -2 到 2;留空不传"},
-            "seed": {"type": "number", "description": "随机种子;留空不传"},
-            "stop": {"type": "string", "description": "停止词,多个用换行分隔"},
-            "response_format": {
+            "temperature": {"advanced": True, "type": "number", "description": "采样温度 0-2;留空跟随生成风格"},
+            "top_p": {"advanced": True, "type": "number", "description": "核采样 0-1;留空不传"},
+            "max_tokens": {"advanced": True, "type": "number", "description": "最大输出 token;留空不传"},
+            "frequency_penalty": {"advanced": True, "type": "number", "description": "频率惩罚 -2 到 2;留空不传"},
+            "presence_penalty": {"advanced": True, "type": "number", "description": "存在惩罚 -2 到 2;留空不传"},
+            "seed": {"advanced": True, "type": "number", "description": "随机种子;留空不传"},
+            "stop": {"advanced": True, "type": "string", "description": "停止词,多个用换行分隔"},
+            "response_format": {"advanced": True, 
                 "type": "string",
                 "description": "输出格式",
                 "options": ["text", "json_object", "json_schema"],
             },
-            "json_schema_name": {"type": "string", "description": "JSON Schema 名称,默认 workflow_output"},
-            "json_schema": {"type": "object", "description": "JSON Schema;仅 response_format=json_schema 时使用"},
-            "json_schema_strict": {
+            "json_schema_name": {"advanced": True, "type": "string", "description": "JSON Schema 名称,默认 workflow_output"},
+            "json_schema": {"advanced": True, "type": "object", "description": "JSON Schema;仅 response_format=json_schema 时使用"},
+            "json_schema_strict": {"advanced": True, 
                 "type": "string",
                 "description": "JSON Schema 严格模式",
                 "options": ["true", "false"],
@@ -114,12 +119,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "prompt": {"type": "template", "required": True},
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
             # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
-            "negative_prompt": {"type": "template", "description": "负向提示词(部分模型支持)"},
+            "negative_prompt": {"advanced": True, "type": "template", "description": "负向提示词(部分模型支持)"},
             "parameters": {
                 "type": "object",
                 "description": "生成参数,取值随模型而定:aspect_ratio / duration_seconds / resolution / size / seed…",
             },
-            "source_asset_ids": {
+            "source_asset_ids": {"advanced": True, 
                 "type": "template",
                 "description": "参考图 / 首帧素材 id;多个用换行或逗号分隔",
             },
@@ -434,10 +439,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
             "selector": {"type": "template", "description": "等这个元素(默认等出现)"},
-            "gone": {"type": "string", "options": ["否", "是"], "description": "是=等元素消失"},
-            "url_contains": {"type": "template", "description": "等 URL 包含此片段(与选择器/文本三选一)"},
-            "text": {"type": "template", "description": "等页面出现此文本"},
-            "timeout_ms": {"type": "number", "description": "超时毫秒,默认 15000"},
+            "gone": {"advanced": True, "type": "string", "options": ["否", "是"], "description": "是=等元素消失"},
+            "url_contains": {"advanced": True, "type": "template", "description": "等 URL 包含此片段(与选择器/文本三选一)"},
+            "text": {"advanced": True, "type": "template", "description": "等页面出现此文本"},
+            "timeout_ms": {"advanced": True, "type": "number", "description": "超时毫秒,默认 15000"},
         },
         "outputs": ["session"],
     },
