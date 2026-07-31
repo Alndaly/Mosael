@@ -53,15 +53,22 @@ import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelec
 import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { formatCostMicros } from "@/features/ai-studio/messageUsage";
+import {
+  aspectRatioOptions,
+  capabilityNumber,
+  capabilityString,
+  durationOptions,
+  imageSizeOptions,
+  maxImages,
+  supportsParameter,
+  videoResolutionOptions,
+} from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
-const FALLBACK_IMAGE_SIZES = ["1024x1024"];
-const FALLBACK_VIDEO_RESOLUTIONS = ["720p"];
-const FALLBACK_ASPECT_RATIOS = ["16:9"];
 const ENGINE_SEP = "::";
 
 type GenerationConfig = {
@@ -86,63 +93,6 @@ type GenerationEngineOption = GenerationModel & {
   provider_profile_id: string;
   label: string;
 };
-
-function capabilityList(model: GenerationModel | null, key: string, fallback: string[]): string[] {
-  const value = model?.capabilities?.[key];
-  if (!Array.isArray(value)) return fallback;
-  const items = value.map((item) => String(item).trim()).filter(Boolean);
-  return items.length > 0 ? items : fallback;
-}
-
-function capabilityNumberList(model: GenerationModel | null, key: string, fallback: number[]): number[] {
-  const value = model?.capabilities?.[key];
-  if (!Array.isArray(value)) return fallback;
-  const items = value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
-  return items.length > 0 ? items : fallback;
-}
-
-function capabilityString(model: GenerationModel | null, key: string, fallback: string): string {
-  const value = model?.capabilities?.[key];
-  return typeof value === "string" ? value : fallback;
-}
-
-function capabilityNumber(model: GenerationModel | null, key: string, fallback: number): number {
-  const value = Number(model?.capabilities?.[key]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function parameterKeys(model: GenerationModel | null): string[] {
-  return capabilityList(model, "parameter_keys", []);
-}
-
-function supportsParameter(model: GenerationModel | null, key: string) {
-  const keys = parameterKeys(model);
-  return keys.length === 0 || keys.includes(key);
-}
-
-function imageSizeOptions(model: GenerationModel | null): string[] {
-  if (!supportsParameter(model, "size")) return [];
-  return capabilityList(model, "sizes", FALLBACK_IMAGE_SIZES);
-}
-
-function videoResolutionOptions(model: GenerationModel | null): string[] {
-  if (!supportsParameter(model, "resolution")) return [];
-  return capabilityList(model, "resolutions", FALLBACK_VIDEO_RESOLUTIONS);
-}
-
-function aspectRatioOptions(model: GenerationModel | null): string[] {
-  if (!supportsParameter(model, "aspect_ratio")) return [];
-  return capabilityList(model, "aspect_ratios", FALLBACK_ASPECT_RATIOS);
-}
-
-function durationOptions(model: GenerationModel | null): number[] {
-  if (!supportsParameter(model, "duration_seconds")) return [];
-  return capabilityNumberList(model, "duration_seconds", [5]);
-}
-
-function maxImages(model: GenerationModel | null): number {
-  return capabilityNumber(model, "max_num_images", 4);
-}
 
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
   const sizes = imageSizeOptions(model);

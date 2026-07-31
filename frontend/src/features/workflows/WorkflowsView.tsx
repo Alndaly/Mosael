@@ -85,11 +85,13 @@ import {
   fetchWorkflowNodeTypes,
   importWorkflow,
   listAssets,
+  listProviderModels,
   listPublishAccounts,
   listVoices,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
+  type GenerationModel,
   type Workflow,
   type WorkflowGraph,
   type WorkflowNodeType,
@@ -115,6 +117,16 @@ import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
+import {
+  aspectRatioOptions,
+  capabilityNumber,
+  capabilityString,
+  durationOptions,
+  imageSizeOptions,
+  maxImages,
+  supportsParameter,
+  videoResolutionOptions,
+} from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 import {
   analyzeWorkflow,
@@ -311,6 +323,11 @@ function WfNode({ data, selected }: NodeProps) {
   );
 }
 
+/** 属性面板里一格字段的样式(标签 + 控件 + 说明)。面板里这串还散落在几十处内联,
+ *  新写的部分先用这个常量,避免再多复制一遍。 */
+const FIELD_BOX =
+  "grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
+
 const NODE_COMPONENT_TYPES = { wf: WfNode };
 
 
@@ -403,7 +420,13 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   code: "wffCode",
   template: "wffTemplate",
   params: "wffParams",
+  negative_prompt: "wffNegativePrompt",
+  source_asset_ids: "wffSourceAssets",
 };
+
+/** 由「AI 生成素材」自己的参数区渲染,不再走通用字段列表 —— 否则同一份 parameters 会出现两次
+ *  (一次是按模型能力生成的下拉,一次是原始 JSON 框),后者还更容易填错。 */
+const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["parameters"]);
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -2067,9 +2090,20 @@ function NodeInspector({
     queryFn: () => listPublishAccounts(workspaceId),
     enabled: node.type === "publish",
   });
+  // llm 节点的模型列表:所选供应商端点上真实可用的模型。以前这里是个纯文本框,
+  // 要用户凭记忆手打模型名 —— 打错了要等到运行时才报错。
+  const llmProfileId = node.type === "llm" ? String(config.profile_id || "") : "";
+  const llmModels = useQuery({
+    queryKey: ["provider-models", llmProfileId],
+    queryFn: () => listProviderModels(llmProfileId),
+    enabled: node.type === "llm" && Boolean(llmProfileId),
+    staleTime: 60_000,
+  });
   const generationModels = useQuery({
     queryKey: ["generation-models"],
-    queryFn: () => api<Array<{ id: string; provider: string; model: string; kind: string }>>("/api/generation/models"),
+    // 要完整类型:参数区靠 capabilities 决定渲染什么。以前这里只取了四个字段,
+    // 于是「模型支持哪些参数」这份信息在工作流侧根本拿不到。
+    queryFn: () => api<GenerationModel[]>("/api/generation/models"),
     enabled: node.type === "ai_generate",
   });
   const providerDefaults = useQuery({
@@ -2238,10 +2272,58 @@ function NodeInspector({
     });
   };
 
+  // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
+  const genModel =
+    node.type === "ai_generate"
+      ? (generationModels.data ?? []).find(
+          (item) => item.provider === config.provider && item.model === config.model && item.kind === config.kind,
+        ) ?? null
+      : null;
+  const genPresetValue = genModel?.id ?? (node.type === "ai_generate" ? String(config.model ?? "") : "");
+  const genParams = (config.parameters ?? {}) as Record<string, unknown>;
+  const setGenParam = (key: string, value: string) => {
+    const next = { ...genParams };
+    // 空值就删掉这一项,而不是塞空串:后端会把空串当"显式指定了空"传给供应商。
+    if (value === "") delete next[key];
+    else next[key] = /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+    setConfig("parameters", next);
+  };
+  /** 该模型声明支持、且是「从若干可选值里挑一个」的那些参数。 */
+  const genParamKeys: Array<{ key: string; label: string; options: string[] }> = React.useMemo(() => {
+    if (!genModel) return [];
+    const out: Array<{ key: string; label: string; options: string[] }> = [];
+    const ratios = aspectRatioOptions(genModel);
+    if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
+    if (genModel.kind === "image") {
+      const sizes = imageSizeOptions(genModel);
+      if (sizes.length > 0) out.push({ key: "size", label: t("wfGenSize"), options: sizes });
+    } else {
+      const resolutions = videoResolutionOptions(genModel);
+      if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
+      const durations = durationOptions(genModel);
+      if (durations.length > 0)
+        out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genModel]);
+
+  /** 哪些动态下拉允许手填值。
+   *
+   * 素材/账号/音色这类**资源**是闭集:填一个不存在的 id 只会在运行时报错,所以下拉即全集。
+   * 模型名不是:供应商上新模型往往早于我们的目录更新,只给下拉等于把人堵在「列表里没有、
+   * 于是填不进去」的死角里。 */
+  const allowsCustomValue = (key: string) => key === "model";
+
   /** (nodeType, key) → 动态下拉选项;返回 null 表示该字段不是动态选择。 */
   const dynamicOptions = (key: string): Array<{ value: string; label: string }> | null => {
     if (node.type === "llm" && key === "profile_id") {
       return (providers.data ?? []).map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
+    }
+    if (node.type === "llm" && key === "model") {
+      // 端点上真实存在的模型。allowsCustomValue 同时放行手填 —— 新模型上线往往早于目录更新,
+      // 只给下拉会把人堵死在一个「列表里没有,于是填不进去」的死角。
+      return (llmModels.data ?? []).map((m) => ({ value: m.id, label: m.id }));
     }
     if (node.type === "plugin_tool" && key === "plugin_id") {
       const seen = new Map<string, string>();
@@ -2365,28 +2447,74 @@ function NodeInspector({
           </div>
         )}
         {node.type === "ai_generate" && (
-          <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-            <span>{t("wfModelPreset")}</span>
-            <Select
-              value=""
-              onValueChange={(id) => {
-                const model = (generationModels.data ?? []).find((item) => item.id === id);
-                if (model) {
-                  onChange({ config: { ...config, provider: model.provider, model: model.model, kind: model.kind } });
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("wfModelPresetHint")} />
-              </SelectTrigger>
-              <SelectContent>
-                {(generationModels.data ?? []).map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.model} · {model.kind}
-                  </SelectItem>
+          <div className="grid gap-[9px] rounded-lg border border-border bg-[color-mix(in_srgb,var(--muted)_58%,transparent)] p-[9px]">
+            <div className={FIELD_BOX}>
+              <span>{t("wfModelPreset")}</span>
+              <Combobox
+                value={genPresetValue}
+                options={(generationModels.data ?? []).map((model) => ({
+                  value: model.id,
+                  label: `${model.model} · ${model.kind === "video" ? t("capVideo") : t("capImage")}`,
+                }))}
+                placeholder={t("wfModelPresetHint")}
+                emptyText={t("cmdkEmpty")}
+                // 目录之外的模型也能用:自建的兼容端点常有目录里没有的模型名。
+                // 这时只改 model,provider / kind 保持用户已选的那对。
+                allowCustomValue
+                className="w-full"
+                onValueChange={(id) => {
+                  const model = (generationModels.data ?? []).find((item) => item.id === id);
+                  if (model) {
+                    onChange({
+                      config: { ...config, provider: model.provider, model: model.model, kind: model.kind, parameters: {} },
+                    });
+                  } else {
+                    setConfig("model", id);
+                  }
+                }}
+              />
+            </div>
+            {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。
+                以前这里什么都没有:执行器一直读 parameters,节点却没声明它,于是工作流里
+                做不出竖屏视频这种最常见的诉求。 */}
+            {genModel && genParamKeys.length > 0 && (
+              <>
+                {genParamKeys.map(({ key, label, options }) => (
+                  <div className={FIELD_BOX} key={key}>
+                    <span>{label}</span>
+                    <Select
+                      value={String(genParams[key] ?? "")}
+                      onValueChange={(next) => setGenParam(key, next)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("wfPickOption")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
+                {supportsParameter(genModel, "seed") && (
+                  <div className={FIELD_BOX}>
+                    <span>{t("wfGenSeed")}</span>
+                    <Input
+                      type="number"
+                      value={String(genParams.seed ?? "")}
+                      placeholder={t("wfGenSeedHint")}
+                      onChange={(event) => setGenParam("seed", event.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            {genModel && genParamKeys.length === 0 && !supportsParameter(genModel, "seed") && (
+              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("wfGenNoParams")}</small>
+            )}
           </div>
         )}
         {node.type === "llm" && (
@@ -2546,6 +2674,7 @@ function NodeInspector({
         )}
         {specs
           .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
+          .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)))
           .map(([key, spec]) => {
           // 循环体 / 子图都是内嵌子图(graph 类型):不铺原始 JSON 文本框,给个只读概览(子画布编辑见 L3)。
           if (spec?.type === "graph") {
@@ -2634,6 +2763,7 @@ function NodeInspector({
                     options={options}
                     placeholder={t("wfPickOption")}
                     emptyText={t("cmdkEmpty")}
+                    allowCustomValue={allowsCustomValue(key)}
                     className="w-full"
                     onValueChange={(next) => setConfig(key, next)}
                   />

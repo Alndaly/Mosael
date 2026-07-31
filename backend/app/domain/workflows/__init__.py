@@ -106,12 +106,23 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "ai_generate": {
         "label": "AI 生成素材",
-        "description": "文生图/文生视频,产出素材进素材库。",
+        "description": "文生图/文生视频(也支持图生图、图生视频),产出素材进素材库。",
         "config": {
             "provider": {"type": "string", "required": True},
             "model": {"type": "string", "required": True},
             "kind": {"type": "string", "required": True, "description": "生成类型", "options": ["image", "video"]},
             "prompt": {"type": "template", "required": True},
+            # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
+            # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
+            "negative_prompt": {"type": "template", "description": "负向提示词(部分模型支持)"},
+            "parameters": {
+                "type": "object",
+                "description": "生成参数,取值随模型而定:aspect_ratio / duration_seconds / resolution / size / seed…",
+            },
+            "source_asset_ids": {
+                "type": "template",
+                "description": "参考图 / 首帧素材 id;多个用换行或逗号分隔",
+            },
         },
         "outputs": ["asset_id", "generation_id"],
     },
