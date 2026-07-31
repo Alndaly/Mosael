@@ -591,6 +591,10 @@ class ProviderProfile(Base):
     #: 同一份 OAuth 凭据,后写的会把已被服务端轮换作废的 refresh token 覆盖回去 ——
     #: 表现为用户莫名其妙被登出。写入时带上读到的版本,不匹配就拒绝(见 credentials 路由)。
     credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: 订阅计划登录后拿到的可用模型目录([{id, name, contextWindow, maxTokens}])。
+    #: 只有登录才知道:Copilot 的模型随订阅档位变,OpenRouter 有几百个。API Key 档案不用它
+    #: —— 那边现取现用(见 app.ai.model_catalog)。
+    model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
     #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for

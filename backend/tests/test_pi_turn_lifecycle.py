@@ -61,7 +61,7 @@ for _ in sys.stdin:
 def fake_sidecar(tmp_path: Path, monkeypatch):
     script = tmp_path / "sidecar.py"
     script.write_text(FAKE_SIDECAR)
-    monkeypatch.setattr(adapters, "_pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
     return script
 
@@ -113,7 +113,7 @@ def echo_sidecar(tmp_path: Path, monkeypatch):
     script.write_text(ECHO_SIDECAR)
     log = tmp_path / "frames.jsonl"
     monkeypatch.setenv("FRAME_LOG", str(log))
-    monkeypatch.setattr(adapters, "_pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
     return log
 

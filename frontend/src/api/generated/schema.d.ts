@@ -2902,6 +2902,81 @@ export interface paths {
         patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/oauth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Oauth Login
+         * @description 发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。
+         */
+        post: operations["start_oauth_login_api_settings_providers__profile_id__oauth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/oauth/login/{login_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll Oauth Login */
+        get: operations["poll_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__get"];
+        put?: never;
+        post?: never;
+        /** Cancel Oauth Login */
+        delete: operations["cancel_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/oauth/login/{login_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer Oauth Login */
+        post: operations["answer_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/oauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Logout Oauth Provider
+         * @description 解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。
+         */
+        delete: operations["logout_oauth_provider_api_settings_providers__profile_id__oauth_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/provider-defaults": {
         parameters: {
             query?: never;
@@ -5239,6 +5314,62 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** OAuthAnswerIn */
+        OAuthAnswerIn: {
+            /** Prompt Id */
+            prompt_id: string;
+            /** Answer */
+            answer: string;
+        };
+        /**
+         * OAuthLoginOut
+         * @description 一次登录的当前状态。前端轮询它,拿到什么就展示什么。
+         */
+        OAuthLoginOut: {
+            /** Login Id */
+            login_id: string;
+            /** Status */
+            status: string;
+            /** Events */
+            events?: {
+                [key: string]: unknown;
+            }[];
+            prompt?: components["schemas"]["OAuthPromptOut"] | null;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Models */
+            models?: components["schemas"]["ProviderModelOut"][];
+        };
+        /**
+         * OAuthPromptOut
+         * @description 登录流程中需要用户作答的一步(输入授权码、选账号……)。
+         */
+        OAuthPromptOut: {
+            /** Prompt Id */
+            prompt_id: string;
+            /**
+             * Prompt Type
+             * @default text
+             */
+            prompt_type: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Placeholder
+             * @default
+             */
+            placeholder: string;
+            /** Options */
+            options?: {
+                [key: string]: unknown;
+            }[];
         };
         /** PasswordUpdate */
         PasswordUpdate: {
@@ -13360,6 +13491,166 @@ export interface operations {
                 "application/json": components["schemas"]["ProviderProfileUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_oauth_login_api_settings_providers__profile_id__oauth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poll_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                login_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                login_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                login_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_oauth_provider_api_settings_providers__profile_id__oauth_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

@@ -104,17 +104,20 @@ export function isSubscriptionProvider(piProvider: string): boolean {
   return Boolean(SUBSCRIPTION_PROVIDERS[piProvider]);
 }
 
-/** 订阅计划的 Models:用 pi 现成的 Provider + 后端托管的凭据存储。 */
-async function buildSubscriptionModels(
+/** 订阅计划的 Models:用 pi 现成的 Provider + 后端托管的凭据存储。
+ *
+ * modelId 省略时不解析模型(登录流程只需要装好 provider 的 Models)。 */
+export async function buildSubscriptionModels(
   piProvider: string,
-  modelId: string,
+  modelId: string | undefined,
   credentials: CredentialStore,
-): Promise<{ models: Models; model: Model<Api> }> {
+): Promise<{ models: Models; model: Model<Api> | undefined; provider: Provider }> {
   const factory = SUBSCRIPTION_PROVIDERS[piProvider];
   if (!factory) throw new Error(`未知的订阅供应商:${piProvider}`);
   const provider = await factory();
   const models = createModels({ credentials });
   models.setProvider(provider);
+  if (modelId === undefined) return { models, model: undefined, provider };
   // 目录里没有这个 id 时不猜:报出来比拿一个别的模型悄悄跑掉好。
   const model = models.getModel(provider.id, modelId);
   if (!model) {
@@ -125,7 +128,7 @@ async function buildSubscriptionModels(
       .join("、");
     throw new Error(`供应商「${provider.name}」没有模型 ${modelId};可用的有:${known}…`);
   }
-  return { models, model };
+  return { models, model, provider };
 }
 
 export interface PiTurnInput {

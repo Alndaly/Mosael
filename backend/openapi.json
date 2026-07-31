@@ -8862,6 +8862,246 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/oauth/login": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Start Oauth Login",
+        "description": "发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。",
+        "operationId": "start_oauth_login_api_settings_providers__profile_id__oauth_login_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthLoginOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/oauth/login/{login_id}": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Poll Oauth Login",
+        "operationId": "poll_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__get",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "login_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Login Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthLoginOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Cancel Oauth Login",
+        "operationId": "cancel_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "login_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Login Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/oauth/login/{login_id}/answer": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Answer Oauth Login",
+        "operationId": "answer_oauth_login_api_settings_providers__profile_id__oauth_login__login_id__answer_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "login_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Login Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthLoginOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/oauth": {
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Logout Oauth Provider",
+        "description": "解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。",
+        "operationId": "logout_oauth_provider_api_settings_providers__profile_id__oauth_delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/provider-defaults": {
       "get": {
         "tags": [
@@ -15474,6 +15714,110 @@
           "created_at"
         ],
         "title": "NotificationOut"
+      },
+      "OAuthAnswerIn": {
+        "properties": {
+          "prompt_id": {
+            "type": "string",
+            "title": "Prompt Id"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_id",
+          "answer"
+        ],
+        "title": "OAuthAnswerIn"
+      },
+      "OAuthLoginOut": {
+        "properties": {
+          "login_id": {
+            "type": "string",
+            "title": "Login Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthPromptOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelOut"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login_id",
+          "status"
+        ],
+        "title": "OAuthLoginOut",
+        "description": "一次登录的当前状态。前端轮询它,拿到什么就展示什么。"
+      },
+      "OAuthPromptOut": {
+        "properties": {
+          "prompt_id": {
+            "type": "string",
+            "title": "Prompt Id"
+          },
+          "prompt_type": {
+            "type": "string",
+            "title": "Prompt Type",
+            "default": "text"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "placeholder": {
+            "type": "string",
+            "title": "Placeholder",
+            "default": ""
+          },
+          "options": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_id"
+        ],
+        "title": "OAuthPromptOut",
+        "description": "登录流程中需要用户作答的一步(输入授权码、选账号……)。"
       },
       "PasswordUpdate": {
         "properties": {

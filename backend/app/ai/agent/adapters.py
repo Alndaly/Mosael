@@ -145,7 +145,8 @@ def abort_turn(session_id: str) -> bool:
     return live.send({"type": "abort", "turnId": live.turn_id})
 
 
-def _pi_sidecar_command() -> tuple[str, str]:
+def pi_sidecar_command() -> tuple[str, str]:
+    """跑 sidecar 用的 (node, 脚本路径)。登录流程也起同一个 sidecar,所以这里是公开的。"""
     node = os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE") or shutil.which("node") or "node"
     repo_root = Path(__file__).resolve().parents[4]
     sidecar = os.environ.get("OPEN_STUDIO_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
@@ -171,7 +172,7 @@ def _run_pi(
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
         raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
-    node, sidecar = _pi_sidecar_command()
+    node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
         raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
 

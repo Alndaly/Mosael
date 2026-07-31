@@ -8,8 +8,18 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.permissions import ensure_instance_admin
+from app.ai.agent.login import (
+    LoginError,
+    answer as answer_login,
+    cancel as cancel_login,
+    get_session as get_login_session,
+    start_login,
+)
 from app.ai.model_catalog import fetch_models
 from app.api.schemas import (
+    OAuthAnswerIn,
+    OAuthLoginOut,
+    OAuthPromptOut,
     ProviderModelOut,
     AiRuntimeConfigOut,
     AiRuntimeConfigUpdate,
@@ -26,13 +36,23 @@ from app.api.schemas import (
     VendorFieldOut,
     VendorPresetOut,
 )
+from app.core.config import settings as settings_config
 from app.core.db import SessionLocal
-from app.db.models import AiRuntimeConfig, KbEmbeddingConfig, ProviderDefault, ProviderPricingRule, ProviderProfile
+from app.db.models import (
+    AiRuntimeConfig,
+    KbEmbeddingConfig,
+    ProviderDefault,
+    ProviderPricingRule,
+    ProviderProfile,
+    new_id,
+)
 from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
+from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.providers import (
     VENDOR_PRESETS,
+    pi_provider_id,
     auth_types_for_vendor,
     capability_ids_for_vendor,
     effective_capability_ids,
@@ -283,6 +303,113 @@ def update_provider_profile(
     return _profile_out(profile)
 
 
+def _oauth_profile(db: DbSession, profile_id: str) -> ProviderProfile:
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    if profile.auth_type != "oauth" or not pi_provider_id(profile.vendor):
+        raise HTTPException(status_code=400, detail="该供应商不是订阅计划,不需要授权登录")
+    return profile
+
+
+def _login_out(session, db: DbSession | None = None) -> OAuthLoginOut:
+    return OAuthLoginOut(
+        login_id=session.login_id,
+        status=session.status,
+        events=list(session.events),
+        prompt=OAuthPromptOut(**session.prompt) if session.prompt else None,
+        error=session.error,
+        models=[
+            ProviderModelOut(
+                id=str(item.get("id", "")),
+                context_window=item.get("contextWindow"),
+                max_output_tokens=item.get("maxTokens"),
+            )
+            for item in session.models
+            if item.get("id")
+        ],
+    )
+
+
+def _store_login_catalog(db: DbSession, profile: ProviderProfile, session) -> None:
+    """登录成功后把该账号的模型目录落库,并在没有默认模型时先挑一个。
+
+    不挑的话用户回到设置页只会看到一个空的模型选择器,而「登录成功但用不了」比登录失败更费解。
+    """
+    if session.status != "done" or not session.models:
+        return
+    profile.model_catalog = session.models
+    if not profile.default_model:
+        profile.default_model = str(session.models[0].get("id", ""))
+    db.commit()
+
+
+@router.post("/settings/providers/{profile_id}/oauth/login", response_model=OAuthLoginOut)
+def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
+    """发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。"""
+    ensure_instance_admin(db, user, "credentials")
+    profile = _oauth_profile(db, profile_id)
+    from app.ai.agent.host import mint_tool_token
+
+    try:
+        session = start_login(
+            login_id=new_id(),
+            profile_id=profile.id,
+            pi_provider=pi_provider_id(profile.vendor),
+            api_base=f"http://{settings_config.backend_host}:{settings_config.backend_port}",
+            token=mint_tool_token(db, user),
+            credential=read_credential(profile),
+        )
+    except LoginError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return _login_out(session)
+
+
+@router.get("/settings/providers/{profile_id}/oauth/login/{login_id}", response_model=OAuthLoginOut)
+def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
+    ensure_instance_admin(db, user, "credentials")
+    profile = _oauth_profile(db, profile_id)
+    session = get_login_session(login_id)
+    if session is None or session.profile_id != profile_id:
+        raise HTTPException(status_code=404, detail="登录会话已结束")
+    _store_login_catalog(db, profile, session)
+    return _login_out(session)
+
+
+@router.post("/settings/providers/{profile_id}/oauth/login/{login_id}/answer", response_model=OAuthLoginOut)
+def answer_oauth_login(
+    profile_id: str, login_id: str, body: OAuthAnswerIn, db: DbSession, user: CurrentUser
+) -> OAuthLoginOut:
+    ensure_instance_admin(db, user, "credentials")
+    _oauth_profile(db, profile_id)
+    session = get_login_session(login_id)
+    if session is None or session.profile_id != profile_id:
+        raise HTTPException(status_code=404, detail="登录会话已结束")
+    if not answer_login(login_id, body.prompt_id, body.answer):
+        raise HTTPException(status_code=409, detail="这一步已经不在等待作答了")
+    return _login_out(session)
+
+
+@router.delete("/settings/providers/{profile_id}/oauth/login/{login_id}", status_code=204)
+def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> None:
+    ensure_instance_admin(db, user, "credentials")
+    _oauth_profile(db, profile_id)
+    cancel_login(login_id)
+
+
+@router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)
+def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
+    """解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。"""
+    ensure_instance_admin(db, user, "credentials")
+    profile = _oauth_profile(db, profile_id)
+    lease = acquire_lease(profile.id)
+    commit_credential(db, profile.id, lease, None)
+    profile.model_catalog = None
+    db.commit()
+    db.refresh(profile)
+    return _profile_out(profile)
+
+
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
     """每种能力的默认供应商+模型;未配置的返回空默认。"""
@@ -418,6 +545,18 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
+    if profile.auth_type == "oauth":
+        # 订阅计划的目录只有登录才知道(Copilot 随档位变、OpenRouter 有几百个),
+        # 登录成功时由 pi 带回来存下(见 _store_login_catalog)。
+        return [
+            ProviderModelOut(
+                id=str(item.get("id", "")),
+                context_window=item.get("contextWindow"),
+                max_output_tokens=item.get("maxTokens"),
+            )
+            for item in (profile.model_catalog or [])
+            if item.get("id")
+        ]
     models = fetch_models(profile.base_url or "", profile.api_key or "")
     if not models:
         return [ProviderModelOut(id=profile.default_model)] if profile.default_model else []

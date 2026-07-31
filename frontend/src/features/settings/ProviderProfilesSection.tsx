@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ExternalLink, KeyRound, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { ExternalLink, KeyRound, LogIn, LogOut, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
+import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
@@ -203,6 +204,14 @@ export function ProviderProfilesSection({
     onSuccess: refresh,
   });
 
+  /** 正在授权的档案。订阅计划没有可填的 Key,授权是它唯一的"配置"动作。 */
+  const [authing, setAuthing] = React.useState<ProviderProfile | null>(null);
+  const logout = useMutation({
+    mutationFn: (id: string) => api(`/api/settings/providers/${id}/oauth`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
+  const isOauth = (profile: ProviderProfile) => profile.auth_type === "oauth";
+
   const vendorLabel = (value: string) => (vendors.data ?? []).find((item) => item.vendor === value)?.label ?? value;
   const preset = (vendors.data ?? []).find((item) => item.vendor === vendor) ?? null;
   const docsUrl = VENDOR_DOCS[vendor];
@@ -268,6 +277,12 @@ export function ProviderProfilesSection({
                 </FormItem>
               )}
             />
+            {preset?.auth?.includes("oauth") && (preset?.fields ?? []).length === 0 && (
+              <p className="m-0 rounded-md border border-border bg-panel p-2 text-[11.5px] leading-[1.5] text-muted-foreground">
+                {t("providerOauthHint")}
+                {!editing && ` ${t("providerOauthSaveFirst")}`}
+              </p>
+            )}
             {(preset?.fields ?? []).map((spec) => (
               <FormField
                 key={spec.key}
@@ -384,13 +399,40 @@ export function ProviderProfilesSection({
               <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
                 <strong>{profile.name}</strong>
                 <small>
-                  {vendorLabel(profile.vendor)} · {profile.key_hint}
+                  {vendorLabel(profile.vendor)}
+                  {isOauth(profile)
+                    ? ` · ${profile.oauth_linked ? t("providerOauthLinked") : t("providerOauthUnlinked")}`
+                    : profile.key_hint
+                      ? ` · ${profile.key_hint}`
+                      : ""}
                   {profile.default_model ? ` · ${profile.default_model}` : ""}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                 </small>
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="flex items-center gap-1">
+                {isOauth(profile) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setAuthing(profile)}
+                    aria-label={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
+                    title={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
+                  >
+                    <LogIn size={13} />
+                  </Button>
+                )}
+                {isOauth(profile) && profile.oauth_linked && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => logout.mutate(profile.id)}
+                    aria-label={t("providerOauthLogout")}
+                    title={t("providerOauthLogout")}
+                  >
+                    <LogOut size={13} />
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
                   <Pencil size={13} />
                 </Button>
@@ -408,6 +450,15 @@ export function ProviderProfilesSection({
           )}
         </div>
       </SettingsBlock>
+
+      {authing && (
+        <ProviderOAuthDialog
+          profileId={authing.id}
+          profileName={authing.name}
+          open
+          onOpenChange={(next) => !next && setAuthing(null)}
+        />
+      )}
     </SettingsGroup>
   );
 }

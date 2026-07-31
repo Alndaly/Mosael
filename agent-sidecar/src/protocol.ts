@@ -76,7 +76,46 @@ export interface AbortRequest {
   turnId: string;
 }
 
-export type Request = RunTurnRequest | SteerRequest | QueueRequest | AbortRequest;
+/**
+ * 跑一次订阅计划的登录(设备码 / 浏览器授权)。
+ *
+ * 和 run_turn 分开是必然的:授权是**用户在界面上**完成的,可能几十秒到几分钟,而且要往返
+ * 提问-作答;塞进一轮对话里既拿不到 UI,也会把这一轮卡死。
+ */
+export interface AuthLoginRequest {
+  type: "auth_login";
+  loginId: string;
+  /** pi 内置 Provider 的 id(授权流程在它里面)。 */
+  piProvider: string;
+  /** 凭据落库时定位档案。 */
+  profileId: string;
+  apiBase: string;
+  token: string;
+  /** 重新登录时把已有凭据带上。 */
+  credential?: Credential | null;
+}
+
+/** 用户对某个 auth_prompt 的作答。 */
+export interface AuthAnswerRequest {
+  type: "auth_answer";
+  promptId: string;
+  answer: string;
+}
+
+/** 放弃这次登录(用户关掉了弹窗)。 */
+export interface AuthCancelRequest {
+  type: "auth_cancel";
+  loginId: string;
+}
+
+export type Request =
+  | RunTurnRequest
+  | SteerRequest
+  | QueueRequest
+  | AbortRequest
+  | AuthLoginRequest
+  | AuthAnswerRequest
+  | AuthCancelRequest;
 
 
 /** Sidecar -> backend events. */
@@ -88,7 +127,26 @@ export type Event =
   | { type: "turn_done"; turnId: string; text: string; sessionState: unknown; usage?: Record<string, unknown> }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
-  | { type: "error"; turnId: string | null; message: string };
+  | { type: "error"; turnId: string | null; message: string }
+  // ── 登录流程 ───────────────────────────────────────────────────────────────
+  // pi 要展示给用户的东西(授权链接、设备码、进度)原样转发:`event` 就是 pi 的 AuthEvent,
+  // 不在这里翻译成自定义结构 —— 上游加一种事件类型时,前端至少还能拿到原文。
+  | { type: "auth_event"; loginId: string; event: Record<string, unknown> }
+  | {
+      type: "auth_prompt";
+      loginId: string;
+      promptId: string;
+      promptType: "text" | "secret" | "select" | "manual_code";
+      message: string;
+      placeholder?: string;
+      options?: readonly { id: string; label: string; description?: string }[];
+    }
+  /** 登录成功。models = 该账号实际可用的模型目录(Copilot 随档位变、OpenRouter 有几百个)。 */
+  | {
+      type: "auth_done";
+      loginId: string;
+      models: { id: string; name: string; contextWindow?: number; maxTokens?: number }[];
+    };
 
 export function send(event: Event): void {
   process.stdout.write(JSON.stringify(event) + "\n");

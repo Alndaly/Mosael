@@ -1,5 +1,5 @@
 /**
- * sidecar 打包产物的冒烟:能不能真的构造出模型。
+ * sidecar 打包产物的冒烟:能不能真的构造出模型、能不能真的起一次授权登录。
  *
  * 为什么需要它:这类故障**只在 bundle 之后出现**,源码和类型都是对的,单元测试也照样绿。
  * 真实事故是 pi-ai 0.82 重排模块之后,esbuild 的 CJS 惰性初始化转换把 createModels 提到顶层、
@@ -10,6 +10,12 @@
  *
  * 判据是**失败的种类**而不是成败:base_url 指向一个必然连不上的端口,所以这一轮一定失败;
  * 我们要的是它失败在网络上,而不是失败在构造器上。
+ *
+ * 第二段(授权登录)是同一类故障的另一处:pi 的 OAuth 流程默认走动态 import,靠
+ *   `import.meta.url.endsWith(".js")`
+ * 判断运行形态 —— 而 CJS 产物里 import.meta 是 `{}`,于是点「授权登录」当场炸在
+ *   TypeError: Cannot read properties of undefined (reading 'endsWith')
+ * 解法是 registerBunOAuthFlows()(把各家流程静态注册进来)。这条同样只在打包后可见。
  *
  * 跑法:node agent-sidecar/test/bundle.smoke.mjs
  */
@@ -61,5 +67,50 @@ setTimeout(() => {
     process.exit(1);
   }
   console.log("PASS  打包产物完整跑到发起请求(失败原因是连不上,符合预期)");
-  process.exit(0);
+  void smokeAuthLogin();
 }, 9000);
+
+/**
+ * 第二段:auth_login 能不能走过「加载授权流程」这一步。
+ *
+ * 判据同样是**失败的种类**:设备码要打真实网络,离线时拿不到,但那时的错误应该是网络类的,
+ * 绝不该是加载类的。所以断言「没有加载期 TypeError」,并且确实看到了设备码/授权链接或一个
+ * 网络错误 —— 而不是简单地断言某个字符串不出现(那样进程一启动就崩也算通过)。
+ */
+function smokeAuthLogin() {
+  const child = spawn(process.execPath, [bundle], { stdio: ["pipe", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (d) => (output += d));
+  child.stderr.on("data", (d) => (output += d));
+  child.stdin.write(
+    JSON.stringify({
+      type: "auth_login",
+      loginId: "smoke",
+      piProvider: "kimi-coding",
+      profileId: "p",
+      // 凭据写回用不到(还没走到那一步),给个必然连不上的地址即可。
+      apiBase: "http://127.0.0.1:9",
+      token: "t",
+    }) + "\n",
+  );
+
+  setTimeout(() => {
+    child.kill();
+    const loadFailure = /endsWith|is not a constructor|Dynamic require|Cannot find module|SyntaxError/i.test(output);
+    const reachedFlow = /device_code|auth_url|verificationUri/i.test(output);
+    const networkFailure = /ECONNREFUSED|fetch failed|ENOTFOUND|socket|timeout/i.test(output);
+
+    if (loadFailure || !(reachedFlow || networkFailure)) {
+      console.error("FAIL  授权流程没能加载起来:");
+      console.error(`      走到流程=${reachedFlow} 网络失败=${networkFailure} 加载失败=${loadFailure}`);
+      console.error(output.slice(0, 800));
+      process.exit(1);
+    }
+    console.log(
+      reachedFlow
+        ? "PASS  打包产物能起一次设备码授权(拿到了设备码)"
+        : "PASS  打包产物的授权流程已加载(本次离线,失败在网络上)",
+    );
+    process.exit(0);
+  }, 12000);
+}

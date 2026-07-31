@@ -94,6 +94,7 @@ def _migrate_provider_auth() -> None:
         ("auth_type", "ALTER TABLE provider_profiles ADD COLUMN auth_type VARCHAR(20) NOT NULL DEFAULT 'api_key'"),
         ("oauth_credential", "ALTER TABLE provider_profiles ADD COLUMN oauth_credential JSON"),
         ("credential_version", "ALTER TABLE provider_profiles ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0"),
+        ("model_catalog", "ALTER TABLE provider_profiles ADD COLUMN model_catalog JSON"),
     ]
     missing = [sql for name, sql in additions if name not in columns]
     if not missing:

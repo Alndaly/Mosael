@@ -492,6 +492,34 @@ class ProviderModelOut(BaseModel):
     max_output_tokens: int | None = None
 
 
+class OAuthPromptOut(BaseModel):
+    """登录流程中需要用户作答的一步(输入授权码、选账号……)。"""
+
+    prompt_id: str
+    prompt_type: str = "text"
+    message: str = ""
+    placeholder: str = ""
+    options: list[dict] = Field(default_factory=list)
+
+
+class OAuthLoginOut(BaseModel):
+    """一次登录的当前状态。前端轮询它,拿到什么就展示什么。"""
+
+    login_id: str
+    status: str  # running | done | error | cancelled
+    #: pi 的 AuthEvent 原样透传(auth_url / device_code / progress / info)。
+    #: 刻意不翻译成自定义结构:上游加一种事件时,前端至少还能拿到原文而不是空白。
+    events: list[dict] = Field(default_factory=list)
+    prompt: OAuthPromptOut | None = None
+    error: str = ""
+    models: list[ProviderModelOut] = Field(default_factory=list)
+
+
+class OAuthAnswerIn(BaseModel):
+    prompt_id: str
+    answer: str
+
+
 class LocalImportRequest(BaseModel):
     """按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。"""
 

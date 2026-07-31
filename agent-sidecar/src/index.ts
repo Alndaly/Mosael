@@ -11,6 +11,7 @@ import * as readline from "node:readline";
 
 import type { Agent } from "@earendil-works/pi-agent-core";
 
+import { answerAuthPrompt, runAuthLogin } from "./auth.js";
 import { log, send, type Request } from "./protocol.js";
 import { runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
@@ -22,6 +23,9 @@ import { buildAllTools } from "./tools.js";
  * addressable from outside the call that is awaiting it.
  */
 const active = new Map<string, Agent>();
+
+/** 进行中的登录:loginId -> 取消开关。授权可能持续几分钟,用户随时可能关掉弹窗。 */
+const logins = new Map<string, AbortController>();
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
@@ -106,6 +110,24 @@ async function main(): Promise<void> {
         send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
       } else if (msg.type === "abort") {
         active.get(msg.turnId)?.abort();
+      } else if (msg.type === "auth_login") {
+        const controller = new AbortController();
+        logins.set(msg.loginId, controller);
+        // 同样不 await:授权要等用户操作,await 会让 stdin 停读,作答帧永远送不进来。
+        void runAuthLogin(msg, controller.signal)
+          .catch((err) => {
+            // 授权失败的原因往往在栈里(某一步 pi 内部拿不到东西),而协议帧只带 message。
+            // stderr 是调试通道,不进协议,所以这里可以放全量。
+            log("auth login failed:", (err as Error)?.stack ?? String(err));
+            send({ type: "error", turnId: msg.loginId, message: String(err) });
+          })
+          .finally(() => logins.delete(msg.loginId));
+      } else if (msg.type === "auth_answer") {
+        if (!answerAuthPrompt(msg.promptId, msg.answer)) {
+          log("no pending auth prompt for", msg.promptId);
+        }
+      } else if (msg.type === "auth_cancel") {
+        logins.get(msg.loginId)?.abort();
       } else {
         log("unknown message type:", (msg as { type?: string }).type ?? "(none)");
       }
