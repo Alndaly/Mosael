@@ -92,6 +92,9 @@ export async function runAuthLogin(input: AuthLoginInput, signal: AbortSignal): 
     name: model.name,
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
+    // 美元 / 百万 token,和后端计价规则的 million_* 单位同口径。
+    // 只是**报价**,不是账单:实际计费始终由后端的 ProviderPricingRule 算(pi 的 Usage.cost 不用)。
+    cost: model.cost,
   }));
   log(`auth login ok: ${provider.id}, ${catalog.length} models`);
   send({ type: "auth_done", loginId, models: catalog });

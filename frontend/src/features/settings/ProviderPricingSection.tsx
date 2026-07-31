@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, ReceiptText, Trash2 } from "lucide-react";
+import { Pencil, Plus, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -15,6 +15,7 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
+type PrefillResult = components["schemas"]["PricingPrefillOut"];
 
 type PricingForm = {
   providerProfileId: string;
@@ -201,6 +202,18 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     onSuccess: refresh,
   });
 
+  /** 按目录预填:省掉几十上百个模型的手抄。只补缺失的,已填的一律不动(后端保证)。 */
+  const [prefillOpen, setPrefillOpen] = React.useState(false);
+  const [prefillResult, setPrefillResult] = React.useState<PrefillResult | null>(null);
+  const prefill = useMutation({
+    mutationFn: (profileId: string) =>
+      api<PrefillResult>(`/api/settings/providers/${profileId}/pricing/prefill`, { method: "POST" }),
+    onSuccess: (result) => {
+      setPrefillResult(result);
+      refresh();
+    },
+  });
+
   const profileLabel = (profileId: string | null | undefined, provider: string) => {
     const profile = (profiles.data ?? []).find((item) => item.id === profileId);
     if (profile) return profile.name;
@@ -215,11 +228,57 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       title={t("pricingRulesTitle")}
       description={t("pricingRulesDesc")}
       actions={
-        <Button variant="outline" size="sm" onClick={openCreate}>
-          <Plus size={13} /> {t("pricingRuleAdd")}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setPrefillResult(null);
+              setPrefillOpen(true);
+            }}
+            title={t("pricingPrefillHint")}
+          >
+            <Sparkles size={13} /> {t("pricingPrefill")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={openCreate}>
+            <Plus size={13} /> {t("pricingRuleAdd")}
+          </Button>
+        </div>
       }
     >
+      <ModalShell open={prefillOpen} onOpenChange={setPrefillOpen} title={t("pricingPrefill")}>
+        <div className="grid gap-2.5">
+          <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
+          <div className="grid gap-1.5">
+            {(profiles.data ?? []).map((profile) => (
+              <Button
+                key={profile.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-start"
+                disabled={prefill.isPending}
+                onClick={() => prefill.mutate(profile.id)}
+              >
+                {profile.name}
+              </Button>
+            ))}
+          </div>
+          {prefillResult && (
+            <p className="m-0 text-[11.5px] leading-[1.5] text-foreground">
+              {(prefillResult.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
+                .replace("{created}", String(prefillResult.created))
+                .replace("{priced}", String(prefillResult.models_with_price))
+                .replace("{seen}", String(prefillResult.models_seen))}
+            </p>
+          )}
+          <div className="mt-1 flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>
+              {t("close")}
+            </Button>
+          </div>
+        </div>
+      </ModalShell>
       <ModalShell
         open={adding || editing !== null}
         onOpenChange={(next) => !next && closeModal()}

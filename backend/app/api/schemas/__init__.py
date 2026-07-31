@@ -515,6 +515,18 @@ class OAuthLoginOut(BaseModel):
     models: list[ProviderModelOut] = Field(default_factory=list)
 
 
+class PricingPrefillOut(BaseModel):
+    """按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
+    是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"""
+
+    #: 本次新建的规则条数。
+    created: int
+    #: 目录里带报价的模型数。
+    models_with_price: int
+    #: 目录里的模型总数。
+    models_seen: int
+
+
 class OAuthAnswerIn(BaseModel):
     prompt_id: str
     answer: str

@@ -2977,6 +2977,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/pricing/prefill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prefill Provider Pricing
+         * @description 按该供应商的模型目录补齐缺失的计价规则。
+         *
+         *     **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
+         *     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+         */
+        post: operations["prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/provider-defaults": {
         parameters: {
             query?: never;
@@ -5512,6 +5535,19 @@ export interface components {
              * @default 1
              */
             speed: number;
+        };
+        /**
+         * PricingPrefillOut
+         * @description 按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
+         *     是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。
+         */
+        PricingPrefillOut: {
+            /** Created */
+            created: number;
+            /** Models With Price */
+            models_with_price: number;
+            /** Models Seen */
+            models_seen: number;
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -13659,6 +13695,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingPrefillOut"];
                 };
             };
             /** @description Validation Error */

@@ -9102,6 +9102,49 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/pricing/prefill": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Prefill Provider Pricing",
+        "description": "按该供应商的模型目录补齐缺失的计价规则。\n\n**只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。\n目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。",
+        "operationId": "prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingPrefillOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/provider-defaults": {
       "get": {
         "tags": [
@@ -16116,6 +16159,30 @@
         ],
         "title": "PodcastRequest",
         "description": "A 火山 podcast: two voices reading or discussing the given material."
+      },
+      "PricingPrefillOut": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "models_with_price": {
+            "type": "integer",
+            "title": "Models With Price"
+          },
+          "models_seen": {
+            "type": "integer",
+            "title": "Models Seen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "models_with_price",
+          "models_seen"
+        ],
+        "title": "PricingPrefillOut",
+        "description": "按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:\n是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"
       },
       "ProjectCreate": {
         "properties": {

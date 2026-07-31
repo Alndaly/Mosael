@@ -145,7 +145,14 @@ export type Event =
   | {
       type: "auth_done";
       loginId: string;
-      models: { id: string; name: string; contextWindow?: number; maxTokens?: number }[];
+      models: {
+        id: string;
+        name: string;
+        contextWindow?: number;
+        maxTokens?: number;
+        /** 美元 / 百万 token。仅用于预填计价规则,不参与实际计费。 */
+        cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+      }[];
     };
 
 export function send(event: Event): void {

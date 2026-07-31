@@ -18,6 +18,7 @@ from app.ai.agent.login import (
 from app.ai.model_catalog import fetch_models
 from app.api.schemas import (
     OAuthAnswerIn,
+    PricingPrefillOut,
     OAuthLoginOut,
     OAuthPromptOut,
     ProviderModelOut,
@@ -60,7 +61,12 @@ from app.domain.providers import (
     normalize_capability_ids,
     supports_capability,
 )
-from app.domain.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
+from app.domain.usage import (
+    create_pricing_rule,
+    delete_pricing_rule,
+    prefill_model_pricing,
+    update_pricing_rule,
+)
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -408,6 +414,70 @@ def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> 
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
+
+
+def _catalog_rates(profile: ProviderProfile) -> list[tuple[str, dict[str, float | None]]]:
+    """(模型 id, 每百万 token 报价) —— 两种档案取自各自的目录来源,单位已对齐。"""
+    if profile.auth_type == "oauth":
+        # 订阅计划:登录时 pi 带回来的目录(cost 是 {input, output, cacheRead, cacheWrite})。
+        out = []
+        for item in profile.model_catalog or []:
+            model_id = str(item.get("id", ""))
+            cost = item.get("cost") or {}
+            if model_id and isinstance(cost, dict):
+                out.append(
+                    (
+                        model_id,
+                        {
+                            "input": cost.get("input"),
+                            "output": cost.get("output"),
+                            "cache_read": cost.get("cacheRead"),
+                            "cache_write": cost.get("cacheWrite"),
+                        },
+                    )
+                )
+        return out
+    # API Key 档案:现取 /models。多数端点不报价,报价的(OpenRouter 一类)在 pricing 里给每 token 价。
+    return [
+        (
+            m.id,
+            {
+                "input": m.input_cost,
+                "output": m.output_cost,
+                "cache_read": m.cache_read_cost,
+                "cache_write": m.cache_write_cost,
+            },
+        )
+        for m in fetch_models(profile.base_url or "", profile.api_key or "")
+    ]
+
+
+@router.post("/settings/providers/{profile_id}/pricing/prefill", response_model=PricingPrefillOut)
+def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) -> PricingPrefillOut:
+    """按该供应商的模型目录补齐缺失的计价规则。
+
+    **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
+    目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+    """
+    ensure_instance_admin(db, user, "credentials")
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    rates = _catalog_rates(profile)
+    created = 0
+    priced = 0
+    for model_id, model_rates in rates:
+        if any(value for value in model_rates.values()):
+            priced += 1
+        created += prefill_model_pricing(
+            db,
+            provider_profile_id=profile.id,
+            provider=profile.vendor,
+            model=model_id,
+            rates=model_rates,
+        )
+    db.commit()
+    return PricingPrefillOut(created=created, models_with_price=priced, models_seen=len(rates))
 
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])

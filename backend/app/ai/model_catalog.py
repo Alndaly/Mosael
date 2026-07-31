@@ -27,6 +27,12 @@ class CatalogModel:
     id: str
     context_window: int | None = None
     max_output_tokens: int | None = None
+    #: 单价,**美元 / 百万 token**。端点没给就是 None(多数 OpenAI 兼容端点不报价)。
+    #: 单位刻意统一成「每百万」:计价规则表里本来就有 million_* 系列,换算一次即可对上。
+    input_cost: float | None = None
+    output_cost: float | None = None
+    cache_read_cost: float | None = None
+    cache_write_cost: float | None = None
 
 
 _cache: dict[tuple[str, str], tuple[float, list[CatalogModel]]] = {}
@@ -39,6 +45,20 @@ def _positive_int(value: object) -> int | None:
     return value if value > 0 else None
 
 
+def _per_million(value: object) -> float | None:
+    """OpenRouter 一类端点在 `pricing` 里给的是**每 token** 的美元价,而且是字符串。
+
+    换算成每百万,和计价规则表的 million_* 单位对齐。负数/非数字/空串一律当没给。
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        amount = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return amount * 1_000_000 if amount >= 0 else None
+
+
 def _parse(rows: object) -> list[CatalogModel]:
     if not isinstance(rows, list):
         return []
@@ -49,11 +69,16 @@ def _parse(rows: object) -> list[CatalogModel]:
         model_id = str(row.get("id") or "").strip()
         if not model_id or model_id in models:
             continue
+        pricing = row.get("pricing") if isinstance(row.get("pricing"), dict) else {}
         models[model_id] = CatalogModel(
             id=model_id,
             # 字段名各家不一:OpenRouter 用 context_length,vLLM/部分网关用 context_window。
             context_window=_positive_int(row.get("context_length") or row.get("context_window")),
             max_output_tokens=_positive_int(row.get("max_output_tokens") or row.get("max_tokens")),
+            input_cost=_per_million(pricing.get("prompt")),
+            output_cost=_per_million(pricing.get("completion")),
+            cache_read_cost=_per_million(pricing.get("input_cache_read")),
+            cache_write_cost=_per_million(pricing.get("input_cache_write")),
         )
     return [models[key] for key in sorted(models)]
 

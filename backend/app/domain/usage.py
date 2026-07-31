@@ -114,6 +114,66 @@ def create_pricing_rule(
     return rule
 
 
+#: 目录报价 → 计价单位。都是「每百万 token」,和 CatalogModel / pi 的 ModelCost 同口径。
+CATALOG_PRICE_UNITS = {
+    "input": "million_input_token",
+    "output": "million_output_token",
+    "cache_read": "million_cache_read_token",
+    "cache_write": "million_cache_write_token",
+}
+
+
+def prefill_model_pricing(
+    db: Session,
+    *,
+    provider_profile_id: str,
+    provider: str,
+    model: str,
+    rates: dict[str, float | None],
+    capability: str = "chat",
+) -> int:
+    """按供应商目录的报价补齐这个模型缺失的计价规则,返回新建条数。
+
+    三条刻意的取舍:
+
+    **只补不改。**已有规则一律不动 —— 用户填过的数字是他自己核对过的账,目录报价只是厂商官网
+    的挂牌价(还可能因折扣、企业协议、订阅额度而不同)。自动覆盖等于悄悄改账。
+
+    **0 不写。**目录里的 0 意思是「未标价」或「订阅内含」,不是「免费」。写成 0 会让这一项在
+    报表里变成确定的零成本,比留空更误导 —— 留空至少还能看出「没配」。
+
+    **规则始终是唯一的计费来源。**pi 自己也会算 cost,但那份不进账:一处算钱,才能解释每一笔。
+    """
+    created = 0
+    for key, unit in CATALOG_PRICE_UNITS.items():
+        amount = rates.get(key)
+        if not amount or amount <= 0:
+            continue
+        exists = db.scalar(
+            select(ProviderPricingRule).where(
+                ProviderPricingRule.provider_profile_id == provider_profile_id,
+                ProviderPricingRule.model == model,
+                ProviderPricingRule.capability == capability,
+                ProviderPricingRule.billing_unit == unit,
+            )
+        )
+        if exists is not None:
+            continue
+        create_pricing_rule(
+            db,
+            provider_profile_id=provider_profile_id,
+            provider=provider,
+            capability=capability,
+            model=model,
+            billing_unit=unit,
+            unit_amount_micros=int(round(amount * 1_000_000)),
+            source="catalog",
+            notes="按供应商模型目录的报价预填,可直接改",
+        )
+        created += 1
+    return created
+
+
 def update_pricing_rule(db: Session, rule: ProviderPricingRule, **patch: Any) -> ProviderPricingRule:
     fields = _normalize_pricing_fields(patch, partial=True)
     for key, value in fields.items():
