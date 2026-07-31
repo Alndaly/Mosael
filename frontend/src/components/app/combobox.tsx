@@ -22,6 +22,26 @@ export type ComboboxOption = {
  * 打开期间锁住背景滚动,与原生 select 的行为相同。
  */
 
+/**
+ * 只在**确实位于 Dialog 内**时才开 modal。
+ *
+ * modal 是为了解决 Dialog 专属的问题:Dialog 用 react-remove-scroll 锁背景滚动,只放行自己
+ * shard 内的滚轮,而 PopoverContent 走 Portal 落在 shard 之外 —— 不加 modal 就滚不动列表。
+ *
+ * 但 modal 会让 Radix 给 `document.body` 挂上 `pointer-events: none`,而这个还原**并不可靠**
+ * (多层 Popper 交替开关时会漏)。留下来的后果是**整个应用点击穿透** —— 表现为「点面板上的
+ * 输入框,却选中了它背后的画布节点」,而且看不出跟下拉框有任何关系。
+ *
+ * 所以按位置决定:Dialog 内需要它,Dialog 外不该为它付这个代价。
+ */
+function useInsideDialog(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [inside, setInside] = React.useState(false);
+  React.useEffect(() => {
+    setInside(Boolean(ref.current?.closest('[role="dialog"]')));
+  });
+  return inside;
+}
+
 export function Combobox({
   value,
   options,
@@ -48,6 +68,8 @@ export function Combobox({
   onValueChange: (value: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const modal = useInsideDialog(triggerRef);
   const [query, setQuery] = React.useState("");
   const selected = options.find((option) => option.value === value);
   const trimmedQuery = query.trim();
@@ -63,7 +85,7 @@ export function Combobox({
   return (
     // modal 见组件顶部注释:不加就在对话框里滚不动。
     <Popover
-      modal
+      modal={modal}
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
@@ -72,6 +94,7 @@ export function Combobox({
     >
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           variant="outline"
           role="combobox"
@@ -79,7 +102,9 @@ export function Combobox({
           disabled={disabled}
           className={cn("justify-between rounded-md border-input bg-field font-normal hover:bg-field hover:text-foreground", className)}
         >
-          <span className={cn("truncate", value ? "text-foreground" : "text-muted-foreground")}>
+          {/* min-w-0:flex 子项默认 min-width:auto,不肯收缩 —— truncate 就失效,
+              长模型名会顶穿按钮边框、把右侧箭头挤没。 */}
+          <span className={cn("min-w-0 truncate", value ? "text-foreground" : "text-muted-foreground")}>
             {selected?.label ?? (value || placeholder)}
           </span>
           <ChevronsUpDown size={14} className="shrink-0 opacity-60" />

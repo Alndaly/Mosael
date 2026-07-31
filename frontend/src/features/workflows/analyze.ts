@@ -97,6 +97,9 @@ const VAR_RE = /\{\{\s*([\w.-]+)\s*\}\}/g;
 
 // 内嵌子图节点(循环体 / subgraph):body/output/condition 引用的是子作用域({{loop.*}} / {{input.*}})
 // 或**内部**节点,不在顶层解析,顶层失效检查要跳过它们(与后端 NESTED_BODY_TYPES / RAW_KEYS 对齐)。
+/** 选一个生成模型就同时填上这三项 —— 就绪检查里当作一条。 */
+const GENERATE_MODEL_KEYS = new Set(["provider", "model", "kind"]);
+
 const NESTED_BODY_TYPES = new Set(["loop_foreach", "loop_while", "subgraph"]);
 const NESTED_BODY_RAW_KEYS = new Set(["body", "output", "condition"]);
 
@@ -184,8 +187,15 @@ export function analyzeWorkflow(
     // 必填字段 + 失效引用(逐字段)
     for (const [key, rawSpec] of Object.entries(meta?.config ?? {})) {
       const spec = (rawSpec ?? {}) as ConfigSpecLike;
-      if (spec.required && isEmpty(config[key]) && !dataBound.has(`${node.id}:${key}`))
-        push("error", "required-missing", { configKey: key });
+      if (spec.required && isEmpty(config[key]) && !dataBound.has(`${node.id}:${key}`)) {
+        // AI 生成节点的 provider/model/kind 是**一次选择**的三个产物(选一个生成模型即全部填上),
+        // 分开报会变成三条待办、指向三个界面上根本不存在的字段名。归成一条,指向那个选择器。
+        if (node.type === "ai_generate" && GENERATE_MODEL_KEYS.has(key)) {
+          if (key === "model") push("error", "required-missing", { configKey: "model" });
+        } else {
+          push("error", "required-missing", { configKey: key });
+        }
+      }
       // 子图/循环体的 body/output/condition 引用子作用域或内部节点,顶层不做失效检查(否则误报)。
       if (NESTED_BODY_TYPES.has(node.type) && NESTED_BODY_RAW_KEYS.has(key)) continue;
       for (const { ref, sourceId } of extractRefs(config[key])) {

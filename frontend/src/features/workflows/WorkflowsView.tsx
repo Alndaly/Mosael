@@ -424,9 +424,13 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   source_asset_ids: "wffSourceAssets",
 };
 
-/** 由「AI 生成素材」自己的参数区渲染,不再走通用字段列表 —— 否则同一份 parameters 会出现两次
- *  (一次是按模型能力生成的下拉,一次是原始 JSON 框),后者还更容易填错。 */
-const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["parameters"]);
+/** 「AI 生成素材」自己渲染这几项,不走通用字段列表。
+ *
+ *  provider / model / kind 是**执行器要的形状**,不是用户要做的选择 —— 用户只决定一件事:
+ *  用哪个生成模型。三者各自铺成必填框时,面板里会出现两个都叫「模型」的字段(一个选择器、
+ *  一个输入框),外加一个能和模型矛盾的「类型」(选了图像模型却把类型填成 video)。
+ *  parameters 同理:按模型能力生成的下拉已经在管它,再铺一个原始 JSON 框就是同一份东西两处编辑。 */
+const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["provider", "model", "kind", "parameters"]);
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -733,7 +737,16 @@ function issueText(t: ReturnType<typeof useI18n>, issue: NodeIssue): string {
     case "missing-start":
       return t("wfIssueMissingStart");
     case "required-missing":
-      return t("wfIssueRequired").replace("{k}", issue.configKey ?? "");
+      // 显示界面上真实出现的名字。原始 key(provider / json_schema)对用户没有意义,
+      // 尤其是它在面板上根本不叫这个名字的时候。
+      return t("wfIssueRequired").replace(
+        "{k}",
+        issue.nodeType === "ai_generate" && issue.configKey === "model"
+          ? t("wfGenModel")
+          : issue.configKey && FIELD_LABEL_KEYS[issue.configKey]
+            ? t(FIELD_LABEL_KEYS[issue.configKey])
+            : (issue.configKey ?? ""),
+      );
     case "stale-var":
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
     case "disconnected":
@@ -2276,13 +2289,14 @@ function NodeInspector({
   };
 
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
+  /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
+  const [genCustom, setGenCustom] = React.useState(false);
   const genModel =
     node.type === "ai_generate"
       ? (generationModels.data ?? []).find(
           (item) => item.provider === config.provider && item.model === config.model && item.kind === config.kind,
         ) ?? null
       : null;
-  const genPresetValue = genModel?.id ?? (node.type === "ai_generate" ? String(config.model ?? "") : "");
   const genParams = (config.parameters ?? {}) as Record<string, unknown>;
   const setGenParam = (key: string, value: string) => {
     const next = { ...genParams };
@@ -2450,47 +2464,87 @@ function NodeInspector({
           </div>
         )}
         {node.type === "ai_generate" && (
-          // 不套卡片:模型和参数就是这个表单里的普通字段,加个外框会让它看着像另一类东西。
-          // (LLM 节点那边套框是因为里面是一组"高级参数",与主字段确实分属两层。)
           <div className="grid min-w-0 gap-2">
             <div className={FIELD_BOX}>
-              <span>{t("wfModelPreset")}</span>
+              <span>
+                {t("wfGenModel")}
+                <em className="font-bold not-italic text-destructive">*</em>
+              </span>
               <Combobox
-                value={genPresetValue}
+                value={genModel?.id ?? ""}
                 options={(generationModels.data ?? []).map((model) => ({
                   value: model.id,
                   label: `${model.model} · ${model.kind === "video" ? t("capVideo") : t("capImage")}`,
                 }))}
-                placeholder={t("wfModelPresetHint")}
+                placeholder={t("wfGenModelHint")}
                 emptyText={t("cmdkEmpty")}
-                // 目录之外的模型也能用:自建的兼容端点常有目录里没有的模型名。
-                // 这时只改 model,provider / kind 保持用户已选的那对。
-                allowCustomValue
                 className="w-full"
                 onValueChange={(id) => {
                   const model = (generationModels.data ?? []).find((item) => item.id === id);
-                  if (model) {
-                    onChange({
-                      config: { ...config, provider: model.provider, model: model.model, kind: model.kind, parameters: {} },
-                    });
-                  } else {
-                    setConfig("model", id);
-                  }
+                  if (!model) return;
+                  // 三者一起写:分开填就会出现「图像模型 + 类型 video」这种自相矛盾的组合。
+                  // 换模型时清空参数 —— 上一个模型的比例/时长在新模型上未必存在。
+                  onChange({
+                    config: { ...config, provider: model.provider, model: model.model, kind: model.kind, parameters: {} },
+                  });
+                  setGenCustom(false);
                 }}
               />
+              {!genModel && !genCustom && (config.provider || config.model) ? (
+                <small className="text-destructive">{t("wfGenModelUnknown")}</small>
+              ) : (
+                <small>{t("wfGenModelDesc")}</small>
+              )}
+              <button
+                type="button"
+                className="w-fit cursor-pointer border-0 bg-transparent p-0 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => setGenCustom((prev) => !prev)}
+              >
+                {genCustom ? t("wfGenCustomHide") : t("wfGenCustomShow")}
+              </button>
             </div>
-            {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。
-                以前这里什么都没有:执行器一直读 parameters,节点却没声明它,于是工作流里
-                做不出竖屏视频这种最常见的诉求。 */}
+
+            {/* 自定义端点上的模型目录里没有 —— 这时才需要看见执行器那三个字段。
+                已配置但对不上目录时自动展开,否则用户会看到一个空选择器却不知道值存在哪。 */}
+            {(genCustom || (!genModel && Boolean(config.provider || config.model))) && (
+              <div className="grid min-w-0 gap-2 border-l-2 border-border pl-2">
+                <div className={FIELD_BOX}>
+                  <span>{t("wffProvider")}</span>
+                  <Input
+                    value={String(config.provider ?? "")}
+                    placeholder="openai-compatible"
+                    onChange={(event) => setConfig("provider", event.target.value)}
+                  />
+                </div>
+                <div className={FIELD_BOX}>
+                  <span>{t("wffModel")}</span>
+                  <Input
+                    value={String(config.model ?? "")}
+                    onChange={(event) => setConfig("model", event.target.value)}
+                  />
+                </div>
+                <div className={FIELD_BOX}>
+                  <span>{t("wffKind")}</span>
+                  <Select value={String(config.kind ?? "image")} onValueChange={(next) => setConfig("kind", next)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="image">{t("capImage")}</SelectItem>
+                      <SelectItem value="video">{t("capVideo")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
             {genModel && genParamKeys.length > 0 && (
               <>
                 {genParamKeys.map(({ key, label, options }) => (
                   <div className={FIELD_BOX} key={key}>
                     <span>{label}</span>
-                    <Select
-                      value={String(genParams[key] ?? "")}
-                      onValueChange={(next) => setGenParam(key, next)}
-                    >
+                    <Select value={String(genParams[key] ?? "")} onValueChange={(next) => setGenParam(key, next)}>
                       <SelectTrigger>
                         <SelectValue placeholder={t("wfPickOption")} />
                       </SelectTrigger>
@@ -2516,9 +2570,6 @@ function NodeInspector({
                   </div>
                 )}
               </>
-            )}
-            {genModel && genParamKeys.length === 0 && !supportsParameter(genModel, "seed") && (
-              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("wfGenNoParams")}</small>
             )}
           </div>
         )}

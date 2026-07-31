@@ -16,6 +16,26 @@ type Option = { value: string; label: string };
  * 时列表明明可滚、滚动条也在,滚轮却完全无效(拖滚动条/方向键仍可用,是这个故障的特征组合)。
  * 加了之后 Popover 自建滚动锁并把自己的内容作为放行区;对话框外的行为也一致(与原生 select 相同)。
  */
+/**
+ * 只在**确实位于 Dialog 内**时才开 modal。
+ *
+ * modal 是为了解决 Dialog 专属的问题:Dialog 用 react-remove-scroll 锁背景滚动,只放行自己
+ * shard 内的滚轮,而 PopoverContent 走 Portal 落在 shard 之外 —— 不加 modal 就滚不动列表。
+ *
+ * 但 modal 会让 Radix 给 `document.body` 挂上 `pointer-events: none`,而这个还原**并不可靠**
+ * (多层 Popper 交替开关时会漏)。留下来的后果是**整个应用点击穿透** —— 表现为「点面板上的
+ * 输入框,却选中了它背后的画布节点」,而且看不出跟下拉框有任何关系。
+ *
+ * 所以按位置决定:Dialog 内需要它,Dialog 外不该为它付这个代价。
+ */
+function useInsideDialog(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [inside, setInside] = React.useState(false);
+  React.useEffect(() => {
+    setInside(Boolean(ref.current?.closest('[role="dialog"]')));
+  });
+  return inside;
+}
+
 export function SearchableSelect({
   value,
   onValueChange,
@@ -39,13 +59,15 @@ export function SearchableSelect({
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const modal = useInsideDialog(triggerRef);
   const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
   const selected = items.find((item) => item.value === value);
   return (
-    <Popover modal open={open} onOpenChange={setOpen}>
+    <Popover modal={modal} open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         {trigger ?? (
-          <button
+          <button ref={triggerRef}
             type="button"
             disabled={disabled}
             className={cn(
