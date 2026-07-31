@@ -5,8 +5,15 @@
   "description": "Open Studio AI agent sidecar — embeds the pi coding agent (pi-agent-core) and speaks newline-delimited JSON over stdio with the Python backend.",
   "type": "module",
   "main": "dist/sidecar.cjs",
+  "// build 的 --ignore-annotations": [
+    "pi-ai 的 package.json 把 sideEffects 限定在三个文件里,于是 esbuild 认为 models.js 等模块",
+    "「无副作用」,把它们的初始化摘掉/推迟 —— 而 createModels() 会被提到顶层,它引用的",
+    "ModelsImpl 却留在惰性块里,调用时是 undefined,每轮对话都报 is not a constructor。",
+    "--ignore-annotations 让 esbuild 忽略 sideEffects/__PURE__ 标注,初始化顺序即被固定。",
+    "删掉它会静默复现该故障:类型与单测全绿,只有 test:bundle 抓得到。"
+  ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/sidecar.cjs",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --ignore-annotations --outfile=dist/sidecar.cjs",
     "typecheck": "tsc --noEmit",
     "test:bundle": "node test/bundle.smoke.mjs"
   },

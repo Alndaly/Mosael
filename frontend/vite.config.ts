@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 // app.getVersion() 的返回值,发版 CI(release.yml 的 Sync app version from tag)也只 bump 它。
 // 之前这里读的是 frontend/package.json —— 那个没人 bump,于是 v0.3.0 的包在设置页显示
 // "v0.1.0",而同一页的「检查更新」(走 app.getVersion())却正确地说"已是最新版本"。
-const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "..", "package.json"), "utf-8")) as { version: string };
+// 用 import.meta.dirname 而不是 __dirname:Vite 8 的 `configLoader: "native"`(未来版本的默认值)
+// 下不提供 CJS 的 __dirname,当前版本只是警告,默认值一换配置就直接加载失败。
+const here = import.meta.dirname;
+const pkg = JSON.parse(readFileSync(path.resolve(here, "..", "package.json"), "utf-8")) as { version: string };
 
 export default defineConfig({
   // Relative asset paths so the packaged Electron shell can loadFile() dist.
@@ -19,7 +22,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(here, "src"),
     },
   },
   server: {

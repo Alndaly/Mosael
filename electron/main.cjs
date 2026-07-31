@@ -72,6 +72,10 @@ try {
 //
 // 必须在 app ready 之前调用。
 if (!app.requestSingleInstanceLock()) {
+  // 说清楚为什么退出。开发时最容易撞上:上一个实例还开着(或没退干净)就跑 pnpm dev,
+  // 新进程拿不到锁直接 quit,concurrently 只看到「electron exited」就把整套 dev 栈 SIGTERM 掉,
+  // 现象是「刚起来就全挂了」而没有任何解释。打包版撞上则是双击图标没反应 —— 同样需要说明。
+  console.warn("[open-studio] 已有一个实例在运行,本次启动退出(窗口会被唤到前台)。");
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
