@@ -34,6 +34,12 @@ class UsageSummary:
     by_provider: dict[str, int]
 
 
+#: 计价单位。带 `million_` 前缀的由 _quantity_for_unit 自动换算,不必单列。
+#:
+#: 缓存读/写是**独立的桶**,不能并进 input_token —— 供应商侧 prompt_tokens 是含缓存的总量,
+#: 而 pi 上报前已经减掉了(input = prompt_tokens - cacheRead - cacheWrite),四者不相交。
+#: 它们的单价也完全不同(缓存读约为输入价一成,缓存写约 1.25 倍),所以必须能各自配规则:
+#: 在此之前这两项无单位可匹配,被静默丢弃 —— 长上下文重复对话会显著少算。
 PRICING_BILLING_UNITS = frozenset(
     {
         "request",
@@ -44,9 +50,13 @@ PRICING_BILLING_UNITS = frozenset(
         "token",
         "input_token",
         "output_token",
+        "cache_read_token",
+        "cache_write_token",
         "million_token",
         "million_input_token",
         "million_output_token",
+        "million_cache_read_token",
+        "million_cache_write_token",
     }
 )
 
@@ -397,8 +407,12 @@ def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None
         "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
         "character": ("character", "characters", "input_characters"),
         "token": ("token", "tokens", "total_token", "total_tokens"),
+        # 注意 prompt_tokens 只作为 input_token 的**兜底**别名:适配器直接给 input_tokens 时
+        # 用它(已扣除缓存);只有那些自己不拆分的来源才会落到 prompt_tokens 上。
         "input_token": ("input_token", "input_tokens", "prompt_tokens"),
         "output_token": ("output_token", "output_tokens", "completion_tokens"),
+        "cache_read_token": ("cache_read_token", "cache_read_tokens", "cached_tokens"),
+        "cache_write_token": ("cache_write_token", "cache_write_tokens"),
     }
     for key in (billing_unit, *aliases.get(billing_unit, ())):
         value = units.get(key)

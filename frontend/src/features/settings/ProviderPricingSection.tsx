@@ -47,9 +47,15 @@ const BILLING_UNITS = [
   "token",
   "input_token",
   "output_token",
+  // 缓存读/写是独立的桶(供应商的 prompt_tokens 含缓存,而适配器上报前已减掉),单价也完全
+  // 不同 —— 缓存读约为输入价一成,缓存写约 1.25 倍。不给它们单独的单位就只能少算。
+  "cache_read_token",
+  "cache_write_token",
   "million_token",
   "million_input_token",
   "million_output_token",
+  "million_cache_read_token",
+  "million_cache_write_token",
 ] as const;
 const CAPABILITY_LABELS: Record<string, MessageKey> = {
   chat: "capChat",
@@ -71,6 +77,10 @@ const UNIT_LABELS: Record<string, MessageKey> = {
   million_token: "pricingUnit_million_token",
   million_input_token: "pricingUnit_million_input_token",
   million_output_token: "pricingUnit_million_output_token",
+  cache_read_token: "pricingUnit_cache_read_token",
+  cache_write_token: "pricingUnit_cache_write_token",
+  million_cache_read_token: "pricingUnit_million_cache_read_token",
+  million_cache_write_token: "pricingUnit_million_cache_write_token",
 };
 
 function microsToAmount(value: number): string {
