@@ -12,30 +12,39 @@
  */
 import assert from "node:assert/strict";
 import http from "node:http";
-import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
 
-// 现打一份 ESM:installProxyFromEnv 要在装载时读环境,得能控制装载时机。
-// undici 留作 external —— 它是 CJS,内部用 require 取 node 内建模块,打进 ESM 会在加载时炸
-//("Dynamic require of node:assert is not supported")。真实产物是 CJS 没这问题,而那条路径
+/**
+ * 用 esbuild 的 **JS API** 现打一份出来引入。
+ *
+ * 不能去 exec `node_modules/.bin/esbuild`:那在 Windows 上是 `.CMD` 垫片,execFileSync 不带
+ * shell 根本起不来 —— 本地 macOS 全绿、Windows 打包 CI 直接红(真实事故)。JS API 三个平台一致。
+ */
+async function bundle(entry, outfile, external = []) {
+  const esbuild = await import("esbuild");
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    external,
+    outfile,
+  });
+  return outfile;
+}
+
+// installProxyFromEnv 要在装载时读环境,所以得能控制装载时机 —— 现打一份再动态 import。
+// undici 留作 external:它是 CJS,内部用 require 取 node 内建模块,打进 ESM 会在加载时炸
+//("Dynamic require of node:assert is not supported")。真实产物是 CJS 没这问题,那条路径
 // 由 bundle.smoke.mjs 覆盖。
-// 落在包内(dist 已被忽略):放到系统临时目录的话,ESM 解析 undici 会找不到 node_modules。
-const out = path.join(root, "dist", "proxy.test-bundle.mjs");
-execFileSync(
-  path.join(root, "node_modules", ".bin", "esbuild"),
-  [
-    path.join(root, "src", "proxy.ts"),
-    "--bundle",
-    "--platform=node",
-    "--format=esm",
-    "--external:undici",
-    `--outfile=${out}`,
-  ],
-  { cwd: root, stdio: "pipe" },
+const out = await bundle(
+  path.join(root, "src", "proxy.ts"),
+  path.join(root, "dist", "proxy.test-bundle.mjs"),
+  ["undici"],
 );
 
 /** 假代理:普通 HTTP 代理收到的是带完整 URL 的请求行。记下来即可证明"走了代理"。 */

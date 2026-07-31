@@ -14,30 +14,38 @@
  * 跑法:node agent-sidecar/test/credentials.test.mjs
  */
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import http from "node:http";
-import { mkdtempSync } from "node:fs";
-import os from "node:os";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-// 现打一份 ESM 出来引入:这个类引用了模块级常量(重试次数)和 log(),从 dist/sidecar.cjs 里
-// 正则抠出类体会漏掉它们。打包产物本身能不能跑由 bundle.smoke.mjs 负责,这里测的是逻辑。
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
-const out = path.join(mkdtempSync(path.join(os.tmpdir(), "os-cred-")), "credentials.mjs");
-execFileSync(
-  path.join(root, "node_modules", ".bin", "esbuild"),
-  [
-    path.join(root, "src", "credentials.ts"),
-    "--bundle",
-    "--platform=node",
-    "--format=esm",
-    `--outfile=${out}`,
-  ],
-  { cwd: root, stdio: "pipe" },
+
+/**
+ * 用 esbuild 的 **JS API** 现打一份出来引入。
+ *
+ * 不能去 exec `node_modules/.bin/esbuild`:那在 Windows 上是 `.CMD` 垫片,execFileSync 不带
+ * shell 根本起不来 —— 本地 macOS 全绿、Windows 打包 CI 直接红(真实事故)。JS API 三个平台一致。
+ */
+async function bundle(entry, outfile, external = []) {
+  const esbuild = await import("esbuild");
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    external,
+    outfile,
+  });
+  return outfile;
+}
+
+// 这个类引用了模块级常量(重试次数)和 log(),从 dist/sidecar.cjs 里正则抠出类体会漏掉它们。
+// 打包产物本身能不能跑由 bundle.smoke.mjs 负责,这里测的是逻辑。
+// 落在包内(dist 已被忽略):放到系统临时目录的话,ESM 解析依赖会找不到 node_modules。
+const { BackendCredentialStore } = await import(
+  await bundle(path.join(root, "src", "credentials.ts"), path.join(root, "dist", "credentials.test-bundle.mjs"))
 );
-const { BackendCredentialStore } = await import(out);
 
 /** 假后端:记录调用顺序,按脚本回应。 */
 function startBackend(script) {
