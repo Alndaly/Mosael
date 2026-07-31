@@ -6,13 +6,11 @@ import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEv
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { outputType } from "@/features/workflows/analyze";
+import { parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
 
-function parseIso(iso: string): number {
-  return Date.parse(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z");
-}
 function relTime(iso: string, now: number): string {
   const s = Math.max(0, (now - parseIso(iso)) / 1000);
   if (s < 60) return `${Math.floor(s)}s`;
@@ -24,49 +22,6 @@ function ms(a: string, b: string): number {
   return Math.max(0, parseIso(b) - parseIso(a));
 }
 
-type Step = {
-  nid: string;
-  name: string;
-  status: "running" | "done" | "skipped" | "failed";
-  ms?: number;
-  startAt?: number;
-  outputs?: Record<string, unknown>;
-  error?: string;
-};
-
-/** Reduce a run's task events into an ordered per-node step list (Dify-style detail). */
-function toSteps(events: TaskEvent[]): Step[] {
-  const order: string[] = [];
-  const byNode = new Map<string, Step>();
-  const sorted = [...events].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-  for (const e of sorted) {
-    const p = (e.payload ?? {}) as { node_id?: string; name?: string; outputs?: Record<string, unknown>; error?: string };
-    const nid = p.node_id ?? "";
-    if (!nid) continue;
-    if (e.type === "workflow.node.started") {
-      if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, status: "running", startAt: e.created_at ? parseIso(e.created_at) : undefined });
-    } else if (e.type === "workflow.node.finished") {
-      const s = byNode.get(nid);
-      if (s) {
-        s.status = "done";
-        s.outputs = p.outputs;
-        if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
-      }
-    } else if (e.type === "workflow.node.failed") {
-      const s = byNode.get(nid);
-      if (s) {
-        s.status = "failed";
-        s.error = p.error;
-        if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
-      }
-    } else if (e.type === "workflow.node.skipped") {
-      if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });
-    }
-  }
-  return order.map((nid) => byNode.get(nid)!).filter(Boolean);
-}
 
 /** 这一步输出里声明为素材的那些(节点注册表里 outputType === "asset")。
  *
@@ -188,8 +143,10 @@ export function WorkflowRunHistory({
       return next;
     });
 
+  // 和 AI 助手一样停靠在右栏,不再是盖在画布上的悬浮层:悬浮会挡住正在跑的节点,
+  // 而运行时恰恰要同时看见画布和这里。
   return (
-    <aside className="absolute bottom-2 right-2 top-2 z-40 flex w-[340px] flex-col overflow-hidden rounded-lg border border-border bg-[rgb(12_12_14/0.94)] backdrop-blur-[10px]" role="dialog" aria-label={t("wfHistory")}>
+    <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label={t("wfHistory")}>
       <div className="flex h-[34px] items-center border-b border-border pl-2.5 pr-1.5 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold">
         <h2>
           <History size={14} /> {t("wfHistory")}

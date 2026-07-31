@@ -22,6 +22,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  XCircle,
+  SkipForward,
+  CheckCircle2,
   ChevronRight,
   AlignLeft,
   AlertTriangle,
@@ -86,6 +89,7 @@ import {
   fetchWorkflowNodeTypes,
   importWorkflow,
   listAssets,
+  listJobEvents,
   listProviderModels,
   listPublishAccounts,
   listVoices,
@@ -93,6 +97,7 @@ import {
   runWorkflow,
   updateWorkflow,
   type GenerationModel,
+  type TaskEvent,
   type Workflow,
   type WorkflowGraph,
   type WorkflowNodeType,
@@ -139,6 +144,7 @@ import {
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
+import { stepsByNode } from "@/features/workflows/runSteps";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -222,6 +228,8 @@ interface WfNodeData extends Record<string, unknown> {
   /** 数据接点:左侧输入(连接态字段)、右侧输出(节点声明的 outputs)。 */
   inputs?: string[];
   outputs?: string[];
+  /** 本次运行到这一步的状态。运行结束后保留,方便回看这次跑成什么样。 */
+  run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string } | null;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
@@ -244,6 +252,11 @@ function WfNode({ data, selected }: NodeProps) {
         badge && !selected && (badge.severity === "error"
           ? "border-[color-mix(in_srgb,var(--destructive)_60%,var(--border))]"
           : "border-[color-mix(in_srgb,#d97706_55%,var(--border))]"),
+        // 运行态压过就绪角标:正在跑/跑挂了是此刻更要紧的信息。
+        d.run?.status === "running" && "border-primary shadow-[0_0_0_1px_var(--primary)]",
+        d.run?.status === "done" && "border-[color-mix(in_srgb,#3fb950_55%,var(--border))]",
+        d.run?.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_70%,var(--border))]",
+        d.run?.status === "skipped" && "opacity-55",
         selected && "border-primary shadow-[0_0_0_1px_var(--primary)] hover:border-primary",
       )}
       data-node-type={d.nodeType}
@@ -251,6 +264,28 @@ function WfNode({ data, selected }: NodeProps) {
       {/* 控制入(左上) */}
       {d.nodeType !== "start" && (
         <Handle type="target" position={Position.Left} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
+      )}
+      {d.run && (
+        <span
+          className="absolute -left-1.5 -top-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border border-border bg-panel px-[3px]"
+          title={d.run.error ?? undefined}
+        >
+          {d.run.status === "running" ? (
+            <Loader2 size={11} className="animate-spin text-primary" />
+          ) : d.run.status === "done" ? (
+            <CheckCircle2 size={11} className="text-[#3fb950]" />
+          ) : d.run.status === "failed" ? (
+            <XCircle size={11} className="text-destructive" />
+          ) : (
+            <SkipForward size={11} className="text-muted-foreground" />
+          )}
+        </span>
+      )}
+      {/* 耗时贴在右下角:跑完一眼看出哪一步慢。 */}
+      {d.run?.ms != null && (
+        <span className="timecode absolute -bottom-2 right-1.5 rounded-full border border-border bg-panel px-1.5 text-[9.5px] text-muted-foreground">
+          {(d.run.ms / 1000).toFixed(2)}s
+        </span>
       )}
       <div className="flex items-center gap-2">
         <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[d.nodeType] } as React.CSSProperties}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
@@ -1270,9 +1305,27 @@ function WorkflowEditor({
     mutationFn: () => deleteWorkflow(workflow.id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] }),
   });
+  /** 本次运行的 job。留着是为了在画布上实时标状态 —— 运行完不清,方便回看这次跑成什么样;
+   *  再次运行或切换工作流时被顶掉。 */
+  const [runJobId, setRunJobId] = React.useState<string | null>(null);
+  React.useEffect(() => setRunJobId(null), [workflow.id]);
+  const runEvents = useQuery({
+    queryKey: ["job-events", runJobId],
+    queryFn: () => listJobEvents(runJobId ?? ""),
+    enabled: Boolean(runJobId),
+    // 跑动时勤快些,结束后停下来。判据是「有没有节点还在跑」而不是 job 状态:
+    // 后者要等整条流程收尾,中间那段画布就不动了。
+    refetchInterval: (q) => {
+      const list = (q.state.data as TaskEvent[] | undefined) ?? [];
+      const done = list.some((e) => e.type === "workflow.finished" || e.type === "workflow.failed");
+      return done ? false : 800;
+    },
+  });
+  const runByNode = React.useMemo(() => stepsByNode(runEvents.data ?? []), [runEvents.data]);
   const run = useMutation({
     mutationFn: () => runWorkflow(workflow.id),
-    onSuccess: () => {
+    onSuccess: (job) => {
+      setRunJobId(job.id);
       toast.success(t("wfRunQueued"));
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
@@ -1328,6 +1381,30 @@ function WorkflowEditor({
       ? t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))
       : t("wfChecklistReady");
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
+  /** 本次运行真正走过的边:两端都留下了步骤记录。条件分支没走的那一侧因此保持原样 ——
+   *  这正是运行时最想一眼看清的东西。 */
+  const dockedAgent = agentOpen && agentMode === "docked";
+  /** 右栏里停靠着几个面板(助手 / 执行历史)。0 就不开这一列。 */
+  const rightPanels = (dockedAgent ? 1 : 0) + (showHistory ? 1 : 0);
+
+  const displayEdges = React.useMemo(() => {
+    if (Object.keys(runByNode).length === 0) return edges;
+    return edges.map((edge) => {
+      const from = runByNode[edge.source];
+      const to = runByNode[edge.target];
+      const taken = from && to && from.status !== "skipped" && to.status !== "skipped";
+      // 描边直接给 style:Tailwind 的任意变体要和既有的 wf-edge-* 规则抢优先级,
+      // 而 React Flow 本来就支持按边给样式,确定性更高。
+      return taken
+        ? {
+            ...edge,
+            className: `${edge.className ?? ""} wf-edge-taken`.trim(),
+            style: { ...(edge.style ?? {}), stroke: "#3fb950", strokeWidth: 2.4 },
+          }
+        : edge;
+    });
+  }, [edges, runByNode]);
+
   const displayNodes = React.useMemo(
     () =>
       nodes.map((node) => {
@@ -1337,9 +1414,17 @@ function WorkflowEditor({
           nodeIssues && severity
             ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => issueText(t, i)).join("\n") }
             : null;
-        return { ...node, data: { ...node.data, badge } };
+        const step = runByNode[node.id];
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            badge,
+            run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
+          },
+        };
       }),
-    [nodes, analysis, t],
+    [nodes, analysis, t, runByNode],
   );
 
   return (
@@ -1542,13 +1627,13 @@ function WorkflowEditor({
 
       <div className={cn(
         "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-[#16a34a] [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-[#e11d48] [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-[#d97706] [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
-        agentOpen && agentMode === "docked" && "grid-cols-[minmax(0,1fr)_minmax(360px,420px)]",
+        rightPanels > 0 && "grid-cols-[minmax(0,1fr)_minmax(360px,420px)]",
       )}>
         <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !viewReady && "opacity-0")}
             nodes={displayNodes}
-            edges={edges}
+            edges={displayEdges}
             nodeTypes={NODE_COMPONENT_TYPES}
             onInit={(instance) => {
               rfRef.current = instance as unknown as ReactFlowInstance;
@@ -1619,7 +1704,38 @@ function WorkflowEditor({
             />
           </ReactFlow>
         </div>
-        {agentOpen && (
+        {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
+            一边翻某一步的输出。助手切到浮动模式时自己脱离文档流,所以只按停靠中的个数分行。 */}
+        {(dockedAgent || showHistory) && (
+          <div
+            className={cn(
+              "grid min-h-0 min-w-0 gap-2",
+              dockedAgent && showHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
+            )}
+          >
+            {agentOpen && (
+              <WorkflowAgentChat
+                workflowId={workflow.id}
+                workflowName={workflow.name}
+                workspaceId={workflow.workspace_id}
+                mode={agentMode}
+                onModeChange={setAgentMode}
+                onClose={() => setAgentOpen(false)}
+              />
+            )}
+            {showHistory && (
+              <WorkflowRunHistory
+                workflowId={workflow.id}
+                // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
+                // 是就渲染成缩略图/播放器而不是一串裸 id。
+                nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
+                onClose={() => setShowHistory(false)}
+              />
+            )}
+          </div>
+        )}
+        {/* 助手处于浮动模式时不在右栏里,单独挂。 */}
+        {agentOpen && !dockedAgent && (
           <WorkflowAgentChat
             workflowId={workflow.id}
             workflowName={workflow.name}
@@ -1627,15 +1743,6 @@ function WorkflowEditor({
             mode={agentMode}
             onModeChange={setAgentMode}
             onClose={() => setAgentOpen(false)}
-          />
-        )}
-        {showHistory && (
-          <WorkflowRunHistory
-            workflowId={workflow.id}
-            // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
-            // 是就渲染成缩略图/播放器而不是一串裸 id。
-            nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
-            onClose={() => setShowHistory(false)}
           />
         )}
         {editingLoopId &&
