@@ -5,6 +5,7 @@ import os
 import pytest
 
 from app.domain.network import (
+    DEFAULT_BYPASS_HOSTS,
     LOOPBACK_NO_PROXY,
     apply_to_process,
     effective_no_proxy,
@@ -83,6 +84,26 @@ def test_subprocess_env_drops_inherited_proxy_when_disabled(monkeypatch) -> None
         env = subprocess_env(db, {"HTTPS_PROXY": "http://shell-inherited:1080", "PATH": "/usr/bin"})
     assert "HTTPS_PROXY" not in env
     assert env["PATH"] == "/usr/bin", "只该动代理相关的变量"
+
+
+def test_domestic_endpoints_are_bypassed_by_default() -> None:
+    """配代理的动机通常是「某家境外供应商按地区拒绝」,但这个开关覆盖后端**全部**出站。
+    飞书 / 火山 / 百炼这些跟着走境外代理只会更慢甚至不通,所以新装就预填上。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    bypass = client.get("/api/settings/network").json()["effective_no_proxy"].split(",")
+    for host in ("open.feishu.cn", "openspeech.bytedance.com", "dashscope.aliyuncs.com"):
+        assert host in bypass, f"{host} 不在默认绕过列表里"
+
+
+def test_default_bypass_is_a_default_not_a_rule() -> None:
+    """和回环不同,国内端点用户删得掉 —— 公司代理在国内时可能就是要全量走代理。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    body = client.put("/api/settings/network", json={"proxy_url": "http://p:1", "no_proxy": ""}).json()
+    bypass = body["effective_no_proxy"].split(",")
+    assert "open.feishu.cn" not in bypass, "国内端点应当删得掉"
+    assert "127.0.0.1" in bypass, "但回环不行"
 
 
 def test_settings_round_trip_and_effective_list_is_echoed() -> None:

@@ -64,6 +64,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
     logger.info("Open Studio backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
+    _prepare_network()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
     issue_worker_key()
@@ -119,6 +120,26 @@ class _MethodBindingMiddleware:
 
             bind_request_method(scope.get("method", "GET"))
         await self.app(scope, receive, send)  # type: ignore[operator]
+
+
+def _prepare_network() -> None:
+    """把库里的出站代理设置装进本进程的环境变量,后端自己的 httpx 调用随即生效。
+
+    放在这里而不是 init_db:`core.db` 去 import 领域层会形成
+    core.db ⇄ db.models ⇄ domain.network 的环(分层测试会拦)。启动装配本来就是组装根的事。
+
+    顺带给 v0.5.0 已经建过的空行补上默认绕过列表 —— 列默认值只对新建行生效,而那批行是
+    在有默认值之前建的。只在用户还没配过代理时补,填过就不动他的。
+    """
+    from app.db.models import NetworkConfig
+    from app.domain.network import DEFAULT_BYPASS_HOSTS, apply_from_db
+
+    with SessionLocal() as db:
+        row = db.get(NetworkConfig, "default")
+        if row is not None and not row.no_proxy and not row.proxy_url:
+            row.no_proxy = ",".join(DEFAULT_BYPASS_HOSTS)
+            db.commit()
+        apply_from_db(db)
 
 
 def create_app() -> FastAPI:

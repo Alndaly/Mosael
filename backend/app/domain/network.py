@@ -27,6 +27,25 @@ from app.db.models import NetworkConfig
 #: 不做等价推断,漏一个就是一类回连失败。
 LOOPBACK_NO_PROXY = ("localhost", "127.0.0.1", "::1", "0.0.0.0")
 
+#: 新装时预填的绕过列表:应用自带集成里的**国内**端点。
+#:
+#: 配代理的典型动机是「某家境外供应商按地区拒绝」,而这个开关一开就覆盖后端所有出站 ——
+#: 飞书、火山、百炼、Kling 这些跟着走境外代理只会更慢甚至不通。所以给一份合理的默认。
+#:
+#: 是**默认值不是规则**:用户可以在设置里删掉任意一条(比如公司代理在国内、要求全量走代理)。
+#: 与之相对,LOOPBACK 是强制的 —— 那条错了会让智能体的工具调用全废。
+DEFAULT_BYPASS_HOSTS = (
+    "open.feishu.cn",
+    "accounts.feishu.cn",
+    "accounts.larksuite.com",
+    "openspeech.bytedance.com",
+    "ark.cn-beijing.volces.com",
+    "dashscope.aliyuncs.com",
+    "api.moonshot.cn",
+    "api.minimaxi.com",
+    "api.klingai.com",
+)
+
 #: 进程环境里要同步的键。大小写两份都写:httpx 认小写优先,别的库(和 Node)习惯大写。
 _PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY")
 
@@ -34,7 +53,9 @@ _PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY")
 def get_config(db: Session) -> NetworkConfig:
     row = db.get(NetworkConfig, "default")
     if row is None:
-        row = NetworkConfig(id="default")
+        # 默认绕过列表在这里给,不放在列默认值上:那会让 db.models 反向 import 领域层,
+        # 形成 models ⇄ domain.network 的循环(分层测试会拦住)。
+        row = NetworkConfig(id="default", no_proxy=",".join(DEFAULT_BYPASS_HOSTS))
         db.add(row)
         db.commit()
         db.refresh(row)

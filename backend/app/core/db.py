@@ -228,20 +228,6 @@ def init_db() -> None:
     _migrate_partition_rename()
     _migrate_drop_local_publish_accounts()
     _backfill_browser_pool()
-    _apply_network_proxy()
-
-
-def _apply_network_proxy() -> None:
-    """把库里的代理设置装进本进程的环境变量,后端自己的 httpx 调用随即生效。
-    放在建表之后:这张表可能是这次才建出来的。"""
-    from app.domain.network import apply_from_db
-
-    with SessionLocal() as db:
-        apply_from_db(db)
-
-
-
-
 
 
 def session_scope() -> Generator[Session, None, None]:

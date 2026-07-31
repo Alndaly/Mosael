@@ -737,7 +737,8 @@ class NetworkConfig(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     #: 形如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080;空串 = 直连。
     proxy_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    #: 额外绕过代理的主机,逗号分隔。回环由代码强制补上,不依赖这里填对。
+    #: 额外绕过代理的主机,逗号分隔。默认值由领域层在建行时填(模型层不该反向依赖 domain),
+    #: 回环则由代码强制补上、不依赖这里填对 —— 两者都见 app/domain/network.py。
     no_proxy: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
