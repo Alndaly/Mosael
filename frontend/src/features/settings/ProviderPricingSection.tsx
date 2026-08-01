@@ -41,7 +41,22 @@ const DEFAULT_FORM: PricingForm = {
   notes: "",
 };
 
-const CAPABILITY_KEYS = ["chat", "image", "video", "tts", "podcast", "embedding"] as const;
+/** 能力清单**从后端预设取并集**,不在这里手抄第六遍。手抄的代价刚兑现过:模型设置弹窗里那份
+ *  漏了 embedding,于是它在列表行上有标签、在弹窗里连格子都没有。 */
+function useAllCapabilities(): string[] {
+  const presets = useQuery({
+    queryKey: ["provider-vendors"],
+    queryFn: () => api<components["schemas"]["VendorPresetOut"][]>("/api/settings/provider-vendors"),
+    staleTime: 300_000,
+  });
+  return React.useMemo(() => {
+    const union: string[] = [];
+    for (const preset of presets.data ?? []) {
+      for (const id of preset.capability_ids ?? []) if (!union.includes(id)) union.push(id);
+    }
+    return union;
+  }, [presets.data]);
+}
 const BILLING_UNITS = [
   "request",
   "image",
@@ -118,6 +133,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const t = useI18n();
   const qc = useQueryClient();
   const [editing, setEditing] = React.useState<PricingRule | null>(null);
+  const allCapabilities = useAllCapabilities();
   const [adding, setAdding] = React.useState(false);
   const [form, setForm] = React.useState<PricingForm>(DEFAULT_FORM);
 
@@ -327,7 +343,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CAPABILITY_KEYS.map((capability) => (
+                {allCapabilities.map((capability) => (
                   <SelectItem key={capability} value={capability}>
                     {capabilityLabel(capability)}
                   </SelectItem>
