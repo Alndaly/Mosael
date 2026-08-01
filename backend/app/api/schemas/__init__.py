@@ -653,8 +653,6 @@ class ProviderProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
     config: dict[str, str] | None = None
-    #: 档案级能力覆盖;传 [] 清空(=显式声明"无能力"),传 null / 不传则不改动。
-    capability_ids: list[str] | None = None
     enabled: bool | None = None
     auth_type: str | None = None
 
@@ -679,7 +677,6 @@ class ProviderProfileOut(OrmModel):
     vendor: str
     capability_ids: list[str] = Field(default_factory=list)
     base_url: str
-    default_model: str
     enabled: bool
     created_at: datetime
     key_hint: str = ""

@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from app.domain import provider_models
 from app.db.models import Workflow
 from app.domain.ai_retry import RetryingClient
 from app.domain.providers import require_profile
@@ -190,7 +191,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
         raise WorkflowDomainError("LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。")
     messages.append({"role": "user", "content": prompt})
     base_url = profile.base_url.rstrip("/")
-    model = str(config.get("model") or profile.default_model)
+    model = str(config.get("model") or provider_models.model_id_for(db, profile, "chat"))
     response = _post_with_retry(
         base_url, profile.api_key, _request_payload(config, model, messages), model, configured_max_retries(db)
     )

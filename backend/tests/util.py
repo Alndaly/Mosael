@@ -110,3 +110,21 @@ def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
             return status
         time.sleep(0.15)
     return status
+
+
+def add_provider(db, *, model: str = "", capability_ids=None, **fields):
+    """建一条连接,并把它的模型建成一行。
+
+    档案上不再有 default_model —— 模型是独立实体。直接构造 ProviderProfile 而不建模型行的
+    话,任何按能力解析模型的地方都会拿到空串(这正是重构时十几条测试红掉的原因,而它们红得
+    有道理:少了模型行,那条连接确实没有可用模型)。
+    """
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+
+    profile = ProviderProfile(**fields)
+    db.add(profile)
+    db.flush()
+    if model:
+        provider_models.upsert(db, profile, model, source="manual", capability_ids=capability_ids)
+    return profile

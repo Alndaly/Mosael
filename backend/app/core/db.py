@@ -97,9 +97,6 @@ def _migrate_provider_auth() -> None:
         ("oauth_credential", "ALTER TABLE provider_profiles ADD COLUMN oauth_credential JSON"),
         ("credential_version", "ALTER TABLE provider_profiles ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0"),
         ("model_catalog", "ALTER TABLE provider_profiles ADD COLUMN model_catalog JSON"),
-        # model_overrides 已退役(被 provider_models 表取代)。这行保留只是为了让老库的
-        # 加列迁移仍然幂等 —— SQLite 删列要重建表,而一个没人读的空列不值得那份风险。
-        ("model_overrides", "ALTER TABLE provider_profiles ADD COLUMN model_overrides JSON"),
     ]
     missing = [sql for name, sql in additions if name not in columns]
     if not missing:
@@ -137,6 +134,10 @@ def _backfill_provider_models() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     if "provider_models" not in tables or "provider_profiles" not in tables:
+        return
+    # 只有**老库**才有 default_model 这列可读。新库由 create_all 直接建成没有它的形状,
+    # 此时无从回填也无需回填 —— 不加这道判断,全新安装会在启动时直接崩在这条 SELECT 上。
+    if "default_model" not in {col["name"] for col in inspector.get_columns("provider_profiles")}:
         return
     from app.db.models import new_id
 
@@ -182,6 +183,30 @@ def _migrate_provider_default_model_fk() -> None:
                 ") WHERE provider_model_id IS NULL"
             )
         )
+
+
+def _drop_legacy_profile_columns() -> None:
+    """删掉 provider_profiles 上退役的 default_model / capability_ids。
+
+    两者都是"一档案一模型"时代的字段:default_model 不区分能力(对话档案的默认模型被拿去当
+    生图模型用过),capability_ids 挂在连接上导致同一个端点只能二选一。能力与模型现在都在
+    provider_models 行上,读取点已全部切走(见 domain/provider_models)。
+
+    SQLite 从 3.35 起支持 DROP COLUMN;删不掉就跳过 —— 留着一个没人读的列不影响任何行为,
+    而在启动路径上抛异常会让应用起不来。
+    """
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
+    for name in ("default_model", "capability_ids", "model_overrides"):
+        if name not in columns:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE provider_profiles DROP COLUMN {name}"))
+        except Exception:  # noqa: BLE001 — 老版本 SQLite 不支持;留着无害
+            logger.info("provider_profiles.%s 未能删除(SQLite 版本不支持 DROP COLUMN),留着无害", name)
 
 
 def _migrate_job_parent() -> None:
@@ -312,6 +337,8 @@ def init_db() -> None:
     # 必须在 create_all 之后:provider_models 是新表,之前还不存在。
     _backfill_provider_models()
     _migrate_provider_default_model_fk()
+    # 回填与外键都落定之后再删旧列 —— 它们正是回填的输入。
+    _drop_legacy_profile_columns()
 
 
 def session_scope() -> Generator[Session, None, None]:

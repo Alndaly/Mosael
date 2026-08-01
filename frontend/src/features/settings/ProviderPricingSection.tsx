@@ -317,7 +317,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 setForm((current) => ({
                   ...current,
                   providerProfileId: value,
-                  model: current.model || profile?.default_model || "",
+                  model: current.model,
                 }));
               }}
             >
@@ -328,7 +328,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 <SelectItem value={ANY_PROFILE}>{t("pricingAnyProvider")}</SelectItem>
                 {visibleProfiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
-                    {profile.name} · {profile.default_model || profile.vendor}
+                    {profile.name} · {profile.vendor}
                   </SelectItem>
                 ))}
               </SelectContent>

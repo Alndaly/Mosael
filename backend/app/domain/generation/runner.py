@@ -11,6 +11,7 @@ from app.ai.providers import GenerationRequest, GenerationResult, ProviderContex
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
+from app.domain import provider_models
 from app.domain.jobs import dispatch_job, emit_job_event
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
@@ -62,7 +63,9 @@ def _run_generation(generation_id: str) -> None:
             vendor=profile.vendor if profile is not None else generation.provider,
             api_key=profile.api_key if profile is not None else "",
             base_url=profile.base_url if profile is not None else "",
-            default_model=profile.default_model if profile is not None else "",
+            # 这条连接在本次生成的能力下该用的模型。此前取 profile.default_model ——
+            # 那个字段不区分能力,对话档案的默认模型被拿去当生图模型用过。
+            default_model=provider_models.model_id_for(db, profile, generation.kind),
             extra=dict(profile.extra or {}) if profile is not None else {},
         )
         job.status = "running"

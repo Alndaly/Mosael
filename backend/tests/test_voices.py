@@ -4,7 +4,7 @@ import io
 import time
 import wave
 
-from tests.util import fresh_client
+from tests.util import add_provider, fresh_client
 
 
 def _tiny_wav(seconds: int = 1) -> bytes:
@@ -150,14 +150,13 @@ def test_an_openai_compatible_tts_profile_base_url_reaches_the_engine() -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        db.add(
-            ProviderProfile(
-                name="proxy",
-                vendor="openai-compatible-tts",
-                api_key="k",
-                base_url="https://proxy.test/v1",
-                default_model="custom-tts",
-            )
+        add_provider(
+            db,
+            name="proxy",
+            vendor="openai-compatible-tts",
+            api_key="k",
+            base_url="https://proxy.test/v1",
+            model="custom-tts",
         )
         db.commit()
 

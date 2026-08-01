@@ -13,6 +13,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from app.domain import provider_models
 import httpx
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
@@ -70,7 +71,11 @@ def resolve_ai_provider(db, profile_id: str | None = None) -> AiProvider:
         ).first()
     if profile is None or not profile.enabled:
         raise TranslateError("没有可用的 AI 供应商,请先在设置里添加")
-    return AiProvider(base_url=profile.base_url, api_key=profile.api_key, model=profile.default_model)
+    return AiProvider(
+        base_url=profile.base_url,
+        api_key=profile.api_key,
+        model=provider_models.model_id_for(db, profile, "chat"),
+    )
 
 
 def ai_translate(db, text: str, target: str, profile_id: str | None = None) -> str:

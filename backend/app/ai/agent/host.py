@@ -118,7 +118,7 @@ def resolve_chat_provider(
             if "chat" in provider_models.effective_capabilities(candidate):
                 model = candidate.model_id
                 break
-    agent_model = (model or profile.default_model or "").strip()
+    agent_model = (model or provider_models.model_id_for(db, profile, "chat")).strip()
     # A profile with no usable model would otherwise reach the sidecar as model=""
     # and come back as a silent empty turn.
     if not agent_model:

@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from app.domain import provider_models
 from app.core.config import settings
 from app.domain.providers import resolve_profile
 
@@ -63,7 +64,7 @@ def _entity_profile(db: Session):
     chunk that the per-chunk version was doing."""
     vendor = settings.kb_embedding_vendor  # 复用同一供应商配置做轻量抽取
     profile = resolve_profile(db, vendor) if vendor else None
-    return profile if profile is not None and profile.default_model else None
+    return profile if profile is not None and provider_models.model_id_for(db, profile, "chat") else None
 
 
 def _extract_with(profile, text: str) -> list[dict[str, str]]:
@@ -73,7 +74,7 @@ def _extract_with(profile, text: str) -> list[dict[str, str]]:
             f"{profile.base_url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {profile.api_key}"},
             json={
-                "model": profile.default_model,
+                "model": provider_models.model_id_for(object_session(profile), profile, "chat"),
                 "messages": [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
                 "temperature": 0,
             },

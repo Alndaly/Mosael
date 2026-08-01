@@ -42,7 +42,6 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
 
   const options = enabled.flatMap((profile, index) => {
     const models = new Set((modelQueries[index].data ?? []).map((m) => m.id));
-    if (profile.default_model) models.add(profile.default_model);
     if (defaultChat?.provider_profile_id === profile.id && defaultChat.model) models.add(defaultChat.model);
     if (session?.provider_profile_id === profile.id && session.model) models.add(session.model);
     return [...models].map((model) => ({

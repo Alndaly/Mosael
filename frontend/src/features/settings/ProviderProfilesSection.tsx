@@ -416,7 +416,6 @@ export function ProviderProfilesSection({
                     : profile.key_hint
                       ? ` · ${profile.key_hint}`
                       : ""}
-                  {profile.default_model ? ` · ${profile.default_model}` : ""}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                 </small>
               </div>

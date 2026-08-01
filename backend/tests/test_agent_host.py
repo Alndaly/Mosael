@@ -206,7 +206,6 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
                 vendor="openai-compatible",
                 base_url="http://localhost:1/v1",
                 api_key="k",
-                default_model="",
                 enabled=True,
             )
         )

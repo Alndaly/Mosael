@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from app.domain import provider_models
 from app.domain import ai_retry
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -86,7 +87,7 @@ def _chat(profile: ProviderProfile, system: str, user: str) -> str:
         f"{base_url}/chat/completions",
         headers={"Authorization": f"Bearer {profile.api_key}"},
         json={
-            "model": profile.default_model,
+            "model": provider_models.model_id_for(db, profile, "chat"),
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "temperature": 0.1,
         },

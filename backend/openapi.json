@@ -17645,10 +17645,6 @@
             "type": "string",
             "title": "Base Url"
           },
-          "default_model": {
-            "type": "string",
-            "title": "Default Model"
-          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
@@ -17704,7 +17700,6 @@
           "name",
           "vendor",
           "base_url",
-          "default_model",
           "enabled",
           "created_at"
         ],
@@ -17738,20 +17733,6 @@
               }
             ],
             "title": "Config"
-          },
-          "capability_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capability Ids"
           },
           "enabled": {
             "anyOf": [

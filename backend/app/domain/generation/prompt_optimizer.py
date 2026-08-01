@@ -205,7 +205,7 @@ def optimize_image_prompt(
     if chat_profile is None:
         chat_profile = require_profile(db, profile_id, error=PromptOptimizeError)
     if not chat_model:
-        chat_model = chat_profile.default_model
+        chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:
         raise PromptOptimizeError("未配置对话模型,请在设置里为「对话」选择供应商与模型")
     data = _chat_json(chat_profile, chat_model, _build_system_prompt(guide, ui_language), raw_prompt.strip())

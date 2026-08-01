@@ -6082,8 +6082,6 @@ export interface components {
             capability_ids?: string[];
             /** Base Url */
             base_url: string;
-            /** Default Model */
-            default_model: string;
             /** Enabled */
             enabled: boolean;
             /**
@@ -6133,8 +6131,6 @@ export interface components {
             config?: {
                 [key: string]: string;
             } | null;
-            /** Capability Ids */
-            capability_ids?: string[] | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Auth Type */

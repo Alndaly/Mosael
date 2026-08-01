@@ -124,3 +124,37 @@ def upsert(
             setattr(model, key, value)
     db.flush()
     return model
+
+
+def model_id_for(db: Session, profile: ProviderProfile | None, capability: str) -> str:
+    """这条连接在某能力下该用的模型 id。取不到返回空串。
+
+    取代了此前散在二十来处的 `profile.default_model` —— 那个字段是"一档案一模型"时代的写法,
+    同一条连接有多个模型时它给不出答案,而它给出的那一个还可能根本不提供所问的能力
+    (对话档案的 default_model 被拿去当生图模型用过)。
+
+    顺序:全局默认若正好指在这条连接上,用它;否则用这条连接下第一个提供该能力的启用模型。
+    """
+    if profile is None:
+        return ""
+    chosen = resolve_default(db, capability)
+    if chosen is not None and chosen.provider_profile_id == profile.id:
+        return chosen.model_id
+    for model in list_models(db, profile.id, enabled_only=True):
+        if capability in effective_capabilities(model):
+            return model.model_id
+    return ""
+
+
+def profile_capabilities(db: Session, profile: ProviderProfile) -> list[str]:
+    """这条连接对外提供的能力 = 它下面所有启用模型能力的并集。
+
+    还没有任何模型行时回落 vendor 预设 —— 刚建好的连接应当能出现在对应的能力分区里,
+    否则用户会看到"我建了个 Kimi 档案,但对话那栏找不到它"。
+    """
+    seen: list[str] = []
+    for model in list_models(db, profile.id, enabled_only=True):
+        for capability in effective_capabilities(model):
+            if capability not in seen:
+                seen.append(capability)
+    return seen or capability_ids_for_vendor(profile.vendor)

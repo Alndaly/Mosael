@@ -15,7 +15,9 @@ def test_profile_crud_with_masked_keys() -> None:
     ).json()
     # Preset fills base_url + default model; key never serializes, only a hint.
     assert created["base_url"] == "https://api.moonshot.cn/v1"
-    assert created["default_model"] == "moonshot-v1-8k-vision-preview"
+    # 档案上不再有 default_model —— 预设里的那个模型现在落成一行模型。
+    models = client.get(f"/api/settings/providers/{created['id']}/models").json()
+    assert any(row["id"] == "moonshot-v1-8k-vision-preview" and row["configured"] for row in models)
     assert "api_key" not in created
     assert created["key_hint"] == "…1234"
     assert created["config"]["api_key"] == "…1234"
@@ -48,33 +50,36 @@ def test_resolution_reads_enabled_profiles() -> None:
         assert resolve_profile(db, "alibaba").name == "主力 DashScope"
 
 
-def test_capability_ids_override() -> None:
+def test_能力挂在模型行上而不是连接上() -> None:
+    """此前能力是档案级覆盖,于是同一个端点只能二选一:要么对话要么生图 —— 用户被迫为同一把
+    key 建两个档案。现在能力在模型行上,一条连接可以同时提供两者。"""
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
-    cfg = {"api_key": "sk-x", "base_url": "https://x/v1", "default_model": "m"}
-
-    # 不传覆盖 → 沿用 vendor 默认(openai-compatible: chat/image/embedding)
-    default = client.post(
-        "/api/settings/providers", json={"name": "兼容默认", "vendor": "openai-compatible", "config": cfg}
-    ).json()
-    assert set(default["capability_ids"]) == {"chat", "image", "embedding"}
-
-    # 建档案时覆盖为只做对话;未知能力被过滤
-    chat_only = client.post(
+    created = client.post(
         "/api/settings/providers",
-        json={"name": "只对话", "vendor": "openai-compatible", "config": cfg, "capability_ids": ["chat", "bogus"]},
+        json={
+            "name": "多能力端点",
+            "vendor": "openai-compatible",
+            "config": {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "default_model": "chat-m"},
+        },
     ).json()
-    assert chat_only["capability_ids"] == ["chat"]
 
-    # 改档案:传 [] = 清空能力
-    assert client.patch(f"/api/settings/providers/{default['id']}", json={"capability_ids": []}).json()["capability_ids"] == []
-    # 传 null = 回落 vendor 默认
-    reverted = client.patch(f"/api/settings/providers/{default['id']}", json={"capability_ids": None}).json()
-    assert set(reverted["capability_ids"]) == {"chat", "image", "embedding"}
-    # 只改名、不传 capability_ids → 能力不动
-    renamed = client.patch(f"/api/settings/providers/{default['id']}", json={"name": "改名"}).json()
-    assert set(renamed["capability_ids"]) == {"chat", "image", "embedding"}
+    client.post(f"/api/settings/providers/{created['id']}/models", json={"model_id": "image-m"})
+    client.patch(
+        f"/api/settings/providers/{created['id']}/models/chat-m", json={"capability_ids": ["chat"]}
+    )
+    client.patch(
+        f"/api/settings/providers/{created['id']}/models/image-m", json={"capability_ids": ["image"]}
+    )
 
+    chat = [row["model"] for row in client.get("/api/settings/capability-models/chat").json()]
+    image = [row["model"] for row in client.get("/api/settings/capability-models/image").json()]
+    assert "chat-m" in chat and "image-m" not in chat
+    assert "image-m" in image and "chat-m" not in image
+
+    # 连接对外的能力 = 它下面模型能力的并集
+    profile = next(p for p in client.get("/api/settings/providers").json() if p["id"] == created["id"])
+    assert set(profile["capability_ids"]) == {"chat", "image"}
 
 def test_vendor_presets_listed() -> None:
     client = fresh_client()
@@ -172,7 +177,9 @@ def test_create_profile_copies_credentials_server_side() -> None:
     assert image["vendor"] == "bytedance-image"
     assert image["key_hint"] == "…9876"  # 密钥拷到了,响应仍只有打码提示
     assert image["base_url"] == "https://ark.cn-beijing.volces.com/api/v3"
-    assert image["default_model"] == "doubao-seedream-4-0-250828"
+    # 预设里的模型落成了模型行,不再是档案上的字段。
+    image_models = client.get(f"/api/settings/providers/{image['id']}/models").json()
+    assert any(row["id"] == "doubao-seedream-4-0-250828" and row["configured"] for row in image_models)
 
     # 独立性:改视频档案的 key 不影响生图档案
     client.patch(f"/api/settings/providers/{video['id']}", json={"config": {"api_key": "ark-new-0000"}})

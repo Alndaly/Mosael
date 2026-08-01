@@ -595,16 +595,11 @@ class ProviderProfile(Base):
     #: 只有登录才知道:Copilot 的模型随订阅档位变,OpenRouter 有几百个。API Key 档案不用它
     #: —— 那边现取现用(见 app.ai.model_catalog)。
     model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
-    default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
     #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for
     #: listing voices are three unrelated credentials from three different consoles. Which keys
     #: a vendor uses is declared by its VENDOR_PRESETS entry, which is also what renders the form.
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    #: 能力覆盖:非 None 时覆盖 vendor 默认能力(用户可按档案增删)。典型用途:把只做对话的
-    #: openai-compatible 档案取消 image,避免生成下拉冒出 Ollama·gpt-image-2 这类错配。
-    #: None = 沿用 vendor 预设(capability_ids_for_vendor)。
-    capability_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

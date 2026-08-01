@@ -109,9 +109,10 @@ def test_login_streams_events_then_takes_an_answer_and_stores_the_catalog(
     assert listed[0]["context_window"] == 1048576
     assert listed[1]["context_window"] is None, "端点没给的字段不能被填出来"
 
-    # 没有默认模型时先挑一个:否则「登录成功但用不了」,比登录失败更费解。
+    # 一个模型行都没有时先把第一个建上:否则「登录成功但用不了」,比登录失败更费解。
     profile = client.get("/api/settings/providers").json()[0]
-    assert profile["default_model"] == "k3"
+    configured = [m["id"] for m in client.get(f"/api/settings/providers/{profile['id']}/models").json() if m["configured"]]
+    assert configured == ["k3"]
 
 
 def test_answering_a_prompt_that_is_no_longer_pending_is_rejected(fake_sidecar, client_and_profile) -> None:
@@ -192,4 +193,8 @@ def test_logout_clears_both_the_credential_and_the_catalog(fake_sidecar, client_
     resp = client.delete(f"/api/settings/providers/{profile_id}/oauth")
     assert resp.status_code == 200, resp.text
     assert resp.json()["oauth_linked"] is False
-    assert client.get(f"/api/settings/providers/{profile_id}/models").json() == []
+    # 登出清掉的是**凭据与目录**,不是用户配过的模型行:那上面挂着上下文长度、能力这些设置,
+    # 因为登出一次就全丢会让"重新登录"变成"重新配一遍"。行还在,只是标成目录里已不存在。
+    rows = client.get(f"/api/settings/providers/{profile_id}/models").json()
+    assert [row["id"] for row in rows] == ["k3"]
+    assert rows[0]["in_catalog"] is False

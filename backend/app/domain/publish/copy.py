@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain import provider_models
 from app.db.models import Asset, ProviderProfile, Transcript
 from app.domain.providers import require_profile
 from app.domain.publish import PublishDomainError
@@ -77,7 +78,7 @@ def _chat(profile: ProviderProfile, user: str) -> str:
         f"{profile.base_url.rstrip('/')}/chat/completions",
         headers={"Authorization": f"Bearer {profile.api_key}"},
         json={
-            "model": profile.default_model,
+            "model": provider_models.model_id_for(db, profile, "chat"),
             "messages": [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
             "temperature": 0.7,
         },

@@ -83,12 +83,13 @@ from app.domain.usage import (
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
-def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
+def _profile_out(db: DbSession, profile: ProviderProfile) -> ProviderProfileOut:
     out = ProviderProfileOut.model_validate(profile)
-    out.capability_ids = effective_capability_ids(profile)
+    # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
+    out.capability_ids = provider_models.profile_capabilities(db, profile)
     out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
     out.extra = _masked_extra(profile)
-    out.config = _masked_config(profile)
+    out.config = _masked_config(db, profile)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(profile.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
@@ -104,7 +105,7 @@ def _field_storage(spec: dict) -> str:
     return str(spec.get("storage") or "extra")
 
 
-def _read_config_field(profile: ProviderProfile, spec: dict) -> str:
+def _read_config_field(db: DbSession, profile: ProviderProfile, spec: dict) -> str:
     storage = _field_storage(spec)
     key = str(spec.get("key", ""))
     if storage == "api_key":
@@ -112,7 +113,10 @@ def _read_config_field(profile: ProviderProfile, spec: dict) -> str:
     if storage == "base_url":
         return profile.base_url or ""
     if storage == "default_model":
-        return profile.default_model or ""
+        # 这个表单项现在落到模型行,不再存在档案上。读回来时取这条连接在它主能力下的模型 ——
+        # 绝大多数连接只有一个模型,读到的就是用户当初填的那个。
+        capabilities = provider_models.profile_capabilities(db, profile)
+        return provider_models.model_id_for(db, profile, capabilities[0]) if capabilities else ""
     value = (profile.extra or {}).get(key)
     return str(value) if value else ""
 
@@ -127,7 +131,7 @@ def _write_config_field(profile: ProviderProfile, spec: dict, value: str) -> Non
         profile.base_url = value
         return
     if storage == "default_model":
-        profile.default_model = value
+        # 由 _sync_model_row 建成模型行(它需要 db,而这里只拿得到 profile)。
         return
     merged = dict(profile.extra or {})
     if value:
@@ -137,11 +141,11 @@ def _write_config_field(profile: ProviderProfile, spec: dict, value: str) -> Non
     profile.extra = merged
 
 
-def _masked_config(profile: ProviderProfile) -> dict[str, str]:
+def _masked_config(db: DbSession, profile: ProviderProfile) -> dict[str, str]:
     out: dict[str, str] = {}
     for spec in _field_specs(profile.vendor):
         key = str(spec.get("key", ""))
-        value = _read_config_field(profile, spec)
+        value = _read_config_field(db, profile, spec)
         if not key or not value:
             continue
         out[key] = f"…{value[-4:]}" if spec.get("secret") else value
@@ -192,12 +196,11 @@ def _config_from_body(body: ProviderProfileCreate | ProviderProfileUpdate) -> di
     return dict(body.config or {})
 
 
-def _apply_profile_config(profile: ProviderProfile, incoming: dict[str, str], *, creating: bool) -> None:
+def _apply_profile_config(db: DbSession, profile: ProviderProfile, incoming: dict[str, str], *, creating: bool) -> None:
     preset = VENDOR_PRESETS.get(profile.vendor, {})
     if creating:
         profile.api_key = ""
         profile.base_url = str(preset.get("base_url", "") or "")
-        profile.default_model = str(preset.get("default_model", "") or "")
         profile.extra = {}
 
     specs = _field_specs(profile.vendor)
@@ -224,10 +227,20 @@ def _apply_profile_config(profile: ProviderProfile, incoming: dict[str, str], *,
         else:
             _write_config_field(profile, spec, "")
 
+    def _submitted(spec: dict) -> str:
+        """校验用的值。default_model 这类字段落成的是模型行,而模型行在校验**之后**才建 ——
+        拿"读回来的模型"去判必填永远是空,新建档案会一律报缺少默认模型。"""
+        key = str(spec.get("key", ""))
+        if _field_storage(spec) == "default_model":
+            return (incoming.get(key) or str(spec.get("default", "") or "")).strip() or _read_config_field(
+                db, profile, spec
+            )
+        return _read_config_field(db, profile, spec)
+
     missing = [
         str(spec.get("label") or spec.get("key"))
         for spec in specs
-        if spec.get("required") and not _read_config_field(profile, spec).strip()
+        if spec.get("required") and not _submitted(spec).strip()
     ]
     if missing:
         raise HTTPException(status_code=422, detail=f"缺少必要配置: {', '.join(missing)}")
@@ -253,25 +266,31 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
 @router.get("/settings/providers", response_model=list[ProviderProfileOut])
 def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
     profiles = db.scalars(select(ProviderProfile).order_by(ProviderProfile.created_at)).all()
-    return [_profile_out(profile) for profile in profiles]
+    return [_profile_out(db, profile) for profile in profiles]
 
 
-def _sync_default_model_row(db: DbSession, profile: ProviderProfile) -> None:
-    """让档案上的 default_model 在 provider_models 里有一行。
+def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str, str]) -> None:
+    """表单里那个「模型」字段落成模型行。
 
-    回填只覆盖历史数据;**运行时新建/改动的档案同样需要模型行**,否则新系统对它们一无所知 ——
-    能力选择器空着、默认解析退回不到任何候选。测试当场抓到过这一点(新建的 TTS 档案配了默认
-    却报"没有配置可用于语音生成的真实供应商")。
+    档案上不再有 default_model —— 那是"一档案一模型"时代的字段。表单项保留是因为建连接时
+    顺手填一个模型确实是常见流程,但它写进的是 provider_models 的一行,和后来在模型列表里
+    加的那些完全平权。
 
-    能力沿用档案上的覆盖(为空则由 effective_capabilities 回落 vendor 预设)。这一步在
-    default_model 退场之前是必需的粘合;它退场后由模型列表接口直接建行。
+    能力留空,由 effective_capabilities 回落 vendor 预设;用户想细分就去模型列表里改。
     """
-    model_id = (profile.default_model or "").strip()
+    preset = VENDOR_PRESETS.get(profile.vendor, {})
+    specs = [spec for spec in _field_specs(profile.vendor) if _field_storage(spec) == "default_model"]
+    model_id = ""
+    for spec in specs:
+        key = str(spec.get("key", ""))
+        model_id = (incoming.get(key) or str(spec.get("default", "") or "")).strip()
+        if model_id:
+            break
+    if not model_id:
+        model_id = str(preset.get("default_model", "") or "").strip()
     if not model_id:
         return
-    provider_models.upsert(
-        db, profile, model_id, source="manual", capability_ids=list(profile.capability_ids or [])
-    )
+    provider_models.upsert(db, profile, model_id, source="manual")
 
 
 @router.post("/settings/providers", response_model=ProviderProfileOut)
@@ -280,7 +299,6 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
     profile = ProviderProfile(
         name=body.name,
         vendor=body.vendor,
-        capability_ids=normalize_capability_ids(body.capability_ids),
         auth_type=normalize_auth_type(body.vendor, body.auth_type),
     )
     # 服务端凭据复制:同一把 Key 要配到另一能力的独立档案时,密钥从既有档案
@@ -297,16 +315,16 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
             key = str(spec.get("key", ""))
             if incoming.get(key, "").strip():
                 continue  # 显式提供的密钥优先
-            copied = _read_config_field(source, spec)
+            copied = _read_config_field(db, source, spec)
             if copied:
                 incoming[key] = copied
-    _apply_profile_config(profile, incoming, creating=True)
+    _apply_profile_config(db, profile, incoming, creating=True)
     db.add(profile)
     db.flush()
-    _sync_default_model_row(db, profile)
+    _sync_model_row(db, profile, incoming)
     db.commit()
     db.refresh(profile)
-    return _profile_out(profile)
+    return _profile_out(db, profile)
 
 
 @router.patch("/settings/providers/{profile_id}", response_model=ProviderProfileOut)
@@ -322,9 +340,8 @@ def update_provider_profile(
         profile.name = body.name
     if "enabled" in patch and body.enabled is not None:
         profile.enabled = body.enabled
-    # 显式传了 capability_ids 才动:[] = 清空能力,null = 回落 vendor 默认,不传 = 不改。
-    if "capability_ids" in patch:
-        profile.capability_ids = normalize_capability_ids(body.capability_ids)
+    # 能力现在挂在模型行上(见 provider_models),不再是档案级覆盖 —— 同一个端点既可能有
+    # 对话模型也可能有生图模型,挂在连接上就只能二选一。
     if "auth_type" in patch and body.auth_type is not None:
         # 切换鉴权方式时清掉另一侧的凭据:留着的那份既不会被用到,又会让「已登录」的显示说谎。
         next_auth = normalize_auth_type(profile.vendor, body.auth_type)
@@ -337,12 +354,12 @@ def update_provider_profile(
             profile.credential_version = (profile.credential_version or 0) + 1
     incoming = _config_from_body(body)
     if incoming:
-        _apply_profile_config(profile, incoming, creating=False)
+        _apply_profile_config(db, profile, incoming, creating=False)
     db.flush()
-    _sync_default_model_row(db, profile)
+    _sync_model_row(db, profile, incoming)
     db.commit()
     db.refresh(profile)
-    return _profile_out(profile)
+    return _profile_out(db, profile)
 
 
 def _require_profile(db: DbSession, profile_id: str) -> ProviderProfile:
@@ -388,8 +405,12 @@ def _store_login_catalog(db: DbSession, profile: ProviderProfile, session) -> No
     if session.status != "done" or not session.models:
         return
     profile.model_catalog = session.models
-    if not profile.default_model:
-        profile.default_model = str(session.models[0].get("id", ""))
+    # 登录带回目录后,若这条连接一个模型行都没有,先把第一个建上 ——
+    # 否则「登录成功但用不了」,比登录失败更费解。
+    if not provider_models.list_models(db, profile.id):
+        first = str(session.models[0].get("id", "")).strip()
+        if first:
+            provider_models.upsert(db, profile, first, source="catalog")
     db.commit()
 
 
@@ -496,7 +517,7 @@ def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> 
     profile.model_catalog = None
     db.commit()
     db.refresh(profile)
-    return _profile_out(profile)
+    return _profile_out(db, profile)
 
 
 def _catalog_rates(profile: ProviderProfile) -> list[tuple[str, dict[str, float | None]]]:

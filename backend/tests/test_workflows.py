@@ -7,7 +7,7 @@ import httpx
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, default_graph, interpolate, topo_order, validate_graph
-from tests.util import fresh_client
+from tests.util import add_provider, fresh_client
 
 
 def _install_llm_transport(monkeypatch, module, handler) -> None:
@@ -472,15 +472,16 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
     _install_llm_transport(monkeypatch, ai_nodes, handler)
 
     with SessionLocal() as db:
-        profile = ProviderProfile(
+        profile = add_provider(
+            db,
             name="LLM",
             vendor="openai-compatible",
             base_url="https://example.test/v1",
             api_key="sk-test",
-            default_model="gpt-default",
+            model="gpt-default",
         )
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
-        db.add_all([profile, workflow])
+        db.add(workflow)
         db.flush()
 
         result = ai_nodes.llm(
@@ -543,9 +544,11 @@ def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
     )
 
     with SessionLocal() as db:
-        profile = ProviderProfile(name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk")
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk", model="m"
+        )
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
-        db.add_all([profile, workflow])
+        db.add(workflow)
         db.flush()
 
         try:
@@ -572,15 +575,16 @@ def test_llm_node_surfaces_provider_error_body(monkeypatch) -> None:
     )
 
     with SessionLocal() as db:
-        profile = ProviderProfile(
+        profile = add_provider(
+            db,
             name="LLM",
             vendor="openai-compatible",
             base_url="https://api.deepseek.com",
             api_key="sk",
-            default_model="deepseek-chat",
+            model="deepseek-chat",
         )
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
-        db.add_all([profile, workflow])
+        db.add(workflow)
         db.flush()
 
         try:
@@ -608,7 +612,7 @@ def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
 
     with SessionLocal() as db:
         profile = ProviderProfile(
-            name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk", default_model="m"
+            name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk"
         )
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
         db.add_all([profile, workflow])

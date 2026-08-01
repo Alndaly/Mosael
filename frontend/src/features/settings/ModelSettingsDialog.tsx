@@ -28,6 +28,9 @@ type ModelSettings = components["schemas"]["ProviderModelOut"];
 /** 端点和目录都没给时,sidecar 用的保守回退。界面上要显示出来 —— 否则"空着"会被读成"不限"。 */
 const FALLBACK_CONTEXT_WINDOW = 32000;
 
+/** 可选能力。与后端 provider_defaults.CAPABILITIES 一致。 */
+const CAPABILITIES = ["chat", "image", "video", "tts", "podcast"] as const;
+
 function AdvancedToggle({
   label,
   hint,
@@ -105,15 +108,24 @@ export function ModelSettingsDialog({
   const source = settings.data?.context_window_source ?? "fallback";
   // 目录给了就把它当占位提示:用户清空输入框时,回到的正是这个值。
   const inherited = source === "catalog" ? settings.data?.context_window : null;
+  // 上下文窗口与那几个兼容开关只对**对话**模型有意义 —— 给一个生图模型显示"支持 developer 角色"
+  // 纯属噪音,还会让人以为漏配了什么。
+  //
+  // 按**草稿**算而不是服务端回的 effective:用户刚把 chat 取消掉,下面那些项就该立刻消失,
+  // 而不是等保存并重新拉一次才反应过来。自己填了能力就以它为准,没填才跟随预设。
+  const own = current?.capability_ids ?? [];
+  const effective = own.length > 0 ? own : (current?.effective_capability_ids ?? []);
+  const isChat = effective.includes("chat");
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={`${t("modelSettingsTitle")} · ${modelId}`}>
+    <ModalShell open={open} onOpenChange={onOpenChange} title={t("modelSettingsTitle")}>
       <form
         className="grid gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           if (!current) return;
           save.mutate({
+            capability_ids: current.capability_ids ?? [],
             context_window: source === "override" || current.context_window !== inherited ? current.context_window : null,
             reasoning: current.reasoning,
             vision: current.vision,
@@ -122,80 +134,126 @@ export function ModelSettingsDialog({
           });
         }}
       >
-        <div className="grid gap-1.5">
-          <div className="grid gap-1">
-            <label className="text-[13px] font-medium text-foreground" htmlFor="ctx">
-              {t("modelSettingsContextWindow")}
-            </label>
-            <Input
-              id="ctx"
-              type="number"
-              min={1024}
-              value={current?.context_window ?? ""}
-              placeholder={String(inherited ?? FALLBACK_CONTEXT_WINDOW)}
-              onChange={(event) =>
-                setDraft((prev) =>
-                  prev ? { ...prev, context_window: event.target.value ? Number(event.target.value) : null } : prev,
-                )
-              }
-            />
-          </div>
-          {/* 说清这个数从哪来:只给一个输入框的话,用户不知道现在的 32000 是端点说的还是我们兜的底,
-              也不知道清空之后会变成什么。 */}
-          <p className="m-0 text-xs leading-[1.45] text-muted-foreground">
-            {source === "override"
-              ? t("modelSettingsSourceOverride")
-              : source === "catalog"
-                ? t("modelSettingsSourceCatalog").replace("{n}", String(inherited ?? 0))
-                : t("modelSettingsSourceFallback").replace("{n}", String(FALLBACK_CONTEXT_WINDOW))}
-          </p>
-        </div>
+        {/* 模型 id 单独一行:它常常很长(doubao-seedream-4-0-250828),挤进标题会把整行顶掉。 */}
+        <p className="m-0 truncate font-mono text-[12px] text-muted-foreground" title={modelId}>
+          {modelId}
+        </p>
 
-        <div className="overflow-hidden rounded-lg border border-border">
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-3.5 py-3 text-left"
-            onClick={() => setAdvancedOpen((v) => !v)}
-          >
-            <span className="grid gap-0.5">
-              <span className="text-[13px] font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
-              <small className="text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsAdvancedHint")}</small>
+        <div className="grid gap-1.5">
+          <span className="text-[13px] font-medium text-foreground">{t("modelCapabilities")}</span>
+          {/* 能力放在最前:它决定下面显示什么 —— 生图模型没有上下文窗口,也不认 developer 角色。
+              留空表示跟随 vendor 预设。 */}
+          <div className="flex flex-wrap gap-1.5">
+            {CAPABILITIES.map((capability) => {
+              const active = (current?.capability_ids ?? []).includes(capability);
+              return (
+                <button
+                  key={capability}
+                  type="button"
+                  className={cn(
+                    "cursor-pointer rounded-full border px-2.5 py-1 text-[11.5px] transition-colors",
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-panel text-muted-foreground hover:border-border-strong",
+                  )}
+                  onClick={() =>
+                    setDraft((prev) => {
+                      if (!prev) return prev;
+                      const own = prev.capability_ids ?? [];
+                      return {
+                        ...prev,
+                        capability_ids: active ? own.filter((item) => item !== capability) : [...own, capability],
+                      };
+                    })
+                  }
+                >
+                  {capability}
+                </button>
+              );
+            })}
+          </div>
+          {(current?.capability_ids ?? []).length === 0 && (
+            <span className="text-xs leading-[1.45] text-muted-foreground">
+              {t("modelCapabilitiesInherit").replace("{list}", (current?.effective_capability_ids ?? []).join(" / "))}
             </span>
-            <ChevronDown
-              size={14}
-              className={cn("shrink-0 text-muted-foreground transition-transform", advancedOpen && "rotate-180")}
-            />
-          </button>
-          {advancedOpen && current && (
-            // 分隔线由这一层统一给,和 SettingsGroup 的做法一致 —— 每行自己带边框会在折叠处多出一条。
-            <div className="border-t border-border [&>*+*]:border-t [&>*+*]:border-border">
-              <AdvancedToggle
-                label={t("modelSettingsReasoning")}
-                hint={t("modelSettingsReasoningHint")}
-                value={current.reasoning}
-                onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning: next } : prev))}
-              />
-              <AdvancedToggle
-                label={t("modelSettingsVision")}
-                hint={t("modelSettingsVisionHint")}
-                value={current.vision}
-                onChange={(next) => setDraft((prev) => (prev ? { ...prev, vision: next } : prev))}
-              />
-              <AdvancedToggle
-                label={t("modelSettingsReasoningEffort")}
-                hint={t("modelSettingsReasoningEffortHint")}
-                value={current.reasoning_effort}
-                onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning_effort: next } : prev))}
-              />
-              <AdvancedToggle
-                label={t("modelSettingsDeveloperRole")}
-                hint={t("modelSettingsDeveloperRoleHint")}
-                value={current.developer_role}
-                onChange={(next) => setDraft((prev) => (prev ? { ...prev, developer_role: next } : prev))}
-              />
-            </div>
           )}
         </div>
+
+        {isChat && (
+          <div className="grid gap-1.5">
+            <div className="grid gap-1">
+              <label className="text-[13px] font-medium text-foreground" htmlFor="ctx">
+                {t("modelSettingsContextWindow")}
+              </label>
+              <Input
+                id="ctx"
+                type="number"
+                min={1024}
+                value={current?.context_window ?? ""}
+                placeholder={String(inherited ?? FALLBACK_CONTEXT_WINDOW)}
+                onChange={(event) =>
+                  setDraft((prev) =>
+                    prev ? { ...prev, context_window: event.target.value ? Number(event.target.value) : null } : prev,
+                  )
+                }
+              />
+            </div>
+            <p className="m-0 text-xs leading-[1.45] text-muted-foreground">
+              {source === "override"
+                ? t("modelSettingsSourceOverride")
+                : source === "catalog"
+                  ? t("modelSettingsSourceCatalog").replace("{n}", String(inherited ?? 0))
+                  : t("modelSettingsSourceFallback").replace("{n}", String(FALLBACK_CONTEXT_WINDOW))}
+            </p>
+          </div>
+        )}
+
+        {isChat && (
+          <div className="overflow-hidden rounded-lg border border-border">
+            <button
+              type="button"
+              className="flex w-full cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-3.5 py-3 text-left"
+              onClick={() => setAdvancedOpen((v) => !v)}
+            >
+              <span className="grid gap-0.5">
+                <span className="text-[13px] font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
+                <small className="text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsAdvancedHint")}</small>
+              </span>
+              <ChevronDown
+                size={14}
+                className={cn("shrink-0 text-muted-foreground transition-transform", advancedOpen && "rotate-180")}
+              />
+            </button>
+            {advancedOpen && current && (
+              <div className="border-t border-border [&>*+*]:border-t [&>*+*]:border-border">
+                <AdvancedToggle
+                  label={t("modelSettingsReasoning")}
+                  hint={t("modelSettingsReasoningHint")}
+                  value={current.reasoning}
+                  onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning: next } : prev))}
+                />
+                <AdvancedToggle
+                  label={t("modelSettingsVision")}
+                  hint={t("modelSettingsVisionHint")}
+                  value={current.vision}
+                  onChange={(next) => setDraft((prev) => (prev ? { ...prev, vision: next } : prev))}
+                />
+                <AdvancedToggle
+                  label={t("modelSettingsReasoningEffort")}
+                  hint={t("modelSettingsReasoningEffortHint")}
+                  value={current.reasoning_effort}
+                  onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning_effort: next } : prev))}
+                />
+                <AdvancedToggle
+                  label={t("modelSettingsDeveloperRole")}
+                  hint={t("modelSettingsDeveloperRoleHint")}
+                  value={current.developer_role}
+                  onChange={(next) => setDraft((prev) => (prev ? { ...prev, developer_role: next } : prev))}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-1.5">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>

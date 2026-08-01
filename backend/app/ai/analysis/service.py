@@ -10,6 +10,9 @@ from typing import Any
 
 import httpx
 
+from sqlalchemy.orm import object_session
+
+from app.domain import provider_models
 from app.domain import ai_retry
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -155,7 +158,9 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
 
 def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) -> str:
     base_url = profile.base_url.rstrip("/")
-    model = profile.default_model or "gpt-4o-mini"
+    # 叶子函数只拿得到 ORM 对象;它必然挂在调用方的会话上,object_session 正为此而设 ——
+    # 比为一个模型名把 db 串进三层签名干净。
+    model = provider_models.model_id_for(object_session(profile), profile, "chat") or "gpt-4o-mini"
     try:
         response = ai_retry.post(
             f"{base_url}/chat/completions",
@@ -192,7 +197,7 @@ def _read_native_video(path: Path) -> tuple[bytes, str]:
 def _call_gemini_video(profile: ProviderProfile, prompt: str, video: bytes, mime: str) -> str:
     """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
     base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-    model = profile.default_model or "gemini-2.0-flash"
+    model = provider_models.model_id_for(object_session(profile), profile, "chat") or "gemini-2.0-flash"
     body = {
         "contents": [
             {
@@ -248,7 +253,7 @@ def analyze_asset(
     if asset.kind == "image":
         profile = pick_analysis_profile(db, profile_id)
         answer = call_vision_model(profile, build_messages(asset, prompt, [path.read_bytes()]))
-        return {"answer": answer, "provider": profile.vendor, "model": profile.default_model, "mode": "image", "frames": 1}
+        return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(object_session(profile), profile, "chat"), "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
     native_profile = None if mode == "frames" else pick_native_video_profile(db, profile_id)
@@ -261,7 +266,7 @@ def analyze_asset(
         return {
             "answer": answer,
             "provider": native_profile.vendor,
-            "model": native_profile.default_model,
+            "model": provider_models.model_id_for(db, native_profile, "chat"),
             "mode": "native",
             "used_transcript": bool(transcript_text),
         }
@@ -273,7 +278,7 @@ def analyze_asset(
     return {
         "answer": answer,
         "provider": profile.vendor,
-        "model": profile.default_model,
+        "model": provider_models.model_id_for(db, profile, "chat"),
         "mode": "frames",
         "frames": len(images),
         "used_transcript": bool(transcript_text),

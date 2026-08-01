@@ -20,7 +20,7 @@ from tests.util import fresh_client
 
 
 def _profile(db, vendor: str = "openai-compatible") -> ProviderProfile:
-    profile = ProviderProfile(name=vendor, vendor=vendor, base_url="http://x/v1", api_key="k", default_model="")
+    profile = ProviderProfile(name=vendor, vendor=vendor, base_url="http://x/v1", api_key="k")
     db.add(profile)
     db.flush()
     return profile

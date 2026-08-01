@@ -15,6 +15,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain import provider_models
 from app.audio.tts_models import WORKER_PATH, resolve_tts_python
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -391,7 +392,7 @@ def _synthesize_remote(
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     profile = resolve_profile(db, engine, provider_profile_id)
     api_key = (profile.api_key if profile else None) or ""
-    model = model_override or voice_resource or ((profile.default_model if profile else "") or "")
+    model = model_override or voice_resource or provider_models.model_id_for(db, profile, "tts")
     provider = build_remote_provider(
         engine,
         api_key=api_key,
