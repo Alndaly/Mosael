@@ -26,7 +26,15 @@ type ProviderModel = components["schemas"]["ProviderModelOut"];
  * 什么(不该被目录冲掉)。已配置的排在前面 —— 那是实际在用的;目录里的其余项跟在后面,
  * 一键加入。目录查不到的模型(私有部署、别名)可以手填,和目录来的平权。
  */
-export function ProviderModelList({ profileId, vendorLabel }: { profileId: string; vendorLabel?: string }) {
+export function ProviderModelList({
+  profileId,
+  vendor,
+  vendorLabel,
+}: {
+  profileId: string;
+  vendor?: string;
+  vendorLabel?: string;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
   const [editing, setEditing] = React.useState<string | null>(null);
@@ -63,6 +71,19 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
       api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}`, { method: "DELETE" }),
     onSuccess: invalidate,
   });
+
+  // ComfyUI 的选择单位是**工作流**不是模型 —— 它是个工作流引擎,没有模型目录可言。
+  // 但交互完全一样(加入 / 启停 / 设能力 / 删除),所以走同一套行,只换文案:后端把
+  // 实例里保存的工作流当成这条连接的"目录"返回(见 settings._catalog_entries)。
+  // 在前端分叉成两个组件的话,两边的行样式和批量选择迟早各长各的。
+  const isWorkflowUnit = vendor === "comfyui";
+  const unit = {
+    add: isWorkflowUnit ? t("workflowAddPlaceholder") : t("modelAddPlaceholder"),
+    search: isWorkflowUnit ? t("workflowSearchPlaceholder") : t("modelSearchPlaceholder"),
+    empty: isWorkflowUnit ? t("workflowNoMatch") : t("modelNoMatch"),
+    custom: isWorkflowUnit ? t("workflowAddCustom") : t("modelAddCustom"),
+    gone: isWorkflowUnit ? t("workflowNotInInstance") : t("modelNotInCatalog"),
+  };
 
   const rows = models.data ?? [];
   const configured = rows.filter((row) => row.configured);
@@ -150,7 +171,7 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
               <span className="truncate text-[12.5px] font-medium text-foreground">{row.display_name || row.id}</span>
               {/* 目录里已经没有它了:不删,别名与私有部署仍要能用,但得说出来 —— 否则用户
                   只会看到"模型突然不工作了"却不知道端点那边已经下线了它。 */}
-              {!row.in_catalog && <Badge variant="outline">{t("modelNotInCatalog")}</Badge>}
+              {!row.in_catalog && <Badge variant="outline">{unit.gone}</Badge>}
             </span>
             <span className="flex flex-wrap items-center gap-1">
               {(row.effective_capability_ids ?? []).map((capability) => (
@@ -202,11 +223,11 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
       <Combobox
         value=""
         options={available.map((row) => ({ value: row.id }))}
-        placeholder={t("modelAddPlaceholder")}
-        searchPlaceholder={t("modelSearchPlaceholder")}
-        emptyText={t("modelNoMatch")}
+        placeholder={unit.add}
+        searchPlaceholder={unit.search}
+        emptyText={unit.empty}
         allowCustomValue
-        customValueLabel={(query) => t("modelAddCustom").replace("{id}", query)}
+        customValueLabel={(query) => unit.custom.replace("{id}", query)}
         className="h-8 w-full text-[12px]"
         onValueChange={(modelId) => {
           const trimmed = modelId.trim();
@@ -231,3 +252,4 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
     </div>
   );
 }
+

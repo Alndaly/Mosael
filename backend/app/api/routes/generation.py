@@ -124,12 +124,26 @@ def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | N
     from app.ai.providers.comfyui_client import ComfyUIClient
     from app.domain.providers import resolve_profile
 
+    from app.domain import provider_models
+
     profile = resolve_profile(db, "comfyui", profile_id)
     base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
     try:
-        return ComfyUIClient(base).list_workflows()
+        workflows = ComfyUIClient(base).list_workflows()
     except Exception as exc:  # noqa: BLE001 — 网络/解析失败都回可读 502
         raise HTTPException(status_code=502, detail=f"连接 ComfyUI 失败({base}):{exc}") from exc
+    if profile is None:
+        return workflows
+    # 设置页里加入并启用过工作流,就只给这些 —— 否则设置页那份清单只是装饰:用户在那里
+    # 挑挑拣拣,生成页照样把实例里所有东西铺出来。一条都没配过时给全量(不能因为"还没配"
+    # 就让本来能用的功能变成空列表)。
+    chosen = {
+        model.model_id
+        for model in provider_models.list_models(db, profile.id, enabled_only=True)
+    }
+    if not chosen:
+        return workflows
+    return [item for item in workflows if item.get("path") in chosen]
 
 
 @router.get("/generation/comfyui/workflow-params")

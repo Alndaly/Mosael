@@ -593,7 +593,7 @@ export function ProviderProfilesSection({
                   挤进那一列会窄到读不出任何东西。 */}
               {expanded.has(profile.id) && (
                 <div className="col-span-full border-t border-border pt-2">
-                  <ProviderModelList profileId={profile.id} />
+                  <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
                 </div>
               )}
             </div>

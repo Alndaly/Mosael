@@ -808,6 +808,18 @@ def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser)
 def _catalog_entries(profile: ProviderProfile) -> dict[str, dict]:
     """该连接的**目录**(供应商说它有什么)。订阅计划的目录只有登录才知道(Copilot 随档位变、
     OpenRouter 有几百个),登录时由 pi 带回存下;API Key 档案现打 /models(带 TTL 缓存)。"""
+    if profile.vendor == "comfyui":
+        # ComfyUI 是工作流引擎,没有模型目录 —— 它的"目录"就是实例里保存的工作流。
+        # 走同一个接缝而不是在前端分叉:这样「加入 / 启停 / 删除 / 设能力」整套交互
+        # 对工作流原样成立,只有文案不同。连不上就返回空,和端点没模型是同一种表现。
+        from app.ai.providers.comfyui_client import ComfyUIClient
+
+        try:
+            items = ComfyUIClient(profile.base_url or "http://127.0.0.1:8188").list_workflows()
+        except Exception as exc:  # noqa: BLE001 — 连不上是常态(忘了启动),不该让设置页 500
+            logger.info("ComfyUI 工作流列表获取失败(%s):%s", profile.base_url, exc)
+            return {}
+        return {str(item["path"]): {"context_window": None, "max_output_tokens": None} for item in items if item.get("path")}
     if profile.auth_type == "oauth":
         return {
             str(item.get("id")): {
