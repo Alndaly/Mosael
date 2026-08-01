@@ -36,6 +36,7 @@ from app.api.schemas import (
     ProviderProfileCreate,
     ModelSettingsOut,
     ModelSettingsUpdate,
+    ProviderModelUpdate,
     ProviderQuotaOut,
     ProviderProfileOut,
     ProviderProfileUpdate,
@@ -729,41 +730,142 @@ def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser)
     return Response(status_code=204)
 
 
+def _catalog_entries(profile: ProviderProfile) -> dict[str, dict]:
+    """该连接的**目录**(供应商说它有什么)。订阅计划的目录只有登录才知道(Copilot 随档位变、
+    OpenRouter 有几百个),登录时由 pi 带回存下;API Key 档案现打 /models(带 TTL 缓存)。"""
+    if profile.auth_type == "oauth":
+        return {
+            str(item.get("id")): {
+                "context_window": item.get("contextWindow"),
+                "max_output_tokens": item.get("maxTokens"),
+            }
+            for item in (profile.model_catalog or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+    return {
+        m.id: {"context_window": m.context_window, "max_output_tokens": m.max_output_tokens}
+        for m in fetch_models(profile.base_url or "", profile.api_key or "")
+    }
+
+
+def _model_out(model, catalog: dict[str, dict]) -> ProviderModelOut:
+    entry = catalog.get(model.model_id) or {}
+    catalog_window = entry.get("context_window")
+    if model.context_window:
+        window, source = model.context_window, "override"
+    elif catalog_window:
+        window, source = catalog_window, "catalog"
+    else:
+        window, source = None, "fallback"
+    return ProviderModelOut(
+        id=model.model_id,
+        display_name=model.display_name or "",
+        capability_ids=list(model.capability_ids or []),
+        effective_capability_ids=provider_models.effective_capabilities(model),
+        enabled=model.enabled,
+        configured=True,
+        in_catalog=model.model_id in catalog,
+        source=model.source,
+        context_window=window,
+        context_window_source=source,
+        max_output_tokens=model.max_output_tokens or entry.get("max_output_tokens"),
+        reasoning=model.reasoning,
+        vision=model.vision,
+        reasoning_effort=model.reasoning_effort,
+        developer_role=model.developer_role,
+    )
+
+
 @router.get("/settings/providers/{profile_id}/models", response_model=list[ProviderModelOut])
 def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[ProviderModelOut]:
-    """列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
+    """这条连接下的模型:**已配置的行 + 目录里还没配的**。
 
-    除模型 id 外还带回上下文窗口与最大输出 —— 同一份响应里本来就有,以前被丢掉,于是智能体侧
-    只能硬编 128000/8000。目录的抓取与解析在 `app.ai.model_catalog`,和智能体启动一轮时取
-    contextWindow 用的是同一份(带 TTL 缓存),不另开一条链路。
-
-    取不到列表时回退到默认模型,保证选择器至少有一项。
+    两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
+    已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
     """
     ensure_instance_admin(db, user, "credentials")
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        raise HTTPException(status_code=404, detail="供应商不存在")
-    if profile.auth_type == "oauth":
-        # 订阅计划的目录只有登录才知道(Copilot 随档位变、OpenRouter 有几百个),
-        # 登录成功时由 pi 带回来存下(见 _store_login_catalog)。
-        return [
+    profile = _require_profile(db, profile_id)
+    catalog = _catalog_entries(profile)
+    configured = provider_models.list_models(db, profile_id)
+    rows = [_model_out(model, catalog) for model in configured]
+    known = {row.id for row in rows}
+    for model_id, entry in catalog.items():
+        if model_id in known:
+            continue
+        rows.append(
             ProviderModelOut(
-                id=str(item.get("id", "")),
-                context_window=item.get("contextWindow"),
-                max_output_tokens=item.get("maxTokens"),
+                id=model_id,
+                configured=False,
+                in_catalog=True,
+                enabled=False,  # 没配置过 = 还没启用,加入后才进选择器
+                context_window=entry.get("context_window"),
+                context_window_source="catalog" if entry.get("context_window") else "fallback",
+                max_output_tokens=entry.get("max_output_tokens"),
+                effective_capability_ids=capability_ids_for_vendor(profile.vendor),
             )
-            for item in (profile.model_catalog or [])
-            if item.get("id")
-        ]
-    models = fetch_models(profile.base_url or "", profile.api_key or "")
-    if not models:
-        return [ProviderModelOut(id=profile.default_model)] if profile.default_model else []
-    return [
-        ProviderModelOut(
-            id=m.id, context_window=m.context_window, max_output_tokens=m.max_output_tokens
         )
-        for m in models
-    ]
+    return rows
+
+
+@router.post("/settings/providers/{profile_id}/models", response_model=ProviderModelOut)
+def add_provider_model(
+    profile_id: str, body: ProviderModelUpdate, db: DbSession, user: CurrentUser
+) -> ProviderModelOut:
+    """把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
+    手填是为了私有部署与别名:目录查不到不等于不能用。"""
+    ensure_instance_admin(db, user, "credentials")
+    profile = _require_profile(db, profile_id)
+    model_id = (body.model_id or "").strip()
+    if not model_id:
+        raise HTTPException(status_code=422, detail="模型 id 不能为空")
+    catalog = _catalog_entries(profile)
+    fields = body.model_dump(exclude_unset=True, exclude={"model_id", "capability_ids"})
+    model = provider_models.upsert(
+        db,
+        profile,
+        model_id,
+        source="catalog" if model_id in catalog else "manual",
+        capability_ids=body.capability_ids if body.capability_ids is not None else None,
+        **fields,
+    )
+    db.commit()
+    return _model_out(model, catalog)
+
+
+@router.patch("/settings/providers/{profile_id}/models/{model_id}", response_model=ProviderModelOut)
+def update_provider_model(
+    profile_id: str, model_id: str, body: ProviderModelUpdate, db: DbSession, user: CurrentUser
+) -> ProviderModelOut:
+    """改一行。运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
+    ensure_instance_admin(db, user, "credentials")
+    profile = _require_profile(db, profile_id)
+    model = provider_models.get_model(db, profile_id, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="该连接下没有这个模型")
+    patch = body.model_dump(exclude_unset=True)
+    for field in provider_models.RUNTIME_FIELDS:
+        if field in patch:
+            setattr(model, field, patch[field])
+    if "enabled" in patch and body.enabled is not None:
+        model.enabled = body.enabled
+    if "display_name" in patch:
+        model.display_name = body.display_name or ""
+    if "capability_ids" in patch:
+        model.capability_ids = normalize_capability_ids(body.capability_ids) or []
+    db.commit()
+    return _model_out(model, _catalog_entries(profile))
+
+
+@router.delete("/settings/providers/{profile_id}/models/{model_id}", status_code=204)
+def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
+    手填的则彻底消失 —— 它本来就只存在于这一行里。"""
+    ensure_instance_admin(db, user, "credentials")
+    model = provider_models.get_model(db, profile_id, model_id)
+    if model is not None:
+        db.delete(model)
+        db.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)

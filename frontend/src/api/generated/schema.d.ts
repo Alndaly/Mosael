@@ -3136,21 +3136,48 @@ export interface paths {
         };
         /**
          * List Provider Models
-         * @description 列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。
+         * @description 这条连接下的模型:**已配置的行 + 目录里还没配的**。
          *
-         *     除模型 id 外还带回上下文窗口与最大输出 —— 同一份响应里本来就有,以前被丢掉,于是智能体侧
-         *     只能硬编 128000/8000。目录的抓取与解析在 `app.ai.model_catalog`,和智能体启动一轮时取
-         *     contextWindow 用的是同一份(带 TTL 缓存),不另开一条链路。
-         *
-         *     取不到列表时回退到默认模型,保证选择器至少有一项。
+         *     两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
+         *     已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
          */
         get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
         put?: never;
-        post?: never;
+        /**
+         * Add Provider Model
+         * @description 把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
+         *     手填是为了私有部署与别名:目录查不到不等于不能用。
+         */
+        post: operations["add_provider_model_api_settings_providers__profile_id__models_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Provider Model
+         * @description 移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
+         *     手填的则彻底消失 —— 它本来就只存在于这一行里。
+         */
+        delete: operations["delete_provider_model_api_settings_providers__profile_id__models__model_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Provider Model
+         * @description 改一行。运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。
+         */
+        patch: operations["update_provider_model_api_settings_providers__profile_id__models__model_id__patch"];
         trace?: never;
     };
     "/api/settings/kb-embedding": {
@@ -5860,18 +5887,90 @@ export interface components {
         };
         /**
          * ProviderModelOut
-         * @description 供应商端点上一个可用模型。
+         * @description 一条连接下的一个模型 —— **已配置的行与供应商目录合并后的样子**。
          *
-         *     元数据来自 OpenAI 兼容 `/models` 的响应,**取不到就留空**:contextWindow 之类硬编一个
-         *     默认值(曾经是 128000)会让配了小上下文的本地模型在真正请求时才被服务端拒绝。
+         *     两个来源缺一不可:目录说"这个端点有什么"(会变),模型行说"我对它做过什么"(不该被目录
+         *     冲掉)。所以这里同时带 `configured`(有没有行)和 `in_catalog`(目录里还在不在):
+         *     目录有而没行 = 可一键加入;有行而目录没了 = 标出来但不删,别名与私有部署仍要能用。
+         *
+         *     元数据取不到就留空:contextWindow 之类硬编一个默认值(曾经是 128000)会让配了小上下文的
+         *     本地模型在真正请求时才被服务端拒绝。
          */
         ProviderModelOut: {
             /** Id */
             id: string;
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
+            /** Capability Ids */
+            capability_ids?: string[];
+            /** Effective Capability Ids */
+            effective_capability_ids?: string[];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * In Catalog
+             * @default false
+             */
+            in_catalog: boolean;
+            /**
+             * Source
+             * @default catalog
+             */
+            source: string;
+            /** Context Window */
+            context_window?: number | null;
+            /**
+             * Context Window Source
+             * @default fallback
+             */
+            context_window_source: string;
+            /** Max Output Tokens */
+            max_output_tokens?: number | null;
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Vision */
+            vision?: boolean | null;
+            /** Reasoning Effort */
+            reasoning_effort?: boolean | null;
+            /** Developer Role */
+            developer_role?: boolean | null;
+        };
+        /**
+         * ProviderModelUpdate
+         * @description 模型行的增改。传 null 的运行时项表示**清除**、回到跟随目录/保守默认。
+         */
+        ProviderModelUpdate: {
+            /** Model Id */
+            model_id?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Capability Ids */
+            capability_ids?: string[] | null;
+            /** Enabled */
+            enabled?: boolean | null;
             /** Context Window */
             context_window?: number | null;
             /** Max Output Tokens */
             max_output_tokens?: number | null;
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Vision */
+            vision?: boolean | null;
+            /** Reasoning Effort */
+            reasoning_effort?: boolean | null;
+            /** Developer Role */
+            developer_role?: boolean | null;
         };
         /** ProviderPricingRuleCreate */
         ProviderPricingRuleCreate: {
@@ -14308,6 +14407,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_provider_model_api_settings_providers__profile_id__models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderModelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_provider_model_api_settings_providers__profile_id__models__model_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_model_api_settings_providers__profile_id__models__model_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderModelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderModelOut"];
                 };
             };
             /** @description Validation Error */

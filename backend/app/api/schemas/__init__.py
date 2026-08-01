@@ -481,15 +481,48 @@ class NotificationListOut(BaseModel):
 
 
 class ProviderModelOut(BaseModel):
-    """供应商端点上一个可用模型。
+    """一条连接下的一个模型 —— **已配置的行与供应商目录合并后的样子**。
 
-    元数据来自 OpenAI 兼容 `/models` 的响应,**取不到就留空**:contextWindow 之类硬编一个
-    默认值(曾经是 128000)会让配了小上下文的本地模型在真正请求时才被服务端拒绝。
+    两个来源缺一不可:目录说"这个端点有什么"(会变),模型行说"我对它做过什么"(不该被目录
+    冲掉)。所以这里同时带 `configured`(有没有行)和 `in_catalog`(目录里还在不在):
+    目录有而没行 = 可一键加入;有行而目录没了 = 标出来但不删,别名与私有部署仍要能用。
+
+    元数据取不到就留空:contextWindow 之类硬编一个默认值(曾经是 128000)会让配了小上下文的
+    本地模型在真正请求时才被服务端拒绝。
     """
 
     id: str
+    display_name: str = ""
+    #: 该模型能干什么。为空表示跟随 vendor 预设(回填来的老行、以及还没细分过的连接)。
+    capability_ids: list[str] = Field(default_factory=list)
+    #: 生效能力(已回落 vendor 预设)。界面显示这个,而 capability_ids 是"用户填了什么"。
+    effective_capability_ids: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    configured: bool = False
+    in_catalog: bool = False
+    source: str = "catalog"
+    context_window: int | None = None
+    context_window_source: str = "fallback"
+    max_output_tokens: int | None = None
+    reasoning: bool | None = None
+    vision: bool | None = None
+    reasoning_effort: bool | None = None
+    developer_role: bool | None = None
+
+
+class ProviderModelUpdate(BaseModel):
+    """模型行的增改。传 null 的运行时项表示**清除**、回到跟随目录/保守默认。"""
+
+    model_id: str | None = Field(default=None, min_length=1, max_length=160)
+    display_name: str | None = None
+    capability_ids: list[str] | None = None
+    enabled: bool | None = None
     context_window: int | None = None
     max_output_tokens: int | None = None
+    reasoning: bool | None = None
+    vision: bool | None = None
+    reasoning_effort: bool | None = None
+    developer_role: bool | None = None
 
 
 class OAuthPromptOut(BaseModel):

@@ -9571,7 +9571,7 @@
           "settings"
         ],
         "summary": "List Provider Models",
-        "description": "列出该供应商可用的对话模型(打 OpenAI 兼容 /models;Ollama 亦支持)。\n\n除模型 id 外还带回上下文窗口与最大输出 —— 同一份响应里本来就有,以前被丢掉,于是智能体侧\n只能硬编 128000/8000。目录的抓取与解析在 `app.ai.model_catalog`,和智能体启动一轮时取\ncontextWindow 用的是同一份(带 TTL 缓存),不另开一条链路。\n\n取不到列表时回退到默认模型,保证选择器至少有一项。",
+        "description": "这条连接下的模型:**已配置的行 + 目录里还没配的**。\n\n两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。\n已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。",
         "operationId": "list_provider_models_api_settings_providers__profile_id__models_get",
         "parameters": [
           {
@@ -9598,6 +9598,162 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Add Provider Model",
+        "description": "把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,\n手填是为了私有部署与别名:目录查不到不等于不能用。",
+        "operationId": "add_provider_model_api_settings_providers__profile_id__models_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderModelUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/models/{model_id}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Provider Model",
+        "description": "改一行。运行时项传 null 即清除、回到跟随目录 —— 与\"没传\"是两回事,后者不动它。",
+        "operationId": "update_provider_model_api_settings_providers__profile_id__models__model_id__patch",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderModelUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModelOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Provider Model",
+        "description": "移除一行。目录里仍有的模型移除后会回到\"未配置\"状态(还能再加回来),\n手填的则彻底消失 —— 它本来就只存在于这一行里。",
+        "operationId": "delete_provider_model_api_settings_providers__profile_id__models__model_id__delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -16964,6 +17120,175 @@
             "type": "string",
             "title": "Id"
           },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": ""
+          },
+          "capability_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capability Ids"
+          },
+          "effective_capability_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Effective Capability Ids"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "default": false
+          },
+          "in_catalog": {
+            "type": "boolean",
+            "title": "In Catalog",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "catalog"
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "context_window_source": {
+            "type": "string",
+            "title": "Context Window Source",
+            "default": "fallback"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Output Tokens"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "developer_role": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Developer Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ProviderModelOut",
+        "description": "一条连接下的一个模型 —— **已配置的行与供应商目录合并后的样子**。\n\n两个来源缺一不可:目录说\"这个端点有什么\"(会变),模型行说\"我对它做过什么\"(不该被目录\n冲掉)。所以这里同时带 `configured`(有没有行)和 `in_catalog`(目录里还在不在):\n目录有而没行 = 可一键加入;有行而目录没了 = 标出来但不删,别名与私有部署仍要能用。\n\n元数据取不到就留空:contextWindow 之类硬编一个默认值(曾经是 128000)会让配了小上下文的\n本地模型在真正请求时才被服务端拒绝。"
+      },
+      "ProviderModelUpdate": {
+        "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "capability_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability Ids"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -16985,14 +17310,55 @@
               }
             ],
             "title": "Max Output Tokens"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "developer_role": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Developer Role"
           }
         },
         "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "ProviderModelOut",
-        "description": "供应商端点上一个可用模型。\n\n元数据来自 OpenAI 兼容 `/models` 的响应,**取不到就留空**:contextWindow 之类硬编一个\n默认值(曾经是 128000)会让配了小上下文的本地模型在真正请求时才被服务端拒绝。"
+        "title": "ProviderModelUpdate",
+        "description": "模型行的增改。传 null 的运行时项表示**清除**、回到跟随目录/保守默认。"
       },
       "ProviderPricingRuleCreate": {
         "properties": {
