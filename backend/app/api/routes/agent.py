@@ -20,6 +20,7 @@ from app.api.schemas import (
     AgentSkillOut,
     ProviderUsageEventOut,
 )
+from app.core.config import app_version
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_skills
@@ -231,7 +232,7 @@ def get_agent_skills(db: DbSession) -> list[dict]:
 def get_agent_manifest(db: DbSession) -> AgentManifestOut:
     return AgentManifestOut(
         app="open-studio",
-        version="0.1.0",
+        version=app_version(),
         openapi_url="/openapi.json",
         skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db)],
     )

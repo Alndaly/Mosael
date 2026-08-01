@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # 只在「后端与用户文件在同一台机器上」才成立的能力 —— 团队服务器部署不会有这个标记,
     # 于是客户端也就无法让服务器去读它自己的文件系统。
     local_desktop: bool = False
+    # 应用版本。**唯一真相在根 package.json**,由 Electron 壳在拉起后端时传进来
+    # (electron/main.cjs)。后端自己维护第二个版本号必然漂移——智能体的能力面板此前
+    # 就一直显示 pyproject 里那个从未跟着发版更新过的 0.1.0。
+    # 纯 `uvicorn` 起的开发后端拿不到,那时 app_version() 会回落去读仓库里的 package.json。
+    app_version: str = ""
     feishu_autostart: bool = True
     # 第三方登录(留空 = 对应按钮不出现)。Google 用「Web 应用」型客户端并把
     # http://127.0.0.1:8800/api/auth/oauth/google/callback 登记为重定向 URI;
@@ -227,3 +232,27 @@ def _migrate_db_filename() -> None:
 
 _migrate_data_dir()
 _migrate_db_filename()
+
+
+def app_version() -> str:
+    """当前应用版本。
+
+    壳传进来的优先(那是发版时打进包里的那个数);纯 `uvicorn` 起的开发后端拿不到,
+    回落去读仓库根的 package.json —— 开发时看到 "0.7.0-dev" 比看到一个假的定值有用。
+    两个都没有就说 "dev",**不编一个版本号出来**。
+    """
+    if settings.app_version:
+        return settings.app_version
+    for parent in Path(__file__).resolve().parents:
+        manifest = parent / "package.json"
+        if manifest.is_file():
+            try:
+                import json
+
+                version = json.loads(manifest.read_text(encoding="utf-8")).get("version")
+            except (OSError, ValueError):
+                break
+            if version:
+                return f"{version}-dev"
+            break
+    return "dev"

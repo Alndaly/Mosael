@@ -157,6 +157,10 @@ async function ensureBackend() {
     ...process.env,
     OPEN_STUDIO_BACKEND_PORT: String(BACKEND_PORT),
     OPEN_STUDIO_LOCAL_DESKTOP: "1",
+    // 应用版本的唯一真相在 package.json,壳读得到而后端读不到(打包版是 PyInstaller
+    // 冻结二进制,连仓库都不在)。所以由壳传进去 —— 后端自己维护第二个版本号必然漂移,
+    // 智能体能力面板此前就一直显示 pyproject 里那个从未更新过的 0.1.0。
+    OPEN_STUDIO_APP_VERSION: app.getVersion(),
   };
   if (!isDev) {
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
