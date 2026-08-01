@@ -27,12 +27,35 @@ type ModelSettings = components["schemas"]["ProviderModelOut"];
 /** 端点和目录都没给时,sidecar 用的保守回退。界面上要显示出来 —— 否则"空着"会被读成"不限"。 */
 const FALLBACK_CONTEXT_WINDOW = 32000;
 
-/** 可选能力。与后端 provider_defaults.CAPABILITIES 一致。 */
-const CAPABILITIES = ["chat", "image", "video", "tts", "podcast"] as const;
+type VendorPreset = components["schemas"]["VendorPresetOut"];
 
-/** 某些 vendor 的可选能力天生就是子集 —— ComfyUI 工作流不可能是对话或语音模型,
- *  把那三个摆出来只是让人多读三个不可能的选项。 */
-const VENDOR_CAPABILITIES: Record<string, readonly string[]> = { comfyui: ["image", "video"] };
+/**
+ * 可选能力**由后端的 vendor 预设给**,不在这里手抄一份。
+ *
+ * 抄一份的代价刚兑现过:这里曾照着 `provider_defaults.CAPABILITIES` 写死五项,而模型行认的是
+ * `providers.ALL_CAPABILITY_IDS` 六项 —— 于是 embedding 在列表行上有标签、在弹窗里却根本没有
+ * 对应的格子,既看不到也改不了。
+ *
+ * 用**这个 vendor 的**预设而不是全集,还顺带解决了另一半:给 ComfyUI 工作流列 chat/tts、
+ * 给 DeepSeek 端点列 video,都是让人多读几个不可能的选项。而它正是"未指定时跟随预设"里的
+ * 那个预设,所以弹窗里的格子和它下面那句提示永远说的是同一件事。
+ */
+function useCapabilityOptions(vendor: string | undefined): string[] {
+  const presets = useQuery({
+    queryKey: ["provider-vendors"],
+    queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
+    staleTime: 300_000,
+  });
+  return React.useMemo(() => {
+    const all = presets.data ?? [];
+    const mine = all.find((preset) => preset.vendor === vendor);
+    if (mine?.capability_ids?.length) return mine.capability_ids;
+    // 认不出 vendor(老数据/自定义)就给全集,而不是给空 —— 宁可多几个选项,不能让人改不了。
+    const union: string[] = [];
+    for (const preset of all) for (const id of preset.capability_ids ?? []) if (!union.includes(id)) union.push(id);
+    return union;
+  }, [presets.data, vendor]);
+}
 
 function AdvancedToggle({
   label,
@@ -90,6 +113,7 @@ export function ModelSettingsDialog({
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState<ModelSettings | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const capabilityOptions = useCapabilityOptions(vendor);
 
   // 从合并后的模型列表里取这一行 —— 目录与覆盖的合并逻辑只该有一处,再开一个单独的读接口
   // 就会出现"列表说 128k、弹窗说 32k"这种两份真相。
@@ -158,7 +182,7 @@ export function ModelSettingsDialog({
           {/* 能力放在最前:它决定下面显示什么 —— 生图模型没有上下文窗口,也不认 developer 角色。
               留空表示跟随 vendor 预设。 */}
           <div className="flex flex-wrap gap-1.5">
-            {(VENDOR_CAPABILITIES[vendor ?? ""] ?? CAPABILITIES).map((capability) => {
+            {capabilityOptions.map((capability) => {
               // **按生效值高亮**,而不是只按显式设置。列表行上的标签画的就是生效值 ——
               // 行里明明标着 image/video,点开却一个都不亮,读起来像丢了配置。
               // 继承来的用浅底区分:亮着,但看得出"这是跟着预设来的"。
