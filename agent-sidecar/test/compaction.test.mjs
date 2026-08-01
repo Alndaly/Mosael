@@ -90,10 +90,12 @@ test("短对话不切", () => {
 });
 
 test("压缩把早期换成摘要,并报告压掉了多少", async () => {
+  // 早期部分必须够长:摘要本身也占地方,压一段本来就很短的历史是会变大的
+  // (那种情况由 compact 自己判定为"没压",见下一条用例)。
   const messages = [
-    user("目标是做一个视频"),
-    assistant("好的", { input: 90, output: 10 }),
-    user("继续"),
+    user("目标是做一个视频。" + "详细需求".repeat(300)),
+    assistant("好的" + "方案细节".repeat(300), { input: 90, output: 10 }),
+    user("继续" + "补充说明".repeat(300)),
     ...Array.from({ length: KEEP_RECENT }, (_, i) => assistant(`step-${i}`)),
   ];
   const result = await compact(messages, {
@@ -127,10 +129,11 @@ test("摘要失败退回截断,而不是让这一轮跟着失败", async () => {
 });
 
 test("force 跳过水位判断 —— 对应界面上的「立即压缩」", async () => {
+  // 早期部分要够长才压得出东西 —— force 绕过的是**水位阈值**,不是"压了反而更大"那条。
   const messages = [
-    user("u"),
-    assistant("a", { input: 1, output: 1 }),
-    user("u2"),
+    user("u".repeat(4000)),
+    assistant("a".repeat(4000), { input: 1, output: 1 }),
+    user("u2".repeat(2000)),
     ...Array.from({ length: KEEP_RECENT }, (_, i) => assistant(`s${i}`)),
   ];
   assert.equal(shouldCompact(messages, 1_000_000), false);
@@ -141,4 +144,39 @@ test("force 跳过水位判断 —— 对应界面上的「立即压缩」", asy
 test("摘要挂成 user 而不是第二条 system", () => {
   // 多轮里 system 只应有一条,塞第二条会让部分供应商直接报错。
   assert.equal(summaryMessage("x").role, "user");
+});
+
+test("腾出的 token 不能用锚定值算 —— 那个数不会因为丢掉早期消息而变小", async () => {
+  // 回归:tokensBefore/After 曾用 contextTokens 计算,而它锚定在最近一条 assistant 的
+  // usage 上。那条消息压缩后还在(它属于保留的最近几条),于是前后完全相等,
+  // 界面上永远显示「腾出约 0 token」。
+  const messages = [
+    user("很长很长的早期提问".repeat(200)),
+    assistant("很长很长的早期回答".repeat(200)),
+    user("中间的提问".repeat(200)),
+    assistant("带 usage 的回答", { input: 12_000, output: 800 }),
+    ...Array.from({ length: KEEP_RECENT }, (_, i) => user(`最近 ${i}`)),
+  ];
+  const result = await compact(messages, { contextWindow: 1_000_000, force: true, summarize: async () => "短摘要" });
+  assert.ok(result.info, "force 应当压缩");
+  assert.ok(
+    result.info.tokensBefore - result.info.tokensAfter > 0,
+    `应当报出正的节省量,实际 before=${result.info.tokensBefore} after=${result.info.tokensAfter}`,
+  );
+});
+
+test("压完反而更大就不算压缩 —— 短对话上手动点「立即整理」会撞到", async () => {
+  const messages = [
+    user("目标是做一个视频"),
+    assistant("好的", { input: 90, output: 10 }),
+    user("继续"),
+    ...Array.from({ length: KEEP_RECENT }, (_, i) => assistant(`step-${i}`)),
+  ];
+  const result = await compact(messages, {
+    contextWindow: 1_000_000,
+    force: true,
+    summarize: async () => "这段摘要比被它换掉的三条短消息还长得多,压了等于白压。".repeat(3),
+  });
+  assert.equal(result.info, null, "变大就该报「没压」");
+  assert.deepEqual(result.messages, messages, "原文必须原样保留");
 });

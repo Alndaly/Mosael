@@ -68,6 +68,14 @@ export function estimateTokens(message: Message): number {
   return Math.ceil(textOf(message).length / CHARS_PER_TOKEN);
 }
 
+/** 纯估算的整段大小。**衡量"压掉了多少"只能用它**,不能用 contextTokens ——
+ *  后者锚定在最近一条 assistant 的 usage 上,而那个数字是"供应商上次实际看到了多少"的
+ *  历史事实,不会因为我们丢掉了更早的消息而变小。用它算差值,压缩前后永远相等,
+ *  界面上就是那句「腾出约 0 token」。 */
+export function estimateAll(messages: readonly Message[]): number {
+  return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+}
+
 /**
  * 当前上下文占了多少 token。
  *
@@ -130,6 +138,8 @@ export interface CompactionResult {
   messages: Message[];
   /** 压缩没发生时为 null。前端据此在对话流里插一条可展开的标记 —— 压缩必须被看见,
    *  否则用户不知道早期消息已经不在上下文里了。 */
+  /** tokensBefore/After 是**纯估算**的整段大小,只用来说"腾出了多少";
+   *  水位显示走 contextTokens(锚定真实 usage),两者算的不是同一件事。 */
   info: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
 }
 
@@ -142,7 +152,7 @@ export async function compact(
   messages: readonly Message[],
   options: { contextWindow: number; force?: boolean; summarize: (messages: readonly Message[]) => Promise<string> },
 ): Promise<CompactionResult> {
-  const tokensBefore = contextTokens(messages);
+  const tokensBefore = estimateAll(messages);
   if (!options.force && !shouldCompact(messages, options.contextWindow)) {
     return { messages: [...messages], info: null };
   }
@@ -159,8 +169,13 @@ export async function compact(
     summary = "";
   }
   const next = summary ? [summaryMessage(summary), ...messages.slice(cut)] : [...messages.slice(cut)];
+  const tokensAfter = estimateAll(next);
+  // **压完反而更大就不算压缩**。早期部分很短时,摘要加上它的说明抬头可能比被换掉的原文还长
+  // (手动点「立即整理」在短对话上就会撞到这种情况)。这时保留原文并如实报告"没压" ——
+  // 界面据此说"对话还不长,暂时不需要整理",而不是显示一次让上下文变大的"整理"。
+  if (tokensAfter >= tokensBefore) return { messages: [...messages], info: null };
   return {
     messages: next,
-    info: { droppedMessages: cut, tokensBefore, tokensAfter: contextTokens(next), summary },
+    info: { droppedMessages: cut, tokensBefore, tokensAfter, summary },
   };
 }

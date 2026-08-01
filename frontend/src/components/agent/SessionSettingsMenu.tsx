@@ -78,10 +78,9 @@ export function SessionSettingsMenu({
                 size="sm"
                 className="w-full"
                 disabled={compacting}
-                onClick={() => {
-                  onCompact();
-                  setOpen(false);
-                }}
+                // **不关弹出层**:水位条就在这个按钮上面,整理的结果(剩余百分比变化)
+                // 恰恰在这里显示。关掉它等于把用户刚触发的那件事的结果藏起来。
+                onClick={() => onCompact()}
               >
                 <Scissors size={12} /> {t("agentCompactNow")}
               </Button>

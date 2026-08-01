@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
   Check,
+  ChevronDown,
   CircleDot,
   Copy,
   CornerDownRight,
@@ -25,10 +26,12 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -37,7 +40,7 @@ import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
+import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -667,7 +670,7 @@ function ChatInspector({
     () => collectRecentToolCalls(messages, running ? streamTimeline : []).slice(0, 6),
     [messages, running, streamTimeline],
   );
-  const [toolsExpanded, setToolsExpanded] = React.useState(false);
+  const [toolBrowser, setToolBrowser] = React.useState(false);
   const userCount = messages.filter((message) => message.role === "user").length;
   const assistantCount = messages.filter((message) => message.role === "assistant").length;
   const failedCount = messages.filter((message) => message.error).length;
@@ -754,88 +757,149 @@ function ChatInspector({
         )}
       </section>
 
+      {/* 「最近工具」与「能力」原本是两块 —— 一块只有名字和状态(看不出做了什么),另一块把
+          36 个工具铺成四行胶囊(占掉半个侧栏,而那 8 个只是注册表顺序的前 8 个)。
+          合成一块:头部一行交代规模与版本,主体是可展开看参数/结果的最近调用,
+          全部工具收进一个带搜索的弹层——要查一个工具能干嘛时才打开。 */}
       <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
-        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
-          <Wrench size={13} /> {t("agentInspectorRecentTools")}
+        <h3 className="m-0 flex items-center justify-between gap-1.5 text-[11.5px] font-bold text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Wrench size={13} /> {t("agentInspectorRecentTools")}
+          </span>
+          <span className="font-normal tabular-nums">
+            {tools.length}
+            {manifest ? ` · v${manifest.version}` : ""}
+          </span>
         </h3>
         {recentTools.length > 0 ? (
-          <ul className="m-0 grid list-none gap-[5px] p-0">
-            {recentTools.map((tool) => (
-              <li key={tool.key} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-[11.5px]">
-                <span
-                  className={cn(
-                    "h-[7px] w-[7px] rounded-full bg-muted-foreground",
-                    tool.status === "done" && "bg-success",
-                    tool.status === "running" && "bg-primary",
-                    tool.status === "error" && "bg-destructive",
-                  )}
-                />
-                <span className="truncate" title={tool.name}>{tool.name}</span>
-                <em className="text-[10.5px] not-italic text-muted-foreground">
-                  {tool.status === "error" ? t("toolStatusFailed") : tool.status === "running" ? t("toolStatusRunning") : t("toolStatusDone")}
-                </em>
-              </li>
+          <ul className="m-0 grid list-none gap-px p-0">
+            {recentTools.map(({ key, call }) => (
+              <RecentToolRow key={key} call={call} />
             ))}
           </ul>
         ) : (
           <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{t("agentNoRecentTools")}</p>
         )}
-      </section>
-
-      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
-        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
-          <Sparkles size={13} /> {t("agentInspectorCapabilities")}
-        </h3>
-        <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-          <span className="truncate text-[11px] text-muted-foreground">{t("agentTools")}</span>
-          <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{tools.length}</strong>
-        </div>
-        {manifest && (
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            {/* 此前这行把 app 名当标签、版本当值,读出来是「open-studio 0.1.0」——
-                既没说这是什么,那个数还是后端写死的常量,和真实版本对不上。 */}
-            <span className="truncate text-[11px] text-muted-foreground">{t("agentVersion")}</span>
-            <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{manifest.version}</strong>
-          </div>
-        )}
-        {/* 36 个工具却只列 6 个、还没有别的入口 —— 看到的那 6 个只是注册表顺序的前 6 个,
-            既不是最常用的也不是最相关的。默认仍然只铺 8 个(否则这块会顶掉整个侧栏),
-            但给一个明确的「还有 N 个」把剩下的展开。 */}
-        <div className="flex flex-wrap gap-[5px]">
-          {(toolsExpanded ? tools : tools.slice(0, 8)).map((tool) => (
-            <span
-              className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
-              key={tool.name}
-              title={tool.description}
-            >
-              {tool.name}
-            </span>
-          ))}
-          {tools.length > 8 && (
-            <button
-              type="button"
-              className="cursor-pointer rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-              onClick={() => setToolsExpanded((value) => !value)}
-            >
-              {toolsExpanded ? t("agentToolsLess") : t("agentToolsMore").replace("{n}", String(tools.length - 8))}
-            </button>
-          )}
-        </div>
+        <Button variant="outline" size="sm" className="h-7 justify-center text-[11.5px]" onClick={() => setToolBrowser(true)}>
+          {t("agentToolsBrowse")}
+        </Button>
+        <ToolBrowser open={toolBrowser} onOpenChange={setToolBrowser} tools={tools} />
       </section>
     </aside>
   );
 }
 
+type RecentToolCall = { key: string; call: ToolCall };
+
+/** 一次调用:一行状态点 + 名字 + 耗时,点开就地展开参数与结果。
+ *  就地展开而不是弹层 —— 看这一栏时人在扫历史,弹层会打断这个动作。 */
+function RecentToolRow({ call }: { call: ToolCall }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const seconds = call.usage?.duration_seconds;
+  const hasDetail = call.args != null || call.result != null;
+  return (
+    <li className="grid min-w-0 gap-1 border-b border-border/45 py-1 last:border-b-0">
+      <button
+        type="button"
+        className="grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] text-foreground"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span
+          className={cn(
+            "h-[7px] w-[7px] rounded-full bg-muted-foreground",
+            call.status === "done" && "bg-success",
+            call.status === "running" && "bg-primary",
+            call.status === "error" && "bg-destructive",
+          )}
+        />
+        <span className="truncate" title={call.name}>{call.name}</span>
+        <em className="not-italic tabular-nums text-[10.5px] text-muted-foreground">
+          {call.status === "error"
+            ? t("toolStatusFailed")
+            : call.status === "running"
+              ? t("toolStatusRunning")
+              : typeof seconds === "number"
+                ? `${seconds}s`
+                : t("toolStatusDone")}
+        </em>
+        <ChevronDown size={11} className={cn("text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="grid gap-1 pb-0.5 pl-[13px]">
+          {hasDetail ? (
+            <>
+              {call.args != null && <ToolPayload label={t("agentToolArgs")} value={call.args} />}
+              {call.result != null && <ToolPayload label={t("agentToolResult")} value={call.result} />}
+            </>
+          ) : (
+            <p className="m-0 text-[10.5px] text-muted-foreground">{t("agentToolNoDetail")}</p>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** 参数/结果都可能很长(read_kb_document 能回几千字),所以限高可滚,不让它撑开整个侧栏。 */
+function ToolPayload({ label, value }: { label: string; value: unknown }) {
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-panel p-1.5 text-[10.5px] leading-[1.45] text-muted-foreground">
+        {text}
+      </pre>
+    </div>
+  );
+}
+
+/** 全部工具:带搜索,列名字 + 说明 + 是否走确认卡。
+ *  36 个工具铺在侧栏里没人读得完,而"这个工具能干嘛"是偶发问题 —— 需要时打开就好。 */
+function ToolBrowser({
+  open,
+  onOpenChange,
+  tools,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  tools: AgentTool[];
+}) {
+  const t = useI18n();
+  const [query, setQuery] = React.useState("");
+  const needle = query.trim().toLowerCase();
+  const matched = needle
+    ? tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
+    : tools;
+  return (
+    <ModalShell open={open} onOpenChange={onOpenChange} title={`${t("agentInspectorCapabilities")} · ${tools.length}`}>
+      <div className="grid gap-2">
+        <Input value={query} placeholder={t("agentToolsSearch")} onChange={(event) => setQuery(event.target.value)} />
+        <div className="grid max-h-[52vh] gap-1.5 overflow-auto">
+          {matched.map((tool) => (
+            <div className="grid gap-0.5 rounded-md border border-border bg-panel px-2.5 py-2" key={tool.name}>
+              <span className="flex items-center gap-1.5">
+                <strong className="truncate font-mono text-[12px] font-[650] text-foreground">{tool.name}</strong>
+                {tool.confirmation && <Badge variant="outline">{t("agentToolNeedsConfirm")}</Badge>}
+              </span>
+              <span className="text-[11px] leading-[1.5] text-muted-foreground">{tool.description}</span>
+            </div>
+          ))}
+          {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("agentToolNoMatch")}</p>}
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/** 最近的工具调用。**带上参数与结果** —— 面板此前只留了名字和状态,而"它到底做了什么"
+ *  恰恰是看这一栏的人想知道的,于是那一栏只能证明"有事发生过"。 */
 function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentTimelineItem[]) {
-  const tools: { key: string; name: string; status: "running" | "done" | "error" }[] = [];
+  const tools: RecentToolCall[] = [];
   const pushTimeline = (timeline: AgentTimelineItem[] | undefined, scope: string) => {
     for (const item of timeline ?? []) {
       if (item.type !== "tool") continue;
-      tools.push({
-        key: `${scope}:${item.tool.id}`,
-        name: item.tool.name,
-        status: item.tool.status,
-      });
+      tools.push({ key: `${scope}:${item.tool.id}`, call: item.tool });
     }
   };
 
