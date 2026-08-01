@@ -32,11 +32,9 @@ type ProfileForm = {
   /** Adapter-specific settings, keyed by the backend preset's field spec. */
   config: Record<string, string>;
   /** 该档案实际支持的能力(可覆盖 vendor 默认)。生成/分析等按此过滤,避免供应商×模型错配。 */
-  capabilityIds: string[];
 };
 
 /** 可勾选的能力项(与后端 ALL_CAPABILITY_IDS 对齐;podcast 太小众,表单里不列)。 */
-const CAPABILITY_CHOICES = ["chat", "image", "video", "tts", "embedding"] as const;
 
 /** 各供应商创建密钥的官方控制台入口(告知用户"去哪拿 key")。外链走系统浏览器。 */
 const VENDOR_DOCS: Record<string, string> = {
@@ -97,7 +95,7 @@ export function ProviderProfilesSection({
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
-  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {}, capabilityIds: [] };
+  const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
     queryKey: ["provider-profiles"],
@@ -115,7 +113,6 @@ export function ProviderProfilesSection({
     return qc.invalidateQueries({ queryKey: ["provider-profiles"] });
   };
   /** 某 vendor 的默认能力(新建/换 vendor 时用作能力初值)。 */
-  const vendorCaps = (v: string) => (vendors.data ?? []).find((item) => item.vendor === v)?.capability_ids ?? [];
 
   const schema = React.useMemo(() => {
     return z
@@ -125,7 +122,6 @@ export function ProviderProfilesSection({
         // 可选字段留空时值是 undefined,z.string() 会在 superRefine 之前就报「expected string」;
         // .catch("") 把缺失/非串值归一成空串,可选字段才真能留空(必填仍由下方 superRefine 校验)。
         config: z.record(z.string(), z.string().catch("")),
-        capabilityIds: z.array(z.string()),
       })
       .superRefine((data, ctx) => {
         const preset = (vendors.data ?? []).find((item) => item.vendor === data.vendor);
@@ -156,23 +152,14 @@ export function ProviderProfilesSection({
   }, [adding, editing, form, initialVendor, vendor, vendorOptions]);
 
   // 换 vendor(仅新建时)→ 能力初值重置为该 vendor 的默认;编辑时 vendor 不动、保留档案能力。
-  const prevVendorRef = React.useRef(vendor);
-  React.useEffect(() => {
-    if (vendor === prevVendorRef.current) return;
-    prevVendorRef.current = vendor;
-    if (!editing) form.setValue("capabilityIds", vendorCaps(vendor));
-    // vendorCaps 读 vendors.data;这里只在 vendor 变化时触发,vendors.data 已就绪。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendor, editing, form]);
-
   const closeModal = () => {
     setAdding(false);
     setEditing(null);
-    form.reset({ ...EMPTY, vendor: initialVendor, capabilityIds: vendorCaps(initialVendor) });
+    form.reset({ ...EMPTY, vendor: initialVendor });
   };
   const openCreate = () => {
     setEditing(null);
-    form.reset({ ...EMPTY, vendor: initialVendor, capabilityIds: vendorCaps(initialVendor) });
+    form.reset({ ...EMPTY, vendor: initialVendor });
     setAdding(true);
   };
   const openEdit = (profile: ProviderProfile) => {
@@ -183,7 +170,6 @@ export function ProviderProfilesSection({
       vendor: profile.vendor,
       name: profile.name,
       // 编辑时用档案实际生效能力(后端返回 effective:有覆盖用覆盖,否则 vendor 默认)。
-      capabilityIds: profile.capability_ids ?? [],
       // Secret fields come back only as "…abcd", so prefilling one would submit the mask as
       // the new value. Blank means "keep".
       config: Object.fromEntries(
@@ -203,7 +189,6 @@ export function ProviderProfilesSection({
           name: values.name.trim(),
           vendor: values.vendor,
           config: cleanConfig(values.config),
-          capability_ids: values.capabilityIds,
         }),
       }),
     onSuccess: () => {
@@ -218,7 +203,6 @@ export function ProviderProfilesSection({
         body: JSON.stringify({
           name: values.name.trim(),
           config: cleanConfig(values.config),
-          capability_ids: values.capabilityIds,
         }),
       }),
     onSuccess: () => {
@@ -401,48 +385,10 @@ export function ProviderProfilesSection({
                 )}
               />
             ))}
-            <FormField
-              control={form.control}
-              name="capabilityIds"
-              render={({ field }) => {
-                const selected = field.value ?? [];
-                const label = (cap: string) =>
-                  cap === "chat" ? t("capChat")
-                  : cap === "image" ? t("capImage")
-                  : cap === "video" ? t("capVideo")
-                  : cap === "tts" ? t("capTts")
-                  : t("capEmbedding");
-                return (
-                  <FormItem>
-                    <FormLabel>{t("providerCapabilities")}</FormLabel>
-                    <FormControl>
-                      <div className="flex flex-wrap gap-1.5">
-                        {CAPABILITY_CHOICES.map((cap) => {
-                          const active = selected.includes(cap);
-                          return (
-                            <button
-                              key={cap}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() =>
-                                field.onChange(active ? selected.filter((item) => item !== cap) : [...selected, cap])
-                              }
-                              className={cn(
-                                "inline-flex cursor-pointer items-center rounded-full border border-border bg-panel px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
-                                active && "border-primary bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-                              )}
-                            >
-                              {label(cap)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </FormControl>
-                    <FormDescription>{t("providerCapabilitiesHint")}</FormDescription>
-                  </FormItem>
-                );
-              }}
-            />
+            {/* 「支持能力」这一栏已经删掉。它编辑的是 ProviderProfile.capability_ids —— 那个字段在
+                供应商⇄模型重构里就没了(能力挂在模型行上:同一个端点既可能有对话模型也可能有生图
+                模型,挂在连接上就只能二选一)。更新路由一直显式忽略它,于是这一栏勾了、存了、
+                什么都没发生。能力现在在每个模型/工作流自己的设置弹窗里改。 */}
             <div className="mt-1 flex justify-end gap-1.5">
               <Button type="button" variant="outline" size="sm" onClick={closeModal}>
                 {t("cancel")}

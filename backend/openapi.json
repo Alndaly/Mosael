@@ -18015,20 +18015,6 @@
             "type": "object",
             "title": "Config"
           },
-          "capability_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capability Ids"
-          },
           "copy_credentials_from": {
             "anyOf": [
               {

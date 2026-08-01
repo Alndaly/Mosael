@@ -6225,8 +6225,6 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
-            /** Capability Ids */
-            capability_ids?: string[] | null;
             /** Copy Credentials From */
             copy_credentials_from?: string | null;
             /** Auth Type */

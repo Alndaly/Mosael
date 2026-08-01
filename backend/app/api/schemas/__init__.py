@@ -649,8 +649,6 @@ class ProviderProfileCreate(BaseModel):
     vendor: str = Field(min_length=1, max_length=60)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
     config: dict[str, str] = Field(default_factory=dict)
-    #: 档案级能力覆盖(None=沿用 vendor 默认)。用于把只做对话的通用端点取消 image/video 等。
-    capability_ids: list[str] | None = None
     #: 服务端从既有档案复制 secret 字段(如同一把方舟 Key 配到另一能力的独立档案),
     #: 密钥全程不出后端、不下发前端。仅在本档案未显式提供该字段时生效。
     copy_credentials_from: str | None = None
