@@ -63,7 +63,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - uses: astral-sh/setup-uv@v9
+      # setup-uv 从 v8 起不再发浮动主版本 tag(v9 只有 v9.0.0),官方 README 也改为推荐锁
+      # commit SHA。所以这一条与上面几个写法不同,不是笔误。升级时连注释一起换。
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
