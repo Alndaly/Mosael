@@ -44,6 +44,18 @@ const subscribeZ = (listener: () => void) => {
 /** 快照必须保持引用稳定,否则 useSyncExternalStore 会判定每次都变、无限重渲染。 */
 const getZOrder = () => zOrder;
 
+/** 当前有没有悬浮窗握着"层级快捷键"。
+ *
+ * 画布上的节点用同一组 Cmd/Ctrl+[ ] 调层级,两边都监听同一个键,必须有一处仲裁 ——
+ * 否则按一次会既动窗口又动节点。规则是"最后碰过谁就归谁":点了悬浮窗归窗口,
+ * 点回画布归画布(画布那边显式调 blurFloatingPanels)。 */
+export const hasFocusedFloatingPanel = () => focusedId !== null;
+
+/** 把焦点交还给调用方(画布)。点画布就该轮到节点响应快捷键。 */
+export function blurFloatingPanels() {
+  focusedId = null;
+}
+
 function raiseToTop(id: string) {
   focusedId = id;
   if (zOrder[zOrder.length - 1] === id) return;

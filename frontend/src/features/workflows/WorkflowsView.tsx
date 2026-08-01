@@ -5,6 +5,7 @@ import {
   Background,
   Controls,
   Handle,
+  ConnectionLineType,
   MarkerType,
   MiniMap,
   Panel,
@@ -78,6 +79,9 @@ import {
   Hourglass,
   PanelTopClose,
   FileOutput,
+  Spline,
+  Waypoints,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -135,6 +139,8 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
+import { usePersistentTab } from "@/lib/usePersistentTab";
+import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import {
   analyzeWorkflow,
   extractRefs,
@@ -533,6 +539,29 @@ const LLM_SPECIAL_CONFIG_KEYS = new Set([
 ]);
 
 /** 连线统一带闭合箭头,方向一目了然。 */
+/**
+ * 连线走线方式。值直接就是 React Flow 的内置边类型,不另建一层映射 ——
+ * 多一层枚举只会在加一种时要改两处。
+ *
+ * 走线方式是**看图习惯**而不是工作流数据:同一张图,有人要贝塞尔的流畅,有人要直角好对齐。
+ * 所以存本地偏好、对所有工作流生效,不写进 graph —— 写进去会让同一张图在两个人眼里长得不一样,
+ * 还会让"换了个线型"变成一次图变更、触发自动保存和脏状态。
+ */
+const EDGE_SHAPES = ["default", "smoothstep"] as const;
+type EdgeShape = (typeof EDGE_SHAPES)[number];
+
+const EDGE_SHAPE_ICON: Record<EdgeShape, LucideIcon> = {
+  default: Spline,
+  smoothstep: Waypoints,
+};
+
+/** 走线方式对应的 i18n key。`as const` 不能去掉:t() 只接受字面量键的联合,
+ *  标成 Record<EdgeShape, string> 会把值放宽成 string,当场编译不过。 */
+const EDGE_SHAPE_LABEL = {
+  default: "wfEdgeBezier",
+  smoothstep: "wfEdgeSmoothStep",
+} as const;
+
 const DEFAULT_EDGE_OPTIONS = {
   markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" },
 };
@@ -935,6 +964,10 @@ function WorkflowEditor({
   const [agentMode, setAgentMode] = React.useState<WorkflowAgentMode>("docked");
   /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
   const [historyMode, setHistoryMode] = React.useState<WorkflowAgentMode>("docked");
+  const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
+  /** 节点的手动层级。只在会话内有效,不写进图 —— 叠放是看图时的临时诉求(把被压住的那个
+   *  拎出来看一眼),固化进数据会让每次调整都变成一次图变更、触发自动保存。 */
+  const [nodeZ, setNodeZ] = React.useState<Record<string, number>>({});
   const [nodeSearchOpen, setNodeSearchOpen] = React.useState(false);
   const [nodeSearch, setNodeSearch] = React.useState("");
   // While a node is being dragged we pause auto-save: a mid-drag PATCH→refetch would rebuild the
@@ -1470,8 +1503,11 @@ function WorkflowEditor({
   const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
 
   const displayEdges = React.useMemo(() => {
-    if (Object.keys(runByNode).length === 0) return edges;
-    return edges.map((edge) => {
+    // type 显式写到每条边上,而不是只靠 defaultEdgeOptions —— 后者的语义是"新建边的默认值",
+    // 指望它去改已存在的边是碰运气。
+    const shaped = edges.map((edge) => (edge.type === edgeShape ? edge : { ...edge, type: edgeShape }));
+    if (Object.keys(runByNode).length === 0) return shaped;
+    return shaped.map((edge) => {
       const from = runByNode[edge.source];
       const to = runByNode[edge.target];
       const taken = from && to && from.status !== "skipped" && to.status !== "skipped";
@@ -1485,7 +1521,45 @@ function WorkflowEditor({
           }
         : edge;
     });
-  }, [edges, runByNode]);
+  }, [edges, runByNode, edgeShape]);
+
+  /**
+   * Cmd/Ctrl+] 把选中节点提到最前、[ 压到最后。与悬浮窗、剪辑页片段同键同义。
+   *
+   * **夹在 ±900 而不是无穷**:React Flow 的 elevateNodesOnSelect 是给选中节点的 z **加** 1000
+   * (实测手动置顶的选中节点是 1001、压底的是 999)。手动值只要不越过 1000,"选中的那个恒在
+   * 最上面"就一直成立 —— 而选中的正是用户此刻在操作的那个,它被别人压住最说不通。
+   *
+   * 节点层级永远盖不过悬浮窗,这一点不靠数值保证也保证不了 —— 靠的是 .react-flow__viewport
+   * 带 transform 自成层叠上下文,里面的 z 再大也只在画布内部排序。数值只管画布内部的秩序。
+   */
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.key !== "[" && event.key !== "]") return;
+      // 悬浮窗握着焦点时这组键归它。点回画布(onPaneClick / onNodeClick)才交还。
+      if (hasFocusedFloatingPanel()) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const picked = nodes.filter((node) => node.selected).map((node) => node.id);
+      if (picked.length === 0) return;
+      event.preventDefault(); // Chromium 里这两个键是后退/前进
+      setNodeZ((current) => {
+        const values = Object.values(current);
+        const next = { ...current };
+        if (event.key === "]") {
+          const top = Math.min(Math.max(0, ...values) + 1, 900);
+          for (const id of picked) next[id] = top;
+        } else {
+          const bottom = Math.max(Math.min(0, ...values) - 1, -900);
+          for (const id of picked) next[id] = bottom;
+        }
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [nodes]);
 
   const displayNodes = React.useMemo(
     () =>
@@ -1499,6 +1573,7 @@ function WorkflowEditor({
         const step = runByNode[node.id];
         return {
           ...node,
+          zIndex: nodeZ[node.id],
           data: {
             ...node.data,
             badge,
@@ -1507,7 +1582,7 @@ function WorkflowEditor({
           },
         };
       }),
-    [nodes, analysis, t, runByNode],
+    [nodes, analysis, t, runByNode, nodeZ],
   );
 
   return (
@@ -1692,6 +1767,28 @@ function WorkflowEditor({
             <Play size={13} /> {t("wfRun")}
           </Button>
           <div className="mx-1 h-[18px] w-px bg-border" />
+          {/* 走线方式:四种够用,直接摆成一排图标钮而不是下拉 —— 它是"试一下看哪种顺眼"的
+              设置,藏进下拉就得点两次才能比较一次。 */}
+          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+            {EDGE_SHAPES.map((shape) => {
+              const Icon = EDGE_SHAPE_ICON[shape];
+              return (
+                <Button
+                  key={shape}
+                  variant={edgeShape === shape ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7 rounded-[5px]"
+                  aria-label={t(EDGE_SHAPE_LABEL[shape])}
+                  title={t(EDGE_SHAPE_LABEL[shape])}
+                  aria-pressed={edgeShape === shape}
+                  onClick={() => setEdgeShape(shape)}
+                >
+                  <Icon size={13} />
+                </Button>
+              );
+            })}
+          </div>
+          <div className="mx-1 h-[18px] w-px bg-border" />
           <Button
             variant="ghost"
             size="icon"
@@ -1736,14 +1833,21 @@ function WorkflowEditor({
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             connectionRadius={36}
+            connectionLineType={edgeShape as ConnectionLineType}
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
-            onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+            onNodeClick={(_event, node) => {
+              blurFloatingPanels(); // 层级快捷键交还给画布
+              setSelectedNodeId(node.id);
+            }}
             onNodeDoubleClick={(_event, node) => {
               const g = graph.nodes.find((item) => item.id === node.id);
               if (g && (g.type === "loop_foreach" || g.type === "loop_while" || g.type === "subgraph"))
                 setEditingLoopId(node.id);
             }}
-            onPaneClick={() => setSelectedNodeId(null)}
+            onPaneClick={() => {
+              blurFloatingPanels();
+              setSelectedNodeId(null);
+            }}
             /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
                React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
                于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
@@ -1751,7 +1855,7 @@ function WorkflowEditor({
             panOnScroll
             zoomOnScroll={false}
             zoomOnPinch
-            defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
@@ -2020,6 +2124,12 @@ function LoopBodyEditor({
   const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody));
+  // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
+  const [edgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
+  const shapedEdges = React.useMemo(
+    () => edges.map((edge) => (edge.type === edgeShape ? edge : { ...edge, type: edgeShape })),
+    [edges, edgeShape],
+  );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const commit = React.useCallback(
@@ -2163,7 +2273,7 @@ function LoopBodyEditor({
         <ReactFlow
           className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !bodyViewReady && "opacity-0")}
           nodes={nodes}
-          edges={edges}
+          edges={shapedEdges}
           nodeTypes={NODE_COMPONENT_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
@@ -2177,6 +2287,7 @@ function LoopBodyEditor({
           panOnScroll
           zoomOnScroll={false}
           zoomOnPinch
+          connectionLineType={edgeShape as ConnectionLineType}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           deleteKeyCode={["Backspace", "Delete"]}
           onInit={(instance) =>
