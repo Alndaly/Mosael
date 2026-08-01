@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ChevronRight, Copy, ExternalLink, Loader2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -114,30 +114,36 @@ export function AuthPromptField({
 
   return (
     <div className="grid gap-1.5">
-      <span className="text-[11.5px] text-foreground">{prompt.message}</span>
+      {/* 提问要比弹窗顶部那句说明重:它是此刻唯一要用户做决定的东西,同灰同字号会让视线
+          找不到落点。文案来自 pi(常为英文),不翻译 —— 选项 id 是照它的原文提交的,
+          改字面等于把用户看到的和实际提交的对不上。 */}
+      <span className="text-[12px] font-medium text-foreground">{prompt.message}</span>
       {prompt.prompt_type === "select" ? (
         // 提交的是选项 id,不是它的显示文案。
         <div className="grid gap-1">
-          {(prompt.options ?? []).map((option) => {
+          {(prompt.options ?? []).map((option, index) => {
             const row = option as Record<string, unknown>;
             const id = String(row.id ?? "");
             const label = String(row.label ?? id);
             const description = typeof row.description === "string" ? row.description : "";
             return (
-              <Button
+              // 用列表行而不是 <Button variant="outline">:后者是 rounded-full px-4 的胶囊,
+              // 撑成整宽后又高又圆、文字缩在左边一大截,和应用里其他"选一个"的控件对不上。
+              <button
                 key={id}
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-auto justify-start py-1.5 text-left"
+                // 首项聚焦:pi 把推荐项排在第一个并在 label 里标 (default),回车即可走默认路径。
+                autoFocus={index === 0}
+                className="flex w-full items-center gap-2 rounded-md border border-input bg-field px-3 py-2 text-left transition-colors hover:border-border-strong hover:bg-panel focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={pending}
                 onClick={() => onSubmit(id)}
               >
-                <span className="grid gap-px">
-                  <span className="text-[12px] font-medium">{label}</span>
-                  {description && <span className="text-[10.5px] font-normal text-muted-foreground">{description}</span>}
+                <span className="grid min-w-0 flex-1 gap-px">
+                  <span className="truncate text-[12px] font-medium text-foreground">{label}</span>
+                  {description && <span className="text-[10.5px] text-muted-foreground">{description}</span>}
                 </span>
-              </Button>
+                <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+              </button>
             );
           })}
         </div>
@@ -263,7 +269,9 @@ export function ProviderOAuthDialog({
         )}
 
         <div className="mt-1 flex justify-end">
-          <Button type="button" variant={status === "done" ? "default" : "outline"} size="sm" onClick={close}>
+          {/* 未完成时是「取消」—— 放弃这次授权。用描边胶囊会读成主操作(它带 primary 色边),
+              而此刻真正的主操作是上面的选项行。完成后才变成实心的「关闭」。 */}
+          <Button type="button" variant={status === "done" ? "default" : "ghost"} size="sm" onClick={close}>
             {status === "done" ? t("close") : t("cancel")}
           </Button>
         </div>
