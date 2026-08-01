@@ -317,3 +317,38 @@ def test_令牌过期时先刷新再查(monkeypatch):
     assert called.get("pi_provider") == "anthropic"
     # 查询拿到的必须是刷新后的那份,而不是过期的老令牌
     assert seen["credential"]["access"] == "new"
+
+
+def test_探活把_凭据不对_和_服务没起_分开() -> None:
+    """401/403 说明**端点是通的**,只是凭据不对 —— 这与"服务没起"是两回事。
+    混成一个"离线"会让用户去重启一个根本没问题的服务。"""
+    import httpx
+
+    from app.db.models import ProviderProfile
+    from app.domain import provider_health
+
+    profile = ProviderProfile(name="X", vendor="openai-compatible", base_url="http://example.invalid/v1",
+                              api_key="k", auth_type="api_key")
+
+    class _Stub:
+        def __init__(self, status): self.status = status
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, url, headers=None): return httpx.Response(self.status, request=httpx.Request("GET", url))
+
+    import app.domain.provider_health as mod
+
+    mod.RetryingClient = lambda **kw: _Stub(401)  # type: ignore[assignment]
+    assert mod.probe(profile).online is True
+    mod.RetryingClient = lambda **kw: _Stub(500)  # type: ignore[assignment]
+    assert mod.probe(profile).online is False
+
+
+def test_订阅计划不探活() -> None:
+    """它们没有我们持有的 base_url,端点在 pi 的 Provider 定义里。返回 supported=False,
+    界面据此整列不显示,而不是显示一个假的"离线"。"""
+    from app.db.models import ProviderProfile
+    from app.domain import provider_health
+
+    profile = ProviderProfile(name="Kimi", vendor="kimi", base_url="", api_key="", auth_type="oauth")
+    assert provider_health.probe(profile).supported is False

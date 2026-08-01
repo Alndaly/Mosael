@@ -18,6 +18,7 @@ import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
+import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
@@ -527,6 +528,8 @@ export function ProviderProfilesSection({
                     ""
                   )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
+                  {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}
+                  <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" />
                 </small>
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}

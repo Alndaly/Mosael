@@ -35,6 +35,7 @@ from app.api.schemas import (
     ProviderPricingRuleCreate,
     ProviderPricingRuleOut,
     ProviderPricingRuleUpdate,
+    ProviderHealthOut,
     ProviderProfileCreate,
     ProviderModelUpdate,
     ProviderQuotaOut,
@@ -63,6 +64,7 @@ from app.ai.agent.host import mint_tool_token
 from app.domain import provider_models
 from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
+from app.domain import provider_health
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.providers import (
     VENDOR_PRESETS,
@@ -511,6 +513,23 @@ def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curr
     ensure_instance_admin(db, user, "credentials")
     _oauth_profile(db, profile_id)
     cancel_login(login_id)
+
+
+@router.get("/settings/providers/{profile_id}/health", response_model=ProviderHealthOut)
+def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderHealthOut:
+    """探一次这条连接通不通、往返多久。
+
+    **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
+    定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
+    """
+    profile = _require_profile(db, profile_id)
+    result = provider_health.probe(profile)
+    return ProviderHealthOut(
+        supported=result.supported,
+        online=result.online,
+        latency_ms=result.latency_ms,
+        detail=result.detail,
+    )
 
 
 @router.post("/settings/providers/{profile_id}/quota", response_model=ProviderQuotaOut)

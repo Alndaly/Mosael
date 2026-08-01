@@ -2957,6 +2957,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Probe Provider Health
+         * @description 探一次这条连接通不通、往返多久。
+         *
+         *     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
+         *     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
+         */
+        get: operations["probe_provider_health_api_settings_providers__profile_id__health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/quota": {
         parameters: {
             query?: never;
@@ -5975,6 +5998,27 @@ export interface components {
              * @default
              */
             model: string;
+        };
+        /**
+         * ProviderHealthOut
+         * @description 一次探活的结果。`supported=False` 表示这类档案没法探(订阅计划没有我们持有的端点),
+         *     界面据此整列不显示,而不是显示一个假的"离线"。
+         */
+        ProviderHealthOut: {
+            /** Supported */
+            supported: boolean;
+            /**
+             * Online
+             * @default false
+             */
+            online: boolean;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
         };
         /**
          * ProviderModelOut
@@ -14110,6 +14154,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    probe_provider_health_api_settings_providers__profile_id__health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealthOut"];
                 };
             };
             /** @description Validation Error */

@@ -559,6 +559,16 @@ class AgentCompactOut(BaseModel):
     compaction: dict | None = None
 
 
+class ProviderHealthOut(BaseModel):
+    """一次探活的结果。`supported=False` 表示这类档案没法探(订阅计划没有我们持有的端点),
+    界面据此整列不显示,而不是显示一个假的"离线"。"""
+
+    supported: bool
+    online: bool = False
+    latency_ms: int | None = None
+    detail: str = ""
+
+
 class ProviderQuotaMetricOut(BaseModel):
     """一条额度指标。
 

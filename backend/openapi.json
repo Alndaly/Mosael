@@ -9059,6 +9059,49 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/health": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Probe Provider Health",
+        "description": "探一次这条连接通不通、往返多久。\n\n**只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),\n定时轮询等于替用户持续产生请求 —— 而\"它现在通不通\"这个问题只在他看着这一页时才有意义。",
+        "operationId": "probe_provider_health_api_settings_providers__profile_id__health_get",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderHealthOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/quota": {
       "post": {
         "tags": [
@@ -17302,6 +17345,41 @@
         },
         "type": "object",
         "title": "ProviderDefaultUpdate"
+      },
+      "ProviderHealthOut": {
+        "properties": {
+          "supported": {
+            "type": "boolean",
+            "title": "Supported"
+          },
+          "online": {
+            "type": "boolean",
+            "title": "Online",
+            "default": false
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "supported"
+        ],
+        "title": "ProviderHealthOut",
+        "description": "一次探活的结果。`supported=False` 表示这类档案没法探(订阅计划没有我们持有的端点),\n界面据此整列不显示,而不是显示一个假的\"离线\"。"
       },
       "ProviderModelOut": {
         "properties": {

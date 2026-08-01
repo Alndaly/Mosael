@@ -205,6 +205,8 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "comfyui": {
         "label": "ComfyUI(本地)",
         "base_url": "http://127.0.0.1:8188",
+        # 探活走 /system_stats:ComfyUI 没有 /models,而这个接口无鉴权、必然存在、返回小。
+        "health_path": "/system_stats",
         # 免密钥:本地(或局域网 GPU 机器)的 ComfyUI 实例。工作流模板是接缝——
         # 任意 ComfyUI 图经 {{prompt}} 等占位符适配成"提示词 → 图"契约;留空用内置
         # txt2img(checkpoint 从 /object_info 现场发现)。
