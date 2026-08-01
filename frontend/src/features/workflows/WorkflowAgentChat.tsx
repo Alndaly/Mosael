@@ -107,7 +107,7 @@ export function WorkflowAgentChat({
   const isFloating = mode === "floating";
 
   // 悬浮窗的拖动/缩放/位置记忆走共用 hook —— 执行历史面板用的是同一套。
-  const { style: floatStyle, startDrag, handles } = useFloatingPanel({
+  const { style: floatStyle, startDrag, handles, focusProps } = useFloatingPanel({
     storageKey: RECT_KEY,
     floating: isFloating,
   });
@@ -399,10 +399,11 @@ export function WorkflowAgentChat({
       className={cn(
         "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border-strong bg-panel",
         isFloating
-          ? "fixed z-[55] min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
+          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
           : "relative z-[1] h-full w-full min-h-0 min-w-0 rounded-lg border-border shadow-none",
       )}
       style={floatStyle}
+      {...focusProps}
       role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfAgentTitle")}
     >

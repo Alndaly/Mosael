@@ -90,7 +90,7 @@ export function WorkflowRunHistory({
   onClose: () => void;
 }) {
   const isFloating = mode === "floating";
-  const { style: floatStyle, startDrag, handles } = useFloatingPanel({
+  const { style: floatStyle, startDrag, handles, focusProps } = useFloatingPanel({
     storageKey: "openstudio.wf.history.rect.v1",
     floating: isFloating,
     // 历史是列表,窄一点就够;高度给足,一屏能看到步骤和产物。
@@ -155,10 +155,11 @@ export function WorkflowRunHistory({
       className={cn(
         "flex flex-col overflow-hidden rounded-lg border border-border bg-panel",
         isFloating
-          ? "fixed z-[55] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
+          ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
           : "relative min-h-0 min-w-0",
       )}
       style={floatStyle}
+      {...focusProps}
       role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfHistory")}
     >

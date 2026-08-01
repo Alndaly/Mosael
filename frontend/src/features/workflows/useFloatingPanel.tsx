@@ -15,6 +15,48 @@ import { cn } from "@/lib/utils";
 export const PANEL_HEADER_CLASS =
   "flex h-[34px] cursor-default select-none touch-none items-center gap-1 border-b border-border pl-2.5 pr-1.5 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-[12.5px] [&_h2]:font-semibold";
 
+/**
+ * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。
+ *
+ * 之前两个面板都写死 z-[55],谁在上完全由 DOM 顺序决定,用户没有任何手段调整 —— 两个都浮着
+ * 又叠在一起时,下面那个就是够不着。
+ *
+ * **下限是 BASE 而不是 0**:降级只在悬浮窗之间重排,永远不会掉到页面内容底下。否则"降到最低"
+ * 会把窗口压到画布之下,变成一个既看不见也点不到、只能靠清 localStorage 找回来的状态。
+ *
+ * 放模块级而不是 context:这个 hook 的两个使用者分别在各自的组件树里,套一层 Provider 只是
+ * 为了让它们看见同一个数组,不值得。
+ */
+const Z_BASE = 55;
+
+let zOrder: string[] = [];
+let focusedId: string | null = null;
+const zListeners = new Set<() => void>();
+const emitZ = () => {
+  for (const listener of zListeners) listener();
+};
+const subscribeZ = (listener: () => void) => {
+  zListeners.add(listener);
+  return () => {
+    zListeners.delete(listener);
+  };
+};
+/** 快照必须保持引用稳定,否则 useSyncExternalStore 会判定每次都变、无限重渲染。 */
+const getZOrder = () => zOrder;
+
+function raiseToTop(id: string) {
+  focusedId = id;
+  if (zOrder[zOrder.length - 1] === id) return;
+  zOrder = [...zOrder.filter((item) => item !== id), id];
+  emitZ();
+}
+
+function sendToBottom(id: string) {
+  if (zOrder[0] === id) return;
+  zOrder = [id, ...zOrder.filter((item) => item !== id)];
+  emitZ();
+}
+
 export interface FloatRect {
   x: number;
   y: number;
@@ -146,6 +188,44 @@ export function useFloatingPanel({
     window.addEventListener("pointerup", onUp);
   };
 
+  /* ── 叠放次序 ────────────────────────────────────────────────────────────── */
+
+  const order = React.useSyncExternalStore(subscribeZ, getZOrder, getZOrder);
+
+  React.useEffect(() => {
+    if (!floating) return;
+    // 新浮起来的窗口置顶并接管焦点 —— 刚打开就被压在别的窗口下面是说不通的。
+    raiseToTop(storageKey);
+    return () => {
+      zOrder = zOrder.filter((item) => item !== storageKey);
+      if (focusedId === storageKey) focusedId = zOrder[zOrder.length - 1] ?? null;
+      emitZ();
+    };
+  }, [floating, storageKey]);
+
+  React.useEffect(() => {
+    if (!floating) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.key !== "[" && event.key !== "]") return;
+      // 每个悬浮窗都装了这个监听,只有拿到焦点的那个真正动作。
+      if (focusedId !== storageKey) return;
+      // 必须拦掉:Chromium 里 Cmd/Ctrl+[ 和 ] 是后退/前进,不拦会把整个应用导航走。
+      event.preventDefault();
+      if (event.key === "]") raiseToTop(storageKey);
+      else sendToBottom(storageKey);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [floating, storageKey]);
+
+  /** 摊到面板根节点上:点哪儿都能让这个窗口拿到焦点并置顶。
+   *
+   *  **捕获阶段是必需的**:标题栏拖动和八向缩放的 pointerdown 都会 stopPropagation,
+   *  冒泡阶段的监听在那两处收不到事件 —— 于是"拖一下窗口"反而不能把它带到最前,
+   *  而拖动恰恰是最常伴随置顶意图的操作。 */
+  const focusProps = floating ? { onPointerDownCapture: () => raiseToTop(storageKey) } : {};
+
   /** 八个缩放手柄。停靠态返回 null。 */
   const handles = floating
     ? RESIZE_EDGES.map((edge) => (
@@ -155,9 +235,18 @@ export function useFloatingPanel({
 
   return {
     rect,
-    /** 悬浮时的定位样式;停靠时为 undefined(交给网格)。 */
-    style: floating ? ({ left: rect.x, top: rect.y, width: rect.w, height: rect.h } as const) : undefined,
+    /** 悬浮时的定位样式与层级;停靠时为 undefined(交给网格)。 */
+    style: floating
+      ? ({
+          left: rect.x,
+          top: rect.y,
+          width: rect.w,
+          height: rect.h,
+          zIndex: Z_BASE + Math.max(order.indexOf(storageKey), 0),
+        } as const)
+      : undefined,
     startDrag,
     handles,
+    focusProps,
   };
 }
