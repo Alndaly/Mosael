@@ -515,6 +515,38 @@ class OAuthLoginOut(BaseModel):
     models: list[ProviderModelOut] = Field(default_factory=list)
 
 
+class ProviderQuotaMetricOut(BaseModel):
+    """一条额度指标。
+
+    各家的额度类型和周期对不齐,所以不压成单一数字:每条指标自带 kind(百分比 / 余额)、
+    周期长度与重置时间,怎么展示交给前端。硬归一要么丢信息,要么得为它编一个不存在的分母。
+    """
+
+    key: str
+    kind: str  # percent | balance
+    used_percent: float | None = None
+    used: float | None = None
+    limit: float | None = None
+    unit: str | None = None
+    window_seconds: int | None = None
+    resets_at: str | None = None
+    unlimited: bool = False
+
+
+class ProviderQuotaOut(BaseModel):
+    """一次额度查询的结果。
+
+    `supported=False` 与 `error` 是两回事:前者是这家压根没有可查的端点(界面该说"不支持"),
+    后者是这次没查成(界面该说原因并允许重试)。混成一个会让"查不了"和"查失败"长一样。
+    """
+
+    supported: bool
+    plan: str | None = None
+    metrics: list[ProviderQuotaMetricOut] = Field(default_factory=list)
+    fetched_at: float | None = None
+    error: str = ""
+
+
 class PricingPrefillOut(BaseModel):
     """按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
     是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"""
@@ -615,6 +647,10 @@ class ProviderProfileOut(OrmModel):
     auth_type: str = "api_key"
     #: OAuth 档案是否已登录。**只回布尔**,令牌本身任何接口都不下发。
     oauth_linked: bool = False
+    #: 这家有没有可查的额度接口。前端据此决定要不要摆「查询额度」——不给这个字段的话,
+    #: 按钮会对着 Kimi/xAI 这类没有端点的供应商也亮着,点下去只能回一句"不支持",
+    #: 等于摆了个做不到的操作。
+    quota_supported: bool = False
 
     #: ORM 列 capability_ids 可为 None(=沿用 vendor 默认);model_validate 时先归一成 []。
     #: 路由 _profile_out 随后会覆写成实际生效能力(effective_capability_ids)。

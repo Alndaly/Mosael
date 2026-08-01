@@ -9059,6 +9059,49 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/quota": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Fetch Provider Quota",
+        "description": "查一次订阅额度。\n\n**只在用户点击时执行**,不做后台轮询:这些端点都不是官方承诺的公开接口(Anthropic 的\noauth/usage、Codex 的 codex/usage 都是各自 CLI 内部在用),定时轮询既容易撞限流,也会\n在对方改接口后变成后台里一直失败的任务。\n\n查不到不抛 5xx:\"这家不支持\"和\"这次没查成\"都是正常结果,前端要据此显示不同的话,\n500 会被统一的错误提示吞成一句\"请求失败\"。",
+        "operationId": "fetch_provider_quota_api_settings_providers__profile_id__quota_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderQuotaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/oauth": {
       "delete": {
         "tags": [
@@ -17099,6 +17142,11 @@
             "type": "boolean",
             "title": "Oauth Linked",
             "default": false
+          },
+          "quota_supported": {
+            "type": "boolean",
+            "title": "Quota Supported",
+            "default": false
           }
         },
         "type": "object",
@@ -17181,6 +17229,144 @@
         },
         "type": "object",
         "title": "ProviderProfileUpdate"
+      },
+      "ProviderQuotaMetricOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "used_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Percent"
+          },
+          "used": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "window_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Seconds"
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resets At"
+          },
+          "unlimited": {
+            "type": "boolean",
+            "title": "Unlimited",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind"
+        ],
+        "title": "ProviderQuotaMetricOut",
+        "description": "一条额度指标。\n\n各家的额度类型和周期对不齐,所以不压成单一数字:每条指标自带 kind(百分比 / 余额)、\n周期长度与重置时间,怎么展示交给前端。硬归一要么丢信息,要么得为它编一个不存在的分母。"
+      },
+      "ProviderQuotaOut": {
+        "properties": {
+          "supported": {
+            "type": "boolean",
+            "title": "Supported"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderQuotaMetricOut"
+            },
+            "type": "array",
+            "title": "Metrics"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "supported"
+        ],
+        "title": "ProviderQuotaOut",
+        "description": "一次额度查询的结果。\n\n`supported=False` 与 `error` 是两回事:前者是这家压根没有可查的端点(界面该说\"不支持\"),\n后者是这次没查成(界面该说原因并允许重试)。混成一个会让\"查不了\"和\"查失败\"长一样。"
       },
       "ProviderUsageEventOut": {
         "properties": {

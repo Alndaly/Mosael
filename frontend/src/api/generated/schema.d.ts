@@ -2957,6 +2957,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch Provider Quota
+         * @description 查一次订阅额度。
+         *
+         *     **只在用户点击时执行**,不做后台轮询:这些端点都不是官方承诺的公开接口(Anthropic 的
+         *     oauth/usage、Codex 的 codex/usage 都是各自 CLI 内部在用),定时轮询既容易撞限流,也会
+         *     在对方改接口后变成后台里一直失败的任务。
+         *
+         *     查不到不抛 5xx:"这家不支持"和"这次没查成"都是正常结果,前端要据此显示不同的话,
+         *     500 会被统一的错误提示吞成一句"请求失败"。
+         */
+        post: operations["fetch_provider_quota_api_settings_providers__profile_id__quota_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/oauth": {
         parameters: {
             query?: never;
@@ -5896,6 +5923,11 @@ export interface components {
              * @default false
              */
             oauth_linked: boolean;
+            /**
+             * Quota Supported
+             * @default false
+             */
+            quota_supported: boolean;
         };
         /** ProviderProfileUpdate */
         ProviderProfileUpdate: {
@@ -5911,6 +5943,58 @@ export interface components {
             enabled?: boolean | null;
             /** Auth Type */
             auth_type?: string | null;
+        };
+        /**
+         * ProviderQuotaMetricOut
+         * @description 一条额度指标。
+         *
+         *     各家的额度类型和周期对不齐,所以不压成单一数字:每条指标自带 kind(百分比 / 余额)、
+         *     周期长度与重置时间,怎么展示交给前端。硬归一要么丢信息,要么得为它编一个不存在的分母。
+         */
+        ProviderQuotaMetricOut: {
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+            /** Used Percent */
+            used_percent?: number | null;
+            /** Used */
+            used?: number | null;
+            /** Limit */
+            limit?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Window Seconds */
+            window_seconds?: number | null;
+            /** Resets At */
+            resets_at?: string | null;
+            /**
+             * Unlimited
+             * @default false
+             */
+            unlimited: boolean;
+        };
+        /**
+         * ProviderQuotaOut
+         * @description 一次额度查询的结果。
+         *
+         *     `supported=False` 与 `error` 是两回事:前者是这家压根没有可查的端点(界面该说"不支持"),
+         *     后者是这次没查成(界面该说原因并允许重试)。混成一个会让"查不了"和"查失败"长一样。
+         */
+        ProviderQuotaOut: {
+            /** Supported */
+            supported: boolean;
+            /** Plan */
+            plan?: string | null;
+            /** Metrics */
+            metrics?: components["schemas"]["ProviderQuotaMetricOut"][];
+            /** Fetched At */
+            fetched_at?: number | null;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
         };
         /** ProviderUsageEventOut */
         ProviderUsageEventOut: {
@@ -13716,6 +13800,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fetch_provider_quota_api_settings_providers__profile_id__quota_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderQuotaOut"];
                 };
             };
             /** @description Validation Error */

@@ -34,6 +34,7 @@ from app.api.schemas import (
     ProviderPricingRuleOut,
     ProviderPricingRuleUpdate,
     ProviderProfileCreate,
+    ProviderQuotaOut,
     ProviderProfileOut,
     ProviderProfileUpdate,
     VendorFieldOut,
@@ -54,6 +55,7 @@ from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
+from app.domain.provider_quota import QuotaUnavailable, fetch_quota, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.providers import (
     VENDOR_PRESETS,
@@ -83,6 +85,7 @@ def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     out.config = _masked_config(profile)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(profile.oauth_credential)
+    out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
     return out
 
 
@@ -405,6 +408,29 @@ def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curr
     ensure_instance_admin(db, user, "credentials")
     _oauth_profile(db, profile_id)
     cancel_login(login_id)
+
+
+@router.post("/settings/providers/{profile_id}/quota", response_model=ProviderQuotaOut)
+def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderQuotaOut:
+    """查一次订阅额度。
+
+    **只在用户点击时执行**,不做后台轮询:这些端点都不是官方承诺的公开接口(Anthropic 的
+    oauth/usage、Codex 的 codex/usage 都是各自 CLI 内部在用),定时轮询既容易撞限流,也会
+    在对方改接口后变成后台里一直失败的任务。
+
+    查不到不抛 5xx:"这家不支持"和"这次没查成"都是正常结果,前端要据此显示不同的话,
+    500 会被统一的错误提示吞成一句"请求失败"。
+    """
+    ensure_instance_admin(db, user, "credentials")
+    profile = _oauth_profile(db, profile_id)
+    pi_provider = pi_provider_id(profile.vendor)
+    if not supports_quota(pi_provider):
+        return ProviderQuotaOut(supported=False)
+    try:
+        snapshot = fetch_quota(pi_provider, read_credential(profile))
+    except QuotaUnavailable as exc:
+        return ProviderQuotaOut(supported=True, error=str(exc))
+    return ProviderQuotaOut(supported=True, **snapshot)
 
 
 @router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)

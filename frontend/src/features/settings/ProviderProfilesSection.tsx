@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
+import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
@@ -422,6 +423,9 @@ export function ProviderProfilesSection({
                     <LogIn size={13} />
                   </Button>
                 )}
+                {/* 只对真有额度接口的供应商出现。没有端点的(Kimi/xAI 等)不摆这个钮 ——
+                    亮着却只能回一句"不支持",等于摆了个做不到的操作。 */}
+                {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
                 {isOauth(profile) && profile.oauth_linked && (
                   <Button
                     variant="ghost"
@@ -443,6 +447,7 @@ export function ProviderProfilesSection({
                   <Trash2 size={13} />
                 </Button>
               </div>
+
             </div>
           ))}
           {profiles.data && visibleProfiles.length === 0 && (
