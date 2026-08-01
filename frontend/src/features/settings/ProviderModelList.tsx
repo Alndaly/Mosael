@@ -8,6 +8,8 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
+import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 
@@ -66,6 +68,38 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
   const configured = rows.filter((row) => row.configured);
   const available = rows.filter((row) => !row.configured);
 
+  /* 一个端点常常一次加进来十几个模型,之后"只留对话的、其余停用"是常见动作。
+     逐个点开关的话,这件事要点十几次,中间还会点错行。 */
+  const bulk = useBulkSelection(configured, (row) => row.id);
+  const patchMany = useMutation({
+    mutationFn: async ({ ids, body }: { ids: string[]; body: Record<string, unknown> }) => {
+      await Promise.allSettled(
+        ids.map((id) =>
+          api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      bulk.clear();
+      invalidate();
+    },
+  });
+  const removeMany = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.allSettled(
+        ids.map((id) => api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(id)}`, { method: "DELETE" })),
+      );
+    },
+    onSuccess: () => {
+      bulk.clear();
+      invalidate();
+    },
+  });
+  const busy = patchMany.isPending || removeMany.isPending;
+
   return (
     <div className="grid gap-1.5">
       {models.isPending && (
@@ -75,11 +109,31 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
         </span>
       )}
 
+      <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: true } })}>
+          {t("bulkEnable")}
+        </Button>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: false } })}>
+          {t("bulkDisable")}
+        </Button>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => removeMany.mutate(bulk.selectedIds)}>
+          <Trash2 size={12} /> {t("bulkDelete")}
+        </Button>
+      </BulkActionBar>
+
       {configured.map((row) => (
         <div
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5"
+          className={cn(
+            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5",
+            bulk.isSelected(row.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
+          )}
           key={row.id}
         >
+          <BulkCheckbox
+            checked={bulk.isSelected(row.id)}
+            onToggle={(event) => bulk.toggle(row.id, event)}
+            label={t("bulkSelectRow")}
+          />
           <div className="grid min-w-0 gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[12.5px] font-medium text-foreground">{row.display_name || row.id}</span>

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -21,6 +21,7 @@ import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
+import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
@@ -241,6 +242,35 @@ export function ProviderProfilesSection({
     onSuccess: refresh,
   });
 
+  /* 批量:同一批临时试的端点、或换供应商后要整体停掉的一组,逐个点开关会点很久。
+     **删除仍然要过确认**——删连接会连带它的模型行和指向它的能力默认,不是可以顺手做的事。 */
+  const bulk = useBulkSelection(visibleProfiles, (profile) => profile.id);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const bulkPatch = useMutation({
+    mutationFn: async ({ ids, enabled }: { ids: string[]; enabled: boolean }) => {
+      await Promise.allSettled(
+        ids.map((id) =>
+          api(`/api/settings/providers/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      bulk.clear();
+      void refresh();
+    },
+  });
+  const bulkRemove = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.allSettled(ids.map((id) => api(`/api/settings/providers/${id}`, { method: "DELETE" })));
+    },
+    onSuccess: () => {
+      bulk.clear();
+      setBulkDeleting(false);
+      void refresh();
+    },
+  });
+  const bulkBusy = bulkPatch.isPending || bulkRemove.isPending;
+
   /** 正在授权的档案。订阅计划没有可填的 Key,授权是它唯一的"配置"动作。 */
   const [authing, setAuthing] = React.useState<ProviderProfile | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
@@ -427,10 +457,41 @@ export function ProviderProfilesSection({
         </Form>
       </ModalShell>
 
+      <ConfirmDialog
+        open={bulkDeleting}
+        title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
+        body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
+        onCancel={() => setBulkDeleting(false)}
+        onConfirm={() => bulkRemove.mutate(bulk.selectedIds)}
+      />
+
       <SettingsBlock>
         <div className="grid gap-1.5">
+          <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
+              {t("bulkEnable")}
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
+              {t("bulkDisable")}
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
+              <Trash2 size={12} /> {t("bulkDelete")}
+            </Button>
+          </BulkActionBar>
           {visibleProfiles.map((profile) => (
-            <div className={cn("grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5", !profile.enabled && "opacity-55")} key={profile.id}>
+            <div
+              className={cn(
+                "grid grid-cols-[auto_28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                !profile.enabled && "opacity-55",
+                bulk.isSelected(profile.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))] opacity-100",
+              )}
+              key={profile.id}
+            >
+              <BulkCheckbox
+                checked={bulk.isSelected(profile.id)}
+                onToggle={(event) => bulk.toggle(profile.id, event)}
+                label={t("bulkSelectRow")}
+              />
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <KeyRound size={13} />
               </span>

@@ -8,10 +8,13 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
@@ -200,6 +203,29 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const remove = useMutation({
     mutationFn: (id: string) => api(`/api/settings/provider-pricing-rules/${id}`, { method: "DELETE" }),
     onSuccess: refresh,
+  });
+
+  /* 批量选择:「按目录预填」一次能生成几十条规则,发现填错了逐条删要点几十次。
+     用户的动作本来就是"把这一批去掉",界面得给得出这个动作。 */
+  const ruleList = rules.data ?? [];
+  const bulk = useBulkSelection(ruleList, (rule) => rule.id);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const removeMany = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // 逐条发但一次性回报结果:后端没有批量删接口,而为了一个设置页列表去加一个
+      // 破坏性的批量端点不划算。失败的那几条要单独说出来,不能被"已删除 N 项"盖过去。
+      const results = await Promise.allSettled(
+        ids.map((id) => api(`/api/settings/provider-pricing-rules/${id}`, { method: "DELETE" })),
+      );
+      return { ok: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };
+    },
+    onSuccess: ({ ok, failed }) => {
+      bulk.clear();
+      setBulkDeleting(false);
+      refresh();
+      if (failed) toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
+      else toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
+    },
   });
 
   /** 按目录预填:省掉几十上百个模型的手抄。只补缺失的,已填的一律不动(后端保证)。 */
@@ -398,10 +424,34 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         </form>
       </ModalShell>
 
+      <ConfirmDialog
+        open={bulkDeleting}
+        title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
+        body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
+        onCancel={() => setBulkDeleting(false)}
+        onConfirm={() => removeMany.mutate(bulk.selectedIds)}
+      />
+
       <SettingsBlock>
         <div className="grid gap-1.5">
-          {(rules.data ?? []).map((rule) => (
-            <div className="grid grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5" key={rule.id}>
+          <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+            <Button variant="outline" size="sm" disabled={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
+              <Trash2 size={12} /> {t("bulkDelete")}
+            </Button>
+          </BulkActionBar>
+          {ruleList.map((rule) => (
+            <div
+              className={cn(
+                "grid grid-cols-[auto_28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                bulk.isSelected(rule.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
+              )}
+              key={rule.id}
+            >
+              <BulkCheckbox
+                checked={bulk.isSelected(rule.id)}
+                onToggle={(event) => bulk.toggle(rule.id, event)}
+                label={t("bulkSelectRow")}
+              />
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <ReceiptText size={13} />
               </span>
@@ -425,7 +475,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </div>
             </div>
           ))}
-          {rules.data && rules.data.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pricingRulesEmpty")}</p>}
+          {rules.data && ruleList.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pricingRulesEmpty")}</p>}
         </div>
       </SettingsBlock>
     </SettingsGroup>
