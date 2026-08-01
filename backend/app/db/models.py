@@ -668,6 +668,9 @@ class ProviderModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
+    #: 解析一个模型时几乎总要同时拿到端点与凭据 —— 它们在连接上。
+    profile: Mapped["ProviderProfile"] = relationship(lazy="joined")
+
 
 class ProviderDefault(Base):
     """每种能力的默认供应商 + 模型(统一到 ProviderProfile)。
@@ -681,6 +684,11 @@ class ProviderDefault(Base):
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )
     model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    #: 指向具体的模型行。**这才是"某能力的默认"该指的东西** —— 上面那对
+    #: (provider_profile_id, model) 是模型还不是实体时的写法,行为一致但没法引用、没法查询。
+    provider_model_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("provider_models.id", ondelete="SET NULL"), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

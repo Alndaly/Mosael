@@ -63,7 +63,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 配置
     "ProviderProfile": ("app/domain/providers.py", "app/api/routes/settings.py"),
     "ProviderDefault": ("app/domain/provider_defaults.py", "app/api/routes/settings.py"),
-    "ProviderModel": ("app/domain/provider_defaults.py", "app/api/routes/settings.py"),
+    "ProviderModel": ("app/domain/provider_models.py", "app/api/routes/settings.py"),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),
     "KbEmbeddingConfig": ("app/domain/kb/",),

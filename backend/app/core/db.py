@@ -156,6 +156,32 @@ def _backfill_provider_models() -> None:
             )
 
 
+def _migrate_provider_default_model_fk() -> None:
+    """provider_defaults 增加 provider_model_id 并回填。
+
+    老行存的是 (provider_profile_id, model) 这一对字符串 —— 行为一致,但没法引用、没法查询
+    "哪一行是 image 的默认"。回填时按这对去 provider_models 里找对应行;找不到就留空,由
+    resolve_default 退回"该能力下第一个可用模型",不会变成未配置。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "provider_defaults" not in tables or "provider_models" not in tables:
+        return
+    columns = {col["name"] for col in inspector.get_columns("provider_defaults")}
+    with engine.begin() as conn:
+        if "provider_model_id" not in columns:
+            conn.execute(text("ALTER TABLE provider_defaults ADD COLUMN provider_model_id VARCHAR(64)"))
+        conn.execute(
+            text(
+                "UPDATE provider_defaults SET provider_model_id = ("
+                "  SELECT pm.id FROM provider_models pm"
+                "  WHERE pm.provider_profile_id = provider_defaults.provider_profile_id"
+                "    AND pm.model_id = provider_defaults.model"
+                ") WHERE provider_model_id IS NULL"
+            )
+        )
+
+
 def _migrate_job_parent() -> None:
     """加列迁移:jobs 增加 parent_job_id —— 工作流派生的子任务归到父工作流下,
     任务中心不再把子任务与父工作流平铺成两行。老行留 NULL 即顶层任务,语义正确。"""
@@ -283,6 +309,7 @@ def init_db() -> None:
     _backfill_browser_pool()
     # 必须在 create_all 之后:provider_models 是新表,之前还不存在。
     _backfill_provider_models()
+    _migrate_provider_default_model_fk()
 
 
 def session_scope() -> Generator[Session, None, None]:
