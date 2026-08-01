@@ -118,6 +118,25 @@ def _migrate_agent_thinking_level() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
 
 
+def _adopt_deepseek_vendor() -> None:
+    """把明确指向 api.deepseek.com 的「OpenAI 兼容端点」档案改挂 deepseek 预设。
+
+    通用预设为了覆盖各种自建网关声明了 chat/image/embedding,而模型行没显式设能力时会把三样
+    全继承 —— DeepSeek 的对话模型于是会出现在「AI 绘图」的可选项里。判据取 base_url 而不是
+    名字:域名是确定的,名字是用户随便起的。只改 vendor,base_url/密钥/模型行一概不动。
+    """
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE provider_profiles SET vendor='deepseek' "
+                "WHERE vendor='openai-compatible' AND base_url LIKE '%api.deepseek.com%'"
+            )
+        )
+
+
 def _drop_generation_models() -> None:
     """删表:generation_models 退场。
 
@@ -357,6 +376,7 @@ def init_db() -> None:
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
     _drop_generation_models()
+    _adopt_deepseek_vendor()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

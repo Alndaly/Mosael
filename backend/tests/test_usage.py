@@ -163,6 +163,8 @@ def test_workspace_summary_includes_usage_rollup() -> None:
         "date": summary["usage_daily"][-1]["date"],
         "input_tokens": 100,
         "output_tokens": 25,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
         "total_tokens": 205,
     }
     assert summary["usage_by_capability"] == {"image": 120_000, "video": 0}
@@ -191,3 +193,45 @@ def test_summarize_usage_scopes_to_workspace() -> None:
 
     assert summary.total_cost_micros == 0
     assert summary.event_count == 0
+
+
+def test_缓存读写单列并算出命中率() -> None:
+    """缓存这两桶此前落进图表的「其他」里 —— "省下多少"是长对话最大的变量,却看不见。
+
+    命中率的分母是**提示词总量**(input + cacheRead + cacheWrite,三者不相交),
+    不是 total_tokens:把补全 token 算进去会让这个比例随回答长短漂移。
+    """
+    from app.domain.usage import _token_usage
+
+    split = _token_usage({"input_token": 300, "output_token": 100, "cache_read_token": 700, "cache_write_token": 0})
+    assert split == {
+        "input_tokens": 300,
+        "output_tokens": 100,
+        "cache_read_tokens": 700,
+        "cache_write_tokens": 0,
+        "total_tokens": 1100,
+    }
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        record_usage(
+            db,
+            workspace_id=ws,
+            provider="openai-compatible",
+            model="m",
+            capability="chat",
+            operation="chat",
+            source_type="agent",
+            source_id="s1",
+            idempotency_key="cache-probe-1",
+            units={"input_token": 300, "output_token": 100, "cache_read_token": 700},
+            raw_usage={},
+        )
+        db.commit()
+    summary = client.get(f"/api/workspaces/{ws}/summary").json()
+    assert summary["usage_cache_read_tokens"] == 700
+    assert summary["usage_cache_write_tokens"] == 0
+    # 700 / (300 + 700 + 0) = 0.7
+    assert summary["usage_cache_hit_ratio"] == 0.7
+    assert summary["usage_token_daily"][-1]["cache_read_tokens"] == 700

@@ -14438,6 +14438,16 @@
             "type": "integer",
             "title": "Output Tokens"
           },
+          "cache_read_tokens": {
+            "type": "integer",
+            "title": "Cache Read Tokens",
+            "default": 0
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "title": "Cache Write Tokens",
+            "default": 0
+          },
           "total_tokens": {
             "type": "integer",
             "title": "Total Tokens"
@@ -21137,6 +21147,21 @@
             "type": "integer",
             "title": "Usage Token Count",
             "default": 0
+          },
+          "usage_cache_read_tokens": {
+            "type": "integer",
+            "title": "Usage Cache Read Tokens",
+            "default": 0
+          },
+          "usage_cache_write_tokens": {
+            "type": "integer",
+            "title": "Usage Cache Write Tokens",
+            "default": 0
+          },
+          "usage_cache_hit_ratio": {
+            "type": "number",
+            "title": "Usage Cache Hit Ratio",
+            "default": 0.0
           },
           "usage_daily": {
             "items": {

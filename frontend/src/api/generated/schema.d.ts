@@ -4826,6 +4826,16 @@ export interface components {
             input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /**
+             * Cache Read Tokens
+             * @default 0
+             */
+            cache_read_tokens: number;
+            /**
+             * Cache Write Tokens
+             * @default 0
+             */
+            cache_write_tokens: number;
             /** Total Tokens */
             total_tokens: number;
         };
@@ -7623,6 +7633,21 @@ export interface components {
              * @default 0
              */
             usage_token_count: number;
+            /**
+             * Usage Cache Read Tokens
+             * @default 0
+             */
+            usage_cache_read_tokens: number;
+            /**
+             * Usage Cache Write Tokens
+             * @default 0
+             */
+            usage_cache_write_tokens: number;
+            /**
+             * Usage Cache Hit Ratio
+             * @default 0
+             */
+            usage_cache_hit_ratio: number;
             /** Usage Daily */
             usage_daily?: components["schemas"]["DailyUsageOut"][];
             /** Usage Token Daily */

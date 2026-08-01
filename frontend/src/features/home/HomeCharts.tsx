@@ -36,6 +36,7 @@ const usageConfigBase = {
 } satisfies ChartConfig;
 
 const tokenConfigBase = {
+  cacheRead: { label: "", color: "var(--chart-cache)" },
   input: { label: "", color: "var(--chart-video)" },
   output: { label: "", color: "var(--chart-audio)" },
   other: { label: "", color: "var(--chart-image)" },
@@ -158,15 +159,22 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
     return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyTokens")}</p>;
   }
   const config: ChartConfig = {
+    cacheRead: { ...tokenConfigBase.cacheRead, label: t("homeLegendCacheReadTokens") },
     input: { ...tokenConfigBase.input, label: t("homeLegendInputTokens") },
     output: { ...tokenConfigBase.output, label: t("homeLegendOutputTokens") },
     other: { ...tokenConfigBase.other, label: t("homeLegendOtherTokens") },
   };
+  // 缓存读单独一段,而且垫在最底下:它是"本来要按输入价重新算、结果只花了一成"的那部分,
+  // 和 input 挨着才看得出比例。缓存写并进 input —— 它按输入价的 1.25 倍计,性质是"写入成本"
+  // 而不是节省,单列会让这张图变成四段谁也读不清。
   const data = rows.map((day) => {
-    const split = day.input_tokens + day.output_tokens;
+    const cacheRead = day.cache_read_tokens ?? 0;
+    const input = day.input_tokens + (day.cache_write_tokens ?? 0);
+    const split = input + day.output_tokens + cacheRead;
     return {
       day: day.date.slice(5),
-      input: day.input_tokens,
+      cacheRead,
+      input,
       output: day.output_tokens,
       other: Math.max(0, day.total_tokens - split),
     };
@@ -185,6 +193,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
           minTickGap={48}
         />
         <ChartTooltip cursor={{ fillOpacity: 0.06 }} content={<ChartTooltipContent valueFormatter={(value) => formatCount(Number(value))} />} />
+        <Bar dataKey="cacheRead" stackId="tokens" fill="var(--color-cacheRead)" maxBarSize={14} />
         <Bar dataKey="input" stackId="tokens" fill="var(--color-input)" maxBarSize={14} />
         <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
         <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />

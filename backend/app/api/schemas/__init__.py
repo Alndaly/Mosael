@@ -1692,6 +1692,10 @@ class DailyUsageTokensOut(BaseModel):
     date: str
     input_tokens: int
     output_tokens: int
+    #: 缓存读/写单列 —— 它们与 input 不相交,单价也差一个数量级。并进"其他"的话,
+    #: "这个月省下多少"在界面上就看不见了。
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     total_tokens: int
 
 
@@ -1721,6 +1725,10 @@ class WorkspaceSummaryOut(BaseModel):
     usage_unknown_cost_events: int = 0
     usage_duration_seconds: float = 0
     usage_token_count: int = 0
+    usage_cache_read_tokens: int = 0
+    usage_cache_write_tokens: int = 0
+    #: cacheRead / 提示词总量(input + cacheRead + cacheWrite)。0..1。
+    usage_cache_hit_ratio: float = 0.0
     usage_daily: list[DailyUsageOut] = Field(default_factory=list)
     usage_token_daily: list[DailyUsageTokensOut] = Field(default_factory=list)
     usage_by_capability: dict[str, int] = Field(default_factory=dict)

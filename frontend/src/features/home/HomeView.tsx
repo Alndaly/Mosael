@@ -250,7 +250,19 @@ export function HomeView({
             <UsageCostChart daily={stats.usage_daily} currency={stats.usage_currency} unknown={stats.usage_unknown_cost_events} />
           </div>
           <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartTokens")}</h2>
+            <h2 className="m-0 flex items-center justify-between gap-2 text-xs font-[650] text-muted-foreground">
+              {t("homeChartTokens")}
+              {/* 命中率放标题行:图上看的是"哪天多哪天少",这个数回答的是"整段时间省了多少",
+                  两者不该抢同一块地方。只在真有缓存时出现 —— 恒定的 0% 只是噪音。 */}
+              {stats.usage_cache_hit_ratio > 0 && (
+                <span
+                  className="font-normal tabular-nums text-muted-foreground"
+                  title={t("homeCacheHitHint")}
+                >
+                  {t("homeCacheHit")} {Math.round(stats.usage_cache_hit_ratio * 100)}%
+                </span>
+              )}
+            </h2>
             <UsageTokensChart daily={stats.usage_token_daily} />
           </div>
         </section>

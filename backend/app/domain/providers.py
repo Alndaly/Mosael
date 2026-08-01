@@ -114,6 +114,26 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "deepseek": {
+        "label": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-chat",
+        # **只做对话**。此前这类档案只能选「OpenAI 兼容端点」,而那个预设为了覆盖各种自建网关
+        # 声明了 chat/image/embedding —— 模型行没显式设能力时会把三样全继承下来,于是 DeepSeek
+        # 的对话模型会冒到「AI 绘图」的可选项里。给它自己的预设,能力就说得准了。
+        "capabilities": "对话、推理(不支持图像 / 视频生成)",
+        "capability_ids": ["chat"],
+        "fields": [
+            {"key": "api_key", "label": "DeepSeek API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "DeepSeek Endpoint",
+                "storage": "base_url",
+                "default": "https://api.deepseek.com",
+            },
+            {"key": "default_model", "label": "对话模型", "storage": "default_model", "default": "deepseek-chat"},
+        ],
+    },
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",

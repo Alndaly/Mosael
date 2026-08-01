@@ -28,6 +28,10 @@ class UsageSummary:
     unknown_cost_events: int
     duration_seconds: float
     token_count: int
+    #: 缓存读/写各自的总量,以及命中率(cacheRead / 提示词总量)。
+    cache_read_tokens: int
+    cache_write_tokens: int
+    cache_hit_ratio: float
     daily: list[dict[str, Any]]
     token_daily: list[dict[str, Any]]
     by_capability: dict[str, int]
@@ -332,6 +336,8 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             "unknown": 0,
             "input_tokens": 0,
             "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
             "total_tokens": 0,
         }
         for offset in range(days)
@@ -342,11 +348,19 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     unknown = 0
     duration = 0.0
     token_count = 0
+    cache_read_total = 0
+    cache_write_total = 0
+    #: 命中率的分母是**提示词总量** = input + cacheRead + cacheWrite(三者不相交),
+    #: 不是 total_tokens —— 把补全 token 算进去会让这个比例随回答长短漂移。
+    prompt_total = 0
     currency = "USD"
     for event in rows:
         amount = int(event.cost_micros or 0)
         tokens = _token_usage(event.units or {})
         token_count += tokens["total_tokens"]
+        cache_read_total += tokens["cache_read_tokens"]
+        cache_write_total += tokens["cache_write_tokens"]
+        prompt_total += tokens["input_tokens"] + tokens["cache_read_tokens"] + tokens["cache_write_tokens"]
         if event.cost_micros is not None:
             total_cost += amount
             currency = event.currency or currency
@@ -362,6 +376,8 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
                 daily_index[day]["unknown"] += 1
             daily_index[day]["input_tokens"] += tokens["input_tokens"]
             daily_index[day]["output_tokens"] += tokens["output_tokens"]
+            daily_index[day]["cache_read_tokens"] += tokens["cache_read_tokens"]
+            daily_index[day]["cache_write_tokens"] += tokens["cache_write_tokens"]
             daily_index[day]["total_tokens"] += tokens["total_tokens"]
         by_capability[event.capability] = by_capability.get(event.capability, 0) + amount
         provider_key = event.provider or "unknown"
@@ -374,12 +390,17 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
         unknown_cost_events=unknown,
         duration_seconds=round(duration, 1),
         token_count=token_count,
+        cache_read_tokens=cache_read_total,
+        cache_write_tokens=cache_write_total,
+        cache_hit_ratio=round(cache_read_total / prompt_total, 4) if prompt_total > 0 else 0.0,
         daily=daily,
         token_daily=[
             {
                 "date": day["date"],
                 "input_tokens": day["input_tokens"],
                 "output_tokens": day["output_tokens"],
+                "cache_read_tokens": day["cache_read_tokens"],
+                "cache_write_tokens": day["cache_write_tokens"],
                 "total_tokens": day["total_tokens"],
             }
             for day in daily
@@ -515,15 +536,24 @@ def _numeric_unit(value: Any) -> float | None:
 
 
 def _token_usage(units: dict[str, Any]) -> dict[str, int]:
+    """一次调用的 token 拆分。
+
+    **缓存读/写要单列**:它们和 input 不相交(pi 上报前已从 prompt 里减掉),单价也差一个
+    数量级(读约输入价一成,写约 1.25 倍)。此前汇总只取 input/output,缓存这两桶落进图表的
+    「其他」里 —— 于是"这个月省下多少"这件事在界面上根本看不见,而它恰恰是长对话最大的变量。
+    """
     input_tokens = round(_quantity_for_unit(units, "input_token") or 0)
     output_tokens = round(_quantity_for_unit(units, "output_token") or 0)
+    cache_read = round(_quantity_for_unit(units, "cache_read_token") or 0)
+    cache_write = round(_quantity_for_unit(units, "cache_write_token") or 0)
     total_tokens = round(_quantity_for_unit(units, "token") or 0)
-    if total_tokens <= 0:
-        total_tokens = input_tokens + output_tokens
-    elif input_tokens + output_tokens > total_tokens:
-        total_tokens = input_tokens + output_tokens
+    split = input_tokens + output_tokens + cache_read + cache_write
+    if total_tokens <= 0 or split > total_tokens:
+        total_tokens = split
     return {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
+        "cache_read_tokens": cache_read,
+        "cache_write_tokens": cache_write,
         "total_tokens": total_tokens,
     }

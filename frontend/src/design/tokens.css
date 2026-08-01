@@ -141,6 +141,9 @@
   --chart-video: #5873d6;
   --chart-audio: #2f9e8f;
   --chart-image: #b8801f;
+  /* 缓存命中:紫灰。与 video 蓝拉开一个色相段,但保持同一冷区 —— 它和 input 在同一根柱子上
+     相邻,靠明度差而不是撞色区分。 */
+  --chart-cache: #8a72c4;
   --track-overlay-bg: #fbe4ef;
   --track-overlay-border: #eba8c9;
   --track-overlay-text: #8f3a63;
@@ -217,6 +220,7 @@
   --chart-video: #5c7ce8;
   --chart-audio: #219e8c;
   --chart-image: #bb8326;
+  --chart-cache: #9b86d4;
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
