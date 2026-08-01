@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import random
-import time
 from typing import Any
 
 import httpx
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
+from app.domain.ai_retry import RetryingClient
 from app.domain.providers import require_profile
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -18,11 +17,10 @@ from app.domain.workflows.executors import register
 LLM_TIMEOUT_SECONDS = 120
 
 # 供应商偶发瞬断(Server disconnected / 连接或读超时 / 429 限流 / 5xx 过载)是常态,让整条工作流
-# 一次就挂太脆。对这类**可重试**错误做几次指数退避重试;4xx(除 429)是请求本身的问题,重试无意义。
-# 「最大重试次数」用户可在设置页调整(见 AiRuntimeConfig / configured_max_retries),缺省 3。
+# 一次就挂太脆。重试与退避统一在 domain/ai_retry 的传输层做,**所有 AI 出站调用共用**;
+# 这里只保留「读设置」这一步,因为工作流执行器手上正好有 db 会话。
 DEFAULT_MAX_RETRIES = 3
 MAX_RETRIES_CAP = 10
-_LLM_RETRY_BASE_SECONDS = 1.5
 
 
 def configured_max_retries(db: Session) -> int:
@@ -137,38 +135,28 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
     return payload
 
 
-def _is_retryable_status(status: int) -> bool:
-    """429(限流)与 5xx(过载/网关)是瞬时状态,值得重试;4xx 是请求本身的问题,重试无益。"""
-    return status == 429 or 500 <= status < 600
-
-
 def _post_with_retry(
     base_url: str, api_key: str, payload: dict[str, Any], model: str, max_retries: int
 ) -> httpx.Response:
-    """带指数退避重试的 chat/completions 调用:网络瞬断 / 429 / 5xx 重试,4xx 立即失败。
-    max_retries 为**重试**次数(不含首次),故总尝试 = max_retries + 1。"""
-    attempts = max(1, max_retries + 1)
-    for attempt in range(attempts):
-        last = attempt == attempts - 1
-        try:
-            response = httpx.post(
+    """chat/completions 调用。重试本身交给 RetryingClient —— 这里只负责把失败翻译成
+    工作流能显示的一句话。
+
+    退避与「哪些状态值得重试」原本在这里单独实现了一份,而生图/生视频/语音/向量化一次都
+    不重试;现在同一套逻辑在传输层,这几类调用一起覆盖到,也不会再出现「改了这边忘了那边」。"""
+    try:
+        with RetryingClient(max_retries=max_retries, timeout=LLM_TIMEOUT_SECONDS) as client:
+            response = client.post(
                 f"{base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 json=payload,
-                timeout=LLM_TIMEOUT_SECONDS,
             )
-            response.raise_for_status()
-            return response
-        except httpx.HTTPStatusError as exc:
-            if last or not _is_retryable_status(exc.response.status_code):
-                raise WorkflowDomainError(_provider_error(exc.response, model)) from exc
-        except httpx.RequestError as exc:
-            if last:
-                suffix = f",已重试 {max_retries} 次仍失败" if max_retries > 0 else ""
-                raise WorkflowDomainError(f"调用 LLM 失败(网络/连接{suffix}):{exc}") from exc
-        # 退避后重试:指数增长 + 少量抖动,封顶 8s,避开与其它节点同时重击供应商。
-        time.sleep(min(_LLM_RETRY_BASE_SECONDS * 2**attempt, 8.0) + random.uniform(0, 0.4))
-    raise WorkflowDomainError("调用 LLM 失败:重试耗尽")  # 不可达(末次必抛),仅为类型收敛兜底
+        response.raise_for_status()
+        return response
+    except httpx.HTTPStatusError as exc:
+        raise WorkflowDomainError(_provider_error(exc.response, model)) from exc
+    except httpx.RequestError as exc:
+        suffix = f",已重试 {max_retries} 次仍失败" if max_retries > 0 else ""
+        raise WorkflowDomainError(f"调用 LLM 失败(网络/连接{suffix}):{exc}") from exc
 
 
 def _provider_error(response: httpx.Response, model: str) -> str:

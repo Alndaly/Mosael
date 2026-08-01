@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationCallbacks,
     GenerationProvider,
@@ -144,7 +146,7 @@ class ComfyUIProvider(GenerationProvider):
             "duration_seconds": float(request.parameters.get("duration_seconds", 5)),
         }
         try:
-            with httpx.Client(base_url=base, timeout=SUBMIT_TIMEOUT) as client:
+            with RetryingClient(base_url=base, timeout=SUBMIT_TIMEOUT) as client:
                 graph = self._resolve_graph(client, context, request, values, base)
                 prompt_id = self._submit(client, graph)
                 entry = self._wait(client, prompt_id, callbacks)

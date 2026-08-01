@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -93,7 +95,7 @@ class VeoProvider(GenerationProvider):
         payload = build_submit_payload(_with_first_frame_inline(request, context.api_key))
         headers = {"x-goog-api-key": context.api_key}
         try:
-            with httpx.Client(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
+            with RetryingClient(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
                 submit = client.post(f"/models/{model}:predictLongRunning", json=payload)
                 submit.raise_for_status()
                 operation_name = submit.json().get("name") or ""
@@ -145,7 +147,7 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
     if not first_frame_url:
         return request
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
+        with RetryingClient(timeout=30, follow_redirects=True) as client:
             response = client.get(str(first_frame_url), headers={"x-goog-api-key": api_key})
             response.raise_for_status()
             mime_type = response.headers.get("content-type", "").split(";")[0]

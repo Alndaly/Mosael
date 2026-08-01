@@ -14,7 +14,7 @@ import json
 import httpx
 import pytest
 
-from app.ai.providers import get_provider
+from app.ai.providers import comfyui, comfyui_client, get_provider
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
 from app.ai.providers.comfyui import (
     DEFAULT_TEMPLATE,
@@ -84,14 +84,22 @@ def test_collect_output_files_skips_temp_previews() -> None:
 
 
 def _mock_comfy(monkeypatch, handler) -> None:
+    """把传输换成 MockTransport。
+
+    打桩点是模块里的 RetryingClient 而不是 httpx.Client:重试统一在 RetryingClient 里做,
+    替换 httpx.Client 既拦不住它(子类在导入期就绑定了真类),也等于把被测的重试逻辑绕过去。
+    """
+    from app.domain import ai_retry
+
     transport = httpx.MockTransport(handler)
-    real = httpx.Client
+    real = ai_retry.RetryingClient
 
     def patched(*args, **kwargs):
         kwargs["transport"] = transport
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(httpx, "Client", patched)
+    for module in (comfyui, comfyui_client):
+        monkeypatch.setattr(module, "RetryingClient", patched, raising=False)
 
 
 def test_full_flow_discovers_checkpoint_submits_and_downloads(monkeypatch, tmp_path) -> None:

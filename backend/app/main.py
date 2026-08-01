@@ -140,6 +140,13 @@ def _prepare_network() -> None:
             row.no_proxy = ",".join(DEFAULT_BYPASS_HOSTS)
             db.commit()
         apply_from_db(db)
+        # 重试次数同理:进程级状态,启动时从库里装配一次。
+        from app.db.models import AiRuntimeConfig
+        from app.domain.ai_retry import set_max_retries
+
+        runtime = db.get(AiRuntimeConfig, "default")
+        if runtime is not None:
+            set_max_retries(runtime.max_retries)
 
 
 def create_app() -> FastAPI:

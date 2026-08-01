@@ -2,10 +2,30 @@ from __future__ import annotations
 
 import time
 
+import httpx
+
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, default_graph, interpolate, topo_order, validate_graph
 from tests.util import fresh_client
+
+
+def _install_llm_transport(monkeypatch, module, handler) -> None:
+    """LLM 节点的 HTTP 桩。打在 RetryingClient 的传输上 —— 重试统一在传输层做,
+    换掉 httpx.post 既拦不住它,也把重试逻辑一起绕过去了。"""
+    import httpx as _httpx
+
+    from app.domain import ai_retry
+
+    transport = _httpx.MockTransport(handler)
+    real = ai_retry.RetryingClient
+
+    def patched(*args, **kwargs):
+        kwargs["transport"] = transport
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "RetryingClient", patched)
+
 
 
 def linear_graph() -> dict:
@@ -435,18 +455,21 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     captured: dict = {}
 
-    class Response:
-        def raise_for_status(self) -> None:
-            return None
+    def handler(request):
+        import json as _json
 
-        def json(self) -> dict:
-            return {"choices": [{"message": {"content": '{"title":"海边"}'}}]}
+        captured.update(
+            {
+                "url": str(request.url),
+                "headers": request.headers,
+                "json": _json.loads(request.content),
+                # 超时现在设在 Client 上,httpx 把它作为 extension 挂到每个 request 上带下来。
+                "timeout": (request.extensions.get("timeout") or {}).get("read"),
+            }
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"title":"海边"}'}}]})
 
-    def fake_post(url: str, headers: dict, json: dict, timeout: int) -> Response:
-        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
-        return Response()
-
-    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+    _install_llm_transport(monkeypatch, ai_nodes, handler)
 
     with SessionLocal() as db:
         profile = ProviderProfile(
@@ -513,14 +536,11 @@ def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
-    class Response:
-        def raise_for_status(self) -> None:
-            return None
-
-        def json(self) -> dict:
-            return {"choices": [{"message": {"content": "not json"}}]}
-
-    monkeypatch.setattr(ai_nodes.httpx, "post", lambda *args, **kwargs: Response())
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(200, json={"choices": [{"message": {"content": "not json"}}]}),
+    )
 
     with SessionLocal() as db:
         profile = ProviderProfile(name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk")
@@ -543,14 +563,13 @@ def test_llm_node_surfaces_provider_error_body(monkeypatch) -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
-    def fake_post(url: str, headers: dict, json: dict, timeout: int):
-        return ai_nodes.httpx.Response(
-            400,
-            json={"error": {"message": "response_format.type must be one of text, json_object"}},
-            request=ai_nodes.httpx.Request("POST", url),
-        )
-
-    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(
+            400, json={"error": {"message": "response_format.type must be one of text, json_object"}}
+        ),
+    )
 
     with SessionLocal() as db:
         profile = ProviderProfile(
@@ -582,10 +601,10 @@ def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
-    def fake_post(*args, **kwargs):
+    def handler(request):
         raise AssertionError("空提示词不应发起网络请求")
 
-    monkeypatch.setattr(ai_nodes.httpx, "post", fake_post)
+    _install_llm_transport(monkeypatch, ai_nodes, handler)
 
     with SessionLocal() as db:
         profile = ProviderProfile(

@@ -167,7 +167,9 @@ def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, mon
             captured["url"] = url
             return FakeResponse()
 
-    monkeypatch.setattr("app.ai.providers.qwen_image.httpx.Client", FakeClient)
+    # 下载走的是带重试的传输层(RetryingClient),桩要打在它上面 —— 打 httpx.Client 拦不住,
+    # 因为子类在导入期就绑定了真类,结果会真的去连那个域名。
+    monkeypatch.setattr("app.ai.providers.qwen_image.RetryingClient", FakeClient)
     target = tmp_path / "generated.png"
     signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
 

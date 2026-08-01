@@ -18,6 +18,8 @@ import json
 from dataclasses import dataclass
 
 import httpx
+
+from app.domain import ai_retry
 from sqlalchemy.orm import Session
 
 from app.domain.provider_defaults import resolve_default
@@ -148,7 +150,7 @@ def _auth_headers(api_key: str) -> dict[str, str]:
 def _chat_json(profile, model: str, system: str, user: str) -> dict:
     """一次 chat/completions 调用,强制 JSON 输出,解析为 dict。"""
     try:
-        response = httpx.post(
+        response = ai_retry.post(
             f"{profile.base_url.rstrip('/')}/chat/completions",
             headers=_auth_headers(profile.api_key or ""),
             json={

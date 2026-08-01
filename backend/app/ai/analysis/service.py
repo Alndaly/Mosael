@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from app.domain import ai_retry
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -155,7 +157,7 @@ def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) 
     base_url = profile.base_url.rstrip("/")
     model = profile.default_model or "gpt-4o-mini"
     try:
-        response = httpx.post(
+        response = ai_retry.post(
             f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {profile.api_key}"},
             json={"model": model, "messages": messages, "temperature": 0.2},
@@ -203,7 +205,7 @@ def _call_gemini_video(profile: ProviderProfile, prompt: str, video: bytes, mime
         ]
     }
     try:
-        response = httpx.post(
+        response = ai_retry.post(
             f"{base_url}/models/{model}:generateContent",
             params={"key": profile.api_key},
             json=body,

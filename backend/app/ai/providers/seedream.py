@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -79,7 +81,7 @@ class SeedreamProvider(GenerationProvider):
         base_url = (context.base_url or ARK_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with httpx.Client(base_url=base_url, timeout=180, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=180, headers=headers) as client:
                 response = client.post(IMAGES_PATH, json=build_image_payload(request, context))
                 response.raise_for_status()
                 payload = response.json()
@@ -89,7 +91,7 @@ class SeedreamProvider(GenerationProvider):
                 target = output_dir / "generated.png"
                 # 结果是预签名的对象存储 URL:不能带着 ARK 的 Authorization 去下载,
                 # 多余的头会破坏签名校验(与 DashScope 同坑)。
-                with httpx.Client(timeout=120) as downloader:
+                with RetryingClient(timeout=120) as downloader:
                     download = downloader.get(url)
                     download.raise_for_status()
                     target.write_bytes(download.content)

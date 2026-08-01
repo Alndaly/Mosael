@@ -11,6 +11,8 @@ import json
 from typing import Any
 
 import httpx
+
+from app.domain import ai_retry
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -80,7 +82,7 @@ def _parse_json(raw: str) -> dict[str, Any]:
 
 def _chat(profile: ProviderProfile, system: str, user: str) -> str:
     base_url = profile.base_url.rstrip("/")
-    response = httpx.post(
+    response = ai_retry.post(
         f"{base_url}/chat/completions",
         headers={"Authorization": f"Bearer {profile.api_key}"},
         json={

@@ -5,6 +5,8 @@ import threading
 from typing import Any
 
 import httpx
+
+from app.domain import ai_retry
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -43,7 +45,7 @@ def embed_texts(db: Session, texts: list[str]) -> list[list[float]]:
         raise EmbeddingError("没有可用的嵌入供应商配置")
     base_url = profile.base_url.rstrip("/")
     try:
-        response = httpx.post(
+        response = ai_retry.post(
             f"{base_url}/embeddings",
             headers={"Authorization": f"Bearer {profile.api_key}"},
             json={"model": cfg.model, "input": texts},

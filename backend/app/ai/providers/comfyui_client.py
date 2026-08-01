@@ -5,6 +5,8 @@ from urllib.parse import quote
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 """
 ComfyUI 深度接入的隔离层:所有「ComfyUI 内部格式」知识只在这一个模块里。
 
@@ -273,7 +275,7 @@ class ComfyUIClient:
         self.timeout = timeout
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(base_url=self.base_url, timeout=self.timeout)
+        return RetryingClient(base_url=self.base_url, timeout=self.timeout)
 
     def list_workflows(self) -> list[dict[str, Any]]:
         """ComfyUI 里保存的工作流列表(名字 + 修改时间),供前端下拉。"""

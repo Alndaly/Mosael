@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -79,7 +81,7 @@ class OpenAIImageProvider(GenerationProvider):
         base_url = (context.base_url or OPENAI_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with httpx.Client(base_url=base_url, timeout=120, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=120, headers=headers) as client:
                 if request.source_files:
                     files = []
                     handles = []

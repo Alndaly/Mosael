@@ -55,6 +55,7 @@ from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
+from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.providers import (
@@ -776,7 +777,8 @@ def get_ai_runtime(db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
 
 @router.put("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
 def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
-    """供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。"""
+    """AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
+    对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。"""
     ensure_instance_admin(db, user, "credentials")
     row = db.get(AiRuntimeConfig, "default")
     if row is None:
@@ -784,4 +786,7 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser
         db.add(row)
     row.max_retries = body.max_retries
     db.commit()
+    # 推进进程内状态:调用点散在十几个适配器里,其中不少拿不到 db 会话。
+    # 与出站代理(domain/network.apply_to_process)同一套做法,改完即时生效、不必重启。
+    set_max_retries(row.max_retries)
     return AiRuntimeConfigOut(max_retries=row.max_retries)

@@ -167,7 +167,7 @@ def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
         captured["json"] = kwargs.get("json")
         return _FakeResp({"choices": [{"message": {"content": "海边散步的女孩"}}]})
 
-    monkeypatch.setattr(service.httpx, "post", fake_post)
+    monkeypatch.setattr(service.ai_retry, "post", fake_post)
     with SessionLocal() as db:
         _add_native_profile(db, "alibaba", base_url="https://dashscope/compatible-mode/v1", model="qwen-vl-max")
         asset = db.get(Asset, asset_json["id"])
@@ -191,7 +191,7 @@ def test_analyze_video_native_gemini_inline_data(monkeypatch) -> None:
         captured["params"] = kwargs.get("params")
         return _FakeResp({"candidates": [{"content": {"parts": [{"text": "Gemini 看到了海"}]}}]})
 
-    monkeypatch.setattr(service.httpx, "post", fake_post)
+    monkeypatch.setattr(service.ai_retry, "post", fake_post)
     with SessionLocal() as db:
         _add_native_profile(db, "google", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.0-flash")
         asset = db.get(Asset, asset_json["id"])

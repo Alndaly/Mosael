@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -119,7 +121,7 @@ class KlingProvider(GenerationProvider):
         endpoint = endpoint_for(request)
         headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
         try:
-            with httpx.Client(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
+            with RetryingClient(base_url=base_url, timeout=60, headers=headers, follow_redirects=True) as client:
                 submit = client.post(endpoint, json=build_submit_payload(request, context))
                 submit.raise_for_status()
                 data = submit.json().get("data") or {}

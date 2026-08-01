@@ -42,6 +42,7 @@ type SectionId =
   | "provider-embedding"
   | "provider-audio"
   | "provider-pricing"
+  | "ai-runtime"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -57,6 +58,7 @@ const SECTION_IDS: SectionId[] = [
   "provider-embedding",
   "provider-audio",
   "provider-pricing",
+  "ai-runtime",
   "transcribe",
   "voice",
   "feishu",
@@ -119,6 +121,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "provider-audio", label: t("providerAudioTitle"), icon: <AudioLines size={14} /> },
     { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
     { id: "provider-pricing", label: t("providerPricingTitle"), icon: <ReceiptText size={14} /> },
+    // 重试对**所有** AI 供应商调用生效(对话/生图/生视频/语音/向量化),所以自成一节。
+    // 原本挂在「AI 对话」下面,位置本身就在说"只管对话",而它从来不是。
+    { id: "ai-runtime", label: t("aiRuntimeTitle"), icon: <RefreshCw size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -163,9 +168,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                 title={t("providerChatTitle")}
                 description={t("providerChatDesc")}
               />
-              <AiRuntimeSection />
             </>
           )}
+          {section === "ai-runtime" && <AiRuntimeSection />}
           {section === "provider-image" && (
             <>
               <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability} />

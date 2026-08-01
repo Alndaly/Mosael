@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -107,7 +109,7 @@ class SeedanceProvider(GenerationProvider):
         base_url = resolve_seedance_base(model, context)
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=30, headers=headers) as client:
                 submit = client.post(TASKS_PATH, json=build_submit_payload(request, context))
                 submit.raise_for_status()
                 task_id = submit.json().get("id") or ""

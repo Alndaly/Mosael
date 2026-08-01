@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from app.domain.ai_retry import RetryingClient
+
 from app.ai.providers.base import (
     GenerationProvider,
     GenerationRequest,
@@ -125,7 +127,7 @@ def download_result_asset(url: str, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     # DashScope returns a pre-signed OSS URL. Do not reuse the DashScope client here:
     # carrying Authorization or DashScope headers into OSS changes signature validation.
-    with httpx.Client(timeout=120) as client:
+    with RetryingClient(timeout=120) as client:
         response = client.get(url)
         response.raise_for_status()
         target.write_bytes(response.content)
@@ -142,7 +144,7 @@ class QwenImageProvider(GenerationProvider):
         try:
             if request.source_files:
                 headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
-                with httpx.Client(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
+                with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
                     submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))
                     submit.raise_for_status()
                     url = extract_result_url(submit.json())
@@ -153,7 +155,7 @@ class QwenImageProvider(GenerationProvider):
                     return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=submit.json())
 
             headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
-            with httpx.Client(base_url=base_url, timeout=30, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=30, headers=headers) as client:
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
