@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from sqlalchemy import delete
-from sqlalchemy.orm import Session
+from typing import Any
 
-from app.db.models import GenerationModel
 
 
 OPENAI_IMAGE_CAPABILITIES = {
@@ -258,16 +256,85 @@ REMOVED_BUILTIN_MODEL_IDS = {
 }
 
 
-def ensure_builtin_generation_models(db: Session) -> None:
-    db.execute(delete(GenerationModel).where(GenerationModel.id.in_(REMOVED_BUILTIN_MODEL_IDS)))
+#: 某个 vendor 在某种生成能力下的**兜底**描述符。目录里没登记的模型(私有部署、别名、
+#: 用户手填的)照样要能出现在选择器里并给出一组可用参数 —— 缺描述符不该等于"不能用"。
+_FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
+    "image": {
+        "modes": ["text-to-image"],
+        "parameter_keys": ["size", "negative_prompt"],
+        "sizes": ["1024x1024"],
+        "default_size": "1024x1024",
+        "max_num_images": 1,
+    },
+    "video": {
+        "modes": ["text-to-video"],
+        "parameter_keys": ["duration_seconds"],
+        "duration_seconds": [5],
+        "default_duration_seconds": 5,
+        "max_duration_seconds": 10,
+    },
+}
+
+
+def capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]:
+    """某个模型在某种生成能力下的参数描述符(尺寸/时长/支持哪些参数)。
+
+    **这是关于供应商 API 的静态知识,不是用户配置** —— 所以它是一张查表,不再是数据库里的行。
+    以前每条描述符都在 `generation_models` 里占一行,于是"有哪些模型可选"这件事有了第二个
+    答案:设置页看 provider_models,生成页看 generation_models,两边永远对不齐(ComfyUI 的
+    工作流只在后者里,而且是个叫 `workflow` 的假模型 id)。
+
+    精确匹配 (provider, model, kind) 优先;同 vendor 同 kind 的第一条次之(同系模型参数通常
+    一致);都没有就用按 kind 的保守兜底。
+    """
     for item in BUILTIN_MODELS:
-        existing = db.get(GenerationModel, item["id"])
-        if existing is None:
-            db.add(GenerationModel(**item))
+        if item["provider"] == vendor and item["model"] == model and item["kind"] == kind:
+            return dict(item["capabilities"])
+    for item in BUILTIN_MODELS:
+        if item["provider"] == vendor and item["kind"] == kind:
+            return dict(item["capabilities"])
+    return dict(_FALLBACK_BY_KIND.get(kind, {}))
+
+
+def builtin_models_for(vendor: str, kind: str) -> list[str]:
+    """该 vendor 在该能力下的内置模型名 —— 用户没在设置里加过任何模型时的候选。"""
+    return [item["model"] for item in BUILTIN_MODELS if item["provider"] == vendor and item["kind"] == kind]
+
+
+def generation_options(db, kind: str) -> list[dict[str, Any]]:
+    """能用来生成的 (连接 × 模型) 列表 —— **唯一**的那份。
+
+    以前这份列表是前端现拼的:拿 generation_models 的目录、enabled 的档案、provider_defaults
+    三张表在浏览器里做交叉连接。三份数据任何一份的口径变一点,拼出来的东西就和设置页看到的
+    对不上 —— ComfyUI 的工作流只在目录里(还是个叫 `workflow` 的假模型 id)、设置页里加的
+    模型进不了生成页,都是这么来的。
+
+    现在只有一条线:**有哪些模型 = provider_models**(设置页管的就是它),参数描述符按
+    (vendor, model, kind) 查静态表,适配器可用性问 get_provider。
+    """
+    from app.ai.providers import get_provider
+    from app.domain import provider_models
+
+    options: list[dict[str, Any]] = []
+    for model in provider_models.models_for_capability(db, kind):
+        profile = model.profile
+        if profile is None:
             continue
-        existing.provider = item["provider"]
-        existing.kind = item["kind"]
-        existing.model = item["model"]
-        existing.capabilities = item["capabilities"]
-        existing.enabled = True
-    db.commit()
+        vendor = profile.vendor
+        options.append(
+            {
+                "id": f"{profile.id}:{kind}:{model.model_id}",
+                "provider_profile_id": profile.id,
+                "profile_name": profile.name,
+                "provider": vendor,
+                "kind": kind,
+                "model": model.model_id,
+                "label": f"{profile.name} · {model.display_name or model.model_id}",
+                "capabilities": capabilities_for(vendor, model.model_id, kind),
+                # 适配器不可用的照样列出来但标出来 —— 藏起来的话,用户配好了却找不到,
+                # 只会以为是自己配错了。
+                "adapter_available": get_provider(vendor, kind) is not None,
+            }
+        )
+    options.sort(key=lambda item: (item["profile_name"], item["model"]))
+    return options

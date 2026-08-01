@@ -986,6 +986,26 @@ class VendorPresetOut(BaseModel):
     auth: list[str] = Field(default_factory=lambda: ["api_key"])
 
 
+class GenerationOptionOut(BaseModel):
+    """一个「用哪条连接的哪个模型来生成」的选项。
+
+    **后端做联接**:以前这份列表由前端拿三张表(生成目录 / 启用的档案 / 能力默认)现拼,
+    任何一份口径变一点就和设置页对不上。现在只有一条线 —— 有哪些模型看 provider_models。
+    """
+
+    id: str
+    provider_profile_id: str
+    profile_name: str
+    provider: str
+    kind: str
+    model: str
+    label: str
+    capabilities: dict = Field(default_factory=dict)
+    #: 这个 vendor+kind 有没有接入的生成 Adapter。不可用的照样列出但标出来 ——
+    #: 藏起来的话用户配好了却找不到,只会以为是自己配错了。
+    adapter_available: bool = False
+
+
 class GenerationModelOut(OrmModel):
     id: str
     provider: str

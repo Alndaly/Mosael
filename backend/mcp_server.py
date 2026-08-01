@@ -411,15 +411,25 @@ def generate_image(
 def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     """List the AI generation engines available to generate_image / generate_video.
 
-    Read-only, no confirmation. Returns provider/model pairs (e.g. provider="comfyui",
-    model="workflow" is the local ComfyUI instance — free, no API key, works whenever
-    ComfyUI is running). Call this before generate_image/generate_video when the user
-    names a specific engine or asks what is available. kind filters to "image" or
-    "video"; empty returns both.
+    Read-only, no confirmation. Returns what the user has actually configured — each entry
+    is one connection plus one model on it (a ComfyUI entry's "model" is a saved workflow).
+    Call this before generate_image/generate_video when the user names a specific engine or
+    asks what is available. kind filters to "image" or "video"; empty returns both.
     """
-    params = {"kind": kind} if kind in ("image", "video") else None
-    models = _get("/api/generation/models", params)
-    return [{"provider": m["provider"], "model": m["model"], "kind": m["kind"]} for m in models]
+    kinds = [kind] if kind in ("image", "video") else ["image", "video"]
+    out: list[dict[str, Any]] = []
+    for one in kinds:
+        for item in _get("/api/generation/options", {"kind": one}):
+            out.append(
+                {
+                    "provider": item["provider"],
+                    "model": item["model"],
+                    "kind": item["kind"],
+                    "profile": item["profile_name"],
+                    "available": item["adapter_available"],
+                }
+            )
+    return out
 
 
 @mcp.tool()

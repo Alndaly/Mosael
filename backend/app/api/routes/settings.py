@@ -55,7 +55,7 @@ from app.db.models import (
     ProviderProfile,
     new_id,
 )
-from app.domain.provider_defaults import CAPABILITIES, set_default
+from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
@@ -654,7 +654,7 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
     """每种能力的默认供应商+模型;未配置的返回空默认。"""
     rows = {row.capability: row for row in db.scalars(select(ProviderDefault))}
     out: list[ProviderDefaultOut] = []
-    for capability in CAPABILITIES:
+    for capability in DEFAULTABLE_CAPABILITIES:
         row = rows.get(capability)
         out.append(
             ProviderDefaultOut(
@@ -674,7 +674,7 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
     """
     ensure_instance_admin(db, user, "credentials")
-    if capability not in CAPABILITIES:
+    if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     return [
         CapabilityModelOut(
@@ -692,7 +692,7 @@ def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderDefaultOut:
     ensure_instance_admin(db, user, "credentials")
-    if capability not in CAPABILITIES:
+    if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     model = None
     model_id = body.model.strip()

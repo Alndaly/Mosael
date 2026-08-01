@@ -820,17 +820,6 @@ class TtsConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
-class GenerationModel(Base):
-    __tablename__ = "generation_models"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    provider: Mapped[str] = mapped_column(String(80), nullable=False)
-    kind: Mapped[str] = mapped_column(String(24), nullable=False)
-    model: Mapped[str] = mapped_column(String(120), nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    capabilities: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-
-
 class GenerationSession(Base):
     __tablename__ = "generation_sessions"
     __table_args__ = (Index("idx_generation_sessions_ws_updated", "workspace_id", "updated_at"),)

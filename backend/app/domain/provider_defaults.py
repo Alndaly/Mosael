@@ -7,7 +7,10 @@ from app.db.models import ProviderDefault, ProviderModel, ProviderProfile
 """每种能力的默认供应商解析(统一到 ProviderProfile)。
 capability: chat / image / video / tts / podcast(embedding 走 KbEmbeddingConfig)。"""
 
-CAPABILITIES = ("chat", "image", "video", "tts", "podcast")
+#: **能设默认模型的**那几种能力 —— 不是"系统里有哪些能力"(那是 providers.ALL_CAPABILITY_IDS,
+#: 六项,多一个 embedding)。名字叫得像同一件事的三份拷贝,已经让人照着错的那份抄过一次:
+#: 模型设置弹窗按这份列了五个格子,而模型行认六个,embedding 于是在行上有标签、在弹窗里没格子。
+DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "tts", "podcast")
 
 
 def resolve_default(db: Session, capability: str) -> tuple[ProviderProfile | None, str]:

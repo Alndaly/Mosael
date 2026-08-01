@@ -277,12 +277,15 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
 
     monkeypatch.setattr(mcp_server, "_get", fake_get)
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    # 内建模型目录随 generation 首次使用落库;这里显式确保,贴近真实启动路径
-    from app.core.db import SessionLocal
-    from app.domain.generation import ensure_builtin_generation_models
-
-    with SessionLocal() as db:
-        ensure_builtin_generation_models(db)
+    # 生成选项现在直接来自用户配置的连接+模型(不再有内置目录表),所以先配一条。
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "本地 ComfyUI", "vendor": "comfyui", "config": {"base_url": "http://127.0.0.1:1"}},
+    ).json()
+    client.post(
+        f"/api/settings/providers/{profile['id']}/models",
+        json={"model_id": "my-workflow.json", "enabled": True, "capability_ids": ["image"]},
+    )
 
     manifest = {tool["name"]: tool for tool in _manifest(client)}
     assert manifest["list_generation_models"]["confirmation"] is False
@@ -292,7 +295,8 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
     )
     assert res.status_code == 200, res.text
     pairs = {(m["provider"], m["model"]) for m in res.json()["result"]}
-    assert ("comfyui", "workflow") in pairs
+    # 智能体看到的就是用户配的那份 —— 以前它看的是内置目录,里面有个叫 workflow 的假模型 id。
+    assert ("comfyui", "my-workflow.json") in pairs
     assert workspace_id  # workspace 仅为初始化,断言防未用警告
 
 

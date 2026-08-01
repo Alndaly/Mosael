@@ -320,11 +320,9 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         job = start_export(db, str(payload["sequence_id"]))
         return {"job_id": job.id}
     if confirmation.tool in ("generate_image", "generate_video"):
-        from app.domain.generation import create_generation_job, ensure_builtin_generation_models
+        from app.domain.generation import create_generation_job
         from app.domain.generation.runner import start_generation_thread
         from app.domain import provider_models
-
-        ensure_builtin_generation_models(db)
         kind = "image" if confirmation.tool == "generate_image" else "video"
         provider = str(payload.get("provider", "")).strip()
         model = str(payload.get("model", "")).strip()

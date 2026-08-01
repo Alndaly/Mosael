@@ -7036,27 +7036,22 @@
         }
       }
     },
-    "/api/generation/models": {
+    "/api/generation/options": {
       "get": {
         "tags": [
           "generation"
         ],
-        "summary": "List Generation Models",
-        "operationId": "list_generation_models_api_generation_models_get",
+        "summary": "List Generation Options",
+        "description": "能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。",
+        "operationId": "list_generation_options_api_generation_options_get",
         "parameters": [
           {
             "name": "kind",
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "default": "image",
               "title": "Kind"
             }
           }
@@ -7069,9 +7064,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/GenerationModelOut"
+                    "$ref": "#/components/schemas/GenerationOptionOut"
                   },
-                  "title": "Response List Generation Models Api Generation Models Get"
+                  "title": "Response List Generation Options Api Generation Options Get"
                 }
               }
             }
@@ -15109,11 +15104,19 @@
         ],
         "title": "GenerationJobOut"
       },
-      "GenerationModelOut": {
+      "GenerationOptionOut": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
           },
           "provider": {
             "type": "string",
@@ -15127,9 +15130,9 @@
             "type": "string",
             "title": "Model"
           },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
+          "label": {
+            "type": "string",
+            "title": "Label"
           },
           "capabilities": {
             "additionalProperties": true,
@@ -15138,20 +15141,22 @@
           },
           "adapter_available": {
             "type": "boolean",
-            "title": "Adapter Available"
+            "title": "Adapter Available",
+            "default": false
           }
         },
         "type": "object",
         "required": [
           "id",
+          "provider_profile_id",
+          "profile_name",
           "provider",
           "kind",
           "model",
-          "enabled",
-          "capabilities",
-          "adapter_available"
+          "label"
         ],
-        "title": "GenerationModelOut"
+        "title": "GenerationOptionOut",
+        "description": "一个「用哪条连接的哪个模型来生成」的选项。\n\n**后端做联接**:以前这份列表由前端拿三张表(生成目录 / 启用的档案 / 能力默认)现拼,\n任何一份口径变一点就和设置页对不上。现在只有一条线 —— 有哪些模型看 provider_models。"
       },
       "GenerationSessionCreate": {
         "properties": {

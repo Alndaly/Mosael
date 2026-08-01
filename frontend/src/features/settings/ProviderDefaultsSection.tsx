@@ -13,7 +13,10 @@ type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 const NONE = "__none__";
-const DEFAULT_CAPABILITIES = ["chat", "image", "video"] as const;
+/** 这一页**默认展示**哪几个能力分区 —— 不是"系统里有哪些能力"(那份由后端预设给),
+ *  也不是"哪些能力能设默认模型"(后端 DEFAULTABLE_CAPABILITIES)。三者名字曾经长得一模一样,
+ *  照着错的那份抄过一次(模型设置弹窗漏了 embedding)。 */
+const SECTIONS_SHOWN_BY_DEFAULT = ["chat", "image", "video"] as const;
 
 function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
@@ -135,7 +138,7 @@ export function ProviderDefaultsSection({
     { capability: "image", label: t("capImage")},
     { capability: "video", label: t("capVideo")},
   ];
-  const wanted = new Set(capabilities ?? DEFAULT_CAPABILITIES);
+  const wanted = new Set(capabilities ?? SECTIONS_SHOWN_BY_DEFAULT);
   const rows = allRows.filter((row) => wanted.has(row.capability));
 
   React.useEffect(() => {

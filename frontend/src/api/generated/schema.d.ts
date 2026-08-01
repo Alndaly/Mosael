@@ -2368,15 +2368,18 @@ export interface paths {
         patch: operations["update_generation_session_api_generation_sessions__session_id__patch"];
         trace?: never;
     };
-    "/api/generation/models": {
+    "/api/generation/options": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Generation Models */
-        get: operations["list_generation_models_api_generation_models_get"];
+        /**
+         * List Generation Options
+         * @description 能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。
+         */
+        get: operations["list_generation_options_api_generation_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5064,23 +5067,36 @@ export interface components {
             /** Cost Confidence */
             cost_confidence?: string | null;
         };
-        /** GenerationModelOut */
-        GenerationModelOut: {
+        /**
+         * GenerationOptionOut
+         * @description 一个「用哪条连接的哪个模型来生成」的选项。
+         *
+         *     **后端做联接**:以前这份列表由前端拿三张表(生成目录 / 启用的档案 / 能力默认)现拼,
+         *     任何一份口径变一点就和设置页对不上。现在只有一条线 —— 有哪些模型看 provider_models。
+         */
+        GenerationOptionOut: {
             /** Id */
             id: string;
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /** Profile Name */
+            profile_name: string;
             /** Provider */
             provider: string;
             /** Kind */
             kind: string;
             /** Model */
             model: string;
-            /** Enabled */
-            enabled: boolean;
+            /** Label */
+            label: string;
             /** Capabilities */
-            capabilities: {
+            capabilities?: {
                 [key: string]: unknown;
             };
-            /** Adapter Available */
+            /**
+             * Adapter Available
+             * @default false
+             */
             adapter_available: boolean;
         };
         /** GenerationSessionCreate */
@@ -12731,10 +12747,10 @@ export interface operations {
             };
         };
     };
-    list_generation_models_api_generation_models_get: {
+    list_generation_options_api_generation_options_get: {
         parameters: {
             query?: {
-                kind?: string | null;
+                kind?: string;
             };
             header?: never;
             path?: never;
@@ -12748,7 +12764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenerationModelOut"][];
+                    "application/json": components["schemas"]["GenerationOptionOut"][];
                 };
             };
             /** @description Validation Error */

@@ -245,6 +245,15 @@ def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> 
     monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    # 生成任务现在按"用户配了哪条连接"校验(内置目录表已退场),所以先配一条。
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "百炼", "vendor": "alibaba", "config": {"api_key": "k"}},
+    ).json()
+    client.post(
+        f"/api/settings/providers/{profile['id']}/models",
+        json={"model_id": "qwen-image", "enabled": True, "capability_ids": ["image"]},
+    )
     data = client.post(
         "/api/confirmations",
         json={

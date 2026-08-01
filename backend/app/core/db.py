@@ -118,6 +118,22 @@ def _migrate_agent_thinking_level() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
 
 
+def _drop_generation_models() -> None:
+    """删表:generation_models 退场。
+
+    它曾是"有哪些模型可以生成"的第二个答案 —— 设置页看 provider_models、生成页看这张表,
+    两边永远对不齐(ComfyUI 的工作流只在这张表里,而且是个叫 `workflow` 的假模型 id)。
+    表里的行全部由 BUILTIN_MODELS 播种、用户改不了,所以直接删,没有需要保留的用户数据;
+    那份"某模型支持哪些生成参数"的知识退化成 domain/generation/catalog.capabilities_for
+    的一张查表(它本来就是关于供应商 API 的静态知识,不是用户配置)。
+    """
+    inspector = inspect(engine)
+    if "generation_models" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE generation_models"))
+
+
 def _migrate_agent_session_plan() -> None:
     """加列迁移:agent_sessions 增加 plan(任务计划)。老会话留 NULL = 还没有计划。"""
     inspector = inspect(engine)
@@ -340,6 +356,7 @@ def init_db() -> None:
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
+    _drop_generation_models()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

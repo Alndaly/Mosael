@@ -38,7 +38,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Lut": ("app/domain/luts.py",),
     "Font": ("app/domain/fonts.py",),
     "GeneratedAsset": ("app/domain/generation/",),
-    "GenerationModel": ("app/domain/generation/",),
     "GenerationJob": ("app/domain/generation/",),
     "GenerationSession": ("app/domain/generation/", "app/api/routes/generation.py"),
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)

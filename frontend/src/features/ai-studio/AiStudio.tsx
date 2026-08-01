@@ -34,6 +34,7 @@ import {
   type GenerationModel,
   type Job,
   type Workspace,
+  type GenerationOption,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -88,11 +89,11 @@ type GenerationConfig = {
   workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
 
-type GenerationEngineOption = GenerationModel & {
-  value: string;
-  provider_profile_id: string;
-  label: string;
-};
+/** 选项**由后端联接好**(/generation/options),前端只补一个用于下拉的 value。
+ *  以前这里拿生成目录 / 启用档案 / 能力默认三张表在浏览器里做交叉连接,三份口径任何一份
+ *  变一点,拼出来的就和设置页对不上 —— ComfyUI 的工作流只在目录里、设置页加的模型进不来,
+ *  都是这么来的。 */
+type GenerationEngineOption = GenerationOption & { value: string };
 
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
   const sizes = imageSizeOptions(model);
@@ -138,58 +139,6 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
 
 function generationOptionValue(providerProfileId: string, kind: string, model: string) {
   return [providerProfileId, kind, model].join(ENGINE_SEP);
-}
-
-function buildGenerationEngineOptions(
-  catalog: GenerationModel[],
-  profiles: ProviderProfile[],
-  defaults: ProviderDefault[],
-): GenerationEngineOption[] {
-  const enabledProfiles = profiles.filter((profile) => profile.enabled);
-  const byProviderKind = new Map<string, GenerationModel[]>();
-  for (const model of catalog) {
-    const key = `${model.provider}:${model.kind}`;
-    byProviderKind.set(key, [...(byProviderKind.get(key) ?? []), model]);
-  }
-  const options = new Map<string, GenerationEngineOption>();
-  const add = (profile: ProviderProfile, kind: string, modelName: string, source?: GenerationModel) => {
-    if (!modelName) return;
-    const providerKind = byProviderKind.get(`${profile.vendor}:${kind}`) ?? [];
-    const model = source ?? providerKind.find((item) => item.model === modelName) ?? providerKind[0];
-    const value = generationOptionValue(profile.id, kind, modelName);
-    options.set(value, {
-      id: model?.id ?? value,
-      provider: profile.vendor,
-      kind,
-      model: modelName,
-      enabled: true,
-      capabilities: model?.capabilities ?? {},
-      adapter_available: model?.adapter_available ?? false,
-      provider_profile_id: profile.id,
-      value,
-      label: `${profile.name} · ${modelName}`,
-    });
-  };
-
-  for (const profile of enabledProfiles) {
-    // 只挂档案实际声明支持的能力(capability_ids,含用户按档案的覆盖)→ 避免只做对话的
-    // openai-compatible 档案(如 Ollama/DeepSeek)冒出 gpt-image-2 这类图像/视频错配。
-    const profileCaps = new Set(profile.capability_ids ?? []);
-    for (const model of catalog.filter((item) => item.provider === profile.vendor)) {
-      if (!profileCaps.has(model.kind)) continue;
-      add(profile, model.kind, model.model, model);
-    }
-    for (const row of defaults) {
-      if (
-        (row.capability === "image" || row.capability === "video") &&
-        row.provider_profile_id === profile.id &&
-        profileCaps.has(row.capability)
-      ) {
-        add(profile, row.capability, row.model);
-      }
-    }
-  }
-  return [...options.values()];
 }
 
 function findGenerationOption(
@@ -273,9 +222,13 @@ function GenerateWorkspace({
     queryKey: ["generation-sessions", workspace.id],
     queryFn: () => api<GenerationSession[]>(`/api/generation/sessions?workspace_id=${workspace.id}`),
   });
-  const models = useQuery({
-    queryKey: ["generation-models"],
-    queryFn: () => api<GenerationModel[]>("/api/generation/models"),
+  const imageOptions = useQuery({
+    queryKey: ["generation-options", "image"],
+    queryFn: () => api<GenerationOption[]>("/api/generation/options?kind=image"),
+  });
+  const videoOptions = useQuery({
+    queryKey: ["generation-options", "video"],
+    queryFn: () => api<GenerationOption[]>("/api/generation/options?kind=video"),
   });
   const providers = useQuery({
     queryKey: ["provider-profiles"],
@@ -312,9 +265,13 @@ function GenerateWorkspace({
     () => new Map((providers.data ?? []).filter((profile) => profile.enabled).map((profile) => [profile.id, profile])),
     [providers.data],
   );
-  const modelOptions = React.useMemo(
-    () => buildGenerationEngineOptions(models.data ?? [], providers.data ?? [], defaults.data ?? []),
-    [models.data, providers.data, defaults.data],
+  const modelOptions = React.useMemo<GenerationEngineOption[]>(
+    () =>
+      [...(imageOptions.data ?? []), ...(videoOptions.data ?? [])].map((option) => ({
+        ...option,
+        value: generationOptionValue(option.provider_profile_id, option.kind, option.model),
+      })),
+    [imageOptions.data, videoOptions.data],
   );
   const optionByValue = React.useMemo(
     () => new Map(modelOptions.map((option) => [option.value, option])),

@@ -229,13 +229,22 @@ class TestDispatchWiring:
             assert claim_next_job(db, kinds=["tts"]).id == job.id
 
     def test_generation_respects_external_mode(self, monkeypatch) -> None:
-        from app.domain.generation import create_generation_job, ensure_builtin_generation_models
+        from app.domain.generation import create_generation_job
         from app.domain.generation.runner import start_generation_thread
 
         self._external(monkeypatch, "ai_generation")
         workspace_id = _workspace()
+        # 生成任务现在按"用户配了哪条连接"校验(不再查内置目录表),所以先配一条阿里云的。
         with SessionLocal() as db:
-            ensure_builtin_generation_models(db)  # fresh_client 重建库,内置模型目录需补种
+            from app.db.models import ProviderProfile
+            from app.domain import provider_models
+
+            profile = ProviderProfile(name="百炼", vendor="alibaba", base_url="", api_key="k")
+            db.add(profile)
+            db.flush()
+            provider_models.upsert(db, profile, "qwen-image", capability_ids=["image"])
+            db.commit()
+        with SessionLocal() as db:
             generation, job = create_generation_job(
                 db,
                 workspace_id=workspace_id,

@@ -13,18 +13,39 @@ from app.main import app
 from tests.util import fresh_client
 
 
+def _configure(client, vendor: str, name: str, models: list[tuple[str, list[str]]], **config: str) -> str:
+    """配一条连接 + 若干模型。生成选项现在完全来自用户配置(不再有内置目录表),
+    所以每个用到生成的用例都得先配 —— 这本身就是新语义的一部分:没配过就没得选。"""
+    response = client.post(
+        "/api/settings/providers", json={"name": name, "vendor": vendor, "config": config}
+    )
+    assert response.status_code < 300, response.text
+    profile = response.json()
+    for model_id, caps in models:
+        added = client.post(
+            f"/api/settings/providers/{profile['id']}/models",
+            json={"model_id": model_id, "enabled": True, "capability_ids": caps},
+        )
+        assert added.status_code < 300, added.text
+    return profile["id"]
+
+
 def reset_db(tmp_path: Path) -> None:
     Base.metadata.drop_all(bind=engine)
     init_db()
 
 
-def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> None:
+def test_generation_job_creates_job_and_generation_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 不真起生成线程:这条用例断言的是"任务建出来了",而真跑会拿假 key 去打网络,
+    # 线程里的异常还会飘到后面的用例里(实测污染了同文件的下一条)。
+    monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
-    models = client.get("/api/generation/models?kind=image").json()
+    _configure(client, "alibaba", "百炼", [("qwen-image", ["image"])], api_key="k")
+    models = client.get("/api/generation/options?kind=image").json()
     assert any(model["model"] == "qwen-image" for model in models)
-    assert any(model["provider"] == "openai-compatible" and model["adapter_available"] for model in models)
+    assert all(model["adapter_available"] for model in models)
 
     res = client.post(
         "/api/generation/jobs",
@@ -52,17 +73,28 @@ def test_generation_job_creates_job_and_generation_record(tmp_path: Path) -> Non
 
 
 def test_generation_models_expose_provider_specific_parameters() -> None:
+    """参数描述符按 (vendor, model, kind) 查静态表 —— 它是关于供应商 API 的知识,
+    不是用户配置,所以不该在库里占一行。"""
     client = fresh_client()
-    models = client.get("/api/generation/models?kind=image").json()
-    by_id = {model["id"]: model for model in models}
+    client.post("/api/workspaces", json={"name": "W"})  # 首个账号即实例管理员,配供应商要它
+    _configure(client, "openai-compatible", "兼容端点", [("gpt-image-2", ["image"])], base_url="http://x/v1", api_key="k", default_model="gpt-image-2")
+    _configure(client, "alibaba", "百炼", [("qwen-image-edit", ["image"])], api_key="k")
+    by_model = {m["model"]: m for m in client.get("/api/generation/options?kind=image").json()}
 
-    openai_sizes = by_id["openai-compatible:gpt-image-2:image"]["capabilities"]["sizes"]
+    openai_sizes = by_model["gpt-image-2"]["capabilities"]["sizes"]
     assert "1024x1024" in openai_sizes
     assert "1024x576" not in openai_sizes
 
-    qwen_edit_caps = by_id["alibaba:qwen-image-edit:image"]["capabilities"]
+    qwen_edit_caps = by_model["qwen-image-edit"]["capabilities"]
     assert qwen_edit_caps["parameter_keys"] == ["reference_image"]
     assert qwen_edit_caps["max_num_images"] == 1
+
+
+def test_没配过就没得选() -> None:
+    """新语义:生成选项 = 用户配了什么。以前不管配没配,内置目录都会铺一堆出来,
+    点下去才发现没有对应的供应商档案。"""
+    client = fresh_client()
+    assert client.get("/api/generation/options?kind=image").json() == []
 
 
 def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,6 +102,7 @@ def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monke
     client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
+    _configure(client, "alibaba", "百炼", [("qwen-image", ["image"])], api_key="k")
     session = client.post("/api/generation/sessions", json={"workspace_id": ws["id"], "title": "海边女孩"}).json()
     res = client.post(
         "/api/generation/jobs",
@@ -254,3 +287,39 @@ def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
     assert jobs[ids[2]]["cost_micros"] is None and jobs[ids[2]]["cost_confidence"] is None
 
 
+
+
+def test_设置页加了什么_生成页就有什么() -> None:
+    """这条钉住这次重构的目的:两个页面同一个来源。
+
+    以前生成页看 generation_models(内置目录)、设置页看 provider_models,于是 ComfyUI 的
+    工作流只在生成页出现(还是个叫 `workflow` 的假模型 id),而设置页里新加的模型进不了生成页。
+    """
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    profile_id = _configure(
+        client, "comfyui", "本地 ComfyUI", [("my-flow.json", ["image", "video"])], base_url="http://127.0.0.1:1"
+    )
+
+    for kind in ("image", "video"):
+        options = client.get(f"/api/generation/options?kind={kind}").json()
+        assert [(o["provider_profile_id"], o["model"]) for o in options] == [(profile_id, "my-flow.json")]
+
+    # 在设置里停用 → 生成页立刻没有了(同一个来源的直接后果)
+    client.patch(
+        f"/api/settings/providers/{profile_id}/models/my-flow.json", json={"enabled": False}
+    )
+    assert client.get("/api/generation/options?kind=image").json() == []
+
+
+def test_描述符按模型查_查不到给保守兜底() -> None:
+    """参数描述符是关于供应商 API 的静态知识。目录里没登记的模型(私有部署、别名、
+    ComfyUI 的任意工作流名)照样要能给出一组可用参数 —— 缺描述符不等于不能用。"""
+    from app.domain.generation import capabilities_for
+
+    assert capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video")["resolutions"]
+    # 同 vendor 同 kind 的兜底
+    assert capabilities_for("comfyui", "随便什么名字.json", "image")["sizes"]
+    # 完全不认识的 vendor
+    assert capabilities_for("nobody", "x", "image")["default_size"] == "1024x1024"
+    assert capabilities_for("nobody", "x", "video")["max_duration_seconds"] == 10

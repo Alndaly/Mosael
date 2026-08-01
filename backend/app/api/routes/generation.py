@@ -8,7 +8,7 @@ from app.api.schemas import (
     GenerationCreate,
     GenerationCreateResponse,
     GenerationJobOut,
-    GenerationModelOut,
+    GenerationOptionOut,
     GenerationSessionCreate,
     GenerationSessionOut,
     GenerationSessionUpdate,
@@ -17,8 +17,8 @@ from app.api.schemas import (
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.ai.providers import get_provider
-from app.db.models import GenerationJob, GenerationModel, GenerationSession, Job, ProviderUsageEvent
-from app.domain.generation import create_generation_job, ensure_builtin_generation_models
+from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
+from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
 from app.domain.generation.runner import start_generation_thread
@@ -89,14 +89,10 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
     return Response(status_code=204)
 
 
-@router.get("/generation/models", response_model=list[GenerationModelOut])
-def list_generation_models(db: DbSession, kind: str | None = None) -> list[GenerationModelOut]:
-    ensure_builtin_generation_models(db)
-    stmt = select(GenerationModel).where(GenerationModel.enabled.is_(True))
-    if kind:
-        stmt = stmt.where(GenerationModel.kind == kind)
-    stmt = stmt.order_by(GenerationModel.provider, GenerationModel.model)
-    return [_generation_model_out(model) for model in db.scalars(stmt)]
+@router.get("/generation/options", response_model=list[GenerationOptionOut])
+def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image") -> list[GenerationOptionOut]:
+    """能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。"""
+    return [GenerationOptionOut(**option) for option in generation_options(db, kind)]
 
 
 @router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
@@ -165,7 +161,6 @@ def get_comfyui_workflow_params(
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    ensure_builtin_generation_models(db)
     try:
         generation, job = create_generation_job(db, **body.model_dump())
     except GenerationDomainError as exc:
@@ -227,18 +222,6 @@ def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) ->
             gen.cost_micros = None  # type: ignore[attr-defined]
             gen.currency = evs[0].currency  # type: ignore[attr-defined]
             gen.cost_confidence = "unknown"  # type: ignore[attr-defined]
-
-
-def _generation_model_out(model: GenerationModel) -> GenerationModelOut:
-    return GenerationModelOut(
-        id=model.id,
-        provider=model.provider,
-        kind=model.kind,
-        model=model.model,
-        enabled=model.enabled,
-        capabilities=model.capabilities,
-        adapter_available=get_provider(model.provider, model.kind) is not None,
-    )
 
 
 def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str) -> GenerationSession:

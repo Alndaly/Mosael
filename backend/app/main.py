@@ -51,7 +51,6 @@ from app.core.db import SessionLocal, init_db
 logger = logging.getLogger(__name__)
 from app.core.permissions import get_current_user
 from app.domain.assets import reconcile_broken_media_info
-from app.domain.generation import ensure_builtin_generation_models
 from app.ai.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
@@ -76,7 +75,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if external:
         logger.info("external job kinds (driven by outside worker): %s", ", ".join(external))
     with SessionLocal() as db:
-        ensure_builtin_generation_models(db)
         # A restart kills every in-process worker thread — fail the jobs they
         # were running so they don't linger frozen in the task center.
         failed = reconcile_orphaned_jobs(db)

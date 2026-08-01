@@ -2412,10 +2412,17 @@ function NodeInspector({
     staleTime: 60_000,
   });
   const generationModels = useQuery({
-    queryKey: ["generation-models"],
+    queryKey: ["generation-options", "all"],
     // 要完整类型:参数区靠 capabilities 决定渲染什么。以前这里只取了四个字段,
     // 于是「模型支持哪些参数」这份信息在工作流侧根本拿不到。
-    queryFn: () => api<GenerationModel[]>("/api/generation/models"),
+    // 现在两种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
+    queryFn: async () => {
+      const [image, video] = await Promise.all([
+        api<GenerationModel[]>("/api/generation/options?kind=image"),
+        api<GenerationModel[]>("/api/generation/options?kind=video"),
+      ]);
+      return [...image, ...video];
+    },
     enabled: node.type === "ai_generate",
   });
   const providerDefaults = useQuery({
