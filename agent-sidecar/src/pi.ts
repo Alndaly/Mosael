@@ -131,7 +131,7 @@ const FALLBACK_CONTEXT_WINDOW = 32000;
 const FALLBACK_MAX_TOKENS = 4096;
 
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
-function buildModels(
+export function buildModels(
   baseUrl: string,
   apiKey: string,
   modelId: string,
@@ -150,10 +150,21 @@ function buildModels(
     api: "openai-completions",
     provider: PROVIDER_ID,
     baseUrl,
-    // 以下四项默认取**最保守**的那一侧,由用户在设置里按模型放开。
-    // 默认放开的代价不对称:多发一个 reasoning_effort 或 developer 角色,不认的端点会直接
-    // 400,整轮对话失败;而少发只是不用上某个增强。
-    reasoning: limits.reasoning ?? false,
+    // vision / developerRole / reasoningEffort 三项默认取**最保守**的那一侧,由用户在设置里
+    // 按模型放开:多发一个 reasoning_effort 或 developer 角色,不认的端点会直接 400,整轮
+    // 对话失败;而少发只是不用上某个增强。
+    //
+    // **reasoning 例外,默认开**。它在 pi 里不是"能不能发某个参数",而是这个模型的思考
+    // **开关总闸**:pi 里每一条"把思考关掉"的分支(deepseek 的 thinking:{type:"disabled"}、
+    // qwen 的 enable_thinking:false、openrouter 的 reasoning:{effort:"none"}…)都写着
+    // `&& model.reasoning`。关着的话,会话里的思考档位两个方向都发不出去 —— 请求里既没有
+    // "要思考"也没有"别思考",供应商按它自己的默认来,于是 DeepSeek 这类混合模型无论开关
+    // 都在思考,用户看到的就是那个开关根本没接线。
+    //
+    // 默认开**不会**把参数发给不认识它的端点:那些分支是按 baseUrl 匹配到具体供应商的
+    // (deepseek.com / z.ai / openrouter.ai…),通用 OpenAI 兼容端点走的是最后两条
+    // reasoning_effort 分支,而它们额外要求 supportsReasoningEffort —— 那一项仍然默认关。
+    reasoning: limits.reasoning ?? true,
     input: limits.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: limits.contextWindow ?? FALLBACK_CONTEXT_WINDOW,

@@ -227,7 +227,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
   if (!tools || tools.length === 0) return null;
   return (
-    <div className="mb-2 flex w-full flex-col gap-1 self-stretch">
+    <div className="flex w-full flex-col gap-1 self-stretch">
       {tools.map((tool) => (
         <ToolCallCard key={tool.id} tool={tool} />
       ))}
@@ -273,7 +273,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
   }, [done]);
 
   return (
-    <div className="mb-2.5 grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
+    <div className="grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
       <button
         type="button"
         className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] text-muted-foreground hover:text-foreground"
@@ -297,7 +297,10 @@ export function AgentTurnContent({
   timeline?: AgentTimelineItem[];
 }) {
   return (
-    <>
+    // **间距由容器统一给**。此前每种块自带下外边距(思考 10px、工具卡 8px),而正文的
+    // 末段被 `last-child:mb-0` 清零 —— 于是三种块之间的缝隙各不相同,正文后面紧跟一张卡时
+    // 干脆贴在一起。grid + gap 一处说了算,也符合仓库里"纵向堆叠一律 grid/flex + gap"的约定。
+    <div className="grid w-full gap-2.5">
       {agentTurnParts(timeline).map((item, index) =>
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
@@ -313,7 +316,7 @@ export function AgentTurnContent({
           </Streamdown>
         ) : null,
       )}
-    </>
+    </div>
   );
 }
 
