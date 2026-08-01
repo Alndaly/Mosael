@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, listProviderModels } from "@/api/client";
+import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
-type GenerationModel = components["schemas"]["GenerationModelOut"];
 
 const NONE = "__none__";
 const DEFAULT_CAPABILITIES = ["chat", "image", "video"] as const;
@@ -28,58 +27,50 @@ function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
   return out;
 }
 
-export function generationModelSuggestions(
-  profile: ProviderProfile | null,
-  genModels: GenerationModel[] | null,
-  currentModel: string,
-): string[] {
-  const catalogModels = (genModels ?? [])
-    .filter((item) => !profile || item.provider === profile.vendor)
-    .map((item) => item.model);
-  return uniqueNonEmpty([currentModel, profile?.default_model, ...catalogModels]);
-}
+type CapabilityModel = components["schemas"]["CapabilityModelOut"];
 
-/** 一行:某能力的默认供应商 + 模型。chat 的模型取自供应商 /models;image/video 允许自定义端点手填模型名。 */
+/**
+ * 一行:某能力的默认模型。
+ *
+ * **一个下拉,不是两个**。此前是"先选供应商再选模型" —— 那是模型还不是实体时的形状,逼着
+ * 用户先知道"这个模型在哪条连接下",而那恰恰是他不关心的。现在模型自带能力与连接,直接列
+ * 跨连接的候选即可,选项文本里带上连接名用来消歧(同名模型可能出现在两条连接下)。
+ *
+ * 想用列表里没有的模型,去那条连接的模型列表里加一行 —— 加进去的模型才有启用状态、上下文
+ * 长度、推理/视觉这些设置。在这里直接手打一个名字会绕过全部这些,等于又造一个没有实体的模型。
+ */
 function DefaultRow({
   capability,
   label,
-  providers,
   current,
-  genModels,
   highlighted,
 }: {
   capability: string;
   label: string;
-  providers: ProviderProfile[];
   current: ProviderDefault | undefined;
-  genModels: GenerationModel[] | null;
   highlighted?: boolean;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
   const providerId = current?.provider_profile_id ?? "";
   const model = current?.model ?? "";
-  const capabilityProviders = providers.filter((profile) => (profile.capability_ids ?? []).includes(capability));
-  const selectedProfile = capabilityProviders.find((p) => p.id === providerId) ?? null;
-  const isGenerationCapability = capability === "image" || capability === "video";
 
-  // chat:该供应商的 LLM 列表
-  const chatModels = useQuery({
-    queryKey: ["provider-models", providerId],
-    queryFn: () => listProviderModels(providerId),
-    enabled: capability === "chat" && Boolean(providerId),
-    staleTime: 60_000,
+  const candidates = useQuery({
+    queryKey: ["capability-models", capability],
+    queryFn: () => api<CapabilityModel[]>(`/api/settings/capability-models/${capability}`),
+    staleTime: 30_000,
   });
-  const modelOptions =
-    capability === "chat"
-      ? (chatModels.data ?? []).map((m) => m.id)
-      : generationModelSuggestions(selectedProfile, genModels, model);
+  const options = candidates.data ?? [];
+  // 值必须同时含连接与模型:同一个模型 id 可能出现在两条连接下(同一端点配了两把 key)。
+  const valueOf = (item: CapabilityModel) => `${item.provider_profile_id}::${item.model}`;
+  const currentValue = providerId && model ? `${providerId}::${model}` : NONE;
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
       api(`/api/settings/provider-defaults/${capability}`, { method: "PUT", body: JSON.stringify(patch) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
   });
+
   return (
     <SettingsRow
       id={`provider-default-${capability}`}
@@ -90,76 +81,32 @@ function DefaultRow({
       controlClassName="w-full min-w-0 shrink"
       label={label}
     >
-      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-        <Select
-          key={`p-${providerId || "none"}`}
-          value={providerId || NONE}
-          onValueChange={(value) => {
-            const nextProviderId = value === NONE ? "" : value;
-            const nextProfile = capabilityProviders.find((profile) => profile.id === nextProviderId) ?? null;
-            const nextModel = isGenerationCapability
-              ? generationModelSuggestions(nextProfile, genModels, "")[0] ?? ""
-              : "";
-            save.mutate({ provider_profile_id: nextProviderId || null, model: nextModel });
-          }}
-        >
-          <SelectTrigger className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45">
-            <SelectValue placeholder={t("kbEmbedPickProvider")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>—</SelectItem>
-            {capabilityProviders.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {isGenerationCapability ? (
-          <Combobox
-            value={model}
-            options={modelOptions.map((name) => ({ value: name }))}
-            placeholder={!providerId ? t("providerDefaultsPickFirst") : t("providerDefaultsModelInputPlaceholder")}
-            searchPlaceholder={t("providerDefaultsModelInputPlaceholder")}
-            emptyText={t("providerDefaultsNoModels")}
-            allowCustomValue
-            disabled={!providerId}
-            className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45"
-            onValueChange={(nextModel) =>
-              save.mutate({ provider_profile_id: providerId || null, model: nextModel.trim() })
-            }
-            customValueLabel={(query) => t("providerDefaultsUseCustomModel").replace("{model}", query)}
+      <Select
+        key={currentValue}
+        value={currentValue}
+        onValueChange={(value) => {
+          if (value === NONE) {
+            save.mutate({ provider_profile_id: null, model: "" });
+            return;
+          }
+          const [nextProvider, ...rest] = value.split("::");
+          save.mutate({ provider_profile_id: nextProvider, model: rest.join("::") });
+        }}
+      >
+        <SelectTrigger className="h-8 w-full min-w-0">
+          <SelectValue
+            placeholder={options.length === 0 ? t("providerDefaultsNoModels") : t("agentModelPlaceholder")}
           />
-        ) : (
-          <Select
-            key={`m-${model || "none"}`}
-            value={model || NONE}
-            onValueChange={(value) =>
-              save.mutate({ provider_profile_id: providerId || null, model: value === NONE ? "" : value })
-            }
-            disabled={!providerId || modelOptions.length === 0}
-          >
-            <SelectTrigger className="h-8 w-full min-w-0 disabled:cursor-not-allowed disabled:opacity-45 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45">
-              <SelectValue
-                placeholder={
-                  !providerId
-                    ? t("providerDefaultsPickFirst")
-                    : modelOptions.length === 0
-                      ? t("providerDefaultsNoModels")
-                      : t("agentModelPlaceholder")
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {modelOptions.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>—</SelectItem>
+          {options.map((item) => (
+            <SelectItem key={valueOf(item)} value={valueOf(item)}>
+              {item.provider_name} · {item.display_name || item.model}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </SettingsRow>
   );
 }
@@ -180,21 +127,13 @@ export function ProviderDefaultsSection({
     queryKey: ["provider-defaults"],
     queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
   });
-  const genImage = useQuery({
-    queryKey: ["generation-models", "image"],
-    queryFn: () => api<GenerationModel[]>("/api/generation/models?kind=image"),
-  });
-  const genVideo = useQuery({
-    queryKey: ["generation-models", "video"],
-    queryFn: () => api<GenerationModel[]>("/api/generation/models?kind=video"),
-  });
 
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const byCapability = new Map((defaults.data ?? []).map((row) => [row.capability, row]));
-  const allRows: Array<{ capability: string; label: string; genModels: GenerationModel[] | null }> = [
-    { capability: "chat", label: t("capChat"), genModels: null },
-    { capability: "image", label: t("capImage"), genModels: genImage.data ?? null },
-    { capability: "video", label: t("capVideo"), genModels: genVideo.data ?? null },
+  const allRows: Array<{ capability: string; label: string }> = [
+    { capability: "chat", label: t("capChat")},
+    { capability: "image", label: t("capImage")},
+    { capability: "video", label: t("capVideo")},
   ];
   const wanted = new Set(capabilities ?? DEFAULT_CAPABILITIES);
   const rows = allRows.filter((row) => wanted.has(row.capability));
@@ -222,9 +161,7 @@ export function ProviderDefaultsSection({
               key={row.capability}
               capability={row.capability}
               label={row.label}
-              providers={enabled}
               current={byCapability.get(row.capability)}
-              genModels={row.genModels}
               highlighted={focusCapability === row.capability}
             />
           ))}

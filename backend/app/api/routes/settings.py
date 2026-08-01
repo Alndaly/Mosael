@@ -28,6 +28,7 @@ from app.api.schemas import (
     NetworkConfigUpdate,
     KbEmbeddingConfigOut,
     KbEmbeddingConfigUpdate,
+    CapabilityModelOut,
     ProviderDefaultOut,
     ProviderDefaultUpdate,
     ProviderPricingRuleCreate,
@@ -52,7 +53,7 @@ from app.db.models import (
     ProviderProfile,
     new_id,
 )
-from app.domain.provider_defaults import CAPABILITIES
+from app.domain.provider_defaults import CAPABILITIES, set_default
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
@@ -579,6 +580,27 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
     return out
 
 
+@router.get("/settings/capability-models/{capability}", response_model=list[CapabilityModelOut])
+def list_capability_models(capability: str, db: DbSession, user: CurrentUser) -> list[CapabilityModelOut]:
+    """某能力下所有可用模型,跨连接。
+
+    界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
+    先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
+    """
+    ensure_instance_admin(db, user, "credentials")
+    if capability not in CAPABILITIES:
+        raise HTTPException(status_code=404, detail="未知能力")
+    return [
+        CapabilityModelOut(
+            provider_profile_id=model.provider_profile_id,
+            provider_name=model.profile.name if model.profile is not None else "",
+            model=model.model_id,
+            display_name=model.display_name or "",
+        )
+        for model in provider_models.models_for_capability(db, capability)
+    ]
+
+
 @router.put("/settings/provider-defaults/{capability}", response_model=ProviderDefaultOut)
 def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
@@ -586,21 +608,35 @@ def set_provider_default(
     ensure_instance_admin(db, user, "credentials")
     if capability not in CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
-    if body.provider_profile_id:
+    model = None
+    model_id = body.model.strip()
+    if body.provider_profile_id and model_id:
         profile = db.get(ProviderProfile, body.provider_profile_id)
         if profile is None:
             raise HTTPException(status_code=404, detail="供应商不存在")
-        if not supports_capability(profile.vendor, capability):
-            raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
-    row = db.get(ProviderDefault, capability)
-    if row is None:
-        row = ProviderDefault(capability=capability)
-        db.add(row)
-    row.provider_profile_id = body.provider_profile_id or None
-    row.model = body.model.strip()
+        model = provider_models.get_model(db, body.provider_profile_id, model_id)
+        # 能力校验放在建行之前:先建再拒会在库里留下一行没人要的模型。
+        # 已有行按它自己的能力判,没有行按 vendor 预设判(新行正是这么回落的)。
+        capabilities = (
+            provider_models.effective_capabilities(model)
+            if model is not None
+            else capability_ids_for_vendor(profile.vendor)
+        )
+        if capability not in capabilities:
+            raise HTTPException(status_code=422, detail=f"该模型不提供 {capability} 能力")
+        if model is None:
+            # 设默认时顺手把这一行加上 —— 用户知道模型名但还没加过它是个正常流程,
+            # 逼他先去列表里加一遍纯属多一步。
+            model = provider_models.upsert(db, profile, model_id, source="manual")
+    # 指向模型行(旧的两列由 set_default 同步写,生成侧还在读)。
+    set_default(db, capability, model)
     db.commit()
-    db.refresh(row)
-    return ProviderDefaultOut(capability=row.capability, provider_profile_id=row.provider_profile_id, model=row.model)
+    row = db.get(ProviderDefault, capability)
+    return ProviderDefaultOut(
+        capability=capability,
+        provider_profile_id=row.provider_profile_id if row else None,
+        model=row.model if row else "",
+    )
 
 
 def _pricing_payload_with_profile_defaults(

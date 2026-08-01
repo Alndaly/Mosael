@@ -714,6 +714,19 @@ class ProviderDefaultOut(BaseModel):
     model: str = ""
 
 
+class CapabilityModelOut(BaseModel):
+    """某能力下的一个候选模型(跨连接)。
+
+    界面直接列它 —— 一个模型现在自带能力与连接,"先选供应商再选模型"那两级下拉是模型还不是
+    实体时的形状:它逼着用户先知道"这个模型在哪条连接下",而那恰恰是他不关心的。
+    """
+
+    provider_profile_id: str
+    provider_name: str
+    model: str
+    display_name: str = ""
+
+
 class ProviderDefaultUpdate(BaseModel):
     provider_profile_id: str | None = None
     model: str = Field(default="", max_length=120)

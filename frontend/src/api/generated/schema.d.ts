@@ -3047,6 +3047,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/capability-models/{capability}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Capability Models
+         * @description 某能力下所有可用模型,跨连接。
+         *
+         *     界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
+         *     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
+         */
+        get: operations["list_capability_models_api_settings_capability_models__capability__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/provider-defaults/{capability}": {
         parameters: {
             query?: never;
@@ -4437,6 +4460,26 @@ export interface components {
             proxy?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /**
+         * CapabilityModelOut
+         * @description 某能力下的一个候选模型(跨连接)。
+         *
+         *     界面直接列它 —— 一个模型现在自带能力与连接,"先选供应商再选模型"那两级下拉是模型还不是
+         *     实体时的形状:它逼着用户先知道"这个模型在哪条连接下",而那恰恰是他不关心的。
+         */
+        CapabilityModelOut: {
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /** Provider Name */
+            provider_name: string;
+            /** Model */
+            model: string;
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
         };
         /**
          * ClipIdsRequest
@@ -14075,6 +14118,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderDefaultOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_capability_models_api_settings_capability_models__capability__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityModelOut"][];
                 };
             };
             /** @description Validation Error */
