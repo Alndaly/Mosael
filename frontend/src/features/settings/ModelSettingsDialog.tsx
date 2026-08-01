@@ -44,30 +44,27 @@ function AdvancedToggle({
   const t = useI18n();
   const set = value !== null && value !== undefined;
   return (
-    // **不复用 SettingsRow**:它的 gap-5 / px-3.5 / py-3 是给整页设置栏调的,塞进 480px 的
-    // 弹窗里开关会孤零零飘在右边,四行还要占掉近 400px 高。这里按弹窗的尺度重排。
-    <label className="flex cursor-pointer items-start gap-2.5 py-2">
-      <Switch className="mt-0.5 shrink-0" checked={Boolean(value)} onCheckedChange={(next) => onChange(next)} />
-      <span className="grid min-w-0 flex-1 gap-px">
-        <span className="flex items-center gap-1.5 text-[12.5px] text-foreground">
+    // 每项自带背景与边框,和模型列表里的行、以及其它表单的卡片行一致 —— 四个开关平铺在
+    // 一片留白上时,读者要自己在脑子里划分组,而背景把"这是一项"直接说出来。
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-panel px-3 py-2.5">
+      <div className="grid min-w-0 gap-0.5">
+        <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-foreground">
           {label}
           {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻只会让人以为漏了什么。 */}
           {set && (
             <button
               type="button"
-              className="cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={(event) => {
-                event.preventDefault();
-                onChange(null);
-              }}
+              className="cursor-pointer border-0 bg-transparent p-0 text-[10.5px] font-normal text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => onChange(null)}
             >
               {t("modelSettingsFollowDefault")}
             </button>
           )}
         </span>
         <span className="text-[11px] leading-[1.45] text-muted-foreground">{hint}</span>
-      </span>
-    </label>
+      </div>
+      <Switch className="shrink-0" checked={Boolean(value)} onCheckedChange={(next) => onChange(next)} />
+    </div>
   );
 }
 
@@ -232,7 +229,7 @@ export function ModelSettingsDialog({
               </span>
             </button>
             {advancedOpen && current && (
-              <div className="mt-1 grid">
+              <div className="mt-1.5 grid gap-1.5">
                 <AdvancedToggle
                   label={t("modelSettingsReasoning")}
                   hint={t("modelSettingsReasoningHint")}
