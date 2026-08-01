@@ -14,6 +14,29 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ### Recently added
 
+**Providers and models are now two levels** — a "provider" is **one endpoint plus one credential**,
+and it can hold any number of models; capabilities (chat / image / video / audio), context window,
+and the reasoning/vision switches all live on the **model**. A profile used to carry exactly one
+model, so one endpoint's chat model and image model could never appear in two capability sections —
+people ended up naming profiles after models and pasting the same key five times. Expanding a
+provider now lists its models; adding one is a searchable input (DashScope's catalog has 233 entries,
+which is neither scrollable nor findable as a flat list), and models missing from the catalog
+(private deployments, aliases) can be typed by hand.
+
+**Context meter and automatic compaction** — how much room is left is shown in the composer's session
+settings; past 80% of the window, older turns are summarized by the model and the recent ones kept.
+You can also compact on demand. Compaction is recorded in the conversation (how many messages moved
+out, how many tokens freed) rather than happening silently. Each model's context window is editable,
+defaulting to the vendor catalog.
+
+**Thinking mode** — off / low / medium / high per session, streamed into a block that collapses when
+done. "Off" only means we don't ask for it: models that think regardless (k3, DeepSeek reasoner) still
+have their thinking shown.
+
+**Subscription quota** — Claude, Codex, Kimi Code, xAI, OpenRouter and Copilot plans can report their
+current quota and reset window on demand. Expired tokens refresh themselves; you're only asked to
+re-authorize when a refresh actually fails.
+
 **Runs in the tray** — closing the window no longer quits. Scheduled tasks run inside the local
 backend, which is a child process of the app: on Windows/Linux, closing the window used to stop
 them silently while users assumed they were still running. The tray icon is the visible proof the
@@ -169,7 +192,8 @@ For publishing issues, start with `publisher.log` — every step is recorded.
 ```
 backend/          FastAPI + SQLAlchemy 2.0 (schema via create_all + _migrate_*, see ARCHITECTURE)
   app/domain/     Domain core: sequences (editing), render, workflows, publish, browser, kb, agent,
-                  scheduler, transcripts, generation, plugins, notifications
+                  scheduler, transcripts, generation, plugins, notifications,
+                  provider_models, provider_quota, ai_retry
   app/api/routes/ HTTP routes
   tests/          pytest
 frontend/         Vite + React 19 + TS + Tailwind v4 + Radix/shadcn

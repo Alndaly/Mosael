@@ -52,14 +52,16 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-`WorkflowsView.tsx`(2.7k 行)、`EditorView.tsx`(1.3k)、`Timeline.tsx`(1.2k)。
+`WorkflowsView.tsx`(3.2k 行,还在长)、`EditorView.tsx`(1.3k)、`timeline/Timeline.tsx`(1.2k)。
 
-按函数量过一遍之后,这三个要分开看 —— **大而内聚**的不必拆:`Timeline` 虽然 1.0k+,但只有
+按函数量过一遍之后,这三个要分开看 —— **大而内聚**的不必拆:`Timeline` 虽然 1.2k,但只有
 6 个 state、3 个 effect、**0 个查询**,主体是交互数学与绘制,拆开反而更难读。真正该拆的是
-`WorkflowEditor`(929 行 / **15 个 state**:图编辑、面板开关、重命名删除弹窗、画布几何、
-内嵌视图就绪状态混在一起)和 `Editor`(954 行 / **38 处 useQuery/useMutation**)。
-切分方向:画布 / 节点检查器 / 节点表单;面板编排 / 变换与合成 / mutations。
-低优先,顺手做,不专项大拆。
+`WorkflowsView.tsx` 里的两个组件:`WorkflowEditor`(**1106 行**,图编辑、面板开关、重命名删除弹窗、
+画布几何、连线形态、内嵌视图就绪状态混在一起)与 `NodeInspector`(**885 行**),以及 `Editor`
+(1.3k / **42 处 useQuery/useMutation**)。切分方向:画布 / 节点检查器 / 节点表单;
+面板编排 / 变换与合成 / mutations。低优先,顺手做,不专项大拆。
+
+> 这条一直在变糟(2.7k → 3.2k)。下次往 `WorkflowsView.tsx` 加东西时,先把要加的那部分单独成文件。
 
 ## 5. 预览与导出 — ✅ 已按契约收口(2026-07-28)
 
@@ -124,6 +126,45 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 
 以后再加入口(比如 Slack、命令行)照此办理:入口只负责认身份和翻译错误。
 
+## 10. `-webkit-app-region: drag` 会在页面之前吃掉鼠标事件
+
+**症状与病因隔了三层**,我为此连着给出两个错误诊断(原生 `title` tooltip、窗口边缘热区),都改错了地方。
+
+现象是「并排对比」里**第一张缩略图**的 hover 态一会儿在一会儿没有;真正的线索是用户那句
+「第一张图片横向中间的位置无法被鼠标选中」——那条竖带正好压在 56px 图标侧栏的 x 区间上,而侧栏是
+`-webkit-app-region: drag`。
+
+拖拽区由 Blink 计算好交给 OS,**在页面拿到事件之前**就被消费:z-index 多高、盖在多上面、有没有
+`pointer-events` 都不管用,只有显式的 `-webkit-app-region: no-drag` 能从中减掉一块。
+
+- 任何覆盖到顶栏 / 侧栏区域的全屏叠加层,根元素都要写 `[.is-desktop_&]:[-webkit-app-region:no-drag]`,
+  自身需要拖窗的子区域(如叠加层自己的工具条)再 `drag` 回来。
+- **浏览器预览里复现不出来**——没有 Electron 就没有拖拽区。这类问题只能在桌面端验证;
+  在预览里反复"验证通过"只会把诊断带偏,我就是这么浪费了两轮。
+
+## 11. pi 的凭据字段名不是 OAuth 规范里的那几个
+
+`provider_quota` 六家解析器**全部**取不到令牌、UI 一律显示「尚未授权登录」,而档案明明是已授权的。
+原因是取键取的是 `access_token` / `api_key`(OAuth / OpenAI 的习惯写法),而 pi 的 CredentialStore
+存的是 `{type:"oauth", access, refresh, expires}` 与 `{type:"api_key", key}`。
+
+- 读凭据一律经 `_TOKEN_KEYS`(已含两套写法),不要在新代码里再写一次字面量键名。
+- `expires` 是**epoch 毫秒**,不是秒、也不是"还剩多少秒"。按秒比会让所有令牌看起来都过期了 55 年。
+- 这类"字段名对不上"的故障**类型全绿、单测全绿**,因为两侧都在自说自话。判据只有一条:
+  拿真实凭据跑一次。
+
+## 12. 同一个常量在 sidecar 和后端各写了一份
+
+`FALLBACK_CONTEXT_WINDOW = 32000`(`agent-sidecar/src/pi.ts` ↔ `backend/app/ai/agent/host.py`)与
+`CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
+
+不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认
+REST)。但**改一处不改另一处**的后果是隐性的——前端说「剩余 40%」,而 sidecar 已经按另一套数字
+整理过了,用户看到的和实际发生的对不上,还没有任何报错。
+
+改这两个值时**两侧一起改**,并在 PR 里说明。将来若要收口,方向是让后端从 sidecar 拿一次配置,
+而不是再抄第三份。
+
 ## Verification rule
 
 每个 slice 至少跑:
@@ -135,3 +176,5 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
 - `cd docs-site && pnpm run build` when touching docs-site(它不在 release CI 里,坏了不会有人告诉你)
 - targeted browser smoke only when the change affects actual platform page driving
+- **桌面端**(不是浏览器预览)when the change touches 拖拽区 / 无边框窗 / 内嵌浏览器 —— 见第 10 条
+- **拿真实凭据跑一次** when the change touches 供应商凭据、令牌刷新或额度解析 —— 见第 11 条

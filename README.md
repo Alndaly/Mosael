@@ -14,6 +14,22 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 ### 近期新增
 
+**供应商与模型分成两级** —— 一条「供应商」现在是**一个端点 + 一份凭据**,它下面可以有任意多个模型;
+能力(对话 / 绘图 / 视频 / 音频)、上下文长度、推理与视觉开关都挂在**模型**上。此前一条档案只能带
+一个模型,同一个端点的对话模型和生图模型没法分别出现在两个能力分区里,用户只好拿模型名当档案名、
+把同一把 key 粘贴五遍。现在展开一条供应商就是它的模型列表,加模型是一个带搜索的输入框(百炼的目录
+有 233 个模型,平铺既滚不完也找不到),目录里查不到的私有部署 / 别名可以手填。
+
+**智能体的上下文水位与自动整理** —— 输入框的会话设置里直接显示还剩多少,超过窗口八成时把早期对话
+交给模型摘要、保留最近若干轮,也可以随时手动「立即整理」。整理会作为一条记录留在对话里(移出多少条、
+腾出多少 token),不是悄悄发生。每个模型的上下文长度可以在模型设置里改,默认取供应商目录。
+
+**思考模式** —— 会话级的关闭 / 低 / 中 / 高,思考过程流式显示在一个默认收起的折叠块里。「关闭」只表示
+不主动要求思考:k3、DeepSeek reasoner 这类模型无论如何都会思考,它们的思考照常显示。
+
+**订阅计划额度** —— Claude / Codex / Kimi Code / xAI / OpenRouter / Copilot 这些订阅制供应商可以点开
+看当前额度与重置周期。令牌过期会自动续期,只有续不上时才提示重新授权。
+
 **桌面常驻** —— 关窗只是收进托盘,不再退出。定时任务跑在本机后端里,而后端是应用的子进程:
 以前 Windows/Linux 上关个窗就把定时任务一起关了,而用户以为它还在跑。托盘是应用还活着的可见
 入口,想让它开机就守着可在设置里打开「开机时启动」。任务在跑时会阻止系统睡眠(渲染到一半合盖
@@ -145,8 +161,8 @@ cd backend && uv venv --clear && uv sync
 ### 测试与检查
 
 ```bash
-cd backend  && uv run pytest -q          # 780 用例
-cd frontend && pnpm vitest run           # 212 用例
+cd backend  && uv run pytest -q          # 910 用例
+cd frontend && pnpm vitest run           # 258 用例
 cd frontend && pnpm exec tsc -b --noEmit # 类型检查(必须在 frontend 目录下跑)
 cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 类型
 ```
@@ -175,6 +191,7 @@ Windows 为 `%APPDATA%\Open Studio`。插件目录同理——不必照着这里
 backend/          FastAPI + SQLAlchemy 2.0(建表走 create_all + _migrate_*,见 ARCHITECTURE)
   app/domain/     领域内核:sequences(剪辑) render workflows publish browser kb agent
                   scheduler transcripts generation plugins notifications
+                  provider_models(供应商模型) provider_quota ai_retry
   app/api/routes/ HTTP 路由
   tests/          pytest
 frontend/         Vite + React 19 + TS + Tailwind v4 + Radix/shadcn

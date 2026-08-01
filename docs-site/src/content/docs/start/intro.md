@@ -24,7 +24,7 @@ Open Studio 是一个**本地优先的桌面应用**,把内容创作的四段路
 - **后端**:FastAPI(Python)+ SQLite,负责工程、渲染、AI、工作流与发布任务的全部状态 —— 单一事实源。
 - **执行器**:Electron 主进程内置的发布执行器,驱动内嵌浏览器视图完成登录与上传。
 - **AI 智能体**:托管一个外部 coding-agent CLI(opencode 式),以 Open Studio 的 MCP server 为工具面;改动先出确认卡。
-- **数据**:全部落在本机 `~/.openstudio-cut`,不依赖云端,离线可用。
+- **数据**:全部落在本机 `~/.open-studio`,不依赖云端,离线可用。
 
 ## 谁适合用
 

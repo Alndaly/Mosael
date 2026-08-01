@@ -24,7 +24,7 @@ Open Studio is a **local-first desktop app** that folds the four legs of content
 - **Backend**: FastAPI (Python) + SQLite, the single source of truth for projects, rendering, AI, workflows and publish jobs.
 - **Executor**: a publish executor built into the Electron main process drives embedded browser views for logins and uploads.
 - **AI agent**: hosts an external coding-agent CLI (opencode-style) with Open Studio's MCP server as its tool surface; changes go through confirmation cards.
-- **Data**: everything lives in `~/.openstudio-cut` on your machine — no cloud dependency, works offline.
+- **Data**: everything lives in `~/.open-studio` on your machine — no cloud dependency, works offline.
 
 ## Who it's for
 

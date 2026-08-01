@@ -69,7 +69,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - Token-level streaming chat: pi sidecar streams partial deltas → per-session SSE endpoint → live bubble; Streamdown renders all assistant markdown (tables/code/CJK, unterminated-block safe).
 - Context menus everywhere (projects/assets/pool/sessions/clips) with rename/delete modals (no native dialogs); full CRUD APIs for projects/assets (in-use guard)/sessions; scheduler rows gain pause/enable + delete; empty states center vertically.
-- Provider profiles (schema): multiple named provider accounts with vendor presets (DashScope/ARK/Kimi/MiniMax/OpenAI/compatible), base_url + default model, enable toggle; legacy credentials remain as fallback; Settings UI rebuilt around profiles.
+- Provider profiles (schema): multiple named provider accounts with vendor presets (DashScope/ARK/Kimi/MiniMax/OpenAI/compatible), base_url + default model, enable toggle; legacy credentials remain as fallback; Settings UI rebuilt around profiles. *(Superseded 2026-08-01: a profile is now a connection with many models; `default_model` is gone — see the 2026-08-01 entry.)*
 - Asset analysis: images direct, videos frame-sampled (ffmpeg) into OpenAI-compatible multimodal chat — works with Kimi & MiniMax profiles; POST /assets/{id}/analyze + analyze_asset MCP tool; chat composer supports file attachments that land as assets and are referenced in the message for the agent.
 
 ### Agent host layer + Feishu binding
@@ -242,6 +242,59 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   test also stopped inferring concurrency from total wall-clock and now asserts that the two
   execution spans overlap.
 
+### 2026-08-01: providers ⇄ models split, token-aware context, thinking, subscription quota
+
+- **A provider profile is a connection, not a model.** New `provider_models` table: each row carries
+  its own `capability_ids`, `context_window`, `max_output_tokens`, `reasoning` / `vision` /
+  `reasoning_effort` / `developer_role`, enabled flag and source (catalog | manual).
+  `provider_profiles.default_model` / `capability_ids` / `model_overrides` are **deleted**, and
+  `provider_defaults` now points at a model row. The old single-model-per-profile shape forced users
+  to name profiles after models — the same key pasted five times — because one endpoint's chat model
+  and image model could not appear in two capability sections. ~20 call sites of
+  `profile.default_model` collapsed into `provider_models.model_id_for(db, profile, capability)`.
+  Model lists merge configured rows with the vendor's live catalog; catalog-missing models stay usable
+  and are just badged. Owner module is `domain/provider_models.py` (ratchet-enforced).
+- **Model settings dialog**: capability chips first (they decide what else is relevant — an image model
+  has no context window), context window with catalog / override / fallback provenance shown inline,
+  and four compat switches behind an **Advanced** disclosure. Adding a model is one searchable
+  Combobox that also accepts a hand-typed id (DashScope's catalog has 233 entries; a flat list is
+  neither scrollable nor searchable).
+- **Token-aware context compaction** (rewritten; `contextWindow` was previously never read — the old
+  rule was a message count). Usage is anchored on the last assistant message carrying real provider
+  usage, with only newer messages estimated at `CHARS_PER_TOKEN = 3.5`. Over `COMPACT_RATIO = 0.8` of
+  the window, older turns are summarized by the model and the last `KEEP_RECENT = 8` kept; the split
+  point backs up to a `user` message so no orphan `tool_result` survives. Summarization failure
+  degrades to truncation but still reports what happened. Runs **between turns**, not in
+  `transformContext` (which fires per LLM call inside tool loops).
+- **Context readout + manual compaction in the UI**: a meter and a 「立即整理上下文」 button, both in the
+  composer's session-settings popover (AI Studio and the workflow assistant share one component).
+  Compaction lands in the timeline as a collapsed notice (messages moved out, tokens freed).
+- **Thinking level** (off / low / medium / high) as a session setting, forwarded to pi as
+  `thinkingLevel`; `thinking_start/delta/end` stream into the same timeline as tool calls (ordered),
+  rendered as a collapsible block that auto-collapses when done. Off means "we don't ask for it" —
+  models that think anyway (k3, DeepSeek reasoner) still have their thinking shown.
+- **Subscription quota**, fetched on click only: six parsers (Anthropic / Codex / OpenRouter / Kimi /
+  xAI / Copilot) in `domain/provider_quota.py`, surfaced in a per-connection popover. None of these
+  endpoints is a documented public API, so polling them on a timer would both hit rate limits and rot
+  silently.
+- **OAuth tokens refresh themselves.** Refresh previously happened only on the chat path, so an
+  overnight gap always showed 「令牌已过期」 in settings for a credential that would have healed on
+  first use. Listing profiles now refreshes expired ones first (via pi's `models.getAuth` — the
+  protocol stays in pi rather than being reimplemented six times in Python); only a *failed* refresh
+  surfaces, in warning colour, as 「需重新授权」. Failures back off for 5 minutes.
+- **Retry is shared by every AI call**, not just chat: `domain/ai_retry.RetryingClient` (an
+  `httpx.Client` subclass retrying 429/5xx/RequestError in `send()` with exponential backoff + jitter)
+  is used by 15 modules — rate limits apply to image, video, TTS and embedding just the same.
+  The cap is configurable under Settings → AI runtime.
+- **Composer rebuilt** across AI Studio and the workflow assistant: the row that used to carry eight
+  equally-weighted controls now keeps only what's looked at every turn (mode, attachments, model,
+  send); analysis mode, thinking level, the context meter and compaction moved into one shared
+  session-settings popover.
+- **Floating panels and canvas nodes get `Cmd/Ctrl + [ / ]`** to raise/lower z-order, with focus
+  tracked on the capture phase (drag and resize both `stopPropagation`). Nodes structurally cannot
+  outrank floating panels — React Flow's viewport `transform` creates its own stacking context.
+- **Workflow edges** offer two shapes (bezier / smoothstep), persisted per user.
+
 ## Next
 
 - Precise preview ("render preview"): render a selected range through the real export pipeline so a
@@ -250,7 +303,9 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - Transitions (转场) in the render plan and editor.
 - Plugin write-path tools via jobs + confirmation cards; scoped API token injection per granted permission.
 - Windows packaging + smoke test (mac done); app icon, code signing, auto-update.
-- Split the oversized feature files (WorkflowsView 2.3k lines, EditorView 1.1k, Timeline 1k) along canvas/inspector/node-form seams.
+- Split the oversized feature files — `WorkflowsView.tsx` is now 3.2k lines and still growing
+  (`WorkflowEditor` 1.1k, `NodeInspector` 885), `EditorView.tsx` 1.3k with 42 queries/mutations — along
+  canvas / inspector / node-form seams. `Timeline.tsx` is large but cohesive (0 queries) and stays.
 - Publish adapter seam slices (see MAINTENANCE_HOTSPOTS.md).
 
 ## Frontend Rules

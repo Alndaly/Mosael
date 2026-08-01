@@ -137,9 +137,57 @@ _Avoid_: 把费用写进 `task_events`、把供应商账单逻辑散落在各 ad
 变更工具的属性(manifest 的 `confirmation: true`):调用只创建待确认卡,用户批准后才执行;sidecar 对此类工具统一阻塞轮询。
 _Avoid_: 按工具名硬编码确认逻辑
 
-**供应商能力配置**:
-`app/domain/providers.py` 暴露的 Adapter preset,按供应商/能力声明它支持哪些能力(chat / image / video / embedding / tts / podcast)以及设置页要收集哪些配置字段。前端只渲染后端声明的 `fields`,不要硬编码 `api_key/base_url/default_model` 这类通用凭据模型。
+**上下文预算**:
+一次对话还能塞多少 token,由**模型的上下文窗口**决定(模型行的 `context_window` → 目录 → 保守回退 32000)。
+估算锚定在**最后一条带 usage 的助手消息**(供应商回的真实 input+output),此后的新消息按
+`CHARS_PER_TOKEN = 3.5` 估。sidecar(`compaction.ts`)与后端(`domain/context_meter.py`)各有一份实现,
+**回退值与估算规则必须逐字一致**——不一致时用户看到的水位和真正触发压缩的时机会对不上。
+_Avoid_: 按消息条数判断"聊得够久了";把 `maxTokens` 当上下文窗口
+
+**上下文整理(compaction)**:
+超过窗口的 `COMPACT_RATIO = 0.8` 时,把早期对话交给模型摘要、保留最近 `KEEP_RECENT = 8` 条。
+切点**必须回退到一条 user 消息**,否则会留下没有对应 tool_call 的孤儿 tool_result。摘要失败时
+降级为截断,但**仍然如实回报**发生了什么——静默降级会让用户以为上下文还在。发生在**两轮之间**,
+不在 `transformContext`(那个在工具循环里每次 LLM 调用都跑)。
+_Avoid_: 压缩=丢最老的 N 条;失败了不说
+
+**思考档位**:
+会话级设置(off / low / medium / high),决定**我们是否主动向供应商要**思考内容。
+「关闭」不等于模型不思考——k3、DeepSeek reasoner 这类模型无论如何都会回思考,照常解析、照常显示。
+与模型设置里的「推理模型」是两件事:后者只决定拿到思考内容后**怎么解析**。
+_Avoid_: 把 off 理解成"屏蔽思考显示"
+
+### 供应商
+
+**连接(ProviderProfile)**:
+一个端点 + 一份凭据 + 一种鉴权方式(api_key / oauth)。**不是模型**——它下面可以有任意多个模型。
+_Avoid_: `profile.default_model`(已删,是"一档案一模型"时代的字段);拿模型名当档案名建一堆档案
+
+**模型(ProviderModel)**:
+连接下的一行,是能力与运行时参数的**唯一挂载点**:`capability_ids`(留空回落 vendor 预设)、
+`context_window`、`reasoning` / `vision` / `reasoning_effort` / `developer_role`。
+拥有方是 `app/domain/provider_models.py`,建行只经 `upsert`。
+运行时参数**只下发用户显式设过的键**——`None` 与"显式设成 false"在下游行为不同。
+_Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生图模型)
+
+**能力默认(ProviderDefault)**:
+每种能力(chat / image / video / tts / podcast / embedding)指向**一行模型**,不是一个档案。
+指向失效时回落"该能力下第一个可用模型",而不是报未配置。
+
+**vendor 预设**:
+`app/domain/providers.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。
+前端只渲染后端声明的 `fields`,不硬编码通用凭据模型。它是**兜底**:模型行没写能力时按它回落。
 _Avoid_: 仅凭 vendor 文案推断能力
+
+**订阅额度**:
+`domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。
+**只在用户点击时查**——这些端点都不是官方承诺的公开接口,定时轮询既容易撞限流,也会在对方改接口后
+变成后台里一直失败的任务。查不到不抛 5xx:"这家不支持"和"这次没查成"是两种正常结果。
+
+**AI 调用重试**:
+`domain/ai_retry.RetryingClient`(httpx.Client 子类,在 `send()` 里对 429/5xx/RequestError 指数退避重试)。
+它是**所有** AI 出站调用的统一入口(15 个模块),不是对话专属——生图、生视频、TTS、向量化同样会遇到限流。
+_Avoid_: 在某一条调用路径里手写重试循环
 
 ## Relationships
 
@@ -148,7 +196,9 @@ _Avoid_: 仅凭 vendor 文案推断能力
 - **卫星进程**经 **worker 协议**(external 类)或 stdio/subprocess(共生类)与**事实源**通信
 - 每张表有且只有一个**数据归属**领域;**归属棘轮**守护它
 - **用量台账**从任务总线、智能体、生成执行器接收事实,不反向决定业务是否成功
-- **供应商能力配置**只说明某个 adapter 需要哪些配置以及能进入哪些能力;能力的实际 HTTP/SDK 差异由该能力自己的 Adapter 接缝负责
+- 一个**连接**有 0..n 个**模型**;**能力默认**指向一行**模型**;**vendor 预设**只在模型没声明能力时兜底
+- 能力的实际 HTTP/SDK 差异由该能力自己的 Adapter 接缝负责,不由**连接**或**模型**表达
+- **上下文预算**由所选**模型**的窗口决定;超过阈值触发**上下文整理**;**思考档位**是会话属性,与模型无关
 
 ## Example dialogue
 
@@ -159,3 +209,4 @@ _Avoid_: 仅凭 vendor 文案推断能力
 
 - 「worker」曾同时指发布执行器与任意后台线程——现约定:**worker** 专指经 worker 协议认领任务的外部进程;进程内的叫守护线程/执行器。
 - 「注册表」需带限定词:**节点注册表**(元数据)/ **执行器注册表**(行为)/ **工具注册表**(智能体)/ 平台注册表(发布)。
+- 「供应商」在 UI 里指**连接**(设置页那一行),在讨论 vendor 支持什么时指**vendor 预设**。谈架构时用**连接** / **模型** / **vendor 预设**三个词,别用「档案」——它此前既指供应商档案又指浏览器档案(`BrowserProfile`),而后者才是「档案」的正主。

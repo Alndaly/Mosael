@@ -17,8 +17,14 @@ Workflows orchestrate a chain of actions (retrieval, generation, transcription, 
 
 - The left column lists workflows; the rest is a React Flow canvas with a toolbar on top.
 - **Add node** from the toolbar. Types include: start, LLM, knowledge-base search, plugin tool, transcribe asset, export timeline, AI-generate asset, publish, condition, HTTP request, code, text template.
-- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
+- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** (icon + inline rename + type in the header).
+
+### When something is buried
+
+With dense nodes or stacked floating panels, select one and press **⌘/Ctrl + ]** to raise it or
+**⌘/Ctrl + [** to send it down. Floating panels use the same pair, but **nodes can never cover a
+floating panel** — otherwise the inspector would end up buried under the very node it's editing.
 
 ## Variables: wiring upstream outputs into downstream inputs
 

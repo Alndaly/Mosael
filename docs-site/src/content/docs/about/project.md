@@ -34,4 +34,4 @@ Open Studio **源码开放但非开源软件**,采用专有许可(全文见仓�
 | AI 智能体 | 托管外部 coding-agent CLI(opencode 式),经 Open Studio MCP server 使用工具 |
 | 文档站 | Astro Starlight(本站) |
 
-所有用户数据落在本机 `~/.openstudio-cut`,不依赖云端。
+所有用户数据落在本机 `~/.open-studio`,不依赖云端。

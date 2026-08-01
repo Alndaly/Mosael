@@ -48,6 +48,6 @@ Official releases are built by CI: maintainers push a `v*` tag and GitHub Action
 
 ## Where your data lives
 
-Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.openstudio-cut` (Windows: `C:\Users\<you>\.openstudio-cut`), outside the app bundle — upgrades and reinstalls keep your data.
+Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.open-studio` (Windows: `C:\Users\<you>\.open-studio`), outside the app bundle — upgrades and reinstalls keep your data.
 
 Next: [Quick start](/en/start/quickstart/).

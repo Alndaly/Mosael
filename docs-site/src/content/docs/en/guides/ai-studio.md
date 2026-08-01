@@ -20,6 +20,32 @@ The agent uses Open Studio's MCP tools to **see your project and propose changes
 
 Under the hood it hosts an external coding-agent CLI (opencode-style), not a home-grown chat loop. Requires [model providers](/en/guides/providers/) to be configured.
 
+### The composer keeps only what you look at every turn
+
+The composer row carries just the things you touch on every message: the **Chat / Generate** toggle,
+attachments, the **model**, and send. Everything else lives behind the slider icon in **session
+settings** — the set-once-and-forget things:
+
+- **Thinking**: off / low / medium / high. When on, the model's reasoning streams into a collapsible
+  block you can expand, and it auto-collapses when done. "Off" only means we don't *ask* for it:
+  models that reason regardless (k3, DeepSeek reasoner) still have their thinking shown.
+- **Video analysis mode**: whole clip vs sampled frames.
+- **Context**: a meter with "N% left", plus **Compact context now**.
+
+### What happens when the context fills up
+
+Once a conversation runs long, the app has the model **summarize the earlier turns** and keeps the
+recent ones, freeing room to continue. This is never silent — a record stays in the conversation
+saying how many messages moved out and roughly how many tokens were freed; expand it to read the
+summary itself.
+
+- It triggers at **80%** of the selected model's context window. Windows differ per model and are
+  editable in [model settings](/en/guides/providers/).
+- You can compact on demand instead of waiting — it costs one model call, so it's an explicit button
+  rather than something that fires on its own.
+- The meter is anchored on **real usage reported by the vendor** (the last call's input + output);
+  only messages newer than that are estimated.
+
 ## Generate: text-to-image / text-to-video
 
 In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:

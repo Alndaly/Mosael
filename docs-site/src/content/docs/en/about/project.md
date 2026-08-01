@@ -34,4 +34,4 @@ Open Studio is **source-available, not open source**, under a proprietary licens
 | AI agent | hosts an external coding-agent CLI (opencode-style) using Open Studio's MCP server as its tool surface |
 | Docs site | Astro Starlight (this site) |
 
-All user data lives locally in `~/.openstudio-cut` — no cloud dependency.
+All user data lives locally in `~/.open-studio` — no cloud dependency.

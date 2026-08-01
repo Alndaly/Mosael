@@ -78,6 +78,7 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 - `publish_accounts` / `publish_tasks` — 发布账号与发布记录(`publish_accounts.profile_id` 指向所挂的浏览器档案)
 - `browser_profiles` / `browser_sessions` / `browser_actions` — 浏览器池:持久登录身份、会话(租约)、待执行动作队列
 - `notifications` — 每用户一行,`type` 含 `team`(为协作申请预留)
+- `provider_profiles` / `provider_models` / `provider_defaults` — AI 供应商的连接、模型、能力默认(见下)
 
 ### 声音克隆的运行环境由 App 托管
 
@@ -98,6 +99,73 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 **两个下载源是分开的**:「模型下载源」管 HF 权重(`HF_ENDPOINT`),「依赖下载源」管 pip 索引
 (`--index-url`)。装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,而它与权重镜像并不是
 同一件事。自定义 index 只接受 http(s),避免任意字符串进子进程 argv。
+
+## AI 供应商:连接、模型、能力默认
+
+三层,粒度各不相同——**混成一层是这块此前所有麻烦的根源**:
+
+| | 是什么 | 表 |
+| --- | --- | --- |
+| **连接** | 一个端点 + 一份凭据 + 一种鉴权方式(api_key / oauth) | `provider_profiles` |
+| **模型** | 连接下的一行。能力与运行时参数的唯一挂载点 | `provider_models` |
+| **能力默认** | 某个能力(chat/image/video/tts/podcast/embedding)用哪一行模型 | `provider_defaults` |
+
+早期只有「档案」一层,还带一个 `default_model` 字段。于是同一个端点上的对话模型和生图模型没法
+分别出现在两个能力分区里,用户被迫**拿模型名当档案名**建一堆档案——同一把 key 重复五遍,改一处
+不牵连另一处成了负担而非特性。`default_model` / `capability_ids` / `model_overrides` 三个字段已从
+`provider_profiles` 删除,替代品是模型行;此前散在二十来处的 `profile.default_model` 统一收敛到
+`provider_models.model_id_for(db, profile, capability)`。
+
+- **能力在模型上**。模型行的 `capability_ids` 留空时回落 vendor 预设(`domain/providers.py`),
+  让回填来的老数据和"还没细分过"的连接继续可用。连接对外提供的能力 = 其下启用模型能力的并集。
+- **运行时参数只下发显式设过的键**(`runtime_limits`):`context_window` / `max_output_tokens` /
+  `reasoning` / `vision` / `reasoning_effort` / `developer_role`。带上 `None` 会让 sidecar 分不清
+  "没设过"和"设成了 false",而两者的默认行为不同。
+- **模型列表 = 已配置的行 + 供应商目录里还没配的**。目录说端点有什么(会变),模型行说用户做过
+  什么(不该被目录冲掉)。目录里查不到的模型(私有部署、别名)可以手填,与目录来的平权,只额外
+  标一个「目录中已不存在」。
+- **数据归属**是 `app/domain/provider_models.py`,建行只经它的 `upsert`(棘轮盯着)。
+
+**订阅计划(OAuth)的令牌自动刷新**。access token 普遍只有几小时,刷新是协议里就有的一步,但刷新
+协议在 pi 的 Provider 定义里——自己在 Python 里实现等于把六家协议再抄一遍。所以后端只负责**决定
+什么时候刷**,动作交给 sidecar 跑一次 `models.getAuth`(`refresh_oauth_credential`)。触发点有三处:
+对话路径(pi 解析鉴权时)、查额度、以及**列档案**——少了最后一个,隔夜打开设置页必然看到一行
+「已过期」,而它只要被用到就会自己好。刷不动才是用户需要知道的事,那时才用警告色说「需重新授权」;
+失败带 5 分钟冷却,否则这个最常被拉的接口会每次都起一个 node 去撞同一堵墙。
+
+**额度只在点击时查**(`domain/provider_quota.py`,六家各一个解析器)。这些端点都不是官方承诺的
+公开接口(Anthropic 的 `oauth/usage`、Codex 的 `codex/usage` 都是各自 CLI 内部在用),定时轮询
+既容易撞限流,也会在对方改接口后变成后台里一直失败的任务。查不到不抛 5xx——"这家不支持"和
+"这次没查成"都是正常结果,统一的 500 错误提示会把两者吞成一句"请求失败"。
+
+**重试是所有 AI 调用共享的**(`domain/ai_retry.RetryingClient`,15 个模块用它)。它是 `httpx.Client`
+子类,在 `send()` 里对 429/5xx/RequestError 做指数退避 + 抖动,因此对调用方完全透明。此前只有对话
+路径有重试,而限流对生图、生视频、TTS、向量化一视同仁。重试上限在设置 → **AI 运行时**,进程级生效。
+
+## 智能体的上下文:预算与整理
+
+**窗口来自模型**:模型行的 `context_window` → 供应商目录 → 保守回退 **32000**。这个回退值在 sidecar
+(`agent-sidecar/src/pi.ts`)和后端(`ai/agent/host.py`)各有一份,**必须一致**——否则前端显示的水位
+和真正触发整理的时机会对不上。
+
+**用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息
+才按 `CHARS_PER_TOKEN = 3.5` 估。纯靠字符估会随对话变长持续跑偏。同一套锚定规则在
+`agent-sidecar/src/compaction.ts` 与 `backend/app/domain/context_meter.py` 各实现一次——前者决定何时
+整理,后者供前端实时显示。
+
+**整理发生在两轮之间**,不在 `transformContext`(那个在工具循环里每次 LLM 调用都会跑)。超过窗口的
+`COMPACT_RATIO = 0.8` 时,把早期对话交给模型摘要,保留最近 `KEEP_RECENT = 8` 条:
+
+- **切点必须回退到一条 `user` 消息**,否则会留下没有对应 `tool_call` 的孤儿 `tool_result`,下一轮直接 400。
+- **摘要失败降级为截断,但仍如实回报**。静默降级会让用户以为上下文还在,而它已经没了。
+- 结果作为一条 `compaction` 记录进时间线,前端折叠显示(移出多少条、腾出约多少 token)。
+- 用户也可以在输入框的「会话设置」里点**立即整理上下文**——不必等它自己到线。
+
+**思考档位**(off / low / medium / high)是**会话属性**:同一个模型有时要深想、有时要快答。off 表示
+我们不主动向供应商要思考,**不表示模型不思考**——k3、DeepSeek reasoner 无论如何都会回思考内容,pi
+照常解析、我们照常显示(藏掉才是撒谎)。这与模型设置里的「推理模型」是两件事:后者只决定拿到思考
+内容后**怎么解析**。思考经 `thinking_start/delta/end` 流式落进同一条 timeline(与工具调用保序),
+前端渲染成默认收起的折叠块。
 
 ## 预览与导出:两个渲染器,一份契约
 
@@ -157,6 +225,15 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 
 - 无边框窗:顶栏全宽横贯,mac 红绿灯落在顶栏左侧(面包屑让位 88px),Win/Linux 用 `titleBarOverlay` 并给顶栏右侧留位。
 - 拖拽区:顶栏与侧栏可拖窗(`-webkit-app-region: drag`),其中交互元素必须 `no-drag`,否则点击被当成拖窗吃掉。
+  **注意它不遵守层级**:拖拽区由 Blink 算好交给 OS,在页面拿到事件**之前**就被消费,z-index /
+  绘制顺序一概无效。因此任何盖在侧栏或顶栏上方的全屏叠加层(对比视图、悬浮面板)**必须自己声明
+  `no-drag`** —— 只有显式的 `no-drag` 能从拖拽区里减掉一块。见 MAINTENANCE_HOTSPOTS.md 第 10 条。
+
+**悬浮层级**:工作流的悬浮面板与画布节点都支持 `Cmd/Ctrl + [` / `]` 升降层级
+(`features/workflows/useFloatingPanel.tsx` 持模块级 z 序表,`Z_BASE = 55`)。**节点永远不得高于悬浮
+面板** —— React Flow 的 `.react-flow__viewport` 带 `transform`、自成一个层叠上下文,节点的 z-index
+在那个上下文内部生效,天然低于外层 fixed 面板,这条约束由结构而非纪律保证。焦点用
+`onPointerDownCapture` 记(捕获阶段:拖拽与缩放都会 `stopPropagation`)。
 
 ### 系统能力层(`electron/system/`)
 
