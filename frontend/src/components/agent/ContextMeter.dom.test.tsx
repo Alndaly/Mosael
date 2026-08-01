@@ -51,13 +51,10 @@ describe("上下文水位", () => {
     expect((container.querySelector("[style*='width']") as HTMLElement).style.width).toBe("100%");
   });
 
-  it("运行中不给整理入口 —— 半路换掉上下文会把正在跑的这一轮弄乱", () => {
+  it("只是读数,不再承载操作 —— 整理入口移进了会话设置", () => {
     const { container } = render(<ContextMeter context={{ tokens: 90, window: 100 }} />);
     expect(container.querySelector("button")).toBeNull();
-    const onCompact = vi.fn();
-    render(<ContextMeter context={{ tokens: 90, window: 100 }} onCompact={onCompact} />);
-    fireEvent.click(screen.getByLabelText("agentCompactNow"));
-    expect(onCompact).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("10");
   });
 });
 

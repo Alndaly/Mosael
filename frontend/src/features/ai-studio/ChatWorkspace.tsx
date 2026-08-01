@@ -33,8 +33,7 @@ import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMe
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
-import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
-import { ThinkingLevelPicker } from "@/features/ai-studio/ThinkingLevelPicker";
+import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
@@ -569,15 +568,17 @@ export function ChatWorkspace({
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
-                  <AnalysisModePicker session={session.data ?? null} />
-                  <ThinkingLevelPicker session={session.data ?? null} />
-                  {/* 水位跟输入框走,不另起一条横幅:它要回答的是"我还能再问多少",
-                      而这个念头恰好发生在准备打字的时候。参考 Claude Code / Codex 的位置。 */}
-                  <ContextMeter
+                  {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
+                      和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
+                  <SessionSettingsMenu
+                    session={session.data ?? null}
                     context={context}
                     compacting={compactContext.isPending}
                     onCompact={running ? undefined : () => compactContext.mutate()}
                   />
+                  {/* 水位留在主行但只剩一个读数:它要回答的是"我还能再问多少",
+                      而这个念头恰好发生在准备打字的时候(Claude Code / Codex 同位置)。 */}
+                  <ContextMeter context={context} compacting={compactContext.isPending} />
                 </div>
                 {/* One button that changes meaning, the way ChatGPT does it: while the agent
                     works it stops the turn, and the moment you type something it becomes send

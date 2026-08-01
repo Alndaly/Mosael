@@ -2,7 +2,6 @@ import React from "react";
 import { Loader2, Scissors } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,12 +30,10 @@ function formatTokens(value: number): string {
 
 export function ContextMeter({
   context,
-  onCompact,
   compacting,
   className,
 }: {
   context: ContextInfo | null | undefined;
-  onCompact?: () => void;
   compacting?: boolean;
   className?: string;
 }) {
@@ -65,19 +62,7 @@ export function ContextMeter({
       <span className={cn("timecode shrink-0 text-[10.5px]", warn ? "text-destructive" : "text-muted-foreground")}>
         {t("agentContextLeft").replace("{n}", String(left))}
       </span>
-      {onCompact && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          disabled={compacting}
-          aria-label={t("agentCompactNow")}
-          title={t("agentCompactNow")}
-          onClick={onCompact}
-        >
-          {compacting ? <Loader2 size={11} className="animate-spin" /> : <Scissors size={11} />}
-        </Button>
-      )}
+      {compacting && <Loader2 size={11} className="shrink-0 animate-spin text-muted-foreground" />}
     </span>
   );
 }

@@ -32,7 +32,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
-import { ThinkingLevelPicker } from "@/features/ai-studio/ThinkingLevelPicker";
+import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
@@ -438,11 +438,7 @@ export function WorkflowAgentChat({
         </h2>
         {sessionId && (
           <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
-            <ContextMeter
-              context={context}
-              compacting={compact.isPending}
-              onCompact={running ? undefined : () => compact.mutate()}
-            />
+            <ContextMeter context={context} compacting={compact.isPending} />
           </span>
         )}
         {sessionList.length > 0 && sessionId && (
@@ -703,7 +699,15 @@ export function WorkflowAgentChat({
               <Paperclip size={15} />
             </Button>
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
-            <ThinkingLevelPicker session={sessionDetail.data ?? null} />
+            {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
+                有无都不一致。工作流助手不做素材分析,那一项在这里是死的,关掉。 */}
+            <SessionSettingsMenu
+              session={sessionDetail.data ?? null}
+              context={context}
+              compacting={compact.isPending}
+              onCompact={running ? undefined : () => compact.mutate()}
+              showAnalysis={false}
+            />
           </div>
           {showStop ? (
             <Button
