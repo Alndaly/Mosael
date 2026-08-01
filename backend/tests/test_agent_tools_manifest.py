@@ -294,3 +294,42 @@ def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
     pairs = {(m["provider"], m["model"]) for m in res.json()["result"]}
     assert ("comfyui", "workflow") in pairs
     assert workspace_id  # workspace 仅为初始化,断言防未用警告
+
+
+def test_多给一个键不会让整轮白跑() -> None:
+    """回归:模型给 update_plan 传了个顶层 `status`(它的每个 step 里确实有 status,模型把它
+    抬了一层),`fn(**arguments)` 抛 TypeError,整次调用 422 —— 而它想做的事完全清楚。
+
+    直接测收敛函数:走路由的话工具体会经回环再打一次 HTTP,测试进程里没有在听的服务器,
+    断言就落到了 401 上,证明不了参数这一步。"""
+    from app.api.routes.agent_tools import _fit_arguments
+
+    def update_plan(steps: list) -> dict:
+        return {"steps": steps}
+
+    fitted, dropped = _fit_arguments(update_plan, {"steps": [{"step": "第一步"}], "status": "in_progress"})
+    assert fitted == {"steps": [{"step": "第一步"}]}
+    assert dropped == ["status"]
+
+
+def test_带_kwargs_的工具原样放行() -> None:
+    from app.api.routes.agent_tools import _fit_arguments
+
+    def anything(**kwargs) -> dict:
+        return kwargs
+
+    fitted, dropped = _fit_arguments(anything, {"whatever": 1})
+    assert fitted == {"whatever": 1} and dropped == []
+
+
+def test_必填参数拼错仍然报错_并说明接受哪些参数() -> None:
+    """把必填参数拼错也表现为"多了一个不认识的键"。这时静默丢弃会让工具带着默认值跑起来,
+    做的是另一件事 —— 所以照样报错,而且要说清这个工具接受什么。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    response = client.post("/api/agent/tools/forget", json={"arguments": {"memoryId": "x"}})
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "memory_id" in detail

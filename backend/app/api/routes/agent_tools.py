@@ -17,6 +17,7 @@ tool added to mcp_server.py is available to every runtime with no second edit.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from typing import Any
 
@@ -73,6 +74,46 @@ def list_agent_tools(user: CurrentUser) -> list[ToolSpec]:
     ]
 
 
+def _accepted_names(fn: Any) -> list[str]:
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return []
+    return [
+        name
+        for name, param in signature.parameters.items()
+        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    ]
+
+
+def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """把模型给的参数收敛到这个工具真正接受的那些,返回 (可用参数, 被丢掉的键)。
+
+    **多给一个键不该让整轮白跑**。模型经常顺手加上语义正确但工具没声明的键 —— 实际见过的是
+    update_plan 收到一个顶层 `status`(它的每个 step 里确实有 status,模型把它抬了一层),
+    于是 `fn(**arguments)` 抛 TypeError,整次调用 422,而它想做的事完全清楚。
+
+    但**不能一律吞掉**:把必填参数拼错也表现为"多了一个不认识的键",这时静默丢弃会让工具
+    带着默认值跑起来,做的是另一件事。所以只丢多余的;丢完之后必填项缺了,照样报错 ——
+    而且报的是"这个工具接受哪些参数",比一句 Python 的 TypeError 更能让模型改对。
+    """
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError):  # 拿不到签名就原样放行,交给下面的 TypeError 兜底
+        return dict(arguments), []
+    accepts_kwargs = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
+    if accepts_kwargs:
+        return dict(arguments), []
+    known = {
+        name
+        for name, param in signature.parameters.items()
+        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    }
+    fitted = {key: value for key, value in arguments.items() if key in known}
+    dropped = [key for key in arguments if key not in known]
+    return fitted, dropped
+
+
 @router.post("/agent/tools/{name}")
 def invoke_agent_tool(
     name: str, body: ToolInvocation, db: DbSession, user: CurrentUser, workspace_id: str = ""
@@ -103,10 +144,15 @@ def invoke_agent_tool(
     base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
     requested_by_reset = registry.set_requested_by(body.requested_by) if body.requested_by else None
     session_reset = registry.set_session_id(body.session_id) if body.session_id else None
+    arguments, dropped = _fit_arguments(fn, body.arguments)
+    if dropped:
+        # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。
+        logger.info("tool %s: dropped unsupported arguments %s", name, dropped)
     try:
-        result = fn(**body.arguments)
-    except TypeError as exc:  # wrong/missing arguments from the model, not a server fault
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = fn(**arguments)
+    except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
+        accepted = ", ".join(_accepted_names(fn)) or "(无)"
+        raise HTTPException(status_code=422, detail=f"{exc};该工具接受的参数:{accepted}") from exc
     except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
         logger.warning("tool %s failed: %s", name, exc)
         return {"error": str(exc)[:500]}
