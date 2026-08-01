@@ -392,3 +392,49 @@ def compact_session(
             child.finish()
             raise AdapterError(_tail(str(event.get("message", "压缩失败"))))
     raise AdapterError(_tail(child.finish()) or "压缩没有返回结果")
+
+
+def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, profile_id: str, credential: dict | None) -> bool:
+    """刷新一次订阅计划的 OAuth 凭据。返回 False 表示这个档案根本没登录过。
+
+    **刷新协议不在这边**:各家的 refresh flow 在 pi 的 Provider 定义里,这里只是让 sidecar
+    调一次 `models.getAuth` —— 它返回前会刷新并把新凭据经租约写回后端。自己在 Python 里
+    实现刷新等于把六家协议再抄一遍,而当初把订阅制交给 pi 就是为了不抄。
+    """
+    node, sidecar = pi_sidecar_command()
+    if not Path(sidecar).exists():
+        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+    frame = {
+        "type": "refresh_credential",
+        "turnId": "refresh",
+        "piProvider": pi_provider,
+        "profileId": profile_id,
+        "credential": credential,
+        "apiBase": api_base,
+        "token": token,
+    }
+    env = {**os.environ}
+    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+        env["ELECTRON_RUN_AS_NODE"] = "1"
+    env = _proxy_env(env)
+    process = subprocess.Popen(
+        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
+    )
+    assert process.stdin is not None and process.stdout is not None
+    process.stdin.write(json.dumps(frame) + "\n")
+    process.stdin.flush()
+    process.stdin.close()
+    # 刷新是一次 token 交换,不该等到对话那种时限。
+    child = ChildProcess(process, 60)
+    for line in child.lines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "credential_refreshed":
+            child.finish()
+            return bool(event.get("refreshed"))
+        if event.get("type") == "error":
+            child.finish()
+            raise AdapterError(_tail(str(event.get("message", "刷新凭据失败"))))
+    raise AdapterError(_tail(child.finish()) or "刷新凭据没有返回结果")

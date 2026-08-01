@@ -19,12 +19,6 @@ import { cn } from "@/lib/utils";
 /** 与 sidecar 的触发阈值一致(compaction.ts 的 COMPACT_RATIO)。到这条线就该显眼了。 */
 const WARN_RATIO = 0.8;
 
-/** 低于这个用量根本不显示。
- *
- * Claude Code / Codex 都不常驻这个数 —— 对话刚开始时"还剩 97%"是纯噪音,挤在输入框旁边
- * 反而让真正要紧的时候不显眼。过半才出现,读数本身就成了一个信号。 */
-const SHOW_FROM_RATIO = 0.5;
-
 export interface ContextInfo {
   tokens: number;
   window: number;
@@ -51,7 +45,6 @@ export function ContextMeter({
   if (!context || !context.window || context.window <= 0) return null;
 
   const ratio = Math.min(1, context.tokens / context.window);
-  if (ratio < SHOW_FROM_RATIO && !compacting) return null;
 
   // 报**剩余**而不是已用:用户此刻在决定"还能不能接着问",剩余量是直接答案,
   // 已用量还要在脑子里做一次减法。Claude Code 的 "Context left" 是同一个道理。

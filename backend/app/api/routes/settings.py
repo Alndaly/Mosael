@@ -55,6 +55,8 @@ from app.domain.provider_defaults import CAPABILITIES
 from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
+from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
+from app.ai.agent.host import mint_tool_token
 from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
@@ -428,8 +430,25 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
     pi_provider = pi_provider_id(profile.vendor)
     if not supports_quota(pi_provider):
         return ProviderQuotaOut(supported=False)
+    credential = read_credential(profile)
+    # 令牌过期就先刷新再查。自动刷新原本只发生在对话路径上(pi 解析模型鉴权时按 expires 判),
+    # 于是"很久没聊天"之后这条旁路一律撞 401,而档案上明明写着已授权。刷新协议仍在 pi 那边,
+    # 这里只是让它跑一次。
+    if credential is not None and is_expired(credential):
+        try:
+            refresh_oauth_credential(
+                api_base=f"http://{settings_config.backend_host}:{settings_config.backend_port}",
+                token=mint_tool_token(db, user),
+                pi_provider=pi_provider or "",
+                profile_id=profile.id,
+                credential=credential,
+            )
+            db.refresh(profile)
+            credential = read_credential(profile)
+        except AdapterError as exc:
+            return ProviderQuotaOut(supported=True, error=f"令牌刷新失败:{exc}")
     try:
-        snapshot = fetch_quota(pi_provider, read_credential(profile))
+        snapshot = fetch_quota(pi_provider, credential)
     except QuotaUnavailable as exc:
         return ProviderQuotaOut(supported=True, error=str(exc))
     return ProviderQuotaOut(supported=True, **snapshot)

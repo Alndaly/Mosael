@@ -12,9 +12,9 @@ import * as readline from "node:readline";
 import type { Agent } from "@earendil-works/pi-agent-core";
 
 import { answerAuthPrompt, runAuthLogin } from "./auth.js";
-import { log, send, type CompactRequest, type Request } from "./protocol.js";
+import { log, send, type CompactRequest, type RefreshCredentialRequest, type Request } from "./protocol.js";
 import { installProxyFromEnv } from "./proxy.js";
-import { runCompaction, runPiTurn } from "./pi.js";
+import { refreshCredential, runCompaction, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
 
 /**
@@ -73,6 +73,17 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
   const text = `「sidecar echo」未提供 provider/model。收到 prompt:${prompt ?? ""}`;
   for (const ch of text) send({ type: "text_delta", turnId, delta: ch });
   send({ type: "turn_done", turnId, text, sessionState: null, usage: { requests: 1 } });
+}
+
+async function handleRefreshCredential(msg: RefreshCredentialRequest): Promise<void> {
+  const result = await refreshCredential({
+    piProvider: msg.piProvider,
+    profileId: msg.profileId,
+    credential: msg.credential,
+    apiBase: msg.apiBase,
+    token: msg.token,
+  });
+  send({ type: "credential_refreshed", turnId: msg.turnId, refreshed: result.refreshed });
 }
 
 /** 只压缩不对话。没有 provider/model 就原样回,不假装压过 —— 界面会显示"没有可压缩的内容"。 */
@@ -142,6 +153,10 @@ async function main(): Promise<void> {
           }
         }
         send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
+      } else if (msg.type === "refresh_credential") {
+        void handleRefreshCredential(msg).catch((err) =>
+          send({ type: "error", turnId: msg.turnId, message: String(err) }),
+        );
       } else if (msg.type === "compact") {
         // 同样不 await:压缩要调一次模型做摘要,期间 stdin 仍要能收 abort。
         void handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }));

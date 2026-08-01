@@ -222,3 +222,55 @@ def test_档案同时报出_已授权_与_是否过期():
     row = next(r for r in rows if r["name"] == "过期的订阅")
     assert row["oauth_linked"] is True
     assert row["oauth_expired"] is True
+
+
+def test_令牌过期时先刷新再查(monkeypatch):
+    """自动刷新原本只发生在对话路径上,于是"很久没聊天"之后额度查询一律撞 401,
+    而档案上明明写着已授权。这条锁住:过期时旁路也会先让 pi 刷新一次。"""
+    import time as _time
+
+    from app.api.routes import settings as settings_routes
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    past = int((_time.time() - 3600) * 1000)
+    with SessionLocal() as db:
+        profile = ProviderProfile(
+            name="过期订阅",
+            vendor="anthropic",
+            base_url="",
+            api_key="",
+            auth_type="oauth",
+            oauth_credential={"type": "oauth", "access": "old", "refresh": "r", "expires": past},
+        )
+        db.add(profile)
+        db.commit()
+        profile_id = profile.id
+
+    called: dict = {}
+
+    def fake_refresh(**kwargs):
+        called.update(kwargs)
+        # 模拟 pi 刷新后写回:换上一个尚未过期的令牌
+        with SessionLocal() as inner:
+            row = inner.get(ProviderProfile, profile_id)
+            row.oauth_credential = {"type": "oauth", "access": "new", "refresh": "r2", "expires": past + 10**7}
+            inner.commit()
+        return True
+
+    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", fake_refresh)
+    seen: dict = {}
+    monkeypatch.setattr(
+        settings_routes,
+        "fetch_quota",
+        lambda provider, credential: seen.update(credential=credential) or {"plan": None, "metrics": []},
+    )
+
+    response = client.post(f"/api/settings/providers/{profile_id}/quota")
+    assert response.status_code == 200
+    assert called.get("pi_provider") == "anthropic"
+    # 查询拿到的必须是刷新后的那份,而不是过期的老令牌
+    assert seen["credential"]["access"] == "new"

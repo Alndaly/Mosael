@@ -29,9 +29,9 @@ describe("上下文水位", () => {
     expect(render(<ContextMeter context={null} />).container.textContent).toBe("");
   });
 
-  it("用量过半才出现 —— 刚开始时「还剩 97%」是纯噪音", () => {
+  it("有窗口就一直显示 —— 用量低时也是有用的信息", () => {
     const { container } = render(<ContextMeter context={{ tokens: 20_000, window: 100_000 }} />);
-    expect(container.textContent).toBe("");
+    expect(container.textContent).toContain("80");
   });
 
   it("报剩余而不是已用,并在过线时转成告警色", () => {

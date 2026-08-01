@@ -178,6 +178,33 @@ export async function buildSubscriptionModels(
   return { models, model, provider };
 }
 
+/**
+ * 只刷新凭据,不做任何模型调用。
+ *
+ * 自动刷新原本只发生在对话路径上 —— pi 在解析模型鉴权时按 expires 判断并调各家的 refresh
+ * flow。于是"很久没聊天"之后,额度查询这类旁路一律撞 401,而档案上明明写着已授权。
+ *
+ * `models.getAuth` 就是 pi 对外的那个口子:返回前会刷新 OAuth,新凭据经我们的
+ * CredentialStore(租约互斥)写回后端。所以这里不重描任何一家的刷新协议 —— 那正是当初把
+ * 订阅制交给 pi 的原因。
+ */
+export async function refreshCredential(input: {
+  piProvider: string;
+  profileId: string;
+  credential?: Credential | null;
+  apiBase: string;
+  token: string;
+}): Promise<{ refreshed: boolean }> {
+  const { models, provider } = await buildSubscriptionModels(
+    input.piProvider,
+    undefined,
+    new BackendCredentialStore(input.apiBase, input.token, input.profileId, input.credential ?? undefined),
+  );
+  // 拿不到 auth 说明这个档案根本没登录过,不是"刷新失败" —— 交给调用方去说。
+  const auth = await models.getAuth(provider.id);
+  return { refreshed: Boolean(auth) };
+}
+
 /** 只压缩不对话:走和轮前压缩同一条路径,force=true。 */
 export async function runCompaction(input: {
   provider: PiTurnInput["provider"];

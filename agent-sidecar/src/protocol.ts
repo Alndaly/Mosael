@@ -79,6 +79,17 @@ export interface AbortRequest {
 }
 
 /** 只压缩,不对话。对应界面上的「立即压缩」—— 用户想主动整理上下文,而不是先发一句话。 */
+/** 只刷新凭据。对话之外的旁路(如额度查询)在令牌过期时先走这一步。 */
+export interface RefreshCredentialRequest {
+  type: "refresh_credential";
+  turnId: string;
+  piProvider: string;
+  profileId: string;
+  credential?: Credential | null;
+  apiBase: string;
+  token: string;
+}
+
 export interface CompactRequest {
   type: "compact";
   turnId: string;
@@ -128,6 +139,7 @@ export type Request =
   | QueueRequest
   | AbortRequest
   | CompactRequest
+  | RefreshCredentialRequest
   | AuthLoginRequest
   | AuthAnswerRequest
   | AuthCancelRequest;
@@ -153,6 +165,7 @@ export type Event =
     }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
+  | { type: "credential_refreshed"; turnId: string; refreshed: boolean }
   | {
       type: "compacted";
       turnId: string;
