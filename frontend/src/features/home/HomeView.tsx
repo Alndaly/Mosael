@@ -29,6 +29,7 @@ import {
   UsageCostChart,
   UsageTokensChart,
 } from "@/features/home/HomeCharts";
+import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
 import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
@@ -89,6 +90,16 @@ export function HomeView({
 
   // 走字的钟。它不解决任何问题 —— 但盯着首页等渲染/发布跑完的时候,一个还在动的东西
   // 让这一页看起来是活的。每秒一跳,只在首页挂载期间。
+  // ?holiday=christmas 之类:节日效果一年只有几天能看到,没有预览入口等于写完没法验。
+  // 跟着 hashchange 走 —— 只在挂载时读一次的话,改了地址栏没反应,这个知道也用不了。
+  const readHolidayOverride = () =>
+    new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("holiday");
+  const [holidayOverride, setHolidayOverride] = React.useState(readHolidayOverride);
+  React.useEffect(() => {
+    const sync = () => setHolidayOverride(readHolidayOverride());
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -207,40 +218,16 @@ export function HomeView({
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
-      <section className="mb-3 flex items-stretch justify-between gap-3 max-[880px]:flex-col">
-        <div className="flex min-w-0 flex-col justify-center gap-0.5">
-          <h1 className="m-0 flex items-baseline gap-2 text-xl font-[650] tracking-[-0.01em]">
-            {t(greetingKey)}
-            <span className="text-xs font-normal text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</span>
-          </h1>
-          <small className="text-xs tabular-nums text-muted-foreground">
-            {now.toLocaleDateString(locale === "en-US" ? "en-US" : "zh-CN", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              weekday: "long",
-            })}
-            {"  "}
-            {now.toLocaleTimeString(locale === "en-US" ? "en-US" : "zh-CN", { hour12: false })}
-          </small>
-        </div>
-        <figure className="relative m-0 flex max-w-[46ch] flex-col justify-center gap-0.5 rounded-lg border border-border bg-panel py-2.5 pl-8 pr-[34px] max-[880px]:max-w-none" aria-live="polite">
-          <BookText size={13} className="absolute left-2.5 top-3 text-muted-foreground" />
-          {poemSpins > 0 && poemSpins % 10 === 0 ? (
-            <blockquote className="m-0 text-[13px] leading-normal">{t("homePoemEgg")}</blockquote>
-          ) : (
-            <>
-              <blockquote className="m-0 text-[13px] leading-normal">{poem.text}</blockquote>
-              <figcaption className="text-[11px] text-muted-foreground">
-                {poem.author} · 《{poem.source}》
-              </figcaption>
-            </>
-          )}
-          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={() => void spinPoem()} disabled={poemLoading}>
-            <RefreshCcw size={12} className={poemLoading ? "animate-spin" : undefined} />
-          </button>
-        </figure>
-      </section>
+      <HomeHero
+        greeting={t(greetingKey)}
+        workspaceName={displayWorkspaceName(workspace.name, t)}
+        now={now}
+        poem={poem}
+        poemLoading={poemLoading}
+        poemEgg={poemSpins > 0 && poemSpins % 10 === 0 ? t("homePoemEgg") : undefined}
+        onRefreshPoem={() => void spinPoem()}
+        holidayOverride={holidayOverride}
+      />
 
       {statTiles.length > 0 && (
         <section className="mb-3 grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2.5">

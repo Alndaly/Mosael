@@ -47,6 +47,31 @@
       opacity: 0.25;
     }
   }
+  /* 节日彩蛋的四种动作。keyframes 是 Tailwind 表达不了的少数东西之一,和上面几个一样留在这里,
+     而不是回到手写全局 class 那条老路。 */
+  --animate-holiday-fall: holiday-fall linear infinite;
+  --animate-holiday-rise: holiday-rise ease-out infinite;
+  --animate-holiday-sway: holiday-sway 3.5s ease-in-out infinite;
+  --animate-holiday-pulse: holiday-pulse 2.4s ease-in-out infinite;
+  @keyframes holiday-fall {
+    0% { transform: translateY(-20%) rotate(0deg); opacity: 0; }
+    12% { opacity: 1; }
+    88% { opacity: 1; }
+    100% { transform: translateY(150%) rotate(360deg); opacity: 0; }
+  }
+  @keyframes holiday-rise {
+    0% { transform: translateY(40%) scale(0.9); opacity: 0; }
+    18% { opacity: 1; }
+    100% { transform: translateY(-130%) scale(1.05); opacity: 0; }
+  }
+  @keyframes holiday-sway {
+    0%, 100% { transform: translateY(0) rotate(-6deg); }
+    50% { transform: translateY(-4px) rotate(6deg); }
+  }
+  @keyframes holiday-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.65; }
+    50% { transform: scale(1.14); opacity: 1; }
+  }
   --animate-confirm-in: confirm-in 160ms ease-out;
   --animate-wf-dash: wf-dash 0.6s linear infinite;
   @keyframes wf-dash {
@@ -144,6 +169,14 @@
   /* 缓存命中:紫灰。与 video 蓝拉开一个色相段,但保持同一冷区 —— 它和 input 在同一根柱子上
      相邻,靠明度差而不是撞色区分。 */
   --chart-cache: #8a72c4;
+  /* 节日强调色。和图表色一样按面板底色单独调过 —— 直接用 Tailwind 调色板会在暖纸面上显脏。 */
+  --holiday-red: #c2453c;
+  --holiday-amber: #b8801f;
+  --holiday-pink: #c05186;
+  --holiday-green: #2f8f6b;
+  --holiday-violet: #6a5cd8;
+  --holiday-sky: #3d7fb8;
+  --holiday-orange: #c9722a;
   --track-overlay-bg: #fbe4ef;
   --track-overlay-border: #eba8c9;
   --track-overlay-text: #8f3a63;
@@ -221,6 +254,13 @@
   --chart-audio: #219e8c;
   --chart-image: #bb8326;
   --chart-cache: #9b86d4;
+  --holiday-red: #e0645c;
+  --holiday-amber: #d19b3d;
+  --holiday-pink: #d977a5;
+  --holiday-green: #43a883;
+  --holiday-violet: #8a7bf0;
+  --holiday-sky: #5b9dd6;
+  --holiday-orange: #d98a45;
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
