@@ -469,6 +469,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 content=final_text,
                 payload={
                     "usage": usage,
+                    # 上下文水位挂在最近一条助手消息上,前端据此画进度条 —— 不另建一张表:
+                    # 它天然随对话推进而更新,且历史消息保留着当时的水位,回看时也说得通。
+                    **({"context": result.context} if result.context else {}),
+                    # 压缩必须被看见:静默压缩会让用户以为模型"忘了"早期内容。
+                    **({"compaction": result.compaction} if result.compaction else {}),
                     **({"timeline": timeline} if timeline else {}),
                 },
             )

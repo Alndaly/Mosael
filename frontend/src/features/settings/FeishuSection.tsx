@@ -155,13 +155,10 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       <SettingsBlock>
         {beginScan.isError && <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>}
 
-        {hasBots && (
-          /* 一次性的后台配置,只能人工去开(飞书没开放改事件订阅的接口)。放在列表下方常驻,
-             而不是等用户点了卡片没反应再去猜 —— 真撞上时后端还会把原因写进机器人状态那行小字。 */
-          <p className="m-0 rounded-md border border-border bg-panel-subtle px-2.5 py-2 text-[11.5px] leading-[1.6] text-muted-foreground">
-            {t("feishuCardSetup")}
-          </p>
-        )}
+        {/* 这里曾常驻一条「还需去开发者后台开交互卡片」的横幅。**扫码一键创建已经把这两项配好了**,
+            对绝大多数用户它就是一条错的指令 —— 照着去后台反而会怀疑自己漏配了什么。
+            手动建的应用确实可能没开:那种情况后端在发卡片撞上 200340 时会把具体步骤写进机器人
+            状态那行小字(见 feishu/service.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
 
         {hasBots && (
           <div className="grid gap-1.5">

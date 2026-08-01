@@ -12,9 +12,9 @@ import * as readline from "node:readline";
 import type { Agent } from "@earendil-works/pi-agent-core";
 
 import { answerAuthPrompt, runAuthLogin } from "./auth.js";
-import { log, send, type Request } from "./protocol.js";
+import { log, send, type CompactRequest, type Request } from "./protocol.js";
 import { installProxyFromEnv } from "./proxy.js";
-import { runPiTurn } from "./pi.js";
+import { runCompaction, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
 
 /**
@@ -43,6 +43,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         apiBase: msg.apiBase,
         token: msg.token,
         sessionState: msg.sessionState,
+        forceCompact: msg.forceCompact,
         onAgentReady: (agent) => active.set(turnId, agent),
       },
       {
@@ -57,13 +58,43 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
       send({ type: "error", turnId, message: result.errorMessage });
       return;
     }
-    send({ type: "turn_done", turnId, text: result.text, sessionState: result.sessionState, usage: result.usage });
+    send({
+      type: "turn_done",
+      turnId,
+      text: result.text,
+      sessionState: result.sessionState,
+      usage: result.usage,
+      context: result.context,
+      compaction: result.compaction ?? null,
+    });
     return;
   }
   // 无 provider:退回 echo(便于纯传输测试)
   const text = `「sidecar echo」未提供 provider/model。收到 prompt:${prompt ?? ""}`;
   for (const ch of text) send({ type: "text_delta", turnId, delta: ch });
   send({ type: "turn_done", turnId, text, sessionState: null, usage: { requests: 1 } });
+}
+
+/** 只压缩不对话。没有 provider/model 就原样回,不假装压过 —— 界面会显示"没有可压缩的内容"。 */
+async function handleCompact(msg: CompactRequest): Promise<void> {
+  if (!(msg.provider?.baseUrl || msg.provider?.piProvider) || !msg.model) {
+    send({ type: "compacted", turnId: msg.turnId, sessionState: msg.sessionState ?? null, compaction: null });
+    return;
+  }
+  const result = await runCompaction({
+    provider: msg.provider,
+    model: msg.model,
+    sessionState: msg.sessionState,
+    apiBase: msg.apiBase,
+    token: msg.token,
+  });
+  send({
+    type: "compacted",
+    turnId: msg.turnId,
+    sessionState: result.sessionState,
+    context: result.context,
+    compaction: result.compaction,
+  });
 }
 
 async function main(): Promise<void> {
@@ -111,6 +142,9 @@ async function main(): Promise<void> {
           }
         }
         send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
+      } else if (msg.type === "compact") {
+        // 同样不 await:压缩要调一次模型做摘要,期间 stdin 仍要能收 abort。
+        void handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }));
       } else if (msg.type === "abort") {
         active.get(msg.turnId)?.abort();
       } else if (msg.type === "auth_login") {

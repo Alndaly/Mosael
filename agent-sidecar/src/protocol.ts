@@ -40,6 +40,8 @@ export interface RunTurnRequest {
   model?: string;
   /** Opaque pi session/compaction state to resume (S5+). */
   sessionState?: unknown;
+  /** 跳过水位判断,本轮开始前先压缩一次(界面上的「立即压缩」)。 */
+  forceCompact?: boolean;
 }
 
 /**
@@ -74,6 +76,18 @@ export interface QueueRequest {
 export interface AbortRequest {
   type: "abort";
   turnId: string;
+}
+
+/** 只压缩,不对话。对应界面上的「立即压缩」—— 用户想主动整理上下文,而不是先发一句话。 */
+export interface CompactRequest {
+  type: "compact";
+  turnId: string;
+  systemPrompt: string;
+  provider?: RunTurnRequest["provider"];
+  model?: string;
+  sessionState?: unknown;
+  apiBase: string;
+  token: string;
 }
 
 /**
@@ -113,6 +127,7 @@ export type Request =
   | SteerRequest
   | QueueRequest
   | AbortRequest
+  | CompactRequest
   | AuthLoginRequest
   | AuthAnswerRequest
   | AuthCancelRequest;
@@ -124,9 +139,27 @@ export type Event =
   | { type: "text_delta"; turnId: string; delta: string }
   | { type: "tool_start"; turnId: string; toolCallId: string; name: string; args: unknown }
   | { type: "tool_end"; turnId: string; toolCallId: string; result: unknown; isError: boolean }
-  | { type: "turn_done"; turnId: string; text: string; sessionState: unknown; usage?: Record<string, unknown> }
+  | {
+      type: "turn_done";
+      turnId: string;
+      text: string;
+      sessionState: unknown;
+      usage?: Record<string, unknown>;
+      /** 本轮结束时的上下文水位。窗口按当前模型给 —— 换模型上限就变。 */
+      context?: { tokens: number; window: number };
+      /** 本轮开始前发生的压缩;没发生则不带。前端据此在对话流里插一条标记 ——
+       *  压缩必须被看见,否则用户不知道早期消息已经不在上下文里了。 */
+      compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
+    }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
+  | {
+      type: "compacted";
+      turnId: string;
+      sessionState: unknown;
+      context?: { tokens: number; window: number };
+      compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
+    }
   | { type: "error"; turnId: string | null; message: string }
   // ── 登录流程 ───────────────────────────────────────────────────────────────
   // pi 要展示给用户的东西(授权链接、设备码、进度)原样转发:`event` 就是 pi 的 AuthEvent,

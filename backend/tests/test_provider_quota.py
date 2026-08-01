@@ -151,6 +151,10 @@ def test_六家都接入了():
 @pytest.mark.parametrize(
     "credential,expected",
     [
+        # pi 的真实形状:OAuth 用 access,API Key 用 key。第一版按 access_token / api_key 去取,
+        # 六家一家都取不到,界面上全是"尚未授权登录"而档案显示已授权。
+        ({"type": "oauth", "access": "tok", "refresh": "r", "expires": 123}, "tok"),
+        ({"type": "api_key", "key": "sk-1"}, "sk-1"),
         ({"access_token": " abc "}, "abc"),
         ({"accessToken": "xyz"}, "xyz"),
         ({"auth": {"apiKey": "nested"}}, "nested"),

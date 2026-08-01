@@ -104,7 +104,7 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[280px] p-2.5">
-        {quota.isPending ? (
+        {quota.isFetching ? (
           <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             {t("quotaLoading")}

@@ -20,18 +20,65 @@ import { BackendCredentialStore } from "./credentials.js";
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
+import {
+  type CompactionResult,
+  type Message as CompactionMessage,
+  SUMMARY_PROMPT,
+  compact,
+  contextTokens,
+} from "./compaction";
+
 const PROVIDER_ID = "open-studio";
 
-// 上下文压缩(S7):超过阈值时只把最近若干条喂给 LLM,避免长对话撑爆上下文窗口。
-// 切点回退到最近的一条 user 消息,保证不切断 assistant 工具调用与其 toolResult 的配对。
-const COMPACT_OVER = 40;
-const COMPACT_KEEP = 24;
+// 轮内兜底:一轮里工具调用可能连着追加十几条消息,而按 token 的压缩只在**轮与轮之间**做
+// (见 prepareContext)。这条只防"单轮内爆炸"这一种情况,阈值放得很宽,正常对话碰不到它。
+const RUNAWAY_TURN_MESSAGES = 120;
+const RUNAWAY_KEEP = 60;
 
-function compactContext(messages: AgentMessage[]): AgentMessage[] {
-  if (messages.length <= COMPACT_OVER) return messages;
-  let start = messages.length - COMPACT_KEEP;
+function guardRunawayTurn(messages: AgentMessage[]): AgentMessage[] {
+  if (messages.length <= RUNAWAY_TURN_MESSAGES) return messages;
+  let start = messages.length - RUNAWAY_KEEP;
   while (start > 0 && (messages[start] as { role?: string }).role !== "user") start -= 1;
   return start > 0 ? messages.slice(start) : messages;
+}
+
+/**
+ * 轮前压缩:水位过线就把早期对话交给同一个模型压成交接说明。
+ *
+ * **放在轮与轮之间而不是 transformContext 里**:后者在一轮内的每次 LLM 调用前都会跑,
+ * 工具循环里会被调用很多次 —— 在那儿摘要等于一轮里付好几次摘要的钱,而且每次摘的还是
+ * 几乎同一段内容。
+ */
+async function prepareContext(
+  messages: AgentMessage[],
+  model: Model<Api>,
+  streamFn: ConstructorParameters<typeof Agent>[0]["streamFn"],
+  force: boolean,
+): Promise<{ messages: AgentMessage[]; info: CompactionResult["info"] }> {
+  const contextWindow = Number(model.contextWindow) || 0;
+  const result = await compact(messages as unknown as CompactionMessage[], {
+    contextWindow,
+    force,
+    summarize: async (early) => {
+      // 摘要用同一个模型:换个便宜模型看着省钱,但它读不懂这段对话里的专有名词和 id,
+      // 摘出来的东西反而会误导后续几十轮。工具留空 —— 摘要不该顺手去调工具。
+      const summarizer = new Agent({
+        initialState: { systemPrompt: "你是一个严谨的对话摘要器。", model, tools: [], messages: [...early] as unknown as AgentMessage[] },
+        streamFn,
+      });
+      await summarizer.prompt(SUMMARY_PROMPT);
+      const last = [...summarizer.state.messages].reverse().find((m) => (m as { role?: string }).role === "assistant");
+      const content = (last as { content?: unknown } | undefined)?.content;
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) {
+        return content
+          .map((part) => (typeof part === "string" ? part : String((part as { text?: unknown })?.text ?? "")))
+          .join("");
+      }
+      return "";
+    },
+  });
+  return { messages: result.messages as unknown as AgentMessage[], info: result.info };
 }
 
 /** 端点没告诉我们上下文窗口时的回退。
@@ -131,6 +178,33 @@ export async function buildSubscriptionModels(
   return { models, model, provider };
 }
 
+/** 只压缩不对话:走和轮前压缩同一条路径,force=true。 */
+export async function runCompaction(input: {
+  provider: PiTurnInput["provider"];
+  model: string;
+  sessionState?: unknown;
+  apiBase: string;
+  token: string;
+}): Promise<{ sessionState: unknown; context: { tokens: number; window: number }; compaction: CompactionResult["info"] }> {
+  const piProvider = input.provider.piProvider ?? "";
+  const { models, model } = piProvider
+    ? await buildSubscriptionModels(
+        piProvider,
+        input.model,
+        new BackendCredentialStore(input.apiBase, input.token, input.provider.profileId ?? "", input.provider.credential ?? undefined),
+      )
+    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  const streamFn = (m: Parameters<typeof models.stream>[0], context: Parameters<typeof models.stream>[1], options: Parameters<typeof models.stream>[2]) =>
+    models.stream(m, context, options);
+  const { messages, info } = await prepareContext(prior, model as Model<Api>, streamFn, true);
+  return {
+    sessionState: messages,
+    context: { tokens: contextTokens(messages as unknown as CompactionMessage[]), window: Number(model?.contextWindow) || 0 },
+    compaction: info,
+  };
+}
+
 export interface PiTurnInput {
   systemPrompt: string;
   prompt: string;
@@ -155,6 +229,8 @@ export interface PiTurnInput {
   sessionState?: unknown;
   /** Called with the Agent once built, so the caller can steer or abort the running turn. */
   onAgentReady?: (agent: Agent) => void;
+  /** 跳过水位判断直接压缩一次 —— 对应界面上的「立即压缩」。 */
+  forceCompact?: boolean;
 }
 
 export interface PiTurnResult {
@@ -170,6 +246,10 @@ export interface PiTurnResult {
   errorMessage?: string;
   /** True when the run was stopped by abort() rather than finishing on its own. */
   aborted?: boolean;
+  /** 本轮结束时的上下文水位(前端画进度条)。 */
+  context?: { tokens: number; window: number };
+  /** 本轮**开始前**是否发生了压缩;没发生为 null。 */
+  compaction?: CompactionResult["info"];
 }
 
 export interface PiTurnHandlers {
@@ -193,12 +273,21 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
         ),
       )
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
-  const priorMessages = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  const streamFn = (m: Parameters<typeof models.stream>[0], context: Parameters<typeof models.stream>[1], options: Parameters<typeof models.stream>[2]) =>
+    models.stream(m, context, options);
+  // 轮前按 token 水位压缩(超过窗口 80% 触发,或调用方显式要求)。
+  const { messages: priorMessages, info: compaction } = await prepareContext(
+    prior,
+    model as Model<Api>,
+    streamFn,
+    Boolean(input.forceCompact),
+  );
   const agent = new Agent({
     initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },
-    streamFn: (m, context, options) => models.stream(m, context, options),
-    // 每次 LLM 调用前压缩上下文;state.messages 保留全量(多轮记忆不受影响)
-    transformContext: async (messages) => compactContext(messages),
+    streamFn,
+    // 轮内兜底:只防单轮里工具调用把消息堆爆,正常对话碰不到。
+    transformContext: async (messages) => guardRunawayTurn(messages),
   });
   // One queued message per turn, in the order they were sent. Draining the whole queue at
   // once merges several questions into a single answer, which reads as the agent ignoring
@@ -242,6 +331,13 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     sessionState: messages,
     errorMessage: aborted ? undefined : failed?.errorMessage,
     aborted,
+    // 每轮都回报水位:前端据此画进度条。窗口按**当前模型**给 —— 换个模型上限就变了,
+    // 用一个全局常量会在小窗口模型上显示成"还早得很"。
+    context: {
+      tokens: contextTokens(messages as unknown as CompactionMessage[]),
+      window: Number(model?.contextWindow) || 0,
+    },
+    compaction,
   };
 }
 

@@ -344,15 +344,21 @@ def parse_copilot(payload: dict[str, Any]) -> dict[str, Any]:
 # ── 取访问令牌 ──────────────────────────────────────────────────────────────
 
 
-def access_token(credential: dict[str, Any] | None) -> str | None:
-    """从 pi 的 Credential 里取访问令牌。
+#: pi 的 Credential 是个带 type 标签的联合(见 pi-ai/auth/types):
+#:   OAuth   → {type: "oauth",   access, refresh, expires}
+#:   API Key → {type: "api_key", key}
+#: **令牌字段叫 access / key**,不叫 access_token / api_key —— 第一版按后者去取,结果六家
+#: 一家都取不到令牌,界面上全是"尚未授权登录",而档案明明显示已授权。后面几个别名只是
+#: 对非 pi 来源凭据的容错,不是主路径。
+_TOKEN_KEYS = ("access", "key", "access_token", "accessToken", "token", "apiKey")
 
-    各家键名不统一(pi 原样存的),挨个试。取不到就返回 None —— 让调用方报"未登录",
-    比拿着空串去请求换回一个 401 强。
-    """
+
+def access_token(credential: dict[str, Any] | None) -> str | None:
+    """从 pi 的 Credential 里取访问令牌。取不到返回 None —— 让调用方报"未登录",
+    比拿着空串去请求换回一个 401 强。"""
     if not isinstance(credential, dict):
         return None
-    for key in ("access_token", "accessToken", "token", "api_key", "apiKey"):
+    for key in _TOKEN_KEYS:
         value = credential.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()

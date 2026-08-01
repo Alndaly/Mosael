@@ -37,6 +37,12 @@ class TurnResult:
     text: str
     adapter_state: object | None = None  # pi: 序列化的消息数组,用于下一轮多轮记忆
     usage: dict | None = None
+    #: 本轮结束时的上下文水位 {tokens, window}。窗口按**当前模型**给 —— 换模型上限就变,
+    #: 用一个全局常量会在小窗口模型上把界面显示成"还早得很"。
+    context: dict | None = None
+    #: 本轮开始前发生的压缩;没发生为 None。必须一路带到前端 —— 压缩静默进行的话,
+    #: 用户不会知道早期消息已经不在上下文里了。
+    compaction: dict | None = None
 
 def run_turn(
     adapter: str,
@@ -51,6 +57,7 @@ def run_turn(
     model: str | None = None,
     workspace_id: str = "",
     adapter_state: object | None = None,
+    force_compact: bool = False,
     on_tool: "Callable[[dict], None] | None" = None,
 ) -> TurnResult:
     if adapter == "pi":
@@ -66,6 +73,7 @@ def run_turn(
             on_delta,
             on_tool,
             session_id=session_key,
+            force_compact=force_compact,
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
@@ -175,6 +183,7 @@ def _run_pi(
     on_delta: Callable[[str], None] | None,
     on_tool: Callable[[dict], None] | None = None,
     session_id: str = "",
+    force_compact: bool = False,
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Open Studio's REST with the
@@ -210,6 +219,8 @@ def _run_pi(
         },
         "model": model,
         "sessionState": adapter_state,
+        # 界面上的「立即压缩」:跳过水位判断,本轮开始前先整理一次上下文。
+        "forceCompact": force_compact,
     }
     # 打包版把 Electron 二进制当 node 用(OPEN_STUDIO_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
@@ -235,6 +246,8 @@ def _run_pi(
     result_text: str | None = None
     result_state: object | None = None
     result_usage: dict | None = None
+    result_context: dict | None = None
+    result_compaction: dict | None = None
     saw_tool = False
     aborted = False
     for line in child.lines():
@@ -254,6 +267,10 @@ def _run_pi(
             result_state = event.get("sessionState")
             usage = event.get("usage")
             result_usage = usage if isinstance(usage, dict) else None
+            context = event.get("context")
+            result_context = context if isinstance(context, dict) else None
+            compaction = event.get("compaction")
+            result_compaction = compaction if isinstance(compaction, dict) else None
             # Stop reading here rather than waiting for the process to exit. stdin now stays
             # open for the whole turn so steering has somewhere to go, which means the sidecar's
             # readline loop no longer ends on its own — waiting for EOF left every turn
@@ -283,12 +300,18 @@ def _run_pi(
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
-        return TurnResult(text=result_text, adapter_state=result_state, usage=result_usage)
+        return TurnResult(text=result_text, adapter_state=result_state, usage=result_usage, context=result_context, compaction=result_compaction)
     if not result_text.strip() and not saw_tool:
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
         raise AdapterError(stderr_tail or f"模型没有返回任何内容。{_PROVIDER_HINT}")
-    return TurnResult(text=result_text.strip(), adapter_state=result_state, usage=result_usage)
+    return TurnResult(
+        text=result_text.strip(),
+        adapter_state=result_state,
+        usage=result_usage,
+        context=result_context,
+        compaction=result_compaction,
+    )
 def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]
