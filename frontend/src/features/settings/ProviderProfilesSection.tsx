@@ -105,7 +105,13 @@ export function ProviderProfilesSection({
     queryKey: ["provider-vendors"],
     queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
   });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["provider-profiles"] });
+  const refresh = () => {
+    // 档案启停/新增/删除都会改变"某能力有哪些模型可选",顶部那几个默认模型下拉读的是
+    // capability-models —— 不一起失效就得刷新整页才看得到新模型。
+    void qc.invalidateQueries({ queryKey: ["capability-models"] });
+    void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+    return qc.invalidateQueries({ queryKey: ["provider-profiles"] });
+  };
   /** 某 vendor 的默认能力(新建/换 vendor 时用作能力初值)。 */
   const vendorCaps = (v: string) => (vendors.data ?? []).find((item) => item.vendor === v)?.capability_ids ?? [];
 
@@ -432,19 +438,27 @@ export function ProviderProfilesSection({
                 <strong>{profile.name}</strong>
                 <small>
                   {vendorLabel(profile.vendor)}
-                  {isOauth(profile)
-                    ? ` · ${
-                        profile.oauth_linked
-                          ? // 过期不等于要重新授权:下次对话时会自动刷新。所以说的是「令牌已过期」
-                            // 而不是「未授权」—— 后者会把用户支去重走一遍其实不必要的授权。
-                            profile.oauth_expired
-                            ? t("providerOauthExpired")
-                            : t("providerOauthLinked")
-                          : t("providerOauthUnlinked")
-                      }`
-                    : profile.key_hint
-                      ? ` · ${profile.key_hint}`
-                      : ""}
+                  {isOauth(profile) ? (
+                    <>
+                      {" · "}
+                      {profile.oauth_linked ? (
+                        profile.oauth_expired ? (
+                          // 走到这里说明后端已经替它刷过且没刷动(见 _auto_refresh_expired)——
+                          // 单纯的"过期"不会到用户面前,所以这一行现在确实需要人来处理,
+                          // 用警告色说出来。
+                          <span className="text-destructive">{t("providerOauthExpired")}</span>
+                        ) : (
+                          t("providerOauthLinked")
+                        )
+                      ) : (
+                        t("providerOauthUnlinked")
+                      )}
+                    </>
+                  ) : profile.key_hint ? (
+                    ` · ${profile.key_hint}`
+                  ) : (
+                    ""
+                  )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                 </small>
               </div>

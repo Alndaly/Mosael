@@ -106,6 +106,7 @@ export function ModelSettingsDialog({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
       void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+      void qc.invalidateQueries({ queryKey: ["capability-models"] });
       onOpenChange(false);
     },
   });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import logging
 
 from fastapi import APIRouter, HTTPException, Response
@@ -263,9 +264,54 @@ def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
     ]
 
 
+#: 刷新失败后多久才再试一次。失败通常不会因为再试而变好(refresh token 被吊销、账号在别处
+#: 登出),而档案列表是设置页最常被拉的那个接口 —— 没有冷却就会变成每次进页面都起一次
+#: node 去撞同一堵墙,页面还跟着卡。
+_REFRESH_COOLDOWN_SECONDS = 300.0
+_refresh_failed_at: dict[str, float] = {}
+
+
+def _auto_refresh_expired(db: DbSession, user: CurrentUser, profiles) -> None:
+    """过期就先刷一次,而不是把「令牌已过期」摆出来让用户自己去想办法。
+
+    **过期本身不是一个需要用户知道的状态**:订阅计划的 access token 普遍只有几小时,
+    刷新是协议里就有的一步。此前只有对话路径(pi 解析鉴权时)和查额度会触发刷新,于是
+    "隔夜再打开设置页"必然看到一行已过期 —— 而它其实只要被用到就会自己好。
+
+    刷新协议仍然在 pi 那边(见 refresh_oauth_credential),这里只负责决定什么时候刷。
+    刷不动才让 oauth_expired 保持 True —— 那时它是真的需要用户重新授权。
+    """
+    now = time.monotonic()
+    for profile in profiles:
+        if profile.auth_type != "oauth" or not profile.oauth_credential:
+            continue
+        credential = read_credential(profile)
+        if credential is None or not is_expired(credential):
+            _refresh_failed_at.pop(profile.id, None)
+            continue
+        failed_at = _refresh_failed_at.get(profile.id)
+        if failed_at is not None and now - failed_at < _REFRESH_COOLDOWN_SECONDS:
+            continue
+        try:
+            refresh_oauth_credential(
+                api_base=f"http://{settings_config.backend_host}:{settings_config.backend_port}",
+                token=mint_tool_token(db, user),
+                pi_provider=pi_provider_id(profile.vendor) or "",
+                profile_id=profile.id,
+                credential=credential,
+            )
+        except AdapterError as exc:
+            logger.warning("刷新 %s 的订阅令牌失败:%s", profile.name, exc)
+            _refresh_failed_at[profile.id] = now
+            continue
+        _refresh_failed_at.pop(profile.id, None)
+        db.refresh(profile)
+
+
 @router.get("/settings/providers", response_model=list[ProviderProfileOut])
 def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
     profiles = db.scalars(select(ProviderProfile).order_by(ProviderProfile.created_at)).all()
+    _auto_refresh_expired(db, user, profiles)
     return [_profile_out(db, profile) for profile in profiles]
 
 

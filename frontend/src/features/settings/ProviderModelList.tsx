@@ -37,6 +37,7 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
     void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
     // 能力默认的候选就是这些模型 —— 加/删/停用一个,那边的下拉必须跟着变。
     void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+    void qc.invalidateQueries({ queryKey: ["capability-models"] });
   };
 
   const add = useMutation({

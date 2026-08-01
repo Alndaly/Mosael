@@ -225,6 +225,7 @@ export function ProviderOAuthDialog({
     }
     void qc.invalidateQueries({ queryKey: ["provider-profiles"] });
     void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
+    void qc.invalidateQueries({ queryKey: ["capability-models"] });
     onOpenChange(false);
   };
 
