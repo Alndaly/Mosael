@@ -444,17 +444,7 @@ export function ChatWorkspace({
         />
       </aside>
 
-      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)_auto]">
-        {/* 水位条:窗口未知或还没有对话时整条不渲染(ContextMeter 自己判),不占一条空白。 */}
-        {context && (
-          <div className="flex items-center justify-end border-b border-border px-3 py-1">
-            <ContextMeter
-              context={context}
-              compacting={compactContext.isPending}
-              onCompact={running ? undefined : () => compactContext.mutate()}
-            />
-          </div>
-        )}
+      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[minmax(0,1fr)_auto]">
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
         {
           <>
@@ -584,6 +574,13 @@ export function ChatWorkspace({
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   <AnalysisModePicker session={session.data ?? null} />
+                  {/* 水位跟输入框走,不另起一条横幅:它要回答的是"我还能再问多少",
+                      而这个念头恰好发生在准备打字的时候。参考 Claude Code / Codex 的位置。 */}
+                  <ContextMeter
+                    context={context}
+                    compacting={compactContext.isPending}
+                    onCompact={running ? undefined : () => compactContext.mutate()}
+                  />
                 </div>
                 {/* One button that changes meaning, the way ChatGPT does it: while the agent
                     works it stops the turn, and the moment you type something it becomes send

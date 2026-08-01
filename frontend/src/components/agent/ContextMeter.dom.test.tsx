@@ -12,8 +12,11 @@ import { describe, expect, it, vi } from "vitest";
  * 摘要为空时仍给展开 → 点开是一片空白,比不给展开更像坏了。
  */
 
+// 带占位符的那几条要返回真实模板,否则 .replace("{n}", …) 无从发生,断言就成了空过。
+const TEMPLATES: Record<string, string> = { agentContextLeft: "剩余 {n}%", agentCompacted: "移出 {n} 条,腾出 {saved}" };
+
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => TEMPLATES[key] ?? key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
@@ -26,10 +29,16 @@ describe("上下文水位", () => {
     expect(render(<ContextMeter context={null} />).container.textContent).toBe("");
   });
 
-  it("按窗口给出比例,并在过线时转成告警色", () => {
-    const { container, rerender } = render(<ContextMeter context={{ tokens: 20_000, window: 100_000 }} />);
+  it("用量过半才出现 —— 刚开始时「还剩 97%」是纯噪音", () => {
+    const { container } = render(<ContextMeter context={{ tokens: 20_000, window: 100_000 }} />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("报剩余而不是已用,并在过线时转成告警色", () => {
+    const { container, rerender } = render(<ContextMeter context={{ tokens: 60_000, window: 100_000 }} />);
     const bar = () => container.querySelector("[style*='width']") as HTMLElement;
-    expect(bar().style.width).toBe("20%");
+    // 用户此刻在决定"还能不能接着问",剩余量是直接答案;已用量还要在脑子里做一次减法。
+    expect(container.textContent).toContain("40");
     expect(bar().className).toContain("bg-primary");
 
     // 80% 是 sidecar 的触发阈值,到这条线就该显眼。
@@ -43,10 +52,10 @@ describe("上下文水位", () => {
   });
 
   it("运行中不给整理入口 —— 半路换掉上下文会把正在跑的这一轮弄乱", () => {
-    const { container } = render(<ContextMeter context={{ tokens: 10, window: 100 }} />);
+    const { container } = render(<ContextMeter context={{ tokens: 90, window: 100 }} />);
     expect(container.querySelector("button")).toBeNull();
     const onCompact = vi.fn();
-    render(<ContextMeter context={{ tokens: 10, window: 100 }} onCompact={onCompact} />);
+    render(<ContextMeter context={{ tokens: 90, window: 100 }} onCompact={onCompact} />);
     fireEvent.click(screen.getByLabelText("agentCompactNow"));
     expect(onCompact).toHaveBeenCalledOnce();
   });

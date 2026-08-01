@@ -16,8 +16,14 @@ import { cn } from "@/lib/utils";
  * 8k 上下文的本地模型上显示成"还早得很",而它其实早就该压了。
  */
 
-/** 与 sidecar 的触发阈值一致(compaction.ts 的 COMPACT_RATIO)。到这条线就该提示了。 */
+/** 与 sidecar 的触发阈值一致(compaction.ts 的 COMPACT_RATIO)。到这条线就该显眼了。 */
 const WARN_RATIO = 0.8;
+
+/** 低于这个用量根本不显示。
+ *
+ * Claude Code / Codex 都不常驻这个数 —— 对话刚开始时"还剩 97%"是纯噪音,挤在输入框旁边
+ * 反而让真正要紧的时候不显眼。过半才出现,读数本身就成了一个信号。 */
+const SHOW_FROM_RATIO = 0.5;
 
 export interface ContextInfo {
   tokens: number;
@@ -41,26 +47,30 @@ export function ContextMeter({
   className?: string;
 }) {
   const t = useI18n();
-  // 窗口未知时整条不显示。画一个没有分母的进度条只会让人误读成"快满了"。
+  // 窗口未知时整条不显示:没有分母的进度条只会被读成"快满了"。
   if (!context || !context.window || context.window <= 0) return null;
 
   const ratio = Math.min(1, context.tokens / context.window);
-  const pct = Math.round(ratio * 100);
+  if (ratio < SHOW_FROM_RATIO && !compacting) return null;
+
+  // 报**剩余**而不是已用:用户此刻在决定"还能不能接着问",剩余量是直接答案,
+  // 已用量还要在脑子里做一次减法。Claude Code 的 "Context left" 是同一个道理。
+  const left = Math.max(0, Math.round((1 - ratio) * 100));
   const warn = ratio >= WARN_RATIO;
 
   return (
-    <div className={cn("flex items-center gap-1.5", className)}>
-      <div
-        className="h-1 w-16 overflow-hidden rounded-full bg-field"
-        title={`${context.tokens.toLocaleString()} / ${context.window.toLocaleString()}`}
-      >
-        <div
-          className={cn("h-full rounded-full transition-[width]", warn ? "bg-destructive" : "bg-primary")}
-          style={{ width: `${Math.max(2, pct)}%` }}
+    <span
+      className={cn("inline-flex items-center gap-1.5", className)}
+      title={`${context.tokens.toLocaleString()} / ${context.window.toLocaleString()}`}
+    >
+      <span className="h-1 w-10 overflow-hidden rounded-full bg-field">
+        <span
+          className={cn("block h-full rounded-full transition-[width]", warn ? "bg-destructive" : "bg-primary")}
+          style={{ width: `${Math.max(2, Math.round(ratio * 100))}%` }}
         />
-      </div>
+      </span>
       <span className={cn("timecode shrink-0 text-[10.5px]", warn ? "text-destructive" : "text-muted-foreground")}>
-        {formatTokens(context.tokens)}/{formatTokens(context.window)}
+        {t("agentContextLeft").replace("{n}", String(left))}
       </span>
       {onCompact && (
         <Button
@@ -75,7 +85,7 @@ export function ContextMeter({
           {compacting ? <Loader2 size={11} className="animate-spin" /> : <Scissors size={11} />}
         </Button>
       )}
-    </div>
+    </span>
   );
 }
 

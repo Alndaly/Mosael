@@ -36,6 +36,16 @@ class QuotaUnavailable(RuntimeError):
     """这家供应商没有可查的额度接口,或本次查询失败。"""
 
 
+class CredentialExpired(QuotaUnavailable):
+    """access token 已过期。
+
+    单独成类是因为**处理方式不同**:这不是"授权没了",而是"该刷新了"。自动刷新只发生在
+    对话路径上(pi 在 auth/resolve 里按 expires 判断并调各家的 refresh flow,新凭据经
+    BackendCredentialStore 写回后端),额度查询走的是库里那份原样凭据,不经过刷新。
+    所以过期时该告诉用户"发一条消息即可刷新",而不是让他重新走一遍授权。
+    """
+
+
 def _percent_metric(
     key: str, used_percent: float | None, *, window_seconds: int | None, resets_at: str | None
 ) -> dict[str, Any]:
@@ -353,6 +363,22 @@ def parse_copilot(payload: dict[str, Any]) -> dict[str, Any]:
 _TOKEN_KEYS = ("access", "key", "access_token", "accessToken", "token", "apiKey")
 
 
+def is_expired(credential: dict[str, Any] | None, *, now_ms: float | None = None) -> bool:
+    """凭据是否已过期。
+
+    `expires` 是 **epoch 毫秒**(pi 里判的是 `Date.now() >= credential.expires`)。按秒去比
+    会让每一份凭据都显示成过期 —— 毫秒数除以 1000 才是秒,直接比就是差三个数量级。
+    没有 expires 字段(API Key 型)一律当作没过期。
+    """
+    if not isinstance(credential, dict):
+        return False
+    expires = _number(credential.get("expires"))
+    if expires is None or expires <= 0:
+        return False
+    current = now_ms if now_ms is not None else time.time() * 1000
+    return current >= expires
+
+
 def access_token(credential: dict[str, Any] | None) -> str | None:
     """从 pi 的 Credential 里取访问令牌。取不到返回 None —— 让调用方报"未登录",
     比拿着空串去请求换回一个 401 强。"""
@@ -374,8 +400,12 @@ def access_token(credential: dict[str, Any] | None) -> str | None:
 def _get_json(url: str, headers: dict[str, str], *, proxies_from_env: bool = True) -> dict[str, Any]:
     with httpx.Client(timeout=TIMEOUT_SECONDS, trust_env=proxies_from_env) as client:
         response = client.get(url, headers=headers)
-        if response.status_code == 401 or response.status_code == 403:
-            raise QuotaUnavailable("凭据已失效,请重新授权登录")
+        if response.status_code == 401:
+            raise CredentialExpired("凭据已过期。在对话里发一条消息会自动刷新;仍失败请重新授权登录。")
+        if response.status_code == 403:
+            # 403 基本是"这个端点不给这个账号用"(计划不含、或该供应商换了接口),
+            # 和过期是两回事。混成一句会让用户反复去重新授权,而问题根本不在授权上。
+            raise QuotaUnavailable("该账号没有访问这个额度接口的权限")
         if response.status_code == 429:
             raise QuotaUnavailable("对方限流,稍后再试")
         response.raise_for_status()
@@ -468,6 +498,9 @@ def fetch_quota(pi_provider: str | None, credential: dict[str, Any] | None) -> d
     token = access_token(credential)
     if not token:
         raise QuotaUnavailable("尚未授权登录")
+    if is_expired(credential):
+        # 先判再发:过期的令牌发出去只会换回 401,还白等一个网络往返。
+        raise CredentialExpired("凭据已过期。在对话里发一条消息会自动刷新;仍失败请重新授权登录。")
     try:
         snapshot = fetcher(token)
     except QuotaUnavailable:

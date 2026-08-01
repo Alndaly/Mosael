@@ -164,3 +164,31 @@ def test_六家都接入了():
 )
 def test_取访问令牌兼容各家键名(credential, expected):
     assert access_token(credential) == expected
+
+
+def test_过期判定按毫秒():
+    """expires 是 epoch **毫秒**(pi 里判的是 Date.now() >= expires)。
+    按秒比会让每一份凭据都显示成过期 —— 差三个数量级。"""
+    from app.domain.provider_quota import is_expired
+
+    now_ms = 1_700_000_000_000
+    assert is_expired({"expires": now_ms - 1}, now_ms=now_ms) is True
+    assert is_expired({"expires": now_ms + 60_000}, now_ms=now_ms) is False
+    # API Key 型没有 expires,不能被当成过期
+    assert is_expired({"type": "api_key", "key": "sk"}, now_ms=now_ms) is False
+    assert is_expired(None, now_ms=now_ms) is False
+
+
+def test_过期与无权限是两种错():
+    """403 基本是"这个端点不给这个账号用",和过期是两回事。混成一句会让用户
+    反复去重新授权,而问题根本不在授权上。"""
+    from app.domain.provider_quota import CredentialExpired, QuotaUnavailable
+
+    assert issubclass(CredentialExpired, QuotaUnavailable)
+
+
+def test_过期的凭据不发请求直接报过期():
+    from app.domain.provider_quota import CredentialExpired, fetch_quota
+
+    with pytest.raises(CredentialExpired):
+        fetch_quota("anthropic", {"type": "oauth", "access": "tok", "expires": 1})
