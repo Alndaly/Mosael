@@ -30,6 +30,10 @@ const FALLBACK_CONTEXT_WINDOW = 32000;
 /** 可选能力。与后端 provider_defaults.CAPABILITIES 一致。 */
 const CAPABILITIES = ["chat", "image", "video", "tts", "podcast"] as const;
 
+/** 某些 vendor 的可选能力天生就是子集 —— ComfyUI 工作流不可能是对话或语音模型,
+ *  把那三个摆出来只是让人多读三个不可能的选项。 */
+const VENDOR_CAPABILITIES: Record<string, readonly string[]> = { comfyui: ["image", "video"] };
+
 function AdvancedToggle({
   label,
   hint,
@@ -71,11 +75,14 @@ function AdvancedToggle({
 export function ModelSettingsDialog({
   profileId,
   modelId,
+  vendor,
   open,
   onOpenChange,
 }: {
   profileId: string;
   modelId: string;
+  /** 决定标题措辞与可选能力范围。ComfyUI 这里管的是工作流,不是模型。 */
+  vendor?: string;
   open: boolean;
   onOpenChange: (next: boolean) => void;
 }) {
@@ -125,7 +132,7 @@ export function ModelSettingsDialog({
   const isChat = effective.includes("chat");
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t("modelSettingsTitle")}>
+    <ModalShell open={open} onOpenChange={onOpenChange} title={vendor === "comfyui" ? t("workflowSettingsTitle") : t("modelSettingsTitle")}>
       <form
         className="grid gap-3"
         onSubmit={(event) => {
@@ -151,25 +158,32 @@ export function ModelSettingsDialog({
           {/* 能力放在最前:它决定下面显示什么 —— 生图模型没有上下文窗口,也不认 developer 角色。
               留空表示跟随 vendor 预设。 */}
           <div className="flex flex-wrap gap-1.5">
-            {CAPABILITIES.map((capability) => {
-              const active = (current?.capability_ids ?? []).includes(capability);
+            {(VENDOR_CAPABILITIES[vendor ?? ""] ?? CAPABILITIES).map((capability) => {
+              // **按生效值高亮**,而不是只按显式设置。列表行上的标签画的就是生效值 ——
+              // 行里明明标着 image/video,点开却一个都不亮,读起来像丢了配置。
+              // 继承来的用浅底区分:亮着,但看得出"这是跟着预设来的"。
+              const explicit = (current?.capability_ids ?? []).includes(capability);
+              const inherited = own.length === 0 && effective.includes(capability);
               return (
                 <button
                   key={capability}
                   type="button"
                   className={cn(
                     "cursor-pointer rounded-full border px-2.5 py-1 text-[11.5px] transition-colors",
-                    active
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-panel text-muted-foreground hover:border-border-strong",
+                    explicit && "border-primary bg-primary text-primary-foreground",
+                    inherited && "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] text-foreground",
+                    !explicit && !inherited && "border-border bg-panel text-muted-foreground hover:border-border-strong",
                   )}
                   onClick={() =>
                     setDraft((prev) => {
                       if (!prev) return prev;
-                      const own = prev.capability_ids ?? [];
+                      // 从"跟随预设"里点掉一项时,先把继承的那份落成显式的,再去掉这一项 ——
+                      // 否则第一次点击会把整组清空,表现成"点一下全没了"。
+                      const base = (prev.capability_ids ?? []).length > 0 ? prev.capability_ids ?? [] : effective;
+                      const has = base.includes(capability);
                       return {
                         ...prev,
-                        capability_ids: active ? own.filter((item) => item !== capability) : [...own, capability],
+                        capability_ids: has ? base.filter((item) => item !== capability) : [...base, capability],
                       };
                     })
                   }
@@ -179,10 +193,18 @@ export function ModelSettingsDialog({
               );
             })}
           </div>
-          {(current?.capability_ids ?? []).length === 0 && (
+          {own.length === 0 ? (
             <span className="text-xs leading-[1.45] text-muted-foreground">
-              {t("modelCapabilitiesInherit").replace("{list}", (current?.effective_capability_ids ?? []).join(" / "))}
+              {t("modelCapabilitiesInherit").replace("{list}", effective.join(" / "))}
             </span>
+          ) : (
+            <button
+              type="button"
+              className="justify-self-start cursor-pointer border-0 bg-transparent p-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => setDraft((prev) => (prev ? { ...prev, capability_ids: [] } : prev))}
+            >
+              {t("modelCapabilitiesFollowPreset")}
+            </button>
           )}
         </div>
 

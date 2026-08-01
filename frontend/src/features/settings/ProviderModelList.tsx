@@ -240,6 +240,7 @@ export function ProviderModelList({
         <ModelSettingsDialog
           profileId={profileId}
           modelId={editing}
+          vendor={vendor}
           open
           onOpenChange={(next) => {
             if (!next) {
