@@ -1,16 +1,15 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Loader2, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/app/combobox";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
-import { cn } from "@/lib/utils";
 
 type ProviderModel = components["schemas"]["ProviderModelOut"];
 
@@ -28,7 +27,6 @@ type ProviderModel = components["schemas"]["ProviderModelOut"];
 export function ProviderModelList({ profileId, vendorLabel }: { profileId: string; vendorLabel?: string }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [manualId, setManualId] = React.useState("");
   const [editing, setEditing] = React.useState<string | null>(null);
 
   const models = useQuery({
@@ -47,10 +45,7 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
         method: "POST",
         body: JSON.stringify({ model_id: modelId, enabled: true }),
       }),
-    onSuccess: () => {
-      setManualId("");
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
   const patch = useMutation({
     mutationFn: ({ modelId, body }: { modelId: string; body: Record<string, unknown> }) =>
@@ -133,42 +128,25 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
         </div>
       ))}
 
-      {available.length > 0 && (
-        <details className="rounded-md border border-dashed border-border px-2.5 py-1.5">
-          <summary className="cursor-pointer text-[11.5px] text-muted-foreground">
-            {t("modelFromCatalog").replace("{n}", String(available.length))}
-          </summary>
-          <div className="mt-1.5 grid gap-1">
-            {available.map((row) => (
-              <div className="flex items-center justify-between gap-2" key={row.id}>
-                <span className="min-w-0 truncate text-[11.5px] text-foreground">{row.id}</span>
-                <Button variant="ghost" size="sm" disabled={add.isPending} onClick={() => add.mutate(row.id)}>
-                  <Plus size={12} /> {t("modelAdd")}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-
-      {/* 手填:目录查不到不等于不能用(私有部署、别名)。和目录来的模型在列表里平权。 */}
-      <form
-        className="flex items-center gap-1.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (manualId.trim()) add.mutate(manualId.trim());
+      {/* 一个带搜索的入口,取代原来的「展开目录清单」+「手填 id」两处。
+       *
+       * 目录动辄两三百个模型(百炼 233 个),铺成一列既滚不完也找不到 —— 而用户来这里时
+       * 通常已经知道要哪个,缺的是"输入几个字母就定位"。手填也并进来:目录里没有就直接用
+       * 输入的那个,不必先意识到"这个模型不在目录里"再去找另一个框。 */}
+      <Combobox
+        value=""
+        options={available.map((row) => ({ value: row.id }))}
+        placeholder={t("modelAddPlaceholder")}
+        searchPlaceholder={t("modelSearchPlaceholder")}
+        emptyText={t("modelNoMatch")}
+        allowCustomValue
+        customValueLabel={(query) => t("modelAddCustom").replace("{id}", query)}
+        className="h-8 w-full text-[12px]"
+        onValueChange={(modelId) => {
+          const trimmed = modelId.trim();
+          if (trimmed) add.mutate(trimmed);
         }}
-      >
-        <Input
-          value={manualId}
-          placeholder={t("modelManualPlaceholder")}
-          className={cn("h-8 flex-1 text-[12px]")}
-          onChange={(event) => setManualId(event.target.value)}
-        />
-        <Button type="submit" variant="outline" size="sm" disabled={!manualId.trim() || add.isPending}>
-          {t("modelAdd")}
-        </Button>
-      </form>
+      />
       {vendorLabel && <span className="sr-only">{vendorLabel}</span>}
 
       {editing && (
