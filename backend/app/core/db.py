@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Generator
 
+import json
+
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -115,6 +117,43 @@ def _migrate_agent_thinking_level() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
+
+
+def _backfill_provider_models() -> None:
+    """把「一档案一模型」的老数据搬成模型行。
+
+    每个已有档案生成一行 provider_models:model_id 取它的 default_model,能力取档案上的覆盖
+    (为空则留空列表,由后续解析回落 vendor 预设,语义一致)。迁移后用户看到的是"连接展开后
+    有一个模型",一比一,没有任何东西消失。
+
+    只在表为空时跑一次 —— 这是一次性的形状迁移,不是每次启动的同步。default_model 为空的
+    档案不生成行:凭空造一个空模型只会让选择器里多出一个选不了的条目。
+
+    **用裸 SQL 而不是 ORM 构造**,与本文件其它回填一致:迁移不属于任何领域,直接 new 领域
+    模型会绕过归属约束(见 domain/ownership.py 与数据归属棘轮测试)。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "provider_models" not in tables or "provider_profiles" not in tables:
+        return
+    from app.db.models import new_id
+
+    with engine.begin() as conn:
+        if conn.execute(text("SELECT 1 FROM provider_models LIMIT 1")).first() is not None:
+            return
+        rows = conn.execute(
+            text("SELECT id, default_model, capability_ids FROM provider_profiles WHERE default_model != ''")
+        ).fetchall()
+        for row in rows:
+            capabilities = row[2] if isinstance(row[2], str) else json.dumps(row[2] or [], ensure_ascii=False)
+            conn.execute(
+                text(
+                    "INSERT INTO provider_models "
+                    "(id, provider_profile_id, model_id, display_name, capability_ids, enabled, source, created_at, updated_at) "
+                    "VALUES (:id, :pid, :model, '', :caps, 1, 'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": new_id(), "pid": row[0], "model": row[1], "caps": capabilities},
+            )
 
 
 def _migrate_job_parent() -> None:
@@ -242,6 +281,8 @@ def init_db() -> None:
     _migrate_partition_rename()
     _migrate_drop_local_publish_accounts()
     _backfill_browser_pool()
+    # 必须在 create_all 之后:provider_models 是新表,之前还不存在。
+    _backfill_provider_models()
 
 
 def session_scope() -> Generator[Session, None, None]:

@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -612,6 +612,59 @@ class ProviderProfile(Base):
     #: None = 沿用 vendor 预设(capability_ids_for_vendor)。
     capability_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class ProviderModel(Base):
+    """一条连接下的一个模型。
+
+    **为什么模型必须是一等实体**:此前「档案」的粒度是不一致的 —— 有的是一条连接(一个端点
+    多个模型),有的其实是一个模型(用户拿模型名当档案名建了 gpt-image-2、火山seedream)。
+    用户被迫这样,是因为能力挂在档案上、而档案只有一个 default_model:想用同一个端点的两个
+    模型做两件事,就只能建两个档案。
+
+    能力下沉到模型这一层之后,一条连接可以同时提供对话模型和生图模型,「某能力的默认模型」
+    也才有东西可指 —— ProviderDefault 早就是 (capability → profile + model) 的形状,
+    只是没有模型实体可以引用。
+
+    **表里存的是"已配置的模型",不是模型全集**。供应商目录仍是发现来源(见 ai.model_catalog
+    与订阅计划的 model_catalog),界面把两者合并展示:目录有而这里没有 = 未配置,可一键加入;
+    这里有而目录没了 = 标记"目录中已不存在"但不删,别名与私有部署仍要能用。
+    """
+
+    __tablename__ = "provider_models"
+    __table_args__ = (
+        # 同一条连接下模型 id 唯一 —— 否则"哪一行是这个模型"就没有答案了。
+        UniqueConstraint("provider_profile_id", "model_id", name="uq_provider_models_profile_model"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("provider_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: 发给供应商的模型标识,原样。
+    model_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    #: 展示名。留空即用 model_id —— 大多数情况下模型 id 本身就是最好的名字。
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    #: 这个模型能干什么(chat / image / video / tts / podcast)。**能力在模型上而不是连接上**:
+    #: 同一个端点既有对话模型也有生图模型,挂在连接上就只能二选一。
+    capability_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    #: 停用的模型不出现在任何选择器里。OpenRouter 几百个模型全铺进下拉是不可用的。
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: catalog = 来自供应商目录;manual = 用户手填(私有部署、别名,目录里查不到)。
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="catalog")
+
+    #: 以下是"我对这个模型做过什么"。**留空表示跟随目录/保守默认**,不是 0/False ——
+    #: 两者混淆会让"没设过"被当成"显式设成了关"。
+    context_window: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    #: 都对应 pi 里真实生效的开关(思考格式 / 图片输入 / reasoning_effort / developer 角色)。
+    reasoning: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    reasoning_effort: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    developer_role: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

@@ -14,6 +14,10 @@ const LEVELS = ["off", "low", "medium", "high"] as const;
 /**
  * 思考档位(会话级)。
  *
+ * **「关闭」只表示我们不主动要求思考**,不表示模型不会思考:Kimi k3、DeepSeek reasoner
+ * 这类模型无论如何都会返回思考内容,pi 照常解析、我们照常显示 —— 那是模型真实产出的东西,
+ * 藏掉才是错的。所以触发器带上「思考:」前缀,让这个开关管的是什么一目了然。
+ *
  * **挂在会话上而不是模型上**:同一个模型有时要深想、有时要快答 —— 它是每次对话的选择,
  * 不是模型的属性。所以入口跟着输入框走,和模型选择器并排,而不是藏在模型设置弹窗里。
  *
@@ -53,6 +57,7 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
         title={t("agentThinkingLevel")}
       >
         <Brain size={13} className="shrink-0 opacity-70" />
+        <span className="shrink-0">{t("agentThinkingLevel")}:</span>
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="max-w-none">

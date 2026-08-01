@@ -808,9 +808,18 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     return {"context": result.context, "compaction": result.compaction}
 
 
+#: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的 FALLBACK_CONTEXT_WINDOW 一致** ——
+#: 运行时压缩用的就是那个数,界面显示另一个数会让水位和实际行为对不上。
+FALLBACK_CONTEXT_WINDOW = 32000
+
+
 def session_context(db: Session, session: AgentSession) -> dict | None:
-    """会话当前的上下文水位。窗口未知(没配供应商 / 目录查不到又没手动设)时返回 None ——
-    界面据此整条不显示,而不是画一条没有分母的进度条(那只会被读成"快满了")。"""
+    """会话当前的上下文水位。
+
+    没配供应商时返回 None(整条不显示)。但**窗口取不到不等于未知**:sidecar 那边一直在用
+    32000 的回退值跑压缩,所以这里也回落到同一个数 —— 藏起来会让用户以为"没有上限",
+    而实际上它早就在按 32k 压缩了。
+    """
     try:
         provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "")
     except Exception:  # noqa: BLE001 — 没配供应商时不该让会话详情整个失败
@@ -824,9 +833,10 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
             if entry.get("id") == agent_model:
                 window = entry.get("contextWindow") or entry.get("context_window")
                 break
-    if not window:
-        return None
-    return {"tokens": context_tokens(session.adapter_state), "window": int(window)}
+    return {
+        "tokens": context_tokens(session.adapter_state),
+        "window": int(window) if window else FALLBACK_CONTEXT_WINDOW,
+    }
 
 
 def session_model_catalog(db: Session, profile_id: str | None) -> list[dict]:
