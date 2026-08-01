@@ -357,8 +357,18 @@ export function ChatWorkspace({
   const context = (session.data?.context ?? null) as ContextInfo | null;
 
   const compactContext = useMutation({
-    mutationFn: () => api(`/api/agent/sessions/${activeSession!.id}/compact`, { method: "POST" }),
-    onSuccess: () => void messages.refetch(),
+    mutationFn: () =>
+      api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${activeSession!.id}/compact`, {
+        method: "POST",
+      }),
+    // 压成功了对话里会多一条整理记录,那本身就是反馈;**没得压和压失败必须说出来** ——
+    // 此前两种情况都只是 loading 闪一下就没了,用户无从判断是没生效、还是不需要。
+    onSuccess: (result) => {
+      void messages.refetch();
+      void qc.invalidateQueries({ queryKey: ["agent-session", activeSession?.id] });
+      if (!result?.compaction) toast.message(t("agentCompactNothing"));
+    },
+    onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
   });
   const usageByMessage = React.useMemo(() => {
     const byMessage = new Map<string, AgentUsageEvent[]>();
@@ -657,6 +667,7 @@ function ChatInspector({
     () => collectRecentToolCalls(messages, running ? streamTimeline : []).slice(0, 6),
     [messages, running, streamTimeline],
   );
+  const [toolsExpanded, setToolsExpanded] = React.useState(false);
   const userCount = messages.filter((message) => message.role === "user").length;
   const assistantCount = messages.filter((message) => message.role === "assistant").length;
   const failedCount = messages.filter((message) => message.error).length;
@@ -781,12 +792,17 @@ function ChatInspector({
         </div>
         {manifest && (
           <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            <span className="truncate text-[11px] text-muted-foreground">{manifest.app}</span>
+            {/* 此前这行把 app 名当标签、版本当值,读出来是「open-studio 0.1.0」——
+                既没说这是什么,那个数还是后端写死的常量,和真实版本对不上。 */}
+            <span className="truncate text-[11px] text-muted-foreground">{t("agentVersion")}</span>
             <strong className="m-0 truncate text-[11.5px] font-[650] text-foreground">{manifest.version}</strong>
           </div>
         )}
+        {/* 36 个工具却只列 6 个、还没有别的入口 —— 看到的那 6 个只是注册表顺序的前 6 个,
+            既不是最常用的也不是最相关的。默认仍然只铺 8 个(否则这块会顶掉整个侧栏),
+            但给一个明确的「还有 N 个」把剩下的展开。 */}
         <div className="flex flex-wrap gap-[5px]">
-          {tools.slice(0, 6).map((tool) => (
+          {(toolsExpanded ? tools : tools.slice(0, 8)).map((tool) => (
             <span
               className="max-w-full truncate rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground"
               key={tool.name}
@@ -795,6 +811,15 @@ function ChatInspector({
               {tool.name}
             </span>
           ))}
+          {tools.length > 8 && (
+            <button
+              type="button"
+              className="cursor-pointer rounded-full border border-border bg-panel px-[7px] py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+              onClick={() => setToolsExpanded((value) => !value)}
+            >
+              {toolsExpanded ? t("agentToolsLess") : t("agentToolsMore").replace("{n}", String(tools.length - 8))}
+            </button>
+          )}
         </div>
       </section>
     </aside>

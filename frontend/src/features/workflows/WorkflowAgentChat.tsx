@@ -243,10 +243,13 @@ export function WorkflowAgentChat({
 
   const compact = useMutation({
     mutationFn: () => api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" }),
-    onSuccess: () => {
+    // 压成功了对话里会多一条整理记录;没得压和压失败必须说出来,否则只是 loading 闪一下。
+    onSuccess: (result) => {
       void messages.refetch();
       void sessionDetail.refetch();
+      if (!result?.compaction) toast.message(t("agentCompactNothing"));
     },
+    onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
   });
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });

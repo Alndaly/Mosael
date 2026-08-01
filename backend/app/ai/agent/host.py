@@ -162,6 +162,21 @@ def _stream_reset(session_id: str) -> None:
         _streams[session_id] = {"text": "", "done": False, "seq": 0, "timeline": [], "tool_starts": {}}
 
 
+def _close_open_thinking(timeline: list[dict]) -> None:
+    """把最后一块还开着的思考标记为结束。
+
+    **不能只靠 `thinking_end`**:它取决于供应商发不发那个事件,而有的(如 k3 这条链路)思考完
+    直接开始吐正文,一个 end 都没有。于是那张卡顶着一个永远转不完的「思考中…」,底下正文却已经
+    写完了 —— 用户看到的是矛盾的两句话。
+
+    正文开始、或者开始调工具,本身就是思考已经结束的确凿证据,不需要供应商再宣布一次。
+
+    只看末尾一项:任何往时间线追加的路径都会先调这个函数,所以还开着的思考块只可能在最后。
+    """
+    if timeline and timeline[-1].get("type") == "thinking" and not timeline[-1].get("done"):
+        timeline[-1]["done"] = True
+
+
 def _stream_tool_event(session_id: str, event: dict) -> None:
     """pi 工具事件 → 流里的工具卡:tool_start 建卡(running),tool_end 更新(done/error)。"""
     with _streams_lock:
@@ -170,6 +185,7 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
             return
         timeline: list[dict] = state.setdefault("timeline", [])
         if event.get("type") == "tool_start":
+            _close_open_thinking(timeline)
             tool_call_id = str(event.get("toolCallId") or "")
             started_at = now().isoformat()
             state.setdefault("tool_starts", {})[tool_call_id] = time.monotonic()
@@ -234,6 +250,8 @@ def _stream_append(session_id: str, delta: str) -> None:
         if state is not None:
             state["text"] += delta
             timeline: list[dict] = state.setdefault("timeline", [])
+            # 正文开始 = 思考结束,不等供应商发 thinking_end(有的根本不发)。
+            _close_open_thinking(timeline)
             if timeline and timeline[-1].get("type") == "text":
                 timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
             else:
@@ -246,6 +264,8 @@ def _stream_finish(session_id: str, final_text: str) -> None:
         state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0, "timeline": []})
         state["text"] = final_text
         timeline: list[dict] = state.setdefault("timeline", [])
+        # 一轮结束时无论如何都不该再有"思考中"——哪怕这轮只思考没说话。
+        _close_open_thinking(timeline)
         existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
         if final_text and not existing_text:
             timeline.append({"type": "text", "text": final_text})

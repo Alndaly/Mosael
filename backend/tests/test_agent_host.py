@@ -311,3 +311,45 @@ def test_session_analysis_video_mode_patch() -> None:
     # 非法值被拒
     bad = client.patch(f"/api/agent/sessions/{session['id']}", json={"analysis_video_mode": "bogus"})
     assert bad.status_code == 422
+
+
+def test_思考块在正文开始时结束_不依赖供应商发_thinking_end() -> None:
+    """**「思考中…」不能靠供应商宣布结束**。
+
+    有的链路思考完直接开始吐正文,一个 `thinking_end` 都不发,于是那张卡顶着一个永远转不完的
+    转圈,底下正文却已经写完了 —— 用户看到的是自相矛盾的两句话。正文开始本身就是确凿证据。
+    """
+    session_id = "s-thinking"
+    host._stream_reset(session_id)
+    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "先想一下"})
+    assert host.get_stream_state(session_id)["timeline"][-1] == {
+        "type": "thinking",
+        "text": "先想一下",
+        "done": False,
+    }
+
+    host._stream_append(session_id, "正文开始")
+    timeline = host.get_stream_state(session_id)["timeline"]
+    assert timeline[0]["type"] == "thinking" and timeline[0]["done"] is True
+    assert timeline[1] == {"type": "text", "text": "正文开始"}
+
+    # 之后再有思考(工具循环里常见)是**新的一块**,不会续到已结束的那块上
+    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "再想想"})
+    timeline = host.get_stream_state(session_id)["timeline"]
+    assert timeline[2] == {"type": "thinking", "text": "再想想", "done": False}
+
+    # 调工具同样意味着思考结束
+    host._stream_tool_event(session_id, {"type": "tool_start", "toolCallId": "c1", "name": "list_assets", "args": {}})
+    timeline = host.get_stream_state(session_id)["timeline"]
+    assert timeline[2]["done"] is True
+    assert timeline[3]["type"] == "tool"
+
+
+def test_一轮结束时不会留下思考中() -> None:
+    """只思考、没说话的一轮(被取消、或模型只回了思考)也不该留一个转不完的圈。"""
+    session_id = "s-thinking-only"
+    host._stream_reset(session_id)
+    host._stream_thinking(session_id, {"type": "thinking_delta", "delta": "想了但没说"})
+    host._stream_finish(session_id, "")
+    timeline = host.get_stream_state(session_id)["timeline"]
+    assert timeline == [{"type": "thinking", "text": "想了但没说", "done": True}]
