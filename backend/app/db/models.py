@@ -596,12 +596,6 @@ class ProviderProfile(Base):
     #: —— 那边现取现用(见 app.ai.model_catalog)。
     model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     default_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    #: 按模型的手动覆盖:{模型id: {context_window, reasoning, vision, ...}}。
-    #:
-    #: 存的是**用户显式改过的那几项**,不是整份模型元数据。供应商目录已经给了大部分值,
-    #: 全量落库会让目录更新永远追不上这份快照 —— 比如端点把某模型的窗口从 32k 提到 128k,
-    #: 而库里那份旧值把它按 32k 用。只覆盖填过的键,其余仍取目录。
-    model_overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
     #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for
     #: listing voices are three unrelated credentials from three different consoles. Which keys

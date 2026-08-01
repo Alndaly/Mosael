@@ -97,6 +97,8 @@ def _migrate_provider_auth() -> None:
         ("oauth_credential", "ALTER TABLE provider_profiles ADD COLUMN oauth_credential JSON"),
         ("credential_version", "ALTER TABLE provider_profiles ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0"),
         ("model_catalog", "ALTER TABLE provider_profiles ADD COLUMN model_catalog JSON"),
+        # model_overrides 已退役(被 provider_models 表取代)。这行保留只是为了让老库的
+        # 加列迁移仍然幂等 —— SQLite 删列要重建表,而一个没人读的空列不值得那份风险。
         ("model_overrides", "ALTER TABLE provider_profiles ADD COLUMN model_overrides JSON"),
     ]
     missing = [sql for name, sql in additions if name not in columns]

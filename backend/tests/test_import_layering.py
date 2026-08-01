@@ -27,6 +27,10 @@ def _modules() -> list[tuple[str, Path]]:
     for rel in out.split():
         if not rel.endswith(".py"):
             continue
+        # git ls-files 会列出"已删除但还没暂存"的文件。删一个模块之后到 git add 之前,
+        # 这里会去打开一个不存在的路径,让整组分层测试红在一个与分层无关的原因上。
+        if not (BACKEND / rel).exists():
+            continue
         name = rel[:-3].replace("/", ".")
         if name.endswith(".__init__"):
             name = name[: -len(".__init__")]

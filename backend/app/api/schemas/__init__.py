@@ -559,34 +559,6 @@ class AgentCompactOut(BaseModel):
     compaction: dict | None = None
 
 
-class ModelSettingsOut(BaseModel):
-    """一个模型当前生效的设置。
-
-    `*_source` 说明这个值是从哪来的:catalog(供应商目录)/ override(用户改过)/
-    fallback(都没有,用的保守默认)。界面据此把"跟随目录"和"我改过"区分开 —— 混成一个
-    输入框会让用户不知道清空之后会变成什么。
-    """
-
-    model_id: str
-    context_window: int | None = None
-    context_window_source: str = "fallback"
-    #: 高级开关。None = 跟随默认(保守值),True/False = 用户显式设过。
-    reasoning: bool | None = None
-    vision: bool | None = None
-    reasoning_effort: bool | None = None
-    developer_role: bool | None = None
-
-
-class ModelSettingsUpdate(BaseModel):
-    """按模型的覆盖。字段传 null 表示**清除这一项**、回到跟随目录/默认。"""
-
-    context_window: int | None = None
-    reasoning: bool | None = None
-    vision: bool | None = None
-    reasoning_effort: bool | None = None
-    developer_role: bool | None = None
-
-
 class ProviderQuotaMetricOut(BaseModel):
     """一条额度指标。
 

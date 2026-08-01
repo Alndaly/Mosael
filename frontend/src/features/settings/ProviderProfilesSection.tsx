@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ExternalLink, KeyRound, LogIn, LogOut, Pencil, Plus, Power, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
-import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
+import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
@@ -208,7 +208,7 @@ export function ProviderProfilesSection({
 
   /** 正在授权的档案。订阅计划没有可填的 Key,授权是它唯一的"配置"动作。 */
   const [authing, setAuthing] = React.useState<ProviderProfile | null>(null);
-  const [modelSettings, setModelSettings] = React.useState<{ id: string; model: string } | null>(null);
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const logout = useMutation({
     mutationFn: (id: string) => api(`/api/settings/providers/${id}/oauth`, { method: "DELETE" }),
     onSuccess: refresh,
@@ -433,19 +433,24 @@ export function ProviderProfilesSection({
                     <LogIn size={13} />
                   </Button>
                 )}
-                {/* 模型设置:入口挂在这一行,针对的是该档案的默认模型 —— 绝大多数档案就用这一个。
-                    没设默认模型时不给入口:没有对象可设。 */}
-                {profile.default_model && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("modelSettingsTitle")}
-                    title={`${t("modelSettingsTitle")} · ${profile.default_model}`}
-                    onClick={() => setModelSettings({ id: profile.id, model: profile.default_model })}
-                  >
-                    <SlidersHorizontal size={13} />
-                  </Button>
-                )}
+                {/* 模型入口从"配默认模型那一个"改成"展开这条连接的模型列表" ——
+                    一条连接下本来就可能有多个模型,只给一个入口是把连接当成了模型。 */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("modelListTitle")}
+                  title={t("modelListTitle")}
+                  onClick={() =>
+                    setExpanded((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(profile.id)) next.delete(profile.id);
+                      else next.add(profile.id);
+                      return next;
+                    })
+                  }
+                >
+                  <ChevronDown size={13} className={cn("transition-transform", expanded.has(profile.id) && "rotate-180")} />
+                </Button>
                 {/* 只对真有额度接口的供应商出现。没有端点的(Kimi/xAI 等)不摆这个钮 ——
                     亮着却只能回一句"不支持",等于摆了个做不到的操作。 */}
                 {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
@@ -470,7 +475,13 @@ export function ProviderProfilesSection({
                   <Trash2 size={13} />
                 </Button>
               </div>
-
+              {/* 展开区整行独占:模型行本身就是"名字 + 能力 + 开关 + 两个按钮",
+                  挤进那一列会窄到读不出任何东西。 */}
+              {expanded.has(profile.id) && (
+                <div className="col-span-full border-t border-border pt-2">
+                  <ProviderModelList profileId={profile.id} />
+                </div>
+              )}
             </div>
           ))}
           {profiles.data && visibleProfiles.length === 0 && (
@@ -478,15 +489,6 @@ export function ProviderProfilesSection({
           )}
         </div>
       </SettingsBlock>
-
-      {modelSettings && (
-        <ModelSettingsDialog
-          profileId={modelSettings.id}
-          modelId={modelSettings.model}
-          open
-          onOpenChange={(next) => !next && setModelSettings(null)}
-        />
-      )}
 
       {authing && (
         <ProviderOAuthDialog

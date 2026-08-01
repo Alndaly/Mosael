@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
-type ModelSettings = components["schemas"]["ModelSettingsOut"];
+type ModelSettings = components["schemas"]["ProviderModelOut"];
 
 /**
  * 单个模型的设置。
@@ -75,10 +75,13 @@ export function ModelSettingsDialog({
   const [draft, setDraft] = React.useState<ModelSettings | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
+  // 从合并后的模型列表里取这一行 —— 目录与覆盖的合并逻辑只该有一处,再开一个单独的读接口
+  // 就会出现"列表说 128k、弹窗说 32k"这种两份真相。
   const settings = useQuery({
-    queryKey: ["model-settings", profileId, modelId],
-    queryFn: () => api<ModelSettings>(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}/settings`),
+    queryKey: ["provider-models", profileId],
+    queryFn: () => api<ModelSettings[]>(`/api/settings/providers/${profileId}/models`),
     enabled: open,
+    select: (rows) => rows.find((row) => row.id === modelId) ?? null,
   });
 
   React.useEffect(() => {
@@ -87,12 +90,13 @@ export function ModelSettingsDialog({
 
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
-      api<ModelSettings>(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}/settings`, {
-        method: "PUT",
+      api<ModelSettings>(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}`, {
+        method: "PATCH",
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["model-settings", profileId, modelId] });
+      void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
+      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
       onOpenChange(false);
     },
   });
