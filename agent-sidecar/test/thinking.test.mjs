@@ -7,6 +7,7 @@
  */
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
@@ -29,6 +30,7 @@ await build({
   ignoreAnnotations: true,
 });
 const { buildModels } = await import(pathToFileURL(outfile).href);
+const source = await readFile(path.join(import.meta.dirname, "..", "src", "pi.ts"), "utf8");
 
 test("reasoning 默认开 —— 否则思考档位两个方向都发不出去", () => {
   const { model } = buildModels("https://api.deepseek.com", "k", "deepseek-v4-pro");
@@ -46,4 +48,12 @@ test("reasoning_effort 仍然默认关 —— 通用端点不认它会直接 400
 test("用户显式关掉推理模型时照办", () => {
   const { model } = buildModels("https://api.deepseek.com", "k", "m", { reasoning: false });
   assert.equal(model.reasoning, false);
+});
+
+test("必须走 streamSimple —— 思考档位的翻译只发生在它里面", () => {
+  // pi 的 Agent 把档位放在 options.reasoning,而拼请求体的地方读 options.reasoningEffort;
+  // 两者之间的翻译(含按模型 clamp)只在 streamSimple 里。走 stream 的话 reasoningEffort
+  // 永远 undefined,供应商收到的永远是"别思考" —— 档位调什么都没用,而类型全绿。
+  assert.ok(source.includes("models.streamSimple("), "streamFn 必须调 models.streamSimple");
+  assert.ok(!/[^e]models\.stream\(/.test(source), "不得再有裸的 models.stream( 调用");
 });

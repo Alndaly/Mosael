@@ -287,8 +287,16 @@ export async function runCompaction(input: {
       )
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
-  const streamFn = (m: Parameters<typeof models.stream>[0], context: Parameters<typeof models.stream>[1], options: Parameters<typeof models.stream>[2]) =>
-    models.stream(m, context, options);
+  // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
+  // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
+  // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
+  // 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
+  // "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
+  const streamFn = (
+    m: Parameters<typeof models.streamSimple>[0],
+    context: Parameters<typeof models.streamSimple>[1],
+    options: Parameters<typeof models.streamSimple>[2],
+  ) => models.streamSimple(m, context, options);
   const { messages, info } = await prepareContext(prior, model as Model<Api>, streamFn, true);
   return {
     sessionState: messages,
@@ -375,8 +383,16 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
       )
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
-  const streamFn = (m: Parameters<typeof models.stream>[0], context: Parameters<typeof models.stream>[1], options: Parameters<typeof models.stream>[2]) =>
-    models.stream(m, context, options);
+  // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
+  // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
+  // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
+  // 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
+  // "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
+  const streamFn = (
+    m: Parameters<typeof models.streamSimple>[0],
+    context: Parameters<typeof models.streamSimple>[1],
+    options: Parameters<typeof models.streamSimple>[2],
+  ) => models.streamSimple(m, context, options);
   // 轮前按 token 水位压缩(超过窗口 80% 触发,或调用方显式要求)。
   const { messages: priorMessages, info: compaction } = await prepareContext(
     prior,
