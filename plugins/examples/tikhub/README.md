@@ -5,16 +5,19 @@
 
 ## 配置
 
+在 Open Studio 的**插件页 → 凭据**里填 `TIKHUB_API_KEY`(在 https://user.tikhub.io 生成)。
+中国大陆网络可以把 `TIKHUB_BASE_URL` 填成 `https://api.tikhub.dev`。
+
+凭据由 manifest 的 `credentials` 声明,运行时只注入到**这个插件自己的进程**。插件仍然拿不到
+Open Studio 的任何凭据 —— 那层隔离是插件绕不过确认卡与权限系统的原因,没有被破坏。
+
+不经 Open Studio 直接跑这个脚本时(调试、CI),它会回退到读插件目录下的 `config.json`:
+
 ```bash
-cp config.example.json config.json   # 然后填入你的 TikHub API Key
+cp config.example.json config.json
 ```
 
 `config.json` 已被 .gitignore 忽略。
-
-**为什么 Key 放在插件目录里而不是 Open Studio 的设置页**:插件运行时只向子进程透传
-`PATH` / `HOME` / `LANG`,不给任何应用凭据(见 `backend/app/domain/plugins/runtime.py`)。
-这是有意的隔离——插件因此绕不过确认卡与权限系统。代价是插件自己的凭据得自己管。
-应用侧的插件凭据托管还没做,那是这套插件体系下一步该补的东西。
 
 ## 工具
 

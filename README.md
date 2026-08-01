@@ -203,7 +203,7 @@ electron/         main.cjs(主进程)+ publish/(内嵌浏览器发布执行器 T
 agent-sidecar/    智能体 sidecar(pi 运行时,Node)
 contracts/        跨实现的可执行规约(前后端各跑一遍同一份语料),见 contracts/README.md
 docs/             架构与子系统文档(见下)
-plugins/          本地插件(子进程 + MCP 暴露)
+plugins/          本地插件(子进程脚本 / 接入 MCP 服务)
 ```
 
 ## 深入文档

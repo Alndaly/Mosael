@@ -7,9 +7,11 @@
 把一个每月都在变的东西冻在插件里 —— 它会烂,而且烂得很安静。path 直接取自 TikHub 自己的
 文档,那份永远是最新的。
 
-**Key 从插件目录的 config.json 读**,不从环境变量:Open Studio 的插件运行时只透传
-PATH/HOME/LANG(见 backend/app/domain/plugins/runtime.py),这是有意的隔离 —— 插件拿不到
-应用的任何凭据。代价是插件自己的凭据也得自己管。config.json 已在 .gitignore 里。
+**Key 走 manifest 声明的凭据**:插件在 manifest 的 credentials 里声明 TIKHUB_API_KEY,用户在
+Open Studio 的插件设置页填,运行时把它(且只把它)注入这个插件自己的进程环境。插件仍然拿不到
+应用的任何凭据 —— 隔离没变,变的是用户不用再开终端 cp 一个 config.json。
+
+config.json 作为回退保留:插件也可能被别的东西直接跑(调试、CI),那时没有注入方。
 
 只允许 GET。TikHub 也有写类接口(下单、投放),但一个"读数据"的插件不该顺手具备那些能力 ——
 真要用,那属于另一个插件、另一次授权。
@@ -17,6 +19,7 @@ PATH/HOME/LANG(见 backend/app/domain/plugins/runtime.py),这是有意的隔离 
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -32,15 +35,18 @@ MAX_BYTES = 800_000
 
 
 def _config() -> dict:
-    if not CONFIG_PATH.is_file():
-        raise ValueError(
-            f"没有找到 {CONFIG_PATH.name}:把 config.example.json 复制成 config.json 并填入 TikHub API Key"
-        )
-    data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    key = str(data.get("api_key") or "").strip()
-    if not key or key.startswith("把你的"):
-        raise ValueError("config.json 里的 api_key 还没填")
-    return {"api_key": key, "base_url": str(data.get("base_url") or DEFAULT_BASE).rstrip("/")}
+    # 注入优先:Open Studio 按 manifest 的 credentials 声明把它塞进环境。
+    key = os.environ.get("TIKHUB_API_KEY", "").strip()
+    base = os.environ.get("TIKHUB_BASE_URL", "").strip()
+    if not key and CONFIG_PATH.is_file():
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        key = str(data.get("api_key") or "").strip()
+        base = base or str(data.get("base_url") or "").strip()
+        if key.startswith("把你的"):
+            key = ""
+    if not key:
+        raise ValueError("TikHub API Key 未配置:在 Open Studio 的插件设置页填写 TIKHUB_API_KEY")
+    return {"api_key": key, "base_url": (base or DEFAULT_BASE).rstrip("/")}
 
 
 def _get(path: str, params: dict) -> dict:

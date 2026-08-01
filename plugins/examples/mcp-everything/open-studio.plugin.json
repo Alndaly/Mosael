@@ -1,0 +1,18 @@
+{
+  "id": "dev.openstudio.mcp-everything",
+  "name": "MCP 接入范例",
+  "version": "0.1.0",
+  "kind": "mcp",
+  "mcp": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-everything"]
+  },
+  "permissions": ["process:spawn"],
+  "skills": [
+    {
+      "id": "mcp-example",
+      "description": "把一个现成的 MCP server 接成 Open Studio 插件的范例。工具清单由 server 自己提供,不写在这个文件里。"
+    }
+  ]
+}
