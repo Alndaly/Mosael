@@ -100,3 +100,41 @@ def test_同一连接下模型_id_唯一():
         provider_models.upsert(db, profile, "m", capability_ids=["image"])
         db.commit()
         assert len(provider_models.list_models(db, profile.id)) == 1
+
+
+def test_新建档案立刻有模型行():
+    """回填只覆盖历史数据。运行时新建的档案同样需要模型行,否则新系统对它们一无所知 ——
+    能力选择器空着、默认解析退回不到任何候选。这个缺口是被测试抓到的:新建的 TTS 档案
+    配了默认却报"没有配置可用于语音生成的真实供应商"。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    created = client.post(
+        "/api/settings/providers",
+        json={
+            "name": "本地",
+            "vendor": "openai-compatible",
+            "config": {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "default_model": "m1"},
+        },
+    )
+    assert created.status_code == 200, created.text
+    with SessionLocal() as db:
+        rows = provider_models.list_models(db, created.json()["id"])
+    assert [row.model_id for row in rows] == ["m1"]
+
+
+def test_改默认模型会补出新的模型行():
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={
+            "name": "本地",
+            "vendor": "openai-compatible",
+            "config": {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "default_model": "m1"},
+        },
+    ).json()["id"]
+    client.patch(f"/api/settings/providers/{profile_id}", json={"config": {"default_model": "m2"}})
+    with SessionLocal() as db:
+        ids = sorted(row.model_id for row in provider_models.list_models(db, profile_id))
+    # 换默认不删旧行 —— 旧模型可能仍在别处被引用(会话里选着它、工作流节点填着它)。
+    assert ids == ["m1", "m2"]

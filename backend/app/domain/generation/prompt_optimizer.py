@@ -22,7 +22,7 @@ import httpx
 from app.domain import ai_retry
 from sqlalchemy.orm import Session
 
-from app.domain.provider_defaults import resolve_default
+from app.domain import provider_models
 from app.domain.providers import require_profile
 
 _LLM_TIMEOUT_SECONDS = 60.0
@@ -199,7 +199,9 @@ def optimize_image_prompt(
     # 用「对话」默认 LLM 重写(与助手同一个),不是图像模型本身:图像 provider 的 default_model 是
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。
-    chat_profile, chat_model = resolve_default(db, "chat")
+    default = provider_models.resolve_default(db, "chat")
+    chat_profile = default.profile if default is not None else None
+    chat_model = default.model_id if default is not None else ""
     if chat_profile is None:
         chat_profile = require_profile(db, profile_id, error=PromptOptimizeError)
     if not chat_model:

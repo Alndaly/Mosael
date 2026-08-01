@@ -60,7 +60,7 @@ from app.domain.network import apply_to_process, effective_no_proxy, get_config 
 from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
 from app.ai.agent.host import mint_tool_token
 from app.ai.model_catalog import find_model
-from app.domain import model_overrides
+from app.domain import model_overrides, provider_models
 from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
@@ -257,6 +257,24 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
     return [_profile_out(profile) for profile in profiles]
 
 
+def _sync_default_model_row(db: DbSession, profile: ProviderProfile) -> None:
+    """让档案上的 default_model 在 provider_models 里有一行。
+
+    回填只覆盖历史数据;**运行时新建/改动的档案同样需要模型行**,否则新系统对它们一无所知 ——
+    能力选择器空着、默认解析退回不到任何候选。测试当场抓到过这一点(新建的 TTS 档案配了默认
+    却报"没有配置可用于语音生成的真实供应商")。
+
+    能力沿用档案上的覆盖(为空则由 effective_capabilities 回落 vendor 预设)。这一步在
+    default_model 退场之前是必需的粘合;它退场后由模型列表接口直接建行。
+    """
+    model_id = (profile.default_model or "").strip()
+    if not model_id:
+        return
+    provider_models.upsert(
+        db, profile, model_id, source="manual", capability_ids=list(profile.capability_ids or [])
+    )
+
+
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     ensure_instance_admin(db, user, "credentials")
@@ -285,6 +303,8 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
                 incoming[key] = copied
     _apply_profile_config(profile, incoming, creating=True)
     db.add(profile)
+    db.flush()
+    _sync_default_model_row(db, profile)
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)
@@ -319,6 +339,8 @@ def update_provider_profile(
     incoming = _config_from_body(body)
     if incoming:
         _apply_profile_config(profile, incoming, creating=False)
+    db.flush()
+    _sync_default_model_row(db, profile)
     db.commit()
     db.refresh(profile)
     return _profile_out(profile)

@@ -11,7 +11,7 @@ from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_
 from app.ai.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import find_model
 from app.domain.provider_auth import read_credential
-from app.domain import model_overrides
+from app.domain import provider_models
 from app.domain.context_meter import context_tokens
 from app.domain.providers import pi_provider_id
 from app.core.config import settings
@@ -96,21 +96,28 @@ def resolve_chat_provider(
     """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
     AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
     永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
-    from app.domain.provider_defaults import resolve_default
     from app.domain.providers import first_enabled_profile, resolve_profile
 
     profile = None
     if provider_profile_id:
         profile = resolve_profile(db, "", provider_profile_id)
     if profile is None:
-        default_profile, default_model = resolve_default(db, "chat")
-        if default_profile is not None:
-            profile = default_profile
-            model = model or default_model
+        # 默认解析已经是模型粒度的:拿到的是一行模型,连接就在它身上。
+        default = provider_models.resolve_default(db, "chat")
+        if default is not None:
+            profile = default.profile
+            model = model or default.model_id
     if profile is None:
         profile = first_enabled_profile(db)
     if profile is None:
         return None, None, None
+    if not (model or "").strip():
+        # 没指定模型时用这条连接下第一个能对话的模型。default_model 那个字段正在退场 ——
+        # 它是"一档案一模型"时代的写法,同一条连接有多个对话模型时它给不出答案。
+        for candidate in provider_models.list_models(db, profile.id, enabled_only=True):
+            if "chat" in provider_models.effective_capabilities(candidate):
+                model = candidate.model_id
+                break
     agent_model = (model or profile.default_model or "").strip()
     # A profile with no usable model would otherwise reach the sidecar as model=""
     # and come back as a silent empty turn.
@@ -134,14 +141,9 @@ def resolve_chat_provider(
         catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
         provider_dict["context_window"] = catalog.context_window if catalog else None
         provider_dict["max_output_tokens"] = catalog.max_output_tokens if catalog else None
-    # 手动覆盖压在最后:目录取不到(自定义模型名、私有部署)或给得不准时,用户填的那份说了算。
-    # 订阅计划同样适用 —— pi 的目录也不是每个模型都准。
-    override = model_overrides.for_model(profile.model_overrides, agent_model)
-    if "context_window" in override:
-        provider_dict["context_window"] = override["context_window"]
-    for key in model_overrides.ADVANCED_FIELDS:
-        if key in override:
-            provider_dict[key] = override[key]
+    # 模型行上的显式设置压在最后:目录取不到(自定义模型名、私有部署)或给得不准时,
+    # 用户填的那份说了算。订阅计划同样适用 —— pi 的目录也不是每个模型都准。
+    provider_dict.update(provider_models.runtime_limits(provider_models.get_model(db, profile.id, agent_model)))
     return provider_dict, agent_model, profile
 
 

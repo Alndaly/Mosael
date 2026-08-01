@@ -112,15 +112,15 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
         elif task.kind == "ai_generation":
             from app.domain.generation import create_generation_job
             from app.domain.generation.runner import start_generation_thread
-            from app.domain.provider_defaults import resolve_default
+            from app.domain import provider_models
 
             kind = str(payload.get("kind", "image")).strip() or "image"
             provider = str(payload.get("provider", "")).strip()
             model = str(payload.get("model", "")).strip()
             if not provider or not model:
-                default_profile, default_model = resolve_default(db, kind)
-                if default_profile is not None and default_model:
-                    provider, model = default_profile.vendor, default_model
+                default = provider_models.resolve_default(db, kind)
+                if default is not None:
+                    provider, model = default.profile.vendor, default.model_id
             if not provider or not model:
                 raise RuntimeError("AI 生成任务缺少真实供应商或模型")
             generation, _generation_job = create_generation_job(

@@ -322,16 +322,16 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     if confirmation.tool in ("generate_image", "generate_video"):
         from app.domain.generation import create_generation_job, ensure_builtin_generation_models
         from app.domain.generation.runner import start_generation_thread
-        from app.domain.provider_defaults import resolve_default
+        from app.domain import provider_models
 
         ensure_builtin_generation_models(db)
         kind = "image" if confirmation.tool == "generate_image" else "video"
         provider = str(payload.get("provider", "")).strip()
         model = str(payload.get("model", "")).strip()
         if not provider or not model:
-            default_profile, default_model = resolve_default(db, kind)
-            if default_profile is not None and default_model:
-                provider, model = default_profile.vendor, default_model
+            default = provider_models.resolve_default(db, kind)
+            if default is not None:
+                provider, model = default.profile.vendor, default.model_id
         if not provider or not model:
             raise RuntimeError("没有配置可用于生成的真实供应商和模型")
         generation, job = create_generation_job(
@@ -351,17 +351,17 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         return {"job_id": job.id, "generation_id": generation.id}
     if confirmation.tool == "generate_audio":
         from app.audio.voices import start_synthesis
-        from app.domain.provider_defaults import resolve_default
+        from app.domain import provider_models
 
         profile_id = str(payload.get("provider_profile_id") or "").strip()
         engine = str(payload.get("engine") or payload.get("provider") or "").strip()
         model = str(payload.get("model") or "").strip()
         if not engine:
-            default_profile, default_model = resolve_default(db, "tts")
-            if default_profile is not None:
-                profile_id = default_profile.id
-                engine = default_profile.vendor
-                model = model or default_model
+            default = provider_models.resolve_default(db, "tts")
+            if default is not None:
+                profile_id = default.provider_profile_id
+                engine = default.profile.vendor
+                model = model or default.model_id
         if not engine:
             raise RuntimeError("没有配置可用于语音生成的真实供应商")
         job = start_synthesis(
@@ -379,13 +379,13 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         return {"job_id": job.id}
     if confirmation.tool == "generate_podcast":
         from app.audio.voices import start_podcast
-        from app.domain.provider_defaults import resolve_default
+        from app.domain import provider_models
 
         profile_id = str(payload.get("provider_profile_id") or "").strip()
         if not profile_id:
-            default_profile, _default_model = resolve_default(db, "podcast")
-            if default_profile is not None:
-                profile_id = default_profile.id
+            default = provider_models.resolve_default(db, "podcast")
+            if default is not None:
+                profile_id = default.provider_profile_id
         job = start_podcast(
             db,
             workspace_id=confirmation.workspace_id,
