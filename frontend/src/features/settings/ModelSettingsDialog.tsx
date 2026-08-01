@@ -9,7 +9,6 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
 type ModelSettings = components["schemas"]["ProviderModelOut"];
@@ -43,22 +42,32 @@ function AdvancedToggle({
   onChange: (next: boolean | null) => void;
 }) {
   const t = useI18n();
+  const set = value !== null && value !== undefined;
   return (
-    // 用设置页同一套 SettingsRow:标签+说明在左、控件在右,行距与分隔线都跟外面一致。
-    // 自己手写一套的结果就是同一个应用里两种"开关行",间距和字号都对不上。
-    <SettingsRow label={label} description={hint}>
-      {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻这个按钮只会让人以为漏了什么。 */}
-      {value !== null && value !== undefined && (
-        <button
-          type="button"
-          className="cursor-pointer border-0 bg-transparent p-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          onClick={() => onChange(null)}
-        >
-          {t("modelSettingsFollowDefault")}
-        </button>
-      )}
-      <Switch checked={Boolean(value)} onCheckedChange={(next) => onChange(next)} />
-    </SettingsRow>
+    // **不复用 SettingsRow**:它的 gap-5 / px-3.5 / py-3 是给整页设置栏调的,塞进 480px 的
+    // 弹窗里开关会孤零零飘在右边,四行还要占掉近 400px 高。这里按弹窗的尺度重排。
+    <label className="flex cursor-pointer items-start gap-2.5 py-2">
+      <Switch className="mt-0.5 shrink-0" checked={Boolean(value)} onCheckedChange={(next) => onChange(next)} />
+      <span className="grid min-w-0 flex-1 gap-px">
+        <span className="flex items-center gap-1.5 text-[12.5px] text-foreground">
+          {label}
+          {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻只会让人以为漏了什么。 */}
+          {set && (
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              onClick={(event) => {
+                event.preventDefault();
+                onChange(null);
+              }}
+            >
+              {t("modelSettingsFollowDefault")}
+            </button>
+          )}
+        </span>
+        <span className="text-[11px] leading-[1.45] text-muted-foreground">{hint}</span>
+      </span>
+    </label>
   );
 }
 
@@ -209,23 +218,21 @@ export function ModelSettingsDialog({
         )}
 
         {isChat && (
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="border-t border-border pt-2">
+            {/* 弹窗本身已经有一圈边框,再套一个盒子就是框中框。一条分隔线足够划分区域。 */}
             <button
               type="button"
-              className="flex w-full cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-3.5 py-3 text-left"
+              className="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left"
               onClick={() => setAdvancedOpen((v) => !v)}
             >
-              <span className="grid gap-0.5">
-                <span className="text-[13px] font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
-                <small className="text-xs leading-[1.45] text-muted-foreground">{t("modelSettingsAdvancedHint")}</small>
+              <span className="text-[12.5px] font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                {t("modelSettingsAdvancedHint")}
+                <ChevronDown size={13} className={cn("transition-transform", advancedOpen && "rotate-180")} />
               </span>
-              <ChevronDown
-                size={14}
-                className={cn("shrink-0 text-muted-foreground transition-transform", advancedOpen && "rotate-180")}
-              />
             </button>
             {advancedOpen && current && (
-              <div className="border-t border-border [&>*+*]:border-t [&>*+*]:border-border">
+              <div className="mt-1 grid">
                 <AdvancedToggle
                   label={t("modelSettingsReasoning")}
                   hint={t("modelSettingsReasoningHint")}
