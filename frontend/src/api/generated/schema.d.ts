@@ -3171,7 +3171,12 @@ export interface paths {
         head?: never;
         /**
          * Update Provider Model
-         * @description 改一行。运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。
+         * @description 改一行。
+         *
+         *     **model_id 必须用 :path 转换器**:模型 id 里带斜杠是常态(kimi/kimi-k2.7-code、
+         *     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
+         *     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
+         *     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。
          */
         patch: operations["update_provider_model_api_settings_providers__profile_id__models__model_id__patch"];
         trace?: never;
@@ -3806,6 +3811,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Agent Plan
+         * @description 写这次会话的任务计划。
+         *
+         *     直接执行、不走确认卡:写计划不改动任何工程状态。每一步都要点一次确认的计划没有人会用,
+         *     而真正的改动(改时间线、导出、生成)仍然各自出卡。
+         */
+        put: operations["set_agent_plan_api_agent_sessions__session_id__plan_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Memories */
+        get: operations["list_memories_api_agent_memories_get"];
+        put?: never;
+        /** Create Memory */
+        post: operations["create_memory_api_agent_memories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/memories/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Memory */
+        delete: operations["delete_memory_api_agent_memories__memory_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Memory */
+        patch: operations["update_memory_api_agent_memories__memory_id__patch"];
+        trace?: never;
+    };
     "/api/agent/skills": {
         parameters: {
             query?: never;
@@ -4074,6 +4138,51 @@ export interface components {
             /** Skills */
             skills: components["schemas"]["AgentSkillOut"][];
         };
+        /** AgentMemoryCreate */
+        AgentMemoryCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Content */
+            content: string;
+            /**
+             * Source
+             * @default user
+             */
+            source: string;
+        };
+        /** AgentMemoryOut */
+        AgentMemoryOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Content */
+            content: string;
+            /**
+             * Source
+             * @default agent
+             */
+            source: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AgentMemoryUpdate */
+        AgentMemoryUpdate: {
+            /** Content */
+            content: string;
+        };
         /** AgentMessageCreate */
         AgentMessageCreate: {
             /** Content */
@@ -4102,6 +4211,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** AgentPlanUpdate */
+        AgentPlanUpdate: {
+            /** Steps */
+            steps?: unknown[];
         };
         /** AgentSessionCreate */
         AgentSessionCreate: {
@@ -4155,6 +4269,10 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+            /** Plan */
+            plan?: {
+                [key: string]: unknown;
+            }[] | null;
             /**
              * Created At
              * Format: date-time
@@ -15894,6 +16012,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_agent_plan_api_agent_sessions__session_id__plan_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentPlanUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memories_api_agent_memories_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                project_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_memory_api_agent_memories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentMemoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_memory_api_agent_memories__memory_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_memory_api_agent_memories__memory_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentMemoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryOut"];
                 };
             };
             /** @description Validation Error */

@@ -102,6 +102,21 @@ def _patch(path: str, payload: dict[str, Any]) -> Any:
         return response.json()
 
 
+def _put(path: str, payload: dict[str, Any]) -> Any:
+    headers = _auth_headers()
+    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
+        response = client.put(path, json=payload)
+        _raise_with_detail(response)
+        return response.json()
+
+
+def _delete(path: str) -> None:
+    headers = _auth_headers()
+    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
+        response = client.delete(path)
+        _raise_with_detail(response)
+
+
 def _default_workspace_id() -> str:
     workspaces = _get("/api/workspaces")
     if not workspaces:
@@ -636,6 +651,88 @@ def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
     """
     asset = _patch(f"/api/assets/{asset_id}", {"tags": tags})
     return {"asset_id": asset["id"], "name": asset["name"], "tags": asset.get("tags", [])}
+
+
+# ---------- 跨会话记忆 / 任务计划 ----------
+#
+# 两组都**直接执行**、不走确认卡:它们不改动任何工程状态(素材、时间线、发布),只影响
+# 智能体自己后续怎么做事,而且用户在界面上随时看得到、改得掉。给它们套确认卡的结果是
+# 每记一件事、每推进一步都要点一次,没有人会用 —— 而真正的改动仍然各自出卡。
+
+
+@mcp.tool()
+def remember(content: str, workspace_id: str = "", project_id: str = "") -> dict[str, Any]:
+    """Runs directly: save a durable fact or convention to cross-session memory.
+
+    Memory is injected into your system prompt at the start of EVERY future
+    conversation in this workspace, so use it only for things that stay true:
+    the user's standing preferences ("always 1080x1920 vertical"), project
+    conventions ("intro is always brand-intro.mp4"), hard constraints ("client
+    forbids red"). One short sentence per entry, max 500 chars.
+
+    Do NOT use it as a notepad for the current conversation, and do NOT store
+    reference material, scripts or research — those belong in the knowledge base
+    (create_kb_note), which is searched on demand instead of costing tokens every
+    single turn. Pass project_id to scope a memory to one project.
+    """
+    ws = workspace_id or _default_workspace_id()
+    body = {"workspace_id": ws, "content": content, "source": "agent"}
+    if project_id:
+        body["project_id"] = project_id
+    row = _post("/api/agent/memories", body)
+    return {"memory_id": row["id"], "content": row["content"], "scope": "project" if row.get("project_id") else "workspace"}
+
+
+@mcp.tool()
+def list_memories(workspace_id: str = "", project_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: list what you already remember in this workspace.
+
+    You normally do not need this — memory is already in your system prompt.
+    Use it before forgetting something (to get the memory_id), or when the user
+    asks what you remember.
+    """
+    ws = workspace_id or _default_workspace_id()
+    params: dict[str, Any] = {"workspace_id": ws}
+    if project_id:
+        params["project_id"] = project_id
+    rows = _get("/api/agent/memories", params)
+    return [
+        {"memory_id": row["id"], "content": row["content"], "source": row.get("source", "agent")}
+        for row in rows
+    ]
+
+
+@mcp.tool()
+def forget(memory_id: str) -> dict[str, Any]:
+    """Runs directly: delete one memory entry.
+
+    Use when the user says a convention no longer applies, or when you notice an
+    entry is wrong. Get memory_id from list_memories. Deleting is not undoable,
+    so do not clear memories the user did not ask you to clear.
+    """
+    _delete(f"/api/agent/memories/{memory_id}")
+    return {"memory_id": memory_id, "forgotten": True}
+
+
+@mcp.tool()
+def update_plan(steps: list[Any]) -> dict[str, Any]:
+    """Runs directly: publish/refresh your task plan for the current conversation.
+
+    Use for any task that takes more than a couple of steps: write the plan out
+    first, then call this again after EACH step to move it forward. The user sees
+    the list live, so it is how they know what you are about to do and where you
+    are — an accurate plan matters more than a detailed one.
+
+    Each step is {"step": "...", "status": "pending"|"in_progress"|"done"}; a bare
+    string is treated as pending. Exactly one step should be in_progress at a
+    time. Max 20 steps. Pass an empty list to clear the plan once everything is
+    finished. Do NOT use for single-step requests — a one-item plan is noise.
+    """
+    session_id = _SESSION_ID.get()
+    if not session_id:
+        return {"error": "update_plan 只能在 Open Studio 的对话会话里使用"}
+    session = _put(f"/api/agent/sessions/{session_id}/plan", {"steps": steps})
+    return {"plan": session.get("plan") or []}
 
 
 # ---------- 浏览器自动化(隔离会话,与用户的发布登录物理隔离) ----------

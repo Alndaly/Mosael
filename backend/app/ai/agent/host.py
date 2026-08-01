@@ -12,6 +12,7 @@ from app.ai.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import find_model
 from app.domain.provider_auth import read_credential
 from app.domain import provider_models
+from app.domain.agent import memory as agent_memory
 from app.domain.context_meter import context_tokens
 from app.domain.providers import pi_provider_id
 from app.core.config import settings
@@ -58,6 +59,13 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Open Studio 的视频创作助手,运行在�
   凭据或个人敏感信息——需要这些时停下来请用户自己操作;③ 要跳到与当前明显不同的站点前,先在
   对话里跟用户说清楚再做。
 - 所有已批准的时间线修改用户都可以撤销,不必过度谨慎,但一次确认卡只装一个连贯意图。
+- 多于两三步的任务,先用 update_plan 写出计划,**每做完一步就再调一次**把它推进 —— 用户
+  正是靠这份列表知道你打算做什么、做到哪了。同时只应有一步 in_progress。单步请求不要写计划。
+- 遇到值得**跨会话**保留的约定或事实(用户的固定偏好、项目惯例、硬性约束)用 remember 记下;
+  它会自动出现在以后每一次对话里。只记约定,不记对话内容与资料 —— 后者进知识库。
+- 需要一段独立的、上下文很占地方的调查(翻很多素材、读很多文档、查很多网页)时,用
+  run_subagent 派一个子智能体去做:它有自己的上下文,只把结论带回来,你这边不会被中间过程占满。
+  子智能体只有只读工具,做不了任何改动 —— 要改还是你自己来。
 工作区 ID: {workspace_id}。用用户使用的语言回复,简洁、面向创作者,不要提及内部实现细节。
 不要读写本机文件系统,不要执行 shell 命令;只使用 open-studio 工具与对话。"""
 
@@ -486,6 +494,16 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
                 workspace_id=session.workspace_id,
             )
+            # 跨会话记忆:每轮都注入,这正是它区别于知识库的地方(不用检索也生效)。
+            # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
+            system_prompt += agent_memory.memory_prompt(db, session.workspace_id, session.project_id)
+            # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。
+            if session.plan:
+                system_prompt += "\n\n【当前任务计划】(用 update_plan 更新)\n" + "\n".join(
+                    f"- [{step.get('status', 'pending')}] {step.get('step', '')}"
+                    for step in session.plan
+                    if isinstance(step, dict)
+                )
             # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
             if session.analysis_video_mode == "native":
                 system_prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'

@@ -32,6 +32,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";

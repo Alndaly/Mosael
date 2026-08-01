@@ -26,7 +26,6 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +38,7 @@ import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -757,6 +757,10 @@ function ChatInspector({
         )}
       </section>
 
+      {/* 计划排在工具之前:等待时最想知道的是"它打算做什么、做到哪了",
+          而不是"刚才调了哪个工具"。没有计划时整块不渲染。 */}
+      <PlanCard plan={(session?.plan ?? null) as PlanStep[] | null} />
+
       {/* 「最近工具」与「能力」原本是两块 —— 一块只有名字和状态(看不出做了什么),另一块把
           36 个工具铺成四行胶囊(占掉半个侧栏,而那 8 个只是注册表顺序的前 8 个)。
           合成一块:头部一行交代规模与版本,主体是可展开看参数/结果的最近调用,
@@ -854,6 +858,35 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+function ToolBrowserRow({ tool }: { tool: AgentTool }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <button
+      type="button"
+      className="grid min-w-0 cursor-pointer gap-0.5 border-0 border-b border-border/50 bg-transparent px-0.5 py-2 text-left last:border-b-0"
+      onClick={() => setOpen((value) => !value)}
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        <strong className="min-w-0 truncate font-mono text-[12px] font-[650] text-foreground">{tool.name}</strong>
+        {tool.confirmation && (
+          <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10px] font-normal text-muted-foreground">
+            {t("agentToolNeedsConfirm")}
+          </span>
+        )}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 break-words text-[11px] leading-[1.5] text-muted-foreground",
+          !open && "line-clamp-2",
+        )}
+      >
+        {tool.description}
+      </span>
+    </button>
+  );
+}
+
 /** 全部工具:带搜索,列名字 + 说明 + 是否走确认卡。
  *  36 个工具铺在侧栏里没人读得完,而"这个工具能干嘛"是偶发问题 —— 需要时打开就好。 */
 function ToolBrowser({
@@ -873,17 +906,15 @@ function ToolBrowser({
     : tools;
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={`${t("agentInspectorCapabilities")} · ${tools.length}`}>
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <Input value={query} placeholder={t("agentToolsSearch")} onChange={(event) => setQuery(event.target.value)} />
-        <div className="grid max-h-[52vh] gap-1.5 overflow-auto">
+        {/* 一行一个工具、发丝线分隔,而不是一堆卡片盒子 —— 三十多条时盒子的边框比内容还抢眼。
+            说明默认夹到两行(工具说明是写给模型看的,动辄一整段),点开看全文。
+            **横向必须锁死**:grid 子项默认 min-width:auto,长英文单词会把整个弹窗撑宽,
+            于是内容跟着左右晃。min-w-0 + break-words 是这里唯一有效的组合。 */}
+        <div className="grid max-h-[52vh] min-w-0 gap-px overflow-y-auto overflow-x-hidden">
           {matched.map((tool) => (
-            <div className="grid gap-0.5 rounded-md border border-border bg-panel px-2.5 py-2" key={tool.name}>
-              <span className="flex items-center gap-1.5">
-                <strong className="truncate font-mono text-[12px] font-[650] text-foreground">{tool.name}</strong>
-                {tool.confirmation && <Badge variant="outline">{t("agentToolNeedsConfirm")}</Badge>}
-              </span>
-              <span className="text-[11px] leading-[1.5] text-muted-foreground">{tool.description}</span>
-            </div>
+            <ToolBrowserRow key={tool.name} tool={tool} />
           ))}
           {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("agentToolNoMatch")}</p>}
         </div>

@@ -27,8 +27,49 @@ import {
   compact,
   contextTokens,
 } from "./compaction";
+import { readOnlyTools, runSubagent, subagentToolSpec } from "./subagent.js";
 
 const PROVIDER_ID = "open-studio";
+
+/** 主智能体手里的 run_subagent。子智能体只拿只读工具(理由见 subagent.ts),
+ *  它的每一步都当作父工具卡的进度上报 —— 否则界面上是一段几十秒的静默。 */
+function buildSubagentTool(
+  allTools: AgentTool[],
+  model: Model<Api>,
+  streamFn: unknown,
+  handlers: PiTurnHandlers,
+): AgentTool {
+  const spec = subagentToolSpec();
+  const confirmationNames = new Set(
+    allTools.filter((tool) => (tool as { confirmation?: boolean }).confirmation).map((tool) => tool.name),
+  );
+  return {
+    name: spec.name,
+    label: "子智能体",
+    description: spec.description,
+    parameters: spec.parameters as never,
+    execute: async (_id: string, rawParams: unknown, signal?: AbortSignal) => {
+      const args = (rawParams ?? {}) as { task?: string; expected_output?: string };
+      const task = (args.task ?? "").trim();
+      if (!task) throw new Error("task 不能为空");
+      const prompt = args.expected_output ? `${task}\n\n【期望的输出形式】${args.expected_output}` : task;
+      const result = await runSubagent({
+        task: prompt,
+        tools: readOnlyTools(allTools, confirmationNames),
+        model,
+        streamFn,
+        signal,
+        onStep: (toolName) => handlers.onSubagentStep?.(toolName),
+      });
+      // 失败照常返回给模型(而不是抛):子任务没做成是**结果的一种**,主智能体应当读到
+      // "没做成、原因是什么"再决定下一步,而不是整轮对话跟着崩。
+      const payload = result.error
+        ? { ok: false, error: result.error, steps: result.steps }
+        : { ok: true, report: result.report, steps: result.steps };
+      return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], details: { data: payload } };
+    },
+  };
+}
 
 // 轮内兜底:一轮里工具调用可能连着追加十几条消息,而按 token 的压缩只在**轮与轮之间**做
 // (见 prepareContext)。这条只防"单轮内爆炸"这一种情况,阈值放得很宽,正常对话碰不到它。
@@ -303,6 +344,8 @@ export interface PiTurnHandlers {
   onThinkingEnd: () => void;
   onToolStart: (toolCallId: string, name: string, args: unknown) => void;
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
+  /** 子智能体每调一次工具就报一次。可选 —— 界面用它把那张卡从"运行中"变成"运行中·第 N 步"。 */
+  onSubagentStep?: (toolName: string) => void;
 }
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
@@ -330,11 +373,14 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     streamFn,
     Boolean(input.forceCompact),
   );
+  // 子智能体挂在这里而不是 buildAllTools 里:它要用的 model/streamFn 到这一步才解析出来,
+  // 而它跑在同一个进程里(见 subagent.ts —— 另起进程就得把供应商解析整套再传一遍)。
+  const tools = [...input.tools, buildSubagentTool(input.tools, model as Model<Api>, streamFn, handlers)];
   const agent = new Agent({
     initialState: {
       systemPrompt: input.systemPrompt,
       model,
-      tools: input.tools,
+      tools,
       messages: priorMessages,
       thinkingLevel: input.thinkingLevel ?? "off",
     },

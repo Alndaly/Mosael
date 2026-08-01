@@ -899,6 +899,10 @@ class AgentSession(Base):
     #: 思考档位(off/low/medium/high)。挂在**会话**上而不是模型上:同一个模型有时要深想、
     #: 有时要快答,它是每次对话的选择。off 时 pi 根本不向供应商要思考。
     thinking_level: Mapped[str] = mapped_column(String(10), nullable=False, default="off")
+    #: 当前任务计划:`[{"step": "...", "status": "pending|in_progress|done"}]`。
+    #: 挂在会话上而不是单独建表 —— 一次会话只有一份"现在在做什么",历史进度由 update_plan
+    #: 的工具卡在时间线上留痕,不需要第二套版本记录。
+    plan: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     # pi 适配器无 --resume:存 pi 序列化的消息数组做多轮记忆(下轮回灌 initialState.messages)
     adapter_state: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running
@@ -923,6 +927,30 @@ class AgentMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
     session: Mapped[AgentSession] = relationship(back_populates="messages")
+
+
+class AgentMemory(Base):
+    """跨会话记忆:一条关于"这个工作区里该知道的事"的短事实。
+
+    **为什么不是知识库**:知识库是用户的资料(要检索才读),记忆是**每轮都注入系统提示**的
+    行为约定 —— "视频统一 1080p 竖屏"、"片头永远用 brand-intro.mp4"、"客户叫我别用红色"。
+    参考 Claude Code 的 CLAUDE.md / Codex 的 AGENTS.md:它们的价值恰恰在于不用检索也生效。
+
+    **两级作用域**:workspace_id 必填(记忆跟着工作区走),project_id 可空 —— 填了就只在
+    那个项目的会话里注入。这对应 Claude Code 的"用户级 / 项目级"两层。
+    """
+
+    __tablename__ = "agent_memories"
+    __table_args__ = (Index("idx_agent_memories_ws", "workspace_id", "project_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    #: agent = 智能体自己记下的;user = 用户在设置里写的。用户写的排在前面注入。
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="agent")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
 class FeishuBot(Base):

@@ -118,6 +118,17 @@ def _migrate_agent_thinking_level() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
 
 
+def _migrate_agent_session_plan() -> None:
+    """加列迁移:agent_sessions 增加 plan(任务计划)。老会话留 NULL = 还没有计划。"""
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    if "plan" in {col["name"] for col in inspector.get_columns("agent_sessions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN plan JSON"))
+
+
 def _backfill_provider_models() -> None:
     """把「一档案一模型」的老数据搬成模型行。
 
@@ -328,6 +339,7 @@ def init_db() -> None:
     _migrate_tool_confirmations_session()
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
+    _migrate_agent_session_plan()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

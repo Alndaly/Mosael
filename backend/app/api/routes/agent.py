@@ -11,6 +11,10 @@ from app.ai.agent import host
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AgentManifestOut,
+    AgentMemoryCreate,
+    AgentMemoryOut,
+    AgentMemoryUpdate,
+    AgentPlanUpdate,
     AgentMessageCreate,
     AgentCompactOut,
     AgentMessageOut,
@@ -24,6 +28,8 @@ from app.core.config import app_version
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_skills
+from app.domain.agent import memory as agent_memory
+from app.domain.agent import plan as agent_plan
 
 router = APIRouter(tags=["agent"])
 
@@ -221,6 +227,87 @@ def _require_session(db: DbSession, user: CurrentUser, session_id: str) -> Agent
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_access(db, user, session.workspace_id)
     return session
+
+
+@router.put("/agent/sessions/{session_id}/plan", response_model=AgentSessionOut)
+def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
+    """写这次会话的任务计划。
+
+    直接执行、不走确认卡:写计划不改动任何工程状态。每一步都要点一次确认的计划没有人会用,
+    而真正的改动(改时间线、导出、生成)仍然各自出卡。
+    """
+    session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    if not body.steps:
+        # 空数组 = 清空计划(事情做完了)。这不是错误输入 —— 没有出口的话,一份做完的计划
+        # 会一直挂在面板上,而"还剩几步"是它唯一要回答的问题。
+        session.plan = None
+    else:
+        try:
+            session.plan = agent_plan.normalize(body.steps)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+# ---------- 跨会话记忆 ----------
+#
+# 设置页与智能体共用这组接口:用户在设置里看到的清单,就是每轮注入模型的那一份。
+# 两份清单会立刻漂移,而"模型到底记住了什么"是用户唯一想确认的事。
+
+
+@router.get("/agent/memories", response_model=list[AgentMemoryOut])
+def list_memories(workspace_id: str, db: DbSession, user: CurrentUser, project_id: str = "") -> list:
+    ensure_workspace_access(db, user, workspace_id)
+    return agent_memory.list_memories(db, workspace_id, project_id or None)
+
+
+@router.post("/agent/memories", response_model=AgentMemoryOut, status_code=201)
+def create_memory(body: AgentMemoryCreate, db: DbSession, user: CurrentUser):
+    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        row = agent_memory.remember(
+            db,
+            body.workspace_id,
+            body.content,
+            project_id=body.project_id,
+            source=body.source,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.patch("/agent/memories/{memory_id}", response_model=AgentMemoryOut)
+def update_memory(memory_id: str, body: AgentMemoryUpdate, db: DbSession, user: CurrentUser):
+    row = agent_memory.get(db, memory_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    ensure_workspace_access(db, user, row.workspace_id)
+    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    try:
+        agent_memory.update(db, row, body.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/agent/memories/{memory_id}", status_code=204)
+def delete_memory(memory_id: str, db: DbSession, user: CurrentUser) -> None:
+    row = agent_memory.get(db, memory_id)
+    if row is None:
+        return
+    ensure_workspace_access(db, user, row.workspace_id)
+    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    agent_memory.forget(db, row)
+    db.commit()
 
 
 @router.get("/agent/skills", response_model=list[AgentSkillOut])

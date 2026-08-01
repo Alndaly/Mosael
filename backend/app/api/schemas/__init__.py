@@ -1375,8 +1375,36 @@ class AgentSessionOut(OrmModel):
     #: 打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数,
     #: 而"还能聊多久"这个问题恰恰在开口之前就要有答案。窗口取当前模型的,换模型即变。
     context: dict | None = None
+    #: 当前任务计划 `[{"step","status"}]`;还没有计划时为 None(界面据此整块不显示)。
+    plan: list[dict] | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AgentPlanUpdate(BaseModel):
+    steps: list = Field(default_factory=list)
+
+
+class AgentMemoryOut(OrmModel):
+    id: str
+    workspace_id: str
+    project_id: str | None = None
+    content: str
+    #: agent = 智能体自己记的;user = 用户在设置里写的。
+    source: str = "agent"
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentMemoryCreate(BaseModel):
+    workspace_id: str
+    project_id: str | None = None
+    content: str = Field(min_length=1, max_length=500)
+    source: str = "user"
+
+
+class AgentMemoryUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=500)
 
 
 class AgentMessageCreate(BaseModel):

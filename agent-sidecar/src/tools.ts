@@ -127,6 +127,9 @@ export async function buildAllTools(
       return {
         name: spec.name,
         label: TOOL_LABELS[spec.name] ?? spec.name,
+        // 子智能体只拿只读工具,判据就是这个标记 —— 名单在后端(唯一工具注册表),
+        // 这边再抄一份名字清单必然漂移(那种漂移让十九个工具静默消失过一次)。
+        confirmation: Boolean(spec.confirmation),
         description: spec.description || spec.name,
         // The manifest's parameters are already JSON Schema, which is what pi wants.
         parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
