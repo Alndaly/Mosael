@@ -30,6 +30,11 @@ export interface RunTurnRequest {
     /** 来自供应商 /models 目录;端点没给就缺省,由 pi.ts 用保守回退。 */
     contextWindow?: number | null;
     maxOutputTokens?: number | null;
+    /** 按模型的手动覆盖。没填就是 undefined —— 由 sidecar 保持保守默认,而不是当成 false。 */
+    reasoning?: boolean | null;
+    vision?: boolean | null;
+    reasoningEffort?: boolean | null;
+    developerRole?: boolean | null;
     /** 订阅计划:pi 内置 Provider 的 id(端点/模型目录/授权流程都在它里面)。 */
     piProvider?: string;
     /** 订阅计划的当前 OAuth 凭据(pi 的 Credential 原样)。 */

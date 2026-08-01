@@ -11,6 +11,8 @@ from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_
 from app.ai.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import find_model
 from app.domain.provider_auth import read_credential
+from app.domain import model_overrides
+from app.domain.context_meter import context_tokens
 from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -132,6 +134,14 @@ def resolve_chat_provider(
         catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
         provider_dict["context_window"] = catalog.context_window if catalog else None
         provider_dict["max_output_tokens"] = catalog.max_output_tokens if catalog else None
+    # 手动覆盖压在最后:目录取不到(自定义模型名、私有部署)或给得不准时,用户填的那份说了算。
+    # 订阅计划同样适用 —— pi 的目录也不是每个模型都准。
+    override = model_overrides.for_model(profile.model_overrides, agent_model)
+    if "context_window" in override:
+        provider_dict["context_window"] = override["context_window"]
+    for key in model_overrides.ADVANCED_FIELDS:
+        if key in override:
+            provider_dict[key] = override[key]
     return provider_dict, agent_model, profile
 
 
@@ -757,3 +767,35 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
         )
     db.commit()
     return {"context": result.context, "compaction": result.compaction}
+
+
+def session_context(db: Session, session: AgentSession) -> dict | None:
+    """会话当前的上下文水位。窗口未知(没配供应商 / 目录查不到又没手动设)时返回 None ——
+    界面据此整条不显示,而不是画一条没有分母的进度条(那只会被读成"快满了")。"""
+    try:
+        provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "")
+    except Exception:  # noqa: BLE001 — 没配供应商时不该让会话详情整个失败
+        return None
+    if not provider_dict or not agent_model:
+        return None
+    window = provider_dict.get("context_window")
+    if not window:
+        # 订阅计划的窗口在 pi 的目录里,后端拿不到;登录时存下的 model_catalog 有这份。
+        for entry in session_model_catalog(db, session.provider_profile_id):
+            if entry.get("id") == agent_model:
+                window = entry.get("contextWindow") or entry.get("context_window")
+                break
+    if not window:
+        return None
+    return {"tokens": context_tokens(session.adapter_state), "window": int(window)}
+
+
+def session_model_catalog(db: Session, profile_id: str | None) -> list[dict]:
+    """订阅计划登录后存下的模型目录;没有就是空列表。"""
+    if not profile_id:
+        return []
+    from app.db.models import ProviderProfile
+
+    profile = db.get(ProviderProfile, profile_id)
+    catalog = profile.model_catalog if profile is not None else None
+    return [entry for entry in (catalog or []) if isinstance(entry, dict)]

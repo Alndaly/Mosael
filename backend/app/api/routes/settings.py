@@ -34,6 +34,8 @@ from app.api.schemas import (
     ProviderPricingRuleOut,
     ProviderPricingRuleUpdate,
     ProviderProfileCreate,
+    ModelSettingsOut,
+    ModelSettingsUpdate,
     ProviderQuotaOut,
     ProviderProfileOut,
     ProviderProfileUpdate,
@@ -57,6 +59,8 @@ from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
 from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
 from app.ai.agent.host import mint_tool_token
+from app.ai.model_catalog import find_model
+from app.domain import model_overrides
 from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
@@ -320,6 +324,13 @@ def update_provider_profile(
     return _profile_out(profile)
 
 
+def _require_profile(db: DbSession, profile_id: str) -> ProviderProfile:
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="供应商不存在")
+    return profile
+
+
 def _oauth_profile(db: DbSession, profile_id: str) -> ProviderProfile:
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
@@ -412,6 +423,50 @@ def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curr
     ensure_instance_admin(db, user, "credentials")
     _oauth_profile(db, profile_id)
     cancel_login(login_id)
+
+
+@router.get("/settings/providers/{profile_id}/models/{model_id}/settings", response_model=ModelSettingsOut)
+def get_model_settings(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> ModelSettingsOut:
+    """这个模型当前生效的设置,并说明每个值的来源。
+
+    界面要把"跟随目录"和"我改过"分开显示 —— 只给一个数字的话,用户不知道清空之后会变成什么,
+    也不知道现在这个 32000 是端点说的还是我们兜的底。
+    """
+    ensure_instance_admin(db, user, "credentials")
+    profile = _require_profile(db, profile_id)
+    override = model_overrides.for_model(profile.model_overrides, model_id)
+    catalog = None
+    if profile.auth_type != "oauth":
+        catalog = find_model(profile.base_url or "", profile.api_key or "", model_id)
+    context_window = override.get("context_window")
+    if context_window is not None:
+        source = "override"
+    elif catalog is not None and catalog.context_window:
+        context_window, source = catalog.context_window, "catalog"
+    else:
+        context_window, source = None, "fallback"
+    return ModelSettingsOut(
+        model_id=model_id,
+        context_window=context_window,
+        context_window_source=source,
+        reasoning=override.get("reasoning"),
+        vision=override.get("vision"),
+        reasoning_effort=override.get("reasoning_effort"),
+        developer_role=override.get("developer_role"),
+    )
+
+
+@router.put("/settings/providers/{profile_id}/models/{model_id}/settings", response_model=ModelSettingsOut)
+def set_model_settings(
+    profile_id: str, model_id: str, body: ModelSettingsUpdate, db: DbSession, user: CurrentUser
+) -> ModelSettingsOut:
+    """写入按模型的覆盖。传 null 的项被清除 —— 回到跟随目录,而不是存一个 null 进去。"""
+    ensure_instance_admin(db, user, "credentials")
+    profile = _require_profile(db, profile_id)
+    values = model_overrides.normalize(body.model_dump(exclude_unset=True))
+    profile.model_overrides = model_overrides.put(profile.model_overrides, model_id, values)
+    db.commit()
+    return get_model_settings(profile_id, model_id, db, user)
 
 
 @router.post("/settings/providers/{profile_id}/quota", response_model=ProviderQuotaOut)

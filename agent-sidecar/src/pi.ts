@@ -94,7 +94,14 @@ function buildModels(
   baseUrl: string,
   apiKey: string,
   modelId: string,
-  limits: { contextWindow?: number | null; maxOutputTokens?: number | null } = {},
+  limits: {
+    contextWindow?: number | null;
+    maxOutputTokens?: number | null;
+    reasoning?: boolean | null;
+    vision?: boolean | null;
+    reasoningEffort?: boolean | null;
+    developerRole?: boolean | null;
+  } = {},
 ): { models: Models; model: Model<"openai-completions"> } {
   const model: Model<"openai-completions"> = {
     id: modelId,
@@ -102,13 +109,19 @@ function buildModels(
     api: "openai-completions",
     provider: PROVIDER_ID,
     baseUrl,
-    reasoning: false,
-    input: ["text"],
+    // 以下四项默认取**最保守**的那一侧,由用户在设置里按模型放开。
+    // 默认放开的代价不对称:多发一个 reasoning_effort 或 developer 角色,不认的端点会直接
+    // 400,整轮对话失败;而少发只是不用上某个增强。
+    reasoning: limits.reasoning ?? false,
+    input: limits.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: limits.contextWindow ?? FALLBACK_CONTEXT_WINDOW,
     maxTokens: limits.maxOutputTokens ?? FALLBACK_MAX_TOKENS,
     // Ollama / vLLM / LM Studio 等本地 OpenAI 兼容服务不认 developer role 与 reasoning_effort
-    compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+    compat: {
+      supportsDeveloperRole: limits.developerRole ?? false,
+      supportsReasoningEffort: limits.reasoningEffort ?? false,
+    },
   };
   const provider = createProvider({
     id: PROVIDER_ID,

@@ -226,19 +226,26 @@ export function WorkflowAgentChat({
   }, [usageEvents.data]);
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
 
-  /** 水位取最近一条带 context 的消息 —— 它天然随对话推进而更新,不必另建一张表。 */
-  const context = React.useMemo(() => {
-    const list = messages.data ?? [];
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      const info = (list[i].payload as { context?: ContextInfo } | null)?.context;
-      if (info && info.window > 0) return info;
-    }
-    return null;
-  }, [messages.data]);
+  /** 会话详情:列表接口不带水位(那要为每个会话各算一次,而界面只看当前这个)。
+   *  跟着消息一起刷新 —— 一轮结束后水位就该更新。 */
+  const sessionDetail = useQuery({
+    queryKey: ["agent-session", sessionId],
+    queryFn: () => api<AgentSession>(`/api/agent/sessions/${sessionId}`),
+    enabled: Boolean(sessionId),
+    refetchInterval: running ? 4000 : false,
+  });
+
+  /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
+   *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
+   *  刚打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数。 */
+  const context = (sessionDetail.data?.context ?? null) as ContextInfo | null;
 
   const compact = useMutation({
     mutationFn: () => api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" }),
-    onSuccess: () => void messages.refetch(),
+    onSuccess: () => {
+      void messages.refetch();
+      void sessionDetail.refetch();
+    },
   });
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });

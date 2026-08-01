@@ -526,6 +526,34 @@ class AgentCompactOut(BaseModel):
     compaction: dict | None = None
 
 
+class ModelSettingsOut(BaseModel):
+    """一个模型当前生效的设置。
+
+    `*_source` 说明这个值是从哪来的:catalog(供应商目录)/ override(用户改过)/
+    fallback(都没有,用的保守默认)。界面据此把"跟随目录"和"我改过"区分开 —— 混成一个
+    输入框会让用户不知道清空之后会变成什么。
+    """
+
+    model_id: str
+    context_window: int | None = None
+    context_window_source: str = "fallback"
+    #: 高级开关。None = 跟随默认(保守值),True/False = 用户显式设过。
+    reasoning: bool | None = None
+    vision: bool | None = None
+    reasoning_effort: bool | None = None
+    developer_role: bool | None = None
+
+
+class ModelSettingsUpdate(BaseModel):
+    """按模型的覆盖。字段传 null 表示**清除这一项**、回到跟随目录/默认。"""
+
+    context_window: int | None = None
+    reasoning: bool | None = None
+    vision: bool | None = None
+    reasoning_effort: bool | None = None
+    developer_role: bool | None = None
+
+
 class ProviderQuotaMetricOut(BaseModel):
     """一条额度指标。
 
@@ -1326,6 +1354,10 @@ class AgentSessionOut(OrmModel):
     model: str | None = None
     analysis_video_mode: str = "auto"
     status: str
+    #: 当前上下文水位 {tokens, window}。**每次请求现算**,而不是等某一轮回报 ——
+    #: 打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数,
+    #: 而"还能聊多久"这个问题恰恰在开口之前就要有答案。窗口取当前模型的,换模型即变。
+    context: dict | None = None
     created_at: datetime
     updated_at: datetime
 

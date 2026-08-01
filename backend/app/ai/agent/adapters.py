@@ -212,6 +212,12 @@ def _run_pi(
             # 供应商目录给了才带上;没有就不传,由 sidecar 用保守回退而不是硬编一个大数。
             "contextWindow": provider.get("context_window"),
             "maxOutputTokens": provider.get("max_output_tokens"),
+            # 按模型的手动覆盖。都对应 pi 里真实生效的开关(thinking 格式、图片输入、
+            # reasoning_effort、developer 角色),没填就不传,由 sidecar 保持保守默认。
+            "reasoning": provider.get("reasoning"),
+            "vision": provider.get("vision"),
+            "reasoningEffort": provider.get("reasoning_effort"),
+            "developerRole": provider.get("developer_role"),
             # 订阅计划(OAuth):pi 内置 Provider 的 id + 当前凭据。刷新后由 sidecar 写回后端。
             "piProvider": provider.get("pi_provider", ""),
             "credential": provider.get("credential"),

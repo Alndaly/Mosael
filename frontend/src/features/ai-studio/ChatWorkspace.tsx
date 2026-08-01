@@ -351,15 +351,10 @@ export function ChatWorkspace({
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
 
-  /** 水位取最近一条带 context 的消息 —— 它随对话推进而更新,不必另建一张表。 */
-  const context = React.useMemo(() => {
-    const list = messages.data ?? [];
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      const info = (list[i].payload as { context?: ContextInfo } | null)?.context;
-      if (info && info.window > 0) return info;
-    }
-    return null;
-  }, [messages.data]);
+  /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
+   *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
+   *  刚打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数。 */
+  const context = (session.data?.context ?? null) as ContextInfo | null;
 
   const compactContext = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${activeSession!.id}/compact`, { method: "POST" }),

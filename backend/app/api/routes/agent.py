@@ -73,8 +73,11 @@ def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -
 
 
 @router.get("/agent/sessions/{session_id}", response_model=AgentSessionOut)
-def get_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentSession:
-    return _require_session(db, user, session_id)
+def get_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentSessionOut:
+    session = _require_session(db, user, session_id)
+    out = AgentSessionOut.model_validate(session)
+    out.context = host.session_context(db, session)
+    return out
 
 
 @router.post("/agent/sessions/{session_id}/messages", response_model=AgentMessageOut)

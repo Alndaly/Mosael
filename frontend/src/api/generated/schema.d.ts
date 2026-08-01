@@ -2957,6 +2957,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/models/{model_id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Settings
+         * @description 这个模型当前生效的设置,并说明每个值的来源。
+         *
+         *     界面要把"跟随目录"和"我改过"分开显示 —— 只给一个数字的话,用户不知道清空之后会变成什么,
+         *     也不知道现在这个 32000 是端点说的还是我们兜的底。
+         */
+        get: operations["get_model_settings_api_settings_providers__profile_id__models__model_id__settings_get"];
+        /**
+         * Set Model Settings
+         * @description 写入按模型的覆盖。传 null 的项被清除 —— 回到跟随目录,而不是存一个 null 进去。
+         */
+        put: operations["set_model_settings_api_settings_providers__profile_id__models__model_id__settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/quota": {
         parameters: {
             query?: never;
@@ -4096,6 +4123,10 @@ export interface components {
             analysis_video_mode: string;
             /** Status */
             status: string;
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time
@@ -5368,6 +5399,49 @@ export interface components {
                     [key: string]: boolean;
                 };
             };
+        };
+        /**
+         * ModelSettingsOut
+         * @description 一个模型当前生效的设置。
+         *
+         *     `*_source` 说明这个值是从哪来的:catalog(供应商目录)/ override(用户改过)/
+         *     fallback(都没有,用的保守默认)。界面据此把"跟随目录"和"我改过"区分开 —— 混成一个
+         *     输入框会让用户不知道清空之后会变成什么。
+         */
+        ModelSettingsOut: {
+            /** Model Id */
+            model_id: string;
+            /** Context Window */
+            context_window?: number | null;
+            /**
+             * Context Window Source
+             * @default fallback
+             */
+            context_window_source: string;
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Vision */
+            vision?: boolean | null;
+            /** Reasoning Effort */
+            reasoning_effort?: boolean | null;
+            /** Developer Role */
+            developer_role?: boolean | null;
+        };
+        /**
+         * ModelSettingsUpdate
+         * @description 按模型的覆盖。字段传 null 表示**清除这一项**、回到跟随目录/默认。
+         */
+        ModelSettingsUpdate: {
+            /** Context Window */
+            context_window?: number | null;
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Vision */
+            vision?: boolean | null;
+            /** Reasoning Effort */
+            reasoning_effort?: boolean | null;
+            /** Developer Role */
+            developer_role?: boolean | null;
         };
         /** MoveClipRequest */
         MoveClipRequest: {
@@ -13843,6 +13917,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OAuthLoginOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_settings_api_settings_providers__profile_id__models__model_id__settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_model_settings_api_settings_providers__profile_id__models__model_id__settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettingsOut"];
                 };
             };
             /** @description Validation Error */
