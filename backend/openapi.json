@@ -1473,6 +1473,38 @@
         }
       }
     },
+    "/api/home/poem": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Get Home Poem",
+        "description": "向今日诗词取一句。走后端是为了吃到出站代理、并且 token 只换一次(见 domain/poem)。",
+        "operationId": "get_home_poem_api_home_poem_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workspaces/{workspace_id}/members": {
       "get": {
         "tags": [
@@ -17076,6 +17108,35 @@
         ],
         "title": "PodcastRequest",
         "description": "A 火山 podcast: two voices reading or discussing the given material."
+      },
+      "PoemOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "dynasty": {
+            "type": "string",
+            "title": "Dynasty",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "PoemOut",
+        "description": "首页那句诗。取不到时前端回落本地精选 —— 断网不该让首页空一格。"
       },
       "PricingPrefillOut": {
         "properties": {

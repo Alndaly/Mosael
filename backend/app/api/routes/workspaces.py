@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -77,6 +78,27 @@ def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Res
         db.delete(workspace)  # FK cascade removes members, perms, and all scoped resources
         db.commit()
     return Response(status_code=204)
+
+
+class PoemOut(BaseModel):
+    """首页那句诗。取不到时前端回落本地精选 —— 断网不该让首页空一格。"""
+
+    text: str
+    author: str = ""
+    source: str = ""
+    dynasty: str = ""
+
+
+@router.get("/home/poem", response_model=PoemOut)
+def get_home_poem(user: CurrentUser) -> PoemOut:
+    """向今日诗词取一句。走后端是为了吃到出站代理、并且 token 只换一次(见 domain/poem)。"""
+    from app.domain.poem import PoemUnavailable, fetch_poem
+
+    try:
+        poem = fetch_poem()
+    except (PoemUnavailable, Exception) as exc:  # noqa: BLE001 — 取不到是正常结果,前端有本地兜底
+        raise HTTPException(status_code=502, detail=f"今日诗词暂时不可达:{exc}") from exc
+    return PoemOut(text=poem.text, author=poem.author, source=poem.source, dynasty=poem.dynasty)
 
 
 @router.get("/workspaces/{workspace_id}/members", response_model=MembersOut)

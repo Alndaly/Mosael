@@ -571,6 +571,26 @@ export interface paths {
         patch: operations["rename_workspace_api_workspaces__workspace_id__patch"];
         trace?: never;
     };
+    "/api/home/poem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Home Poem
+         * @description 向今日诗词取一句。走后端是为了吃到出站代理、并且 token 只换一次(见 domain/poem)。
+         */
+        get: operations["get_home_poem_api_home_poem_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/members": {
         parameters: {
             query?: never;
@@ -5902,6 +5922,29 @@ export interface components {
             speed: number;
         };
         /**
+         * PoemOut
+         * @description 首页那句诗。取不到时前端回落本地精选 —— 断网不该让首页空一格。
+         */
+        PoemOut: {
+            /** Text */
+            text: string;
+            /**
+             * Author
+             * @default
+             */
+            author: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Dynasty
+             * @default
+             */
+            dynasty: string;
+        };
+        /**
          * PricingPrefillOut
          * @description 按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
          *     是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。
@@ -8933,6 +8976,35 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_home_poem_api_home_poem_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoemOut"];
                 };
             };
             /** @description Validation Error */

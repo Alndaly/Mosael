@@ -18,7 +18,7 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react";
 
-import { deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
 import {
@@ -62,12 +62,38 @@ export function HomeView({
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<"updated" | "created" | "name">("updated");
 
+  // 诗从后端取(今日诗词,几十万句);取不到就用本地精选那份 —— 断网不该让首页空一格。
+  // 首屏先给本地那句,网络回来了再换,避免开屏闪一下空白。
   const [poem, setPoem] = React.useState<Poem>(poemOfToday);
   const [poemSpins, setPoemSpins] = React.useState(0);
-  const spinPoem = () => {
-    setPoem((current) => randomPoem(current));
+  const [poemLoading, setPoemLoading] = React.useState(false);
+  const spinPoem = React.useCallback(async () => {
     setPoemSpins((n) => n + 1);
-  };
+    setPoemLoading(true);
+    try {
+      const remote = await api<{ text: string; author: string; source: string; dynasty: string }>("/api/home/poem");
+      if (remote?.text) {
+        setPoem({ text: remote.text, author: remote.author || remote.dynasty, source: remote.source });
+        return;
+      }
+      setPoem((current) => randomPoem(current));
+    } catch {
+      setPoem((current) => randomPoem(current));
+    } finally {
+      setPoemLoading(false);
+    }
+  }, []);
+  React.useEffect(() => {
+    void spinPoem();
+  }, [spinPoem]);
+
+  // 走字的钟。它不解决任何问题 —— 但盯着首页等渲染/发布跑完的时候,一个还在动的东西
+  // 让这一页看起来是活的。每秒一跳,只在首页挂载期间。
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const greetingKey = React.useMemo(() => {
     const hour = new Date().getHours();
@@ -183,8 +209,20 @@ export function HomeView({
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <section className="mb-3 flex items-stretch justify-between gap-3 max-[880px]:flex-col">
         <div className="flex min-w-0 flex-col justify-center gap-0.5">
-          <h1 className="m-0 text-xl font-[650] tracking-[-0.01em]">{t(greetingKey)}</h1>
-          <small className="text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>
+          <h1 className="m-0 flex items-baseline gap-2 text-xl font-[650] tracking-[-0.01em]">
+            {t(greetingKey)}
+            <span className="text-xs font-normal text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</span>
+          </h1>
+          <small className="text-xs tabular-nums text-muted-foreground">
+            {now.toLocaleDateString(locale === "en-US" ? "en-US" : "zh-CN", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              weekday: "long",
+            })}
+            {"  "}
+            {now.toLocaleTimeString(locale === "en-US" ? "en-US" : "zh-CN", { hour12: false })}
+          </small>
         </div>
         <figure className="relative m-0 flex max-w-[46ch] flex-col justify-center gap-0.5 rounded-lg border border-border bg-panel py-2.5 pl-8 pr-[34px] max-[880px]:max-w-none" aria-live="polite">
           <BookText size={13} className="absolute left-2.5 top-3 text-muted-foreground" />
@@ -198,8 +236,8 @@ export function HomeView({
               </figcaption>
             </>
           )}
-          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={spinPoem}>
-            <RefreshCcw size={12} />
+          <button type="button" className="absolute right-1.5 top-1.5 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground [&:active_svg]:rotate-180 [&:active_svg]:transition-transform [&:active_svg]:duration-[250ms]" aria-label={t("homePoemRefresh")} onClick={() => void spinPoem()} disabled={poemLoading}>
+            <RefreshCcw size={12} className={poemLoading ? "animate-spin" : undefined} />
           </button>
         </figure>
       </section>
