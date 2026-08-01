@@ -359,6 +359,8 @@ export const messages = {
     mediaDeselectAll: "取消全选",
 
     // 列表批量选择(components/app/bulkSelection.tsx,各列表共用)
+    bulkSelect: "选择",
+    bulkSelectNone: "选择要操作的项",
     bulkSelectedCount: "已选 {n} 项",
     bulkSelectAll: "全选",
     bulkDeselectAll: "取消全选",
@@ -1940,6 +1942,8 @@ export const messages = {
     mediaDeselectAll: "Deselect all",
 
     // Shared list bulk selection (components/app/bulkSelection.tsx)
+    bulkSelect: "Select",
+    bulkSelectNone: "Pick items to act on",
     bulkSelectedCount: "{n} selected",
     bulkSelectAll: "Select all",
     bulkDeselectAll: "Deselect all",

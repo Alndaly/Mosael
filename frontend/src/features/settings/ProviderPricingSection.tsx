@@ -9,7 +9,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
-import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -255,6 +255,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       description={t("pricingRulesDesc")}
       actions={
         <div className="flex items-center gap-1.5">
+          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={ruleList.length === 0} />
           <Button
             variant="outline"
             size="sm"
@@ -434,7 +435,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
 
       <SettingsBlock>
         <div className="grid gap-1.5">
-          <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+          <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
             <Button variant="outline" size="sm" disabled={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
@@ -442,16 +443,19 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           {ruleList.map((rule) => (
             <div
               className={cn(
-                "grid grid-cols-[auto_28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                "grid items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
                 bulk.isSelected(rule.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
               )}
               key={rule.id}
             >
-              <BulkCheckbox
-                checked={bulk.isSelected(rule.id)}
-                onToggle={(event) => bulk.toggle(rule.id, event)}
-                label={t("bulkSelectRow")}
-              />
+              {bulk.active && (
+                <BulkCheckbox
+                  checked={bulk.isSelected(rule.id)}
+                  onToggle={(event) => bulk.toggle(rule.id, event)}
+                  label={t("bulkSelectRow")}
+                />
+              )}
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <ReceiptText size={13} />
               </span>

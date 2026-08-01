@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
-import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
@@ -109,7 +109,15 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
         </span>
       )}
 
-      <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+      {/* 这个列表内嵌在展开的供应商行里,没有自己的标题栏 —— 入口就贴在列表右上角。
+          只有一个模型时不给:对一行做"批量"没有意义。 */}
+      {configured.length > 1 && !bulk.active && (
+        <div className="flex justify-end">
+          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} />
+        </div>
+      )}
+
+      <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
         <Button variant="outline" size="sm" disabled={busy} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: true } })}>
           {t("bulkEnable")}
         </Button>
@@ -124,16 +132,19 @@ export function ProviderModelList({ profileId, vendorLabel }: { profileId: strin
       {configured.map((row) => (
         <div
           className={cn(
-            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5",
+            "grid items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5",
+            bulk.active ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
             bulk.isSelected(row.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
           )}
           key={row.id}
         >
-          <BulkCheckbox
-            checked={bulk.isSelected(row.id)}
-            onToggle={(event) => bulk.toggle(row.id, event)}
-            label={t("bulkSelectRow")}
-          />
+          {bulk.active && (
+            <BulkCheckbox
+              checked={bulk.isSelected(row.id)}
+              onToggle={(event) => bulk.toggle(row.id, event)}
+              label={t("bulkSelectRow")}
+            />
+          )}
           <div className="grid min-w-0 gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[12.5px] font-medium text-foreground">{row.display_name || row.id}</span>

@@ -1,12 +1,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -29,6 +29,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState("");
   const [editing, setEditing] = React.useState<{ id: string; content: string } | null>(null);
+  const [adding, setAdding] = React.useState(false);
 
   const memories = useQuery({
     queryKey: ["agent-memories", workspace.id],
@@ -45,6 +46,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
       }),
     onSuccess: () => {
       setDraft("");
+      setAdding(false);
       void refresh();
     },
     onError: fail,
@@ -77,97 +79,134 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
   const bulk = useBulkSelection(rows, (row) => row.id);
 
   return (
-    <SettingsGroup title={t("agentMemoryTitle")} description={t("agentMemoryDesc")}>
+    <SettingsGroup
+      title={t("agentMemoryTitle")}
+      description={t("agentMemoryDesc")}
+      actions={
+        <div className="flex items-center gap-1.5">
+          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={rows.length === 0} />
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)} disabled={adding}>
+            <Plus size={13} /> {t("agentMemoryAdd")}
+          </Button>
+        </div>
+      }
+    >
+      {/* **一条记忆就是一行字**,不该是一个盒子里套一个盒子。此前每条外面一个卡片、
+          里面还有图标块和来源标签,加上底部一整块虚线添加区 —— 三层框住的其实只是
+          一句话。现在:发丝线分隔的清单,点哪行改哪行;来源做成行尾的浅色小字。 */}
       <SettingsBlock>
         <div className="grid gap-1.5">
-          <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+          <BulkActionBar
+            active={bulk.active}
+            count={bulk.count}
+            allSelected={bulk.allSelected}
+            onToggleAll={bulk.toggleAll}
+            onExit={bulk.exit}
+          >
             <Button variant="outline" size="sm" disabled={removeMany.isPending} onClick={() => removeMany.mutate(bulk.selectedIds)}>
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
           </BulkActionBar>
 
-          {rows.map((row) => (
-            <div
-              className={cn(
-                "grid grid-cols-[auto_28px_minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
-                bulk.isSelected(row.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
-              )}
-              key={row.id}
-            >
-              <BulkCheckbox
-                checked={bulk.isSelected(row.id)}
-                onToggle={(event) => bulk.toggle(row.id, event)}
-                label={t("bulkSelectRow")}
-              />
-              <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
-                <Brain size={13} />
-              </span>
-              <div className="grid min-w-0 gap-1">
-                {editing?.id === row.id ? (
-                  <>
-                    <Textarea
-                      rows={2}
-                      autoFocus
-                      value={editing.content}
-                      onChange={(event) => setEditing({ id: row.id, content: event.target.value })}
+          {rows.length > 0 && (
+            <ul className="m-0 grid list-none gap-px p-0">
+              {rows.map((row) => (
+                <li
+                  className={cn(
+                    "group grid min-w-0 items-start gap-2 border-b border-border/45 py-1.5 last:border-b-0",
+                    bulk.active ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
+                    bulk.isSelected(row.id) && "bg-[color-mix(in_srgb,var(--primary)_5%,transparent)]",
+                  )}
+                  key={row.id}
+                >
+                  {bulk.active && (
+                    <BulkCheckbox
+                      checked={bulk.isSelected(row.id)}
+                      onToggle={(event) => bulk.toggle(row.id, event)}
+                      label={t("bulkSelectRow")}
                     />
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        disabled={update.isPending || !editing.content.trim()}
-                        onClick={() => update.mutate({ id: row.id, content: editing.content })}
-                      >
-                        {t("agentMemorySave")}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
-                        {t("cancel")}
-                      </Button>
+                  )}
+                  {editing?.id === row.id ? (
+                    <div className="grid min-w-0 gap-1.5">
+                      <Textarea
+                        rows={2}
+                        autoFocus
+                        value={editing.content}
+                        onChange={(event) => setEditing({ id: row.id, content: event.target.value })}
+                      />
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          disabled={update.isPending || !editing.content.trim()}
+                          onClick={() => update.mutate({ id: row.id, content: editing.content })}
+                        >
+                          {t("agentMemorySave")}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                          {t("cancel")}
+                        </Button>
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    {/* 点正文即改 —— 记忆是要被修的东西(模型记岔了是常态),多一个铅笔图标只是多一次瞄准。 */}
+                  ) : (
+                    // 点正文即改 —— 记忆是要被修的东西(模型记岔了是常态),多一个铅笔图标只是多一次瞄准。
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] leading-[1.5] text-foreground"
+                      className="min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] leading-[1.55] text-foreground"
                       onClick={() => setEditing({ id: row.id, content: row.content })}
                     >
                       {row.content}
+                      <span className="ml-1.5 whitespace-nowrap text-[10.5px] text-muted-foreground">
+                        {row.source === "user" ? t("agentMemoryFromUser") : t("agentMemoryFromAgent")}
+                      </span>
                     </button>
-                    <span className="text-[10.5px] text-muted-foreground">
-                      {row.source === "user" ? t("agentMemoryFromUser") : t("agentMemoryFromAgent")}
-                    </span>
-                  </>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" aria-label={t("delete")} onClick={() => remove.mutate(row.id)}>
-                <Trash2 size={13} />
-              </Button>
-            </div>
-          ))}
-
-          {rows.length === 0 && !memories.isPending && (
-            <p className="m-0 text-xs leading-[1.5] text-muted-foreground">{t("agentMemoryEmpty")}</p>
+                  )}
+                  {/* 删除按钮平时隐形,悬停/聚焦才出现:一列常驻的垃圾桶会把清单读成一张操作表。 */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                    aria-label={t("delete")}
+                    onClick={() => remove.mutate(row.id)}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
           )}
 
-          <div className="grid gap-1.5 rounded-md border border-dashed border-border px-2 py-2">
-            <Textarea
-              rows={2}
-              value={draft}
-              placeholder={t("agentMemoryPlaceholder")}
-              maxLength={500}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                disabled={!draft.trim() || create.isPending}
-                onClick={() => create.mutate(draft.trim())}
-              >
-                <Plus size={12} /> {t("agentMemoryAdd")}
-              </Button>
+          {rows.length === 0 && !memories.isPending && !adding && (
+            <p className="m-0 text-xs leading-[1.55] text-muted-foreground">{t("agentMemoryEmpty")}</p>
+          )}
+
+          {/* 添加区只在要添加时出现 —— 常驻一个空输入框会让"还没有记忆"这件事被一个大框盖住。 */}
+          {adding && (
+            <div className="grid gap-1.5 pt-1">
+              <Textarea
+                rows={2}
+                autoFocus
+                value={draft}
+                placeholder={t("agentMemoryPlaceholder")}
+                maxLength={500}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <div className="flex gap-1.5">
+                <Button size="sm" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate(draft.trim())}>
+                  {t("agentMemorySave")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAdding(false);
+                    setDraft("");
+                  }}
+                >
+                  {t("cancel")}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </SettingsBlock>
     </SettingsGroup>

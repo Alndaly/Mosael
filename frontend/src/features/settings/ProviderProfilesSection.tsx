@@ -21,7 +21,7 @@ import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
-import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
@@ -289,9 +289,12 @@ export function ProviderProfilesSection({
       title={title ?? t("providerAccountsTitle")}
       description={description ?? t("providerAccountsDesc")}
       actions={
-        <Button variant="outline" size="sm" onClick={openCreate}>
-          <Plus size={13} /> {t("providerAdd")}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={visibleProfiles.length === 0} />
+          <Button variant="outline" size="sm" onClick={openCreate}>
+            <Plus size={13} /> {t("providerAdd")}
+          </Button>
+        </div>
       }
     >
       <ModalShell
@@ -467,7 +470,7 @@ export function ProviderProfilesSection({
 
       <SettingsBlock>
         <div className="grid gap-1.5">
-          <BulkActionBar count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onClear={bulk.clear}>
+          <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
             <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
               {t("bulkEnable")}
             </Button>
@@ -481,17 +484,20 @@ export function ProviderProfilesSection({
           {visibleProfiles.map((profile) => (
             <div
               className={cn(
-                "grid grid-cols-[auto_28px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                "grid items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
+                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
                 !profile.enabled && "opacity-55",
                 bulk.isSelected(profile.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))] opacity-100",
               )}
               key={profile.id}
             >
-              <BulkCheckbox
-                checked={bulk.isSelected(profile.id)}
-                onToggle={(event) => bulk.toggle(profile.id, event)}
-                label={t("bulkSelectRow")}
-              />
+              {bulk.active && (
+                <BulkCheckbox
+                  checked={bulk.isSelected(profile.id)}
+                  onToggle={(event) => bulk.toggle(profile.id, event)}
+                  label={t("bulkSelectRow")}
+                />
+              )}
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <KeyRound size={13} />
               </span>
