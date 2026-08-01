@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -51,6 +52,34 @@ const VENDOR_DOCS: Record<string, string> = {
 
 function cleanConfig(config: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, (value ?? "").trim()]));
+}
+
+/** 溢出菜单里的一行。用 Popover 而不是 DropdownMenu:这个项目没有装后者,
+ *  而 Popover 已经处理好了「Dialog 内外的 modal 差异」(见 components/ui/popover)。 */
+function MenuItem({
+  icon,
+  label,
+  destructive,
+  onSelect,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  destructive?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-[12.5px] hover:bg-secondary",
+        destructive ? "text-destructive" : "text-foreground",
+      )}
+      onClick={onSelect}
+    >
+      <span className="shrink-0 opacity-70">{icon}</span>
+      {label}
+    </button>
+  );
 }
 
 export function ProviderProfilesSection({
@@ -421,19 +450,8 @@ export function ProviderProfilesSection({
               </div>
               {!profile.enabled && <Badge variant="outline">{t("providerDisabled")}</Badge>}
               <div className="flex items-center gap-1">
-                {isOauth(profile) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setAuthing(profile)}
-                    aria-label={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
-                    title={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
-                  >
-                    <LogIn size={13} />
-                  </Button>
-                )}
-                {/* 模型入口从"配默认模型那一个"改成"展开这条连接的模型列表" ——
-                    一条连接下本来就可能有多个模型,只给一个入口是把连接当成了模型。 */}
+                {/* 常用的三个留在行内:展开模型、查额度、启停。授权/编辑/删除进溢出菜单 ——
+                    订阅档案原本七个图标挤成一排,每个都同等分量,反而哪个都不显眼。 */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -450,29 +468,42 @@ export function ProviderProfilesSection({
                 >
                   <ChevronDown size={13} className={cn("transition-transform", expanded.has(profile.id) && "rotate-180")} />
                 </Button>
-                {/* 只对真有额度接口的供应商出现。没有端点的(Kimi/xAI 等)不摆这个钮 ——
-                    亮着却只能回一句"不支持",等于摆了个做不到的操作。 */}
+                {/* 只对真有额度接口的供应商出现。没有端点的不摆这个钮 —— 亮着却只能回一句
+                    "不支持",等于摆了个做不到的操作。 */}
                 {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
-                {isOauth(profile) && profile.oauth_linked && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => logout.mutate(profile.id)}
-                    aria-label={t("providerOauthLogout")}
-                    title={t("providerOauthLogout")}
-                  >
-                    <LogOut size={13} />
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" onClick={() => openEdit(profile)} aria-label={t("providerEdit")}>
-                  <Pencil size={13} />
-                </Button>
                 <Button variant="ghost" size="icon" onClick={() => toggle.mutate(profile)} aria-label="toggle">
                   <Power size={13} />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => remove.mutate(profile.id)} aria-label={t("delete")}>
-                  <Trash2 size={13} />
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={t("more")} title={t("more")}>
+                      <MoreHorizontal size={13} />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-[168px] p-1">
+                    {isOauth(profile) && (
+                      <MenuItem
+                        icon={<LogIn size={13} />}
+                        label={profile.oauth_linked ? t("providerOauthRelogin") : t("providerOauthLogin")}
+                        onSelect={() => setAuthing(profile)}
+                      />
+                    )}
+                    {isOauth(profile) && profile.oauth_linked && (
+                      <MenuItem
+                        icon={<LogOut size={13} />}
+                        label={t("providerOauthLogout")}
+                        onSelect={() => logout.mutate(profile.id)}
+                      />
+                    )}
+                    <MenuItem icon={<Pencil size={13} />} label={t("providerEdit")} onSelect={() => openEdit(profile)} />
+                    <MenuItem
+                      icon={<Trash2 size={13} />}
+                      label={t("delete")}
+                      destructive
+                      onSelect={() => remove.mutate(profile.id)}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               {/* 展开区整行独占:模型行本身就是"名字 + 能力 + 开关 + 两个按钮",
                   挤进那一列会窄到读不出任何东西。 */}

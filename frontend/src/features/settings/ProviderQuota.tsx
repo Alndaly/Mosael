@@ -32,9 +32,24 @@ function windowLabel(seconds: number | null | undefined, t: ReturnType<typeof us
   return t("quotaWindowMinutes").replace("{n}", String(Math.round(seconds / 60)));
 }
 
+/** 把没有词条的键名整理成人能读的样子。window_0 → 窗口配额 1,copilot_chat → chat。 */
+function humanizeKey(key: string, t: ReturnType<typeof useI18n>): string {
+  const window = /^window_(\d+)$/.exec(key);
+  if (window) return t("quotaMetric_window").replace("{n}", String(Number(window[1]) + 1));
+  return key.replace(/^copilot_/, "").replace(/_/g, " ");
+}
+
+/** 计划名各家写法不一(Kimi 回 LEVEL_INTERMEDIATE)。去掉前缀、拆下划线,别把枚举名直接摆出来。 */
+function humanizePlan(plan: string): string {
+  return plan.replace(/^(LEVEL|PLAN|TIER)_/i, "").replace(/_/g, " ").toLowerCase();
+}
+
 function MetricRow({ metric }: { metric: Metric }) {
   const t = useI18n();
-  const label = t(`quotaMetric_${metric.key}` as never) || metric.key;
+  // 各家的键名各不相同,i18n 表不可能穷举(Kimi 的窗口是 window_0/window_1,Copilot 是
+  // copilot_<配额名>)。有对应词条就用,没有就把键名整理成人能读的样子 —— 直接回退到裸键
+  // 会让弹窗里冒出 window_0、total 这种只有写代码的人看得懂的东西。
+  const label = t(`quotaMetric_${metric.key}` as never) || humanizeKey(metric.key, t);
   const window = windowLabel(metric.window_seconds, t);
 
   if (metric.kind === "percent") {
@@ -126,19 +141,23 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
           </div>
         ) : (
           <div className="grid gap-2">
-            {quota.data?.plan && (
-              <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{quota.data.plan}</span>
-            )}
+            {/* 计划名与「重新查询」同处一行:标题行右侧本来就是放操作的地方,而把刷新挂在
+                列表末尾会让它跟最后一条指标黏在一起,像是那一条的附属。 */}
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-1.5">
+              <span className="min-w-0 truncate text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                {quota.data?.plan ? humanizePlan(quota.data.plan) : t("agentContextTitle")}
+              </span>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                onClick={() => void quota.refetch()}
+              >
+                {t("quotaRefresh")}
+              </button>
+            </div>
             {(quota.data?.metrics ?? []).map((metric) => (
               <MetricRow key={metric.key} metric={metric} />
             ))}
-            <button
-              type="button"
-              className="w-fit cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground hover:text-foreground"
-              onClick={() => void quota.refetch()}
-            >
-              {t("quotaRefresh")}
-            </button>
           </div>
         )}
       </PopoverContent>

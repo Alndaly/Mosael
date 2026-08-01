@@ -195,6 +195,10 @@ export function ModelSettingsDialog({
                 id="ctx"
                 type="number"
                 min={1024}
+                // 与下面的高级卡片同一个底色。Input 默认的 bg-field 是米色填充,而弹窗表面
+                // 本身已经带底色 —— 填充色叠在上面会读成"这个框是禁用的",旁边又是白卡片,
+                // 对比之下更明显。
+                className="bg-panel"
                 value={current?.context_window ?? ""}
                 placeholder={String(inherited ?? FALLBACK_CONTEXT_WINDOW)}
                 onChange={(event) =>

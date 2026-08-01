@@ -3,7 +3,7 @@ import { Scissors, SlidersHorizontal } from "lucide-react";
 
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { ContextMeter, type ContextInfo } from "@/components/agent/ContextMeter";
+import { type ContextInfo } from "@/components/agent/ContextMeter";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
@@ -63,24 +63,22 @@ export function SessionSettingsMenu({
             <AnalysisModePicker session={session} />
           </div>
         )}
-        {context && context.window > 0 && (
-          <div className="grid gap-1.5 border-t border-border pt-2.5">
-            <span className="text-[11px] font-medium text-muted-foreground">{t("agentContextTitle")}</span>
-            <ContextMeter context={context} />
-            {onCompact && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-fit"
-                disabled={compacting}
-                onClick={() => {
-                  onCompact();
-                  setOpen(false);
-                }}
-              >
-                <Scissors size={12} /> {t("agentCompactNow")}
-              </Button>
-            )}
+        {/* **不再重复画一遍水位** —— 主行那条读数已经在说同一件事,弹出层里只放操作。
+            整理上下文要花一次模型调用,所以它是个明确的按钮,而不是顺手就能点到的东西。 */}
+        {onCompact && context && context.window > 0 && (
+          <div className="border-t border-border pt-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={compacting}
+              onClick={() => {
+                onCompact();
+                setOpen(false);
+              }}
+            >
+              <Scissors size={12} /> {t("agentCompactNow")}
+            </Button>
           </div>
         )}
       </PopoverContent>

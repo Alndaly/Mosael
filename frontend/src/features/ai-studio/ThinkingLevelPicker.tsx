@@ -16,7 +16,8 @@ const LEVELS = ["off", "low", "medium", "high"] as const;
  *
  * **「关闭」只表示我们不主动要求思考**,不表示模型不会思考:Kimi k3、DeepSeek reasoner
  * 这类模型无论如何都会返回思考内容,pi 照常解析、我们照常显示 —— 那是模型真实产出的东西,
- * 藏掉才是错的。所以触发器带上「思考:」前缀,让这个开关管的是什么一目了然。
+ * 藏掉才是错的。它现在摆在「会话设置」里、上面挂着「思考」这个标题,管的是什么已经清楚,
+ * 触发器里不再重复一遍。
  *
  * **挂在会话上而不是模型上**:同一个模型有时要深想、有时要快答 —— 它是每次对话的选择,
  * 不是模型的属性。所以入口跟着输入框走,和模型选择器并排,而不是藏在模型设置弹窗里。
@@ -52,12 +53,11 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题(与分析方式同一处理)。
     <Select key={value} value={value} onValueChange={(next) => setLevel.mutate(next)}>
       <SelectTrigger
-        className="h-7 w-auto gap-1 px-2 text-xs text-muted-foreground"
+        className="h-8 w-full justify-start gap-1.5 px-2.5 text-xs text-muted-foreground"
         aria-label={t("agentThinkingLevel")}
         title={t("agentThinkingLevel")}
       >
         <Brain size={13} className="shrink-0 opacity-70" />
-        <span className="shrink-0">{t("agentThinkingLevel")}:</span>
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="max-w-none">

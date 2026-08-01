@@ -842,11 +842,16 @@ def add_provider_model(
     return _model_out(model, catalog)
 
 
-@router.patch("/settings/providers/{profile_id}/models/{model_id}", response_model=ProviderModelOut)
+@router.patch("/settings/providers/{profile_id}/models/{model_id:path}", response_model=ProviderModelOut)
 def update_provider_model(
     profile_id: str, model_id: str, body: ProviderModelUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderModelOut:
-    """改一行。运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
+    """改一行。
+
+    **model_id 必须用 :path 转换器**:模型 id 里带斜杠是常态(kimi/kimi-k2.7-code、
+    MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
+    表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
+    运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
     ensure_instance_admin(db, user, "credentials")
     profile = _require_profile(db, profile_id)
     model = provider_models.get_model(db, profile_id, model_id)
@@ -866,7 +871,7 @@ def update_provider_model(
     return _model_out(model, _catalog_entries(profile))
 
 
-@router.delete("/settings/providers/{profile_id}/models/{model_id}", status_code=204)
+@router.delete("/settings/providers/{profile_id}/models/{model_id:path}", status_code=204)
 def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""

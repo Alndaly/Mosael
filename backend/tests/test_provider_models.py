@@ -138,3 +138,29 @@ def test_改默认模型会补出新的模型行():
         ids = sorted(row.model_id for row in provider_models.list_models(db, profile_id))
     # 换默认不删旧行 —— 旧模型可能仍在别处被引用(会话里选着它、工作流节点填着它)。
     assert ids == ["m1", "m2"]
+
+
+def test_模型_id_带斜杠时也能改和删():
+    """kimi/kimi-k2.7-code、MiniMax/MiniMax-M2.5、ZHIPU/GLM-5 —— 带斜杠是常态。
+    普通路径参数不跨 `/`,路由匹配不上,表现是删除/修改一律 404,且只有带斜杠的模型才复现。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={
+            "name": "端点",
+            "vendor": "openai-compatible",
+            "config": {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "default_model": "m"},
+        },
+    ).json()["id"]
+
+    slashed = "kimi/kimi-k2.7-code"
+    assert client.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": slashed}).status_code == 200
+
+    patched = client.patch(f"/api/settings/providers/{profile_id}/models/{slashed}", json={"enabled": False})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["enabled"] is False
+
+    assert client.delete(f"/api/settings/providers/{profile_id}/models/{slashed}").status_code == 204
+    remaining = [row["id"] for row in client.get(f"/api/settings/providers/{profile_id}/models").json() if row["configured"]]
+    assert slashed not in remaining
