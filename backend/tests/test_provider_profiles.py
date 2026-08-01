@@ -15,14 +15,14 @@ def test_profile_crud_with_masked_keys() -> None:
     ).json()
     # Preset fills base_url + default model; key never serializes, only a hint.
     assert created["base_url"] == "https://api.moonshot.cn/v1"
-    # 档案上不再有 default_model —— 预设里的那个模型现在落成一行模型。
+    # 预设不再写死默认模型(核实过的名字也会随供应商下架失效,而模型目录是实时拉的),
+    # 所以新建档案不再自动落一行模型 —— 用户在模型列表里从目录挑。
     models = client.get(f"/api/settings/providers/{created['id']}/models").json()
-    assert any(row["id"] == "moonshot-v1-8k-vision-preview" and row["configured"] for row in models)
+    assert not [row for row in models if row["configured"]]
     assert "api_key" not in created
     assert created["key_hint"] == "…1234"
     assert created["config"]["api_key"] == "…1234"
     assert created["config"]["base_url"] == "https://api.moonshot.cn/v1"
-    assert created["config"]["default_model"] == "moonshot-v1-8k-vision-preview"
 
     second = client.post(
         "/api/settings/providers",
@@ -85,13 +85,18 @@ def test_vendor_presets_listed() -> None:
     client = fresh_client()
     presets = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
     assert "moonshot" in presets and "minimax" in presets
-    assert presets["minimax"]["default_model"] == "MiniMax-VL-01"
-    assert presets["alibaba"]["capability_ids"] == ["image"]
-    assert presets["bytedance"]["capability_ids"] == ["video"]
-    assert presets["bytedance-image"]["capability_ids"] == ["image"]  # Seedream 独立厂商项:各配各的档案
-    assert presets["bytedance"]["default_model"] == "doubao-seedance-2-0-260128"
+    # 预设不再写死默认模型:实测 deepseek 那个 "deepseek-chat" 在真实端点上根本不存在,
+    # 而这种字符串没人会去复核。模型从供应商目录实时拉。
+    assert not presets["minimax"].get("default_model")
+    # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image —— 同一把
+    # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案,而它明明就是这一家。
+    assert presets["alibaba"]["capability_ids"] == ["chat", "image", "embedding"]
+    # 火山方舟合成一家:同一把 Key 既做图像(Seedream)也做视频(Seedance)。
+    # 拆成两个 vendor 是"一档案一能力"年代的产物,重构后只剩"同一把 Key 填两遍"的代价。
+    assert presets["bytedance"]["capability_ids"] == ["image", "video"]
     assert presets["openai-tts"]["capability_ids"] == ["tts"]
-    assert presets["openai-tts"]["default_model"] == "gpt-4o-mini-tts"
+    # 预设不再写死默认模型:核实过一次的名字也会随供应商下架而失效,而模型目录是实时拉的。
+    assert not presets["openai-tts"].get("default_model")
     assert presets["openai-compatible-tts"]["capability_ids"] == ["tts"]
     assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == ["api_key", "appid"]
     assert presets["volcano-podcast"]["fields"][0]["label"] == "Access Token"
@@ -172,14 +177,14 @@ def test_create_profile_copies_credentials_server_side() -> None:
 
     image = client.post(
         "/api/settings/providers",
-        json={"name": "火山生图", "vendor": "bytedance-image", "config": {}, "copy_credentials_from": video["id"]},
+        json={"name": "火山生图", "vendor": "bytedance", "config": {}, "copy_credentials_from": video["id"]},
     ).json()
-    assert image["vendor"] == "bytedance-image"
+    assert image["vendor"] == "bytedance"
     assert image["key_hint"] == "…9876"  # 密钥拷到了,响应仍只有打码提示
     assert image["base_url"] == "https://ark.cn-beijing.volces.com/api/v3"
-    # 预设里的模型落成了模型行,不再是档案上的字段。
+    # 同上:不再自动落模型行。密钥拷贝这件事本身仍然成立,那才是这条用例要测的。
     image_models = client.get(f"/api/settings/providers/{image['id']}/models").json()
-    assert any(row["id"] == "doubao-seedream-4-0-250828" and row["configured"] for row in image_models)
+    assert not [row for row in image_models if row["configured"]]
 
     # 独立性:改视频档案的 key 不影响生图档案
     client.patch(f"/api/settings/providers/{video['id']}", json={"config": {"api_key": "ark-new-0000"}})
@@ -191,7 +196,7 @@ def test_create_profile_copies_credentials_server_side() -> None:
     assert (
         client.post(
             "/api/settings/providers",
-            json={"name": "x", "vendor": "bytedance-image", "config": {}, "copy_credentials_from": "nope"},
+            json={"name": "x", "vendor": "bytedance", "config": {}, "copy_credentials_from": "nope"},
         ).status_code
         == 404
     )

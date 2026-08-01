@@ -118,6 +118,31 @@ def _migrate_agent_thinking_level() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
 
 
+def _merge_split_vendors() -> None:
+    """把被人为拆开的同一家供应商合回去(只改 vendor 值,档案本身不合并)。
+
+    图像/视频、对话/语音此前各占一个 vendor,理由写在旧注释里:"一处改动不牵连另一处" ——
+    那在"一个档案只有一套能力、一个默认模型"的年代成立。供应商⇄模型重构之后一条连接能挂
+    任意多个模型、各自带能力,拆分只剩代价:同一把 Key 填两遍,设置页里一个账号占两行。
+
+    **不合并档案本身**:用户可能真的想把图像和视频分开管(不同 Key、不同区域端点),
+    那是他的选择;这里只是让"火山方舟"重新变成一个 vendor,两个档案照样并存。
+    """
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    # 只合并方舟那一对。openai-tts / openai-compatible-tts 的 vendor id 同时是**持久化的
+    # 语音引擎 id**(TtsConfig.engine 与历史任务载荷),合并要连着迁移那两处历史数据,
+    # 换来的只是设置页少一行 —— 不值,所以它们保持独立。
+    merges = {"bytedance-image": "bytedance"}
+    with engine.begin() as conn:
+        for old_vendor, new_vendor in merges.items():
+            conn.execute(
+                text("UPDATE provider_profiles SET vendor=:new WHERE vendor=:old"),
+                {"new": new_vendor, "old": old_vendor},
+            )
+
+
 def _adopt_deepseek_vendor() -> None:
     """把明确指向 api.deepseek.com 的「OpenAI 兼容端点」档案改挂 deepseek 预设。
 
@@ -377,6 +402,7 @@ def init_db() -> None:
     _migrate_agent_session_plan()
     _drop_generation_models()
     _adopt_deepseek_vendor()
+    _merge_split_vendors()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

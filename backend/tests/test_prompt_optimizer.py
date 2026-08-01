@@ -29,7 +29,7 @@ def test_qwen_chinese_friendly_with_negative() -> None:
 
 
 def test_seedream_chinese_friendly_no_negative() -> None:
-    g = guide_for("bytedance-image", "doubao-seedream-4-0-250828")
+    g = guide_for("bytedance", "doubao-seedream-4-0-250828")
     assert g.prompt_lang == "zh-ok"
     assert g.wants_negative is False
 

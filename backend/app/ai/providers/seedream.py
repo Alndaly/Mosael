@@ -72,7 +72,9 @@ def extract_image_url(response_payload: dict[str, Any]) -> str:
 
 
 class SeedreamProvider(GenerationProvider):
-    name = "bytedance-image"
+    # 与 Seedance(video)同属 "bytedance":适配器注册表按 (vendor, kind) 建键,
+    # 同一家的图像与视频天然共存,不需要为此拆出第二个 vendor。
+    name = "bytedance"
     kind = "image"
 
     def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:

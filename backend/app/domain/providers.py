@@ -30,8 +30,10 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "alibaba": {
         "label": "阿里云 DashScope (qwen)",
         "base_url": "https://dashscope.aliyuncs.com",
-        "capabilities": "图像生成(qwen-image)。对话/嵌入请用 OpenAI 兼容端点单独配置。",
-        "capability_ids": ["image"],
+        # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image,于是同一把
+        # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案 —— 而它明明就是这一家。
+        "capabilities": "图像生成(qwen-image)、对话与向量嵌入(compatible-mode 端点)。",
+        "capability_ids": ["chat", "image", "embedding"],
         "fields": [
             {"key": "api_key", "label": "DashScope API Key", "storage": "api_key", "secret": True, "required": True},
             {
@@ -41,15 +43,18 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "default": "https://dashscope.aliyuncs.com",
                 "hint": "通常保持默认;自建代理或区域端点可在这里覆盖。",
             },
-            {"key": "default_model", "label": "图像模型", "storage": "default_model", "default": "qwen-image"},
+            {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],
     },
     "bytedance": {
-        "label": "火山 Seedance 视频生成",
+        "label": "火山方舟 ARK",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "default_model": "doubao-seedance-2-0-260128",
-        "capabilities": "视频生成(Seedance)。2.x 走 ARK;1.x 在默认端点下由 Adapter 切到 LAS。",
-        "capability_ids": ["video"],
+        # **一家就是一家**。图像(Seedream)和视频(Seedance)此前是两个 vendor,理由是
+        # "一处改动不牵连另一处" —— 那在"一个档案只有一套能力、一个默认模型"的年代成立。
+        # 供应商⇄模型重构之后一条连接能挂任意多个模型、各自带能力,拆分只剩代价:同一把方舟 Key
+        # 要填两遍,设置页里一个账号占两行。
+        "capabilities": "图像生成(Seedream)与视频生成(Seedance)。同一把方舟 Key。",
+        "capability_ids": ["image", "video"],
         "fields": [
             {"key": "api_key", "label": "方舟 API Key", "storage": "api_key", "secret": True, "required": True},
             {
@@ -61,41 +66,15 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
             {
                 "key": "default_model",
-                "label": "视频模型",
+                "label": "首个模型(可选)",
                 "storage": "default_model",
-                "default": "doubao-seedance-2-0-260128",
-            },
-        ],
-    },
-    # 与 "bytedance"(视频)刻意分开:同一把方舟 Key 也各配各的档案,
-    # 一处改动不牵连另一处(openai-tts / volcano-podcast 同款先例)。
-    "bytedance-image": {
-        "label": "火山 Seedream 图像生成",
-        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "default_model": "doubao-seedream-4-0-250828",
-        "capabilities": "图像生成(Seedream)。4.x 支持参考图;3.x t2i 支持 seed。",
-        "capability_ids": ["image"],
-        "fields": [
-            {"key": "api_key", "label": "方舟 API Key", "storage": "api_key", "secret": True, "required": True},
-            {
-                "key": "base_url",
-                "label": "ARK Endpoint",
-                "storage": "base_url",
-                "default": "https://ark.cn-beijing.volces.com/api/v3",
-                "hint": "通常保持默认。",
-            },
-            {
-                "key": "default_model",
-                "label": "图像模型",
-                "storage": "default_model",
-                "default": "doubao-seedream-4-0-250828",
+                "hint": "留空即可 —— 保存后在模型列表里从方舟目录直接挑,那份是实时拉的。",
             },
         ],
     },
     "moonshot": {
         "label": "Kimi (Moonshot)",
         "base_url": "https://api.moonshot.cn/v1",
-        "default_model": "moonshot-v1-8k-vision-preview",
         "capabilities": "对话、长文本、视觉理解(不支持图像 / 视频生成)",
         "capability_ids": ["chat"],
         "fields": [
@@ -108,16 +87,15 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
             {
                 "key": "default_model",
-                "label": "对话模型",
+                "label": "首个模型(可选)",
                 "storage": "default_model",
-                "default": "moonshot-v1-8k-vision-preview",
-            },
+                "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。",
+               },
         ],
     },
     "deepseek": {
         "label": "DeepSeek",
         "base_url": "https://api.deepseek.com",
-        "default_model": "deepseek-chat",
         # **只做对话**。此前这类档案只能选「OpenAI 兼容端点」,而那个预设为了覆盖各种自建网关
         # 声明了 chat/image/embedding —— 模型行没显式设能力时会把三样全继承下来,于是 DeepSeek
         # 的对话模型会冒到「AI 绘图」的可选项里。给它自己的预设,能力就说得准了。
@@ -131,13 +109,12 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "storage": "base_url",
                 "default": "https://api.deepseek.com",
             },
-            {"key": "default_model", "label": "对话模型", "storage": "default_model", "default": "deepseek-chat"},
+            {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],
     },
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",
-        "default_model": "MiniMax-VL-01",
         "capabilities": "对话/视觉理解。图像、视频、语音能力需等对应 Adapter 接入后再开放。",
         "capability_ids": ["chat"],
         "fields": [
@@ -148,25 +125,27 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "storage": "base_url",
                 "default": "https://api.minimaxi.com/v1",
             },
-            {"key": "default_model", "label": "对话模型", "storage": "default_model", "default": "MiniMax-VL-01"},
+            {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],
     },
     "openai": {
         "label": "OpenAI",
         "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-image-2",
-        "capabilities": "对话、图像生成(gpt-image)、向量嵌入",
+        "capabilities": "对话、图像生成、向量嵌入",
         "capability_ids": ["chat", "image", "embedding"],
         "fields": [
             {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
-            {"key": "default_model", "label": "默认模型", "storage": "default_model", "default": "gpt-image-2"},
+            {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],
     },
+    # **不与 "openai" 合并**:这个 vendor id 同时是**持久化的语音引擎 id**
+    # (TtsConfig.engine 与历史任务载荷都存着它),而 audio/voices.py 直接拿 engine 当 vendor 去
+    # resolve_profile。合并要连着迁移这两处历史数据,换来的只是设置页少一行 —— 不值。
+    # 火山方舟那对(图像/视频)没有这层耦合:生成适配器按 (vendor, kind) 注册,天然共存。
     "openai-tts": {
         "label": "OpenAI 语音合成",
         "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-4o-mini-tts",
         "capabilities": "语音合成(/audio/speech,预置音色)",
         "capability_ids": ["tts"],
         "fields": [
@@ -174,9 +153,9 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
             {
                 "key": "default_model",
-                "label": "语音模型",
+                "label": "首个模型(可选)",
                 "storage": "default_model",
-                "default": "gpt-4o-mini-tts",
+                "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。",
             },
         ],
     },
@@ -252,7 +231,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",
-        "capabilities": "OpenAI 兼容对话、图像生成与向量嵌入端点。不同能力的 base_url / 模型可用独立 profile 配置。",
+        "capabilities": "任意 OpenAI 兼容端点:对话、图像生成与向量嵌入。",
         "capability_ids": ["chat", "image", "embedding"],
         "fields": [
             {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
@@ -260,27 +239,21 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "default_model", "label": "默认模型", "storage": "default_model", "required": True},
         ],
     },
+    # 同 "openai-tts":vendor id 就是语音引擎 id,不并进 openai-compatible。
     "openai-compatible-tts": {
         "label": "OpenAI 兼容语音端点",
         "base_url": "",
-        "capabilities": "OpenAI 兼容语音合成(/audio/speech)。用于自定义 base_url、代理或第三方兼容服务。",
+        "capabilities": "任意 OpenAI 兼容的 /audio/speech 端点",
         "capability_ids": ["tts"],
         "fields": [
-            {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
-            {"key": "base_url", "label": "兼容语音 Endpoint", "storage": "base_url", "required": True},
-            {
-                "key": "default_model",
-                "label": "语音模型",
-                "storage": "default_model",
-                "default": "gpt-4o-mini-tts",
-                "required": True,
-            },
+            {"key": "api_key", "label": "API Key", "storage": "api_key", "secret": True, "required": True},
+            {"key": "base_url", "label": "Endpoint", "storage": "base_url", "required": True},
+            {"key": "default_model", "label": "语音模型", "storage": "default_model", "required": True},
         ],
     },
     "google": {
         "label": "Google (Veo/Gemini)",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "default_model": "veo-3.1-generate-preview",
         "capabilities": "视频生成(Veo)。Gemini/Imagen/Embedding 待对应 Adapter 接入后再开放。",
         "capability_ids": ["video"],
         "fields": [
@@ -293,10 +266,10 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
             {
                 "key": "default_model",
-                "label": "视频模型",
+                "label": "首个模型(可选)",
                 "storage": "default_model",
-                "default": "veo-3.1-generate-preview",
-            },
+                "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。",
+               },
         ],
     },
     # ── 订阅计划(OAuth)────────────────────────────────────────────────────────
@@ -353,7 +326,6 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "kuaishou": {
         "label": "快手 (Kling)",
         "base_url": "https://api.klingai.com",
-        "default_model": "kling-v3",
         "capabilities": "视频与图像生成(可灵 Kling)",
         "capability_ids": ["video"],
         "fields": [
@@ -372,7 +344,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "hint": "官方 Kling 使用 Access Key + Secret Key:上面的 API Key 填 Access Key。第三方兼容端点可只填 Bearer API Key。",
             },
             {"key": "base_url", "label": "Kling Endpoint", "storage": "base_url", "default": "https://api.klingai.com"},
-            {"key": "default_model", "label": "视频模型", "storage": "default_model", "default": "kling-v3"},
+            {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],
     },
 }

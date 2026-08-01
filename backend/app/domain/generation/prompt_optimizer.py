@@ -4,7 +4,7 @@
 
 - GPT-Image / DALL-E(openai):自然语言整句描述,像向人描述一幅画;不吃标签堆砌与权重,也不用 negative。
 - Qwen-Image / 通义(alibaba):自然语言描述,中文表现好;支持 negative prompt。
-- 豆包 Seedream(bytedance-image):自然语言 + 电影感描述,中文友好。
+- 豆包 Seedream(bytedance,image):自然语言 + 电影感描述,中文友好。
 - ComfyUI / Stable Diffusion(comfyui):逗号分隔的英文标签 + 质量词 + 权重 (tag:1.2),且强依赖 negative prompt。
 
 本模块给每个平台一套「风格指南」,连同用户原文一起交给聊天 LLM 重写,返回
@@ -78,7 +78,7 @@ _GUIDES: dict[str, PlatformGuide] = {
         prompt_lang="zh-ok",
         wants_negative=True,
     ),
-    "bytedance-image": PlatformGuide(
+    "bytedance": PlatformGuide(
         label="豆包 Seedream",
         style=_NATURAL_STYLE + " 偏电影感,中文友好;强调质感、光影、镜头语言。",
         prompt_lang="zh-ok",
