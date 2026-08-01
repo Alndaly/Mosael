@@ -16,7 +16,10 @@ from app.domain.provider_quota import (
     access_token,
     parse_anthropic,
     parse_codex,
+    parse_copilot,
+    parse_kimi,
     parse_openrouter,
+    parse_xai,
     supports_quota,
 )
 
@@ -88,11 +91,60 @@ def test_openrouter_周期用量各自成条():
     assert keys == ["credits", "usage_daily", "usage_monthly"]
 
 
-def test_未接入的供应商明确不支持():
-    """kimi-coding / github-copilot / xai 目前没有可验证的公开端点。留白而不是猜一个地址 ——
-    猜错的表现是永远查不出来,却看不出为什么。"""
-    assert supports_quota("anthropic") is True
-    assert supports_quota("kimi-coding") is False
+def test_kimi_剩余量归一成已用():
+    """这家给的是 remaining。界面其余几家都是「已用 / 上限」,这里报剩余会让同一排数字
+    一半是"用了多少"一半是"还剩多少",读起来要来回换算。"""
+    snapshot = parse_kimi(
+        {
+            "usage": {"limit": 1000, "remaining": 250, "resetTime": "2026-08-01T00:00:00Z"},
+            "limits": [{"window": {"duration": 5, "timeUnit": "TIME_UNIT_HOUR"}, "detail": {"limit": 300, "remaining": 90}}],
+            "user": {"membership": {"level": "pro"}},
+        }
+    )
+    assert snapshot["plan"] == "pro"
+    total = snapshot["metrics"][0]
+    assert total["used"] == 750 and total["limit"] == 1000
+    window = snapshot["metrics"][1]
+    assert window["used"] == 210
+    # duration + timeUnit 要一起算:只看 duration 会把「5 小时」当成「5 秒」。
+    assert window["window_seconds"] == 5 * 3600
+
+
+def test_kimi_未知时间单位不瞎猜():
+    snapshot = parse_kimi({"limits": [{"window": {"duration": 5, "timeUnit": "TIME_UNIT_FORTNIGHT"}, "detail": {"limit": 1, "remaining": 0}}]})
+    assert snapshot["metrics"][0]["window_seconds"] is None
+
+
+def test_xai_按需上限单独成条():
+    """按需上限不能加进月度上限:那会让「月度还剩很多」看起来成立,实际早已进入按需计费。"""
+    snapshot = parse_xai({"config": {"used": 80, "monthlyLimit": 100, "onDemandCap": 500}, "subscription_tier_display": "SuperGrok"})
+    assert snapshot["plan"] == "SuperGrok"
+    assert [m["key"] for m in snapshot["metrics"]] == ["monthly", "on_demand"]
+    assert snapshot["metrics"][0]["limit"] == 100
+
+
+def test_copilot_按响应里实际有的项报():
+    """三种账户模式返回的结构不同,要求固定形状会让其中两种一条都读不出来。"""
+    snapshot = parse_copilot(
+        {
+            "quota_snapshots": {
+                "premium_interactions": {"remaining": 60, "entitlement": 300},
+                "chat": {"remaining": 0, "entitlement": 0, "unlimited": True},
+            },
+            "quota_reset_date": "2026-09-01",
+        }
+    )
+    keys = sorted(m["key"] for m in snapshot["metrics"])
+    assert keys == ["copilot_chat", "copilot_premium_interactions"]
+    premium = next(m for m in snapshot["metrics"] if m["key"] == "copilot_premium_interactions")
+    assert premium["used"] == 240
+    assert premium["resets_at"] == "2026-09-01"
+
+
+def test_六家都接入了():
+    for provider in ("anthropic", "openai-codex", "openrouter", "kimi-coding", "xai", "github-copilot"):
+        assert supports_quota(provider) is True
+    assert supports_quota("some-future-vendor") is False
     assert supports_quota(None) is False
 
 

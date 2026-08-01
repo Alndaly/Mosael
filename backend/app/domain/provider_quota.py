@@ -11,8 +11,10 @@
 这一层:每条指标自带 kind(百分比还是余额)、周期长度和重置时间,怎么展示交给前端。
 
 pi 在这块不提供任何能力(六家 Provider 里没有配额查询,也不解析限流响应头),所以这里
-按家实现。**查不到就明说查不到**,不猜、不留一个恒为空的进度条 —— 后者会让用户以为额度
-用完了。
+按家实现。六家都接上了,但除 OpenRouter 外全是各家 CLI 内部在用的未文档化接口,响应形状
+可能随时变 —— 所以每个解析器都按"认到哪条报哪条"写,对方多给一个字段不该让整次查询失败,
+少给一个也只该少一条指标。**查不到就明说查不到**,不留一个恒为空的进度条 —— 后者会让
+用户以为额度用完了。
 """
 
 from __future__ import annotations
@@ -181,6 +183,164 @@ def parse_openrouter(payload: dict[str, Any]) -> dict[str, Any]:
     return {"plan": plan, "metrics": metrics}
 
 
+def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
+    """`GET https://api.kimi.com/coding/v1/usages`。
+
+    这家给的是**剩余量**而不是已用量,而且分两层:`usage` 是总配额,`limits[]` 是每个滚动
+    窗口各自的上限与剩余。窗口长度得由 duration + timeUnit 两个字段一起算 —— 只看 duration
+    会把「5 分钟」当成「5 秒」。
+    """
+    metrics: list[dict[str, Any]] = []
+    usage = payload.get("usage")
+    if isinstance(usage, dict):
+        limit = _number(usage.get("limit"))
+        remaining = _number(usage.get("remaining"))
+        if limit is not None or remaining is not None:
+            reset = usage.get("resetTime")
+            metrics.append(
+                {
+                    "key": "total",
+                    "kind": "balance",
+                    "used_percent": None,
+                    # 归一成「已用」:界面其余几家都是已用/上限,这里报剩余会让同一排数字
+                    # 一半是"用了多少"一半是"还剩多少",读起来要来回换算。
+                    "used": (limit - remaining) if (limit is not None and remaining is not None) else None,
+                    "limit": limit,
+                    "unit": "call",
+                    "window_seconds": None,
+                    "resets_at": str(reset) if reset else None,
+                    "unlimited": False,
+                }
+            )
+    for index, entry in enumerate(payload.get("limits") or []):
+        if not isinstance(entry, dict):
+            continue
+        window = entry.get("window") if isinstance(entry.get("window"), dict) else {}
+        detail = entry.get("detail") if isinstance(entry.get("detail"), dict) else {}
+        limit = _number(detail.get("limit"))
+        remaining = _number(detail.get("remaining"))
+        if limit is None and remaining is None:
+            continue
+        metrics.append(
+            {
+                "key": f"window_{index}",
+                "kind": "balance",
+                "used_percent": None,
+                "used": (limit - remaining) if (limit is not None and remaining is not None) else None,
+                "limit": limit,
+                "unit": "call",
+                "window_seconds": _window_seconds(window.get("duration"), window.get("timeUnit")),
+                "resets_at": None,
+                "unlimited": False,
+            }
+        )
+    if not metrics:
+        raise QuotaUnavailable("响应里没有可识别的额度")
+    user = payload.get("user")
+    membership = user.get("membership") if isinstance(user, dict) else None
+    plan = membership.get("level") if isinstance(membership, dict) else None
+    return {"plan": str(plan) if plan else None, "metrics": metrics}
+
+
+#: Kimi 的窗口单位是枚举名。少一个映射就会把窗口算错一个数量级,所以列全而不是只认分钟。
+_TIME_UNITS = {
+    "TIME_UNIT_SECOND": 1,
+    "TIME_UNIT_MINUTE": 60,
+    "TIME_UNIT_HOUR": 3600,
+    "TIME_UNIT_DAY": 86400,
+    "TIME_UNIT_WEEK": 7 * 86400,
+}
+
+
+def _window_seconds(duration: Any, time_unit: Any) -> int | None:
+    amount = _number(duration)
+    if amount is None:
+        return None
+    scale = _TIME_UNITS.get(str(time_unit or "").upper())
+    if scale is None:
+        return None
+    return int(amount * scale)
+
+
+def parse_xai(payload: dict[str, Any]) -> dict[str, Any]:
+    """`GET https://cli-chat-proxy.grok.com/v1/billing`。
+
+    月度上限 + 已用,外加一个可选的按需上限(超出月度后还能继续用的部分)。按需上限单独成条
+    而不是加进月度上限里 —— 那会让"月度还剩很多"看起来成立,实际早已进入按需计费。
+    """
+    config = payload.get("config")
+    if not isinstance(config, dict):
+        raise QuotaUnavailable("响应缺少 config")
+    used = _number(config.get("used"))
+    limit = _number(config.get("monthlyLimit"))
+    if used is None and limit is None:
+        raise QuotaUnavailable("响应里没有可识别的额度")
+    metrics = [
+        {
+            "key": "monthly",
+            "kind": "balance",
+            "used_percent": None,
+            "used": used,
+            "limit": limit,
+            "unit": "credit",
+            "window_seconds": 30 * 86400,
+            "resets_at": None,
+            "unlimited": limit is None,
+        }
+    ]
+    on_demand = _number(config.get("onDemandCap"))
+    if on_demand is not None:
+        metrics.append(
+            {
+                "key": "on_demand",
+                "kind": "balance",
+                "used_percent": None,
+                "used": None,
+                "limit": on_demand,
+                "unit": "credit",
+                "window_seconds": None,
+                "resets_at": None,
+                "unlimited": False,
+            }
+        )
+    plan = payload.get("subscription_tier_display")
+    return {"plan": str(plan) if plan else None, "metrics": metrics}
+
+
+def parse_copilot(payload: dict[str, Any]) -> dict[str, Any]:
+    """`GET https://api.github.com/copilot_internal/user`。
+
+    三种账户模式(用量计费 / 年度按请求数 / 免费受限)返回的字段结构不同,所以逐个探测
+    `quota_snapshots` 下的各项,认到哪条报哪条,而不是要求某个固定形状。
+    """
+    metrics: list[dict[str, Any]] = []
+    snapshots = payload.get("quota_snapshots")
+    if isinstance(snapshots, dict):
+        for key, snapshot in snapshots.items():
+            if not isinstance(snapshot, dict):
+                continue
+            remaining = _number(snapshot.get("remaining"))
+            entitlement = _number(snapshot.get("entitlement"))
+            if remaining is None and entitlement is None:
+                continue
+            metrics.append(
+                {
+                    "key": f"copilot_{key}",
+                    "kind": "balance",
+                    "used_percent": None,
+                    "used": (entitlement - remaining) if (entitlement is not None and remaining is not None) else None,
+                    "limit": entitlement,
+                    "unit": "request",
+                    "window_seconds": 30 * 86400,
+                    "resets_at": str(payload.get("quota_reset_date") or "") or None,
+                    "unlimited": bool(snapshot.get("unlimited")),
+                }
+            )
+    if not metrics:
+        raise QuotaUnavailable("响应里没有可识别的额度")
+    return {"plan": None, "metrics": metrics}
+
+
 # ── 取访问令牌 ──────────────────────────────────────────────────────────────
 
 
@@ -246,13 +406,47 @@ def _fetch_openrouter(token: str) -> dict[str, Any]:
     )
 
 
-#: pi_provider → 抓取函数。**不在这张表里的供应商就是查不到**,界面据此显示"该供应商不提供
-#: 额度查询"而不是一个空进度条。kimi-coding / github-copilot / xai 目前没有找到可验证的
-#: 公开端点,宁可留白也不写一个猜出来的地址 —— 猜错的表现是永远查不出来,却看不出为什么。
+
+def _fetch_kimi(token: str) -> dict[str, Any]:
+    return parse_kimi(
+        _get_json(
+            "https://api.kimi.com/coding/v1/usages",
+            {"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+    )
+
+
+def _fetch_xai(token: str) -> dict[str, Any]:
+    return parse_xai(
+        _get_json(
+            "https://cli-chat-proxy.grok.com/v1/billing",
+            {"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+    )
+
+
+def _fetch_copilot(token: str) -> dict[str, Any]:
+    # GitHub 这条要的是 `token <t>` 而不是 `Bearer <t>`,给错前缀是 401 而不是报错信息。
+    return parse_copilot(
+        _get_json(
+            "https://api.github.com/copilot_internal/user",
+            {"Authorization": f"token {token}", "Accept": "application/json"},
+        )
+    )
+
+#: pi_provider → 抓取函数。**不在这张表里的供应商就是查不到**,界面据此不摆那个按钮,
+#: 而不是摆一个点下去只会说"不支持"的钮。
+#:
+#: 除 OpenRouter 外全部是各家 CLI 内部在用的**未文档化接口**(逆向而来),响应形状可能
+#: 随时变。所以每个解析器都按"认到哪条报哪条"写,而不是要求某个固定形状 —— 对方多给一个
+#: 字段不该让整次查询失败,少给一个也只该少一条指标。
 FETCHERS: dict[str, Callable[[str], dict[str, Any]]] = {
     "anthropic": _fetch_anthropic,
     "openai-codex": _fetch_codex,
     "openrouter": _fetch_openrouter,
+    "kimi-coding": _fetch_kimi,
+    "xai": _fetch_xai,
+    "github-copilot": _fetch_copilot,
 }
 
 
