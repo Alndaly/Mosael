@@ -8,11 +8,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
+from app.domain.plugins.credentials import env_for as credential_env, missing as missing_credentials
+from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call_tool, discover_tools, is_mcp
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 
 #: 按顺序探测。`open-studio.plugin.json` 是现在的规范名,`plugin.json` 是通用名,
 #: `mibu.plugin.json` 是更名前的写法——用户磁盘上的既有插件还带着它,去掉会让那些插件直接消失。
 MANIFEST_FILENAMES = ("open-studio.plugin.json", "plugin.json", "mibu.plugin.json")
+
+#: MCP 插件的工具清单是从 server 现拉的,缓存在 manifest 的这个键下。下划线开头 = 运行时注入,
+#: 和 `_path` 同一类;重扫 manifest 文件时会被特意搬过来,不然每次扫描都要重连一遍 server。
+DISCOVERED_TOOLS_KEY = "_discovered_tools"
 
 
 class PluginDomainError(ValueError):
@@ -32,6 +38,11 @@ def scan_plugins(db: Session, plugins_dir: Path) -> list[Plugin]:
             plugin = Plugin(id=plugin_id, name=name, version=version, enabled=False, manifest=manifest)
             db.add(plugin)
         else:
+            # MCP 插件的工具清单不在 manifest 文件里,重扫时从旧记录搬过来 —— 否则一次扫描就把
+            # 已发现的工具清空,插件在工作流下拉和智能体工具表里凭空消失,直到用户想起来去刷新。
+            cached = plugin.manifest.get(DISCOVERED_TOOLS_KEY) if isinstance(plugin.manifest, dict) else None
+            if cached and DISCOVERED_TOOLS_KEY not in manifest:
+                manifest[DISCOVERED_TOOLS_KEY] = cached
             plugin.name = name
             plugin.version = version
             plugin.manifest = manifest
@@ -49,6 +60,35 @@ def set_plugin_enabled(db: Session, plugin_id: str, enabled: bool) -> Plugin:
         raise PluginDomainError("Plugin not found")
     plugin.enabled = enabled
     db.commit()
+    # MCP 插件启用时顺手拉一次工具清单:没有它,插件启用了但工具表是空的,而"为什么没工具"
+    # 这个问题在界面上无处可答。失败不阻止启用 —— 常见原因是凭据还没填,而填凭据的入口正是
+    # 启用之后那张卡片;卡在这里会变成死结。错误留给 refresh_plugin_tools 显式报。
+    if enabled and is_mcp(plugin.manifest):
+        try:
+            refresh_plugin_tools(db, plugin_id)
+        except PluginDomainError:
+            pass
+    db.refresh(plugin)
+    return plugin
+
+
+def refresh_plugin_tools(db: Session, plugin_id: str) -> Plugin:
+    """向 MCP 插件的 server 重新要一次工具清单。进程类插件的清单写在 manifest 里,无需刷新。"""
+    plugin = db.get(Plugin, plugin_id)
+    if plugin is None:
+        raise PluginDomainError("Plugin not found")
+    if not is_mcp(plugin.manifest):
+        return plugin
+    absent = missing_credentials(db, plugin)
+    if absent:
+        raise PluginDomainError(f"请先填写插件凭据: {', '.join(absent)}")
+    try:
+        tools = discover_tools(plugin.manifest, credential_env(db, plugin))
+    except McpBridgeError as exc:
+        raise PluginDomainError(str(exc)) from exc
+    # manifest 是 JSON 列,原地改字典 SQLAlchemy 看不见,必须整份换掉。
+    plugin.manifest = {**plugin.manifest, DISCOVERED_TOOLS_KEY: tools}
+    db.commit()
     db.refresh(plugin)
     return plugin
 
@@ -58,6 +98,10 @@ def list_enabled_plugin_tools(db: Session) -> list[dict[str, Any]]:
     tools: list[dict[str, Any]] = []
     for plugin in plugins:
         if not plugin_permissions_granted(db, plugin):
+            continue
+        if missing_credentials(db, plugin):
+            # 缺凭据的插件不进工具表:让智能体调一个必定 401 的工具,只会烧掉一轮对话来
+            # 复述一句用户在设置页早就能看到的话。
             continue
         for tool in _manifest_tools(plugin.manifest):
             tools.append(_tool_descriptor(plugin, tool))
@@ -133,10 +177,17 @@ def invoke_plugin_tool(db: Session, plugin_id: str, tool_name: str, input_payloa
     # invocation record, never the app.
     try:
         check_required_input(tool, input_payload)
-        output = execute_tool(plugin.manifest, tool_name, input_payload)
+        absent = missing_credentials(db, plugin)
+        if absent:
+            raise PluginRuntimeError(f"插件凭据未填写: {', '.join(absent)}")
+        env = credential_env(db, plugin)
+        if is_mcp(plugin.manifest):
+            output = mcp_call_tool(plugin.manifest, tool_name, input_payload, env)
+        else:
+            output = execute_tool(plugin.manifest, tool_name, input_payload, env)
         invocation.status = "succeeded"
         invocation.output = output
-    except PluginRuntimeError as exc:
+    except (PluginRuntimeError, McpBridgeError) as exc:
         invocation.status = "failed"
         invocation.error = str(exc)
     except Exception as exc:  # noqa: BLE001 — defensive: runtime must never bubble
@@ -189,10 +240,26 @@ def _required_string(manifest: dict[str, Any], key: str, path: Path) -> str:
 
 
 def _manifest_tools(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    tools = manifest.get("tools", [])
-    if not isinstance(tools, list):
+    if not is_mcp(manifest):
+        return _tool_entries(manifest.get("tools"))
+    # MCP 插件的清单来自 server 本身。manifest 文件里的 tools 不是第二份清单,而是**按名字的
+    # 覆盖层** —— 目前唯一有意义的覆盖是 read_only:server 报的工具默认不算只读(子智能体因此
+    # 拿不到),要放开得由装这个插件的人明说,那是一个人类判断,不该由被接入的一方自己声称。
+    # 只认 read_only 这一个键:让 manifest 顺手覆盖 description / input_schema,等于又造出一份
+    # 会随 server 升级而烂掉的手抄清单,而这正是"清单从 server 现拉"要避免的东西。
+    read_only = {
+        tool["name"] for tool in _tool_entries(manifest.get("tools")) if tool.get("read_only") is True
+    }
+    return [
+        {**tool, "read_only": tool["name"] in read_only}
+        for tool in _tool_entries(manifest.get(DISCOVERED_TOOLS_KEY))
+    ]
+
+
+def _tool_entries(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
         return []
-    return [tool for tool in tools if isinstance(tool, dict) and isinstance(tool.get("name"), str)]
+    return [tool for tool in raw if isinstance(tool, dict) and isinstance(tool.get("name"), str)]
 
 
 def _manifest_permissions(manifest: dict[str, Any]) -> list[str]:
@@ -213,8 +280,11 @@ def _tool_descriptor(plugin: Plugin, tool: dict[str, Any]) -> dict[str, Any]:
     return {
         "plugin_id": plugin.id,
         "plugin_name": plugin.name,
+        "kind": "mcp" if is_mcp(plugin.manifest) else "process",
         "tool_name": tool["name"],
         "description": tool.get("description", ""),
+        # 只读声明。默认 False:插件跑的是别人的代码,"不确定"必须落在保守那边。
+        "read_only": tool.get("read_only") is True,
         "input_schema": tool.get("input_schema", {"type": "object"}),
         "permissions": plugin.manifest.get("permissions", []),
         "skills": plugin.manifest.get("skills", []),

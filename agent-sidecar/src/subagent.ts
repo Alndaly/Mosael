@@ -34,10 +34,14 @@ const SUBAGENT_PROMPT = `你是一个子智能体,被主智能体派来独立完
 - 带上后续会用到的具体标识(素材 id、序列 id、文档 id、链接);
 - 没查到就明确说没查到,不要猜 —— 主智能体会把你的话当事实用。`;
 
-/** 只读工具的判据:manifest 标了 confirmation 的一律排除。名单在后端(唯一工具注册表),
- *  这边不再维护第二份名字清单 —— 那种清单漂移过一次,代价是十九个工具静默消失。 */
-export function readOnlyTools(tools: AgentTool[], confirmationNames: ReadonlySet<string>): AgentTool[] {
-  return tools.filter((tool) => !confirmationNames.has(tool.name) && tool.name !== "run_subagent");
+/** 只读工具的判据:manifest 的 read_only 标记。名单在后端(唯一工具注册表),这边不再维护
+ *  第二份名字清单 —— 那种清单漂移过一次,代价是十九个工具静默消失。
+ *
+ *  以前的判据是"没有确认门就算只读"。对内置工具那是等价的(会改东西的都走确认卡),但插件
+ *  工具没有确认门也照样能发请求、能写文件,照旧判据会被整批当成只读放给子智能体。现在改成
+ *  **明示**:后端给内置工具算出 read_only = 非确认门,给插件工具只认 manifest 里写死的声明。 */
+export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
+  return tools.filter((tool) => (tool as { readOnly?: boolean }).readOnly === true && tool.name !== "run_subagent");
 }
 
 /**

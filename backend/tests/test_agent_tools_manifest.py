@@ -22,15 +22,29 @@ def _manifest(client) -> list[dict]:
     return res.json()
 
 
+def _builtin(client) -> list[dict]:
+    """The manifest minus expanded plugin tools — those come from the user's own plugins,
+    not from mcp_server.py, so registry-drift assertions must not include them."""
+    return [tool for tool in _manifest(client) if not tool["name"].startswith("plugin__")]
+
+
 def test_the_manifest_is_the_mcp_registry_exactly() -> None:
     """The guard against the drift that caused this. If a tool is added to mcp_server.py it
-    appears here with no second edit; if this ever diverges, something grew a second list."""
+    appears here with no second edit; if this ever diverges, something grew a second list.
+
+    The two plugin meta-tools are the one deliberate subtraction: plugin tools are expanded
+    into the manifest as first-class entries, so list_plugin_tools/invoke_plugin_tool would be
+    a second path to the same capability. They stay registered for MCP clients, which do not
+    get the expansion."""
     import asyncio
 
+    from app.api.routes.agent_tools import _PLUGIN_META_TOOLS
+
     client = fresh_client()
-    served = {tool["name"] for tool in _manifest(client)}
+    served = {tool["name"] for tool in _builtin(client)}
     registered = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
-    assert served == registered
+    assert served == registered - _PLUGIN_META_TOOLS
+    assert _PLUGIN_META_TOOLS <= registered, "MCP 客户端仍然靠这两个元工具发现插件"
     assert len(served) > 20, "the registry looks truncated"
 
 
@@ -56,7 +70,7 @@ def test_high_risk_tool_descriptions_disambiguate_common_misuse() -> None:
     """The descriptions are the model's routing table. Ambiguous neighbors must explicitly
     say what they are NOT for, otherwise the agent will pick the nearest-sounding tool."""
     client = fresh_client()
-    descriptions = {tool["name"]: tool["description"] for tool in _manifest(client)}
+    descriptions = {tool["name"]: tool["description"] for tool in _builtin(client)}
 
     assert "Do NOT use for workflow" in descriptions["edit_timeline"]
     assert "use edit_workflow" in descriptions["edit_timeline"]
@@ -187,7 +201,7 @@ def test_the_declared_schema_matches_what_the_function_accepts() -> None:
     import inspect
 
     client = fresh_client()
-    for tool in _manifest(client):
+    for tool in _builtin(client):
         fn = getattr(mcp_server, tool["name"])
         accepted = set(inspect.signature(fn).parameters)
         declared = set(tool["parameters"].get("properties", {}))
@@ -209,7 +223,7 @@ def test_workspace_scoped_tools_declare_workspace_id() -> None:
     """This is the flag the sidecar branches on when filling in the turn's workspace."""
     client = fresh_client()
     declared = {
-        tool["name"]: set(tool["parameters"].get("properties", {})) for tool in _manifest(client)
+        tool["name"]: set(tool["parameters"].get("properties", {})) for tool in _builtin(client)
     }
     for scoped in ("list_assets", "list_projects", "search_kb", "list_workflows"):
         assert "workspace_id" in declared[scoped], f"{scoped} lost its workspace_id parameter"
@@ -223,7 +237,7 @@ def test_confirmation_gated_tools_are_marked_in_the_manifest() -> None:
     """runtime 从元数据生成确认等待逻辑,不再按名字手写第二份工具。少标 = 静默丢确认门,
     多标 = 对着普通结果空等确认卡——两个方向都必须钉死。"""
     client = fresh_client()
-    marked = {tool["name"] for tool in _manifest(client) if tool.get("confirmation")}
+    marked = {tool["name"] for tool in _builtin(client) if tool.get("confirmation")}
     assert marked == set(mcp_server.CONFIRMATION_TOOLS)
     # 会真实创建确认卡的核心变更工具必须在列
     for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video", "generate_audio", "generate_podcast"):

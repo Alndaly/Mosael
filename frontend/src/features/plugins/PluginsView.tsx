@@ -1,8 +1,15 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Play, Plug, RefreshCcw, Terminal, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, KeyRound, Play, Plug, RefreshCcw, Terminal, Trash2 } from "lucide-react";
 
-import { api, type Plugin, type PluginInvocation, type PluginPermissionGrant, type PluginTool } from "@/api/client";
+import {
+  api,
+  type Plugin,
+  type PluginCredential,
+  type PluginInvocation,
+  type PluginPermissionGrant,
+  type PluginTool,
+} from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -137,6 +144,10 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
     queryKey: ["plugin-invocations", plugin.id],
     queryFn: () => api<PluginInvocation[]>(`/api/plugins/invocations?plugin_id=${plugin.id}`),
   });
+  const credentials = useQuery({
+    queryKey: ["plugin-credentials", plugin.id],
+    queryFn: () => api<PluginCredential[]>(`/api/plugins/${plugin.id}/credentials`),
+  });
 
   const togglePlugin = useMutation({
     mutationFn: (enabled: boolean) =>
@@ -167,9 +178,20 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
     onSuccess: invalidateInvocations,
   });
 
-  const manifestTools = ((plugin.manifest.tools as PluginToolManifest[] | undefined) ?? []).filter(
-    (tool) => typeof tool?.name === "string",
-  );
+  const refreshTools = useMutation({
+    mutationFn: () => api<Plugin>(`/api/plugins/${plugin.id}/refresh`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["plugins"] });
+      void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
+
+  const isMcp = plugin.manifest.kind === "mcp";
+  // MCP 插件的工具是从服务现拉的,缓存在 manifest 的 _discovered_tools 下;进程类插件写在
+  // manifest.tools 里。同一个页面读同一个 manifest,两种来源在这里合并一次就够了。
+  const manifestTools = (((isMcp ? plugin.manifest._discovered_tools : plugin.manifest.tools) as
+    | PluginToolManifest[]
+    | undefined) ?? []).filter((tool) => typeof tool?.name === "string");
   const runnableNames = new Set(
     (enabledTools.data ?? []).filter((tool) => tool.plugin_id === plugin.id).map((tool) => tool.tool_name),
   );
@@ -179,7 +201,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
     <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
       <SettingsGroup
         title={plugin.name}
-        description={`${plugin.id} · v${plugin.version}`}
+        description={`${plugin.id} · v${plugin.version} · ${isMcp ? t("pluginKindMcp") : t("pluginKindProcess")}`}
         actions={
           <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
             <span>{plugin.enabled ? t("pluginOn") : t("pluginOff")}</span>
@@ -204,7 +226,21 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         )}
       </SettingsGroup>
 
-      <SettingsGroup title={t("tools")} description={t("toolsGroupDesc")}>
+      {(credentials.data ?? []).length > 0 && (
+        <CredentialsGroup pluginId={plugin.id} items={credentials.data ?? []} />
+      )}
+
+      <SettingsGroup
+        title={t("tools")}
+        description={isMcp ? t("pluginMcpToolsDesc") : t("toolsGroupDesc")}
+        actions={
+          isMcp ? (
+            <Button variant="outline" size="sm" disabled={refreshTools.isPending} onClick={() => refreshTools.mutate()}>
+              <RefreshCcw size={13} /> {t("pluginRefreshTools")}
+            </Button>
+          ) : undefined
+        }
+      >
         <SettingsBlock>
           {manifestTools.map((tool) => (
             <ToolCard
@@ -241,6 +277,65 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
         </SettingsBlock>
       </SettingsGroup>
     </div>
+  );
+}
+
+/**
+ * 凭据表单。
+ *
+ * **为什么整组一次提交,而不是每格失焦即存**:密钥是一串没有语义的字符,输错一个字符和输对
+ * 长得一模一样;逐格自动保存会让"我改了一半"和"我改完了"在后端无法区分,而这里改到一半的
+ * 状态恰好等于一个连不上的插件。一个显式的保存按钮同时也是"现在去重连试试"的时机。
+ */
+function CredentialsGroup({ pluginId, items }: { pluginId: string; items: PluginCredential[] }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  // 初值取后端给的:secret 项是掩码。原样提交表示"这项没改" —— 用户改别的字段时不会把已存的
+  // key 洗成一串星号。
+  const [draft, setDraft] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(items.map((item) => [item.key, item.value])),
+  );
+  const save = useMutation({
+    mutationFn: () =>
+      api<PluginCredential[]>(`/api/plugins/${pluginId}/credentials`, {
+        method: "PATCH",
+        body: JSON.stringify({ values: draft }),
+      }),
+    onSuccess: (next) => {
+      setDraft(Object.fromEntries(next.map((item) => [item.key, item.value])));
+      void qc.invalidateQueries({ queryKey: ["plugin-credentials", pluginId] });
+      // 凭据是 MCP 插件连上服务的前提,后端保存后会顺手重拉工具清单。
+      void qc.invalidateQueries({ queryKey: ["plugins"] });
+      void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
+
+  return (
+    <SettingsGroup
+      title={t("pluginCredentials")}
+      description={t("pluginCredentialsDesc")}
+      actions={
+        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+          <KeyRound size={13} /> {t("pluginCredentialsSave")}
+        </Button>
+      }
+    >
+      {items.map((item) => (
+        <SettingsRow
+          key={item.key}
+          label={item.label}
+          description={item.help || `${item.key} · ${item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty")}`}
+        >
+          <Input
+            className="w-[260px] max-w-full"
+            type={item.secret ? "password" : "text"}
+            value={draft[item.key] ?? ""}
+            placeholder={item.key}
+            onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
+          />
+        </SettingsRow>
+      ))}
+    </SettingsGroup>
   );
 }
 

@@ -1027,6 +1027,27 @@ class PluginPermissionGrant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class PluginCredential(Base):
+    """插件自己的凭据(API Key 等),按 manifest 的 `credentials` 声明逐条存。
+
+    **为什么插件不能共用应用的供应商凭据**:插件运行时只向子进程透传 PATH/HOME/LANG,
+    刻意不给任何应用凭据——插件因此绕不过确认卡和权限系统。但"什么都不给"也意味着任何
+    需要 API Key 的插件只能自己在插件目录里放一个 config.json,让用户开终端去 cp 文件。
+    这张表是那个缺口的补丁:**只把该插件自己声明的那几个键**注入它自己的进程环境。
+
+    明文存,和 provider_profiles.api_key 一致——本地优先的应用里,数据库文件本身就是
+    信任边界,在同一个文件里加一层可逆加密只是把钥匙和锁放进同一个抽屉。
+    """
+
+    __tablename__ = "plugin_credentials"
+
+    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class PluginInvocation(Base):
     __tablename__ = "plugin_invocations"
 

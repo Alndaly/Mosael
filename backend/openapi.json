@@ -10934,6 +10934,149 @@
         }
       }
     },
+    "/api/plugins/{plugin_id}/credentials": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List Plugin Credentials",
+        "operationId": "list_plugin_credentials_api_plugins__plugin_id__credentials_get",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginCredentialOut"
+                  },
+                  "title": "Response List Plugin Credentials Api Plugins  Plugin Id  Credentials Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Update Plugin Credentials",
+        "operationId": "update_plugin_credentials_api_plugins__plugin_id__credentials_patch",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginCredentialUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginCredentialOut"
+                  },
+                  "title": "Response Update Plugin Credentials Api Plugins  Plugin Id  Credentials Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/{plugin_id}/refresh": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Refresh Tools",
+        "description": "重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。",
+        "operationId": "refresh_tools_api_plugins__plugin_id__refresh_post",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/tools": {
       "get": {
         "tags": [
@@ -16833,6 +16976,63 @@
         ],
         "title": "PasswordUpdate"
       },
+      "PluginCredentialOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "help": {
+            "type": "string",
+            "title": "Help",
+            "default": ""
+          },
+          "secret": {
+            "type": "boolean",
+            "title": "Secret",
+            "default": true
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": true
+          },
+          "filled": {
+            "type": "boolean",
+            "title": "Filled",
+            "default": false
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "PluginCredentialOut",
+        "description": "插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。"
+      },
+      "PluginCredentialUpdate": {
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "title": "PluginCredentialUpdate"
+      },
       "PluginEnableRequest": {
         "properties": {
           "enabled": {
@@ -17007,6 +17207,11 @@
             "type": "string",
             "title": "Plugin Name"
           },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "process"
+          },
           "tool_name": {
             "type": "string",
             "title": "Tool Name"
@@ -17015,6 +17220,11 @@
             "type": "string",
             "title": "Description",
             "default": ""
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
           },
           "input_schema": {
             "additionalProperties": true,
@@ -19885,6 +20095,11 @@
           "confirmation": {
             "type": "boolean",
             "title": "Confirmation",
+            "default": false
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
             "default": false
           }
         },

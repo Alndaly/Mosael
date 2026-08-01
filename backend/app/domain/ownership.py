@@ -80,6 +80,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "FeishuBindCode": ("app/integrations/feishu/",),
     "Plugin": ("app/domain/plugins/",),
     "PluginPermissionGrant": ("app/domain/plugins/",),
+    "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
     # 知识库
     "KbDataset": ("app/domain/kb/",),

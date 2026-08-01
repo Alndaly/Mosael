@@ -1615,6 +1615,16 @@ export const messages = {
     noInvocations: "还没有工具调用记录",
     noPermissions: "无需权限",
     permissions: "权限",
+    pluginCredentials: "凭据",
+    pluginCredentialsDesc: "插件声明需要的密钥。只注入到这个插件自己的进程,不会给它应用的任何凭据。",
+    pluginCredentialsSave: "保存",
+    pluginCredentialFilled: "已填写",
+    pluginCredentialEmpty: "未填写",
+    pluginKindMcp: "MCP 服务",
+    pluginKindProcess: "本地脚本",
+    pluginRefreshTools: "刷新工具",
+    pluginMcpToolsDesc: "工具清单由 MCP 服务提供,不写在 manifest 里。服务升级后点刷新重新拉取。",
+    pluginToolReadOnly: "只读",
   },
   "en-US": {
     // Shell
@@ -3224,6 +3234,18 @@ export const messages = {
     noInvocations: "No tool invocations",
     noPermissions: "No permissions",
     permissions: "permissions",
+    pluginCredentials: "Credentials",
+    pluginCredentialsDesc:
+      "Secrets this plugin declared. Injected into the plugin's own process only — it never receives any of the app's credentials.",
+    pluginCredentialsSave: "Save",
+    pluginCredentialFilled: "Set",
+    pluginCredentialEmpty: "Empty",
+    pluginKindMcp: "MCP server",
+    pluginKindProcess: "Local script",
+    pluginRefreshTools: "Refresh tools",
+    pluginMcpToolsDesc:
+      "The tool list comes from the MCP server itself, not the manifest. Refresh after the server is upgraded.",
+    pluginToolReadOnly: "read-only",
   },
 } as const;
 

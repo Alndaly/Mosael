@@ -12,6 +12,12 @@ Two lists maintained by hand will drift, and the drift is silent, so the fix is 
 two. The MCP registry stays the definition. These endpoints expose it — the manifest so an agent
 can discover the tools, and the invoke endpoint so it can run one without reimplementing it. A
 tool added to mcp_server.py is available to every runtime with no second edit.
+
+**插件工具也在这份清单里**,展开成一等公民(`plugin__<插件>__<工具>`),而不是留在
+list_plugin_tools/invoke_plugin_tool 那两个元工具后面。理由是发现成本:元工具意味着模型要先
+"想到"可能有插件能帮上忙,再花一轮去列清单,才知道参数长什么样 —— 而它想不到的时候,用户
+装的插件就等于不存在。展开之后,插件工具和内置工具在模型眼里没有区别,input_schema 也直接
+在手上。清单只包含**已启用、权限已授、凭据已填**的插件,所以它的长度正好是用户自己开的那些。
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -47,6 +54,11 @@ class ToolSpec(BaseModel):
     # pending}。runtime 据此生成等待逻辑(sidecar 阻塞轮询 / MCP 客户端自行 get_confirmation)
     # ——以前 sidecar 为此手写第二份工具实现,现在这是元数据。
     confirmation: bool = False
+    #: 子智能体只拿只读工具。内置工具的判据就是"没有确认门" —— 会改东西的都走确认卡。
+    #: 插件工具没有这个对应关系:它跑的是别人的代码,可能发请求、可能写文件,所以**默认不算只读**,
+    #: 除非 manifest 在那个工具上明写 `"read_only": true`。宁可让子智能体少一个工具,也不要让它
+    #: 在一次"帮我查一下"里替用户发了条微博。
+    read_only: bool = False
 
 
 class ToolInvocation(BaseModel):
@@ -57,21 +69,63 @@ class ToolInvocation(BaseModel):
     session_id: str = ""
 
 
+#: 展开成一等公民之后,这两个元工具就是同一份东西的第二条路径 —— 留着只会让模型在
+#: "直接调 plugin__x__y" 和 "先 list 再 invoke" 之间摇摆,而后者多烧一轮还更容易填错参数。
+#: 它们仍然留在 mcp_server.py 里:走 MCP 协议的客户端(Claude CLI 等)自己不做展开,靠它们发现。
+_PLUGIN_META_TOOLS = frozenset({"list_plugin_tools", "invoke_plugin_tool"})
+
+PLUGIN_TOOL_PREFIX = "plugin__"
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9_]+")
+
+
+def agent_tool_name(plugin_id: str, tool_name: str) -> str:
+    """插件工具在智能体工具表里的名字。
+
+    各家 API 对函数名的字符集要求都是 `[A-Za-z0-9_-]`,而插件 id 允许点号和其它符号,
+    所以非法字符统一折成下划线。折叠可能撞名(`a.b` 和 `a-b` 都变成 `a_b`),所以调用时是
+    反查这份清单、按折叠后的名字匹配,而不是把名字劈开再拼回 id —— 拼回去才是真的会错。
+    """
+    return f"{PLUGIN_TOOL_PREFIX}{_SAFE_NAME.sub('_', plugin_id)}__{_SAFE_NAME.sub('_', tool_name)}"
+
+
+def _plugin_tool_specs(db: Any) -> list[ToolSpec]:
+    from app.domain.plugins import list_enabled_plugin_tools
+
+    specs: list[ToolSpec] = []
+    for tool in list_enabled_plugin_tools(db):
+        origin = "MCP 插件" if tool.get("kind") == "mcp" else "插件"
+        description = tool.get("description") or ""
+        specs.append(
+            ToolSpec(
+                name=agent_tool_name(tool["plugin_id"], tool["tool_name"]),
+                # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件设置里看,
+                # 而不是以为 Open Studio 自己坏了。
+                description=f"[{origin}·{tool['plugin_name']}] {description}".strip(),
+                parameters=tool.get("input_schema") or {"type": "object", "properties": {}},
+                read_only=tool.get("read_only") is True,
+            )
+        )
+    return specs
+
+
 @router.get("/agent/tools", response_model=list[ToolSpec])
-def list_agent_tools(user: CurrentUser) -> list[ToolSpec]:
+def list_agent_tools(db: DbSession, user: CurrentUser) -> list[ToolSpec]:
     """The tools an agent runtime may offer. Derived from the MCP registry, never a second list."""
     registry = _registry()
     tools = asyncio.run(registry.mcp.list_tools())
-    return [
+    specs = [
         ToolSpec(
             name=tool.name,
             description=tool.description or "",
             # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
             parameters=tool.input_schema or {"type": "object", "properties": {}},
             confirmation=tool.name in registry.CONFIRMATION_TOOLS,
+            read_only=tool.name not in registry.CONFIRMATION_TOOLS,
         )
         for tool in tools
+        if tool.name not in _PLUGIN_META_TOOLS
     ]
+    return specs + _plugin_tool_specs(db)
 
 
 def _accepted_names(fn: Any) -> list[str]:
@@ -114,6 +168,29 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
     return fitted, dropped
 
 
+def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """把展开后的名字反查回 (plugin_id, tool_name) 并执行。
+
+    走的是 invoke_plugin_tool 这条**唯一**的插件执行路径 —— 权限校验、凭据注入、调用留痕
+    都在那里,智能体不该有一条自己的捷径。
+    """
+    from app.domain.plugins import PluginDomainError, invoke_plugin_tool as run_plugin_tool, list_enabled_plugin_tools
+
+    match = next(
+        (t for t in list_enabled_plugin_tools(db) if agent_tool_name(t["plugin_id"], t["tool_name"]) == name), None
+    )
+    if match is None:
+        # 插件被停用/撤权/凭据被清空之后,模型手里还攥着上一轮的工具表。说清楚是哪一类问题。
+        raise HTTPException(status_code=404, detail=f"插件工具 {name} 不可用(插件未启用、未授权,或凭据未填写)")
+    try:
+        invocation = run_plugin_tool(db, match["plugin_id"], match["tool_name"], arguments)
+    except PluginDomainError as exc:
+        return {"error": str(exc)[:500]}
+    if invocation.status != "succeeded":
+        return {"error": (invocation.error or "插件调用失败")[:500]}
+    return {"result": invocation.output}
+
+
 @router.post("/agent/tools/{name}")
 def invoke_agent_tool(
     name: str, body: ToolInvocation, db: DbSession, user: CurrentUser, workspace_id: str = ""
@@ -125,6 +202,8 @@ def invoke_agent_tool(
     """
     if workspace_id:
         ensure_workspace_member(db, user, workspace_id)
+    if name.startswith(PLUGIN_TOOL_PREFIX):
+        return _invoke_plugin_tool(db, name, body.arguments)
     registry = _registry()
     fn = getattr(registry, name, None)
     if fn is None or not callable(fn) or name.startswith("_"):

@@ -8,10 +8,12 @@ Contract with the plugin's entry script:
     stdin : {"tool": str, "input": {...}}
     stdout: {"ok": true, "output": {...}} | {"ok": false, "error": str}
 
-- First version is pure-function tools only: no API token, no database, no
-  network guarantees. Anything long-running or mutating goes through jobs and
-  confirmation cards later — plugins cannot bypass the permission system by
-  design because they receive nothing but their input payload.
+- The child gets a minimal environment: PATH/HOME/LANG plus **the credentials
+  this plugin itself declared** in its manifest (see credentials.py). It never
+  receives the app's own provider keys, database, or API token — plugins cannot
+  bypass the permission system by design because they receive nothing but their
+  input payload and their own declared secrets.
+- Anything long-running or mutating goes through jobs and confirmation cards.
 - Every call is recorded in plugin_invocations; a crashing or hanging plugin
   fails its invocation, never the app.
 """
@@ -58,9 +60,17 @@ def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) ->
         raise PluginRuntimeError(f"缺少必填输入: {', '.join(missing)}")
 
 
-def execute_tool(manifest: dict[str, Any], tool_name: str, input_payload: dict[str, Any]) -> dict[str, Any]:
+def execute_tool(
+    manifest: dict[str, Any],
+    tool_name: str,
+    input_payload: dict[str, Any],
+    credentials: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Run the plugin entry once. Returns the tool output dict; raises
-    PluginRuntimeError with an actionable message on any failure."""
+    PluginRuntimeError with an actionable message on any failure.
+
+    `credentials` are this plugin's own declared keys, injected as environment
+    variables — never the app's."""
     entry_path = resolve_entry(manifest)
     request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
     env = {
@@ -68,6 +78,7 @@ def execute_tool(manifest: dict[str, Any], tool_name: str, input_payload: dict[s
         "HOME": os.environ.get("HOME", ""),
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
         "OPEN_STUDIO_PLUGIN": "1",
+        **(credentials or {}),
     }
     started = time.monotonic()
     try:

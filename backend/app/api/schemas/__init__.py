@@ -1179,11 +1179,32 @@ class PluginPermissionGrantUpdate(BaseModel):
     grants: dict[str, bool] = Field(default_factory=dict)
 
 
+class PluginCredentialOut(BaseModel):
+    """插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。"""
+
+    key: str
+    label: str
+    help: str = ""
+    secret: bool = True
+    required: bool = True
+    filled: bool = False
+    value: str = ""
+
+
+class PluginCredentialUpdate(BaseModel):
+    #: 键 → 值。掩码原样回传表示"这项没改";空串表示清空。
+    values: dict[str, str] = Field(default_factory=dict)
+
+
 class PluginToolOut(BaseModel):
     plugin_id: str
     plugin_name: str
+    #: "process"(本地脚本)或 "mcp"(接一个 MCP server)。
+    kind: str = "process"
     tool_name: str
     description: str = ""
+    #: manifest 明写 read_only 的工具才算只读;子智能体只拿只读工具。
+    read_only: bool = False
     input_schema: dict = Field(default_factory=dict)
     permissions: list = Field(default_factory=list)
     skills: list = Field(default_factory=list)

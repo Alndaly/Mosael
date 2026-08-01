@@ -40,9 +40,6 @@ function buildSubagentTool(
   handlers: PiTurnHandlers,
 ): AgentTool {
   const spec = subagentToolSpec();
-  const confirmationNames = new Set(
-    allTools.filter((tool) => (tool as { confirmation?: boolean }).confirmation).map((tool) => tool.name),
-  );
   return {
     name: spec.name,
     label: "子智能体",
@@ -55,7 +52,7 @@ function buildSubagentTool(
       const prompt = args.expected_output ? `${task}\n\n【期望的输出形式】${args.expected_output}` : task;
       const result = await runSubagent({
         task: prompt,
-        tools: readOnlyTools(allTools, confirmationNames),
+        tools: readOnlyTools(allTools),
         model,
         streamFn,
         signal,

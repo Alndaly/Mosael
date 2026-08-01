@@ -3589,6 +3589,44 @@ export interface paths {
         patch: operations["update_plugin_permissions_api_plugins__plugin_id__permissions_patch"];
         trace?: never;
     };
+    "/api/plugins/{plugin_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plugin Credentials */
+        get: operations["list_plugin_credentials_api_plugins__plugin_id__credentials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Plugin Credentials */
+        patch: operations["update_plugin_credentials_api_plugins__plugin_id__credentials_patch"];
+        trace?: never;
+    };
+    "/api/plugins/{plugin_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Tools
+         * @description 重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。
+         */
+        post: operations["refresh_tools_api_plugins__plugin_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/tools": {
         parameters: {
             query?: never;
@@ -5786,6 +5824,48 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * PluginCredentialOut
+         * @description 插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。
+         */
+        PluginCredentialOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Help
+             * @default
+             */
+            help: string;
+            /**
+             * Secret
+             * @default true
+             */
+            secret: boolean;
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /**
+             * Filled
+             * @default false
+             */
+            filled: boolean;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        /** PluginCredentialUpdate */
+        PluginCredentialUpdate: {
+            /** Values */
+            values?: {
+                [key: string]: string;
+            };
+        };
         /** PluginEnableRequest */
         PluginEnableRequest: {
             /** Enabled */
@@ -5871,6 +5951,11 @@ export interface components {
             plugin_id: string;
             /** Plugin Name */
             plugin_name: string;
+            /**
+             * Kind
+             * @default process
+             */
+            kind: string;
             /** Tool Name */
             tool_name: string;
             /**
@@ -5878,6 +5963,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
             /** Input Schema */
             input_schema?: {
                 [key: string]: unknown;
@@ -7005,6 +7095,11 @@ export interface components {
              * @default false
              */
             confirmation: boolean;
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
         };
         /** TrackOut */
         TrackOut: {
@@ -15594,6 +15689,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginPermissionGrantOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plugin_credentials_api_plugins__plugin_id__credentials_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginCredentialOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plugin_credentials_api_plugins__plugin_id__credentials_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginCredentialUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginCredentialOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_tools_api_plugins__plugin_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginOut"];
                 };
             };
             /** @description Validation Error */

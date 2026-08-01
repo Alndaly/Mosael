@@ -5,6 +5,8 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    PluginCredentialOut,
+    PluginCredentialUpdate,
     PluginEnableRequest,
     PluginInvocationOut,
     PluginInvokeRequest,
@@ -21,10 +23,12 @@ from app.domain.plugins import (
     invoke_plugin_tool,
     list_enabled_plugin_tools,
     list_plugin_permission_grants,
+    refresh_plugin_tools,
     scan_plugins,
     set_plugin_enabled,
     set_plugin_permission_grants,
 )
+from app.domain.plugins import credentials as plugin_credentials
 
 router = APIRouter(tags=["plugins"])
 
@@ -84,6 +88,46 @@ def update_plugin_permissions(
     ensure_instance_admin(db, user, "edit")
     try:
         return set_plugin_permission_grants(db, plugin_id, body.grants)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/plugins/{plugin_id}/credentials", response_model=list[PluginCredentialOut])
+def list_plugin_credentials(plugin_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    ensure_instance_admin(db, user, "edit")
+    plugin = db.get(Plugin, plugin_id)
+    if plugin is None:
+        raise HTTPException(status_code=404, detail="Plugin not found")
+    return plugin_credentials.describe(db, plugin)
+
+
+@router.patch("/plugins/{plugin_id}/credentials", response_model=list[PluginCredentialOut])
+def update_plugin_credentials(
+    plugin_id: str, body: PluginCredentialUpdate, db: DbSession, user: CurrentUser
+) -> list[dict]:
+    ensure_instance_admin(db, user, "edit")
+    plugin = db.get(Plugin, plugin_id)
+    if plugin is None:
+        raise HTTPException(status_code=404, detail="Plugin not found")
+    try:
+        plugin_credentials.set_values(db, plugin, body.values)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # 凭据是 MCP 插件连上 server 的前提,填完顺手重拉一次工具清单 —— 否则用户填完 key
+    # 还要再找一个"刷新"按钮点一下,而中间那段时间插件看起来像是坏的。
+    try:
+        refresh_plugin_tools(db, plugin_id)
+    except PluginDomainError:
+        pass
+    return plugin_credentials.describe(db, plugin)
+
+
+@router.post("/plugins/{plugin_id}/refresh", response_model=PluginOut)
+def refresh_tools(plugin_id: str, db: DbSession, user: CurrentUser) -> Plugin:
+    """重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。"""
+    ensure_instance_admin(db, user, "edit")
+    try:
+        return refresh_plugin_tools(db, plugin_id)
     except PluginDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -273,6 +273,7 @@ export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
+export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const auth: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
