@@ -31,7 +31,7 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
-import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
@@ -436,11 +436,6 @@ export function WorkflowAgentChat({
         <h2 className="inline-flex items-center gap-1.5">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
-        {sessionId && (
-          <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
-            <ContextMeter context={context} compacting={compact.isPending} />
-          </span>
-        )}
         {sessionList.length > 0 && sessionId && (
           <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
             <Popover open={sessionMenuOpen} onOpenChange={setSessionMenuOpen}>

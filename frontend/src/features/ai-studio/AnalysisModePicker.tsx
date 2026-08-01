@@ -37,9 +37,11 @@ export function AnalysisModePicker({ session }: { session: AgentSession | null }
   return (
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题。
     <Select key={value} value={value} onValueChange={(next) => setMode.mutate(next)}>
-      <SelectTrigger className="h-8 w-full justify-start gap-1.5 px-2.5 text-xs text-muted-foreground" aria-label={t("analysisModeLabel")} title={t("analysisModeHint")}>
-        <Film size={13} className="shrink-0 opacity-70" />
-        <SelectValue />
+      <SelectTrigger className="h-8 w-full justify-between gap-1.5 px-2.5 text-xs text-muted-foreground" aria-label={t("analysisModeLabel")} title={t("analysisModeHint")}>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Film size={13} className="shrink-0 opacity-70" />
+          <SelectValue />
+        </span>
       </SelectTrigger>
       <SelectContent className="max-w-none">
         {MODES.map((mode) => (

@@ -35,7 +35,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -576,9 +576,6 @@ export function ChatWorkspace({
                     compacting={compactContext.isPending}
                     onCompact={running ? undefined : () => compactContext.mutate()}
                   />
-                  {/* 水位留在主行但只剩一个读数:它要回答的是"我还能再问多少",
-                      而这个念头恰好发生在准备打字的时候(Claude Code / Codex 同位置)。 */}
-                  <ContextMeter context={context} compacting={compactContext.isPending} />
                 </div>
                 {/* One button that changes meaning, the way ChatGPT does it: while the agent
                     works it stops the turn, and the moment you type something it becomes send
