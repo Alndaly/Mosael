@@ -7,7 +7,7 @@ import time
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, run_turn, steer_turn
+from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
 from app.ai.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import find_model
 from app.domain.provider_auth import read_credential
@@ -727,3 +727,33 @@ def stop_turn(db: Session, session: AgentSession) -> bool:
     if session.status != "running":
         return False
     return abort_turn(session.id)
+
+
+def compact_session_context(db: Session, session: AgentSession, user: User) -> dict:
+    """手动整理上下文(界面上的「立即压缩」)。
+
+    压缩本身要调一次模型做摘要,所以它是用户主动触发而不是后台悄悄跑。压完把新的
+    adapter_state 回存,并在对话里留一条 system 消息 —— **压缩必须被看见**:静默压缩会让
+    用户以为模型"忘了"早期内容,而实际上是我们主动移走的。
+    """
+    provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "")
+    result = compact_session(
+        api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+        token=mint_tool_token(db, user),
+        provider=provider_dict,
+        model=agent_model,
+        adapter_state=session.adapter_state,
+    )
+    if result.adapter_state is not None:
+        session.adapter_state = result.adapter_state
+    if result.compaction:
+        db.add(
+            AgentMessage(
+                session_id=session.id,
+                role="system",
+                content="",
+                payload={"compaction": result.compaction, **({"context": result.context} if result.context else {})},
+            )
+        )
+    db.commit()
+    return {"context": result.context, "compaction": result.compaction}

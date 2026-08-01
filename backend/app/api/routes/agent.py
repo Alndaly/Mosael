@@ -12,6 +12,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AgentManifestOut,
     AgentMessageCreate,
+    AgentCompactOut,
     AgentMessageOut,
     AgentSessionCreate,
     AgentSessionOut,
@@ -86,6 +87,18 @@ def post_agent_message(
         return host.post_user_message(db, session, body.content, user, context=body.context)
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/agent/sessions/{session_id}/compact", response_model=AgentCompactOut)
+def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentCompactOut:
+    """手动整理上下文。压缩要调一次模型做摘要,所以是用户主动触发,不做后台自动跑。"""
+    session = _require_session(db, user, session_id)
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    try:
+        result = host.compact_session_context(db, session, user)
+    except host.AdapterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return AgentCompactOut(**result)
 
 
 @router.get("/agent/sessions/{session_id}/queue", response_model=list[AgentMessageOut])

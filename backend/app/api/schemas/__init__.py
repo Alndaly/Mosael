@@ -515,6 +515,17 @@ class OAuthLoginOut(BaseModel):
     models: list[ProviderModelOut] = Field(default_factory=list)
 
 
+class AgentCompactOut(BaseModel):
+    """一次手动压缩的结果。
+
+    `compaction` 为 None 表示没有可压缩的内容(对话还太短)—— 界面据此说"暂时不需要整理",
+    而不是显示一个"压缩了 0 条"的空结果。
+    """
+
+    context: dict | None = None
+    compaction: dict | None = None
+
+
 class ProviderQuotaMetricOut(BaseModel):
     """一条额度指标。
 

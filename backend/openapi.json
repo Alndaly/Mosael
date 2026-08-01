@@ -9676,7 +9676,7 @@
           "settings"
         ],
         "summary": "Set Ai Runtime",
-        "description": "供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。",
+        "description": "AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——\n对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。",
         "operationId": "set_ai_runtime_api_settings_ai_runtime_put",
         "requestBody": {
           "content": {
@@ -11237,6 +11237,49 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/compact": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Compact Agent Session",
+        "description": "手动整理上下文。压缩要调一次模型做摘要,所以是用户主动触发,不做后台自动跑。",
+        "operationId": "compact_agent_session_api_agent_sessions__session_id__compact_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCompactOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/queue": {
       "get": {
         "tags": [
@@ -12133,6 +12176,37 @@
           "kind"
         ],
         "title": "AddTrackRequest"
+      },
+      "AgentCompactOut": {
+        "properties": {
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "compaction": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compaction"
+          }
+        },
+        "type": "object",
+        "title": "AgentCompactOut",
+        "description": "一次手动压缩的结果。\n\n`compaction` 为 None 表示没有可压缩的内容(对话还太短)—— 界面据此说\"暂时不需要整理\",\n而不是显示一个\"压缩了 0 条\"的空结果。"
       },
       "AgentManifestOut": {
         "properties": {

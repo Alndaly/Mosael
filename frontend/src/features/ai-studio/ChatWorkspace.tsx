@@ -35,6 +35,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
+import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -349,6 +350,21 @@ export function ChatWorkspace({
   };
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+
+  /** 水位取最近一条带 context 的消息 —— 它随对话推进而更新,不必另建一张表。 */
+  const context = React.useMemo(() => {
+    const list = messages.data ?? [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const info = (list[i].payload as { context?: ContextInfo } | null)?.context;
+      if (info && info.window > 0) return info;
+    }
+    return null;
+  }, [messages.data]);
+
+  const compactContext = useMutation({
+    mutationFn: () => api(`/api/agent/sessions/${activeSession!.id}/compact`, { method: "POST" }),
+    onSuccess: () => void messages.refetch(),
+  });
   const usageByMessage = React.useMemo(() => {
     const byMessage = new Map<string, AgentUsageEvent[]>();
     for (const event of usageEvents.data ?? []) {
@@ -428,7 +444,17 @@ export function ChatWorkspace({
         />
       </aside>
 
-      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)_auto]">
+        {/* 水位条:窗口未知或还没有对话时整条不渲染(ContextMeter 自己判),不占一条空白。 */}
+        {context && (
+          <div className="flex items-center justify-end border-b border-border px-3 py-1">
+            <ContextMeter
+              context={context}
+              compacting={compactContext.isPending}
+              onCompact={running ? undefined : () => compactContext.mutate()}
+            />
+          </div>
+        )}
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
         {
           <>
@@ -817,7 +843,17 @@ function formatInspectorTime(value: string | null | undefined) {
 }
 
 function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
-  const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
+  const payload = message.payload as
+    | { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[]; compaction?: CompactionInfo }
+    | null;
+  // 手动压缩留下的是一条 role=system、内容为空的消息,只承载压缩标记。
+  if (message.role === "system") {
+    return payload?.compaction ? (
+      <div className="mx-auto w-full max-w-[780px] shrink-0">
+        <CompactionNotice info={payload.compaction} />
+      </div>
+    ) : null;
+  }
   return (
     <div
       className={
@@ -826,6 +862,12 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
           : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
       }
     >
+      {/* 自动压缩发生在这一轮开始前,标记就排在这条回复之前 —— 位置本身在说"从这里往前被整理过"。 */}
+      {message.role === "assistant" && payload?.compaction && (
+        <div className="mb-1.5">
+          <CompactionNotice info={payload.compaction} />
+        </div>
+      )}
       {message.role === "assistant" ? (
         message.error ? (
           <AgentErrorCard content={message.content} error={message.error} />

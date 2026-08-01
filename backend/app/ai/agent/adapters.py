@@ -315,3 +315,80 @@ def _run_pi(
     )
 def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]
+
+
+@dataclass
+class CompactionResult:
+    """一次手动压缩的结果。`compaction` 为 None 表示没有可压缩的内容(对话还太短)。"""
+
+    adapter_state: object | None
+    context: dict | None
+    compaction: dict | None
+
+
+def compact_session(
+    *,
+    api_base: str,
+    token: str,
+    provider: dict | None,
+    model: str | None,
+    adapter_state: object | None,
+) -> CompactionResult:
+    """只压缩不对话 —— 界面上的「立即压缩」。
+
+    单独走一次 sidecar 而不是"下一轮顺带压":用户点的是"现在把上下文整理掉",要求他先
+    再问一句话才生效,和这个动作的语义对不上。摘要仍然会花一次模型调用,所以它是手动的。
+    """
+    if not provider or not model:
+        raise AdapterError("未配置可用的 AI 供应商;请在设置里添加并启用一个供应商。")
+    node, sidecar = pi_sidecar_command()
+    if not Path(sidecar).exists():
+        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+    frame = {
+        "type": "compact",
+        "turnId": "compact",
+        "systemPrompt": "",
+        "apiBase": api_base,
+        "token": token,
+        "provider": {
+            "baseUrl": provider.get("base_url", ""),
+            "apiKey": provider.get("api_key", ""),
+            "vendor": provider.get("vendor", ""),
+            "contextWindow": provider.get("context_window"),
+            "maxOutputTokens": provider.get("max_output_tokens"),
+            "piProvider": provider.get("pi_provider", ""),
+            "credential": provider.get("credential"),
+            "profileId": provider.get("profile_id", ""),
+        },
+        "model": model,
+        "sessionState": adapter_state,
+    }
+    env = {**os.environ}
+    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+        env["ELECTRON_RUN_AS_NODE"] = "1"
+    env = _proxy_env(env)
+    process = subprocess.Popen(
+        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
+    )
+    assert process.stdin is not None and process.stdout is not None
+    process.stdin.write(json.dumps(frame) + "\n")
+    process.stdin.flush()
+    process.stdin.close()
+    # 摘要要真的调一次模型,给和一轮对话同量级的时限。
+    child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
+    for line in child.lines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "compacted":
+            child.finish()
+            return CompactionResult(
+                adapter_state=event.get("sessionState"),
+                context=event.get("context") if isinstance(event.get("context"), dict) else None,
+                compaction=event.get("compaction") if isinstance(event.get("compaction"), dict) else None,
+            )
+        if event.get("type") == "error":
+            child.finish()
+            raise AdapterError(_tail(str(event.get("message", "压缩失败"))))
+    raise AdapterError(_tail(child.finish()) or "压缩没有返回结果")

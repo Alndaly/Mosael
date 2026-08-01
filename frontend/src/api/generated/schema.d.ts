@@ -3179,7 +3179,8 @@ export interface paths {
         get: operations["get_ai_runtime_api_settings_ai_runtime_get"];
         /**
          * Set Ai Runtime
-         * @description 供应商瞬断时的最大重试次数(工作流 LLM 节点用;见 workflows/executors/ai.py)。
+         * @description AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
+         *     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。
          */
         put: operations["set_ai_runtime_api_settings_ai_runtime_put"];
         post?: never;
@@ -3628,6 +3629,26 @@ export interface paths {
         patch: operations["update_agent_session_api_agent_sessions__session_id__patch"];
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/compact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compact Agent Session
+         * @description 手动整理上下文。压缩要调一次模型做摘要,所以是用户主动触发,不做后台自动跑。
+         */
+        post: operations["compact_agent_session_api_agent_sessions__session_id__compact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}/queue": {
         parameters: {
             query?: never;
@@ -3974,6 +3995,23 @@ export interface components {
         AddTrackRequest: {
             /** Kind */
             kind: string;
+        };
+        /**
+         * AgentCompactOut
+         * @description 一次手动压缩的结果。
+         *
+         *     `compaction` 为 None 表示没有可压缩的内容(对话还太短)—— 界面据此说"暂时不需要整理",
+         *     而不是显示一个"压缩了 0 条"的空结果。
+         */
+        AgentCompactOut: {
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Compaction */
+            compaction?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** AgentManifestOut */
         AgentManifestOut: {
@@ -15376,6 +15414,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compact_agent_session_api_agent_sessions__session_id__compact_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCompactOut"];
                 };
             };
             /** @description Validation Error */

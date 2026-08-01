@@ -31,6 +31,7 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/comp
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
+import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
@@ -224,6 +225,21 @@ export function WorkflowAgentChat({
     return byMessage;
   }, [usageEvents.data]);
   const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+
+  /** 水位取最近一条带 context 的消息 —— 它天然随对话推进而更新,不必另建一张表。 */
+  const context = React.useMemo(() => {
+    const list = messages.data ?? [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const info = (list[i].payload as { context?: ContextInfo } | null)?.context;
+      if (info && info.window > 0) return info;
+    }
+    return null;
+  }, [messages.data]);
+
+  const compact = useMutation({
+    mutationFn: () => api<{ compaction: CompactionInfo | null }>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" }),
+    onSuccess: () => void messages.refetch(),
+  });
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
     void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
@@ -412,6 +428,15 @@ export function WorkflowAgentChat({
         <h2 className="inline-flex items-center gap-1.5">
           <Bot size={14} /> {t("wfAgentTitle")}
         </h2>
+        {sessionId && (
+          <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
+            <ContextMeter
+              context={context}
+              compacting={compact.isPending}
+              onCompact={running ? undefined : () => compact.mutate()}
+            />
+          </span>
+        )}
         {sessionList.length > 0 && sessionId && (
           <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
             <Popover open={sessionMenuOpen} onOpenChange={setSessionMenuOpen}>
@@ -503,9 +528,15 @@ export function WorkflowAgentChat({
           </div>
         )}
         {(messages.data ?? []).map((message) => {
-          const payload = message.payload as { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[] } | null;
+          const payload = message.payload as
+            | { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[]; compaction?: CompactionInfo }
+            | null;
           const duration = payload?.usage?.duration_seconds;
           if (queuedIds.has(message.id)) return null;
+          // 手动压缩留下的是一条 role=system、内容为空的消息:它只承载压缩标记。
+          if (message.role === "system") {
+            return payload?.compaction ? <CompactionNotice key={message.id} info={payload.compaction} /> : null;
+          }
           return (
             <div
               key={message.id}
@@ -515,6 +546,11 @@ export function WorkflowAgentChat({
                   : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
               }
             >
+              {message.role === "assistant" && payload?.compaction && (
+                <div className="mb-1.5">
+                  <CompactionNotice info={payload.compaction} />
+                </div>
+              )}
               {message.role === "assistant" ? (
                 message.error ? (
                   <AgentErrorCard content={message.content} error={message.error} />
