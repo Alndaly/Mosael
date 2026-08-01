@@ -44,10 +44,13 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         token: msg.token,
         sessionState: msg.sessionState,
         forceCompact: msg.forceCompact,
+        thinkingLevel: msg.thinkingLevel,
         onAgentReady: (agent) => active.set(turnId, agent),
       },
       {
         onDelta: (delta) => send({ type: "text_delta", turnId, delta }),
+        onThinking: (delta) => send({ type: "thinking_delta", turnId, delta }),
+        onThinkingEnd: () => send({ type: "thinking_end", turnId }),
         onToolStart: (toolCallId, name, args) => send({ type: "tool_start", turnId, toolCallId, name, args }),
         onToolEnd: (toolCallId, result, isError) => send({ type: "tool_end", turnId, toolCallId, result, isError }),
       },

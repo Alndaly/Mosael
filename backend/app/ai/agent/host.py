@@ -195,6 +195,37 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
         state["seq"] += 1
 
 
+
+def _stream_thinking(session_id: str, event: dict) -> None:
+    """思考增量 → 时间线上的思考块。
+
+    **和正文分开成条**:思考不是回答,混进 text 会被落库成助手消息的内容,复制按钮也会把它
+    一起复制走。单独成块还让"思考发生在哪一步之前"这件事保留下来 —— 一轮里可能思考、调工具、
+    再思考,顺序本身就是信息。
+
+    `done` 由 thinking_end 置上,前端据此把这块收起来(思考中展开、结束后折叠)。
+    """
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if state is None:
+            return
+        timeline: list[dict] = state.setdefault("timeline", [])
+        if event.get("type") == "thinking_end":
+            for item in reversed(timeline):
+                if item.get("type") == "thinking":
+                    item["done"] = True
+                    break
+        else:
+            delta = str(event.get("delta", ""))
+            if not delta:
+                return
+            # 未结束的那一块继续追加;已结束的不能再追加 —— 那是下一段思考。
+            if timeline and timeline[-1].get("type") == "thinking" and not timeline[-1].get("done"):
+                timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
+            else:
+                timeline.append({"type": "thinking", "text": delta, "done": False})
+        state["seq"] += 1
+
 def _stream_append(session_id: str, delta: str) -> None:
     with _streams_lock:
         state = _streams.get(session_id)
@@ -241,6 +272,12 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
                 timeline.append({"type": "text", "text": text})
         elif item.get("type") == "tool" and isinstance(item.get("tool"), dict):
             timeline.append({"type": "tool", "tool": dict(item["tool"])})
+        elif item.get("type") == "thinking":
+            text = decode_byte_fallback(str(item.get("text", "")))
+            if text:
+                # 落库时一律标 done:重新打开会话时那段思考早就结束了,留 False 会让它
+                # 顶着一个永远转不完的"思考中"。
+                timeline.append({"type": "thinking", "text": text, "done": True})
     existing_text = "".join(str(item.get("text", "")) for item in timeline if item.get("type") == "text")
     if final_text and not existing_text:
         timeline.append({"type": "text", "text": final_text})
@@ -451,6 +488,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 token=token,
                 on_delta=lambda delta: _stream_append(session_id, delta),
                 on_tool=lambda event: _stream_tool_event(session_id, event),
+                on_thinking=lambda event: _stream_thinking(session_id, event),
+                thinking_level=session.thinking_level or "off",
                 provider=provider_dict,
                 model=agent_model,
                 workspace_id=session.workspace_id,

@@ -164,6 +164,10 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         if body.analysis_video_mode not in ("auto", "native", "frames"):
             raise HTTPException(status_code=422, detail="analysis_video_mode 只能是 auto/native/frames")
         session.analysis_video_mode = body.analysis_video_mode
+    if body.thinking_level is not None:
+        if body.thinking_level not in ("off", "low", "medium", "high"):
+            raise HTTPException(status_code=422, detail="thinking_level 只能是 off/low/medium/high")
+        session.thinking_level = body.thinking_level
     db.commit()
     db.refresh(session)
     return session

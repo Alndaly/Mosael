@@ -4121,6 +4121,11 @@ export interface components {
              * @default auto
              */
             analysis_video_mode: string;
+            /**
+             * Thinking Level
+             * @default off
+             */
+            thinking_level: string;
             /** Status */
             status: string;
             /** Context */
@@ -4148,6 +4153,8 @@ export interface components {
             model?: string | null;
             /** Analysis Video Mode */
             analysis_video_mode?: string | null;
+            /** Thinking Level */
+            thinking_level?: string | null;
         };
         /** AgentSkillOut */
         AgentSkillOut: {

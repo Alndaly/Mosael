@@ -59,6 +59,8 @@ def run_turn(
     adapter_state: object | None = None,
     force_compact: bool = False,
     on_tool: "Callable[[dict], None] | None" = None,
+    on_thinking: "Callable[[dict], None] | None" = None,
+    thinking_level: str = "off",
 ) -> TurnResult:
     if adapter == "pi":
         return _run_pi(
@@ -72,8 +74,10 @@ def run_turn(
             adapter_state,
             on_delta,
             on_tool,
+            on_thinking,
             session_id=session_key,
             force_compact=force_compact,
+            thinking_level=thinking_level,
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
@@ -182,8 +186,10 @@ def _run_pi(
     adapter_state: object | None,
     on_delta: Callable[[str], None] | None,
     on_tool: Callable[[dict], None] | None = None,
+    on_thinking: Callable[[dict], None] | None = None,
     session_id: str = "",
     force_compact: bool = False,
+    thinking_level: str = "off",
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Open Studio's REST with the
@@ -227,6 +233,9 @@ def _run_pi(
         "sessionState": adapter_state,
         # 界面上的「立即压缩」:跳过水位判断,本轮开始前先整理一次上下文。
         "forceCompact": force_compact,
+        # 思考档位。off 时 pi 根本不向供应商要思考 —— "模型是推理模型"只决定怎么解析,
+        # 与"这一轮要不要思考"是两件事。
+        "thinkingLevel": thinking_level,
     }
     # 打包版把 Electron 二进制当 node 用(OPEN_STUDIO_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
@@ -264,6 +273,8 @@ def _run_pi(
         kind = event.get("type")
         if kind == "text_delta" and on_delta is not None:
             on_delta(str(event.get("delta", "")))
+        elif kind in ("thinking_delta", "thinking_end") and on_thinking is not None:
+            on_thinking(event)
         elif kind in ("tool_start", "tool_end"):
             saw_tool = True
             if on_tool is not None:

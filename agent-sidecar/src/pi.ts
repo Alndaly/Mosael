@@ -271,6 +271,9 @@ export interface PiTurnInput {
   onAgentReady?: (agent: Agent) => void;
   /** 跳过水位判断直接压缩一次 —— 对应界面上的「立即压缩」。 */
   forceCompact?: boolean;
+  /** 思考档位。off 时 pi 根本不向供应商要思考(reasoning 传 undefined),
+   *  所以"模型是推理模型"和"这一轮要不要思考"是两件事,前者只决定怎么解析。 */
+  thinkingLevel?: "off" | "low" | "medium" | "high";
 }
 
 export interface PiTurnResult {
@@ -294,6 +297,10 @@ export interface PiTurnResult {
 
 export interface PiTurnHandlers {
   onDelta: (delta: string) => void;
+  /** 思考增量。与正文分开上报 —— 混进 onDelta 会让思考内容被当成回答存进消息正文。 */
+  onThinking: (delta: string) => void;
+  /** 思考结束。前端据此把「思考中…」收起来。 */
+  onThinkingEnd: () => void;
   onToolStart: (toolCallId: string, name: string, args: unknown) => void;
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
 }
@@ -324,7 +331,13 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     Boolean(input.forceCompact),
   );
   const agent = new Agent({
-    initialState: { systemPrompt: input.systemPrompt, model, tools: input.tools, messages: priorMessages },
+    initialState: {
+      systemPrompt: input.systemPrompt,
+      model,
+      tools: input.tools,
+      messages: priorMessages,
+      thinkingLevel: input.thinkingLevel ?? "off",
+    },
     streamFn,
     // 轮内兜底:只防单轮里工具调用把消息堆爆,正常对话碰不到。
     transformContext: async (messages) => guardRunawayTurn(messages),
@@ -342,6 +355,11 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
       const delta = event.assistantMessageEvent.delta;
       full += delta;
       handlers.onDelta(delta);
+    } else if (event.type === "message_update" && event.assistantMessageEvent.type === "thinking_delta") {
+      // 思考不进 `full`:那是回答正文,会被落库成助手消息的内容。
+      handlers.onThinking(event.assistantMessageEvent.delta);
+    } else if (event.type === "message_update" && event.assistantMessageEvent.type === "thinking_end") {
+      handlers.onThinkingEnd();
     } else if (event.type === "tool_execution_start") {
       handlers.onToolStart(event.toolCallId, event.toolName, event.args);
     } else if (event.type === "tool_execution_end") {

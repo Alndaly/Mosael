@@ -105,6 +105,18 @@ def _migrate_provider_auth() -> None:
             conn.execute(text(sql))
 
 
+def _migrate_agent_thinking_level() -> None:
+    """加列迁移:agent_sessions 增加 thinking_level。老会话留 'off',与此前行为一致。"""
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    columns = {col["name"] for col in inspector.get_columns("agent_sessions")}
+    if "thinking_level" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN thinking_level VARCHAR(10) NOT NULL DEFAULT 'off'"))
+
+
 def _migrate_job_parent() -> None:
     """加列迁移:jobs 增加 parent_job_id —— 工作流派生的子任务归到父工作流下,
     任务中心不再把子任务与父工作流平铺成两行。老行留 NULL 即顶层任务,语义正确。"""
@@ -223,6 +235,7 @@ def init_db() -> None:
     _migrate_provider_auth()
     _migrate_tool_confirmations_session()
     _migrate_tts_pip_index()
+    _migrate_agent_thinking_level()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

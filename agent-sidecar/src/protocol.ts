@@ -47,6 +47,8 @@ export interface RunTurnRequest {
   sessionState?: unknown;
   /** 跳过水位判断,本轮开始前先压缩一次(界面上的「立即压缩」)。 */
   forceCompact?: boolean;
+  /** 思考档位(off/low/medium/high)。不传即 off —— 不向供应商要思考。 */
+  thinkingLevel?: "off" | "low" | "medium" | "high";
 }
 
 /**
@@ -154,6 +156,8 @@ export type Request =
 export type Event =
   | { type: "ready" }
   | { type: "text_delta"; turnId: string; delta: string }
+  | { type: "thinking_delta"; turnId: string; delta: string }
+  | { type: "thinking_end"; turnId: string }
   | { type: "tool_start"; turnId: string; toolCallId: string; name: string; args: unknown }
   | { type: "tool_end"; turnId: string; toolCallId: string; result: unknown; isError: boolean }
   | {

@@ -1341,6 +1341,7 @@ class AgentSessionUpdate(BaseModel):
     model: str | None = Field(default=None, max_length=120)
     #: 视频分析方式偏好:auto / native / frames。
     analysis_video_mode: str | None = None
+    thinking_level: str | None = None
 
 
 class AgentSessionOut(OrmModel):
@@ -1353,6 +1354,7 @@ class AgentSessionOut(OrmModel):
     provider_profile_id: str | None = None
     model: str | None = None
     analysis_video_mode: str = "auto"
+    thinking_level: str = "off"
     status: str
     #: 当前上下文水位 {tokens, window}。**每次请求现算**,而不是等某一轮回报 ——
     #: 打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数,

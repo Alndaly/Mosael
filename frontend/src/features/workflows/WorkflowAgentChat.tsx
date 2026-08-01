@@ -32,6 +32,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { ThinkingLevelPicker } from "@/features/ai-studio/ThinkingLevelPicker";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
@@ -702,6 +703,7 @@ export function WorkflowAgentChat({
               <Paperclip size={15} />
             </Button>
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
+            <ThinkingLevelPicker session={sessionDetail.data ?? null} />
           </div>
           {showStop ? (
             <Button

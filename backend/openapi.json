@@ -12555,6 +12555,11 @@
             "title": "Analysis Video Mode",
             "default": "auto"
           },
+          "thinking_level": {
+            "type": "string",
+            "title": "Thinking Level",
+            "default": "off"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -12644,6 +12649,17 @@
               }
             ],
             "title": "Analysis Video Mode"
+          },
+          "thinking_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Level"
           }
         },
         "type": "object",

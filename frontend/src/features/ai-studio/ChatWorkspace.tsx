@@ -34,6 +34,7 @@ import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/m
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
+import { ThinkingLevelPicker } from "@/features/ai-studio/ThinkingLevelPicker";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, ContextMeter, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
@@ -569,6 +570,7 @@ export function ChatWorkspace({
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   <AnalysisModePicker session={session.data ?? null} />
+                  <ThinkingLevelPicker session={session.data ?? null} />
                   {/* 水位跟输入框走,不另起一条横幅:它要回答的是"我还能再问多少",
                       而这个念头恰好发生在准备打字的时候。参考 Claude Code / Codex 的位置。 */}
                   <ContextMeter

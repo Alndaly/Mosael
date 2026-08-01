@@ -846,6 +846,9 @@ class AgentSession(Base):
     # 视频分析方式偏好:auto(默认,原生优先否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
     # 会话级,聊天里可切,注入系统提示让 analyze_asset 照此传 mode。
     analysis_video_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
+    #: 思考档位(off/low/medium/high)。挂在**会话**上而不是模型上:同一个模型有时要深想、
+    #: 有时要快答,它是每次对话的选择。off 时 pi 根本不向供应商要思考。
+    thinking_level: Mapped[str] = mapped_column(String(10), nullable=False, default="off")
     # pi 适配器无 --resume:存 pi 序列化的消息数组做多轮记忆(下轮回灌 initialState.messages)
     adapter_state: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running

@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "lucide-react";
+import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
@@ -27,7 +27,9 @@ export type ToolCall = {
 
 export type AgentTimelineItem =
   | { type: "text"; text: string }
-  | { type: "tool"; tool: ToolCall };
+  | { type: "tool"; tool: ToolCall }
+  /** 思考块。`done=false` 表示正在思考(展开并转圈),结束后默认收起。 */
+  | { type: "thinking"; text: string; done?: boolean };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
 function summarize(args: unknown): string | null {
@@ -241,11 +243,51 @@ export function agentTurnParts(
   for (const item of timeline) {
     if (item.type === "text") {
       parts.push({ type: "text", text: item.text });
+    } else if (item.type === "thinking") {
+      parts.push({ type: "thinking", text: item.text, done: item.done });
     } else {
       parts.push({ type: "tool", tool: item.tool });
     }
   }
   return parts;
+}
+
+
+/**
+ * 思考块。
+ *
+ * **进行中展开、结束后收起** —— Claude / Codex 都是这个形态:思考在发生时是有用的进度感,
+ * 结束后它就是噪音,把答案挤到屏幕外。折叠标题保留下来是因为"它想过"本身是信息,
+ * 而且用户随时可以翻回去看。
+ *
+ * 思考不进正文:它不是回答,复制按钮不该把它一起复制走,落库也不该混进消息内容。
+ */
+function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(!done);
+  // 从"思考中"变成"已结束"时自动收起;用户手动展开过的不再强行改动。
+  const wasDone = React.useRef(done);
+  React.useEffect(() => {
+    if (!wasDone.current && done) setOpen(false);
+    wasDone.current = done;
+  }, [done]);
+
+  return (
+    <div className="mb-2.5 grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
+      <button
+        type="button"
+        className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] text-muted-foreground hover:text-foreground"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {done ? <Brain size={11} className="shrink-0" /> : <Loader2 size={11} className="shrink-0 animate-spin" />}
+        <span className="min-w-0 flex-1 truncate">{done ? t("agentThought") : t("agentThinking")}</span>
+        <ChevronDown size={11} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && text && (
+        <p className="m-0 whitespace-pre-wrap text-[12px] leading-[1.6] text-muted-foreground">{text}</p>
+      )}
+    </div>
+  );
 }
 
 /** Assistant answer renderer: preserves text/tool event order when payload.timeline exists. */
@@ -259,6 +301,8 @@ export function AgentTurnContent({
       {agentTurnParts(timeline).map((item, index) =>
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
+        ) : item.type === "thinking" ? (
+          <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
         ) : item.type === "text" && item.text ? (
           <Streamdown
             key={`text-${index}`}
