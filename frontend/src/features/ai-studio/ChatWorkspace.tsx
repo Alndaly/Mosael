@@ -4,6 +4,7 @@ import {
   Bot,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleDot,
   Copy,
   CornerDownRight,
@@ -770,13 +771,20 @@ function ChatInspector({
           <span className="flex items-center gap-1.5">
             <Wrench size={13} /> {t("agentInspectorRecentTools")}
           </span>
-          <span className="font-normal tabular-nums">
-            {tools.length}
-            {manifest ? ` · v${manifest.version}` : ""}
-          </span>
+          {/* 「看全部工具」是次要动作,做成标题行右侧的一个轻链接而不是整宽按钮 ——
+              整宽 outline 按钮的分量和这块的主内容(最近调用)一样重,而它其实是偶尔才点的。
+              版本号跟到弹层里去:它是排查时才需要的信息,常驻在这里只是一串噪音。 */}
+          <button
+            type="button"
+            className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 font-normal text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setToolBrowser(true)}
+          >
+            <span className="tabular-nums">{t("agentToolsAll").replace("{n}", String(tools.length))}</span>
+            <ChevronRight size={11} />
+          </button>
         </h3>
         {recentTools.length > 0 ? (
-          <ul className="m-0 grid list-none gap-px p-0">
+          <ul className="m-0 grid list-none p-0">
             {recentTools.map(({ key, call }) => (
               <RecentToolRow key={key} call={call} />
             ))}
@@ -784,10 +792,12 @@ function ChatInspector({
         ) : (
           <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{t("agentNoRecentTools")}</p>
         )}
-        <Button variant="outline" size="sm" className="h-7 justify-center text-[11.5px]" onClick={() => setToolBrowser(true)}>
-          {t("agentToolsBrowse")}
-        </Button>
-        <ToolBrowser open={toolBrowser} onOpenChange={setToolBrowser} tools={tools} />
+        <ToolBrowser
+          open={toolBrowser}
+          onOpenChange={setToolBrowser}
+          tools={tools}
+          version={manifest?.version ?? ""}
+        />
       </section>
     </aside>
   );
@@ -803,10 +813,10 @@ function RecentToolRow({ call }: { call: ToolCall }) {
   const seconds = call.usage?.duration_seconds;
   const hasDetail = call.args != null || call.result != null;
   return (
-    <li className="grid min-w-0 gap-1 border-b border-border/45 py-1 last:border-b-0">
+    <li className="grid min-w-0 border-b border-border/40 last:border-b-0">
       <button
         type="button"
-        className="grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] text-foreground"
+        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1.5 text-left text-[11.5px] text-foreground transition-colors hover:bg-panel"
         onClick={() => setOpen((value) => !value)}
       >
         <span
@@ -827,10 +837,10 @@ function RecentToolRow({ call }: { call: ToolCall }) {
                 ? `${seconds}s`
                 : t("toolStatusDone")}
         </em>
-        <ChevronDown size={11} className={cn("text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="grid gap-1 pb-0.5 pl-[13px]">
+        <div className="grid gap-1 pb-1.5 pl-[13px]">
           {hasDetail ? (
             <>
               {call.args != null && <ToolPayload label={t("agentToolArgs")} value={call.args} />}
@@ -893,10 +903,12 @@ function ToolBrowser({
   open,
   onOpenChange,
   tools,
+  version,
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
   tools: AgentTool[];
+  version?: string;
 }) {
   const t = useI18n();
   const [query, setQuery] = React.useState("");
@@ -918,6 +930,11 @@ function ToolBrowser({
           ))}
           {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("agentToolNoMatch")}</p>}
         </div>
+        {version && (
+          <p className="m-0 text-right text-[10.5px] text-muted-foreground">
+            {t("agentVersion")} {version}
+          </p>
+        )}
       </div>
     </ModalShell>
   );
