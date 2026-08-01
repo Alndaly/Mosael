@@ -130,15 +130,18 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
     engines = {item["id"]: item for item in client.get("/api/tts/engines").json()}
 
     assert engines["clone"]["needs_key"] is False
-    assert engines["openai-tts"]["needs_voice_id"] is False and engines["openai-tts"]["voices"]
-    assert engines["openai-compatible-tts"]["needs_voice_id"] is False and engines["openai-compatible-tts"]["voices"]
+    # openai-tts 与 openai-compatible-tts 已并成一个 "openai":前者拆分是"能力要分开"的
+    # 产物(能力现在挂模型行),后者存在的唯一理由是"要填自定义 endpoint",而档案本来就有
+    # base_url 字段。旧 id 仍能被解析(REMOTE_ENGINES 里留作只读别名),但不再出现在列表里。
+    assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
+    assert "openai-tts" not in engines and "openai-compatible-tts" not in engines
     # 火山's catalogue is account-specific, but /api/tts/voices always answers with a list —
     # live when AK/SK are configured, built-in otherwise — so the panel offers a dropdown
     # rather than asking the user to type an opaque id.
     assert engines["volcano"]["needs_voice_id"] is False and engines["volcano"]["voices"]
 
 
-def test_an_openai_compatible_tts_profile_base_url_reaches_the_engine() -> None:
+def test_自建兼容端点的_base_url_能走到引擎() -> None:
     """A user pointing an OpenAI-compatible TTS profile at a proxy must not have the request
     sent to api.openai.com with a key that is not valid there — a 401 whose cause is invisible."""
     import time
@@ -153,7 +156,7 @@ def test_an_openai_compatible_tts_profile_base_url_reaches_the_engine() -> None:
         add_provider(
             db,
             name="proxy",
-            vendor="openai-compatible-tts",
+            vendor="openai",
             api_key="k",
             base_url="https://proxy.test/v1",
             model="custom-tts",
@@ -174,7 +177,7 @@ def test_an_openai_compatible_tts_profile_base_url_reaches_the_engine() -> None:
             json={
                 "workspace_id": workspace_id,
                 "text": "hello",
-                "engine": "openai-compatible-tts",
+                "engine": "openai",
                 "engine_voice": "alloy",
             },
         )

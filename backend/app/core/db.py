@@ -131,16 +131,53 @@ def _merge_split_vendors() -> None:
     inspector = inspect(engine)
     if "provider_profiles" not in set(inspector.get_table_names()):
         return
-    # 只合并方舟那一对。openai-tts / openai-compatible-tts 的 vendor id 同时是**持久化的
-    # 语音引擎 id**(TtsConfig.engine 与历史任务载荷),合并要连着迁移那两处历史数据,
-    # 换来的只是设置页少一行 —— 不值,所以它们保持独立。
-    merges = {"bytedance-image": "bytedance"}
+    merges = {
+        "bytedance-image": "bytedance",
+        # 语音那两个的 vendor id 同时是**持久化的语音引擎 id**,所以合并要连着改
+        # tts_config.engine 与历史任务载荷 —— 见 _merge_openai_tts_engine。
+        "openai-tts": "openai",
+        # openai-compatible-tts 整个退场:它存在的唯一理由是"要填自定义 endpoint",
+        # 而 openai 档案本来就有 base_url 字段。
+        "openai-compatible-tts": "openai",
+    }
     with engine.begin() as conn:
         for old_vendor, new_vendor in merges.items():
             conn.execute(
                 text("UPDATE provider_profiles SET vendor=:new WHERE vendor=:old"),
                 {"new": new_vendor, "old": old_vendor},
             )
+
+
+def _merge_openai_tts_engine() -> None:
+    """语音引擎 id `openai-tts` / `openai-compatible-tts` → `openai`。
+
+    引擎 id 不只是个显示名:audio/voices.py 拿它当 vendor 去 resolve_profile,所以它同时
+    存在于**三处**——tts_config.engine、历史任务的 payload、以及任务结果里记录的"实际用了
+    哪个引擎"。只改预设不改这三处,已有配置会在下次合成时找不到档案。
+
+    旧 id 在 REMOTE_ENGINES 里仍保留为只读别名:迁移覆盖不到的在途任务(进程里已经读出
+    payload、还没落库)照样能跑完。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    legacy = ("openai-tts", "openai-compatible-tts")
+    with engine.begin() as conn:
+        if "tts_config" in tables:
+            conn.execute(
+                text("UPDATE tts_config SET engine='openai' WHERE engine IN ('openai-tts','openai-compatible-tts')")
+            )
+        if "jobs" in tables:
+            # 载荷是 JSON 字符串,SQLite 的 json_set 能就地改;比读出来再写回省一趟,
+            # 也不必把整张 jobs 表读进内存。
+            for column in ("payload", "result"):
+                for old_id in legacy:
+                    conn.execute(
+                        text(
+                            f"UPDATE jobs SET {column} = json_set({column}, '$.engine', 'openai') "
+                            f"WHERE json_valid({column}) AND json_extract({column}, '$.engine') = :old"
+                        ),
+                        {"old": old_id},
+                    )
 
 
 def _adopt_deepseek_vendor() -> None:
@@ -403,6 +440,7 @@ def init_db() -> None:
     _drop_generation_models()
     _adopt_deepseek_vendor()
     _merge_split_vendors()
+    _merge_openai_tts_engine()
     _migrate_job_parent()
     _migrate_browser_pool()
     Base.metadata.create_all(bind=engine)

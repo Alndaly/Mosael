@@ -113,7 +113,10 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     firstFrameAssetName: "",
     referenceImageAssetId: "",
     referenceImageAssetName: "",
-    usePreviousImage: true,
+    // **默认不带参考图**。此前默认 true,于是每次生成都会悄悄把上一张结果当参考图喂进去 ——
+    // 用户输入一句全新的提示词,出来的图却还带着上一张的人和构图,而参考图那一栏他从没碰过。
+    // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
+    usePreviousImage: false,
     workflow: "",
   };
 }

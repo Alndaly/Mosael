@@ -115,8 +115,8 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "minimax": {
         "label": "MiniMax",
         "base_url": "https://api.minimaxi.com/v1",
-        "capabilities": "对话/视觉理解。图像、视频、语音能力需等对应 Adapter 接入后再开放。",
-        "capability_ids": ["chat"],
+        "capabilities": "对话/视觉理解,以及海螺(Hailuo)视频生成。图像与语音需等对应 Adapter 接入。",
+        "capability_ids": ["chat", "video"],
         "fields": [
             {"key": "api_key", "label": "MiniMax API Key", "storage": "api_key", "secret": True, "required": True},
             {
@@ -131,32 +131,15 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "openai": {
         "label": "OpenAI",
         "base_url": "https://api.openai.com/v1",
-        "capabilities": "对话、图像生成、向量嵌入",
-        "capability_ids": ["chat", "image", "embedding"],
+        # 语音合成也在这里:它的引擎 id 就是 vendor id,而拆出 openai-tts / openai-compatible-tts
+        # 两个 vendor 的理由分别是"能力要分开"和"要填自定义 endpoint" —— 前者被供应商⇄模型重构
+        # 消掉了(能力挂模型行),后者本来就有 base_url 字段可填。
+        "capabilities": "对话、图像生成、语音合成、向量嵌入 —— 同一把 Key,自建兼容端点改 Endpoint 即可。",
+        "capability_ids": ["chat", "image", "tts", "embedding"],
         "fields": [
             {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
             {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
-        ],
-    },
-    # **不与 "openai" 合并**:这个 vendor id 同时是**持久化的语音引擎 id**
-    # (TtsConfig.engine 与历史任务载荷都存着它),而 audio/voices.py 直接拿 engine 当 vendor 去
-    # resolve_profile。合并要连着迁移这两处历史数据,换来的只是设置页少一行 —— 不值。
-    # 火山方舟那对(图像/视频)没有这层耦合:生成适配器按 (vendor, kind) 注册,天然共存。
-    "openai-tts": {
-        "label": "OpenAI 语音合成",
-        "base_url": "https://api.openai.com/v1",
-        "capabilities": "语音合成(/audio/speech,预置音色)",
-        "capability_ids": ["tts"],
-        "fields": [
-            {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
-            {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
-            {
-                "key": "default_model",
-                "label": "首个模型(可选)",
-                "storage": "default_model",
-                "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。",
-            },
         ],
     },
     "volcano": {
@@ -237,18 +220,6 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "兼容 Endpoint", "storage": "base_url", "required": True},
             {"key": "default_model", "label": "默认模型", "storage": "default_model", "required": True},
-        ],
-    },
-    # 同 "openai-tts":vendor id 就是语音引擎 id,不并进 openai-compatible。
-    "openai-compatible-tts": {
-        "label": "OpenAI 兼容语音端点",
-        "base_url": "",
-        "capabilities": "任意 OpenAI 兼容的 /audio/speech 端点",
-        "capability_ids": ["tts"],
-        "fields": [
-            {"key": "api_key", "label": "API Key", "storage": "api_key", "secret": True, "required": True},
-            {"key": "base_url", "label": "Endpoint", "storage": "base_url", "required": True},
-            {"key": "default_model", "label": "语音模型", "storage": "default_model", "required": True},
         ],
     },
     "google": {

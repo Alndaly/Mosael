@@ -283,7 +283,7 @@ def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     profile = client.post(
         "/api/settings/providers",
-        json={"name": "Speech", "vendor": "openai-tts", "config": {"api_key": "sk-tts", "default_model": "tts-model"}},
+        json={"name": "Speech", "vendor": "openai", "config": {"api_key": "sk-tts", "default_model": "tts-model"}},
     ).json()
     client.put(
         "/api/settings/provider-defaults/tts",
@@ -301,7 +301,7 @@ def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
     approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["job_id"] == "tts-job-1"
-    assert captured["engine"] == "openai-tts"
+    assert captured["engine"] == "openai"  # 语音引擎 id 已并成 openai
     assert captured["provider_profile_id"] == profile["id"]
     assert captured["engine_model"] == "tts-model"
     assert captured["engine_voice"] == "nova"

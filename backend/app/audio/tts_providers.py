@@ -65,10 +65,13 @@ class TTSProvider(Protocol):
 class OpenAITTS:
     """OpenAI's speech endpoint. Stock voices, no reference clip, no local model."""
 
-    id = "openai-tts"
-    compatible_id = "openai-compatible-tts"
-    label = "OpenAI 语音合成"
-    compatible_label = "OpenAI 兼容语音端点"
+    #: 引擎 id **就是 vendor id**(audio/voices.py 拿 engine 去 resolve_profile)。
+    #: 合并成 "openai" 之前这里有三个:openai-tts 与 openai-compatible-tts —— 而后者存在的
+    #: 理由只是"要填自定义 endpoint",可 openai 档案本来就有 base_url 字段。
+    id = "openai"
+    #: 老 id 只作**读**的别名:迁移会把库里的值改掉,但在途任务的载荷可能还带着旧串。
+    legacy_ids = ("openai-tts", "openai-compatible-tts")
+    label = "OpenAI 语音合成(含兼容端点)"
     parallel_safe = True
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
 
@@ -323,7 +326,7 @@ PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
 #: it is the local reference-driven path and needs a Voice row, not an engine voice id.
 REMOTE_ENGINES = {
     OpenAITTS.id: OpenAITTS,
-    OpenAITTS.compatible_id: OpenAITTS,
+    **{legacy: OpenAITTS for legacy in OpenAITTS.legacy_ids},
     VolcanoTTS.id: VolcanoTTS,
     EdgeTTS.id: EdgeTTS,
 }
@@ -354,15 +357,7 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_key": True,
             "needs_voice_id": False,
             "voices": list(OpenAITTS.VOICES),
-            "note": "预置音色,不需要参考音频。",
-        },
-        {
-            "id": OpenAITTS.compatible_id,
-            "label": OpenAITTS.compatible_label,
-            "needs_key": True,
-            "needs_voice_id": False,
-            "voices": list(OpenAITTS.VOICES),
-            "note": "走 OpenAI /audio/speech 兼容接口,使用独立语音 profile 的 base_url 与模型。",
+            "note": "预置音色,不需要参考音频。自建 /audio/speech 兼容端点填档案里的 Endpoint 即可,不必另建一项。",
         },
         {
             "id": "volcano-podcast",

@@ -94,10 +94,12 @@ def test_vendor_presets_listed() -> None:
     # 火山方舟合成一家:同一把 Key 既做图像(Seedream)也做视频(Seedance)。
     # 拆成两个 vendor 是"一档案一能力"年代的产物,重构后只剩"同一把 Key 填两遍"的代价。
     assert presets["bytedance"]["capability_ids"] == ["image", "video"]
-    assert presets["openai-tts"]["capability_ids"] == ["tts"]
+    # 语音合成并进 openai:openai-tts / openai-compatible-tts 两个 vendor 都退场了
+    # (前者是"能力要分开"的产物,后者只为"填自定义 endpoint",而档案本来就有 base_url)。
+    assert "tts" in presets["openai"]["capability_ids"]
+    assert "openai-tts" not in presets and "openai-compatible-tts" not in presets
     # 预设不再写死默认模型:核实过一次的名字也会随供应商下架而失效,而模型目录是实时拉的。
-    assert not presets["openai-tts"].get("default_model")
-    assert presets["openai-compatible-tts"]["capability_ids"] == ["tts"]
+    assert not presets["openai"].get("default_model")
     assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == ["api_key", "appid"]
     assert presets["volcano-podcast"]["fields"][0]["label"] == "Access Token"
 
@@ -122,7 +124,7 @@ def test_provider_defaults_require_matching_capability() -> None:
 
     openai_tts = client.post(
         "/api/settings/providers",
-        json={"name": "OpenAI TTS", "vendor": "openai-tts", "config": {"api_key": "sk-tts"}},
+        json={"name": "OpenAI TTS", "vendor": "openai", "config": {"api_key": "sk-tts"}},
     ).json()
     assert client.put(
         "/api/settings/provider-defaults/tts",

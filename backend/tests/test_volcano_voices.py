@@ -76,8 +76,9 @@ def test_podcast_voices_are_the_saturn_set() -> None:
 
 def test_openai_voices_come_from_the_engine_constant() -> None:
     client = _admin_client()
+    assert "alloy" in [v["value"] for v in _voices(client, "openai")]
+    # 旧 id 仍解析得出来(REMOTE_ENGINES 留了只读别名),迁移覆盖不到的在途任务照样跑得完
     assert "alloy" in [v["value"] for v in _voices(client, "openai-tts")]
-    assert "alloy" in [v["value"] for v in _voices(client, "openai-compatible-tts")]
 
 
 def test_an_engine_with_no_listable_voices_answers_empty() -> None:

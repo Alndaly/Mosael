@@ -108,7 +108,29 @@ COMFYUI_VIDEO_CAPABILITIES = {
     "requires_workflow_template": True,
 }
 
+#: MiniMax 海螺 H3(2026-07)。原生 2K、4–15 秒、可给首帧;文生视频必须给具体比例,
+#: 图生视频恒为 adaptive(见 ai/providers/minimax_video.py)。
+MINIMAX_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video"],
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame"],
+    "duration_seconds": [4, 6, 10, 15],
+    "default_duration_seconds": 6,
+    "resolutions": ["2K"],
+    "default_resolution": "2K",
+    "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    "default_aspect_ratio": "16:9",
+    "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
 BUILTIN_MODELS = [
+    {
+        "id": "minimax:MiniMax-H3:video",
+        "provider": "minimax",
+        "kind": "video",
+        "model": "MiniMax-H3",
+        "capabilities": MINIMAX_VIDEO_CAPABILITIES,
+    },
     {
         "id": "comfyui:workflow:image",
         "provider": "comfyui",
