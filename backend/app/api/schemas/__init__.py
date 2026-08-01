@@ -662,6 +662,10 @@ class ProviderProfileOut(OrmModel):
     #: 按钮会对着 Kimi/xAI 这类没有端点的供应商也亮着,点下去只能回一句"不支持",
     #: 等于摆了个做不到的操作。
     quota_supported: bool = False
+    #: access token 是否已过期。`oauth_linked` 只说"存过凭据",不说"现在有效" —— 两者分开,
+    #: 卡片才能把「已授权但令牌过期」如实说出来,而不是让用户看着"已授权"却处处碰壁。
+    #: 过期不等于要重新授权:下次对话时 pi 会自动刷新(见 domain/provider_quota 的注释)。
+    oauth_expired: bool = False
 
     #: ORM 列 capability_ids 可为 None(=沿用 vendor 默认);model_validate 时先归一成 []。
     #: 路由 _profile_out 随后会覆写成实际生效能力(effective_capability_ids)。

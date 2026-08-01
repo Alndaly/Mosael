@@ -5966,6 +5966,11 @@ export interface components {
              * @default false
              */
             quota_supported: boolean;
+            /**
+             * Oauth Expired
+             * @default false
+             */
+            oauth_expired: boolean;
         };
         /** ProviderProfileUpdate */
         ProviderProfileUpdate: {

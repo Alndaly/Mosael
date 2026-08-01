@@ -192,3 +192,33 @@ def test_过期的凭据不发请求直接报过期():
 
     with pytest.raises(CredentialExpired):
         fetch_quota("anthropic", {"type": "oauth", "access": "tok", "expires": 1})
+
+
+def test_档案同时报出_已授权_与_是否过期():
+    """`oauth_linked` 只说"存过凭据",不说"现在有效"。两者分开,卡片才能如实说出
+    「已授权但令牌过期」—— 否则用户看着"已授权"却处处碰壁,只会以为是别的地方坏了。"""
+    import time as _time
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    past = int((_time.time() - 3600) * 1000)
+    with SessionLocal() as db:
+        db.add(
+            ProviderProfile(
+                name="过期的订阅",
+                vendor="anthropic",
+                base_url="",
+                api_key="",
+                auth_type="oauth",
+                oauth_credential={"type": "oauth", "access": "tok", "refresh": "r", "expires": past},
+            )
+        )
+        db.commit()
+    rows = client.get("/api/settings/providers").json()
+    row = next(r for r in rows if r["name"] == "过期的订阅")
+    assert row["oauth_linked"] is True
+    assert row["oauth_expired"] is True

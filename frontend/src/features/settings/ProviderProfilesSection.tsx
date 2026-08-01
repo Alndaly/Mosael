@@ -402,7 +402,15 @@ export function ProviderProfilesSection({
                 <small>
                   {vendorLabel(profile.vendor)}
                   {isOauth(profile)
-                    ? ` · ${profile.oauth_linked ? t("providerOauthLinked") : t("providerOauthUnlinked")}`
+                    ? ` · ${
+                        profile.oauth_linked
+                          ? // 过期不等于要重新授权:下次对话时会自动刷新。所以说的是「令牌已过期」
+                            // 而不是「未授权」—— 后者会把用户支去重走一遍其实不必要的授权。
+                            profile.oauth_expired
+                            ? t("providerOauthExpired")
+                            : t("providerOauthLinked")
+                          : t("providerOauthUnlinked")
+                      }`
                     : profile.key_hint
                       ? ` · ${profile.key_hint}`
                       : ""}

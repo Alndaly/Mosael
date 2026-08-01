@@ -17221,6 +17221,11 @@
             "type": "boolean",
             "title": "Quota Supported",
             "default": false
+          },
+          "oauth_expired": {
+            "type": "boolean",
+            "title": "Oauth Expired",
+            "default": false
           }
         },
         "type": "object",

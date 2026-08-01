@@ -56,7 +56,7 @@ from app.domain import kb
 from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
 from app.domain.ai_retry import set_max_retries
-from app.domain.provider_quota import QuotaUnavailable, fetch_quota, supports_quota
+from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.providers import (
     VENDOR_PRESETS,
@@ -87,6 +87,7 @@ def _profile_out(profile: ProviderProfile) -> ProviderProfileOut:
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(profile.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
+    out.oauth_expired = out.oauth_linked and is_expired(read_credential(profile))
     return out
 
 
