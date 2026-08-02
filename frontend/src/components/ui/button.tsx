@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -38,20 +39,49 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  /**
+   * 正在跑:禁用点击,并把**第一个图标**换成转圈。
+   *
+   * 换掉而不是插一个:按钮宽度不变,行不会跳。没有图标的按钮就在文字前面加一个。
+   *
+   * 判据是「点下去会发请求,而且没有别的即时反馈」—— 那种按钮不接这个标就等于骗人:
+   * 它看起来点了没反应,于是用户再点一次。纯前端的开合/筛选、以及乐观更新的开关不必接,
+   * 界面本来就当场变了。
+   */
+  loading?: boolean
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    // asChild 时不动 children:那时候 Button 只是把样式借给别人(<label>、<a>),
+    // 塞一个 spinner 进去会破坏调用方自己的结构。
+    const content =
+      loading && !asChild ? <BusyChildren>{children}</BusyChildren> : children
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={disabled || (loading && !asChild)}
+        aria-busy={loading || undefined}
         {...props}
-      />
+      >
+        {content}
+      </Comp>
     )
   }
 )
+
+/** 把第一个 svg 图标替换成转圈;一个图标都没有就在最前面补一个。 */
+function BusyChildren({ children }: { children?: React.ReactNode }) {
+  const spinner = <Loader2 key="__busy" className="animate-openstudio-spin" />
+  const nodes = React.Children.toArray(children)
+  const iconAt = nodes.findIndex(
+    (node) => React.isValidElement(node) && typeof node.type !== "string",
+  )
+  if (iconAt < 0) return <>{spinner}{children}</>
+  return <>{nodes.map((node, index) => (index === iconAt ? spinner : node))}</>
+}
 Button.displayName = "Button"
 
 export { Button, buttonVariants }

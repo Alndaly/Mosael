@@ -489,7 +489,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
                   <Pencil size={13} />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
+                <Button variant="ghost" size="icon" loading={remove.isPending && remove.variables === rule.id} onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
                   <Trash2 size={13} />
                 </Button>
               </div>

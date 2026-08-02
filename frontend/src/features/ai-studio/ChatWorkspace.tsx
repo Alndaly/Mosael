@@ -500,6 +500,7 @@ export function ChatWorkspace({
                 <button
                   type="button"
                   className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  disabled={steerQueued.isPending}
                   onClick={() => steerQueued.mutate(message.id)}
                   title={t("chatSteerHint")}
                 >
@@ -508,6 +509,7 @@ export function ChatWorkspace({
                 <button
                   type="button"
                   className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  disabled={cancelQueued.isPending}
                   onClick={() => cancelQueued.mutate(message.id)}
                   aria-label={t("chatQueuedCancel")}
                 >
@@ -575,6 +577,7 @@ export function ChatWorkspace({
                     size="icon"
                     className="shrink-0 rounded-full"
                     aria-label={t("chatStop")}
+                    loading={stopTurn.isPending}
                     onClick={() => stopTurn.mutate()}
                   >
                     <Square size={13} fill="currentColor" />

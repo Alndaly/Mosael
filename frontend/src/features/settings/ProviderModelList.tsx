@@ -139,13 +139,13 @@ export function ProviderModelList({
       )}
 
       <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: true } })}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: true } })}>
           {t("bulkEnable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: false } })}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: false } })}>
           {t("bulkDisable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => removeMany.mutate(bulk.selectedIds)}>
+        <Button variant="outline" size="sm" disabled={busy} loading={removeMany.isPending} onClick={() => removeMany.mutate(bulk.selectedIds)}>
           <Trash2 size={12} /> {t("bulkDelete")}
         </Button>
       </BulkActionBar>
@@ -207,6 +207,7 @@ export function ProviderModelList({
               size="icon"
               className="h-7 w-7"
               aria-label={t("delete")}
+              loading={remove.isPending && remove.variables === row.id}
               onClick={() => remove.mutate(row.id)}
             >
               <Trash2 size={13} />

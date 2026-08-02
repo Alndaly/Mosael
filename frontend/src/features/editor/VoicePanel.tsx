@@ -565,6 +565,7 @@ export function VoicePanel({
                 <button
                   type="button"
                   title={t("delete")}
+                  disabled={remove.isPending && remove.variables === voice.id}
                   onClick={(event) => {
                     event.stopPropagation();
                     remove.mutate(voice.id);

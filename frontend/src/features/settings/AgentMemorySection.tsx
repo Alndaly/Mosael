@@ -166,6 +166,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
                     size="icon"
                     className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                     aria-label={t("delete")}
+                    loading={remove.isPending && remove.variables === row.id}
                     onClick={() => remove.mutate(row.id)}
                   >
                     <Trash2 size={13} />

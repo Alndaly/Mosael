@@ -418,10 +418,10 @@ export function ProviderProfilesSection({
       <SettingsBlock>
         <div className="grid gap-1.5">
           <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
+            <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
               {t("bulkEnable")}
             </Button>
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
+            <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
               {t("bulkDisable")}
             </Button>
             <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
@@ -501,7 +501,7 @@ export function ProviderProfilesSection({
                 {/* 只对真有额度接口的供应商出现。没有端点的不摆这个钮 —— 亮着却只能回一句
                     "不支持",等于摆了个做不到的操作。 */}
                 {profile.oauth_linked && profile.quota_supported && <ProviderQuota profileId={profile.id} />}
-                <Button variant="ghost" size="icon" onClick={() => toggle.mutate(profile)} aria-label="toggle">
+                <Button variant="ghost" size="icon" loading={toggle.isPending && toggle.variables?.id === profile.id} onClick={() => toggle.mutate(profile)} aria-label="toggle">
                   <Power size={13} />
                 </Button>
                 <Popover>

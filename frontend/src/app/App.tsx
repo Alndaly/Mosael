@@ -276,7 +276,7 @@ function WorkspaceGate() {
             <Film size={34} />
             <h1>Open Studio</h1>
             <p>{t("welcomeText")}</p>
-            <Button onClick={() => createWorkspace.mutate()}>
+            <Button loading={createWorkspace.isPending} onClick={() => createWorkspace.mutate()}>
               <FolderPlus size={16} /> {t("createWorkspace")}
             </Button>
           </CardContent>

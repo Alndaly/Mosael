@@ -420,7 +420,7 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
               </button>
               <div className="flex shrink-0 gap-0.5">
                 {doc.status === "error" && (
-                  <Button size="icon" variant="ghost" className="h-7 w-7" title={t("kbReindex")} onClick={() => reindexDoc.mutate(doc.id)}>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" title={t("kbReindex")} loading={reindexDoc.isPending && reindexDoc.variables === doc.id} onClick={() => reindexDoc.mutate(doc.id)}>
                     <RotateCw size={13} />
                   </Button>
                 )}
