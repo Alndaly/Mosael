@@ -6,7 +6,9 @@
 > **落地方案见 [AGENT_PERMISSION_MODES.md](../AGENT_PERMISSION_MODES.md)**,它对照代码复验了本文的
 > 前提,并修正了三处:①`browser_pool_open` 归在 `edit` 档是错档(它接的是用户真实登录身份),
 > auto 下直接放行等于无声授权;②档位不能查静态表 —— `run_workflow` 挂 `ai-cost`,而它能执行
-> `code` / `publish` / `http_request` 节点;③建议第一版不做「AI 判断」(见该文 §2.3,**待拍板**)。
+> `code` / `publish` / `http_request` 节点;③「AI 判断」**维持本文的决定要做**(2026-08-03 拍板),
+> 但它不能是唯一的闸 —— 判断者看到的**参数本身**就是被影响过的模型写的,所以结构化规则先判、
+> 判断者只在规则没覆盖处说话且不能翻案(见该文 §2.3 与 §4.7)。
 
 ## 背景
 
