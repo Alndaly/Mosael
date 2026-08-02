@@ -13,8 +13,9 @@
 产物落在 docs/media/,并分发到旧文档站与新官网(见下面的 publish)。
 GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
 
-**默认录深色**(`--theme dark`)。三处消费者的版面都是深底为主,浅色截图贴进去像从别处
-抠来的;应用本身的重点(时间线、监看器、画布)在深色下对比也更好读。
+**默认两套都录**(`--theme both`)。站点按当前主题选图:浅色页面配浅色截图,深色页面配
+深色截图 —— 一张浅色截图贴在深色版面里,会像是从别处抠来的。深色那套落在各输出目录的
+`dark/` 子目录,文件名与浅色一致。
 """
 
 from __future__ import annotations
@@ -68,10 +69,18 @@ def gif_from_frames(frames: Path, out: Path, fps: int = FPS) -> None:
     print(f"  → {out.relative_to(ROOT)}  {out.stat().st_size // 1024} KB")
 
 
+#: 当前这一轮录的是哪套主题。深色那套落在各目录的 `dark/` 子目录里,浅色留在原地 ——
+#: 于是所有既有的引用(文档正文里的 `/media/screens/x.png`)不用改一个字,而站点在夜档下
+#: 去同名的 `dark/` 里找一张同名图,找不到就退回浅色那张。
+CURRENT_THEME = "light"
+
+
 def publish(src: Path, name: str, *, gif: bool = False) -> None:
-    """把一件产物分发到两个站点,同名落地。"""
-    targets = [(SITE_GIFS if gif else SITE_SHOTS) / name, (WEB_GIFS if gif else WEB_SHOTS) / name]
+    """把一件产物分发到两个站点,同名落地。深色那套进 `dark/` 子目录。"""
+    sub = "dark" if CURRENT_THEME == "dark" else ""
+    targets = [(SITE_GIFS if gif else SITE_SHOTS) / sub / name, (WEB_GIFS if gif else WEB_SHOTS) / sub / name]
     for target in targets:
+        target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(src, target)
     print("  → " + " / ".join(str(t.relative_to(ROOT)) for t in targets))
 
@@ -214,7 +223,9 @@ def main() -> int:
     parser.add_argument("--only", default="", help="只录某一段(plugins/…)")
     #: 配图统一走深色。官网、README、文档三处的版面都是深底为主,而浅色截图贴进去会像
     #: 从别处抠来的 —— 而且应用本身的重点(时间线、监看器、画布)在深色下对比更好读。
-    parser.add_argument("--theme", default="dark", choices=["dark", "light"], help="录制用的应用主题")
+    #: 默认**两套都录**。站点按当前主题选图:浅色页面配浅色截图,深色页面配深色截图 ——
+    #: 一张浅色截图贴在深色版面里,会像是从别处抠来的。
+    parser.add_argument("--theme", default="both", choices=["both", "dark", "light"], help="录制用的应用主题")
     args = parser.parse_args()
 
     for d in (MEDIA, SITE_GIFS, SITE_SHOTS, WEB_GIFS, WEB_SHOTS):
@@ -225,14 +236,21 @@ def main() -> int:
     if args.only:
         scenes = {k: v for k, v in scenes.items() if k == args.only}
 
+    themes = ["light", "dark"] if args.theme == "both" else [args.theme]
+    global CURRENT_THEME
+
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT, device_scale_factor=2, color_scheme=args.theme)
-        open_app(page, args.base, args.api, args.token, args.theme)
-        for name, fn in scenes.items():
-            print(f"录制 {name} …")
-            with tempfile.TemporaryDirectory(prefix="os-doc-media-") as tmp:
-                fn(page, Path(tmp))
+        for theme in themes:
+            CURRENT_THEME = theme
+            print(f"=== {theme} ===")
+            page = browser.new_page(viewport=VIEWPORT, device_scale_factor=2, color_scheme=theme)
+            open_app(page, args.base, args.api, args.token, theme)
+            for name, fn in scenes.items():
+                print(f"录制 {name} …")
+                with tempfile.TemporaryDirectory(prefix="os-doc-media-") as tmp:
+                    fn(page, Path(tmp))
+            page.close()
         browser.close()
     return 0
 

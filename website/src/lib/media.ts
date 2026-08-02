@@ -12,6 +12,22 @@ import path from "node:path";
  */
 const cache = new Map<string, { width: number; height: number }>();
 
+/**
+ * 同名的深色版在哪。`/media/screens/x.png` → `/media/screens/dark/x.png`。
+ *
+ * 录制脚本(scripts/record-doc-media.py)把深色那套放在各目录的 `dark/` 子目录里、文件名
+ * 保持一致 —— 于是文档正文里的 `![](/media/screens/x.png)` 一个字都不用改。
+ */
+export function darkTwin(src: string): string {
+  const at = src.lastIndexOf("/");
+  return at < 0 ? src : `${src.slice(0, at)}/dark${src.slice(at)}`;
+}
+
+/** 深色版可能还没录(脚本只覆盖了一部分场景),没有就退回浅色那张。 */
+export function hasImage(src: string): boolean {
+  return fs.existsSync(path.join(process.cwd(), "public", src.replace(/^\//, "")));
+}
+
 export function imageSize(src: string): { width: number; height: number } {
   const cached = cache.get(src);
   if (cached) return cached;

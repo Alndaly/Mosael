@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { imageSize } from "@/lib/media";
+import { darkTwin, hasImage, imageSize } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,17 +35,40 @@ export function Shot({
   className?: string;
 }) {
   const size = width && height ? { width, height } : imageSize(src);
-  const image = (
+  const dark = darkTwin(src);
+  const hasDark = dark !== src && hasImage(dark);
+
+  /**
+   * 深浅两套图。**用 CSS 切,不用 JS**:主题是 `<html>` 上的一个 class,服务端渲染时就已经
+   * 定下来了 —— 换成在客户端判断,深色用户会先看见一张浅色截图再被换掉。
+   *
+   * 代价是两张图都会被下载。没有更好的办法:`<picture media>` 只认系统色,跟不动站点自己的
+   * 主题开关;而这个站的截图本来就是浏览器里的界面,一张亮底的图贴在深色版面里非常刺眼。
+   */
+  const frame = (theme: "light" | "dark") => (
     <Image
-      src={src}
+      src={theme === "dark" ? dark : src}
       alt={alt}
       width={size.width}
       height={size.height}
       priority={priority}
       unoptimized={src.endsWith(".gif")}
       sizes="(min-width: 80rem) 80rem, 100vw"
-      className={cn("h-auto w-full", framed ? "block" : "border-2 border-current bg-muted")}
+      className={cn(
+        "h-auto w-full",
+        framed ? "block" : "border-2 border-current bg-muted",
+        hasDark && (theme === "dark" ? "hidden dark:block" : "dark:hidden"),
+      )}
     />
+  );
+
+  const image = hasDark ? (
+    <>
+      {frame("light")}
+      {frame("dark")}
+    </>
+  ) : (
+    frame("light")
   );
 
   return (
