@@ -21,6 +21,7 @@ GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -43,6 +44,10 @@ WEB_SHOTS = ROOT / "website" / "public" / "media" / "screens"
 VIEWPORT = {"width": 1440, "height": 760}
 #: GIF 帧率。界面演示不需要高帧率,10 帧足够看清每一步,体积只有 24 帧的四成。
 FPS = 10
+#: 剪辑页的面板宽度。素材栏取 320 而不是默认的 252:窄栏下四个中文页签放不下,会滚掉
+#: 「配音」半个字 —— 那是正常行为(见 EditorView 的 LeftTabs),但配图里一个被截断的页签
+#: 只会让人以为界面坏了。和视口、主题一样,这是"以什么状态开拍"的一部分。
+EDITOR_PANELS = {"left": {"media": 320, "transcript": 420, "subtitle": 320, "voice": 320}, "right": 264, "timeline": 252}
 
 
 def gif_from_frames(frames: Path, out: Path, fps: int = FPS) -> None:
@@ -103,10 +108,11 @@ def open_app(page: Page, base: str, api: str, token: str, theme: str) -> None:
     """
     page.goto(base, wait_until="domcontentloaded")
     page.evaluate(
-        "([api, token, theme]) => { localStorage.setItem('openstudio.server.url', api);"
+        "([api, token, theme, panels]) => { localStorage.setItem('openstudio.server.url', api);"
         " localStorage.setItem('openstudio.auth.token', token);"
-        " localStorage.setItem('openstudio.preferences', JSON.stringify({ theme, locale: 'zh-CN' })); }",
-        [api, token, theme],
+        " localStorage.setItem('openstudio.preferences', JSON.stringify({ theme, locale: 'zh-CN' }));"
+        " localStorage.setItem('openstudio.editor.panels.v2', panels); }",
+        [api, token, theme, json.dumps(EDITOR_PANELS)],
     )
     page.goto(base, wait_until="networkidle")
     # 主题切换会给 <html> 加 class,等它落定再拍 —— 否则第一帧可能还是浅色。
