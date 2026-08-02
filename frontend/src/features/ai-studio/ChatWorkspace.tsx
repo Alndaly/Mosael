@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,7 +65,8 @@ export function ChatWorkspace({
   const [draft, setDraft] = React.useState("");
   const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
-  const [attachments, setAttachments] = React.useState<Asset[]>([]);
+  // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
+  const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
     queryKey: ["agent-manifest"],
     queryFn: () => api<AgentManifest>("/api/agent/manifest"),
@@ -74,14 +76,6 @@ export function ChatWorkspace({
     queryKey: ["agent-tools"],
     queryFn: () => api<AgentTool[]>("/api/agent/tools"),
     staleTime: 60_000,
-  });
-  const uploadAttachment = useMutation({
-    mutationFn: (file: File) =>
-      importAsset({ workspaceId: workspace.id, file }),
-    onSuccess: (asset) => {
-      setAttachments((current) => [...current, asset]);
-      void qc.invalidateQueries({ queryKey: ["assets"] });
-    },
   });
   const [streamText, setStreamText] = React.useState<string>("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
@@ -219,7 +213,7 @@ export function ChatWorkspace({
       refreshQueue();
     },
   });
-  const showStop = running && !draft.trim() && attachments.length === 0;
+  const showStop = running && !draft.trim() && attach.isEmpty;
   const stopTurn = useMutation({
     mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
@@ -344,13 +338,14 @@ export function ChatWorkspace({
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
-    if ((!draft.trim() && attachments.length === 0) || sendMessage.isPending) return;
-    let content = draft.trim();
-    for (const asset of attachments) {
-      content += attachmentToken(asset);
-    }
-    sendMessage.mutate(content.trim());
-    setAttachments([]);
+    if ((!draft.trim() && attach.isEmpty) || sendMessage.isPending) return;
+    // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
+    // 于是两边发出来的气泡也长得一样。
+    const fileBlock = textAttachmentBlock(attach.files, t("chatAttached"));
+    let content = draft.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
+    for (const asset of attach.media) content += attachmentToken(asset);
+    sendMessage.mutate([content.trim(), fileBlock].filter(Boolean).join("\n\n"));
+    attach.clear();
   };
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
@@ -525,27 +520,7 @@ export function ChatWorkspace({
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 px-0.5 pb-1">
-                  {attachments.map((asset) => (
-                    <span
-                      className="inline-flex max-w-[240px] items-center gap-[5px] rounded-full border border-border bg-panel-subtle py-[3px] pl-2 pr-1.5 text-[11px]"
-                      key={asset.id}
-                    >
-                      <Paperclip size={10} className="shrink-0 text-muted-foreground" />
-                      <span className="truncate" title={asset.name}>{asset.name}</span>
-                      <button
-                        type="button"
-                        className="grid shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => setAttachments((current) => current.filter((item) => item.id !== asset.id))}
-                        aria-label={t("delete")}
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              <AttachmentChips attachments={attach} className="flex flex-wrap gap-1.5 px-0.5 pb-1" />
               <Textarea
                 rows={2}
                 className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
@@ -556,6 +531,7 @@ export function ChatWorkspace({
                   event.target.style.height = "auto";
                   event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
                 }}
+                onPaste={attach.onPaste}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
@@ -566,19 +542,18 @@ export function ChatWorkspace({
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
                   {switcher}
-                  <Button asChild variant="ghost" size="icon" aria-label={t("attachFile")} disabled={uploadAttachment.isPending}>
+                  <Button asChild variant="ghost" size="icon" aria-label={t("attachFile")} disabled={attach.uploading}>
                     <label>
                       <input
                         type="file"
-                        accept="video/*,audio/*,image/*"
+                        multiple
                         className="hidden"
                         onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) uploadAttachment.mutate(file);
+                          void attach.accept(event.currentTarget.files);
                           event.currentTarget.value = "";
                         }}
                       />
-                      {uploadAttachment.isPending ? <Loader2 size={14} className="animate-openstudio-spin" /> : <Paperclip size={14} />}
+                      {attach.uploading ? <Loader2 size={14} className="animate-openstudio-spin" /> : <Paperclip size={14} />}
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
@@ -610,7 +585,7 @@ export function ChatWorkspace({
                     size="icon"
                     className="shrink-0 rounded-full"
                     aria-label={running ? t("chatSteer") : t("chatSend")}
-                    disabled={(!draft.trim() && attachments.length === 0) || sendMessage.isPending}
+                    disabled={(!draft.trim() && attach.isEmpty) || sendMessage.isPending || attach.uploading}
                   >
                     <Send size={15} />
                   </Button>

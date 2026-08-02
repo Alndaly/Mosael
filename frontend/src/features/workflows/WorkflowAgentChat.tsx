@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+
 import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
@@ -70,41 +72,10 @@ export function WorkflowAgentChat({
   const [draft, setDraft] = React.useState("");
   const [streamText, setStreamText] = React.useState("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
-  const [attachments, setAttachments] = React.useState<{ name: string; content: string }[]>([]);
-  const [media, setMedia] = React.useState<Asset[]>([]);
-  const [uploading, setUploading] = React.useState(false);
+  // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
+  const attach = useComposerAttachments(workspaceId);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
-  const MAX_FILE = 200 * 1024; // 200KB of text
-  // 图片/视频/音频走素材导入(智能体可分析,与对话页一致);文本文件仍内联为上下文(便于按脚本搭流程)。
-  const pickFiles = async (files: FileList | null) => {
-    if (!files) return;
-    const added: { name: string; content: string }[] = [];
-    for (const file of Array.from(files)) {
-      if (/^(image|video|audio)\//.test(file.type)) {
-        setUploading(true);
-        try {
-          const asset = await importAsset({ workspaceId, file });
-          setMedia((cur) => [...cur, asset]);
-        } catch {
-          toast.error(t("wfAgentFileUnreadable").replace("{name}", file.name));
-        } finally {
-          setUploading(false);
-        }
-        continue;
-      }
-      if (file.size > MAX_FILE) {
-        toast.error(t("wfAgentFileTooBig").replace("{name}", file.name));
-        continue;
-      }
-      try {
-        added.push({ name: file.name, content: await file.text() });
-      } catch {
-        toast.error(t("wfAgentFileUnreadable").replace("{name}", file.name));
-      }
-    }
-    if (added.length) setAttachments((cur) => [...cur, ...added]);
-  };
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
   const isFloating = mode === "floating";
@@ -266,7 +237,7 @@ export function WorkflowAgentChat({
       api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
     onSuccess: refreshQueue,
   });
-  const showStop = running && !draft.trim() && attachments.length === 0 && media.length === 0;
+  const showStop = running && !draft.trim() && attach.isEmpty;
   const stopTurn = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
     meta: { silentError: true },
@@ -378,7 +349,7 @@ export function WorkflowAgentChat({
       mediaAssets: Asset[];
     }) => {
       // 文本文件内联为围栏上下文(纯文本智能体可读);图片/视频/音频编码成附件标记,气泡里渲染成缩略图。
-      const fileBlock = files.map((f) => `[${t("wfAgentAttached")} ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n");
+      const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
       let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
       visibleContent = visibleContent.trim();
@@ -407,8 +378,7 @@ export function WorkflowAgentChat({
     },
     onSuccess: ({ targetId }) => {
       setDraft("");
-      setAttachments([]);
-      setMedia([]);
+      attach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
@@ -418,8 +388,8 @@ export function WorkflowAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draft.trim() && attachments.length === 0 && media.length === 0) || send.isPending) return;
-    send.mutate({ text: draft.trim(), files: attachments, mediaAssets: media });
+    if ((!draft.trim() && attach.isEmpty) || send.isPending) return;
+    send.mutate({ text: draft.trim(), files: attach.files, mediaAssets: attach.media });
   };
 
   return (
@@ -625,41 +595,7 @@ export function WorkflowAgentChat({
           </button>
         </div>
       ))}
-      {(attachments.length > 0 || media.length > 0 || uploading) && (
-        <div className="flex flex-wrap gap-1 px-3.5 pt-1">
-          {media.map((asset, i) => (
-            <span key={asset.id} className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={asset.name}>
-              <Paperclip size={11} />
-              <span className="truncate">{asset.name}</span>
-              <button
-                type="button"
-                aria-label={t("close")}
-                onClick={() => setMedia((cur) => cur.filter((_, j) => j !== i))}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-          {attachments.map((file, i) => (
-            <span key={`${file.name}-${i}`} className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] py-0.5 pl-1.5 pr-1 text-[11px] text-foreground [&_button]:inline-flex [&_button]:text-muted-foreground [&_button:hover]:text-foreground" title={file.name}>
-              <Paperclip size={11} />
-              <span className="truncate">{file.name}</span>
-              <button
-                type="button"
-                aria-label={t("close")}
-                onClick={() => setAttachments((cur) => cur.filter((_, j) => j !== i))}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-          {uploading && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-[rgb(255_255_255/0.07)] px-1.5 py-0.5 text-[11px] text-muted-foreground">
-              <Loader2 size={11} className="animate-openstudio-spin" /> {t("wfAgentAttach")}
-            </span>
-          )}
-        </div>
-      )}
+      <AttachmentChips attachments={attach} />
       <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-[20px] border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
@@ -667,7 +603,7 @@ export function WorkflowAgentChat({
           multiple
           hidden
           onChange={(event) => {
-            void pickFiles(event.target.files);
+            void attach.accept(event.target.files);
             event.target.value = "";
           }}
         />
@@ -678,6 +614,7 @@ export function WorkflowAgentChat({
           value={draft}
           placeholder={t("wfAgentPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}
+          onPaste={attach.onPaste}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -722,7 +659,7 @@ export function WorkflowAgentChat({
               size="icon"
               className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attachments.length === 0 && media.length === 0) || send.isPending || uploading}
+              disabled={(!draft.trim() && attach.isEmpty) || send.isPending || attach.uploading}
               onClick={submit}
             >
               <Send size={14} />
