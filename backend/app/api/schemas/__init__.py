@@ -1479,6 +1479,10 @@ class AgentSessionUpdate(BaseModel):
     #: 视频分析方式偏好:auto / native / frames。
     analysis_video_mode: str | None = None
     thinking_level: str | None = None
+    #: 权限模式:manual / auto / bypass。切到 bypass 另需 admin(见路由)。
+    permission_mode: str | None = None
+    #: 「本会话始终允许」的工具名单。整份替换 —— 它就是用户在卡上点出来的那份清单。
+    auto_allow_tools: list[str] | None = None
 
 
 class AgentSessionOut(OrmModel):
@@ -1488,6 +1492,9 @@ class AgentSessionOut(OrmModel):
     title: str
     origin: str
     adapter: str
+    permission_mode: str = "manual"
+    mode_set_by: str | None = None
+    auto_allow_tools: list[str] = []
     provider_profile_id: str | None = None
     model: str | None = None
     analysis_video_mode: str = "auto"
@@ -1610,6 +1617,8 @@ class ConfirmationOut(OrmModel):
     result: dict
     error: str | None
     requested_by: str
+    decision_mode: str = "manual"
+    decided_by: str | None = None
     created_at: datetime
     resolved_at: datetime | None
 

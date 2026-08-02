@@ -58,6 +58,39 @@ def _migrate_tool_confirmations_session() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
 
 
+def _migrate_permission_modes() -> None:
+    """三档权限模式的两组列(agent_sessions 的模式、tool_confirmations 的留痕)。
+
+    老行取默认值就是正确语义:模式 manual(与此前行为一致)、白名单空、历史卡记为 manual —— 它们
+    确实都是人点的,那时还没有自动放行。读取代码里因此不留"有没有这些列"的分支(docs/adr/0006)。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    additions = {
+        "agent_sessions": [
+            ("permission_mode", "ALTER TABLE agent_sessions ADD COLUMN permission_mode VARCHAR(16) NOT NULL DEFAULT 'manual'"),
+            ("mode_set_by", "ALTER TABLE agent_sessions ADD COLUMN mode_set_by VARCHAR(64)"),
+            ("mode_set_at", "ALTER TABLE agent_sessions ADD COLUMN mode_set_at DATETIME"),
+            ("auto_allow_tools", "ALTER TABLE agent_sessions ADD COLUMN auto_allow_tools JSON NOT NULL DEFAULT '[]'"),
+        ],
+        "tool_confirmations": [
+            ("decision_mode", "ALTER TABLE tool_confirmations ADD COLUMN decision_mode VARCHAR(16) NOT NULL DEFAULT 'manual'"),
+            ("decided_by", "ALTER TABLE tool_confirmations ADD COLUMN decided_by VARCHAR(64)"),
+            ("decision_detail", "ALTER TABLE tool_confirmations ADD COLUMN decision_detail JSON"),
+        ],
+    }
+    for table, columns in additions.items():
+        if table not in tables:
+            continue
+        existing = {c["name"] for c in inspector.get_columns(table)}
+        missing = [sql for name, sql in columns if name not in existing]
+        if not missing:
+            continue
+        with engine.begin() as conn:
+            for sql in missing:
+                conn.execute(text(sql))
+
+
 def _migrate_auth_session_expiry() -> None:
     """auth_sessions 新增 kind / expires_at 两列 —— 这张表此前没有过期概念。
 
@@ -467,6 +500,7 @@ def init_db() -> None:
     _migrate_provider_auth()
     _migrate_tool_confirmations_session()
     _migrate_auth_session_expiry()
+    _migrate_permission_modes()
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()

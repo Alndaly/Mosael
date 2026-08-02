@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.ai.agent.host import wait_for_idle_turns
+from app.domain.agent.autopilot import wait_for_idle_autopilot
 from app.core.config import settings
 from app.core.db import Base, engine, init_db
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key, issue_worker_key
@@ -50,6 +51,8 @@ def fresh_client(username: str = "tester") -> TestClient:
     # (inspect 读到的 schema 与实际不符)、或别的测试的消息串进本测试的断言里。
     # 这三种症状都是概率性的,取决于测试顺序与机器速度——正是最难查的那类失败。
     wait_for_idle_turns()
+    # 自动放行的执行线程同理:它在请求返回之后才批准并执行,底下就要 drop_all 了。
+    wait_for_idle_autopilot()
     Base.metadata.drop_all(bind=engine)
     init_db()
     issue_worker_key()

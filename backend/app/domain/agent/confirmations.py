@@ -116,6 +116,9 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     ensure_graph_node_privileges(db, user, _graph_to_persist(db, confirmation.tool, confirmation.payload or {}))
     if confirmation.tool == "run_code":
         ensure_graph_node_privileges(db, user, {"nodes": [{"type": "code"}]})
+    # 记在谁头上。自动放行也有人 —— 这次 turn 是以他的身份跑的,上面三道闸也是按他校验的。
+    # `decision_mode` 不在这里定:默认就是 manual(人点的),自动放行会在派活之前先改掉它。
+    confirmation.decided_by = user.id
     return approve_confirmation(db, confirmation)
 
 

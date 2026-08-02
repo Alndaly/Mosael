@@ -908,6 +908,17 @@ class AgentSession(Base):
     # 视频分析方式偏好:auto(默认,原生优先否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
     # 会话级,聊天里可切,注入系统提示让 analyze_asset 照此传 mode。
     analysis_video_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
+    #: 权限模式:manual(默认)/ auto / bypass。挂在**会话**上 —— 「这次对话里哪一类动作不用问我」
+    #: 是每次对话的选择,和思考档位同类。
+    permission_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    #: 模式是**谁**开的。行动人不是他就退回手动:飞书群聊共用一个会话,群里任何人发消息都跑在
+    #: 同一个会话上 —— 没有这一条,A 开的 bypass 会替 B 做决定。而会话本身不记 owner。
+    mode_set_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 开启时刻。计费卡「连续自动放行几张」从这里起算。
+    mode_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 「本会话始终允许」的工具名。此前是浏览器 localStorage 里的一份自动批准 —— 聊天面板一关
+    #: 组件就卸载,而 turn 还在跑,同一个"授权"的行为取决于某个 React 组件在不在。
+    auto_allow_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     #: 思考档位(off/low/medium/high)。挂在**会话**上而不是模型上:同一个模型有时要深想、
     #: 有时要快答,它是每次对话的选择。off 时 pi 根本不向供应商要思考。
     thinking_level: Mapped[str] = mapped_column(String(10), nullable=False, default="off")
@@ -1026,6 +1037,14 @@ class ToolConfirmation(Base):
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     requested_by: Mapped[str] = mapped_column(String(120), nullable=False, default="external-agent")
+    #: 这张卡是**怎么**过的:manual(人点的)/ session-allow(工具白名单)/ auto / bypass。
+    #: 自动放行必须留痕,而且要能一眼看出是哪一档放的 —— 事后能查是 bypass 唯一可接受的前提。
+    decision_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    #: 记在谁头上。自动放行也有人 —— 那次 turn 是以他的身份跑的,授权闸也是按他校验的。
+    decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 判定依据(档位、计数快照;第 4 期还会放规则命中与判断者的输入与裁决)。
+    #: 判定是 (工具, 参数, 准则) 的纯函数,把输入记下来,事后就能复算"当时为什么放行"。
+    decision_detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

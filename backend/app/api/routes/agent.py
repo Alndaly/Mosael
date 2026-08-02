@@ -25,8 +25,8 @@ from app.api.schemas import (
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
+from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
@@ -175,9 +175,42 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         if body.thinking_level not in ("off", "low", "medium", "high"):
             raise HTTPException(status_code=422, detail="thinking_level 只能是 off/low/medium/high")
         session.thinking_level = body.thinking_level
+    if body.permission_mode is not None:
+        _set_permission_mode(db, user, session, body.permission_mode)
+    if body.auto_allow_tools is not None:
+        # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
+        ensure_workspace_perm(db, user, session.workspace_id, "ai")
+        session.auto_allow_tools = [str(name) for name in body.auto_allow_tools][:40]
+        session.mode_set_by = user.id
+        if session.mode_set_at is None:
+            session.mode_set_at = now()
     db.commit()
     db.refresh(session)
     return session
+
+
+PERMISSION_MODES = ("manual", "auto", "bypass")
+
+
+def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession, mode: str) -> None:
+    """切换这次对话的权限模式。
+
+    - 要 `ai` 权限:它决定的是"智能体能不问就做什么",和能不能用智能体是同一件事的两半。
+    - **bypass 另要 admin**:它等价于「让智能体替我在这台机器上跑代码」,而那本来就是
+      instance-admin 级别的能力(见 core/permissions.ensure_graph_node_privileges)。
+    - **飞书会话不给 bypass**:那是一个群里所有人共用的对话,而 bypass 不该由一个人替一群人开。
+    - 记下**是谁开的**:授权只对做出授权的那个人生效(见 domain/agent/autopilot.decide)。
+    """
+    if mode not in PERMISSION_MODES:
+        raise HTTPException(status_code=422, detail=f"permission_mode 只能是 {'/'.join(PERMISSION_MODES)}")
+    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    if mode == "bypass":
+        if session.origin != "ui":
+            raise HTTPException(status_code=403, detail="共享会话(如飞书)不能开 bypass —— 它不该由一个人替一群人开")
+        ensure_workspace_role(db, user, session.workspace_id, "admin")
+    session.permission_mode = mode
+    session.mode_set_by = user.id
+    session.mode_set_at = now()
 
 
 @router.delete("/agent/sessions/{session_id}", status_code=204)
