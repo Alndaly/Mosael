@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AuthCredentials, AuthOut, PasswordUpdate, RegisterCredentials, UserOut, UserProfileUpdate
 from app.core.config import settings
-from app.core.security import hash_password, new_session_token, verify_password
+from app.core.security import hash_password, mint_login_session, verify_password
 from app.db.models import AuthSession, User, Workspace, WorkspaceMember
 
 router = APIRouter(tags=["auth"])
@@ -141,9 +141,8 @@ def bootstrap(db: DbSession) -> dict:
 
 
 def _create_session(db: DbSession, user: User) -> str:
-    token = new_session_token()
-    db.add(AuthSession(token=token, user_id=user.id))
-    return token
+    # commit=False:注册时用户行和会话行要么一起进库,要么都不进(调用方紧接着 commit)。
+    return mint_login_session(db, user.id, commit=False)
 
 
 def _normalize_username(value: str) -> str:

@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.roles import effective_perms, has_perm, role_at_least
+from app.core.security import renew_if_stale
 from app.core.usage_scope import bind_workspace
-from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, WorkspaceMemberPerm
+from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, WorkspaceMemberPerm, now
 
 """
 Single permission entry point (plan §9.3).
@@ -46,11 +47,18 @@ def get_current_user(
     if not candidate:
         raise HTTPException(status_code=401, detail="Not authenticated")
     session = db.get(AuthSession, candidate)
+    if session is not None and session.expires_at <= now():
+        # 撞见就顺手删掉:过期的行不该在库里等着某次清理。铸造时的批量清理管的是"没人再碰的
+        # 那些",这一条管的是"正好被碰到的那一条"——两者合起来,表不会因为无人重启而涨。
+        db.delete(session)
+        db.commit()
+        session = None
     if session is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     user = db.get(User, session.user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
+    renew_if_stale(db, session)
     return user
 
 

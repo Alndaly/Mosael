@@ -41,12 +41,31 @@ class User(Base):
 
 
 class AuthSession(Base):
+    """一份可以用来调这个 API 的凭据 —— 人登录的,和子进程回连用的,是同一张表、同一种权力。
+
+    **每一行都必须会过期。** 此前没有 `expires_at`,于是"用完删掉"是每个铸造点各自的责任:
+    对话轮次记得删,工具通道忘了(一次调用留一行),OAuth 刷新/查额度/订阅登录也忘了 ——
+    同一个缺陷发作了五次,而漏掉一处不会有任何东西报错。周期由表来保证之后,忘记撤销最多是
+    多活一会儿,不再是留下一把永久钥匙。铸造与清理都在 core/security.py。
+
+    `kind` 区分的是**周期的来源**:登录会话的周期是"这个人还在用这台机器"(活跃即续期),
+    服务令牌的周期是"那次操作要跑多久"(用得再多也不续)。
+    """
+
     __tablename__ = "auth_sessions"
-    __table_args__ = (Index("idx_auth_sessions_user", "user_id"),)
+    __table_args__ = (
+        Index("idx_auth_sessions_user", "user_id"),
+        # 清理按过期时间扫全表;泄漏期攒下的行可能不少,别让它退化成顺序扫描。
+        Index("idx_auth_sessions_expires", "expires_at"),
+    )
 
     token: Mapped[str] = mapped_column(String(80), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    #: login(人)| service(子进程回连)。决定要不要滑动续期。
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    #: 不给默认值:每个铸造点都必须说清这份凭据该活多久,漏了是 IntegrityError 而不是永久有效。
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class OAuthIdentity(Base):

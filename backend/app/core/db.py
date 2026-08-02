@@ -5,12 +5,12 @@ from collections.abc import Generator
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from app.core.config import settings
+from app.core.config import LOGIN_SESSION_TTL, settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,32 @@ def _migrate_tool_confirmations_session() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
+
+
+def _migrate_auth_session_expiry() -> None:
+    """auth_sessions 新增 kind / expires_at 两列 —— 这张表此前没有过期概念。
+
+    老行分不出哪些是真正的登录、哪些是泄漏的服务令牌(工具通道每次调用留一行,OAuth 刷新、
+    查额度、订阅登录也各留一行),所以一律按登录处理,给一个完整周期:**升级不该把任何人踢
+    出去**。它们最迟一个周期后自然消失,而增长从这次起就停了。
+
+    `expires_at` 在模型上是 NOT NULL,但这里补列时必须允许为空 —— SQLite 给已有行加 NOT NULL
+    列要求常量默认值,而"当前时间 + 周期"不是常量。所以先加列、再回填,回填之后不会再有空值。
+    """
+    inspector = inspect(engine)
+    if "auth_sessions" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("auth_sessions")}
+    with engine.begin() as conn:
+        if "kind" not in columns:
+            conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'login'"))
+        if "expires_at" not in columns:
+            conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN expires_at DATETIME"))
+        # 幂等:只填空值。跑第二次时上面两个分支都不进,这句也改不动任何行。
+        horizon = (datetime.now(UTC).replace(tzinfo=None) + LOGIN_SESSION_TTL).isoformat(
+            sep=" ", timespec="seconds"
+        )
+        conn.execute(text("UPDATE auth_sessions SET expires_at = :h WHERE expires_at IS NULL"), {"h": horizon})
 
 
 def _migrate_tts_pip_index() -> None:
@@ -436,6 +462,7 @@ def init_db() -> None:
     _migrate_provider_capabilities()
     _migrate_provider_auth()
     _migrate_tool_confirmations_session()
+    _migrate_auth_session_expiry()
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()

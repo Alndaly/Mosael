@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -256,3 +257,14 @@ def app_version() -> str:
                 return f"{version}-dev"
             break
     return "dev"
+
+
+#: 凭据周期。放在这里(配置这个叶子模块)而不是 core/security:启动迁移要按它回填老行,
+#: 而 security 会用到 db.models —— 让 db 去 import security 就成了 db ⇄ security ⇄ models
+#: 的环(分层棘轮会红)。策略只有一份,两边都从这里取。
+#:
+#: 登录:桌面应用没人主动登出,靠**活跃续期**保持有效,这个数字实际约束的是"多久不用就要重登"。
+LOGIN_SESSION_TTL = timedelta(days=30)
+#: 服务令牌:一次有界操作的凭据(对话轮次上限 600s、设备码登录几分钟、OAuth 刷新一瞬间)。
+#: 半小时足够宽,又把"忘了撤销"的代价从永久压到半小时。
+SERVICE_SESSION_TTL = timedelta(minutes=30)

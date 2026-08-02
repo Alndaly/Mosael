@@ -34,8 +34,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.core.config import settings
-from app.core.security import hash_password, new_session_token
-from app.db.models import AuthSession, OAuthIdentity, User
+from app.core.security import hash_password, mint_login_session
+from app.db.models import OAuthIdentity, User
 
 router = APIRouter(tags=["oauth"])
 
@@ -165,9 +165,7 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
             email=str(claims.get("email") or ""),
             display_name=str(claims.get("name") or ""),
         )
-        token = new_session_token()
-        db.add(AuthSession(token=token, user_id=user.id))
-        db.commit()
+        token = mint_login_session(db, user.id)
         _finish(pending_id, token=token, user={"id": user.id, "username": user.username, "display_name": user.display_name})
     except Exception as exc:  # 把原因带回前端轮询,而不是让用户对着浏览器空页猜
         _finish(pending_id, error=str(exc)[:300])
