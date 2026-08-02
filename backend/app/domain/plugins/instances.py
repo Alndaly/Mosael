@@ -16,8 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
-from app.domain.plugins.manifest import Field, Manifest, render_name
-from app.domain.plugins.packages import PluginDomainError, manifest_of
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.manifest import Field, Manifest, manifest_of, render_name
 
 #: 掩码回显。前端把它原样发回来时表示"这项没改"。
 MASK = "********"
@@ -58,20 +58,6 @@ def create(db: Session, package_id: str, config: dict[str, Any] | None = None, n
     db.refresh(instance)
     _sync_permissions(db, instance, manifest)
     return instance
-
-
-def ensure_default_instance(db: Session, package: PluginPackage) -> PluginInstance | None:
-    """无配置无凭据的包装上就建一个默认实例 —— 那种插件不该逼用户先"新建一个连接"。
-
-    有配置的包不自动建:建之前我们不知道它连的是哪个端点,也就不知道它该叫什么名字,
-    而一个叫「TikHub」却没配平台的空壳只会让人以为它坏了。
-    """
-    manifest = manifest_of(package)
-    if manifest.config or manifest.credentials:
-        return None
-    if db.scalars(select(PluginInstance).where(PluginInstance.package_id == package.id)).first():
-        return None
-    return create(db, package.id, {}, manifest.name)
 
 
 def reconcile_fields(db: Session, instance: PluginInstance, manifest: Manifest) -> None:
@@ -343,7 +329,6 @@ __all__ = [
     "create",
     "credential_values",
     "describe_credentials",
-    "ensure_default_instance",
     "exposed_tools",
     "get",
     "list_permissions",

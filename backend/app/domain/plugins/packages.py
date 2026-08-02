@@ -16,7 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginPackage
-from app.domain.plugins.manifest import Manifest, ManifestError, parse
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.manifest import PATH_KEY, ManifestError, manifest_of, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME, LEGACY_FILENAMES, migrate_directory
 
 logger = logging.getLogger(__name__)
@@ -24,20 +25,6 @@ logger = logging.getLogger(__name__)
 #: 老写法的清单在扫描时被**改写成**新写法(见 migrations.py),所以这里只认规范名。
 #: 兼容负担在升级那一刻付一次,读取代码里不留分支。
 MANIFEST_FILENAMES = (CANONICAL_FILENAME, *LEGACY_FILENAMES)
-
-#: manifest 里插件目录的绝对路径。下划线开头 = 运行时注入,不是作者写的。
-PATH_KEY = "_path"
-
-
-class PluginDomainError(ValueError):
-    pass
-
-
-def manifest_of(package: PluginPackage) -> Manifest:
-    """包记录 → 解析好的 manifest。**别处一律走这里**,不要直接 `.get()` manifest 字典。"""
-    raw = dict(package.manifest or {})
-    return parse(raw, str(raw.get(PATH_KEY) or ""))
-
 
 def scan(db: Session, plugins_dir: Path) -> list[PluginPackage]:
     """扫描插件目录。新包只登记不启用;目录已经不在的包连同它的实例一起清掉。
@@ -66,34 +53,9 @@ def scan(db: Session, plugins_dir: Path) -> list[PluginPackage]:
         scanned.append(package)
     _prune(db, plugins_dir)
     db.commit()
-    # 默认实例要在包提交之后建(外键)。
-    from app.domain.plugins.instances import ensure_default_instance, reconcile_fields
-
     for package in scanned:
         db.refresh(package)
-        ensure_default_instance(db, package)
-        # 作者把某个字段从凭据改成配置(或反过来)时,把用户早就填过的值搬到新位置 ——
-        # 重填是我们的问题,不是他的。
-        manifest = manifest_of(package)
-        for instance in instances_of(db, package.id):
-            reconcile_fields(db, instance, manifest)
-            _seed_capabilities(db, instance, manifest)
     return scanned
-
-
-def _seed_capabilities(db: Session, instance: PluginInstance, manifest: Manifest) -> None:
-    """给还没有开关记录的工具建一条。
-
-    扫描是「我们刚知道这个包有哪些工具」的时刻,所以在这里补 —— 否则进程类插件的开关要等到
-    下一次启用才出现,而已经启用着的实例根本等不到那一次,界面上就一直停在「已开启 0 / 2」。
-    MCP 实例的清单要连上服务才知道,它的补种在 refresh_tools 里。
-    """
-    if manifest.is_mcp:
-        return
-    from app.domain.plugins.instances import seed_capabilities
-
-    names = [str(t["name"]) for t in manifest.declared_tools if t.get("name")]
-    seed_capabilities(db, instance, manifest, names)
 
 
 def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
@@ -177,12 +139,4 @@ def instances_of(db: Session, package_id: str) -> list[PluginInstance]:
     )
 
 
-__all__ = [
-    "MANIFEST_FILENAMES",
-    "PATH_KEY",
-    "PluginDomainError",
-    "instances_of",
-    "manifest_of",
-    "scan",
-    "uninstall",
-]
+__all__ = ["MANIFEST_FILENAMES", "instances_of", "scan", "uninstall"]

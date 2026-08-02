@@ -157,8 +157,8 @@ def _merge_openai_tts_engine() -> None:
     存在于**三处**——tts_config.engine、历史任务的 payload、以及任务结果里记录的"实际用了
     哪个引擎"。只改预设不改这三处,已有配置会在下次合成时找不到档案。
 
-    旧 id 在 REMOTE_ENGINES 里仍保留为只读别名:迁移覆盖不到的在途任务(进程里已经读出
-    payload、还没落库)照样能跑完。
+    迁移在启动时跑完,读取代码里因此**不留旧 id 的别名** —— 那种别名是一笔永久的税
+    (见 docs/adr/0006),而这里三处都改到了,没有第四处会读到旧串。
     """
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

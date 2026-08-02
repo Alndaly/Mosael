@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
+    from app.db.models import PluginPackage
 
 #: 配置项 / 凭据项的键。同时是 `${...}` 占位符的名字,也是进程插件的环境变量名(大写化)。
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -199,6 +202,16 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
     )
 
 
+#: 清单里插件目录的绝对路径。下划线开头 = 运行时注入,不是作者写的。
+PATH_KEY = "_path"
+
+
+def manifest_of(package: "PluginPackage") -> Manifest:
+    """包记录 → 解析好的清单。**别处一律走这里**,不要直接 `.get()` 那个字典。"""
+    raw = dict(package.manifest or {})
+    return parse(raw, str(raw.get(PATH_KEY) or ""))
+
+
 _PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -229,4 +242,15 @@ def render_name(manifest: Manifest, config: dict[str, Any]) -> str:
     return _NAME_FIELD.sub(_sub, template).strip() or manifest.name
 
 
-__all__ = ["Field", "Manifest", "ManifestError", "Runtime", "ToolOverride", "expand", "parse", "render_name"]
+__all__ = [
+    "Field",
+    "Manifest",
+    "ManifestError",
+    "PATH_KEY",
+    "Runtime",
+    "ToolOverride",
+    "expand",
+    "manifest_of",
+    "parse",
+    "render_name",
+]

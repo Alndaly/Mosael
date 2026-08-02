@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from tests.util import fresh_client
 
@@ -105,7 +106,7 @@ def install(*manifests: dict, entry: str = ENV_ENTRY):
         (directory / "open-studio.plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
         (directory / "main.py").write_text(entry, encoding="utf-8")
     with SessionLocal() as db:
-        pkg.scan(db, plugins_root())
+        installer.sync(db, plugins_root())
     return client
 
 
@@ -413,7 +414,7 @@ def test_迁移是幂等的_跑第二次不再改动() -> None:
     path = plugins_root() / "legacy" / "open-studio.plugin.json"
     first = path.read_text(encoding="utf-8")
     with SessionLocal() as db:
-        pkg.scan(db, plugins_root())
+        installer.sync(db, plugins_root())
     assert path.read_text(encoding="utf-8") == first
     assert client is not None
 
@@ -429,7 +430,7 @@ def test_更名前的文件名被改成规范名() -> None:
     (directory / "mibu.plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
     (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
     with SessionLocal() as db:
-        pkg.scan(db, plugins_root())
+        installer.sync(db, plugins_root())
 
     assert (directory / "open-studio.plugin.json").exists()
     assert not (directory / "mibu.plugin.json").exists()
@@ -443,7 +444,7 @@ def test_目录被手动删掉后_扫描顺手清掉那条记录() -> None:
 
     shutil.rmtree(plugins_root() / "keyed")
     with SessionLocal() as db:
-        pkg.scan(db, plugins_root())
+        installer.sync(db, plugins_root())
     assert set(packages(client)) == {"dev.simple"}
 
 
@@ -464,5 +465,5 @@ def test_卸载连目录一起删_否则下次扫描又装回来() -> None:
     assert client.delete("/api/plugins/dev.simple").status_code == 204
     assert not (plugins_root() / "simple").exists()
     with SessionLocal() as db:
-        pkg.scan(db, plugins_root())
+        installer.sync(db, plugins_root())
     assert packages(client) == {}

@@ -30,8 +30,10 @@ from app.core.permissions import ensure_instance_admin
 from app.db.models import PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst
+from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import tools as tools_domain
+from app.domain.plugins.manifest import manifest_of
 
 router = APIRouter(tags=["plugins"])
 
@@ -46,7 +48,7 @@ def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
 def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     ensure_instance_admin(db, user, "edit")
     try:
-        pkg.scan(db, settings.plugins_dir)
+        installer.sync(db, settings.plugins_dir)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _packages(db)
@@ -83,7 +85,7 @@ def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None
 def _packages(db: DbSession) -> list[dict]:
     out: list[dict] = []
     for package in db.scalars(select(PluginPackage).order_by(PluginPackage.name)):
-        manifest = pkg.manifest_of(package)
+        manifest = manifest_of(package)
         out.append(
             {
                 "id": package.id,

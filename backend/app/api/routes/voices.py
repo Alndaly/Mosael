@@ -163,7 +163,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     from app.audio.tts_providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, EdgeTTS, OpenAITTS
     from app.domain.providers import profile_extra
 
-    if engine in {OpenAITTS.id, *OpenAITTS.legacy_ids}:
+    if engine == OpenAITTS.id:
         return [{"value": voice, "label": voice} for voice in OpenAITTS.VOICES]
     if engine == EdgeTTS.id:
         return [{"value": voice, "label": label} for voice, label in EDGE_BUILTIN_VOICES]

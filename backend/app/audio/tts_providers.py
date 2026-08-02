@@ -69,8 +69,6 @@ class OpenAITTS:
     #: 合并成 "openai" 之前这里有三个:openai-tts 与 openai-compatible-tts —— 而后者存在的
     #: 理由只是"要填自定义 endpoint",可 openai 档案本来就有 base_url 字段。
     id = "openai"
-    #: 老 id 只作**读**的别名:迁移会把库里的值改掉,但在途任务的载荷可能还带着旧串。
-    legacy_ids = ("openai-tts", "openai-compatible-tts")
     label = "OpenAI 语音合成(含兼容端点)"
     parallel_safe = True
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
@@ -326,7 +324,6 @@ PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
 #: it is the local reference-driven path and needs a Voice row, not an engine voice id.
 REMOTE_ENGINES = {
     OpenAITTS.id: OpenAITTS,
-    **{legacy: OpenAITTS for legacy in OpenAITTS.legacy_ids},
     VolcanoTTS.id: VolcanoTTS,
     EdgeTTS.id: EdgeTTS,
 }

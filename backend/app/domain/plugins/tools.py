@@ -13,9 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import instances as inst
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
-from app.domain.plugins.packages import PluginDomainError, manifest_of
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 
 

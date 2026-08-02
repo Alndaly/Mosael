@@ -471,15 +471,20 @@ function CapabilityPicker({
             </Button>
           </div>
           {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pluginToolNoMatch")}</p>}
-          {matched.map((tool) => (
-            <ToolRow
-              key={tool.name}
-              instanceId={instanceId}
-              tool={tool}
-              runnable={!blocked && tool.exposed}
-              onToggle={(exposed) => onToggle({ [tool.name]: exposed })}
-            />
-          ))}
+          {/* 列表自己封顶滚动,不把整页撑长:四十个工具铺开之后,下面的「调用记录」和别的
+              连接就被顶到几屏之外 —— 而那些是同一张卡片上的东西,不该因为这一段而找不到。
+              留 -mx-1 px-1 是给行的焦点环留位置,否则贴着滚动容器边会被裁掉。 */}
+          <div className="-mx-1 grid max-h-[420px] gap-1.5 overflow-y-auto px-1">
+            {matched.map((tool) => (
+              <ToolRow
+                key={tool.name}
+                instanceId={instanceId}
+                tool={tool}
+                runnable={!blocked && tool.exposed}
+                onToggle={(exposed) => onToggle({ [tool.name]: exposed })}
+              />
+            ))}
+          </div>
         </>
       )}
     </SettingsBlock>
