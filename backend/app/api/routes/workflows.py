@@ -223,6 +223,8 @@ def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: 
             instruction=body.instruction,
             graph=body.graph if body.graph is not None else workflow.graph,
             profile_id=body.profile_id,
+            workspace_id=workflow.workspace_id,
+            workflow_id=workflow.id,
         )
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

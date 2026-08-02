@@ -11,10 +11,10 @@ subtitle translation.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 
-from app.domain import provider_models
 import httpx
+
+from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
@@ -46,18 +46,7 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-@dataclass(frozen=True)
-class AiProvider:
-    """A provider resolved out of the DB, so the network calls that use it can run on other
-    threads. Passing the Session itself would not be safe — a SQLAlchemy Session belongs to one
-    thread, and a lazy attribute load from a worker is a race."""
-
-    base_url: str
-    api_key: str
-    model: str
-
-
-def resolve_ai_provider(db, profile_id: str | None = None) -> AiProvider:
+def resolve_ai_provider(db, profile_id: str | None = None) -> ChatTarget:
     from sqlalchemy import select
 
     from app.db.models import ProviderProfile
@@ -71,11 +60,10 @@ def resolve_ai_provider(db, profile_id: str | None = None) -> AiProvider:
         ).first()
     if profile is None or not profile.enabled:
         raise TranslateError("没有可用的 AI 供应商,请先在设置里添加")
-    return AiProvider(
-        base_url=profile.base_url,
-        api_key=profile.api_key,
-        model=provider_models.model_id_for(db, profile, "chat"),
-    )
+    try:
+        return target_for(db, profile)
+    except AiChatError as exc:
+        raise TranslateError(str(exc)) from exc
 
 
 def ai_translate(db, text: str, target: str, profile_id: str | None = None) -> str:
@@ -85,7 +73,7 @@ def ai_translate(db, text: str, target: str, profile_id: str | None = None) -> s
     return ai_translate_with(resolve_ai_provider(db, profile_id), text, target)
 
 
-def ai_translate_with(provider: AiProvider, text: str, target: str, client: httpx.Client | None = None) -> str:
+def ai_translate_with(provider: ChatTarget, text: str, target: str, client: httpx.Client | None = None) -> str:
     if not text.strip():
         return ""
     prompt = (
@@ -93,16 +81,16 @@ def ai_translate_with(provider: AiProvider, text: str, target: str, client: http
         f"Output only the translation, no explanations or quotes.\n\n{text}"
     )
     try:
-        response = (client or httpx).post(
-            f"{provider.base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {provider.api_key}"},
-            json={"model": provider.model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2},
+        return chat(
+            provider,
+            [{"role": "user", "content": prompt}],
+            temperature=0.2,
             timeout=_TIMEOUT * 2,
-        )
-        response.raise_for_status()
-        return str(response.json()["choices"][0]["message"]["content"]).strip()
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        raise TranslateError(f"AI 翻译失败: {exc}") from exc
+            client=client,
+            label="AI 翻译",
+        ).strip()
+    except AiChatError as exc:
+        raise TranslateError(str(exc)) from exc
 
 
 def translate(db, text: str, target: str, engine: str = "google", profile_id: str | None = None) -> str:

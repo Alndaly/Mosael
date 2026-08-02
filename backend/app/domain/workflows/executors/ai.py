@@ -5,12 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
-from app.domain import provider_models
 from app.db.models import Workflow
-from app.domain.ai_retry import RetryingClient
+from app.domain.ai_chat import AiChatError, UsageContext, chat, target_for
 from app.domain.providers import require_profile
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -136,49 +134,6 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
     return payload
 
 
-def _post_with_retry(
-    base_url: str, api_key: str, payload: dict[str, Any], model: str, max_retries: int
-) -> httpx.Response:
-    """chat/completions 调用。重试本身交给 RetryingClient —— 这里只负责把失败翻译成
-    工作流能显示的一句话。
-
-    退避与「哪些状态值得重试」原本在这里单独实现了一份,而生图/生视频/语音/向量化一次都
-    不重试;现在同一套逻辑在传输层,这几类调用一起覆盖到,也不会再出现「改了这边忘了那边」。"""
-    try:
-        with RetryingClient(max_retries=max_retries, timeout=LLM_TIMEOUT_SECONDS) as client:
-            response = client.post(
-                f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json=payload,
-            )
-        response.raise_for_status()
-        return response
-    except httpx.HTTPStatusError as exc:
-        raise WorkflowDomainError(_provider_error(exc.response, model)) from exc
-    except httpx.RequestError as exc:
-        suffix = f",已重试 {max_retries} 次仍失败" if max_retries > 0 else ""
-        raise WorkflowDomainError(f"调用 LLM 失败(网络/连接{suffix}):{exc}") from exc
-
-
-def _provider_error(response: httpx.Response, model: str) -> str:
-    """把供应商的 4xx/5xx 响应体提炼成人看得懂的一行——否则只剩个裸状态码,查不出根因。"""
-    detail = response.text.strip()
-    try:
-        body = response.json()
-    except (ValueError, json.JSONDecodeError):
-        body = None
-    if isinstance(body, dict):
-        err = body.get("error")
-        if isinstance(err, dict) and err.get("message"):
-            detail = str(err["message"])
-        elif isinstance(err, str) and err:
-            detail = err
-        elif body.get("message"):
-            detail = str(body["message"])
-    detail = " ".join(detail.split())[:500] or "(无错误详情)"
-    return f"LLM 供应商返回 {response.status_code}(模型 {model}):{detail}"
-
-
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     profile = require_profile(db, config.get("profile_id"), error=WorkflowDomainError)
@@ -190,12 +145,24 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     if not prompt.strip():
         raise WorkflowDomainError("LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。")
     messages.append({"role": "user", "content": prompt})
-    base_url = profile.base_url.rstrip("/")
-    model = str(config.get("model") or provider_models.model_id_for(db, profile, "chat"))
-    response = _post_with_retry(
-        base_url, profile.api_key, _request_payload(config, model, messages), model, configured_max_retries(db)
-    )
-    text = str(response.json()["choices"][0]["message"]["content"]).strip()
+    try:
+        target = target_for(db, profile, model=str(config.get("model") or ""))
+        payload = _request_payload(config, target.model, messages)
+        text = chat(
+            target,
+            messages,
+            temperature=float(payload.pop("temperature", 0.4)),
+            timeout=LLM_TIMEOUT_SECONDS,
+            extra=payload,
+            max_retries=configured_max_retries(db),
+            usage=UsageContext(
+                db=db, workspace_id=workflow.workspace_id, operation="workflow_llm",
+                source_type="workflow", source_id=workflow.id,
+            ),
+            label="调用 LLM",
+        ).strip()
+    except AiChatError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
     result: dict[str, Any] = {"text": text}
     if str(config.get("response_format") or "text") in {"json_object", "json_schema"}:
         try:

@@ -10,14 +10,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx
 
-from app.domain import provider_models
-from app.domain import ai_retry
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderProfile
+from app.domain.ai_chat import AiChatError, ChatTarget, UsageContext, chat, target_for
 from app.domain.providers import require_profile
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
@@ -40,9 +36,25 @@ _SYSTEM = """你是 Open Studio 视频创作工作台的工作流编辑器。工
 
 
 def ai_edit_graph(
-    db: Session, *, instruction: str, graph: dict[str, Any], profile_id: str | None = None
+    db: Session,
+    *,
+    instruction: str,
+    graph: dict[str, Any],
+    profile_id: str | None = None,
+    workspace_id: str = "",
+    workflow_id: str = "",
 ) -> tuple[dict[str, Any], str]:
     profile = require_profile(db, profile_id, error=WorkflowDomainError)
+    try:
+        target = target_for(db, profile)
+    except AiChatError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    usage = (
+        UsageContext(db=db, workspace_id=workspace_id, operation="workflow_ai_edit",
+                     source_type="workflow", source_id=workflow_id)
+        if workspace_id
+        else None
+    )
     registry = json.dumps(
         {key: {"label": meta["label"], "config": meta["config"], "outputs": meta["outputs"]} for key, meta in NODE_TYPES.items()},
         ensure_ascii=False,
@@ -53,7 +65,7 @@ def ai_edit_graph(
     last_error = ""
     for _attempt in range(2):
         prompt = user if not last_error else f"{user}\n\n你上次的输出未通过校验:{last_error}\n请修正后重新输出。"
-        raw = _chat(profile, system, prompt)
+        raw = _chat(target, system, prompt, usage)
         try:
             payload = _parse_json(raw)
             new_graph = payload["graph"]
@@ -81,18 +93,16 @@ def _parse_json(raw: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
-def _chat(profile: ProviderProfile, system: str, user: str) -> str:
-    base_url = profile.base_url.rstrip("/")
-    response = ai_retry.post(
-        f"{base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {profile.api_key}"},
-        json={
-            "model": provider_models.model_id_for(db, profile, "chat"),
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "temperature": 0.1,
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    return str(response.json()["choices"][0]["message"]["content"])
+def _chat(target: ChatTarget, system: str, user: str, usage: UsageContext | None = None) -> str:
+    try:
+        return chat(
+            target,
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.1,
+            timeout=TIMEOUT_SECONDS,
+            usage=usage,
+            label="AI 编排",
+        )
+    except AiChatError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
 

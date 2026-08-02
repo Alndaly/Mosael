@@ -24,8 +24,9 @@ def _install_llm_transport(monkeypatch, module, handler) -> None:
         kwargs["transport"] = transport
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(module, "RetryingClient", patched)
-
+    # 只打 ai_retry 一处:LLM 节点现在经 domain/ai_chat 走 ai_retry.post,而 RetryingClient
+    # 是在 ai_retry 自己的命名空间里 new 的。(module 参数保留只为不改各调用点的写法。)
+    monkeypatch.setattr(ai_retry, "RetryingClient", patched)
 
 
 def linear_graph() -> dict:
@@ -1048,3 +1049,47 @@ def test_节点清单按分组顺序返回_前端不再排第二次() -> None:
         if item["category"] not in seen:
             seen.append(item["category"])
     assert seen == [c for c in NODE_CATEGORIES if c in seen]
+
+
+def test_llm_节点会把用量记进账(monkeypatch) -> None:
+    """首页那张 Token 图和成本统计读的是 provider_usage_events。
+
+    对话类调用以前一条都不记 —— 图上少的那部分不会有任何提示,看上去只是"这个月用得少"。
+    统一走 domain/ai_chat 之后,给得出工作区的调用点都会记一条。
+    """
+    from app.db.models import ProviderUsageEvent
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "hi"}}],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
+            },
+        ),
+    )
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://api.test", api_key="sk", model="m"
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        assert ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})["text"] == "hi"
+        db.commit()
+
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter_by(workspace_id=workspace_id).all()
+        assert len(events) == 1, "工作流 LLM 节点没有记用量"
+        event = events[0]
+        assert event.capability == "chat"
+        assert event.operation == "workflow_llm"
+        assert event.units["input_tokens"] == 11
+        assert event.units["output_tokens"] == 7

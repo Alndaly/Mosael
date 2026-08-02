@@ -9,12 +9,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain import provider_models
-from app.db.models import Asset, ProviderProfile, Transcript
+from app.db.models import Asset, Transcript
+from app.domain.ai_chat import AiChatError, ChatTarget, UsageContext, chat, target_for
 from app.domain.providers import require_profile
 from app.domain.publish import PublishDomainError
 
@@ -47,11 +46,18 @@ def generate_copy(
     if not parts:
         raise PublishDomainError("需要提供 brief 或素材")
     user = "\n\n".join(parts)
+    try:
+        target = target_for(db, profile)
+    except AiChatError as exc:
+        raise PublishDomainError(str(exc)) from exc
+    usage = UsageContext(
+        db=db, workspace_id=workspace_id, operation="publish_copy", source_type="asset", source_id=asset_id or ""
+    )
 
     last_error = ""
     for _attempt in range(2):
         prompt = user if not last_error else f"{user}\n\n上次输出无法解析:{last_error}\n请重新只输出 JSON。"
-        raw = _chat(profile, prompt)
+        raw = _chat(target, prompt, usage)
         try:
             payload = _parse_json(raw)
             return {
@@ -73,17 +79,16 @@ def _parse_json(raw: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
-def _chat(profile: ProviderProfile, user: str) -> str:
-    response = httpx.post(
-        f"{profile.base_url.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {profile.api_key}"},
-        json={
-            "model": provider_models.model_id_for(db, profile, "chat"),
-            "messages": [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
-            "temperature": 0.7,
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    return str(response.json()["choices"][0]["message"]["content"])
+def _chat(target: ChatTarget, user: str, usage: UsageContext) -> str:
+    try:
+        return chat(
+            target,
+            [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
+            temperature=0.7,
+            timeout=TIMEOUT_SECONDS,
+            usage=usage,
+            label="AI 文案生成",
+        )
+    except AiChatError as exc:
+        raise PublishDomainError(str(exc)) from exc
 

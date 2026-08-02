@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from app.domain.generation.prompt_optimizer import _auth_headers, guide_for
+from app.domain.ai_chat import _auth_headers
+from app.domain.generation.prompt_optimizer import guide_for
 
 
 def test_empty_api_key_sends_no_auth_header() -> None:
-    # An empty key must NOT become "Bearer " — httpx rejects that as an illegal header value.
+    # 空密钥不能变成 "Bearer "(尾随空格)—— httpx 判定为非法头值直接抛,而报错内容和鉴权
+    # 毫无关系。这条以前只护着提示词优化一处;现在它在 ai_chat 里,所有对话调用一起覆盖。
     assert _auth_headers("") == {}
     assert _auth_headers("sk-abc") == {"Authorization": "Bearer sk-abc"}
 

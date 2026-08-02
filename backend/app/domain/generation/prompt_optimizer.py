@@ -17,9 +17,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-import httpx
 
-from app.domain import ai_retry
+from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
@@ -142,34 +141,19 @@ def _build_system_prompt(guide: PlatformGuide, ui_language: str) -> str:
     )
 
 
-def _auth_headers(api_key: str) -> dict[str, str]:
-    """空密钥(本地 / 无鉴权端点)不发 Authorization —— 否则 'Bearer ' 是非法头值,httpx 直接抛。"""
-    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
-
-
-def _chat_json(profile, model: str, system: str, user: str) -> dict:
-    """一次 chat/completions 调用,强制 JSON 输出,解析为 dict。"""
+def _chat_json(target: ChatTarget, system: str, user: str) -> dict:
+    """一次对话调用,强制 JSON 输出,解析为 dict。"""
     try:
-        response = ai_retry.post(
-            f"{profile.base_url.rstrip('/')}/chat/completions",
-            headers=_auth_headers(profile.api_key or ""),
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                "temperature": 0.7,
-                "response_format": {"type": "json_object"},
-            },
+        text = chat(
+            target,
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.7,
             timeout=_LLM_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise PromptOptimizeError(f"提示词优化 LLM 返回 {exc.response.status_code}") from exc
-    except httpx.RequestError as exc:
-        raise PromptOptimizeError(f"提示词优化调用失败(网络):{exc}") from exc
-    text = str(response.json()["choices"][0]["message"]["content"]).strip()
+            json_object=True,
+            label="提示词优化",
+        ).strip()
+    except AiChatError as exc:
+        raise PromptOptimizeError(str(exc)) from exc
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -208,7 +192,11 @@ def optimize_image_prompt(
         chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:
         raise PromptOptimizeError("未配置对话模型,请在设置里为「对话」选择供应商与模型")
-    data = _chat_json(chat_profile, chat_model, _build_system_prompt(guide, ui_language), raw_prompt.strip())
+    try:
+        target = target_for(db, chat_profile, model=chat_model)
+    except AiChatError as exc:
+        raise PromptOptimizeError(str(exc)) from exc
+    data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip())
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:
         raise PromptOptimizeError("优化结果为空")

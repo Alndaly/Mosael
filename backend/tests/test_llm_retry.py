@@ -15,10 +15,14 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import AiRuntimeConfig
-from app.domain.workflows import WorkflowDomainError
+from app.domain.ai_chat import AiChatError, ChatTarget, chat
 from app.domain import ai_retry
 from app.domain.workflows.executors import ai
 from tests.util import fresh_client
+
+
+def _target() -> ChatTarget:
+    return ChatTarget(base_url="https://provider.test", api_key="key", model="m")
 
 
 def _req() -> httpx.Request:
@@ -43,7 +47,8 @@ def _install(monkeypatch, handler) -> None:
         kwargs["transport"] = transport
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(ai, "RetryingClient", patched)
+    # 只打 ai_retry 一处就够:LLM 节点现在经 domain/ai_chat 走 ai_retry.post,
+    # 而 ai_retry.post 是在自己的模块命名空间里 new 的 RetryingClient。
     monkeypatch.setattr(ai_retry, "RetryingClient", patched)
 
 
@@ -57,9 +62,9 @@ def test_transient_disconnect_then_succeeds(monkeypatch):
         return _ok()
 
     _install(monkeypatch, handler)
-    resp = ai._post_with_retry("https://provider.test", "key", {"model": "m"}, "m", max_retries=3)
+    text = chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3)
     assert calls["n"] == 3  # 前 2 次瞬断,第 3 次成功(在 3 重试=4 次尝试的额度内)
-    assert resp.json()["choices"][0]["message"]["content"] == "ok"
+    assert text == "ok"
 
 
 def test_gives_up_after_max_retries(monkeypatch):
@@ -70,8 +75,8 @@ def test_gives_up_after_max_retries(monkeypatch):
         raise httpx.ConnectError("boom", request=_req())
 
     _install(monkeypatch, handler)
-    with pytest.raises(WorkflowDomainError) as ei:
-        ai._post_with_retry("https://provider.test", "key", {"model": "m"}, "m", max_retries=3)
+    with pytest.raises(AiChatError) as ei:
+        chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3)
     assert calls["n"] == 4  # 首次 + 3 次重试
     assert "网络/连接" in str(ei.value) and "重试 3 次" in str(ei.value)
 
@@ -84,8 +89,8 @@ def test_zero_retries_fails_immediately(monkeypatch):
         raise httpx.ConnectError("boom", request=_req())
 
     _install(monkeypatch, handler)
-    with pytest.raises(WorkflowDomainError) as ei:
-        ai._post_with_retry("https://provider.test", "key", {"model": "m"}, "m", max_retries=0)
+    with pytest.raises(AiChatError) as ei:
+        chat(_target(), [{"role": "user", "content": "hi"}], max_retries=0)
     assert calls["n"] == 1  # 关掉重试就只尝试一次
     assert "重试" not in str(ei.value)  # 不显示「已重试 N 次」
 
@@ -98,8 +103,8 @@ def test_4xx_not_retried(monkeypatch):
         return httpx.Response(400, request=_req(), json={"error": {"message": "bad request"}})
 
     _install(monkeypatch, handler)
-    with pytest.raises(WorkflowDomainError) as ei:
-        ai._post_with_retry("https://provider.test", "key", {"model": "m"}, "m", max_retries=3)
+    with pytest.raises(AiChatError) as ei:
+        chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3)
     assert calls["n"] == 1  # 4xx 是请求本身的问题,立即失败不重试
     assert "400" in str(ei.value)
 
@@ -114,9 +119,8 @@ def test_5xx_retried_then_succeeds(monkeypatch):
         return _ok()
 
     _install(monkeypatch, handler)
-    resp = ai._post_with_retry("https://provider.test", "key", {"model": "m"}, "m", max_retries=3)
+    assert chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3) == "ok"
     assert calls["n"] == 2
-    assert resp.status_code == 200
 
 
 def test_configured_max_retries_reads_setting_and_clamps():
@@ -149,6 +153,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     都会让这条红。"""
     import importlib
 
+    from app.domain import ai_chat
     from app.domain.ai_retry import RetryingClient
 
     modules = [
@@ -171,7 +176,9 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         module = importlib.import_module(name)
         uses_client = getattr(module, "RetryingClient", None) is RetryingClient
         uses_helpers = getattr(module, "ai_retry", None) is not None
-        if not (uses_client or uses_helpers):
+        # 对话类调用统一经 domain/ai_chat,而 ai_chat 自己走 ai_retry —— 也算接上了。
+        uses_chat = getattr(module, "chat", None) is ai_chat.chat
+        if not (uses_client or uses_helpers or uses_chat):
             missing.append(name)
     assert missing == [], f"这些模块绕过了统一重试:{missing}"
 

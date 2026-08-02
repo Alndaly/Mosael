@@ -13,7 +13,8 @@ import httpx
 from sqlalchemy.orm import object_session
 
 from app.domain import provider_models
-from app.domain import ai_retry
+from app.domain import ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
+from app.domain.ai_chat import AiChatError, chat, target_for
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -157,22 +158,20 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
 
 
 def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) -> str:
-    base_url = profile.base_url.rstrip("/")
     # 叶子函数只拿得到 ORM 对象;它必然挂在调用方的会话上,object_session 正为此而设 ——
     # 比为一个模型名把 db 串进三层签名干净。
-    model = provider_models.model_id_for(object_session(profile), profile, "chat") or "gpt-4o-mini"
+    session = object_session(profile)
+    model = provider_models.model_id_for(session, profile, "chat") or "gpt-4o-mini"
     try:
-        response = ai_retry.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {profile.api_key}"},
-            json={"model": model, "messages": messages, "temperature": 0.2},
+        return chat(
+            target_for(session, profile, model=model),
+            messages,
+            temperature=0.2,
             timeout=REQUEST_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        return str(payload["choices"][0]["message"]["content"]).strip()
-    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        raise AnalysisError(sanitize_provider_error(f"分析请求失败: {exc}", profile.api_key)) from exc
+            label="分析请求",
+        ).strip()
+    except AiChatError as exc:
+        raise AnalysisError(str(exc)) from exc
 
 
 def _prompt_text(asset: Asset, question: str, transcript: str | None) -> str:

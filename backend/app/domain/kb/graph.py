@@ -7,11 +7,10 @@ import re
 import threading
 from typing import Any
 
-import httpx
 from sqlalchemy.orm import Session
 
-from app.domain import provider_models
 from app.core.config import settings
+from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.providers import resolve_profile
 
 """
@@ -64,24 +63,27 @@ def _entity_profile(db: Session):
     chunk that the per-chunk version was doing."""
     vendor = settings.kb_embedding_vendor  # 复用同一供应商配置做轻量抽取
     profile = resolve_profile(db, vendor) if vendor else None
-    return profile if profile is not None and provider_models.model_id_for(db, profile, "chat") else None
-
-
-def _extract_with(profile, text: str) -> list[dict[str, str]]:
-    """The network half — no Session, so it is safe to run on a worker thread."""
+    if profile is None:
+        return None
     try:
-        response = httpx.post(
-            f"{profile.base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {profile.api_key}"},
-            json={
-                "model": provider_models.model_id_for(object_session(profile), profile, "chat"),
-                "messages": [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
-                "temperature": 0,
-            },
+        return target_for(db, profile)
+    except AiChatError:
+        return None  # 这条连接下没有对话模型 —— 抽取是增强项,静默跳过而不是让入库失败
+
+
+def _extract_with(target: ChatTarget, text: str) -> list[dict[str, str]]:
+    """The network half — no Session, so it is safe to run on a worker thread.
+
+    从前这句话是不成立的:函数体里调了 object_session(profile) 去解析模型名,那正是在工作
+    线程上碰 Session。现在模型名在 _entity_profile 里(调用线程)就解析进 ChatTarget 了。"""
+    try:
+        content = chat(
+            target,
+            [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
+            temperature=0,
             timeout=180,  # 本地模型冷启动加载可能超过 60s
+            label="图谱实体抽取",
         )
-        response.raise_for_status()
-        content = str(response.json()["choices"][0]["message"]["content"])
         match = re.search(r"\[.*\]", content, re.DOTALL)
         if not match:
             return []
