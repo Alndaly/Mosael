@@ -242,13 +242,14 @@ function FieldInput({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useI18n();
   if (field.type === "enum") {
     return (
       <SearchableSelect
         className="w-[180px]"
         value={value}
         onValueChange={onChange}
-        placeholder={field.label}
+        placeholder={t("pluginPickField").replace("{label}", field.label)}
         options={(field.options as { value: string; label: string }[]).map((option) => ({
           value: option.value,
           label: option.label,
@@ -473,8 +474,12 @@ function CapabilityPicker({
           {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pluginToolNoMatch")}</p>}
           {/* 列表自己封顶滚动,不把整页撑长:四十个工具铺开之后,下面的「调用记录」和别的
               连接就被顶到几屏之外 —— 而那些是同一张卡片上的东西,不该因为这一段而找不到。
-              留 -mx-1 px-1 是给行的焦点环留位置,否则贴着滚动容器边会被裁掉。 */}
-          <div className="-mx-1 grid max-h-[420px] gap-1.5 overflow-y-auto px-1">
+              留 -mx-1 px-1 是给行的焦点环留位置,否则贴着滚动容器边会被裁掉。
+
+              **content-start + auto-rows-min 不能少**:行的根节点带 overflow-hidden,而带
+              overflow 的网格项自动最小尺寸失效(min-height:auto 只对 overflow:visible 生效)。
+              少了这两个类,41 行会被压进 420px —— 每行成为一条 4px 的横线,里面什么都看不见。 */}
+          <div className="-mx-1 grid max-h-[420px] auto-rows-min content-start gap-1.5 overflow-y-auto px-1">
             {matched.map((tool) => (
               <ToolRow
                 key={tool.name}

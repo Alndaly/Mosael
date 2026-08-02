@@ -95,8 +95,12 @@ export function SearchableSelect({
               className,
             )}
           >
-            {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。 */}
-            <span className="min-w-0 truncate">{selected?.label ?? placeholder ?? ""}</span>
+            {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
+                未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
+                写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
+            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
+              {selected?.label ?? placeholder ?? ""}
+            </span>
             <ChevronDown size={14} className="shrink-0 opacity-50" />
           </button>
         )}
