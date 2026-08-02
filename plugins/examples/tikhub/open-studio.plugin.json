@@ -1,63 +1,34 @@
 {
   "id": "dev.openstudio.tikhub",
-  "name": "TikHub 自媒体数据",
-  "version": "0.1.0",
-  "entry": "tools/main.py",
-  "permissions": [
-    "network:tikhub"
-  ],
+  "name": "TikHub 抖音数据",
+  "version": "0.2.0",
+  "kind": "mcp",
+  "mcp": {
+    "transport": "http",
+    "url": "https://mcp.tikhub.io/${TIKHUB_PLATFORM}/mcp",
+    "headers": { "Authorization": "Bearer ${TIKHUB_API_KEY}" }
+  },
+  "permissions": ["network:tikhub"],
   "credentials": [
     {
       "key": "TIKHUB_API_KEY",
       "label": "TikHub API Key",
-      "help": "在 https://user.tikhub.io 生成。只注入这个插件的进程。",
+      "help": "在 https://user.tikhub.io 生成。只注入这个插件,拿不到应用的其它凭据。",
       "secret": true,
       "required": true
     },
     {
-      "key": "TIKHUB_BASE_URL",
-      "label": "接口地址",
-      "help": "留空用 https://api.tikhub.io;中国大陆网络可填 https://api.tikhub.dev。",
+      "key": "TIKHUB_PLATFORM",
+      "label": "平台",
+      "help": "douyin / tiktok / xiaohongshu / bilibili / kuaishou / weibo / zhihu …(见 README)。改这一项等于换一个 MCP 端点,改完点「刷新工具」。",
       "secret": false,
-      "required": false
+      "required": true
     }
   ],
   "skills": [
     {
       "id": "tikhub",
-      "description": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据(作品详情、作者作品列表、搜索、热榜)。用于选题调研、对标账号分析、找素材灵感。需要 TikHub 的 API Key。"
-    }
-  ],
-  "tools": [
-    {
-      "name": "tikhub_fetch",
-      "description": "调用 TikHub 的任意只读接口。path 取自 TikHub 文档(https://docs.tikhub.io,完整端点见 https://api.tikhub.io 的 Swagger),例如 /api/v1/douyin/web/fetch_one_video。params 是该端点的查询参数。返回原始 JSON。",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "接口路径,以 / 开头。只允许 GET 类只读接口。"
-          },
-          "params": {
-            "type": "object",
-            "description": "查询参数,键值对。"
-          }
-        },
-        "required": [
-          "path"
-        ]
-      },
-      "read_only": true
-    },
-    {
-      "name": "tikhub_quota",
-      "description": "查询当前 API Key 的剩余额度与账户状态。配好没配好、还剩多少,一次就看得到。",
-      "input_schema": {
-        "type": "object",
-        "properties": {}
-      },
-      "read_only": true
+      "description": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。"
     }
   ]
 }

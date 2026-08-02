@@ -153,7 +153,7 @@ def refresh_plugin_tools(db: Session, plugin_id: str) -> Plugin:
     except McpBridgeError as exc:
         raise PluginDomainError(str(exc)) from exc
     # manifest 是 JSON 列,原地改字典 SQLAlchemy 看不见,必须整份换掉。
-    plugin.manifest = {**plugin.manifest, DISCOVERED_TOOLS_KEY: tools}
+    plugin.manifest = {**plugin.manifest, DISCOVERED_TOOLS_KEY: _apply_tool_overrides(plugin.manifest, tools)}
     db.commit()
     db.refresh(plugin)
     return plugin
@@ -305,21 +305,30 @@ def _required_string(manifest: dict[str, Any], key: str, path: Path) -> str:
     return value.strip()
 
 
+def _apply_tool_overrides(manifest: dict[str, Any], discovered: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """把 manifest 里的 `tools` 套到从 server 拉回来的清单上,结果就是这个插件的**有效工具**。
+
+    manifest 的 tools 对 MCP 插件是**白名单 + 覆盖层**,不是第二份清单:
+
+    - **白名单**。TikHub 这类服务一个端点就报几十个工具;全塞进智能体的工具表会挤掉内置能力,
+      而且每一轮对话都要为那几十条描述付 token。声明了就只出这几个,没声明就全出。
+    - **覆盖层**,而且只认 `read_only`:server 报的工具默认不算只读(子智能体因此拿不到),
+      要放开得由装这个插件的人明说 —— 那是一个人类判断,不该由被接入的一方自己声称。
+
+    只认 read_only、不让 manifest 顺手改 description / input_schema:那样就又造出一份会随
+    server 升级而烂掉的手抄清单,而"清单从 server 现拉"正是为了躲开这件事。
+
+    在**发现时**就套好、把结果存下来,而不是每次读取时再算一遍 —— 插件页、工作流下拉、
+    智能体工具表读的是同一份东西,少一处忘了过滤就会露出一个点了会报"工具不存在"的条目。
+    """
+    overrides = {tool["name"]: tool for tool in _tool_entries(manifest.get("tools"))}
+    allowed = [tool for tool in discovered if tool["name"] in overrides] if overrides else discovered
+    return [{**tool, "read_only": overrides.get(tool["name"], {}).get("read_only") is True} for tool in allowed]
+
+
 def _manifest_tools(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    if not is_mcp(manifest):
-        return _tool_entries(manifest.get("tools"))
-    # MCP 插件的清单来自 server 本身。manifest 文件里的 tools 不是第二份清单,而是**按名字的
-    # 覆盖层** —— 目前唯一有意义的覆盖是 read_only:server 报的工具默认不算只读(子智能体因此
-    # 拿不到),要放开得由装这个插件的人明说,那是一个人类判断,不该由被接入的一方自己声称。
-    # 只认 read_only 这一个键:让 manifest 顺手覆盖 description / input_schema,等于又造出一份
-    # 会随 server 升级而烂掉的手抄清单,而这正是"清单从 server 现拉"要避免的东西。
-    read_only = {
-        tool["name"] for tool in _tool_entries(manifest.get("tools")) if tool.get("read_only") is True
-    }
-    return [
-        {**tool, "read_only": tool["name"] in read_only}
-        for tool in _tool_entries(manifest.get(DISCOVERED_TOOLS_KEY))
-    ]
+    # MCP 插件的有效清单在发现时就算好了(见 _apply_tool_overrides);进程类插件写在 manifest 里。
+    return _tool_entries(manifest.get(DISCOVERED_TOOLS_KEY if is_mcp(manifest) else "tools"))
 
 
 def _tool_entries(raw: Any) -> list[dict[str, Any]]:

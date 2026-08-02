@@ -286,6 +286,27 @@ def test_mcp_插件的只读由装它的人决定_不由_server_自称() -> None
     assert specs["plugin__dev_mcp__whoami"]["read_only"] is True
 
 
+def test_manifest_的_tools_对_mcp_插件是白名单() -> None:
+    """一个 MCP 端点报几十个工具是常态(TikHub 一个平台就上百个)。全塞进智能体的工具表会
+    挤掉内置能力,而且每一轮对话都要为那几十条描述付 token。声明了就只出这几个。"""
+    manifest = json.loads(json.dumps(MCP_MANIFEST))
+    manifest["tools"] = [{"name": "不存在的工具"}]
+    client = _install_mcp(manifest)
+    client.patch("/api/plugins/dev.mcp/credentials", json={"values": {"DEMO_API_KEY": "k-123"}})
+    client.patch("/api/plugins/dev.mcp", json={"enabled": True})
+    # server 确实报了 whoami,但 manifest 没点它的名 —— 于是它不出现在任何一个消费方那里。
+    assert client.get("/api/plugins/tools").json() == []
+    names = {tool["name"] for tool in client.get("/api/agent/tools").json()}
+    assert "plugin__dev_mcp__whoami" not in names
+
+
+def test_不声明_tools_时_server_报什么就有什么() -> None:
+    client = _install_mcp()
+    client.patch("/api/plugins/dev.mcp/credentials", json={"values": {"DEMO_API_KEY": "k-123"}})
+    client.patch("/api/plugins/dev.mcp", json={"enabled": True})
+    assert [t["tool_name"] for t in client.get("/api/plugins/tools").json()] == ["whoami"]
+
+
 def test_缺凭据时报的是缺哪一项_而不是一句连不上() -> None:
     client = _install_mcp()
     res = client.post("/api/plugins/dev.mcp/refresh")
