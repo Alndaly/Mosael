@@ -1,156 +1,273 @@
-# Plugin Manifest
+# 写一个插件
 
-插件是 `~/.open-studio/plugins/<目录>` 下的一个目录,里面有一份 `open-studio.plugin.json`
-(也接受 `plugin.json`;更名前的 `mibu.plugin.json` 仍然认,否则用户磁盘上的既有插件会直接消失)。
+插件是 Open Studio 里**唯一一处能力由第三方提供**的地方。一个插件写好之后,它的工具同时出现在
+三个地方:智能体的工具表、工作流的节点面板、插件页的手动试跑 —— 你不需要为哪一边额外做适配。
 
-插件页的空态会显示这个目录的**真实路径** —— Windows 上它不是 `~/.open-studio/`,别照着这里拼。
+架构与取舍见 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md) 与 [ADR 0005](adr/0005-plugin-package-instance-capability.md)。
 
-## 两种插件
+---
 
-### 本地脚本(默认)
+## 三十秒版本
+
+```
+~/.open-studio/plugins/我的插件/
+  open-studio.plugin.json     ← 清单
+  main.py                     ← 代码(MCP 插件可以没有)
+```
+
+插件页点「扫描插件」,它就出现了。目录路径以插件页空态里显示的为准 —— Windows 上不是 `~/`。
+
+## 先选一种形态
+
+| | **本地脚本** | **接一个 MCP 服务** |
+| --- | --- | --- |
+| 什么时候用 | 逻辑是你自己写的 | 对方**已经**有 MCP 服务 |
+| 代码量 | 一个 Python 文件 | 零 |
+| 工具清单 | 你在清单里声明 | 从服务现拉,不手抄 |
+
+判据很简单:**对方有没有 MCP 服务**。有就别写脚本 —— 再写一层把 stdin 的 JSON 翻译成一次 HTTP
+调用、再把结果翻译回 stdout,是在重新实现一个已经存在的东西,而且每加一个端点都要改代码。
+
+---
+
+## 形态一:本地脚本
 
 ```jsonc
 {
-  "id": "dev.example.text",           // 稳定唯一 id
-  "name": "示例工具",
-  "version": "0.1.0",
-  "entry": "tools/main.py",           // 相对插件目录;必须在目录内
-  "permissions": ["network:example"], // 自由字符串,逐项授权,deny-by-default
-  "credentials": [
-    { "key": "EXAMPLE_API_KEY", "label": "API Key", "help": "在哪儿拿", "secret": true, "required": true }
-  ],
-  "skills": [{ "id": "example", "description": "给别的智能体看的能力描述。" }],
-  "tools": [
-    {
-      "name": "count_words",
-      "description": "模型据此决定要不要调它。写清楚它**不是**用来做什么的。",
-      "read_only": true,              // 见下面「只读」
-      "input_schema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }
-    }
-  ]
-}
-```
+  "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
+  "name": "文本工具",
+  "version": "1.0.0",
+  "manifest_version": 1,
 
-**执行协议**:spawn `<python> entry`,cwd = 插件目录,stdin 一个 JSON 请求,stdout 一个 JSON 响应。
+  "runtime": { "kind": "process", "entry": "main.py" },
 
-```
-stdin : {"tool": str, "input": {...}}
-stdout: {"ok": true, "output": {...}} | {"ok": false, "error": str}
-```
-
-超时 60 秒,输出上限 1MB。进程崩了、超时了、吐了非 JSON —— 失败的是这次调用,不是应用。
-
-### MCP 服务
-
-```jsonc
-{
-  "id": "com.example.thing", "name": "示例", "version": "1.0.0",
-  "kind": "mcp",
-  "mcp": { "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
-  "credentials": [{ "key": "SOME_API_KEY", "label": "API Key", "secret": true }]
-}
-```
-
-远端服务用 `http` 传输。`url` 和 `headers` 里可以用 `${KEY}` 引用凭据 —— 那些字段是 JSON 字符串,
-进不了子进程环境,所以走占位符展开:
-
-```jsonc
-"mcp": {
-  "transport": "http",
-  "url": "https://example.com/mcp",
-  "headers": { "Authorization": "Bearer ${SOME_API_KEY}" }
-}
-```
-
-**工具清单从服务现拉**,不写在 manifest 里 —— 手抄的清单会随服务升级而烂,而且烂得很安静。
-启用时拉一次,填完凭据后再拉一次,之后可以手动刷新。
-
-MCP 插件的 `tools` 字段不是第二份清单,而是**按名字的覆盖层**,且只认 `read_only` 一个键。
-
-## 字段
-
-| 字段 | 说明 |
-| --- | --- |
-| `id` / `name` / `version` | 必填。id 是稳定标识,改了等于换了个插件。 |
-| `kind` | `"process"`(默认)或 `"mcp"`。 |
-| `entry` | 本地脚本的入口,相对插件目录。必须落在目录内。 |
-| `mcp` | MCP 插件的连接配置:`transport` / `command` / `args` / `url` / `headers`。 |
-| `permissions` | 自由字符串。逐项授权,**全部授予**之后工具才可用。 |
-| `credentials` | 见下。 |
-| `skills` | 给别的智能体看的高层能力描述,进 `/api/agent/skills`。 |
-| `tools` | `name` / `description` / `input_schema`(JSON Schema)/ `read_only` / `node`。 |
-
-## 凭据
-
-`credentials` 每项:`key`(必须是合法环境变量名)、`label`、`help`、`secret`(默认 true)、
-`required`(默认 true)。
-
-用户在插件页填,运行时把**这个插件自己声明的、且已填的**键注入它自己的进程环境。
-
-插件拿不到 Open Studio 的任何凭据 —— 供应商 key、数据库、API token 一个都没有。这是有意的隔离:
-插件因此绕不过确认卡和权限系统。凭据注入没有破坏它,只是让插件自己的密钥有地方放。
-
-必填凭据没填时,该插件的工具不进 `/api/plugins/tools`,也不进智能体的工具表。
-
-## 工作流节点
-
-**每个插件工具自动就是一个工作流节点**,类型 id 是 `plugin.<插件id>.<工具名>`。表单从
-`input_schema` 生成 —— 插件什么都不写,用户在画布上看到的就已经是一张正经表单,而不是一个
-让人对着猜的 JSON 文本框。
-
-字符串字段默认映到 `template` 那一档:工作流里的字符串入参十有八九要引用上游输出
-(`{{node.output}}`),template 会把可用变量列出来。`enum` 变成下拉,`required` 进必填校验。
-
-想要更好的标签、更细的类型、或者把返回值拆成几个具名输出口子,就在工具上写 `node`
-(参照 ComfyUI 的自定义节点 —— 节点长什么样由插件说了算,应用只规定形状):
-
-```jsonc
-{
-  "name": "fetch_one_video",
-  "node": {
-    "label": "抖音作品详情",
-    "description": "按作品 id 取一条抖音作品的完整信息。",
-    "config": {
-      "aweme_id": { "type": "template", "required": true, "description": "作品 id" }
-    },
-    "outputs": ["title", "author", "digg_count"]
+  "tools": {
+    "expose": "all",                  // 工具就两三个,不必让用户逐个勾
+    "declare": [
+      {
+        "name": "count_words",
+        "description": "统计字数、词数与预计口播时长。",
+        "read_only": true,            // 见下面「只读」
+        "input_schema": {
+          "type": "object",
+          "properties": { "text": { "type": "string", "description": "要统计的文本" } },
+          "required": ["text"]
+        }
+      }
+    ]
   }
 }
 ```
 
-`config` 与 `outputs` 就是节点注册表里那两个字段,同一套语义、同一个编辑器、同一份校验。
-可以只写一半 —— 只想改标签就写 `label`,表单仍然自动生成。
+`main.py` 的协议:**stdin 一个 JSON 进,stdout 一个 JSON 出**。
 
-**节点的 config 就是工具的入参**,一一对应,中间没有翻译层。声明了 `outputs` 就按同名键从
-返回值里取(下游写 `{{node.title}}`),没声明就把整份返回值装进 `output`。
+```python
+import json, sys
 
-MCP 插件同理:清单是从服务拉的,想给某个工具画一张更好的表单,在 manifest 的 `tools` 覆盖层里写。
+def count_words(payload):
+    text = str(payload.get("text", ""))
+    return {"chars": len(text), "seconds": round(len(text) / 4.5, 1)}
 
-**缺插件的图**:工作流导出到没装这个插件的机器上,报的是「节点 n1 来自插件「X」的工具 Y,
-该插件未安装或未启用」—— 不是一句让人无从下手的"未知节点类型"。
+TOOLS = {"count_words": count_words}
 
-## 只读
+request = json.loads(sys.stdin.read())          # {"tool": "count_words", "input": {...}}
+try:
+    output = TOOLS[request["tool"]](request.get("input") or {})
+    json.dump({"ok": True, "output": output}, sys.stdout, ensure_ascii=False)
+except Exception as exc:
+    json.dump({"ok": False, "error": str(exc)}, sys.stdout, ensure_ascii=False)
+```
 
-`read_only` 决定这个工具会不会给**子智能体**用。默认 `false`。
+规矩:进程 60 秒超时,stdout 上限 1MB,`output` 必须是个对象。进程崩了、超时了、吐了非 JSON ——
+失败的是那一次调用记录,不是应用。
 
-内置工具的只读判据是「没有确认门」—— 会改东西的都走确认卡。插件工具没有这个对应关系:它跑的
-是别人的代码,没有确认门也照样能发请求、写文件。所以默认落在保守那侧,要 manifest 明写才算。
-宁可让子智能体少一个工具,也不要让它在一次「帮我查一下」里替用户发了条微博。
+## 形态二:接一个 MCP 服务
+
+```jsonc
+{
+  "id": "com.example.thing",
+  "name": "示例服务",
+  "version": "1.0.0",
+  "manifest_version": 1,
+
+  // 本地进程:spawn 一个子进程
+  "runtime": { "kind": "mcp", "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
+
+  // 或者远端:url / headers 里用 ${键名} 引用下面声明的配置与凭据
+  // "runtime": {
+  //   "kind": "mcp", "transport": "http",
+  //   "url": "https://example.com/${REGION}/mcp",
+  //   "headers": { "Authorization": "Bearer ${API_KEY}" }
+  // },
+
+  "instance": {
+    "credentials": [{ "key": "API_KEY", "label": "API Key", "help": "在哪儿生成" }]
+  },
+
+  "tools": { "expose": "selected", "recommended": ["fetch_one", "search"] }
+}
+```
+
+工具清单在**启用时**、**填完凭据后**各拉一次,之后可以在插件页点「刷新工具」。服务升级加了新
+工具,刷一下就有 —— 不用改插件、不用发版。
+
+---
+
+## 一个包,多次接入
+
+有些服务是"同一套代码、不同端点"(TikHub 十几个平台各一个 MCP 端点)。这时候声明 `multiple`,
+用户就能建多个**连接**,各有各的配置和凭据:
+
+```jsonc
+"instance": {
+  "multiple": true,
+  "name_template": "示例服务 · {REGION:label}",   // 连接的默认名字,由配置生成
+  "config": [
+    { "key": "REGION", "label": "区域", "type": "enum", "required": true,
+      "options": [{ "value": "cn", "label": "中国" }, { "value": "us", "label": "美国" }] }
+  ],
+  "credentials": [{ "key": "API_KEY", "label": "API Key" }]
+}
+```
+
+`{REGION}` 取配置值,`{REGION:label}` 取枚举的显示文案。**名字必须由配置生成** —— 否则用户配了
+「中国」而卡片上写着「美国」,那比没有名字更坏(这正是重构前的一个真实 bug)。
+
+### 配置还是凭据?
+
+| | `config` | `credentials` |
+| --- | --- | --- |
+| 是什么 | 区域、端点、模式、开关 | API Key、token、密码 |
+| 控件 | 下拉 / 文本框 / 数字 / 开关 | 密码框 |
+| 回显 | 原值 | 掩码(原样交回 = 没改) |
+| 参与显示名 | 是 | 否 |
+
+两者都参与 `${...}` 展开,也都注入本地脚本的环境变量(**键名大写**:`API_KEY` → `$API_KEY`)。
+
+判据:**这个值要不要藏起来**。要 → 凭据。不要 → 配置。把区域塞进凭据,用户会得到一个没有选项、
+没有校验的密码框。
+
+---
+
+## 能有什么能力
+
+### 工具
+
+工具是插件的主体。写好一个工具,它自动出现在:
+
+**智能体的工具表** —— 名字是 `plugin__<连接>__<工具>`,和内置工具在模型眼里没有区别,
+`input_schema` 直接在手上。不需要模型先"想到"去列插件清单。
+
+**工作流的节点** —— 每个工具就是一个节点(`plugin.<包id>.<工具>`),表单从 `input_schema`
+自动生成:字符串给模板输入框(能引用 `{{上游.输出}}`)、`enum` 给下拉、`required` 进必填校验。
+不写一个字也是一个像样的节点。
+
+想更讲究就写 `node`(参照 ComfyUI 的自定义节点 —— 节点长什么样由插件说了算):
+
+```jsonc
+"tools": {
+  "overrides": {
+    "fetch_one": {
+      "label": "取一条作品",
+      "node": {
+        "description": "按作品 id 取完整信息。",
+        "config": { "aweme_id": { "type": "template", "required": true, "description": "作品 id" } },
+        "outputs": ["title", "author", "digg_count"]     // 下游写 {{n1.title}}
+      }
+    }
+  }
+}
+```
+
+声明了 `outputs` 就按同名键从返回值里拆开;没声明就把整份返回值装进 `output`。
+
+### 技能
+
+`skills` 是给**别的智能体**看的一段高层描述(进 `/api/agent/skills`)。工具回答"能调什么",
+技能回答"这个东西是干嘛的"。
+
+### 只读
+
+`read_only: true` 的工具才会给**子智能体**用。默认不标。
+
+内置工具的只读判据是"没有确认门"—— 会改东西的都走确认卡。插件工具没有这个对应关系:它跑的是
+你的代码,没有确认门也照样能发请求、写文件。所以默认落在保守那侧。宁可让子智能体少一个工具,
+也不要让它在一次「帮我查一下」里替用户发了条微博。
+
+### 权限
+
+`permissions` 是一组自由字符串(`network:example`、`assets:read`…)。**逐项授权,全部授予之后
+工具才可用**。它不是沙箱 —— 沙箱是进程隔离本身;它是一次明示的"我知道这个插件要做什么"。
+
+---
+
+## 拿不到什么
+
+插件进程只拿到 `PATH` / `HOME` / `LANG`,加上**它自己这个连接**声明的配置与凭据。
+
+拿不到:Open Studio 的供应商 API Key、数据库、内部 API token、别的插件的凭据。
+
+这是有意的。插件因此**绕不过确认卡和权限系统** —— 它不能替用户批准任何东西,只能返回数据,
+由智能体带着那份数据去走正常的确认流程。
+
+---
+
+## 用户会看到什么
+
+1. 把目录放进插件目录 → 插件页「扫描插件」
+2. 有配置的包:填配置 → 「新建」得到一个连接;没配置的包:自动就有一个连接
+3. 填凭据 → 授权 → 启用
+4. **勾选要开放的工具**(默认不开,按 `recommended` 预勾)
+5. 工具就出现在智能体和工作流里了
+
+第 4 步值得解释:一个 MCP 端点可能报四十上百个工具。全放出去,节点面板要人从四十行里找一行,
+智能体每轮对话为四十条描述付 token,还挤占模型在内置工具之间的选择权。所以默认关,由 `recommended`
+给一个起点;工具本来就少的包写 `expose: "all"` 全开。
+
+---
+
+## 清单字段速查
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件 |
+| `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
+| `runtime.kind` | `"process"` 或 `"mcp"` |
+| `runtime.entry` | 本地脚本入口,相对插件目录,必须在目录内 |
+| `runtime.transport` / `command` / `args` / `url` / `headers` | MCP 的连接方式 |
+| `instance.multiple` | 允许建多个连接 |
+| `instance.name_template` | 连接的默认名字,`{键}` / `{键:label}` |
+| `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default` |
+| `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
+| `permissions` | 自由字符串,逐项授权 |
+| `skills` | 给别的智能体看的高层描述 |
+| `tools.expose` | `"selected"`(默认)/ `"all"` |
+| `tools.recommended` | 首次启用默认勾上的工具名 |
+| `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉) |
+| `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` |
+
+## 范例
+
+`plugins/examples/` 下三个,覆盖三种形态:
+
+- **text-toolkit** — 纯函数,零依赖零凭据,`expose: "all"`
+- **tikhub** — 零代码接 MCP + 多连接 + 枚举配置 + 凭据
+- **mcp-everything** — 最小的 MCP 接入声明
 
 ## 接口
 
 | | |
 | --- | --- |
-| `POST /api/plugins/scan` | 扫描插件目录;目录已不在的记录顺手清掉 |
-| `GET /api/plugins/dir` | 插件目录的真实绝对路径 |
-| `PATCH /api/plugins/{id}` | 启用 / 停用 |
-| `DELETE /api/plugins/{id}` | 卸载:删目录 + 删记录(权限/凭据/调用记录随外键级联) |
-| `GET`/`PATCH` `/api/plugins/{id}/permissions` | 权限授予 |
-| `GET`/`PATCH` `/api/plugins/{id}/credentials` | 凭据(密文回显为掩码,原样提交 = 不改) |
-| `POST /api/plugins/{id}/refresh` | 重拉 MCP 工具清单 |
-| `GET /api/plugins/tools` | 已启用 + 已授权 + 凭据齐全的工具 |
-| `POST /api/plugins/{id}/tools/{tool}/invoke` | 执行一次,留痕 |
-| `GET /api/agent/tools` | 内置工具 + 展开成一等公民的插件工具(`plugin__<插件>__<工具>`) |
+| `POST /api/plugins/scan` | 扫描;顺带迁移老清单、清掉目录已不在的包 |
+| `GET /api/plugins` | 包 + 它们的连接 + 每个连接的工具与开关 |
+| `DELETE /api/plugins/{包id}` | 卸载:删目录 + 删记录 |
+| `POST /api/plugins/{包id}/instances` | 新建连接 |
+| `PATCH /api/plugins/instances/{id}` | 改名 / 改配置 / 启停 |
+| `GET`/`PATCH` `/api/plugins/instances/{id}/credentials` | 凭据(掩码回显) |
+| `GET`/`PATCH` `/api/plugins/instances/{id}/permissions` | 授权 |
+| `PATCH /api/plugins/instances/{id}/capabilities` | 工具开关 |
+| `POST /api/plugins/instances/{id}/refresh` | 重拉 MCP 工具清单 |
+| `GET /api/plugins/tools` | 所有可用连接**已开放**的工具 |
+| `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
 
-智能体、工作流、手动试跑走的是**同一条**执行路径(`invoke_plugin_tool`):权限校验、凭据注入、
-调用留痕都在那里,没有谁能绕过它。
+智能体、工作流、手动试跑走的是**同一条**执行路径:权限校验、凭据注入、调用留痕都在那里。
