@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -118,6 +119,56 @@ def record_plugins(page: Page, tmp: Path) -> None:
     print(f"  → {(SITE_GIFS / 'plugins.gif').relative_to(ROOT)} / {(SITE_SHOTS / 'plugins.png').relative_to(ROOT)}")
 
 
+def record_workflows(page: Page, tmp: Path) -> None:
+    """工作流画布:节点分组面板、连线、执行历史。"""
+    frames = tmp / "workflows"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    page.goto(page.url.split("#")[0] + "#/workflows", wait_until="networkidle")
+    page.wait_for_timeout(1200)
+    # 先「适应视图」:默认缩放下节点挤在中间一小块,截图里大半是空画布。
+    fit = page.locator("button.react-flow__controls-fitview")
+    if fit.count():
+        fit.click()
+        page.wait_for_timeout(800)
+    rec.shot(10)
+
+    # 打开节点面板 —— 分组 + 每行一句说明是这一轮改的重点
+    add = page.get_by_role("button", name=re.compile("添加节点|节点")).first
+    if add.count():
+        add.click()
+        page.wait_for_timeout(700)
+        rec.shot(14)
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(400)
+        rec.shot(6)
+
+    gif_from_frames(frames, MEDIA / "workflows-canvas.gif")
+    shutil.copy(MEDIA / "workflows-canvas.gif", SITE_GIFS / "workflows.gif")
+    page.screenshot(path=str(MEDIA / "workflows-canvas.png"))
+    shutil.copy(MEDIA / "workflows-canvas.png", SITE_SHOTS / "workflows.png")
+    print(f"  → {(SITE_GIFS / 'workflows.gif').relative_to(ROOT)} / {(SITE_SHOTS / 'workflows.png').relative_to(ROOT)}")
+
+
+def record_home(page: Page, tmp: Path) -> None:
+    """首页概览:项目/素材/任务/用量一屏。"""
+    page.goto(page.url.split("#")[0] + "#/", wait_until="networkidle")
+    page.wait_for_timeout(1000)
+    page.screenshot(path=str(MEDIA / "home.png"))
+    shutil.copy(MEDIA / "home.png", SITE_SHOTS / "home.png")
+    print(f"  → {(SITE_SHOTS / 'home.png').relative_to(ROOT)}")
+
+
+def record_media(page: Page, tmp: Path) -> None:
+    """素材库:导入进来的片段。"""
+    page.goto(page.url.split("#")[0] + "#/media", wait_until="networkidle")
+    page.wait_for_timeout(1000)
+    page.screenshot(path=str(MEDIA / "media.png"))
+    shutil.copy(MEDIA / "media.png", SITE_SHOTS / "media.png")
+    print(f"  → {(SITE_SHOTS / 'media.png').relative_to(ROOT)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", required=True, help="演示实例的会话令牌")
@@ -128,7 +179,8 @@ def main() -> int:
 
     for d in (MEDIA, SITE_GIFS, SITE_SHOTS):
         d.mkdir(parents=True, exist_ok=True)
-    scenes = {"plugins": record_plugins}
+    scenes = {"home": record_home, "media": record_media,
+              "plugins": record_plugins, "workflows": record_workflows}
     if args.only:
         scenes = {k: v for k, v in scenes.items() if k == args.only}
 
