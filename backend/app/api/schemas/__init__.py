@@ -730,6 +730,11 @@ class CapabilityModelOut(BaseModel):
     provider_name: str
     model: str
     display_name: str = ""
+    #: 这个模型会不会思考。False = 完全不支持,界面上就不该出现思考档位这个控件。
+    #: None = 还没探明(端点没报、用户没细分过),按"可能会"处理 —— 少一个档位比多一个更坏。
+    reasoning: bool | None = None
+    #: 能不能**分档**(low/medium/high)。False/None 而 reasoning 为真 = 只能开/关。
+    reasoning_effort: bool | None = None
 
 
 class ProviderDefaultUpdate(BaseModel):

@@ -4751,6 +4751,10 @@ export interface components {
              * @default
              */
             display_name: string;
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Reasoning Effort */
+            reasoning_effort?: boolean | null;
         };
         /**
          * ClipIdsRequest

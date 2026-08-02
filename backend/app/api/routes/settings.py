@@ -682,6 +682,10 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
             provider_name=model.profile.name if model.profile is not None else "",
             model=model.model_id,
             display_name=model.display_name or "",
+            # 思考能力跟着模型走:有的完全不思考,有的只能开/关,有的才分档。
+            # 界面据此决定给几个选项 —— 给一个点了没用的开关,比没有这个开关更坏。
+            reasoning=model.reasoning,
+            reasoning_effort=model.reasoning_effort,
         )
         for model in provider_models.models_for_capability(db, capability)
     ]
