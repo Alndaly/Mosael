@@ -26,11 +26,17 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-#: 两处媒体各有各的消费者,别合并:docs/media 给仓库 README(GitHub 上直接渲染),
-#: docs-site/src/assets 给文档站(Astro 会做尺寸优化,必须是 src/ 下的相对引用)。
+#: 三处媒体各有各的消费者,别合并:
+#:   docs/media          仓库 README(GitHub 上直接渲染,只认仓库内相对路径)
+#:   docs-site/src/assets 旧文档站(Astro 做尺寸优化,必须是 src/ 下的相对引用)
+#:   website/public/media 新官网(Next 的 public/,按 URL 引用;next/image 自己做优化)
+#: docs-site 正在被 website/ 取代(见 docs/WEBSITE_REBUILD.md)。迁移期间两边都写 ——
+#: 少写一边的后果是某个站悄悄停在半年前的界面上,而这正是这个脚本存在的理由。
 MEDIA = ROOT / "docs" / "media"
 SITE_GIFS = ROOT / "docs-site" / "src" / "assets" / "gifs"
 SITE_SHOTS = ROOT / "docs-site" / "src" / "assets" / "screens"
+WEB_GIFS = ROOT / "website" / "public" / "media" / "gifs"
+WEB_SHOTS = ROOT / "website" / "public" / "media" / "screens"
 
 #: 录制视口。宽度按文档站正文宽度取,高度取到内容底边即可 —— 留一大片空白的截图在文档里
 #: 会把正文推得很散,读者还得滚过去才看到下一段。
@@ -56,6 +62,14 @@ def gif_from_frames(frames: Path, out: Path, fps: int = FPS) -> None:
         check=True,
     )
     print(f"  → {out.relative_to(ROOT)}  {out.stat().st_size // 1024} KB")
+
+
+def publish(src: Path, name: str, *, gif: bool = False) -> None:
+    """把一件产物分发到两个站点,同名落地。"""
+    targets = [(SITE_GIFS if gif else SITE_SHOTS) / name, (WEB_GIFS if gif else WEB_SHOTS) / name]
+    for target in targets:
+        shutil.copy(src, target)
+    print("  → " + " / ".join(str(t.relative_to(ROOT)) for t in targets))
 
 
 class Recorder:
@@ -114,9 +128,8 @@ def record_plugins(page: Page, tmp: Path) -> None:
         rec.shot(12)  # 工具多的时候靠搜索找,不靠翻
 
     gif_from_frames(frames, MEDIA / "plugins-three-layers.gif")
-    shutil.copy(MEDIA / "plugins-three-layers.gif", SITE_GIFS / "plugins.gif")
-    shutil.copy(MEDIA / "plugins-overview.png", SITE_SHOTS / "plugins.png")
-    print(f"  → {(SITE_GIFS / 'plugins.gif').relative_to(ROOT)} / {(SITE_SHOTS / 'plugins.png').relative_to(ROOT)}")
+    publish(MEDIA / "plugins-three-layers.gif", "plugins.gif", gif=True)
+    publish(MEDIA / "plugins-overview.png", "plugins.png")
 
 
 def record_workflows(page: Page, tmp: Path) -> None:
@@ -145,10 +158,9 @@ def record_workflows(page: Page, tmp: Path) -> None:
         rec.shot(6)
 
     gif_from_frames(frames, MEDIA / "workflows-canvas.gif")
-    shutil.copy(MEDIA / "workflows-canvas.gif", SITE_GIFS / "workflows.gif")
+    publish(MEDIA / "workflows-canvas.gif", "workflows.gif", gif=True)
     page.screenshot(path=str(MEDIA / "workflows-canvas.png"))
-    shutil.copy(MEDIA / "workflows-canvas.png", SITE_SHOTS / "workflows.png")
-    print(f"  → {(SITE_GIFS / 'workflows.gif').relative_to(ROOT)} / {(SITE_SHOTS / 'workflows.png').relative_to(ROOT)}")
+    publish(MEDIA / "workflows-canvas.png", "workflows.png")
 
 
 def record_home(page: Page, tmp: Path) -> None:
@@ -156,8 +168,7 @@ def record_home(page: Page, tmp: Path) -> None:
     page.goto(page.url.split("#")[0] + "#/", wait_until="networkidle")
     page.wait_for_timeout(1000)
     page.screenshot(path=str(MEDIA / "home.png"))
-    shutil.copy(MEDIA / "home.png", SITE_SHOTS / "home.png")
-    print(f"  → {(SITE_SHOTS / 'home.png').relative_to(ROOT)}")
+    publish(MEDIA / "home.png", "home.png")
 
 
 def record_media(page: Page, tmp: Path) -> None:
@@ -165,8 +176,7 @@ def record_media(page: Page, tmp: Path) -> None:
     page.goto(page.url.split("#")[0] + "#/media", wait_until="networkidle")
     page.wait_for_timeout(1000)
     page.screenshot(path=str(MEDIA / "media.png"))
-    shutil.copy(MEDIA / "media.png", SITE_SHOTS / "media.png")
-    print(f"  → {(SITE_SHOTS / 'media.png').relative_to(ROOT)}")
+    publish(MEDIA / "media.png", "media.png")
 
 
 def record_agent(page: Page, tmp: Path) -> None:
@@ -179,8 +189,7 @@ def record_agent(page: Page, tmp: Path) -> None:
     page.goto(page.url.split("#")[0] + "#/ai", wait_until="networkidle")
     page.wait_for_timeout(1200)
     page.screenshot(path=str(MEDIA / "agent.png"))
-    shutil.copy(MEDIA / "agent.png", SITE_SHOTS / "ai-chat.png")
-    print(f"  → {(SITE_SHOTS / 'ai-chat.png').relative_to(ROOT)}")
+    publish(MEDIA / "agent.png", "ai-chat.png")
 
 
 def main() -> int:
@@ -191,7 +200,7 @@ def main() -> int:
     parser.add_argument("--only", default="", help="只录某一段(plugins/…)")
     args = parser.parse_args()
 
-    for d in (MEDIA, SITE_GIFS, SITE_SHOTS):
+    for d in (MEDIA, SITE_GIFS, SITE_SHOTS, WEB_GIFS, WEB_SHOTS):
         d.mkdir(parents=True, exist_ok=True)
     scenes = {"home": record_home, "media": record_media,
               "plugins": record_plugins, "workflows": record_workflows,
