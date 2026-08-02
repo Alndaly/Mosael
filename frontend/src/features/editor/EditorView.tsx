@@ -636,13 +636,18 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     const stillThere = sel != null && (updated.tracks ?? []).some((tr) => (tr.clips ?? []).some((c) => c.id === sel));
     if (sel != null && !stillThere) useEditorStore.getState().selectClip(null);
   };
+  // 撤销**会**失败:轨道上还有片段时撤不掉「新建轨道」,历史里引用的片段可能已经不在了。
+  // 少了 onError 的话,用户按 ⌘Z 之后什么都没发生,也没有任何提示 —— 和「按钮点了没反应」
+  // 是同一个毛病,只是这次出在撤销上,而撤销恰恰是用户最需要确认「到底生效没有」的操作。
   const undoMutation = useMutation({
     mutationFn: () => undoSequence(sequence!.id),
     onSuccess: keepSelectionIfPresent,
+    onError: (error: Error) => toast.error(error.message),
   });
   const redoMutation = useMutation({
     mutationFn: () => redoSequence(sequence!.id),
     onSuccess: keepSelectionIfPresent,
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const allClips = React.useMemo(
