@@ -17,7 +17,8 @@ from app.db.models import Notification, WorkspaceMember, now
 # 每个用户最多保留的通知条数,超出的最旧记录随新通知写入被清理。
 MAX_PER_USER = 200
 
-NOTIFICATION_TYPES = ("system", "publish", "workflow", "team")
+#: agent:智能体经 POST /api/notifications 推的那条(工作流的通知节点对应物)。
+NOTIFICATION_TYPES = ("system", "publish", "workflow", "team", "agent")
 
 
 def notify(

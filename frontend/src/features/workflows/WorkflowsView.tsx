@@ -439,14 +439,18 @@ export type AnchorBox = { left: number; top: number; maxHeight: number };
  */
 export function anchorToNode(
   instance: ReactFlowInstance | null,
-  nodeId: string | null,
+  /** 要贴靠的节点,**取自我们自己的 nodes 状态**,不是 instance.getNode()。
+   *
+   *  读 instance 会拿到过期位置:React Flow 的内部 store 是在**提交后的副作用**里从 nodes
+   *  prop 同步的,而这个位置是在 render 期间算的。撤销一次节点拖动时,graph 和 nodes 在同一批
+   *  更新里变新,内部 store 还停在旧位置 —— 于是表单留在了节点撤销前的地方,而且之后依赖不再
+   *  变化,它就一直留在那儿(除非用户顺手平移一下画布)。这正是「撤销后表单不跟随」的成因。 */
+  node: Pick<Node, "position" | "measured" | "width" | "height"> | null,
   /** 可视区尺寸。作为入参而不是直接读 window:这样这段摆放逻辑是纯函数,可以直接单测
    *  (仓库里没装 jsdom,其余测试也都是纯逻辑)。 */
   viewport: { width: number; height: number },
 ): AnchorBox | null {
-  if (!instance || !nodeId) return null;
-  const node = instance.getNode(nodeId);
-  if (!node) return null;
+  if (!instance || !node) return null;
   // v12:measured 是渲染后的真实尺寸;没测到时用节点默认宽度兜底,别让面板贴到错的地方。
   const width = node.measured?.width ?? node.width ?? 200;
   const height = node.measured?.height ?? node.height ?? 60;
@@ -1466,12 +1470,13 @@ function WorkflowEditor({
     () =>
       dragging
         ? null
-        : anchorToNode(rfRef.current, selectedNodeId, {
+        : anchorToNode(rfRef.current, nodes.find((node) => node.id === selectedNodeId) ?? null, {
             width: window.innerWidth,
             height: window.innerHeight,
           }),
+    // nodes 而不是 graph:位置要和画布上真正画出来的那个节点一致。viewportTick 管平移缩放。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedNodeId, dragging, viewportTick, graph],
+    [selectedNodeId, dragging, viewportTick, nodes],
   );
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);

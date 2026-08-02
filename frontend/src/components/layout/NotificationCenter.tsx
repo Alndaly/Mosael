@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
+import { Bell, Bot, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
 
 import {
   listNotifications,
@@ -23,6 +23,7 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   publish: <Send size={13} />,
   workflow: <GitBranch size={13} />,
   team: <Users size={13} />,
+  agent: <Bot size={13} />,
 };
 
 /** 站内通知中心:发布结果、工作流失败、批量完成、团队协作申请等
