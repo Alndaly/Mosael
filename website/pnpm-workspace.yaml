@@ -1,0 +1,5 @@
+# sharp 要跑安装脚本(next/image 的图片优化靠它),unrs-resolver 是 eslint 的解析器。
+# pnpm 默认拦下所有 postinstall,这两个不放行安装会直接中止。显式列出,而不是全局关掉检查。
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
