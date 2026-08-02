@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
   turbopack: { root: import.meta.dirname },
 
   /**
+   * 配图的 URL 上带了个版本号(`?v=…`,见 src/lib/media.ts 的 mediaVersion)。Next 16 默认
+   * 拒绝带查询串的本地图片,得在这里显式放行 —— 只放 `/media/**` 这一支,别处照旧。
+   */
+  images: {
+    localPatterns: [{ pathname: "/media/**" }],
+  },
+
+  /**
    * 全站路由都在 `[locale]` 段下(见 src/app/[locale]/layout.tsx 的说明),`/` 本身没有页面。
    *
    * 这里不做基于 Accept-Language 的协商:那需要 middleware,而 middleware 会让每个请求都

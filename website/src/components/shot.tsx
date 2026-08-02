@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { darkTwin, hasImage, imageSize } from "@/lib/media";
+import { darkTwin, hasImage, imageSize, mediaVersion } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,9 +45,15 @@ export function Shot({
    * 代价是两张图都会被下载。没有更好的办法:`<picture media>` 只认系统色,跟不动站点自己的
    * 主题开关;而这个站的截图本来就是浏览器里的界面,一张亮底的图贴在深色版面里非常刺眼。
    */
+  // 带上版本号:重录之后路径没变、文件变了,不带的话浏览器会一直吐缓存里那张旧图。
+  const versioned = (path: string) => {
+    const version = mediaVersion(path);
+    return version ? `${path}?v=${version}` : path;
+  };
+
   const frame = (theme: "light" | "dark") => (
     <Image
-      src={theme === "dark" ? dark : src}
+      src={versioned(theme === "dark" ? dark : src)}
       alt={alt}
       width={size.width}
       height={size.height}

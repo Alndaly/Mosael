@@ -23,6 +23,24 @@ export function darkTwin(src: string): string {
   return at < 0 ? src : `${src.slice(0, at)}/dark${src.slice(at)}`;
 }
 
+/**
+ * 配图的版本号,拼进 URL 当查询串。
+ *
+ * **重录之后文件变了、路径没变**,于是 `/_next/image?url=…` 这个 key 一模一样 —— 浏览器
+ * 和 CDN 都会继续吐旧那张,而 Next 给图片响应带的是长缓存。表现是"我明明换了图,页面上
+ * 还是老的",只能让每个人手动强刷一次,不现实。
+ *
+ * 取文件的大小 + mtime 而不是内容哈希:构建期要过几十张图,读一遍全部字节不值得,
+ * 而这两个数只要文件被重写过就一定会变。
+ */
+export function mediaVersion(src: string): string {
+  const file = path.join(process.cwd(), "public", src.replace(/^\//, ""));
+  if (!fs.existsSync(file)) return "";
+  const stat = fs.statSync(file);
+  // `>>> 0` 转成无符号:异或结果可能是负数,而 URL 里挂一个 `?v=-gr8gad` 很难看。
+  return ((stat.size ^ Math.floor(stat.mtimeMs)) >>> 0).toString(36);
+}
+
 /** 深色版可能还没录(脚本只覆盖了一部分场景),没有就退回浅色那张。 */
 export function hasImage(src: string): boolean {
   return fs.existsSync(path.join(process.cwd(), "public", src.replace(/^\//, "")));
