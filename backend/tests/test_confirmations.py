@@ -357,3 +357,167 @@ def test_confirmations_scoped_by_session() -> None:
     assert ids(unowned="true") == {ext["id"]}
     # 不带筛选仍是全部(调试/审计)
     assert ids() == {a["id"], b["id"], ext["id"]}
+
+
+# --- 工作流有、智能体也该有的三件事:发布 / 外部写请求 / 跑代码 -------------------
+#
+# 这三件的后果都不在这个应用里 —— 发出去的帖子、别人服务器上的改动、本机跑过的代码,
+# 都撤不回来。所以它们全部走确认卡,而且**和工作流节点共用同一段实现**:超时、截断上限、
+# 子进程隔离这些约定,不该因为入口不同而在一边被改、另一边不知道。
+
+
+def test_run_code_confirmation_runs_the_same_code_path_as_the_node() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    confirmation = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "run_code",
+            "requested_by": "pi",
+            "payload": {"code": "output = inputs['a'] + 1", "inputs": {"a": 41}},
+        },
+    ).json()
+    assert confirmation["status"] == "pending"
+    assert "在你的机器上运行" in confirmation["summary"]
+
+    approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    assert approved["result"]["output"] == 42
+
+
+def test_run_code_confirmation_cannot_see_the_backend_env() -> None:
+    """后端进程里有各家模型的 API key。代码节点靠子进程 + 最小 env 挡住它 ——
+    智能体这条入口共用同一个实现,那道隔离才不会只在其中一边成立。"""
+    import os
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    os.environ["OPEN_STUDIO_SECRET_PROBE"] = "leaked"
+    try:
+        confirmation = client.post(
+            "/api/confirmations",
+            json={
+                "workspace_id": ws["id"],
+                "tool": "run_code",
+                "requested_by": "pi",
+                "payload": {"code": "import os\noutput = os.environ.get('OPEN_STUDIO_SECRET_PROBE', '')"},
+            },
+        ).json()
+        approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
+        assert approved["status"] == "executed", approved.get("error")
+        assert approved["result"]["output"] == ""
+    finally:
+        os.environ.pop("OPEN_STUDIO_SECRET_PROBE", None)
+
+
+def test_http_request_confirmation_goes_through_the_shared_node_implementation(monkeypatch) -> None:
+    import httpx as _httpx
+
+    from app.domain.workflows.executors import basic
+
+    seen: dict[str, object] = {}
+
+    def fake_request(method, url, **kwargs):
+        seen.update(method=method, url=url, headers=kwargs.get("headers"), content=kwargs.get("content"))
+        return _httpx.Response(201, json={"ok": True}, request=_httpx.Request(method, url))
+
+    monkeypatch.setattr(basic.httpx, "request", fake_request)
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    confirmation = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "http_request",
+            "requested_by": "pi",
+            "payload": {
+                "url": "https://example.test/hook",
+                "method": "POST",
+                "headers": {"X-Token": "t"},
+                "body": '{"hi":1}',
+            },
+        },
+    ).json()
+    # 请求在批准之前不该发出去
+    assert seen == {}
+    assert "向外部发起 POST" in confirmation["summary"]
+
+    approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    assert approved["result"] == {"status": 201, "text": '{"ok":true}', "json": {"ok": True}}
+    assert seen["method"] == "POST"
+    assert seen["headers"] == {"X-Token": "t"}
+    assert seen["content"] == b'{"hi":1}'
+
+
+def test_publish_confirmation_rejects_an_account_outside_the_workspace() -> None:
+    """确认卡里带的是 id,不是对象 —— 批准的那一刻要重新验一次归属,
+    否则一个别处的账号 id 就能借这条路发到别人的号上。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    confirmation = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "publish_asset",
+            "requested_by": "pi",
+            "payload": {"account_id": "no-such-account", "asset_id": "no-such-asset", "title": "标题"},
+        },
+    ).json()
+    assert "公开发布" in confirmation["summary"]
+
+    approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
+    assert approved["status"] == "failed"
+    assert "发布账号不存在" in approved["error"]
+
+
+def test_http_request_confirmation_refuses_non_http_urls() -> None:
+    """file:// 会把本机文件读成「请求结果」交回给模型。这道校验在开卡时就做 ——
+    一张说不清要请求什么的卡,没有让用户去点批准的道理。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    denied = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "http_request",
+            "requested_by": "pi",
+            "payload": {"url": "file:///etc/passwd", "method": "GET"},
+        },
+    )
+    assert denied.status_code == 422, denied.text
+    assert "http(s)" in denied.json()["detail"]
+
+
+def test_run_code_confirmation_needs_the_same_privilege_as_a_code_node() -> None:
+    """画布上存不下 code 节点的人,不该能让智能体替他跑一段 —— 否则那道门白设了。
+
+    工作流那边「能编辑内容」不等于「能拥有这台服务器」,靠的正是这道门;换个入口就该同样挡。
+    """
+    from tests.util import second_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    member = second_client("member")
+    invited = client.post(f"/api/workspaces/{ws['id']}/invitations", json={"username": "member", "role": "editor"})
+    assert invited.status_code == 200, invited.text
+    invitation = member.get("/api/invitations").json()["invitations"][0]
+    assert member.post(f"/api/invitations/{invitation['id']}/accept").status_code == 200
+
+    confirmation = member.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "run_code",
+            "requested_by": "pi",
+            "payload": {"code": "output = 1"},
+        },
+    ).json()
+    denied = member.post(f"/api/confirmations/{confirmation['id']}/approve")
+    assert denied.status_code == 403, denied.text
+    # 拒绝之后卡还在 pending,可以由有权限的人来批
+    assert client.get(f"/api/confirmations/{confirmation['id']}").json()["status"] == "pending"

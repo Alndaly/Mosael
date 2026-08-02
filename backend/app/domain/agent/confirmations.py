@@ -38,6 +38,12 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "browser_open": {"permission": "edit", "cost": "none"},
     # 智能体复用用户**已登录**的浏览器池档案——跨信任边界,确认卡点名是哪个登录身份,用户逐次显式授权。
     "browser_pool_open": {"permission": "edit", "cost": "none"},
+    # 后果不在这个应用里的三件事:发出去的帖子、别人服务器上的改动、本机跑过的代码。
+    # 前面几档最坏是花钱或改坏自己的数据(可撤销),这一档撤不回来,所以单列一个权限档次
+    # ——确认卡上的措辞得和「编辑时间线」明显不同,用户才会真的看一眼再点。
+    "publish_asset": {"permission": "external", "cost": "none"},
+    "http_request": {"permission": "external", "cost": "none"},
+    "run_code": {"permission": "external", "cost": "none"},
 }
 
 EDIT_OP_KINDS = (
@@ -89,14 +95,20 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     一份 —— 之前是两边各抄一遍,谁往路由里加第四道校验,飞书那条就会静默漏掉,而这恰恰是授权
     路径,漏掉等于越权。
 
-    两道闸门缺一不可:
+    三道闸门缺一不可:
       - ensure_workspace_access:他得是这个工作区的人。
       - ensure_graph_node_privileges:create_workflow / update_workflow 的卡片带着整份 graph,
         批准即落库,是绕开 /api/workflows 的又一条落库路径,同样要挡 code 节点。按**审批者**
         校验:卡是他批的,这次执行记在他头上。
+      - run_code 同一道门:它跑的就是 code 节点那段实现,只是入口从画布换成了对话。工作流那边
+        「能编辑内容」不等于「能拥有这台服务器」,靠的正是 PRIVILEGED_NODE_TYPES 这道门 ——
+        少了它,同一个人画布上存不下 code 节点,却可以让智能体替他跑一段,门就白设了。
     """
     ensure_workspace_access(db, user, confirmation.workspace_id)
-    ensure_graph_node_privileges(db, user, (confirmation.payload or {}).get("graph"))
+    payload = confirmation.payload or {}
+    ensure_graph_node_privileges(db, user, payload.get("graph"))
+    if confirmation.tool == "run_code":
+        ensure_graph_node_privileges(db, user, {"nodes": [{"type": "code"}]})
     return approve_confirmation(db, confirmation)
 
 
@@ -155,6 +167,12 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         url = str(payload.get("url") or "").strip()
         if url and not (url.startswith("http://") or url.startswith("https://")):
             raise ConfirmationError("浏览器只能打开 http(s) 网址")
+    if tool == "http_request":
+        url = str(payload.get("url") or "").strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            # file:// 会把本机文件读成「请求结果」交回给模型。只认 http(s),而且在**开卡时**就认 ——
+            # 一张说不清要请求什么的卡,没有让用户去点批准的道理。
+            raise ConfirmationError("只能请求 http(s) 网址")
     if tool == "browser_pool_open":
         from app.domain import browser as browser_domain
 
@@ -270,6 +288,15 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
         who = f"「{name}」" + (f"({platform} 发布账号)" if platform else "(通用档案)")
         url = str(payload.get("url") or "").strip()
         return f"⚠️ 智能体请求复用你的浏览器档案 {who} 的登录身份跑任务" + (f" → {url}" if url else "")
+    if tool == "publish_asset":
+        title = str(payload.get("title") or "").strip()
+        return f"⚠️ 用你的账号**公开发布**{f'「{title}」' if title else '一条内容'}"
+    if tool == "http_request":
+        return f"⚠️ 向外部发起 {payload.get('method', 'POST')} 请求: {str(payload.get('url') or '')[:120]}"
+    if tool == "run_code":
+        code = str(payload.get("code") or "")
+        head = code.strip().splitlines()[0][:60] if code.strip() else ""
+        return f"⚠️ 在你的机器上运行一段 Python({len(code)} 字符){f': {head}…' if head else ''}"
     prompt = str(payload.get("prompt") or payload.get("text") or payload.get("topic") or "")[:80]
     if tool == "generate_image":
         return f"生成图片: {prompt}"
@@ -284,6 +311,39 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
 
 def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     payload = confirmation.payload
+    if confirmation.tool == "publish_asset":
+        from app.db.models import Asset as AssetModel, PublishAccount
+        from app.domain.publish import start_publish
+
+        account = db.get(PublishAccount, str(payload["account_id"]))
+        asset = db.get(AssetModel, str(payload["asset_id"]))
+        if account is None or account.workspace_id != confirmation.workspace_id:
+            raise ValueError("发布账号不存在")
+        if asset is None or asset.workspace_id != confirmation.workspace_id:
+            raise ValueError("素材不存在")
+        task = start_publish(
+            db,
+            workspace_id=confirmation.workspace_id,
+            account=account,
+            asset=asset,
+            title=str(payload.get("title") or ""),
+            description=str(payload.get("description") or ""),
+            tags=[],
+        )
+        return {"task_id": task.id, "status": task.status}
+    if confirmation.tool == "http_request":
+        from app.domain.workflows.executors.basic import run_http
+
+        return run_http(
+            method=str(payload.get("method") or "POST"),
+            url=str(payload["url"]),
+            headers={str(k): str(v) for k, v in (payload.get("headers") or {}).items()},
+            body=str(payload.get("body") or ""),
+        )
+    if confirmation.tool == "run_code":
+        from app.domain.workflows.executors.basic import run_python
+
+        return run_python(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
     if confirmation.tool == "browser_open":
         from app.domain import browser as browser_domain
 

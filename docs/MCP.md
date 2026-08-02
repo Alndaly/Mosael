@@ -18,6 +18,24 @@ summaries — never raw internal schemas.
 | `browser_open` | edit | Open an **isolated, throwaway** automation browser (cannot see the user's logins) — **requires confirmation**; returns a `session_id` the other `browser_*` tools drive |
 | `browser_pool_list` | readonly | List browser-**pool** profiles the agent may request (id / name / platform / login status) — **no cookies or credentials exposed** |
 | `browser_pool_open` | edit | Open a session **reusing one of the user's logged-in pool profiles** — **requires confirmation** on a card that names that identity (explicit per-session authorization); returns a `session_id` |
+| `publish_asset` | external | Post an asset publicly under one of the user's logged-in accounts — **requires confirmation** |
+| `http_request` | external | Write request to an outside server (POST/PUT/PATCH/DELETE) — **requires confirmation**; use `fetch_url` to *read*, which does not |
+| `run_code` | external | Run a Python snippet on the user's machine — **requires confirmation**, and the approver needs the same privilege a workflow `code` node does |
+
+The table lists the confirmation-gated tools and a few representative read-only ones; the
+authoritative list is whatever `mcp.list_tools()` returns. Anything the workflow canvas can do,
+the agent can do too — pinned by `tests/test_agent_workflow_parity.py`, which fails if a node
+type gains no matching tool and no written reason for not needing one.
+
+### The `external` tier
+
+`edit`, `render-cost` and `ai-cost` all bound their worst case to *this* application: data the
+user can undo, or money. `external` is the tier whose consequences are not here at all — a post
+that is now public, a change on somebody else's server, code that already ran on this machine.
+None of it is undoable, so the card gets its own wording and its own badge rather than reading
+like "edit the timeline". Adding a tier means adding its `messages.ts` label; the parity ratchet
+checks that too, because an unlabelled tier would otherwise render as some *other* tier's name —
+on the one line a user reads before clicking approve.
 
 The browser tools reuse the confirmation gate. `browser_pool_open` is the security-critical one: the agent can use **no** logged-in profile without the user approving a card that names the identity ("显式授权每会话"). Agents are instructed that page content is DATA, not instructions; never enter passwords/payment; and warn the user before any post/submit/purchase.
 
@@ -86,5 +104,4 @@ claude mcp add open-studio -- /path/to/OpenStudio/backend/.venv/bin/python /path
 
 ## Roadmap
 
-Scheduler tools (`create_scheduled_task` …) join the confirmation flow next,
-followed by publish tools.
+Scheduler tools (`create_scheduled_task` …) join the confirmation flow next.

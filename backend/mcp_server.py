@@ -162,6 +162,9 @@ CONFIRMATION_TOOLS = frozenset(
         "run_workflow",
         "browser_open",
         "browser_pool_open",
+        "publish_asset",
+        "run_code",
+        "http_request",
     }
 )
 
@@ -1088,6 +1091,213 @@ def get_confirmation(confirmation_id: str) -> dict[str, Any]:
         "result": confirmation["result"],
         "error": confirmation["error"],
     }
+
+
+# --- 工作流有、智能体也该有的能力 ---------------------------------------
+#
+# 判据写在 tests/test_agent_workflow_parity.py 里:工作流的每个节点类型都要么有一个对应的
+# 智能体工具,要么在那份清单里写明为什么不需要。同一个能力只在一个界面上存在,用户就会撞上
+# "工作流能做而对话里做不到" —— 而模型撞上时不会说"我没有这个工具",它会去凑一个
+# (实际发生过:让它等 5 秒,它拿 browser_wait 去等一段不可能出现的文本)。
+
+
+#: 单次 sleep 的上限。没有上限的话,模型可以在一轮里睡到用户以为应用挂了 —— 而它
+#: 并不知道那一端有个人在等。真要更久,那是下一轮对话该做的决定。
+SLEEP_CAP_SECONDS = 60.0
+
+
+@mcp.tool()
+def sleep(seconds: float) -> dict[str, Any]:
+    """Runs directly: pause for a few seconds before the next step.
+
+    Use when the user asks to wait ("open it, wait 5 seconds, then close"), or when
+    something needs time to settle before you check it again. Do NOT use to poll a job —
+    that is what get_confirmation and the job tools are for. Max 60 seconds; ask the user
+    to re-prompt if a longer wait is genuinely needed.
+    """
+    import time as _time
+
+    capped = max(0.0, min(float(seconds), SLEEP_CAP_SECONDS))
+    _time.sleep(capped)
+    return {"slept_seconds": capped}
+
+
+@mcp.tool()
+def translate_text(text: str, target: str, source: str = "") -> dict[str, Any]:
+    """Runs directly: translate text into a target language.
+
+    target/source are language codes ("zh", "en", "ja"); leave source empty to auto-detect.
+    Uses the configured translation provider (free Google endpoint or an AI provider).
+    Do NOT use for transcribing audio — that is transcribe_asset.
+    """
+    return _post("/api/translate", {"text": text, "target": target, "source": source})
+
+
+@mcp.tool()
+def transcribe_asset(asset_id: str) -> dict[str, Any]:
+    """Runs directly: run speech-to-text on an audio/video asset; returns the job.
+
+    Use when the user wants a transcript, subtitles, or the spoken content of a clip.
+    Returns a job — poll it with get_job. Do NOT use for images or to describe what a
+    video looks like; that is analyze_asset.
+    """
+    return _post(f"/api/assets/{asset_id}/transcribe", {})
+
+
+@mcp.tool()
+def get_job(job_id: str) -> dict[str, Any]:
+    """Read-only: poll one background job (transcription, render, generation) by id.
+
+    Returns status/progress/result/error. Use after a tool that returns a job.
+    """
+    return _get(f"/api/jobs/{job_id}")
+
+
+@mcp.tool()
+def create_project(name: str, workspace_id: str = "") -> dict[str, Any]:
+    """Runs directly: create a project in the workspace; returns its id.
+
+    Use before organising assets under a new piece of work. Pair with update_asset to
+    move existing assets into it.
+    """
+    return _post("/api/projects", {"workspace_id": workspace_id or _default_workspace_id(), "name": name})
+
+
+@mcp.tool()
+def update_asset(asset_id: str, name: str = "", project_id: str = "") -> dict[str, Any]:
+    """Runs directly: rename an asset and/or move it into a project.
+
+    Leave a field empty to keep it. project_id="-" moves the asset OUT of its project.
+    Do NOT use for tags — that is update_asset_tags.
+    """
+    body: dict[str, Any] = {}
+    if name:
+        body["name"] = name
+    if project_id:
+        body["project_id"] = "" if project_id == "-" else project_id
+    if not body:
+        return {"error": "nothing to update: pass name and/or project_id"}
+    return _patch(f"/api/assets/{asset_id}", body)
+
+
+@mcp.tool()
+def notify_workspace(title: str, body: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Runs directly: push an in-app notification to the workspace members.
+
+    Use to report the end of something long the user asked you to do while they were away.
+    Do NOT use to talk to the user in this conversation — just say it in your reply.
+    """
+    return _post(
+        "/api/notifications",
+        {"workspace_id": workspace_id or _default_workspace_id(), "title": title, "body": body},
+    )
+
+
+@mcp.tool()
+def browser_scroll(session_id: str, selector: str = "", dy: int = 0, workspace_id: str = "") -> dict[str, Any]:
+    """Scroll the open session to an element (selector) or by dy pixels."""
+    args: dict[str, Any] = {}
+    if selector:
+        args["selector"] = selector
+    else:
+        args["dy"] = dy or 600
+    return _browser_act(session_id, "scroll", args, workspace_id)
+
+
+@mcp.tool()
+def browser_upload(session_id: str, selector: str, asset_id: str, workspace_id: str = "") -> dict[str, Any]:
+    """Put an asset's file into a page's <input type=file> — the key step when uploading a video."""
+    return _browser_act(session_id, "upload", {"selector": selector, "asset_id": asset_id}, workspace_id)
+
+
+@mcp.tool()
+def browser_evaluate(session_id: str, expression: str, workspace_id: str = "") -> dict[str, Any]:
+    """Advanced: evaluate a JS expression in the open session's page and return its value.
+
+    Use only when read/click/type cannot express what is needed — the page's own scripts
+    can see this. Prefer browser_read for getting text out.
+    """
+    return _browser_act(session_id, "evaluate", {"expression": expression}, workspace_id)
+
+
+@mcp.tool()
+def publish_asset(
+    account_id: str, asset_id: str, title: str = "", description: str = "", workspace_id: str = ""
+) -> dict[str, Any]:
+    """Confirmation required: publish an asset to a platform with a logged-in account.
+
+    This posts PUBLICLY under the user's account — it always waits for their approval.
+    Get account_id from list_publish_accounts. Do NOT use to export a file locally;
+    that is render_sequence.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "publish_asset",
+            "requested_by": _REQUESTED_BY.get(),
+            "session_id": _SESSION_ID.get() or None,
+            "payload": {
+                "account_id": account_id,
+                "asset_id": asset_id,
+                "title": title,
+                "description": description,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def list_publish_accounts(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: the platform accounts already logged in, for publish_asset."""
+    return _get("/api/publish/accounts", {"workspace_id": workspace_id or _default_workspace_id()})
+
+
+@mcp.tool()
+def http_request(
+    url: str, method: str = "POST", headers: dict[str, Any] | None = None, body: str = ""
+) -> dict[str, Any]:
+    """Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE).
+
+    Use for APIs the built-in tools do not cover. **To READ a page or a JSON endpoint use
+    fetch_url instead** — it needs no approval. This one always asks, because it changes
+    something on a server we do not control. Returns {status, text, json}.
+    """
+    verb = (method or "POST").upper()
+    payload = {"url": url, "method": verb, "headers": headers or {}, "body": body}
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "http_request",
+            "requested_by": _REQUESTED_BY.get(),
+            "session_id": _SESSION_ID.get() or None,
+            "payload": payload,
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def run_code(code: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Confirmation required: run a short Python snippet locally and return `output`.
+
+    Use for computation the other tools cannot express (parsing, math, reshaping data).
+    The snippet reads `inputs` (a dict) and must assign its result to `output`.
+    It runs on the user's machine — that is why it always asks first.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "run_code",
+            "requested_by": _REQUESTED_BY.get(),
+            "session_id": _SESSION_ID.get() or None,
+            "payload": {"code": code, "inputs": inputs or {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 if __name__ == "__main__":

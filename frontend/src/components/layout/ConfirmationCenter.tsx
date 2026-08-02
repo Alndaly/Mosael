@@ -4,9 +4,9 @@ import { Check, ShieldAlert, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useInlineConfirmSessions } from "@/components/agent/confirmSurface";
+import { PermissionBadge } from "@/components/agent/PermissionBadge";
 
 type Confirmation = components["schemas"]["ConfirmationOut"];
 
@@ -92,9 +92,3 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-function PermissionBadge({ permission }: { permission: string }) {
-  const t = useI18n();
-  const label =
-    permission === "edit" ? t("permEdit") : permission === "ai-cost" ? t("permAiCost") : t("permRenderCost");
-  return <Badge variant={permission === "edit" ? "secondary" : "default"}>{label}</Badge>;
-}
