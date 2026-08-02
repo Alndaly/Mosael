@@ -1016,6 +1016,10 @@ function WorkflowEditor({
   const [viewReady, setViewReady] = React.useState(false);
   // 贴靠面板按节点的**屏幕**位置摆放,视口一动就要重算(平移/缩放时面板跟着节点走)。
   const [viewportTick, setViewportTick] = React.useState(0);
+  //  平移画布时,贴靠面板会跟着节点走 —— 一旦它滑到指针底下,浏览器会对这次手势发
+  //  pointercancel,而 React Flow 的平移(d3-zoom)把 pointercancel 当作手势结束,于是画布
+  //  "自己停住了"。面板在平移期间不吃指针事件就不会发生这件事;它照样跟着节点动,只是不拦。
+  const [panning, setPanning] = React.useState(false);
 
   /**
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
@@ -1865,7 +1869,9 @@ function WorkflowEditor({
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onMoveStart={() => setPanning(true)}
             onMove={() => setViewportTick((n) => n + 1)}
+            onMoveEnd={() => setPanning(false)}
             onNodeDragStart={() => setDragging(true)}
             onNodeDragStop={() => setDragging(false)}
             onConnect={onConnect}
@@ -1973,6 +1979,7 @@ function WorkflowEditor({
         {selectedNode && !editingLoopId && anchor && (
           <NodeInspector
             anchor={anchor}
+            inert={panning}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
@@ -2373,6 +2380,7 @@ function LoopBodyEditor({
 
 function NodeInspector({
   anchor,
+  inert = false,
   node,
   meta,
   graph,
@@ -2385,6 +2393,8 @@ function NodeInspector({
 }: {
   /** 贴靠几何:给出就浮现在节点旁(见 anchorToNode);不给就沿用贴右边占满高度的老样式。 */
   anchor?: AnchorBox | null;
+  /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
+  inert?: boolean;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -2895,6 +2905,7 @@ function NodeInspector({
         anchor
           ? "fixed w-[320px] max-w-[calc(100vw-24px)]"
           : "absolute bottom-2 right-2 top-2 w-[min(300px,calc(100%-32px))]",
+        inert && "pointer-events-none",
       )}
       style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight } : undefined}
       aria-label={node.name || meta?.label || node.type}
