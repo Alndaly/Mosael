@@ -2,7 +2,7 @@
 
 > **已落地(v0.8.0)。** 这份文档留下的是**为什么长成这样** —— 目标模型、以及它替换掉的那个
 > 错误模型。写插件怎么写见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md),用户视角见
-> [插件指南](../docs-site/src/content/docs/guides/plugins.md);决策与被否掉的选项见
+> [插件指南](../website/content/docs/zh/guides/plugins.mdx);决策与被否掉的选项见
 > [ADR 0005](adr/0005-plugin-package-instance-capability.md)。
 
 ## 改之前错在哪
@@ -130,6 +130,6 @@ PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态�
 2. **manifest 解析**:新形状 + 旧形状兼容读(旧 manifest 仍能装,按单实例处理)。
 3. **能力开关**:`plugin_capabilities` 接进 `list_enabled_plugin_tools`,插件页出勾选 UI。
 4. **多实例**:插件页的「新建连接」,节点上的实例选择器。
-5. **文档**:重写 PLUGIN_MANIFEST.md,更新 docs-site 的插件页,范例跟上。
+5. **文档**:重写 PLUGIN_MANIFEST.md,更新官网的插件页,范例跟上。
 
 每一步都能独立发布,前三步就把三个故障全修掉;第 4 步是「同时接两个平台」这个能力本身。

@@ -10,7 +10,7 @@ AI 视频创作工作室 = **NLE 内核 + AI 应用中心 + 创作型智能体�
 
 ![操作演示:素材拖入时间线,播放头定位后一键分割](docs/media/timeline-edit.gif)
 
-> 更多操作演示(工作流搭建、知识库、发布矩阵……)见[文档站点](https://openstudio.team)各指南页(源码在 `docs-site/`)。
+> 更多操作演示(工作流搭建、知识库、发布矩阵……)见[官网文档](https://openstudio.team)各指南页(源码在 `website/content/docs/`)。
 
 ### 近期新增
 

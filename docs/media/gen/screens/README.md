@@ -1,6 +1,6 @@
 # 放这里的截图会覆盖默认素材
 
-`build_promo.py` 优先读本目录里的同名 png,没有才回退到 `docs-site/src/assets/screens/`。
+`build_promo.py` 优先读本目录里的同名 png,没有才回退到 `website/public/media/screens/`。
 
 需要的四张(**16:10 或 16:9,越宽越好;暗色浅色都行,但四张要统一**):
 

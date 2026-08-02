@@ -4,7 +4,7 @@
 与上一版的根本区别:**上一版是九张纯 SVG 幻灯片,没有一帧真实产品画面**——观众看完不知道
 这东西长什么样、能不能用。这一版反过来,真实素材占主体,生成的图形只做连接与强调:
 
-  · 产品界面   gen/screens/*.png(优先)或 docs-site 的那套 —— 真实界面截图
+  · 产品界面   gen/screens/*.png(优先)或官网 public/media 里的那套 —— 真实界面截图
   · 排版图形   本文件内的 SVG                       —— 开场、痛点、本地优先、收尾
 
 节奏:痛点(0-6s)→ 四段能力(6-23s)→ 差异化(23-27s)→ CTA(27-30s)。
@@ -30,7 +30,7 @@ SHOTS = os.path.join(HERE, "shots")
 #: 想换成新的,把同名 png 丢进 gen/screens/ 重跑即可,不用改代码。
 MEDIA = os.path.join(REPO, "docs", "media")
 SCREENS_LOCAL = os.path.join(HERE, "screens")
-SCREENS_FALLBACK = os.path.join(REPO, "docs-site", "src", "assets", "screens")
+SCREENS_FALLBACK = os.path.join(REPO, "website", "public", "media", "screens")
 
 
 def screen(name: str) -> str:

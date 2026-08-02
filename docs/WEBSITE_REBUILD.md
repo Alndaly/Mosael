@@ -7,18 +7,22 @@
 
 ## 当前进度(2026-08-03)
 
-站在 `website/`,`pnpm build` 出 35 个静态页。已经完成:
+站在 `website/`,`pnpm build` 出 37 个静态页。**旧的 `docs-site/`(Astro Starlight)已删除** ——
+文档已经全部搬进 `website/content/docs/`,两份并存只会漂移。
+
+已经完成:
 
 - **双语路由**。`/zh` 与 `/en`,`[locale]` 段下就是根布局,`/` 由 redirects 收口。
-- **首页**。撞色色带版面(纸 / 墨 / 朱轮流铺满),三段叙述各配一张真实界面。
-- **文档区**。24 页(中英各 12)从 Starlight 迁成 `content/docs/` 下的 MDX,三栏
-  (目录 / 正文 / 本页目录),正文一个字没改。
+- **首页**。撞色色带版面(纸 / 墨 / 朱轮流铺满),三段叙述各配一张真实界面,末尾是社区二维码。
+- **文档区**。24 页(中英各 12),三栏(目录 / 正文 / 本页目录),标题带锚点。
+- **全文搜索**(⌘K)。构建期抽成静态 JSON,按小节建索引,纯前端匹配。
 - **插件页**。列表构建期直接读 `plugins/examples/` 里的 manifest,不另抄一份。
 - **工作流页**。条目形状已定,画廊在等第一条投稿。
-- **录制脚本**已改成同时写 `docs-site/` 和 `website/public/media/`。
+- **深浅两套配图**。23 个资产里 22 个有两套,站点按主题选;录制脚本
+  (`scripts/record-doc-media.py`)默认 `--theme both`,深色那套落在 `dark/` 子目录。
 
-**还没做**:退役 `docs-site/`(两份文档并存会漂移,但新站还没部署,所以先留着);
-`/api/workflows` 的示例图;把 README 里指向 openstudio.team 的链接对一遍。
+**还没做**:`/api/workflows` 的示例图(工作流画廊的第一条内容);`editor-import.gif` 的深色版
+(它演示往工程里导入素材,录一次就真往库里加东西,不适合放进例行重录)。
 
 设计与工程上的约定写在 [`website/README.md`](../website/README.md),不在这里重复。
 
@@ -48,9 +52,7 @@ index.mdx  首页
 `en/` 下是同构的英文版。**双语必须保留** —— 现在是 Starlight 的 i18n,Next 这边要自己搭
 (App Router 的 `[locale]` 段 + 一份 messages)。
 
-媒体在 `docs-site/src/assets/`(17MB,screens/ 与 gifs/),由
-`scripts/record-doc-media.py` 对着真实界面生成 —— **重建后要把那个脚本的输出路径跟着改**,
-否则下次重录会写进一个没人读的目录。
+媒体现在在 `website/public/media/`,由 `scripts/record-doc-media.py` 对着真实界面生成。
 
 ## 设计方向(用户原话:「文艺一些」)
 
@@ -79,8 +81,7 @@ manifest 格式见 `docs/PLUGIN_MANIFEST.md`。工作流的导入格式就是 `/
 - 现在的站点构建产物走 Astro 的图片优化(PNG → webp,240kB → 62kB)。Next 用
   `next/image` 能达到同样效果,但**要确认 GIF 的处理**:`next/image` 默认不优化 GIF,
   需要 `unoptimized` 或换成 video。
-- 文档里有指向仓库文件的相对链接(如 `../docs-site/src/content/docs/guides/plugins.md`),
-  迁移时会断,搜一遍 `](../` 和 `](/docs`。
+- 文档里有指向仓库文件的相对链接,迁移时会断,搜一遍 `](../` 和 `](/docs`。
 
 ## 别忘了
 

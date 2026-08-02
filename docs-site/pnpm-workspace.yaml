@@ -1,4 +1,0 @@
-allowBuilds:
-  # Astro 图片优化用 sharp(需构建/下载原生二进制);esbuild 是 Astro/Vite 的打包器,同样是原生二进制。
-  sharp: true
-  esbuild: true

@@ -10,7 +10,7 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ![Demo: drag clips onto the timeline, position the playhead, split in one keystroke](docs/media/timeline-edit.gif)
 
-> More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs site](https://openstudio.team) guides (source in `docs-site/`).
+> More walkthrough GIFs (workflow building, knowledge base, publishing matrix…) live in the [docs](https://openstudio.team) guides (source in `website/content/docs/`).
 
 ### Recently added
 

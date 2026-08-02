@@ -174,7 +174,7 @@ REST)。但**改一处不改另一处**的后果是隐性的——前端说「�
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
   测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
-- `cd docs-site && pnpm run build` when touching docs-site(它不在 release CI 里,坏了不会有人告诉你)
+- `cd website && pnpm build` when touching 官网或文档(它不在 release CI 里,坏了不会有人告诉你)
 - targeted browser smoke only when the change affects actual platform page driving
 - **桌面端**(不是浏览器预览)when the change touches 拖拽区 / 无边框窗 / 内嵌浏览器 —— 见第 10 条
 - **拿真实凭据跑一次** when the change touches 供应商凭据、令牌刷新或额度解析 —— 见第 11 条

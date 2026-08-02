@@ -10,11 +10,11 @@
     pnpm --dir frontend dev                      # 5173,CORS 允许的源
     backend/.venv/bin/python scripts/record-doc-media.py --token <会话令牌>
 
-产物落在 docs/media/,并分发到旧文档站与新官网(见下面的 publish)。
+产物落在 docs/media/,并分发到官网的 public/(见下面的 publish)。
 GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
 
 **默认两套都录**(`--theme both`)。站点按当前主题选图:浅色页面配浅色截图,深色页面配
-深色截图 —— 一张浅色截图贴在深色版面里,会像是从别处抠来的。深色那套落在各输出目录的
+深色截图 —— 一张浅色截图贴在深色版面里,会像是从别处抠来的。深色那套落在输出目录的
 `dark/` 子目录,文件名与浅色一致。
 """
 
@@ -31,15 +31,10 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-#: 三处媒体各有各的消费者,别合并:
-#:   docs/media          仓库 README(GitHub 上直接渲染,只认仓库内相对路径)
-#:   docs-site/src/assets 旧文档站(Astro 做尺寸优化,必须是 src/ 下的相对引用)
-#:   website/public/media 新官网(Next 的 public/,按 URL 引用;next/image 自己做优化)
-#: docs-site 正在被 website/ 取代(见 docs/WEBSITE_REBUILD.md)。迁移期间两边都写 ——
-#: 少写一边的后果是某个站悄悄停在半年前的界面上,而这正是这个脚本存在的理由。
+#: 两处媒体各有各的消费者,别合并:
+#:   docs/media           仓库 README(GitHub 上直接渲染,只认仓库内相对路径)
+#:   website/public/media 官网(Next 的 public/,按 URL 引用;next/image 自己做优化)
 MEDIA = ROOT / "docs" / "media"
-SITE_GIFS = ROOT / "docs-site" / "src" / "assets" / "gifs"
-SITE_SHOTS = ROOT / "docs-site" / "src" / "assets" / "screens"
 WEB_GIFS = ROOT / "website" / "public" / "media" / "gifs"
 WEB_SHOTS = ROOT / "website" / "public" / "media" / "screens"
 
@@ -76,13 +71,11 @@ CURRENT_THEME = "light"
 
 
 def publish(src: Path, name: str, *, gif: bool = False) -> None:
-    """把一件产物分发到两个站点,同名落地。深色那套进 `dark/` 子目录。"""
-    sub = "dark" if CURRENT_THEME == "dark" else ""
-    targets = [(SITE_GIFS if gif else SITE_SHOTS) / sub / name, (WEB_GIFS if gif else WEB_SHOTS) / sub / name]
-    for target in targets:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(src, target)
-    print("  → " + " / ".join(str(t.relative_to(ROOT)) for t in targets))
+    """把一件产物送进官网的 public/。深色那套进 `dark/` 子目录。"""
+    target = (WEB_GIFS if gif else WEB_SHOTS) / ("dark" if CURRENT_THEME == "dark" else "") / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(src, target)
+    print(f"  → {target.relative_to(ROOT)}")
 
 
 class Recorder:
@@ -538,7 +531,7 @@ def main() -> int:
     parser.add_argument("--theme", default="both", choices=["both", "dark", "light"], help="录制用的应用主题")
     args = parser.parse_args()
 
-    for d in (MEDIA, SITE_GIFS, SITE_SHOTS, WEB_GIFS, WEB_SHOTS):
+    for d in (MEDIA, WEB_GIFS, WEB_SHOTS):
         d.mkdir(parents=True, exist_ok=True)
     scenes = {"home": record_home, "media": record_media, "editor": record_editor,
               "plugins": record_plugins, "workflows": record_workflows,

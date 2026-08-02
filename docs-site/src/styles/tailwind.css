@@ -1,8 +1,0 @@
-/* Tailwind v4 接入(Starlight 官方姿势):跳过 preflight(会砸烂 Starlight 自带样式),
-   只取 theme 变量层与 utilities 层;层级顺序声明保证 Starlight 样式优先级正确。
-   自定义 React 组件(shadcn 风格)里的 tailwind 类由 @tailwindcss/vite 扫描生成。 */
-@layer base, starlight, theme, components, utilities;
-
-@import "@astrojs/starlight-tailwind";
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);

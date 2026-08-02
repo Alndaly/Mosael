@@ -1,7 +1,7 @@
 # Open Studio 官网(website)
 
-Next.js 16 + Tailwind 4 + shadcn/ui。中英双语,文档也在这里 —— 它取代 `docs-site/`
-(Astro Starlight),迁移记录见 [`docs/WEBSITE_REBUILD.md`](../docs/WEBSITE_REBUILD.md)。
+Next.js 16 + Tailwind 4 + shadcn/ui。中英双语,文档也在这里 —— 它取代了原来的 Astro
+Starlight 文档站,迁移记录见 [`docs/WEBSITE_REBUILD.md`](../docs/WEBSITE_REBUILD.md)。
 
 ```bash
 pnpm install
@@ -50,4 +50,4 @@ props 传。
 - **`/` 没有页面**,由 `next.config.ts` 的 redirects 送到 `/zh`。全站路由都在 `[locale]` 段下,
   因为 `<html lang>` 必须跟着语言变,而真正的根布局拿不到动态参数。
 - **配图会过期,而过期的配图比没有更糟**。重录用 `scripts/record-doc-media.py`,它同时写
-  `docs-site/` 和这里;别退回手工截图。
+  `website/public/media/`;别退回手工截图。
