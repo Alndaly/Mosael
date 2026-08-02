@@ -269,7 +269,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             </Button>
             <Button
               size="sm"
-              disabled={!appId.trim() || !appSecret.trim() || addBot.isPending}
+              disabled={!appId.trim() || !appSecret.trim()} loading={addBot.isPending}
               onClick={() => addBot.mutate()}
             >
               {t("feishuAdd")}

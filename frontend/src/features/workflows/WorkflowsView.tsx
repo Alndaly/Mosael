@@ -663,10 +663,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           body={t("wfEmptyBody")}
           action={
             <span className="inline-flex items-center gap-2">
-              <Button disabled={create.isPending} onClick={() => create.mutate()}>
+              <Button loading={create.isPending} onClick={() => create.mutate()}>
                 <Plus size={15} /> {t("wfCreate")}
               </Button>
-              <Button variant="outline" disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+              <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={15} /> {t("wfImport")}
               </Button>
               <input
@@ -694,10 +694,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("navWorkflows")}</h2>
             <span className="inline-flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} disabled={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                {importFile.isPending ? <Loader2 size={14} className="animate-openstudio-spin" /> : <FileUp size={14} />}
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+                <FileUp size={14} />
               </Button>
-              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} disabled={create.isPending} onClick={() => create.mutate()}>
+              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} loading={create.isPending} onClick={() => create.mutate()}>
                 <Plus size={14} />
               </Button>
             </span>
@@ -1790,7 +1790,7 @@ function WorkflowEditor({
               脏状态期间运行按钮自会禁用并带「保存中」提示,足够了。 */}
           <Button
             size="sm"
-            disabled={run.isPending || dirty || !analysis.runnable}
+            disabled={dirty || !analysis.runnable} loading={run.isPending}
             title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : undefined}
             onClick={() => run.mutate()}
           >

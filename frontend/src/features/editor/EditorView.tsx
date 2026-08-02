@@ -852,7 +852,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           title={t("emptyTimeline")}
           body={t("mediaEmptyBody")}
           action={
-            <Button onClick={() => createSequence.mutate()} disabled={createSequence.isPending}>
+            <Button onClick={() => createSequence.mutate()} loading={createSequence.isPending}>
               <Plus size={15} /> {t("createMainSequence")}
             </Button>
           }
@@ -1047,7 +1047,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    disabled={!sequence.can_undo || undoMutation.isPending}
+                    disabled={!sequence.can_undo} loading={undoMutation.isPending}
                     onClick={() => undoMutation.mutate()}
                     aria-label={t("undo")}
                   >
@@ -1062,7 +1062,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    disabled={!sequence.can_redo || redoMutation.isPending}
+                    disabled={!sequence.can_redo} loading={redoMutation.isPending}
                     onClick={() => redoMutation.mutate()}
                     aria-label={t("redoAction")}
                   >
@@ -1077,7 +1077,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    disabled={addSubtitleMutation.isPending}
+                    loading={addSubtitleMutation.isPending}
                     onClick={() => addSubtitleMutation.mutate()}
                     aria-label={t("addSubtitleAtPlayhead")}
                   >
@@ -1092,7 +1092,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    disabled={addTextMutation.isPending}
+                    loading={addTextMutation.isPending}
                     onClick={() => addTextMutation.mutate()}
                     aria-label={t("addTextAtPlayhead")}
                   >

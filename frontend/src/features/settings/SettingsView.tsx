@@ -817,7 +817,7 @@ function ProxySection() {
         <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">
           {config.data?.effective_no_proxy || "…"}
         </code>
-        <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
           {t("save")}
         </Button>
       </SettingsRow>

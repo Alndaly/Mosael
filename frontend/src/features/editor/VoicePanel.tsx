@@ -407,10 +407,10 @@ export function VoicePanel({
           />
           <Button
             className="w-full"
-            disabled={!text.trim() || synth.isPending || !engineReady}
+            disabled={!text.trim() || !engineReady} loading={synth.isPending}
             onClick={() => synth.mutate()}
           >
-            {synth.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Wand2 size={13} />} {t("voiceGenerate")}
+            <Wand2 size={13} /> {t("voiceGenerate")}
           </Button>
           {engine === "clone" && !activeVoice && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
@@ -483,7 +483,7 @@ export function VoicePanel({
               <span className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceFromSpeakerHint")}</span>
               <Button
                 size="sm"
-                disabled={!spAsset || !spSpeaker || fromSpeaker.isPending}
+                disabled={!spAsset || !spSpeaker} loading={fromSpeaker.isPending}
                 onClick={() => fromSpeaker.mutate()}
               >
                 {fromSpeaker.isPending ? <Loader2 size={12} className="animate-openstudio-spin" /> : null} {t("voiceDoClone")}
@@ -525,7 +525,7 @@ export function VoicePanel({
               </div>
               <Button
                 size="sm"
-                disabled={!name.trim() || !file || recording || upload.isPending}
+                disabled={!name.trim() || !file || recording} loading={upload.isPending}
                 onClick={() => upload.mutate()}
               >
                 {upload.isPending ? <Loader2 size={12} className="animate-openstudio-spin" /> : null} {t("confirm")}

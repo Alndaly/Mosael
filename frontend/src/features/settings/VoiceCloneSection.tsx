@@ -192,7 +192,7 @@ export function VoiceCloneSection() {
               )}
             />
             <div className="mt-1 flex justify-end gap-1.5">
-              <Button type="submit" size="sm" disabled={save.isPending}>
+              <Button type="submit" size="sm" loading={save.isPending}>
                 {t("save")}
               </Button>
             </div>

@@ -131,7 +131,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                 <Button
                   size="sm"
                   className="h-7"
-                  disabled={respond.isPending}
+                  loading={respond.isPending}
                   onClick={() => respond.mutate({ id: inv.id, accept: true })}
                 >
                   <Check size={12} /> {t("notifInviteAccept")}
@@ -140,7 +140,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                   size="sm"
                   variant="outline"
                   className="h-7 text-muted-foreground"
-                  disabled={respond.isPending}
+                  loading={respond.isPending}
                   onClick={() => respond.mutate({ id: inv.id, accept: false })}
                 >
                   <X size={12} /> {t("notifInviteDecline")}

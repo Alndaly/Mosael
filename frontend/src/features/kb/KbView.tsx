@@ -365,7 +365,7 @@ function DocumentsTab({ dataset, workspace }: { dataset: KbDataset; workspace: W
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto">
       <div className="flex flex-wrap gap-1.5">
-        <Button size="sm" variant="outline" onClick={() => createNote.mutate()} disabled={createNote.isPending}>
+        <Button size="sm" variant="outline" onClick={() => createNote.mutate()} loading={createNote.isPending}>
           <NotebookPen size={13} /> {t("kbNewNote")}
         </Button>
         <Button size="sm" variant="outline" onClick={() => setUrlOpen(true)}>
@@ -521,7 +521,7 @@ function DocumentDetail({
           <span className={cn("text-[11.5px]", dirty ? "text-[#f59e0b]" : "text-muted-foreground")}>
             {dirty ? t("kbUnsavedHint") : t("kbSaved")}
           </span>
-          <Button size="sm" disabled={!dirty || save.isPending} title={t("kbSaveShortcut")} onClick={doSave}>
+          <Button size="sm" disabled={!dirty} loading={save.isPending} title={t("kbSaveShortcut")} onClick={doSave}>
             {save.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("kbSave")}
           </Button>
         </span>
@@ -596,8 +596,8 @@ function RecallTestTab({ dataset }: { dataset: KbDataset }) {
         }}
       >
         <Input value={query} placeholder={t("kbRecallPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
-        <Button type="submit" size="sm" disabled={!query.trim() || run.isPending}>
-          {run.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Search size={13} />} {t("kbRecallRun")}
+        <Button type="submit" size="sm" disabled={!query.trim()} loading={run.isPending}>
+          <Search size={13} /> {t("kbRecallRun")}
         </Button>
       </form>
       <p className="text-[11.5px] text-muted-foreground">{t("kbRecallHint")}</p>
@@ -754,7 +754,7 @@ function SettingsTab({ dataset }: { dataset: KbDataset }) {
       </SettingsGroup>
 
       <div className="flex items-center gap-2.5">
-        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+        <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("kbSaveSettings")}
         </Button>
         {save.isSuccess && !save.isPending && <span className="text-[11.5px] text-success">{t("kbSaved")}</span>}

@@ -314,7 +314,7 @@ export function ModelSettingsDialog({
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             {t("cancel")}
           </Button>
-          <Button type="submit" size="sm" disabled={save.isPending || !current}>
+          <Button type="submit" size="sm" disabled={!current} loading={save.isPending}>
             {t("save")}
           </Button>
         </div>

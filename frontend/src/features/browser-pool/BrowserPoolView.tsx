@@ -225,7 +225,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          disabled={recheck.isPending}
+                          loading={recheck.isPending}
                           onClick={() => recheck.mutate(p.bound_account_id!)}
                         >
                           <RefreshCcw size={13} /> {t("publishRecheck")}

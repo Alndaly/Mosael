@@ -236,8 +236,8 @@ function SubtitleTranslate({
           <span>{t("subtitleTranslateBilingual")}</span>
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
-        <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
-          {run.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Languages size={13} />}
+        <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>
+          <Languages size={13} />
           {(scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
             "{n}",
             String(targets.length),

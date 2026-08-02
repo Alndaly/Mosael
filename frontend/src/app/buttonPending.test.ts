@@ -7,6 +7,10 @@
  * 判据(Button 的 `loading` 注释里写的是同一条):点下去会发请求,而且**没有别的即时反馈**。
  * 纯前端的开合/筛选不算;点完立刻关掉弹层、或者当场把界面换掉的,那个变化本身就是反馈。
  *
+ * **`<Button>` 必须用 `loading`,不能只 `disabled`**。变灰和"点了没反应"长得一模一样 ——
+ * 它只是不再响应,没有告诉任何人"我在做"。原生 `<button>`(列表行里那些小图标)放宽到
+ * `disabled` 就够:它们太小,塞一个转圈会把行撑得抖,而防重复点击才是那里的主要诉求。
+ *
  * 例外只能出现在 EXEMPT 里,而且要写清楚"它的即时反馈是什么" —— 只减不增,和
  * tests/test_data_ownership_ratchet.py 是同一套棘轮。
  */
@@ -74,8 +78,16 @@ describe("会发请求的按钮都反映进行中状态", () => {
         for (const h of source.matchAll(/onClick=\{(\w+)\}/g)) body += handlers.get(h[1]) ?? "";
         const names = [...body.matchAll(/(\w+)\.mutate(?:Async)?\(/g)].map((m) => m[1]);
         if (names.length === 0) continue;
-        // 接了任意一个相关 mutation 的 isPending 就算过关(disabled 与 loading 都数)
-        if (names.some((name) => source.includes(`${name}.isPending`))) continue;
+        // 组件版 <Button> 必须是 loading;原生 <button> 接上 disabled 即可。
+        const isComponent = source.startsWith("<Button");
+        const ok = names.some((name) =>
+          isComponent
+            ? source.includes(`loading={${name}.isPending`)
+            : source.includes(`${name}.isPending`),
+        );
+        // loading 接的是别的表达式(飞书扫码的 scanning、转写的 asrRunning)也算 —— 那些
+        // 变量本身就是"正在进行"的更准确来源,豁免清单里写了理由。
+        if (ok || (isComponent && source.includes("loading={"))) continue;
         const key = `${rel}:${names[0]}`;
         if (key in EXEMPT) continue;
         missing.push(key);

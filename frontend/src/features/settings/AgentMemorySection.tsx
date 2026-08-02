@@ -103,7 +103,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
             onToggleAll={bulk.toggleAll}
             onExit={bulk.exit}
           >
-            <Button variant="outline" size="sm" disabled={removeMany.isPending} onClick={() => removeMany.mutate(bulk.selectedIds)}>
+            <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => removeMany.mutate(bulk.selectedIds)}>
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
           </BulkActionBar>
@@ -137,7 +137,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
                       <div className="flex gap-1.5">
                         <Button
                           size="sm"
-                          disabled={update.isPending || !editing.content.trim()}
+                          disabled={!editing.content.trim()} loading={update.isPending}
                           onClick={() => update.mutate({ id: row.id, content: editing.content })}
                         >
                           {t("agentMemorySave")}
@@ -192,7 +192,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
                 onChange={(event) => setDraft(event.target.value)}
               />
               <div className="flex gap-1.5">
-                <Button size="sm" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate(draft.trim())}>
+                <Button size="sm" disabled={!draft.trim()} loading={create.isPending} onClick={() => create.mutate(draft.trim())}>
                   {t("agentMemorySave")}
                 </Button>
                 <Button

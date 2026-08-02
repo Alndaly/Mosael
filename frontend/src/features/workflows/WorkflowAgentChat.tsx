@@ -662,7 +662,7 @@ export function WorkflowAgentChat({
               size="icon"
               className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attach.isEmpty) || send.isPending || attach.uploading}
+              disabled={(!draft.trim() && attach.isEmpty) || attach.uploading} loading={send.isPending}
               onClick={submit}
             >
               <Send size={14} />

@@ -431,14 +431,14 @@ function CreatePublishDialog({
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>
         <div className="mt-1 flex items-center justify-end gap-1.5">
-          <Button variant="outline" size="sm" disabled={aiCopy.isPending || !assetId} onClick={() => aiCopy.mutate()}>
-            {aiCopy.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Sparkles size={13} />} {t("publishAiCopy")}
+          <Button variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
+            <Sparkles size={13} /> {t("publishAiCopy")}
           </Button>
           <span className="flex-1" />
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button size="sm" disabled={!assetId || !accountId || create.isPending} onClick={() => create.mutate()}>
+          <Button size="sm" disabled={!assetId || !accountId} loading={create.isPending} onClick={() => create.mutate()}>
             <Rocket size={13} /> {t("publishStart")}
           </Button>
         </div>

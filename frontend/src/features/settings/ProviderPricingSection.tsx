@@ -300,7 +300,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 variant="outline"
                 size="sm"
                 className="justify-start"
-                disabled={prefill.isPending}
+                loading={prefill.isPending}
                 onClick={() => prefill.mutate(profile.id)}
               >
                 {profile.name}
@@ -452,7 +452,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       <SettingsBlock>
         <div className="grid gap-1.5">
           <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-            <Button variant="outline" size="sm" disabled={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
+            <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
           </BulkActionBar>

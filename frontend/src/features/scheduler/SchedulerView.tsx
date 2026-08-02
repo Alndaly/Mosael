@@ -337,7 +337,7 @@ function CreateTaskDialog({
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button size="sm" disabled={!workflowId || create.isPending} onClick={() => create.mutate()}>
+          <Button size="sm" disabled={!workflowId} loading={create.isPending} onClick={() => create.mutate()}>
             <CalendarClock size={13} /> {t("createTask")}
           </Button>
         </div>
@@ -402,7 +402,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         description={`${t(`taskKind_${task.kind}` as never)} · ${t(`trigger_${task.trigger_type}` as never)}`}
         actions={
           <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="outline" disabled={!task.enabled || runTask.isPending} onClick={() => runTask.mutate()}>
+            <Button size="sm" variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}
             </Button>
             <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">

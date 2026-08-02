@@ -693,7 +693,7 @@ function GenerateWorkspace({
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
         <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2>{t("generationSessionsTitle")}</h2>
-          <Button variant="outline" size="icon" className="h-7 w-7" title={t("generationNewSession")} aria-label={t("generationNewSession")} onClick={() => createSession.mutate()} disabled={createSession.isPending}>
+          <Button variant="outline" size="icon" className="h-7 w-7" title={t("generationNewSession")} aria-label={t("generationNewSession")} onClick={() => createSession.mutate()} loading={createSession.isPending}>
             <Plus size={14} />
           </Button>
         </div>
@@ -816,15 +816,13 @@ function GenerateWorkspace({
                   variant="ghost"
                   size="sm"
                   className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
-                  disabled={!prompt.trim() || !selectedAdapterAvailable || optimizePrompt.isPending || createGeneration.isPending}
+                  // createGeneration 是**别的**操作在跑,那是 disable;自己在跑才是 loading。
+                  disabled={!prompt.trim() || !selectedAdapterAvailable || createGeneration.isPending}
+                  loading={optimizePrompt.isPending}
                   onClick={() => optimizePrompt.mutate()}
                   title={t("optimizePrompt")}
                 >
-                  {optimizePrompt.isPending ? (
-                    <Loader2 size={13} className="animate-openstudio-spin" />
-                  ) : (
-                    <Wand2 size={13} />
-                  )}
+                  <Wand2 size={13} />
                   {t("optimizePrompt")}
                 </Button>
               )}
@@ -834,9 +832,9 @@ function GenerateWorkspace({
               size="icon"
               className="shrink-0 rounded-full"
               aria-label={t("generate")}
-              disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending}
+              disabled={!prompt.trim() || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
             >
-              {createGeneration.isPending ? <Loader2 size={15} className="animate-openstudio-spin" /> : <Send size={15} />}
+              <Send size={15} />
             </Button>
           </div>
         </form>
@@ -965,9 +963,9 @@ function GenerateWorkspace({
                         size="sm"
                         className="w-full justify-center"
                         onClick={() => referenceImageInputRef.current?.click()}
-                        disabled={uploadReferenceImage.isPending}
+                        loading={uploadReferenceImage.isPending}
                       >
-                        {uploadReferenceImage.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Upload size={13} />}
+                        <Upload size={13} />
                         {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
                       </Button>
                       {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
@@ -1088,9 +1086,9 @@ function GenerateWorkspace({
                       size="sm"
                       className="w-full justify-center"
                       onClick={() => firstFrameInputRef.current?.click()}
-                      disabled={uploadFirstFrame.isPending}
+                      loading={uploadFirstFrame.isPending}
                     >
-                      {uploadFirstFrame.isPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Upload size={13} />}
+                      <Upload size={13} />
                       {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
                     </Button>
                     {generationConfig.firstFrameAssetId && (

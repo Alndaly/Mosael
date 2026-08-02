@@ -52,7 +52,7 @@ export function AiRuntimeSection() {
           disabled={config.isLoading}
           onChange={(e) => setDraft(e.target.value === "" ? 0 : clampRetries(Number(e.target.value)))}
         />
-        <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate(clampRetries(current))}>
+        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(clampRetries(current))}>
           {t("save")}
         </Button>
       </SettingsRow>

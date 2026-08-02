@@ -111,13 +111,13 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
             <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" disabled={settle.isPending} onClick={() => settle.mutate({ id: item.id, action: "approve" })}>
+            <Button size="sm" loading={settle.isPending} onClick={() => settle.mutate({ id: item.id, action: "approve" })}>
               <Check size={13} /> {t("confirmAllowOnce")}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={settle.isPending}
+              loading={settle.isPending}
               onClick={() => {
                 allowTool(item.tool);
                 settle.mutate({ id: item.id, action: "approve" });
@@ -129,7 +129,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
               size="sm"
               variant="outline"
               className="text-destructive"
-              disabled={settle.isPending}
+              loading={settle.isPending}
               onClick={() => settle.mutate({ id: item.id, action: "reject" })}
             >
               <X size={13} /> {t("confirmReject")}

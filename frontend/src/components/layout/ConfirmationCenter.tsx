@@ -72,7 +72,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
           <div className="flex gap-1.5">
             <Button
               size="sm"
-              disabled={settle.isPending}
+              loading={settle.isPending}
               onClick={() => settle.mutate({ id: item.id, action: "approve" })}
             >
               <Check size={13} /> {t("confirmApprove")}
@@ -80,7 +80,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
             <Button
               size="sm"
               variant="outline"
-              disabled={settle.isPending}
+              loading={settle.isPending}
               onClick={() => settle.mutate({ id: item.id, action: "reject" })}
             >
               <X size={13} /> {t("confirmReject")}

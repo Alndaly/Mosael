@@ -113,7 +113,7 @@ export function AddAccountDialog({
           <Button variant="outline" size="sm" onClick={onClose}>
             {t("close")}
           </Button>
-          <Button size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
+          <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
             <Plus size={13} /> {t("publishAccountAdd")}
           </Button>
         </div>

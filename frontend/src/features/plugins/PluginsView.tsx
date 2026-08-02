@@ -194,7 +194,7 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
             variant="outline"
             size="sm"
             className="text-destructive hover:text-destructive"
-            disabled={uninstall.isPending}
+            loading={uninstall.isPending}
             onClick={() => setConfirmUninstall(true)}
           >
             <Trash2 size={13} /> {t("pluginUninstall")}
@@ -215,7 +215,7 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
                   onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
                 />
               ))}
-              <Button size="sm" disabled={createInstance.isPending} onClick={() => createInstance.mutate()}>
+              <Button size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
                 <Plus size={13} /> {t("pluginAddConnection")}
               </Button>
             </div>
@@ -332,8 +332,8 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />
           </label>
           {pkg.kind === "mcp" && (
-            <Button variant="outline" size="sm" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-              <RefreshCcw size={13} className={refresh.isPending ? "animate-openstudio-spin" : undefined} />
+            <Button variant="outline" size="sm" loading={refresh.isPending} onClick={() => refresh.mutate()}>
+              <RefreshCcw size={13} />
               {t("pluginRefreshTools")}
             </Button>
           )}
@@ -538,7 +538,7 @@ function CredentialRows({ instanceId }: { instanceId: string }) {
                 自动保存会让"改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上
                 的连接。一个显式的保存按钮同时也是"现在去重连试试"的时机。 */}
             {Object.keys(draft).length > 0 && (
-              <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+              <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
                 <KeyRound size={13} /> {t("pluginCredentialsSave")}
               </Button>
             )}
@@ -661,7 +661,7 @@ function ToolRow({
             </label>
           ))}
           <div className="flex justify-end">
-            <Button size="sm" disabled={!runnable || missingRequired || invoke.isPending} onClick={() => invoke.mutate()}>
+            <Button size="sm" disabled={!runnable || missingRequired} loading={invoke.isPending} onClick={() => invoke.mutate()}>
               <Play size={13} /> {t("runTool")}
             </Button>
           </div>
@@ -696,7 +696,7 @@ function InvocationList({ instanceId }: { instanceId: string }) {
     <SettingsBlock>
       <div className="flex items-center justify-between">
         <p className="m-0 text-[11.5px] text-muted-foreground">{t("invocationsGroupDesc")}</p>
-        <Button variant="outline" size="sm" disabled={clear.isPending} onClick={() => clear.mutate()}>
+        <Button variant="outline" size="sm" loading={clear.isPending} onClick={() => clear.mutate()}>
           <Trash2 size={13} /> {t("invocationsClear")}
         </Button>
       </div>
