@@ -55,12 +55,10 @@ function pathFor(points: CurvePoint[]): string {
 export function CurveEditor({
   curves,
   onChange,
-  onCommitStart,
 }: {
   curves: ColorCurves | undefined;
   onChange: (next: ColorCurves) => void;
   /** 拖动/加点/删点开始前调用一次(调色撤销栈记一步)。 */
-  onCommitStart?: () => void;
 }) {
   const t = useI18n();
   const [channel, setChannel] = React.useState<Channel>("luma");
@@ -100,7 +98,6 @@ export function CurveEditor({
   const onPointDown = (event: React.PointerEvent, index: number) => {
     event.stopPropagation();
     capturePointer(event);
-    onCommitStart?.();
     dragRef.current = index;
   };
 
@@ -140,7 +137,6 @@ export function CurveEditor({
     }
     if (left + MIN_GAP > right - MIN_GAP) return; // 这里塞不下新点,忽略这次按下
     const x = clamp01(Math.min(Math.max(ux, left + MIN_GAP), right - MIN_GAP));
-    onCommitStart?.();
     const newPoint: CurvePoint = [x, uy];
     const pts = [...points, newPoint].sort((a, b) => a[0] - b[0]);
     const index = pts.indexOf(newPoint); // 按引用定位,避免浮点相等误抓到别的点
@@ -153,12 +149,10 @@ export function CurveEditor({
     event.preventDefault();
     event.stopPropagation();
     if (index === 0 || index === points.length - 1) return; // 端点不可删
-    onCommitStart?.();
     commitPoints(points.filter((_, i) => i !== index));
   };
 
   const resetChannel = () => {
-    onCommitStart?.();
     commitPoints(IDENTITY_CURVE.map((p) => [...p] as CurvePoint));
   };
 

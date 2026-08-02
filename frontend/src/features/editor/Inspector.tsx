@@ -1,5 +1,5 @@
 import React from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, Redo2, RotateCcw, Trash2, Undo2, Upload, X } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, RotateCcw, Trash2, Upload, X } from "lucide-react";
 
 import type { Asset, Clip, Font, Sequence } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import { useEditorStore } from "@/stores/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
-import { useColorHistory } from "@/features/editor/useColorHistory";
 import { LutPicker } from "@/features/editor/LutPicker";
 import { cn } from "@/lib/utils";
 
@@ -594,11 +593,13 @@ function ColorGradePanel({
   const isCleanColor =
     !effects.filter && !curColor.curves && !curColor.lut && !GRADE_KEYS.some((key) => grade[key]);
 
-  // 调色独立撤销栈:按 clip 存快照(color+filter),每次编辑前记一步。与时间线全局
-  // 撤销无关 —— 撤销只是再发一次 setEffects,方便反复试色。
-  const history = useColorHistory(clip.id, clip.effects, onSetEffects);
+  // 调色不再有自己的撤销栈,统一走时间线的 ⌘Z。
+  //
+  // 那套栈的 undo 只是"再发一次 setEffects",而每次 setEffects 都会在服务端记一条
+  // set_clip_effect —— 于是它撤销的动作本身又往全局栈里压了一条。实测三次试色 + 三次
+  // 面板撤销 = 全局栈 6 条,用户想回到调色之前要按 6 次 ⌘Z,其中 3 次是在撤销自己的撤销。
+  // 同一份状态上架两套栈就会这样;滑杆本来就是松手提交一次,全局栈的颗粒度已经够用。
   const applyPreset = (payload: Record<string, unknown> | null) => {
-    history.snapshot();
     const next = { ...clip.effects } as Record<string, unknown>;
     delete next.filter; // 调色预设是唯一真源,清掉遗留的 CSS 滤镜
     if (payload) {
@@ -610,20 +611,17 @@ function ColorGradePanel({
     onSetEffects(clip.id, next);
   };
   const applyGrade = (key: GradeKey, raw: string) => {
-    history.snapshot();
     const value = Math.max(-1, Math.min(1, Number(raw) / 100));
     // 从完整 color 展开,保住 curves 等非滑杆字段。
     onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, [key]: value } });
   };
   const resetAll = () => {
-    history.snapshot();
     const next = { ...clip.effects } as Record<string, unknown>;
     delete next.color;
     delete next.filter;
     onSetEffects(clip.id, next);
   };
   const setLut = (lutId: string | undefined) => {
-    history.snapshot();
     const nextColor = { ...curColor };
     if (lutId) nextColor.lut = lutId;
     else delete nextColor.lut;
@@ -636,26 +634,6 @@ function ColorGradePanel({
         <span>{t("colorTarget")}</span>
         <strong title={targetName}>{targetName}</strong>
         <div className="inline-flex items-center gap-1">
-          <button
-            type="button"
-            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
-            onClick={history.undo}
-            disabled={!history.canUndo}
-            title={t("colorUndo")}
-            aria-label={t("colorUndo")}
-          >
-            <Undo2 size={12} />
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
-            onClick={history.redo}
-            disabled={!history.canRedo}
-            title={t("colorRedo")}
-            aria-label={t("colorRedo")}
-          >
-            <Redo2 size={12} />
-          </button>
           {hasGrade && (
             <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-destructive" onClick={resetAll} title={t("gradeResetAllHint")}>
               <RotateCcw size={11} /> {t("gradeReset")}
@@ -713,7 +691,6 @@ function ColorGradePanel({
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
-          onCommitStart={history.snapshot}
           onChange={(next) =>
             onSetEffects(clip.id, { ...clip.effects, color: { ...curColor, curves: next } })
           }
