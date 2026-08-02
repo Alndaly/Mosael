@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
+  Copy,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -561,8 +562,11 @@ interface ToolState {
 /** 工具的入参模式:生成的类型只知道它是个对象,这里收一次窄化,免得每处各写一遍断言。 */
 type InputSchema = { properties?: Record<string, { type?: string; description?: string }>; required?: string[] };
 
-/** 工具行:左边一个「暴不暴露」的勾,展开后按 input_schema 生成表单试跑。 */
-function ToolRow({
+/** 工具行:左边一个「暴不暴露」的勾,展开后按 input_schema 生成表单试跑。
+ *
+ * **记忆化**:改一个勾会重新拉整份 /api/plugins,41 行随之重渲染 —— 而展开着大结果的那几行
+ * 每次都要把那段文本重新排版一次。props 没变就别重渲染。 */
+const ToolRow = React.memo(function ToolRow({
   instanceId,
   tool,
   runnable,
@@ -670,7 +674,7 @@ function ToolRow({
       )}
     </div>
   );
-}
+});
 
 function InvocationList({ instanceId }: { instanceId: string }) {
   const t = useI18n();
@@ -739,17 +743,53 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
   );
 }
 
+/**
+ * 渲染上限。超出的**不进 DOM**,只留一行说明 + 复制全部。
+ *
+ * 判据是实测的:一段 341KB 的 JSON 放进 `whitespace-pre-wrap` + `word-break` 的 `<pre>` 里,
+ * 光排版就要 **59ms**(JSON.stringify 只占 1ms —— 慢的从来不是序列化,是让浏览器给三十万个
+ * 字符逐个算折行位置)。`max-h` 挡不住这笔开销:要知道能不能滚,浏览器必须先把全部内容排完。
+ * 展开几个这样的工具,每次重渲染都要重付一遍,整页就卡住了。
+ *
+ * 8000 字符在 200px 的框里已经要滚很久;真要看全的人需要的是复制出去,不是在这里翻。
+ */
+const RESULT_RENDER_LIMIT = 8000;
+
 function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
+  const t = useI18n();
+  // 序列化本身不贵,但没必要每次重渲染都跑;真正要防的是下面那段文本被重新排版。
+  const full = React.useMemo(() => (typeof body === "string" ? body : JSON.stringify(body, null, 2)), [body]);
+  const clipped = full.length > RESULT_RENDER_LIMIT;
+  const shown = clipped ? full.slice(0, RESULT_RENDER_LIMIT) : full;
   return (
-    <pre
-      className={cn(
-        "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]",
-        ok
-          ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]"
-          : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive",
+    <div className="grid gap-1">
+      <pre
+        className={cn(
+          "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]",
+          ok
+            ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]"
+            : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive",
+        )}
+      >
+        {shown}
+      </pre>
+      {clipped && (
+        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <span>
+            {t("pluginResultClipped")
+              .replace("{shown}", String(RESULT_RENDER_LIMIT))
+              .replace("{total}", full.length.toLocaleString())}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => void navigator.clipboard?.writeText(full)}
+          >
+            <Copy size={11} /> {t("pluginResultCopyAll")}
+          </Button>
+        </div>
       )}
-    >
-      {typeof body === "string" ? body : JSON.stringify(body, null, 2)}
-    </pre>
+    </div>
   );
 }

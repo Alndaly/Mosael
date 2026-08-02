@@ -1207,6 +1207,9 @@ function WorkflowEditor({
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
       setNodes((current) => applyNodeChanges(changes, current));
+      // 拖拽会连发几十次 position;声明 coalesce,让这一串在历史里塌成一条(存的是拖之前的
+      // 图)。删除是离散操作,不合并 —— 连删两个节点该能分别撤销。
+      const dragging = changes.some((change) => change.type === "position");
       // 位置/删除同步回 graph
       setGraph((current) => {
         let next = current;
@@ -1228,7 +1231,7 @@ function WorkflowEditor({
         }
         if (next !== current) setDirty(true);
         return next;
-      });
+      }, { coalesce: dragging });
     },
     [],
   );
