@@ -4409,6 +4409,18 @@ export interface components {
             origin: string;
             /** Adapter */
             adapter: string;
+            /**
+             * Permission Mode
+             * @default manual
+             */
+            permission_mode: string;
+            /** Mode Set By */
+            mode_set_by?: string | null;
+            /**
+             * Auto Allow Tools
+             * @default []
+             */
+            auto_allow_tools: string[];
             /** Provider Profile Id */
             provider_profile_id?: string | null;
             /** Model */
@@ -4456,6 +4468,10 @@ export interface components {
             analysis_video_mode?: string | null;
             /** Thinking Level */
             thinking_level?: string | null;
+            /** Permission Mode */
+            permission_mode?: string | null;
+            /** Auto Allow Tools */
+            auto_allow_tools?: string[] | null;
         };
         /** AgentSkillOut */
         AgentSkillOut: {
@@ -4862,8 +4878,6 @@ export interface components {
              * @default external-agent
              */
             requested_by: string;
-            /** Session Id */
-            session_id?: string | null;
         };
         /** ConfirmationOut */
         ConfirmationOut: {
@@ -4893,6 +4907,13 @@ export interface components {
             error: string | null;
             /** Requested By */
             requested_by: string;
+            /**
+             * Decision Mode
+             * @default manual
+             */
+            decision_mode: string;
+            /** Decided By */
+            decided_by?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -7296,11 +7317,6 @@ export interface components {
              * @default
              */
             requested_by: string;
-            /**
-             * Session Id
-             * @default
-             */
-            session_id: string;
         };
         /** ToolSpec */
         ToolSpec: {

@@ -37,6 +37,7 @@ import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMe
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
+import { PermissionModePicker } from "@/components/agent/PermissionModePicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
@@ -561,6 +562,9 @@ export function ChatWorkspace({
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
+                  {/* 模式常驻主行:用户不知道此刻授权了什么就等于没有授权。它不进「会话设置」——
+                      那个弹层装的是"配好就不再动的东西",模式恰恰相反。 */}
+                  <PermissionModePicker session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                       和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
                   <SessionSettingsMenu

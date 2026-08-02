@@ -13394,6 +13394,30 @@
             "type": "string",
             "title": "Adapter"
           },
+          "permission_mode": {
+            "type": "string",
+            "title": "Permission Mode",
+            "default": "manual"
+          },
+          "mode_set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Set By"
+          },
+          "auto_allow_tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Auto Allow Tools",
+            "default": []
+          },
           "provider_profile_id": {
             "anyOf": [
               {
@@ -13541,6 +13565,31 @@
               }
             ],
             "title": "Thinking Level"
+          },
+          "permission_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permission Mode"
+          },
+          "auto_allow_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Allow Tools"
           }
         },
         "type": "object",
@@ -14608,18 +14657,6 @@
             "maxLength": 120,
             "title": "Requested By",
             "default": "external-agent"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
           }
         },
         "type": "object",
@@ -14690,6 +14727,22 @@
           "requested_by": {
             "type": "string",
             "title": "Requested By"
+          },
+          "decision_mode": {
+            "type": "string",
+            "title": "Decision Mode",
+            "default": "manual"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
           },
           "created_at": {
             "type": "string",
@@ -20556,11 +20609,6 @@
           "requested_by": {
             "type": "string",
             "title": "Requested By",
-            "default": ""
-          },
-          "session_id": {
-            "type": "string",
-            "title": "Session Id",
             "default": ""
           }
         },
