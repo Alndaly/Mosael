@@ -1,11 +1,18 @@
 import * as React from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type Option = { value: string; label: string };
+type Option = {
+  value: string;
+  label: string;
+  /** 副标题,灰色小字排在标签下面。用来解释"这一项是干什么的"。 */
+  description?: string;
+  /** 分组标题。相邻的同名项归一组;顺序即传入顺序,这里不排序 —— 谁提供选项,谁决定顺序。 */
+  group?: string;
+};
 
 /**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
@@ -63,6 +70,19 @@ export function SearchableSelect({
   const modal = useInsideDialog(triggerRef);
   const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
   const selected = items.find((item) => item.value === value);
+  const hasDescriptions = items.some((item) => item.description);
+  // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
+  // 分组顺序来自后端的 NODE_CATEGORIES),这里再排一次就成了第二份要维护的顺序。
+  const groups = React.useMemo(() => {
+    const out: Array<[string, Option[]]> = [];
+    for (const item of items) {
+      const heading = item.group ?? "";
+      const last = out[out.length - 1];
+      if (last && last[0] === heading) last[1].push(item);
+      else out.push([heading, [item]]);
+    }
+    return out;
+  }, [items]);
   return (
     <Popover modal={modal} open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -81,26 +101,48 @@ export function SearchableSelect({
           </button>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      {/* 宽度:普通下拉对齐触发器;**带描述时改用固定宽度**。
+          对齐触发器的前提是"选项跟触发器差不多长",而描述行是整整一句话 —— 「添加节点」的
+          触发器只有一枚胶囊那么宽,列表若跟着它就每行都得折成三行;反过来放开让内容撑,
+          一句长描述能把浮层顶到整屏宽(实测就是如此)。给个够读一行的固定宽度,超出截断。 */}
+      <PopoverContent
+        className={cn("p-0", hasDescriptions ? "w-[360px] max-w-[calc(100vw-24px)]" : "w-[--radix-popover-trigger-width]")}
+        align="start"
+      >
         <Command>
           <CommandInput placeholder={searchPlaceholder ?? "搜索…"} className="h-9" />
-          <CommandList className="max-h-[240px]">
+          <CommandList className="max-h-[300px]">
             <CommandEmpty>{emptyText ?? "无匹配项"}</CommandEmpty>
-            {items.map((item) => (
-              <CommandItem
-                key={item.value}
-                value={item.label}
-                onSelect={() => {
-                  onValueChange(item.value);
-                  setOpen(false);
-                }}
-              >
-                {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
-                    而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
-              </CommandItem>
-            ))}
+            {groups.map(([heading, groupItems]) => {
+              const rows = groupItems.map((item) => (
+                <CommandItem
+                  key={item.value}
+                  // 描述也参与搜索:用户记得住"发抖音"却未必记得节点叫「发布」。
+                  value={`${item.label} ${item.description ?? ""}`}
+                  onSelect={() => {
+                    onValueChange(item.value);
+                    setOpen(false);
+                  }}
+                >
+                  {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
+                      而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
+                  <span className="grid min-w-0 flex-1 gap-px leading-[1.35]">
+                    <span className="truncate">{item.label}</span>
+                    {item.description && (
+                      <span className="truncate text-[11px] text-muted-foreground">{item.description}</span>
+                    )}
+                  </span>
+                  {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
+                </CommandItem>
+              ));
+              return heading ? (
+                <CommandGroup key={heading} heading={heading}>
+                  {rows}
+                </CommandGroup>
+              ) : (
+                <React.Fragment key="__ungrouped">{rows}</React.Fragment>
+              );
+            })}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -35,14 +35,23 @@ class WorkflowDomainError(RuntimeError):
 #: 判据是「留空也能把这个节点跑起来吗」——能,就是高级项。编辑器把它们收进折叠的「高级选项」,
 #: 不在用户第一眼就把十几个采样参数糊到脸上;AI 助手也读同一份声明,不会替用户瞎填。
 #: 反过来:required 的、以及决定这个节点在做什么的字段(提示词、模型、URL),永远留在外面。
+#: 节点面板的分组与**顺序**。节点类型注册表里每一项都必须落在其中一组(有测试钉着)。
+#:
+#: 顺序不是随手排的,它是一条搭工作流的动线:先有骨架(流程),再决定这一步做什么
+#: (AI / 素材 / 数据),然后是把结果送出去(发布),最后才是两类"需要额外准备"的能力 ——
+#: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
+NODE_CATEGORIES: tuple[str, ...] = ("流程", "AI", "素材", "数据", "发布", "浏览器", "插件")
+
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
+        "category": "流程",
         "label": "开始",
         "description": "工作流入口,声明输入参数(运行时可覆盖默认值)。",
         "config": {"params": {"type": "object", "description": "输入参数名 → 默认值"}},
         "outputs": ["*params"],
     },
     "llm": {
+        "category": "AI",
         "label": "LLM 生成",
         "description": "调用配置的 AI 供应商生成文本。",
         "config": {
@@ -78,6 +87,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "json"],
     },
     "kb_search": {
+        "category": "数据",
         "label": "知识库检索",
         "description": "检索指定知识库,输出片段文本。",
         "config": {
@@ -88,6 +98,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "results"],
     },
     "plugin_tool": {
+        "category": "插件",
         "label": "插件工具",
         "description": "调用已启用插件的纯函数工具。",
         "config": {
@@ -98,18 +109,21 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "transcribe_asset": {
+        "category": "AI",
         "label": "素材转写",
         "description": "对音视频素材跑 ASR,输出全文。",
         "config": {"asset_id": {"type": "template", "required": True}},
         "outputs": ["text"],
     },
     "export_sequence": {
+        "category": "素材",
         "label": "导出时间线",
         "description": "渲染导出一条时间线,产出新素材。",
         "config": {"sequence_id": {"type": "template", "required": True}},
         "outputs": ["asset_id"],
     },
     "ai_generate": {
+        "category": "AI",
         "label": "AI 生成素材",
         "description": "文生图/文生视频(也支持图生图、图生视频),产出素材进素材库。",
         "config": {
@@ -132,6 +146,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id", "generation_id"],
     },
     "publish": {
+        "category": "发布",
         "label": "发布",
         "description": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。",
         "config": {
@@ -143,6 +158,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["result"],
     },
     "condition": {
+        "category": "流程",
         "label": "条件分支",
         "description": "按条件把流程导向「真」或「假」分支(连线时从对应端点拉出)。",
         "config": {
@@ -159,6 +175,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "branches": ["true", "false"],
     },
     "http_request": {
+        "category": "数据",
         "label": "HTTP 请求",
         "description": "调用外部 API,输出状态码与响应内容。",
         "config": {
@@ -170,6 +187,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["status", "text", "json"],
     },
     "code": {
+        "category": "数据",
         "label": "代码",
         "description": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。与插件同级的本地信任沙箱。",
         "config": {
@@ -179,12 +197,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "template": {
+        "category": "数据",
         "label": "文本模板",
         "description": "把多个上游变量拼装成一段文本。",
         "config": {"template": {"type": "template", "required": True}},
         "outputs": ["text"],
     },
     "json_extract": {
+        "category": "数据",
         "label": "JSON 提取",
         "description": "从 JSON/对象里按点路径取值,常接在 HTTP 请求或插件工具后面。",
         "config": {
@@ -194,6 +214,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["value", "text"],
     },
     "text_transform": {
+        "category": "数据",
         "label": "文本处理",
         "description": "对文本做去空白/大小写/替换/正则提取/取长度等处理。",
         "config": {
@@ -210,12 +231,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "length"],
     },
     "delay": {
+        "category": "流程",
         "label": "延时",
         "description": "等待若干秒再继续(限流/节流用)。",
         "config": {"seconds": {"type": "number", "description": "等待秒数,默认 1,上限 300"}},
         "outputs": ["waited"],
     },
     "synthesize_speech": {
+        "category": "AI",
         "label": "语音合成",
         "description": "用指定音色把文本合成为配音,产出音频素材进素材库。",
         "config": {
@@ -225,6 +248,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_id"],
     },
     "notify": {
+        "category": "发布",
         "label": "发送通知",
         "description": "给工作区成员推送一条站内通知。",
         "config": {
@@ -234,6 +258,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["sent"],
     },
     "translate": {
+        "category": "AI",
         "label": "翻译",
         "description": "把文本翻译成目标语言:Google 免费接口(无需 key)或 AI 供应商。",
         "config": {
@@ -250,8 +275,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text"],
     },
     "loop_foreach": {
+        "category": "流程",
         "label": "循环·遍历",
-        "category": "组合",
         "description": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 引用当前元素与序号。",
         "config": {
             "items": {
@@ -268,8 +293,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["results", "count"],
     },
     "loop_while": {
+        "category": "流程",
         "label": "循环·条件",
-        "category": "组合",
         "description": "反复运行内嵌子流程,直到条件不再成立(带最大次数上限防死循环)。子流程内用 {{loop.index}} 拿当前轮次;子流程里放一个「条件」节点,把它的 {{节点id.result}} 填到 condition。",
         "config": {
             "body": {"type": "graph", "description": "循环体子流程(每轮跑一遍;通常含一个条件节点决定是否继续)"},
@@ -283,6 +308,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["results", "count", "iterations"],
     },
     "asset_query": {
+        "category": "素材",
         "label": "素材筛选",
         "description": "按条件批量选出工作区里的素材(类型/名称/标签),输出素材列表 —— 常接「循环·遍历」的 items 逐个处理。",
         "config": {
@@ -294,6 +320,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["assets", "ids", "count"],
     },
     "asset_tag": {
+        "category": "素材",
         "label": "素材打标签",
         "description": "给素材增删标签 —— 常接「素材筛选」或「循环·遍历」,把整理归档做成一步。",
         "config": {
@@ -312,6 +339,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["updated", "count"],
     },
     "asset_update": {
+        "category": "素材",
         "label": "素材整理",
         "description": "重命名素材、或把素材归入某个项目。",
         "config": {
@@ -322,6 +350,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["updated", "count"],
     },
     "project_create": {
+        "category": "素材",
         "label": "新建项目",
         "description": "在当前工作区建一个项目,输出它的 id —— 可接「素材整理」把素材归进去。",
         "config": {
@@ -331,8 +360,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
+        "category": "流程",
         "label": "调用工作流",
-        "category": "组合",
         "description": "把另一个已保存的工作流当子流程调用:映射入参 → 跑完取其「输出」节点声明的结果作为本节点输出(引用 {{call_1.output.xxx}})。子流程走完整引擎,自动收纳到本流程下、随本流程取消;防递归、防过深。",
         "config": {
             "workflow_id": {"type": "string", "required": True, "description": "要调用的工作流(选一个已保存的)"},
@@ -341,8 +370,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "output": {
+        "category": "流程",
         "label": "输出",
-        "category": "组合",
         "description": "声明本工作流的输出(参考 dify End):{名: 引用}。被「调用工作流」时,调用方拿到的就是这里声明的具名输出;留空/无本节点则输出整份上下文。",
         "config": {
             "values": {"type": "object", "description": "具名输出 {名: 引用},如 {\"result\": \"{{llm_1.text}}\", \"url\": \"{{browser_1.value}}\"}"},
@@ -350,8 +379,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["output"],
     },
     "subgraph": {
+        "category": "流程",
         "label": "子图",
-        "category": "组合",
         "description": "把一组节点封装成一个可复用子图(参考 ComfyUI「折叠为子图」):内嵌、可任意嵌套,在节点内进子画布编辑。与主引擎同一套内核(并行/条件分支一致)。用 inputs 把外层值喂进去(子图内 {{input.名}} 引用),output 指定子图输出(引用内部节点,如 {{node_1.text}});留空则输出整份子上下文。",
         "config": {
             "inputs": {"type": "object", "description": "喂进子图的输入 {名: 值/引用},子图内用 {{input.名}} 取,如 {\"topic\": \"{{start.theme}}\"}"},
@@ -363,8 +392,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     # 浏览器自动化(RPA):在隔离浏览器会话里自动化操作网页,与发布登录完全隔离。
     # 典型链路:打开浏览器 → 导航/点击/输入/等待 → 提取 → 关闭。session 输出串起整条链。
     "browser_open": {
-        "label": "打开浏览器",
         "category": "浏览器",
+        "label": "打开浏览器",
         "description": "新建一个浏览器会话并可选导航到网址,输出 session 供后续浏览器节点使用。ephemeral=临时(跑完即清);named=具名持久(保留登录);pool=复用「浏览器池」里某个已登录档案(受租约:一档案一时刻一会话)。",
         "config": {
             "url": {"type": "template", "description": "打开后导航到的网址(可留空,之后用「导航」节点)"},
@@ -375,8 +404,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_navigate": {
-        "label": "浏览器·导航",
         "category": "浏览器",
+        "label": "浏览器·导航",
         "description": "在会话里跳转到网址。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -385,8 +414,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_click": {
-        "label": "浏览器·点击",
         "category": "浏览器",
+        "label": "浏览器·点击",
         "description": "按 CSS 选择器或可见文本点击元素。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -397,8 +426,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_input": {
-        "label": "浏览器·输入",
         "category": "浏览器",
+        "label": "浏览器·输入",
         "description": "往输入框/文本域填入内容(含 contenteditable)。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -408,8 +437,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_upload": {
-        "label": "浏览器·上传文件",
         "category": "浏览器",
+        "label": "浏览器·上传文件",
         "description": "往页面的文件输入框(<input type=file>)塞一个本地文件——发布上传视频的关键一步。用 asset_id 传素材(如 {{export_1.asset_id}}),或 file_path 传本地绝对路径(二选一)。走 CDP setFileInputFiles,不弹系统对话框。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -421,8 +450,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_extract": {
-        "label": "浏览器·提取",
         "category": "浏览器",
+        "label": "浏览器·提取",
         "description": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -433,8 +462,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session", "value"],
     },
     "browser_wait": {
-        "label": "浏览器·等待",
         "category": "浏览器",
+        "label": "浏览器·等待",
         "description": "等元素出现/消失、URL 变化或页面出现某文本。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -447,8 +476,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_scroll": {
-        "label": "浏览器·滚动",
         "category": "浏览器",
+        "label": "浏览器·滚动",
         "description": "滚动到某元素,或按像素滚动页面。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -458,8 +487,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session"],
     },
     "browser_evaluate": {
-        "label": "浏览器·执行脚本",
         "category": "浏览器",
+        "label": "浏览器·执行脚本",
         "description": "在页面里执行一段 JS 表达式并取返回值(高级)。",
         "config": {
             "session": {"type": "string", "required": True, "description": "来自「打开浏览器」的 session"},
@@ -468,8 +497,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["session", "value"],
     },
     "browser_close": {
-        "label": "关闭浏览器",
         "category": "浏览器",
+        "label": "关闭浏览器",
         "description": "关闭会话:临时会话顺带清掉 cookie/存储。用完记得关,免得视图常驻。",
         "config": {
             "session": {"type": "string", "required": True, "description": "要关闭的 session"},

@@ -33,9 +33,11 @@ def _run(wf_id: str, params: dict | None = None) -> tuple[str, dict, str | None,
 
 
 def test_composition_nodes_registered() -> None:
+    # 分组从「组合」并进了「流程」:节点面板上,子流程/调用/输出跟条件、循环是同一件事的不同
+    # 形态 —— 都在决定"接下来往哪走",单开一组只是让人多扫一眼。
     for t in ("call_workflow", "output", "subgraph"):
         assert t in NODE_TYPES and t in registered_types()
-        assert NODE_TYPES[t]["category"] == "组合"
+        assert NODE_TYPES[t]["category"] == "流程"
 
 
 def test_call_workflow_passes_inputs_and_returns_declared_output() -> None:

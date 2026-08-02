@@ -1625,6 +1625,8 @@ export const messages = {
     pluginRefreshTools: "刷新工具",
     pluginMcpToolsDesc: "工具清单由 MCP 服务提供,不写在 manifest 里。服务升级后点刷新重新拉取。",
     pluginToolReadOnly: "只读",
+    wfNodeGroupPlugin: "插件",
+    wfNodeGroupOther: "其它",
     scanningPlugins: "扫描中…",
     pluginUninstall: "卸载",
     pluginUninstallTitle: "卸载「{name}」?",
@@ -3250,6 +3252,8 @@ export const messages = {
     pluginMcpToolsDesc:
       "The tool list comes from the MCP server itself, not the manifest. Refresh after the server is upgraded.",
     pluginToolReadOnly: "read-only",
+    wfNodeGroupPlugin: "Plugins",
+    wfNodeGroupOther: "Other",
     scanningPlugins: "Scanning…",
     pluginUninstall: "Uninstall",
     pluginUninstallTitle: "Uninstall “{name}”?",

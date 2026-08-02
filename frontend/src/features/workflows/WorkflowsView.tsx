@@ -102,6 +102,7 @@ import {
   updateWorkflow,
   type Asset,
   type GenerationModel,
+  type PluginTool,
   type TaskEvent,
   type Workflow,
   type WorkflowGraph,
@@ -886,6 +887,64 @@ function typeName(t: ReturnType<typeof useI18n>, type: DataType | undefined): st
   return t(key);
 }
 
+/** 插件工具在节点面板里的 value 前缀。选中后落到画布上仍是一个 plugin_tool 节点 —— 见 useNodePicker。 */
+const PLUGIN_OPTION_PREFIX = "plugin:";
+
+/**
+ * 「添加节点」面板的选项:内置节点按后端给的分组顺序,插件工具**逐个**列在最后的「插件」组里。
+ *
+ * **为什么插件不共用一个「插件工具」节点**:那个节点在面板上只是一行字,选完还要在检查器里
+ * 先挑插件、再挑工具,才知道自己拿到了什么。用户脑子里想的是「取一条抖音作品数据」,不是
+ * 「插件工具」—— 面板该按前者列。落到画布上它仍然是一个 plugin_tool 节点(图的存储格式、
+ * 执行器、校验都不动),只是 plugin_id / tool_name 已经填好、节点名也直接是工具名。
+ *
+ * 换句话说:**细分只发生在选择这一层**。让每个插件工具变成真的节点类型是另一回事 —— 那会让
+ * 节点类型注册表随用户装了什么插件而变,而工作流文件里存的节点类型就再也不是一个稳定的东西。
+ */
+function useNodePicker(nodeTypes: WorkflowNodeType[], t: ReturnType<typeof useI18n>) {
+  const pluginTools = useQuery({
+    queryKey: ["plugin-tools"],
+    queryFn: () => api<PluginTool[]>("/api/plugins/tools"),
+    staleTime: 30_000,
+  });
+  const pluginCategory = nodeTypes.find((meta) => meta.type === "plugin_tool")?.category || t("wfNodeGroupPlugin");
+
+  const options = React.useMemo(() => {
+    const items = nodeTypes.map((meta) => ({
+      value: meta.type,
+      label: meta.label,
+      description: meta.description,
+      group: meta.category || t("wfNodeGroupOther"),
+    }));
+    // 有插件工具时,「插件工具」那一行就没必要留在面板上了:它能做的每一件事都已经被
+    // 上面那些具体条目覆盖,留着只是多一个"选完还要再选两次"的入口。
+    const tools = (pluginTools.data ?? []).map((tool) => ({
+      value: `${PLUGIN_OPTION_PREFIX}${tool.plugin_id}:${tool.tool_name}`,
+      label: tool.tool_name,
+      description: `${tool.plugin_name} · ${tool.description || ""}`.trim(),
+      group: pluginCategory,
+    }));
+    return tools.length ? [...items.filter((item) => item.value !== "plugin_tool"), ...tools] : items;
+  }, [nodeTypes, pluginTools.data, pluginCategory, t]);
+
+  /** 把面板选中的 value 翻成「建哪种节点、预置什么 config、叫什么名字」。 */
+  const resolve = React.useCallback(
+    (value: string): { type: string; name?: string; preset?: Record<string, unknown> } | null => {
+      if (!value.startsWith(PLUGIN_OPTION_PREFIX)) return { type: value };
+      // plugin_id 里可能有点号但不会有冒号(它是 manifest 的 id);工具名同理。按第一个冒号切开。
+      const rest = value.slice(PLUGIN_OPTION_PREFIX.length);
+      const split = rest.indexOf(":");
+      if (split < 0) return null;
+      const pluginId = rest.slice(0, split);
+      const toolName = rest.slice(split + 1);
+      return { type: "plugin_tool", name: toolName, preset: { plugin_id: pluginId, tool_name: toolName } };
+    },
+    [],
+  );
+
+  return { options, resolve };
+}
+
 function WorkflowEditor({
   workflow,
   nodeTypes,
@@ -898,6 +957,7 @@ function WorkflowEditor({
   const t = useI18n();
   const qc = useQueryClient();
   const registry = React.useMemo(() => new Map(nodeTypes.map((item) => [item.type, item])), [nodeTypes]);
+  const { options: nodeOptions, resolve: resolvePick } = useNodePicker(nodeTypes, t);
 
   // graph 是唯一事实(configs/names);放进 zustand+zundo store 拿撤销/重做,React Flow 只管几何与选中。
   // 每个 WorkflowEditor 一个 store(按 workflow.id 重挂),历史不跨工作流。
@@ -1310,7 +1370,10 @@ function WorkflowEditor({
     [graph.edges],
   );
 
-  const addNode = (type: string) => {
+  const addNode = (option: string) => {
+    const picked = resolvePick(option);
+    if (!picked) return;
+    const { type, preset } = picked;
     const meta = registry.get(type);
     if (!meta) return;
     if (type === "start" && graph.nodes.some((node) => node.type === "start")) return;
@@ -1324,10 +1387,11 @@ function WorkflowEditor({
       // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
       config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
     }
+    Object.assign(config, preset ?? {});
     const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
     const next: WorkflowGraph = {
       ...graph,
-      nodes: [...graph.nodes, { id, type, name: meta.label, position, config }],
+      nodes: [...graph.nodes, { id, type, name: picked.name ?? meta.label, position, config }],
     };
     applyGraph(next);
     setSelectedNodeId(id);
@@ -1604,9 +1668,7 @@ function WorkflowEditor({
             value=""
             onValueChange={addNode}
             searchPlaceholder={t("wfAddNode")}
-            options={nodeTypes
-              .filter((meta) => meta.type !== "start" || !graphHasStart)
-              .map((meta) => ({ value: meta.type, label: meta.label }))}
+            options={nodeOptions.filter((option) => option.value !== "start" || !graphHasStart)}
             trigger={
               <button
                 type="button"
@@ -2110,6 +2172,7 @@ function LoopBodyEditor({
   onClose: () => void;
 }) {
   const t = useI18n();
+  const { options: subOptions, resolve: resolveSubPick } = useNodePicker(nodeTypes, t);
   const [bodyViewReady, setBodyViewReady] = React.useState(false);
   // config.body may be missing, or "" (addNode seeds unknown field types with an empty string) —
   // anything not shaped like a graph must become an empty one, or body.nodes.length blows up the
@@ -2219,7 +2282,10 @@ function LoopBodyEditor({
     [body, commit],
   );
 
-  const addNode = (type: string) => {
+  const addNode = (option: string) => {
+    const picked = resolveSubPick(option);
+    if (!picked) return;
+    const { type, preset } = picked;
     const meta = registry.get(type);
     if (!meta || type === "start") return;
     const base = type.replace(/_/g, "-");
@@ -2231,11 +2297,12 @@ function LoopBodyEditor({
       // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
       config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
     }
+    Object.assign(config, preset ?? {});
     commit({
       ...body,
       nodes: [
         ...body.nodes,
-        { id: `${base}-${index}`, type, name: meta.label, position: { x: maxX + 240, y: 140 + (body.nodes.length % 3) * 90 }, config },
+        { id: `${base}-${index}`, type, name: picked.name ?? meta.label, position: { x: maxX + 240, y: 140 + (body.nodes.length % 3) * 90 }, config },
       ],
     });
   };
@@ -2256,7 +2323,7 @@ function LoopBodyEditor({
           value=""
           onValueChange={addNode}
           searchPlaceholder={t("wfAddNode")}
-          options={nodeTypes.filter((meta) => meta.type !== "start").map((meta) => ({ value: meta.type, label: meta.label }))}
+          options={subOptions.filter((option) => option.value !== "start")}
           trigger={
             <button
               type="button"

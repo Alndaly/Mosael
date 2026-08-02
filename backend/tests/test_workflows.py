@@ -1021,3 +1021,30 @@ def test_workflow_import_rejects_bad_files() -> None:
     }
     res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": unknown_node})
     assert res.status_code == 422 and "未知节点类型" in res.json()["detail"]
+
+
+def test_每个节点类型都有分组和一句人话描述() -> None:
+    """节点面板按分组呈现,分组顺序由 NODE_CATEGORIES 决定。
+
+    漏标 category 不会报错,只会让那个节点静默掉进面板末尾的"其它"里 —— 加节点的人看不到,
+    用节点的人找不到。描述同理:面板上每行都有一句说明,空着的那行就是一个只有作者看得懂
+    的名字。"""
+    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES
+
+    for node_type, meta in NODE_TYPES.items():
+        assert meta.get("category") in NODE_CATEGORIES, f"{node_type} 的分组不在 NODE_CATEGORIES 里"
+        assert len(meta.get("description", "").strip()) >= 8, f"{node_type} 缺一句能读的描述"
+
+
+def test_节点清单按分组顺序返回_前端不再排第二次() -> None:
+    from tests.util import fresh_client
+
+    from app.domain.workflows import NODE_CATEGORIES
+
+    client = fresh_client()
+    items = client.get("/api/workflows/node-types").json()
+    seen: list[str] = []
+    for item in items:
+        if item["category"] not in seen:
+            seen.append(item["category"])
+    assert seen == [c for c in NODE_CATEGORIES if c in seen]

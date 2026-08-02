@@ -24,6 +24,7 @@ from app.api.schemas import (
 from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_access
 from app.db.models import Job, Workflow
 from app.domain.workflows import (
+    NODE_CATEGORIES,
     NODE_TYPES,
     WorkflowDomainError,
     create_workflow,
@@ -40,7 +41,14 @@ router = APIRouter(tags=["workflows"])
 
 @router.get("/workflows/node-types", response_model=list[WorkflowNodeTypeOut])
 def node_types() -> list[dict]:
-    return [
+    """节点类型清单,**按面板分组顺序排好**。
+
+    排序放在这里而不是前端:分组和顺序是这份注册表自己的性质(NODE_CATEGORIES 就在它旁边)。
+    让前端再排一次,等于把同一份知识抄成两份 —— 加一个分组时忘了改另一边,新节点就会静默
+    掉进"其它"里,而没有任何东西会报错。
+    """
+    order = {name: index for index, name in enumerate(NODE_CATEGORIES)}
+    items = [
         {
             "type": key,
             "label": meta["label"],
@@ -51,6 +59,8 @@ def node_types() -> list[dict]:
         }
         for key, meta in NODE_TYPES.items()
     ]
+    # 组内保持注册表里的声明顺序(sorted 是稳定的)。
+    return sorted(items, key=lambda item: order.get(item["category"], len(order)))
 
 
 @router.get("/workflows", response_model=list[WorkflowOut])
