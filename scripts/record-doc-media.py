@@ -215,6 +215,295 @@ def record_agent(page: Page, tmp: Path) -> None:
     publish(MEDIA / "agent.png", "ai-chat.png")
 
 
+def _goto(page: Page, view: str, wait: int = 1200) -> None:
+    """切到某个视图,并**强制重新挂载**。
+
+    路由是 hash 式的(见 frontend/src/app/App.tsx 的 readHash)。只改 hash 时浏览器不会重新
+    加载文档,`wait_until="networkidle"` 于是立刻返回 —— 上一段场景留下的界面状态和正在飞的
+    请求都还在,下一段就可能拍到一个半渲染的页面,或者压根找不到要点的按钮。
+    多花一次重载换一个干净的起点,值得。
+    """
+    page.goto(page.url.split("#")[0] + f"#/{view}", wait_until="domcontentloaded")
+    page.reload(wait_until="networkidle")
+    page.wait_for_timeout(wait)
+
+
+def record_editor(page: Page, tmp: Path) -> None:
+    """剪辑页 —— 官网首屏那张大图,也是文档里最常出现的一张。
+
+    **从首页点进去**,不写死项目 id:id 是每台机器上各自生成的,写死等于这个脚本只能在
+    录制过的那台机器上跑。
+    """
+    _goto(page, "home")
+    card = page.get_by_role("button", name=re.compile("打开剪辑|Open editor")).first
+    try:
+        card.wait_for(state="visible", timeout=8000)
+    except Exception:
+        print("  跳过 editor:首页没有项目卡片")
+        return
+    card.click()
+    page.wait_for_timeout(2500)  # 等时间线和监看器把首帧解出来
+    page.screenshot(path=str(MEDIA / "editor.png"))
+    publish(MEDIA / "editor.png", "editor.png")
+
+    frames = tmp / "timeline"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+    rec.shot(10)  # 起手:多轨时间线 + 双监看器
+
+    # 在时间线上挪一下播放头 —— 这段录屏要说明的是"时间线是可以直接操作的"。
+    ruler = page.locator("[data-testid='timeline-ruler'], .timeline-ruler").first
+    track = ruler if ruler.count() else page.locator("canvas, [class*='timeline']").last
+    if track.count():
+        box = track.bounding_box()
+        if box:
+            for ratio in (0.25, 0.5, 0.75, 0.4):
+                page.mouse.click(box["x"] + box["width"] * ratio, box["y"] + box["height"] / 2)
+                page.wait_for_timeout(350)
+                rec.shot(4)
+
+    gif_from_frames(frames, MEDIA / "timeline-edit.gif")
+    publish(MEDIA / "timeline-edit.gif", "timeline-edit.gif", gif=True)
+
+
+def record_kb(page: Page, tmp: Path) -> None:
+    """知识库:数据集与文档列表。"""
+    _goto(page, "kb")
+    page.screenshot(path=str(MEDIA / "kb.png"))
+    publish(MEDIA / "kb.png", "kb.png")
+
+
+def record_publish(page: Page, tmp: Path) -> None:
+    """发布页:发布记录与账号矩阵两个页签。"""
+    _goto(page, "publish")
+    page.screenshot(path=str(MEDIA / "publish.png"))
+    publish(MEDIA / "publish.png", "publish.png")
+
+
+def record_settings(page: Page, tmp: Path) -> None:
+    """设置页,以及「AI 绘图」那一段的默认模型 + 供应商列表。
+
+    两张图都来自设置页,分两次拍:一张是整页的样子,一张是模型分区 —— 文档里
+    「配置模型服务商」那一节讲的就是后者。
+    """
+    _goto(page, "settings")
+    page.screenshot(path=str(MEDIA / "settings.png"))
+    publish(MEDIA / "settings.png", "settings.png")
+
+    entry = page.get_by_role("button", name=re.compile("AI 绘图|AI 对话")).first
+    if entry.count():
+        entry.click()
+        page.wait_for_timeout(900)
+    page.screenshot(path=str(MEDIA / "settings-models.png"))
+    publish(MEDIA / "settings-models.png", "settings-models.png")
+
+
+def record_ai_generate(page: Page, tmp: Path) -> None:
+    """AI 工作台的生成模式:结果流 + 右侧引擎参数。
+
+    对话模式那张由 record_agent 负责;这里只切到生成模式。切不过去就跳过 ——
+    宁可少一张图,也不要发一张停在对话模式、却在文档里被说成"生成模式"的截图。
+    """
+    _goto(page, "ai")
+    toggle = page.get_by_role("tab", name=re.compile("^生成$|^Generate$")).first
+    try:
+        toggle.wait_for(state="visible", timeout=8000)
+    except Exception:
+        print("  跳过 ai-generate:没找到切到生成模式的入口")
+        return
+    toggle.click()
+    page.wait_for_timeout(1200)
+    page.screenshot(path=str(MEDIA / "ai-generate.png"))
+    publish(MEDIA / "ai-generate.png", "ai-generate.png")
+
+
+def record_home_to_editor(page: Page, tmp: Path) -> None:
+    """首页 → 剪辑:一步直达,中间不弹任何对话框。"""
+    frames = tmp / "home"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "home")
+    rec.shot(12)  # 工作区总览:统计、图表、项目列表
+    card = page.get_by_role("button", name=re.compile("打开剪辑|Open editor")).first
+    try:
+        card.wait_for(state="visible", timeout=8000)
+    except Exception:
+        print("  跳过 home.gif:首页没有项目卡片")
+        return
+    card.hover()
+    rec.shot(5)
+    card.click()
+    page.wait_for_timeout(2200)
+    rec.shot(14)  # 落进编辑器
+
+    gif_from_frames(frames, MEDIA / "home.gif")
+    publish(MEDIA / "home.gif", "home.gif", gif=True)
+
+
+def _settings_section(page: Page, pattern: str):
+    """设置页左栏的分区入口。各分区是按钮,名字就是分区名。"""
+    return page.get_by_role("button", name=re.compile(pattern)).first
+
+
+def record_providers(page: Page, tmp: Path) -> None:
+    """设置 → 各能力分区的供应商配置入口。"""
+    frames = tmp / "providers"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "settings")
+    rec.shot(8)
+    for name in ("AI 对话|AI chat", "AI 绘图|AI image", "AI 音频|AI audio"):
+        entry = _settings_section(page, name)
+        if not entry.count():
+            continue
+        entry.click()
+        page.wait_for_timeout(800)
+        rec.shot(12)  # 每个分区各自的默认模型 + 供应商列表
+
+    gif_from_frames(frames, MEDIA / "providers.gif")
+    publish(MEDIA / "providers.gif", "providers.gif", gif=True)
+
+
+def record_asr_models(page: Page, tmp: Path) -> None:
+    """设置 → 本地转写模型:按需下载,不是开箱就占几个 G。"""
+    frames = tmp / "asr"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "settings")
+    entry = _settings_section(page, "声音克隆|转写|语音|ASR|Speech")
+    if not entry.count():
+        print("  跳过 asr-models.gif:设置里没找到转写分区")
+        return
+    entry.click()
+    page.wait_for_timeout(900)
+    rec.shot(16)
+    page.mouse.wheel(0, 400)
+    page.wait_for_timeout(600)
+    rec.shot(12)
+
+    page.screenshot(path=str(MEDIA / "settings-asr.png"))
+    gif_from_frames(frames, MEDIA / "asr-models.gif")
+    publish(MEDIA / "asr-models.gif", "asr-models.gif", gif=True)
+
+
+def record_publishing(page: Page, tmp: Path) -> None:
+    """发布页:发布记录 ↔ 账号矩阵两个页签。"""
+    frames = tmp / "publishing"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "publish")
+    rec.shot(12)
+    for name in ("账号矩阵|Accounts", "发布记录|Records|History"):
+        tab = page.get_by_role("tab", name=re.compile(name)).first
+        if not tab.count():
+            tab = page.get_by_role("button", name=re.compile(name)).first
+        if not tab.count():
+            continue
+        tab.click()
+        page.wait_for_timeout(800)
+        rec.shot(12)
+
+    gif_from_frames(frames, MEDIA / "publishing.gif")
+    publish(MEDIA / "publishing.gif", "publishing.gif", gif=True)
+
+
+def record_knowledge_base(page: Page, tmp: Path) -> None:
+    """知识库:数据集 → 文档 → 召回测试。"""
+    frames = tmp / "kb"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "kb")
+    rec.shot(12)
+    for name in ("文档|Documents", "召回测试|Retrieval", "知识图谱|Graph"):
+        tab = page.get_by_role("tab", name=re.compile(name)).first
+        if not tab.count():
+            tab = page.get_by_role("button", name=re.compile(name)).first
+        if not tab.count():
+            continue
+        tab.click()
+        page.wait_for_timeout(700)
+        rec.shot(10)
+
+    gif_from_frames(frames, MEDIA / "knowledge-base.gif")
+    publish(MEDIA / "knowledge-base.gif", "knowledge-base.gif", gif=True)
+
+
+def record_ai_studio(page: Page, tmp: Path) -> None:
+    """AI 工作台:对话 ↔ 生成两个模式,并在生成模式里敲一句提示词。
+
+    **只敲不发**:发出去要真的调用供应商,既费钱也让这段录屏依赖网络。
+    """
+    frames = tmp / "ai-studio"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    _goto(page, "ai")
+    rec.shot(10)
+    tab = page.get_by_role("tab", name=re.compile("^生成$|^Generate$")).first
+    try:
+        tab.wait_for(state="visible", timeout=8000)
+    except Exception:
+        print("  跳过 ai-studio.gif:没找到切到生成模式的入口")
+        return
+    tab.click()
+    page.wait_for_timeout(1000)
+    rec.shot(12)
+
+    box = page.get_by_role("textbox").first
+    if box.count():
+        box.click()
+        for ch in "黄昏的海边,一个人走过":
+            box.type(ch, delay=70)
+            rec.shot(1)
+        page.wait_for_timeout(500)
+        rec.shot(14)
+
+    gif_from_frames(frames, MEDIA / "ai-studio.gif")
+    publish(MEDIA / "ai-studio.gif", "ai-studio.gif", gif=True)
+
+
+def record_login(page: Page, tmp: Path) -> None:
+    """登录页 —— 新用户看到的第一屏。
+
+    **临时把令牌摘掉再装回去**:登录态存在 localStorage 里,不清掉就永远进不到这一屏。
+    放在场景表的最后,并且拍完立刻还原 —— 否则后面的场景全都会被踢回登录页。
+    """
+    base = page.url.split("#")[0]
+    token = page.evaluate("() => localStorage.getItem('openstudio.auth.token')")
+    frames = tmp / "login"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    try:
+        page.evaluate("() => localStorage.removeItem('openstudio.auth.token')")
+        page.goto(base, wait_until="networkidle")
+        page.wait_for_timeout(1200)
+        page.screenshot(path=str(MEDIA / "login.png"))
+        publish(MEDIA / "login.png", "login.png")
+
+        rec.shot(14)
+        user = page.get_by_role("textbox").first
+        if user.count():
+            user.click()
+            for ch in "demo":
+                user.type(ch, delay=110)
+                rec.shot(1)
+            page.wait_for_timeout(400)
+            rec.shot(12)
+        gif_from_frames(frames, MEDIA / "login.gif")
+        publish(MEDIA / "login.gif", "login.gif", gif=True)
+    finally:
+        # 还原登录态。放在 finally 里:中间任何一步抛错都不能把这台机器留在登出状态。
+        if token:
+            page.evaluate("(t) => localStorage.setItem('openstudio.auth.token', t)", token)
+        page.goto(base, wait_until="networkidle")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", required=True, help="演示实例的会话令牌")
@@ -230,9 +519,15 @@ def main() -> int:
 
     for d in (MEDIA, SITE_GIFS, SITE_SHOTS, WEB_GIFS, WEB_SHOTS):
         d.mkdir(parents=True, exist_ok=True)
-    scenes = {"home": record_home, "media": record_media,
+    scenes = {"home": record_home, "media": record_media, "editor": record_editor,
               "plugins": record_plugins, "workflows": record_workflows,
-              "agent": record_agent}
+              "agent": record_agent, "ai-generate": record_ai_generate,
+              "kb": record_kb, "publish": record_publish, "settings": record_settings,
+              "home-gif": record_home_to_editor, "providers": record_providers,
+              "asr": record_asr_models, "publishing": record_publishing,
+              "knowledge-base": record_knowledge_base, "ai-studio": record_ai_studio,
+              # login 必须排最后:它会临时清掉登录态。
+              "login": record_login}
     if args.only:
         scenes = {k: v for k, v in scenes.items() if k == args.only}
 
