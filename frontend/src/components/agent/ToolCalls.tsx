@@ -195,7 +195,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         )}
       </button>
       {/* 富结果卡(如 list_assets 的素材列表)可能几十条 → 封顶高度、内部滚动,别把整张卡撑到几屏高。 */}
-      {card && <div className="max-h-[360px] overflow-y-auto border-t border-border px-2.5 py-2">{card}</div>}
+      {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden border-t border-border px-2.5 py-2">{card}</div>}
       {open && hasBody && (
         <div className="flex flex-col gap-2 border-t border-border px-[9px] py-2">
           {argText && (
@@ -310,7 +310,7 @@ export function AgentTurnContent({
           <Streamdown
             key={`text-${index}`}
             controls={{ table: false }}
-            className="[&_:is(p,ul,ol,pre,table)]:mx-0 [&_:is(p,ul,ol,pre,table)]:mb-2.5 [&_:is(p,ul,ol,pre,table)]:mt-0 [&_:is(p,ul,ol,pre,table):last-child]:mb-0 [&_:is(h1,h2)]:mb-2 [&_:is(h1,h2)]:mt-4 [&_:is(h1,h2)]:text-[15px] [&_:is(h1,h2)]:font-[650] [&_:is(h1,h2)]:tracking-[-0.01em] [&_:is(h3,h4)]:mb-1.5 [&_:is(h3,h4)]:mt-3 [&_:is(h3,h4)]:text-[13.5px] [&_:is(h3,h4)]:font-[650] [&_:is(h1,h2,h3,h4):first-child]:mt-0 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[12.5px] [&_:is(th,td)]:border [&_:is(th,td)]:border-border [&_:is(th,td)]:px-2 [&_:is(th,td)]:py-1.5 [&_:is(th,td)]:text-left [&_th]:bg-secondary [&_th]:font-semibold [&_code]:rounded-sm [&_code]:bg-panel-inset [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:border [&_pre]:border-border [&_pre]:px-2 [&_pre]:py-1.5 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_:is(ul,ol)]:pl-[18px] [&_div:has(>div>table)]:my-2.5 [&_div:has(>div>table)]:rounded-none [&_div:has(>div>table)]:border-0 [&_div:has(>div>table)]:bg-transparent [&_div:has(>div>table)]:p-0 [&_div:has(>table)]:rounded-none [&_div:has(>table)]:border-0 [&_div:has(>table)]:bg-transparent"
+            className="min-w-0 max-w-full [&_:is(p,ul,ol,pre,table)]:mx-0 [&_:is(p,ul,ol,pre,table)]:mb-2.5 [&_:is(p,ul,ol,pre,table)]:mt-0 [&_:is(p,ul,ol,pre,table):last-child]:mb-0 [&_:is(h1,h2)]:mb-2 [&_:is(h1,h2)]:mt-4 [&_:is(h1,h2)]:text-[15px] [&_:is(h1,h2)]:font-[650] [&_:is(h1,h2)]:tracking-[-0.01em] [&_:is(h3,h4)]:mb-1.5 [&_:is(h3,h4)]:mt-3 [&_:is(h3,h4)]:text-[13.5px] [&_:is(h3,h4)]:font-[650] [&_:is(h1,h2,h3,h4):first-child]:mt-0 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[12.5px] [&_:is(th,td)]:border [&_:is(th,td)]:border-border [&_:is(th,td)]:px-2 [&_:is(th,td)]:py-1.5 [&_:is(th,td)]:text-left [&_th]:bg-secondary [&_th]:font-semibold [&_code]:rounded-sm [&_code]:bg-panel-inset [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:border [&_pre]:border-border [&_pre]:px-2 [&_pre]:py-1.5 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_:is(ul,ol)]:pl-[18px] [&_div:has(>div>table)]:my-2.5 [&_div:has(>div>table)]:rounded-none [&_div:has(>div>table)]:border-0 [&_div:has(>div>table)]:bg-transparent [&_div:has(>div>table)]:p-0 [&_div:has(>table)]:rounded-none [&_div:has(>table)]:border-0 [&_div:has(>table)]:bg-transparent"
           >
             {decodeByteFallback(item.text)}
           </Streamdown>

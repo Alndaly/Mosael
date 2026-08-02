@@ -452,7 +452,9 @@ export function ChatWorkspace({
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
         {
           <>
-            <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
+            {/* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
+                 撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */}
+            <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={threadRef}>
               {visibleMessages.map((message) => (
                 <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
               ))}

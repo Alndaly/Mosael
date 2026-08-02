@@ -489,7 +489,11 @@ export function WorkflowAgentChat({
       </div>
       <div
         className={cn(
-          "grid min-h-0 content-start gap-2 overflow-y-auto p-2.5",
+          // 横向必须一起锁死。grid 子项默认 min-width:auto —— 一段长代码块 / 一条长 URL 会把
+          // 整列撑宽,于是整个助手面板可以左右滚,正文跟着晃。grid-cols 显式给 minmax(0,1fr)
+          // 才让子项允许被压缩,overflow-x-hidden 兜住越界的那一点。
+          // (代码块自己有 overflow-x-auto,但那只在父容器被约束时才生效。)
+          "grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-y-auto overflow-x-hidden p-2.5",
           (messages.data ?? []).length === 0 && !running && "content-center justify-items-center",
         )}
         ref={threadRef}
