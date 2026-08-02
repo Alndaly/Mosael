@@ -3,13 +3,16 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import timedelta
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentSession, AuthSession, ToolConfirmation, User
+from app.db.models import AgentSession, AuthSession, ToolConfirmation, User, Workspace, now
+from app.domain.agent import judge as judge_module
+from app.domain.agent import rules
 
 """自动放行:一张新开的确认卡该不该不问用户就执行。
 
@@ -40,11 +43,16 @@ AUTOPILOT_THREAD_NAME = "confirmation-autopilot"
 
 @dataclass(frozen=True)
 class Decision:
-    """判定结果。`mode` 会原样落进卡的留痕字段。"""
+    """判定结果。`mode` 会原样落进卡的留痕字段。
+
+    `needs_judge` 是第三种答案:规则既没允许也没拒绝,要花几秒问一次判断者。它不是"半个批准"——
+    卡仍然是 pending,只是先别打扰用户(hold_until)。
+    """
 
     approve: bool
     mode: str = "manual"
     detail: dict[str, Any] = field(default_factory=dict)
+    needs_judge: bool = False
 
 
 def wait_for_idle_autopilot(timeout: float = 5.0) -> bool:
@@ -96,9 +104,21 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
         return Decision(
             approve=True, mode="auto", detail={"permission": permission, "used": used, "limit": COST_AUTO_LIMIT}
         )
-    # external:撤不回来的那一档。auto 不放行 —— 规则与隔离判断者是下一期的事
-    # (见 docs/AGENT_PERMISSION_MODES.md §4.7)。在那之前它照常弹卡。
-    return Decision(approve=False, detail={"reason": "external-needs-a-human", "permission": permission})
+    # external:撤不回来的那一档。规则先判 —— 明确拒绝就到此为止(判断者翻不了案),明确允许就
+    # 直接放行(确定性的答案不该花一次模型调用)。只有规则没覆盖的才往下问判断者,而那要花几秒,
+    # 所以交给后台并压一个 hold_until(见 consider)。
+    ruling = rules.evaluate(confirmation.tool, confirmation.payload or {}, _rules_for(db, confirmation))
+    detail = {"permission": permission, "rule": {"outcome": ruling.outcome, "reason": ruling.reason}}
+    if ruling.allowed:
+        return Decision(approve=True, mode="auto", detail=detail)
+    if ruling.denied:
+        return Decision(approve=False, detail=detail)
+    return Decision(approve=False, needs_judge=True, mode="auto", detail=detail)
+
+
+def _rules_for(db: Session, confirmation: ToolConfirmation) -> dict:
+    workspace = db.get(Workspace, confirmation.workspace_id)
+    return rules.normalize(workspace.autopilot_rules if workspace is not None else None)
 
 
 def _billable_run_length(db: Session, session: AgentSession) -> int:
@@ -134,19 +154,83 @@ def consider(db: Session, user: User, confirmation: ToolConfirmation) -> bool:
     """
     decision = decide(db, user, confirmation)
     confirmation.decision_detail = decision.detail
+    if decision.needs_judge:
+        # 判断者要跑几秒,不能卡在开卡请求里。压一个期限:待办列表在此之前不显示这张卡,用户不会
+        # 看见一张自己出现又自己消失的卡。**这不是一个新状态** —— 期限会自己过去,所以进程崩在
+        # 判断中间也不需要谁去回收,卡自己回到待办(与 AuthSession 的过期同一种做法)。
+        confirmation.hold_until = now() + timedelta(seconds=judge_module.JUDGE_TIMEOUT_SECONDS)
+        db.commit()
+        threading.Thread(
+            target=_judge_thread,
+            args=(confirmation.id, user.id),
+            daemon=True,
+            name=AUTOPILOT_THREAD_NAME,
+        ).start()
+        return True
     if not decision.approve:
         db.commit()
         return False
-    confirmation.decision_mode = decision.mode
-    confirmation.decided_by = user.id
+    _hand_off(db, confirmation, decision.mode, user.id)
+    return True
+
+
+def _hand_off(db: Session, confirmation: ToolConfirmation, mode: str, user_id: str) -> None:
+    """记下"这张卡是被自动放行的",再派线程去执行。
+
+    留痕落在派活**之前**:执行可能失败,但放行这件事已经发生了,它不该只在执行成功时才留下记录。
+    """
+    confirmation.decision_mode = mode
+    confirmation.decided_by = user_id
+    confirmation.hold_until = None
     db.commit()
     threading.Thread(
         target=_execute_thread,
-        args=(confirmation.id, user.id),
+        args=(confirmation.id, user_id),
         daemon=True,
         name=AUTOPILOT_THREAD_NAME,
     ).start()
-    return True
+
+
+def _judge_thread(confirmation_id: str, user_id: str) -> None:
+    """问一次隔离判断者,按裁决决定放行还是交回用户。
+
+    **任何不是"明确放行"的结果都退回用户**:拒绝、超时、报错、回了个读不懂的东西 —— 判断者不可用
+    不等于放行。
+    """
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        confirmation = db.get(ToolConfirmation, confirmation_id)
+        if confirmation is None or confirmation.status != "pending":
+            return
+        tool, payload = confirmation.tool, dict(confirmation.payload or {})
+        request = judge_module.build_request(tool, payload, _rules_for(db, confirmation))
+        detail = dict(confirmation.decision_detail or {})
+        try:
+            verdict = judge_module.ask(request)
+        except Exception as exc:  # noqa: BLE001 —— 超时/网络/解析不出来,都算判不了
+            logger.warning("judge could not settle confirmation %s: %s", confirmation_id, exc)
+            _release(db, confirmation_id, {**detail, "judge_failed": str(exc)[:300]})
+            return
+        detail["judge"] = {**request.recorded(), "allow": verdict.allow, "reason": verdict.reason, "model": verdict.model}
+        confirmation = db.get(ToolConfirmation, confirmation_id)
+        if confirmation is None or confirmation.status != "pending":
+            return
+        confirmation.decision_detail = detail
+        if not verdict.allow:
+            _release(db, confirmation_id, detail)
+            return
+        _hand_off(db, confirmation, "auto", user_id)
+
+
+def _release(db: Session, confirmation_id: str, detail: dict) -> None:
+    """把卡交回用户:清掉期限,它立刻出现在待办里。"""
+    confirmation = db.get(ToolConfirmation, confirmation_id)
+    if confirmation is None or confirmation.status != "pending":
+        return
+    confirmation.hold_until = None
+    confirmation.decision_detail = detail
+    db.commit()
 
 
 def _execute_thread(confirmation_id: str, user_id: str) -> None:

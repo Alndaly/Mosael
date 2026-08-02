@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.core.permissions import ensure_workspace_access
-from app.db.models import ToolConfirmation
+from app.db.models import ToolConfirmation, now
 from app.integrations.feishu.service import announce_confirmation
 from app.domain.agent import autopilot
 from app.domain.agent.confirmations import (
@@ -80,6 +80,12 @@ def list_confirmations(
         stmt = stmt.where(ToolConfirmation.session_id.is_(None))
     if status:
         stmt = stmt.where(ToolConfirmation.status == status)
+    if status == "pending":
+        # 隔离判断者正在看的卡先不显示:它几秒内多半会自己消失(放行了),让用户看见一张自己出现
+        # 又自己消失的卡只会造成困惑。期限一过它自动回到这里 —— 不需要任何回收动作。
+        stmt = stmt.where(
+            or_(ToolConfirmation.hold_until.is_(None), ToolConfirmation.hold_until <= now())
+        )
     stmt = stmt.order_by(ToolConfirmation.created_at.desc()).limit(min(limit, 100))
     return list(db.scalars(stmt))
 

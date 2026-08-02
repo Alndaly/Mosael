@@ -23,6 +23,13 @@ class Workspace(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    #: 自动放行的准则(见 domain/agent/rules)。带 server_default:迁移语句里写了 DEFAULT,
+    #: 模型这边不写的话,**迁移出来的库和新建的库 schema 不一致** —— 同一份代码两种形状,
+    #: 而先撞上的往往是一条裸 SQL(测试或以后的运维脚本),报一句看不懂的 NOT NULL 失败。
+    #: 下面几个带 DEFAULT 的列同理:http 主机白名单、发布账号白名单、run_code 要不要
+    #: 交给判断者、以及一段自由文本。**工作区级**而不是会话级:它是"这个团队允许什么"的策略,
+    #: 不是"这次对话想怎么样"的选择 —— 后者是权限模式。
+    autopilot_rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
@@ -62,7 +69,7 @@ class AuthSession(Base):
     token: Mapped[str] = mapped_column(String(80), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     #: login(人)| service(子进程回连)。决定要不要滑动续期。
-    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="login", server_default="login")
     #: 这份凭据属于哪次智能体会话(service 令牌;登录令牌为空)。**确认卡的归属从这里来**——
     #: 归属由凭据决定,不由调用方在请求体里声明,否则任何拿着同一份凭据的通道都能把自己的动作
     #: 挂到一个开了自动放行的会话上。不设外键:会话删掉之后令牌仍要能认出人来(周期结束自然消失)。
@@ -910,7 +917,7 @@ class AgentSession(Base):
     analysis_video_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
     #: 权限模式:manual(默认)/ auto / bypass。挂在**会话**上 —— 「这次对话里哪一类动作不用问我」
     #: 是每次对话的选择,和思考档位同类。
-    permission_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    permission_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual", server_default="manual")
     #: 模式是**谁**开的。行动人不是他就退回手动:飞书群聊共用一个会话,群里任何人发消息都跑在
     #: 同一个会话上 —— 没有这一条,A 开的 bypass 会替 B 做决定。而会话本身不记 owner。
     mode_set_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -918,7 +925,7 @@ class AgentSession(Base):
     mode_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     #: 「本会话始终允许」的工具名。此前是浏览器 localStorage 里的一份自动批准 —— 聊天面板一关
     #: 组件就卸载,而 turn 还在跑,同一个"授权"的行为取决于某个 React 组件在不在。
-    auto_allow_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    auto_allow_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     #: 思考档位(off/low/medium/high)。挂在**会话**上而不是模型上:同一个模型有时要深想、
     #: 有时要快答,它是每次对话的选择。off 时 pi 根本不向供应商要思考。
     thinking_level: Mapped[str] = mapped_column(String(10), nullable=False, default="off")
@@ -1039,12 +1046,16 @@ class ToolConfirmation(Base):
     requested_by: Mapped[str] = mapped_column(String(120), nullable=False, default="external-agent")
     #: 这张卡是**怎么**过的:manual(人点的)/ session-allow(工具白名单)/ auto / bypass。
     #: 自动放行必须留痕,而且要能一眼看出是哪一档放的 —— 事后能查是 bypass 唯一可接受的前提。
-    decision_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    decision_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual", server_default="manual")
     #: 记在谁头上。自动放行也有人 —— 那次 turn 是以他的身份跑的,授权闸也是按他校验的。
     decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    #: 判定依据(档位、计数快照;第 4 期还会放规则命中与判断者的输入与裁决)。
+    #: 判定依据:档位、计数快照、规则命中、判断者的输入与裁决。
     #: 判定是 (工具, 参数, 准则) 的纯函数,把输入记下来,事后就能复算"当时为什么放行"。
     decision_detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: 在这之前先别打扰用户 —— 隔离判断者正在看这张卡(见 domain/agent/autopilot)。
+    #: 用**会自己到期的时间**而不是一个"判定中"状态:状态要有人去回收,期限不用 —— 进程崩在判断
+    #: 中间,期限自己过去,卡自己回到待办。与 AuthSession 的过期同一种做法。
+    hold_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

@@ -70,6 +70,42 @@ def rename_workspace(workspace_id: str, body: RenameRequest, db: DbSession, user
     return {"id": workspace.id, "name": workspace.name}
 
 
+class AutopilotRulesBody(BaseModel):
+    rules: dict = {}
+
+
+@router.get("/workspaces/{workspace_id}/autopilot-rules")
+def get_autopilot_rules(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """auto 档下 `external` 的放行准则(见 domain/agent/rules)。读:工作区成员即可。"""
+    from app.domain.agent import rules as autopilot_rules
+
+    ensure_workspace_access(db, user, workspace_id)
+    workspace = db.get(Workspace, workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"rules": autopilot_rules.normalize(workspace.autopilot_rules)}
+
+
+@router.put("/workspaces/{workspace_id}/autopilot-rules")
+def set_autopilot_rules(
+    workspace_id: str, body: AutopilotRulesBody, db: DbSession, user: CurrentUser
+) -> dict:
+    """改准则要 admin。
+
+    它决定的是「什么可以不问就发出去」—— 往主机白名单里加一行,等于让智能体从此可以不经确认
+    对那个地址发写请求。这和开 bypass 是同一级别的授权动作,不该是每个编辑都能改的。
+    """
+    from app.domain.agent import rules as autopilot_rules
+
+    ensure_workspace_role(db, user, workspace_id, "admin")
+    workspace = db.get(Workspace, workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    workspace.autopilot_rules = autopilot_rules.normalize(body.rules)
+    db.commit()
+    return {"rules": workspace.autopilot_rules}
+
+
 @router.delete("/workspaces/{workspace_id}", status_code=204)
 def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Response:
     ensure_workspace_role(db, user, workspace_id, "owner")

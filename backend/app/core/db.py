@@ -77,6 +77,10 @@ def _migrate_permission_modes() -> None:
             ("decision_mode", "ALTER TABLE tool_confirmations ADD COLUMN decision_mode VARCHAR(16) NOT NULL DEFAULT 'manual'"),
             ("decided_by", "ALTER TABLE tool_confirmations ADD COLUMN decided_by VARCHAR(64)"),
             ("decision_detail", "ALTER TABLE tool_confirmations ADD COLUMN decision_detail JSON"),
+            ("hold_until", "ALTER TABLE tool_confirmations ADD COLUMN hold_until DATETIME"),
+        ],
+        "workspaces": [
+            ("autopilot_rules", "ALTER TABLE workspaces ADD COLUMN autopilot_rules JSON NOT NULL DEFAULT '{}'"),
         ],
     }
     for table, columns in additions.items():
