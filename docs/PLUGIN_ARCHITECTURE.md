@@ -1,24 +1,26 @@
-# 插件体系:目标架构
+# 插件体系:包 / 实例 / 能力
 
-> 这份文档描述**要改成的样子**。当前实现见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md);
-> 决策与被否掉的选项见 [ADR 0005](adr/0005-plugin-package-instance-capability.md)。
+> **已落地(v0.8.0)。** 这份文档留下的是**为什么长成这样** —— 目标模型、以及它替换掉的那个
+> 错误模型。写插件怎么写见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md),用户视角见
+> [插件指南](../docs-site/src/content/docs/guides/plugins.md);决策与被否掉的选项见
+> [ADR 0005](adr/0005-plugin-package-instance-capability.md)。
 
-## 现在错在哪
+## 改之前错在哪
 
 三个故障,同一个病根:**把「一个包」和「一次接入」当成了同一个东西**。
 
-| 症状 | 现在的样子 | 病根 |
+| 症状 | 改之前的样子 | 病根 |
 | --- | --- | --- |
 | 节点面板显示「bilibili_web_fetch_one_video · TikHub 抖音数据」 | 包名写死在 manifest,平台却是运行时配置 | 身份来自配置,名字是常量 |
 | 41 个工具挤满节点面板和智能体工具表 | MCP 报什么接什么,白名单要手写才生效 | 默认全暴露 |
 | 想同时接 bilibili 和 douyin 要复制目录改 id | 一行 `plugins` 记录既是包也是接入 | 包 ≠ 实例 |
 
-还有两处更细的错位:
+还有两处更细的错位(也一并修掉了):
 
-- **配置被当成凭据**。`TIKHUB_PLATFORM` 本质是个枚举,却和 API Key 挤在同一张表、同一个密码框旁边。没有选项、没有校验,改了也不会改名字。
-- **`manifest.tools` 一个字段三种语义**:进程类插件的完整声明 / MCP 插件的白名单 / MCP 插件的覆盖层。读的人得先知道 `kind` 才能理解这个字段。
+- **配置被当成凭据**。`TIKHUB_PLATFORM` 本质是个枚举,却和 API Key 挤在同一张表、同一个密码框旁边。没有选项、没有校验,改了也不会改名字。现在配置与凭据是 `Field.secret` 的两侧:配置有类型、明文、参与显示名模板,凭据打码。
+- **`manifest.tools` 一个字段三种语义**:进程类插件的完整声明 / MCP 插件的白名单 / MCP 插件的覆盖层。读的人得先知道 `kind` 才能理解这个字段。现在 `declare` 与 `overrides` 分开,语义各归各的。
 
-## 目标模型
+## 现在的模型
 
 ```
 PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态。

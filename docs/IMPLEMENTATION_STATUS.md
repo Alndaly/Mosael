@@ -144,13 +144,25 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 - 3D LUT: `.cube` upload/store/list/delete (`luts` table, per-workspace storage, header validator) + `lut3d` burn-in after the primary grade; `LutPicker` in the color panel wired to `effects.color.lut` (preview is export-only for LUTs).
 - Scopes: histogram + waveform sampled from the current frame on an rAF loop, reflecting the grade via `ctx.filter`. A dedicated crossOrigin sampling video (cache-buster) reads untainted pixels without touching the main playback video.
 
-### Plugin runtime (plan §19.6)
+### Plugin runtime (plan §19.6, rebuilt — see docs/adr/0005)
 
-- Process-isolated execution: manifest `entry` script spawned per call with one JSON request on stdin / one JSON response on stdout ({ok, output|error}), 60s timeout, 1MB output cap, minimal env, cwd = plugin dir, entry path confined to the plugin directory.
-- First version is pure-function tools only — plugins receive nothing but their input payload, so the permission/confirmation system cannot be bypassed; every call lands in plugin_invocations (running → succeeded/failed with error text).
-- Required-input check from the tool's input_schema before spawning; MCP gains list_plugin_tools + invoke_plugin_tool so agents share the same registry.
-- Plugins page: expandable tool cards generate a try-run form from input_schema (typed coercion for number/boolean/object), green/red result blocks, invocation history with expandable output/error.
-- Runnable example plugin plugins/examples/text-toolkit (word_count, extract_hashtags); 8 runtime tests cover the protocol, crash/timeout/garbage-output/entry-escape paths and the API flow.
+- **Three layers: package → instance → capability.** A package is what is on disk; an instance is
+  one concrete hookup (config + credentials + name + enable switch), so one package can be
+  connected many times (TikHub: one package, a dozen platform endpoints, a connection each);
+  a capability is one tool that connection exposes, **opt-in per tool**. Enabling everything
+  drowns the node palette and the agent's tool list, and a model picking from fifty names picks
+  wrong more often.
+- **Two plugin kinds.** A local script (`entry` → process-isolated: one JSON request on stdin, one
+  JSON response on stdout, 60s timeout, 1MB output cap, minimal env, entry confined to the plugin
+  dir), or a **declarative MCP service** (`kind: "mcp"`, stdio or http) whose tool list is pulled
+  from the service rather than hand-copied into the manifest.
+- Plugins get **their own** credentials injected, never Open Studio's — so they cannot route around
+  the permission system or the confirmation cards. Every call lands in `plugin_invocations`.
+- Plugin-declared **workflow nodes**: a plugin says what its node's form, inputs and outputs look
+  like, instead of everything degrading into one generic "plugin node".
+- Compatibility is handled by **migration, not read-time branching** (docs/adr/0006): old manifest
+  filenames and shapes are rewritten in place on upgrade.
+- Examples: `plugins/examples/text-toolkit` (local script), `tikhub` (MCP), `mcp-everything`.
 
 ### Knowledge base (plan §18)
 
@@ -357,3 +369,25 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   allowlist), not the version.
 - **Dependencies current across the board**: Electron 43, TypeScript 7, Vite 8, mcp 2.0 (`FastMCP` →
   `MCPServer`, `inputSchema` → `input_schema`), pi 0.83, Astro 7 / Starlight 0.41 for the docs site.
+
+## Structural constraints added in 0.8.0
+
+These are **ratchet tests** — allowlists that may only shrink. Each exists because the drift it
+prevents already happened once, silently.
+
+- `test_agent_workflow_parity.py` — every workflow node type has a matching agent tool, or a written
+  reason it does not need one. Without it the agent silently lacked capabilities the canvas had, and
+  a model that hits a missing tool does not say "I have no tool for this" — it improvises one
+  (it once used `browser_wait` on impossible text as a sleep, burning 22s and reporting success).
+- `test_mcp_tool_payloads.py` — every tool is called once against a live backend and must not be
+  rejected on **payload shape**. `translate_text` shipped posting `{text,target,source}` at an
+  endpoint wanting `{texts,target_lang}`: a 422 on every single call.
+- `test_undo_registry.py` — every recorded sequence operation registers an inverse. When one did not,
+  undo silently **skipped it and reverted an older edit** instead — 200, no error, the wrong thing gone.
+- `test_chat_single_implementation.py` — only one module may build a `/chat/completions` request.
+  Eight copies had drifted apart on retry, key redaction, empty-key handling and usage reporting.
+- `test_usage_single_entry.py` — only `domain/usage.py` may call `record_usage`; every billable
+  capability has a recorded path. This one found a seventh gap (podcast) that the human list missed.
+- `test_tool_docs_in_sync.py` — the tool table in docs/MCP.md is generated, not hand-written. It had
+  drifted to listing 15 of 54.
+- `buttonPending.test.ts` — a `<Button>` that fires a request must show `loading`, not just `disabled`.
