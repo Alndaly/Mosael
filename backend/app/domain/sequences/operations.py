@@ -3,14 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, SequenceOperation, SequenceRevision, Track
-
-
-class SequenceDomainError(ValueError):
-    pass
+from app.domain.sequences.errors import SequenceDomainError
 
 
 @dataclass(frozen=True)
@@ -1610,7 +1607,20 @@ def _record_operation(
 ) -> None:
     before = sequence.revision
     after = before + 1
-    sequence.revision = after
+    # 版本号自增走**条件 UPDATE**,不是读出来加一再写回去。
+    #
+    # 后者是 check-then-act:两个写入方都读到 5,都写 6,于是两条编辑共用一个版本号 —— 而
+    # 版本号是撤销栈排序的依据(revision_after)、也是序列 JSON 缓存的键,两处都会因此错乱。
+    # 让数据库来挑赢家,输的那个改动 0 行,当场知道自己晚了一步。
+    #
+    # 这条路径以前基本只有一个人在走,现在不是了:智能体批准一张确认卡就会改时间线,而用户
+    # 同时还在拖片段 —— 两个写入方同时存在已经是常态。
+    # (和 domain/agent/confirmations.py 的 _claim 同一个手法。)
+    claimed = db.execute(
+        update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
+    ).rowcount
+    if claimed == 0:
+        raise SequenceDomainError("这个序列刚被改过,请刷新后重试")
     db.add(
         SequenceOperation(
             workspace_id=sequence.workspace_id,

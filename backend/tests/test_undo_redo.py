@@ -130,3 +130,48 @@ def test_revision_increments_on_undo_and_redo(tmp_path: Path) -> None:
     assert undone["revision"] == 3
     redone = client.post(f"/api/sequences/{sequence['id']}/redo").json()
     assert redone["revision"] == 4
+
+
+def test_两个写入方抢同一个版本号时后到的那个被挡下() -> None:
+    """版本号自增走条件 UPDATE,不是读出来加一再写回去。
+
+    后者是 check-then-act:两个写入方都读到 5,都写 6,于是两条编辑共用一个版本号 —— 而版本号
+    是撤销栈的排序依据(revision_after),也是序列 JSON 缓存的键,两处都会因此错乱:撤销可能
+    退回错的那一条,而缓存会把旧的时间线当成新的发出去。
+
+    这条路径以前基本只有一个人在走,现在不是了:智能体批准一张确认卡就会改时间线,而用户
+    同时还在拖片段。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import Sequence
+    from app.domain.sequences.errors import SequenceDomainError
+    from app.domain.sequences.operations import _record_operation
+
+    client = fresh_client()
+    _, _, sequence = setup_sequence(client)
+
+    first, second = SessionLocal(), SessionLocal()
+    try:
+        a = first.get(Sequence, sequence["id"])
+        b = second.get(Sequence, sequence["id"])
+        assert a.revision == b.revision  # 两边都读到了同一个版本号
+
+        _record_operation(first, a, kind="set_subtitle_style", payload={"previous": {}, "style": {}},
+                          summary={"operation": "set_subtitle_style"}, actor_id=None)
+        first.commit()
+
+        # 后到的那个改 0 行,当场知道自己晚了一步,而不是悄悄写出第二条同版本号的操作
+        try:
+            _record_operation(second, b, kind="set_subtitle_style", payload={"previous": {}, "style": {}},
+                              summary={"operation": "set_subtitle_style"}, actor_id=None)
+            second.commit()
+            raise AssertionError("第二个写入方应当被挡下")
+        except SequenceDomainError as exc:
+            assert "刚被改过" in str(exc)
+            second.rollback()
+    finally:
+        first.close()
+        second.close()
+
+    # 版本号只前进了一步,操作日志里也只有一条
+    assert client.get(f"/api/sequences/{sequence['id']}").json()["revision"] == a.revision

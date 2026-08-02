@@ -36,6 +36,7 @@ from app.api.schemas import (
 from app.db.models import Job, Project, Sequence, Track
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.render import start_export
+from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
@@ -55,7 +56,6 @@ from app.domain.sequences.operations import (
     RemoveTrack,
     RippleDeleteClip,
     DetachClipAudio,
-    SequenceDomainError,
     SetClipEffects,
     SetClipGain,
     SetClipSpeed,

@@ -18,7 +18,7 @@
 
 | 领域 | 职责 |
 | --- | --- |
-| `sequences/` | 剪辑内核:insert/move/trim/delete/split/cut-range 等操作,每次操作校验不变量并落 `sequence_operations` + `sequence_revisions`(撤销/重做的基础) |
+| `sequences/` | 剪辑内核:insert/move/trim/delete/split/cut-range 等操作,每次操作校验不变量并落 `sequence_operations` + `sequence_revisions`。撤销/重做拆成两层 —— `history.py` 只管队列(往回找该撤销的那一条、能不能重做),**怎么撤销**在 `undo/` 注册表里按操作类型成对登记(逆向 + 正向),`UNDOABLE_KINDS` 由注册表派生而非手写。新增一种操作 = 记录它 + 登记一对逆操作,`tests/test_undo_registry.py` 守着这个配对 |
 | `render.py` | 序列 → RenderPlan(纯函数)→ ffmpeg 执行导出 |
 | `transcripts/` | 逐字稿:ASR 导入、token 级编辑、投影到时间线(删句 = 剪源区间) |
 | `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 统一并行调度引擎(`execute_graph`);新增节点 = 元数据 + 一个执行器文件,引擎不动。**嵌套**:`subgraph`(内嵌可复用子图)、`call_workflow`(调另一工作流当子流程,子 job 收纳 + 级联取消 + 防递归/过深)、`output`(声明工作流输出契约);子图与循环体都跑在同一套引擎上(并行/条件一致) |
