@@ -16,7 +16,10 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
-vi.mock("streamdown", () => ({ Streamdown: ({ children }: { children: string }) => <div>{children}</div> }));
+vi.mock("streamdown", () => ({
+  Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+  CodeBlockCopyButton: () => <button type="button" />,
+}));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: () => {} }) }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: undefined }) }));
 
