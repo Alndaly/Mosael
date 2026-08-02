@@ -23,12 +23,12 @@ import { cn } from "@/lib/utils";
  * 只在浏览器里看得见。这里只留结构。
  */
 
-/** 与 `messages.home.chapters` 一一对应 —— 文案在那边,图在这边,按顺序配对。 */
-const CHAPTER_SHOTS = [
-  { src: "/media/gifs/timeline-edit.gif", width: 880, height: 550 },
-  { src: "/media/screens/ai-chat.png", width: 2880, height: 1520 },
-  { src: "/media/screens/workflows.png", width: 2880, height: 1520 },
-];
+/**
+ * 与 `messages.home.chapters` 一一对应 —— 文案在那边,图在这边,按顺序配对。
+ *
+ * 只写路径,尺寸由 `Shot` 从文件头读:重录一次换了分辨率,这里不用跟着改。
+ */
+const CHAPTER_SHOTS = ["/media/gifs/timeline-edit.gif", "/media/screens/ai-chat.png", "/media/screens/workflows.png"];
 
 /** 「还有」那三条的图标与顶条颜色,同样按顺序配对。 */
 const MORE_MARKS = [
@@ -85,15 +85,9 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           </Reveal>
 
           <Reveal delay={120} className="mt-16 sm:mt-20">
-            <Shot
-              src="/media/screens/editor.png"
-              alt={t.heroShotAlt}
-              width={1920}
-              height={1200}
-              caption={t.heroShotCaption}
-              framed
-              priority
-            />
+            {/* 不写死宽高:Shot 会从 public/ 下的文件头读真实尺寸。写死的后果是重录一次
+                换了分辨率,比例就对不上,图被纵向拉伸 —— 而且只在浏览器里看得出来。 */}
+            <Shot src="/media/screens/editor.png" alt={t.heroShotAlt} caption={t.heroShotCaption} framed priority />
           </Reveal>
         </div>
       </section>
@@ -129,7 +123,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                     <p className="m-0 max-w-(--measure) text-invert-foreground/70">{chapter.body}</p>
                   </div>
                   <div className={cn("mt-10 lg:col-span-7 lg:mt-0", flipped && "lg:order-1 lg:col-start-1")}>
-                    <Shot src={shot.src} alt={chapter.shotAlt} width={shot.width} height={shot.height} framed />
+                    <Shot src={shot} alt={chapter.shotAlt} framed />
                   </div>
                 </Reveal>
               );
@@ -205,14 +199,19 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 { src: "/media/qr-group.png", title: t.communityGroup, hint: t.communityGroupHint },
                 { src: "/media/qr-wechat.png", title: t.communityAuthor, hint: t.communityAuthorHint },
               ].map((card) => (
-                <figure key={card.src} className="m-0 border-2 border-ink bg-card">
-                  <Image
-                    src={card.src}
-                    alt={card.title}
-                    width={420}
-                    height={560}
-                    className="h-auto w-full border-b-2 border-ink bg-ink object-contain"
-                  />
+                <figure key={card.src} className="m-0 flex flex-col border-2 border-ink bg-card">
+                  {/* 两张二维码原图的比例和底色都不一样(一张 2:3 深底,一张 4:5 白底)。
+                      固定同一个画框 + object-contain:两张卡因此一样高、说明文字也对得齐,
+                      而二维码本身一个像素都没被裁掉 —— 裁了就扫不出来。 */}
+                  <div className="relative aspect-4/5 w-full border-b-2 border-ink bg-secondary">
+                    <Image
+                      src={card.src}
+                      alt={card.title}
+                      fill
+                      sizes="(min-width: 64rem) 22rem, 45vw"
+                      className="object-contain"
+                    />
+                  </div>
                   <figcaption className="p-5">
                     <p className="m-0 font-display text-lg font-bold tracking-tight">{card.title}</p>
                     <p className="m-0 mt-1 text-sm text-muted-foreground">{card.hint}</p>

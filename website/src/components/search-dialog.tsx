@@ -41,8 +41,11 @@ function excerpt(body: string, query: string): string {
  *
  * 按大小写不敏感切分,但**回显原文的那一段**而不是回显 query —— 否则搜 "mcp" 时结果里
  * 会把原文的 "MCP" 显示成小写。
+ *
+ * 选中那一行整条底色就是朱红,再往上叠一层半透明的朱红等于什么都没标出来。所以选中行改用
+ * **反相**:纸色底 + 朱红字,在橙底上比任何一种"更深一点的橙"都好认。
  */
-function Highlight({ text, query }: { text: string; query: string }) {
+function Highlight({ text, query, active }: { text: string; query: string; active: boolean }) {
   if (!query) return <>{text}</>;
   const parts: React.ReactNode[] = [];
   const haystack = text.toLowerCase();
@@ -50,7 +53,13 @@ function Highlight({ text, query }: { text: string; query: string }) {
   for (let at = haystack.indexOf(query); at >= 0; at = haystack.indexOf(query, cursor)) {
     if (at > cursor) parts.push(text.slice(cursor, at));
     parts.push(
-      <mark key={at} className="bg-flame/25 text-inherit underline decoration-flame decoration-2 underline-offset-2">
+      <mark
+        key={at}
+        className={cn(
+          "rounded-sm px-0.5 font-bold",
+          active ? "bg-primary-foreground text-flame" : "bg-flame/20 text-foreground",
+        )}
+      >
         {text.slice(at, at + query.length)}
       </mark>,
     );
@@ -227,7 +236,7 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
                     >
                       <p className="m-0 flex items-baseline gap-2">
                         <span className="font-display font-bold">
-                          <Highlight text={entry.heading || entry.title} query={needle} />
+                          <Highlight text={entry.heading || entry.title} query={needle} active={index === active} />
                         </span>
                         <span
                           className={cn(
@@ -242,7 +251,7 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
                         <p
                           className={cn("m-0 mt-1 text-sm", index === active ? "opacity-90" : "text-muted-foreground")}
                         >
-                          <Highlight text={excerpt(entry.body, needle)} query={needle} />
+                          <Highlight text={excerpt(entry.body, needle)} query={needle} active={index === active} />
                         </p>
                       )}
                     </button>
