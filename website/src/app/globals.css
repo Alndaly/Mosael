@@ -117,7 +117,8 @@
   --invert: var(--ink);
   --invert-foreground: var(--paper);
 
-  /* 正文宽度。中文单字信息密度高于英文,一行放 34em 已经偏长,取 32em 更好读。 */
+  /* 首页那种没有分栏的地方,单段文字的行宽上限。中文单字信息密度高于英文,一行放 34em
+     已经偏长,取 32em 更好读。文档正文不用它 —— 那边行宽由列宽定。 */
   --measure: 32em;
 }
 
@@ -216,8 +217,10 @@
     margin: 1.75rem 0 0.5rem;
     font-size: 1rem;
   }
+  /* 行宽交给列宽定,这里**不再**另加 max-width:两处都限的结果是文字在半途换行,
+     而表格和配图铺满整列 —— 右边缘对不齐,看起来像坏了。文档列本身约 44em,
+     中文一行 40 来字,正好。 */
   .docs-body :is(p, ul, ol) {
-    max-width: var(--measure);
     margin: 0 0 1.125rem;
   }
   .docs-body p {
