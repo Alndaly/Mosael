@@ -9,15 +9,14 @@ import json
 import os
 import subprocess
 import tempfile
-import threading
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
+from app.domain.usage import billable
 from app.audio.tts_models import WORKER_PATH, resolve_tts_python
-from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded
 from app.db.models import Asset, Job, Voice
@@ -403,7 +402,22 @@ def _synthesize_remote(
     with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
         # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
         out = Path(tmp) / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
-        provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
+        # 语音合成此前一条账都不记。各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token
+        # —— 计量因供应商而异正是 billable 留给调用方的那一半。
+        with billable(
+            db,
+            capability="tts",
+            operation="synthesize_speech",
+            workspace_id=workspace_id,
+            provider=engine,
+            model=model,
+            provider_profile_id=profile.id if profile else None,
+            source_type="job",
+            source_id=job.id,
+            job_id=job.id,
+        ) as call:
+            call.meter(characters=len(text), requests=1)
+            provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
         job.progress = 0.85
         db.commit()
         asset = register_file_asset(
@@ -518,16 +532,29 @@ def _run_podcast_body(
 
         with tempfile.TemporaryDirectory(prefix="open-studio-podcast-") as tmp:
             out = Path(tmp) / "podcast.mp3"
-            result = synthesize_podcast(
-                appid,
-                token,
-                action=action,
-                input_text=text,
-                prompt_text=topic,
-                speakers=speakers,
-                speed=speed,
-                out_path=out,
-            )
+            with billable(
+                db,
+                capability="podcast",
+                operation="synthesize_podcast",
+                workspace_id=workspace_id,
+                provider="volcano-podcast",
+                provider_profile_id=profile.id if profile else None,
+                source_type="job",
+                source_id=job_id,
+                job_id=job_id,
+            ) as call:
+                # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
+                call.meter(characters=len(text or topic or ""), speakers=len(speakers or []), requests=1)
+                result = synthesize_podcast(
+                    appid,
+                    token,
+                    action=action,
+                    input_text=text,
+                    prompt_text=topic,
+                    speakers=speakers,
+                    speed=speed,
+                    out_path=out,
+                )
             job = db.get(Job, job_id)
             job.progress = 0.85
             db.commit()

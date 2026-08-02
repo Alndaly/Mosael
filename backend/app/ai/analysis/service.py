@@ -197,7 +197,9 @@ def _read_native_video(path: Path) -> tuple[bytes, str]:
     return data, mime
 
 
-def _call_gemini_video(profile: ProviderProfile, prompt: str, video: bytes, mime: str) -> str:
+def _call_gemini_video(
+    profile: ProviderProfile, prompt: str, video: bytes, mime: str, call: BillableCall | None = None
+) -> str:
     """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
     base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
     model = provider_models.model_id_for(object_session(profile), profile, "chat") or "gemini-2.0-flash"
@@ -221,20 +223,37 @@ def _call_gemini_video(profile: ProviderProfile, prompt: str, video: bytes, mime
         )
         response.raise_for_status()
         payload = response.json()
+        if call is not None:
+            call.describe(provider=profile.vendor or "", model=model, provider_profile_id=profile.id)
+            # Gemini 的计量字段叫 usageMetadata,键名也和 OpenAI 不同 —— 计量本来就该因供应商
+            # 而异,billable 只要求最后落到 input_tokens / output_tokens 上。
+            meta = payload.get("usageMetadata") or {}
+            call.meter(
+                input_tokens=int(meta.get("promptTokenCount") or 0),
+                output_tokens=int(meta.get("candidatesTokenCount") or 0),
+                raw=meta if isinstance(meta, dict) else {},
+            )
         return str(payload["candidates"][0]["content"]["parts"][0]["text"]).strip()
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
         raise AnalysisError(sanitize_provider_error(f"Gemini 视频分析失败: {exc}", profile.api_key)) from exc
 
 
-def _analyze_video_native(profile: ProviderProfile, asset: Asset, path: Path, question: str, transcript: str | None) -> str:
+def _analyze_video_native(
+    profile: ProviderProfile,
+    asset: Asset,
+    path: Path,
+    question: str,
+    transcript: str | None,
+    call: BillableCall | None = None,
+) -> str:
     """原生视频理解:Gemini 走 inline_data;Qwen-VL / Kimi 等 OpenAI 兼容端走 content 里的 video_url。"""
     video, mime = _read_native_video(path)
     prompt = _prompt_text(asset, question, transcript)
     if profile.vendor in GEMINI_VIDEO_VENDORS:
-        return _call_gemini_video(profile, prompt, video, mime)
+        return _call_gemini_video(profile, prompt, video, mime, call)
     data_uri = f"data:{mime};base64,{base64.b64encode(video).decode()}"
     content = [{"type": "text", "text": prompt}, {"type": "video_url", "video_url": {"url": data_uri}}]
-    return call_vision_model(profile, [{"role": "user", "content": content}])
+    return call_vision_model(profile, [{"role": "user", "content": content}], call)
 
 
 def analyze_asset(
@@ -269,7 +288,12 @@ def analyze_asset(
     if mode == "native" and native_profile is None:
         raise AnalysisError("没有支持原生视频理解的供应商(需 Gemini / 通义千问 Qwen-VL / Kimi),或改用抽帧模式")
     if native_profile is not None and mode in ("native", "auto"):
-        answer = _analyze_video_native(native_profile, asset, path, prompt, transcript_text)
+        # 原生视频理解是这套里最贵的调用之一,以前完全不在账上。
+        with billable(
+            db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            source_type="asset", source_id=asset.id,
+        ) as call:
+            answer = _analyze_video_native(native_profile, asset, path, prompt, transcript_text, call)
         return {
             "answer": answer,
             "provider": native_profile.vendor,

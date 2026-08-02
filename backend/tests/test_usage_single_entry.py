@@ -108,3 +108,38 @@ def test_没有工作区归属时不静默(caplog) -> None:
         with billable(db, capability="chat", operation="无归属的调用") as call:
             call.meter(input_tokens=1)
     assert any("无归属的调用" in record.getMessage() for record in caplog.records)
+
+
+def test_每种能力都有记账的路径() -> None:
+    """六种能力(chat / image / video / tts / podcast / embedding)都会花钱,每一种都该在账上
+    有一条来路。
+
+    这条钉的是**遗漏**而不是重复:tts 和 embedding 曾经一条账都不记,而漏记在界面上看不出来 ——
+    Token 图只是显得"这个月用得少",没有任何东西说"这里少了一类"。新增一种能力却不记账,
+    这条会红。
+    """
+    import ast
+    import subprocess
+    from pathlib import Path as _Path
+
+    from app.domain.providers import ALL_CAPABILITY_IDS
+
+    backend = _Path(__file__).resolve().parents[1]
+    tracked = subprocess.run(
+        ["git", "ls-files", "app"], cwd=backend, capture_output=True, text=True
+    ).stdout.split()
+    billed: set[str] = set()
+    for rel in tracked:
+        path = backend / rel
+        if not rel.endswith(".py") or not path.exists():
+            continue
+        for node in ast.walk(ast.parse(path.read_text("utf-8"))):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "billable":
+                for kw in node.keywords:
+                    if kw.arg == "capability" and isinstance(kw.value, ast.Constant):
+                        billed.add(kw.value.value)
+
+    # 生成域的 capability 是运行时变量(generation.kind),静态看不到 —— 它覆盖 image/video。
+    billed |= {"image", "video"}
+    missing = sorted(set(ALL_CAPABILITY_IDS) - billed)
+    assert missing == [], f"这些能力会花钱却没有任何记账路径: {missing}"

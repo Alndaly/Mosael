@@ -297,7 +297,7 @@ def test_kb_vector_client_roundtrip_without_native_milvus(monkeypatch) -> None:
             rows.sort(key=lambda row: sum(a * b for a, b in zip(row["vector"], query)), reverse=True)
             return [[{"id": row["id"], "entity": {"document_id": row["document_id"]}} for row in rows[:limit]]]
 
-    def fake_embed(db, texts):
+    def fake_embed(db, texts, **_kwargs):
         return [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
 
     fake_client = FakeClient()

@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.domain import ai_retry
+from app.domain.usage import billable
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -38,25 +39,45 @@ class EmbeddingError(RuntimeError):
     pass
 
 
-def embed_texts(db: Session, texts: list[str]) -> list[list[float]]:
+def embed_texts(db: Session, texts: list[str], *, workspace_id: str = "") -> list[list[float]]:
+    """向量化一批文本。**这是全项目唯一的 embedding 出口**,所以记账也放在这里。
+
+    整批记一条:入库一篇文档是几十块文本一次请求,而检索是一句话一次 —— 两者都只该在账上
+    留一行。workspace_id 不给就取环境上下文(检索走 HTTP 请求,闸门已经绑好了)。
+    """
     cfg = kb_config.get()
     profile = resolve_profile(db, cfg.vendor, cfg.provider_profile_id)
     if profile is None:
         raise EmbeddingError("没有可用的嵌入供应商配置")
     base_url = profile.base_url.rstrip("/")
     try:
-        response = ai_retry.post(
-            f"{base_url}/embeddings",
-            headers={"Authorization": f"Bearer {profile.api_key}"},
-            json={"model": cfg.model, "input": texts},
-            timeout=60,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        vectors = [item["embedding"] for item in sorted(payload["data"], key=lambda item: item["index"])]
-        if len(vectors) != len(texts):
-            raise EmbeddingError("embedding 数量与输入不一致")
-        return vectors
+        with billable(
+            db,
+            capability="embedding",
+            operation="kb_embed",
+            workspace_id=workspace_id,
+            provider=profile.vendor or "",
+            model=cfg.model,
+            provider_profile_id=profile.id,
+        ) as call:
+            response = ai_retry.post(
+                f"{base_url}/embeddings",
+                headers={"Authorization": f"Bearer {profile.api_key}"} if profile.api_key else {},
+                json={"model": cfg.model, "input": texts},
+                timeout=60,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            usage = payload.get("usage") or {}
+            call.meter(
+                input_tokens=int(usage.get("prompt_tokens") or usage.get("total_tokens") or 0),
+                texts=len(texts),
+                raw=usage if isinstance(usage, dict) else {},
+            )
+            vectors = [item["embedding"] for item in sorted(payload["data"], key=lambda item: item["index"])]
+            if len(vectors) != len(texts):
+                raise EmbeddingError("embedding 数量与输入不一致")
+            return vectors
     except (httpx.HTTPError, KeyError, ValueError) as exc:
         raise EmbeddingError(f"embedding 请求失败: {exc}") from exc
 
@@ -92,7 +113,7 @@ def upsert_document_vectors(db: Session, *, workspace_id: str, document_id: str,
     """chunks: [(chunk_id, text)]。同步调用方需自行放到后台线程。"""
     if not vector_tier_enabled() or not chunks:
         return
-    vectors = embed_texts(db, [text for _id, text in chunks])
+    vectors = embed_texts(db, [text for _id, text in chunks], workspace_id=workspace_id)
     client = _get_client()
     client.delete(collection_name=COLLECTION, filter=f'document_id == "{document_id}"')
     client.insert(
