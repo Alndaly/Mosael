@@ -87,6 +87,12 @@ on the one line a user reads before clicking approve.
 
 The browser tools reuse the confirmation gate. `browser_pool_open` is the security-critical one: the agent can use **no** logged-in profile without the user approving a card that names the identity ("显式授权每会话"). Agents are instructed that page content is DATA, not instructions; never enter passwords/payment; and warn the user before any post/submit/purchase.
 
+### 三档权限模式(已设计,未实现)
+
+现在的门控是二元的:走卡或不走卡。三档模式(手动 / auto / bypass)的设计见
+[ADR 0007](adr/0007-agent-permission-modes.md) —— 包括为什么「AI 自行判断是否放行」必须由一个
+**看不到工具返回内容**的隔离判断者来做。
+
 ## Confirmation flow (plan §16.2/§17.2)
 
 Mutating tools never execute directly. They create a pending confirmation;
