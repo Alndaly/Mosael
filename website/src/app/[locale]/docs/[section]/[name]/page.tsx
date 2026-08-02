@@ -83,17 +83,24 @@ export default async function DocPage({ params }: { params: Params }) {
   const next = index >= 0 && index < all.length - 1 ? all[index + 1] : null;
 
   return (
-    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 py-14 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
-      <div className="lg:row-span-2">
-        <DocsSidebar groups={groups} className="lg:sticky lg:top-28 lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto" />
-      </div>
+    // `pt-12` 和两侧的 `top-sticky` 是**配套**的(见 globals.css 里 --spacing-sticky 的算式):
+    // 侧栏一开始就停在它粘住的位置上,于是滚动时不会先往上滑一小段再顿住。
+    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 pt-12 pb-20 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+      {/* sticky 要直接挂在 grid item 上,并且配 `self-start`:grid 默认把子项拉伸到整行高,
+          被拉满的元素在自己的格子里没有可滑动的余量,`position: sticky` 就完全不起作用。 */}
+      <DocsSidebar
+        groups={groups}
+        className="lg:sticky lg:top-sticky lg:col-start-1 lg:row-start-1 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto"
+      />
 
       {/* 本页目录在窄屏上排到正文前面 —— 那时它是"这一页讲了什么"的摘要,读完之后才给没有意义。 */}
-      <div className="xl:col-start-3 xl:row-start-1">
-        <DocsToc entries={toc} label={t.onThisPage} className="xl:sticky xl:top-28" />
-      </div>
+      <DocsToc
+        entries={toc}
+        label={t.onThisPage}
+        className="xl:sticky xl:top-sticky xl:col-start-3 xl:row-start-1 xl:max-h-[calc(100svh-9rem)] xl:self-start xl:overflow-y-auto"
+      />
 
-      <article className="min-w-0 lg:col-start-2 lg:row-start-1 xl:row-span-2">
+      <article className="min-w-0 lg:col-start-2 lg:row-start-1">
         <header className="mb-12 border-b-2 border-ink pb-8">
           <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
             {t.sections[doc.section]}

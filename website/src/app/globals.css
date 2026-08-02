@@ -68,6 +68,11 @@
     }
   }
 
+  /* 文档页侧栏粘住的位置 = 站头 4rem + 它 2px 的下边框 + 正文区 3rem 的上留白。
+     注册成 spacing 尺度,于是 `top-sticky` 是一个正经 utility,而这三个数只写在这一处 ——
+     分开写的话改了站头高度、忘了改这里,侧栏就会先滑一小段再顿住。 */
+  --spacing-sticky: 7.125rem;
+
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.375rem;
