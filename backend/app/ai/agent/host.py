@@ -733,13 +733,36 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             AgentMessage(
                 session_id=session.id,
                 role="assistant",
-                content="上一轮对话因后端重启而中断,请重新发送。",
+                content=INTERRUPTED_NOTICE,
                 error="backend restarted mid-turn",
             )
         )
     if stale:
         db.commit()
     return len(stale)
+
+
+#: 中断说明的原文。外部渠道(飞书等)要把同一句话发回聊天里 —— 只写进库的话,
+#: 桌面端看得到,而在飞书里发消息的那个人只看到一片沉默,和"还在处理"分辨不出来。
+INTERRUPTED_NOTICE = "上一轮对话因后端重启而中断,请重新发送。"
+
+
+def interrupted_external_sessions(db: Session, origin: str) -> list[tuple[str, str]]:
+    """刚被拨回 idle、且来自某个外部渠道的会话 → [(external_key, 通知文案)]。
+
+    给调用方(main.py 的启动流程)去把中断说明发回原聊天。**不在 host 里直接发**:
+    host 属于 ai 层,而渠道在 integrations 层 —— 反过来 import 就成了环(领域层回调集成层
+    那个环这个仓库已经踩过一次)。所以这里只报告"谁被中断了",发不发、怎么发由组合层决定。
+    """
+    sessions = db.scalars(
+        select(AgentSession).where(AgentSession.origin == origin, AgentSession.external_key.isnot(None))
+    ).all()
+    out: list[tuple[str, str]] = []
+    for session in sessions:
+        last = session.messages[-1] if session.messages else None
+        if last is not None and last.error == "backend restarted mid-turn":
+            out.append((session.external_key or "", INTERRUPTED_NOTICE))
+    return out
 
 
 def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -> list[str]:

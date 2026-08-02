@@ -92,7 +92,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         start_scheduler_loop()
         logger.info("scheduler loop started")
     if settings.feishu_autostart:
-        from app.integrations.feishu.service import autostart_enabled_bots, stop_all_connections
+        from app.integrations.feishu.service import autostart_enabled_bots, notify_interrupted_chats, stop_all_connections
+
+        # 被重启打断的飞书会话:把中断说明发回原聊天。只写进库的话,在飞书里发消息的那个人
+        # 只看到一片沉默 —— 和"还在处理中"分辨不出来,于是一直等。
+        with SessionLocal() as db:
+            notified = notify_interrupted_chats(db)
+        if notified:
+            logger.info("notified %d feishu chat(s) about a turn interrupted by restart", notified)
 
         autostart_enabled_bots()
     logger.info("Open Studio backend ready")

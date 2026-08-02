@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 
 from app.ai.agent.adapters import TurnResult
@@ -61,7 +62,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
 
-    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1", "ou_sender")
+    service.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
 
     assert sent == [("oc_chat_1", "已查看,共 2 个素材")]
     with SessionLocal() as db:
@@ -72,7 +73,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         assert roles == ["user", "assistant"]
 
     # duplicate message id is dropped
-    service.handle_incoming(bot["id"], "oc_chat_1", "看看素材", "msg-1", "ou_sender")
+    service.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
     assert len(sent) == 1
 
 
@@ -87,7 +88,7 @@ def test_handle_incoming_unbound_sender_refused(monkeypatch) -> None:
     monkeypatch.setattr(service, "run_turn", lambda *a, **k: ran.append(True))
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
 
-    service.handle_incoming(bot["id"], "oc_chat_x", "偷偷改点东西", "msg-x", "ou_intruder")
+    service.handle_incoming(bot["id"], "oc_chat_x", "msg-x", "ou_intruder", content_json=json.dumps({"text": "偷偷改点东西"}))
 
     assert ran == []  # the agent never ran for an unbound sender
     assert sent and "绑定" in sent[0]
@@ -115,5 +116,126 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     monkeypatch.setattr(service, "run_turn", boom)
     monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
 
-    service.handle_incoming(bot["id"], "oc_chat_2", "hi", "msg-2", "ou_sender2")
+    service.handle_incoming(bot["id"], "oc_chat_2", "msg-2", "ou_sender2", content_json=json.dumps({"text": "hi"}))
     assert sent and "失败" in sent[0]
+
+
+def _bound_bot(client, monkeypatch, sent: list):
+    """建 bot + 绑一个发送者 + 把外发消息接进 sent。"""
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    bot = client.post(
+        "/api/feishu/bots", json={"workspace_id": ws["id"], "app_id": "cli_img", "app_secret": "s3cret"}
+    ).json()
+    me = client.get("/api/auth/me").json()
+    with SessionLocal() as db:
+        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
+        assert service._redeem_bind_code(db, ws["id"], "ou_img", code) is not None
+    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    return ws, bot
+
+
+def test_不认识的消息类型不再石沉大海(monkeypatch) -> None:
+    """回归。以前 worker 里是 `if message_type != "text": return` —— 发一段语音过来,
+    进程直接返回,用户那边永远等不到回复。**静默丢弃和"正在处理"长得一模一样**,
+    而人只会一直等下去,这就是那个"卡死"。"""
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+
+    service.handle_incoming(bot["id"], "oc_v", "msg-v", "ou_img", message_type="audio", content_json="{}")
+
+    assert len(sent) == 1
+    assert "看不了语音" in sent[0][1]
+
+
+def test_图片消息进素材库_并把素材id带进提示(monkeypatch) -> None:
+    """图片走的是和桌面端回形针同一条路:入素材库 → 提示里引用 → 智能体用 analyze_asset 看图。
+    不给飞书单开一套,也就不会有"飞书里能看、应用里找不到"的图片。"""
+    client = fresh_client()
+    sent: list = []
+    ws, bot = _bound_bot(client, monkeypatch, sent)
+
+    # 1x1 PNG，够走完落盘 + 探测 + 建记录这条真实链路
+    png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d494844520000000100000001080600000"
+        "01f15c4890000000a49444154789c6360000002000100ffff03000006000557bfabd4"
+        "0000000049454e44ae426082"
+    )
+    monkeypatch.setattr(service, "download_message_resource", lambda *a, **k: png)
+    prompts: list[str] = []
+
+    def fake_turn(*args, **kwargs):
+        prompts.append(kwargs["prompt"])
+        return TurnResult(text="看到了")
+
+    monkeypatch.setattr(service, "run_turn", fake_turn)
+
+    service.handle_incoming(
+        bot["id"], "oc_i", "msg-i", "ou_img", message_type="image", content_json=json.dumps({"image_key": "img_k1"})
+    )
+
+    assert sent == [("oc_i", "看到了")]
+    assets = client.get(f"/api/assets?workspace_id={ws['id']}").json()
+    assert [a["kind"] for a in assets] == ["image"]
+    assert assets[0]["source"] == "feishu"
+    # 提示里必须带上素材 id,否则模型知道"有张图"却拿不到它。
+    assert assets[0]["id"] in prompts[0]
+    assert "analyze_asset" in prompts[0]
+
+
+def test_富文本消息的文字和内嵌图片都收(monkeypatch) -> None:
+    """带格式粘贴一段话,飞书发过来的是 post —— 它对用户来说和普通文字没有任何区别,
+    以前却和图片一样被整条丢掉。"""
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+    monkeypatch.setattr(service, "download_message_resource", lambda *a, **k: b"")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        service, "run_turn", lambda *a, **k: (prompts.append(k["prompt"]), TurnResult(text="收到"))[1]
+    )
+
+    content = json.dumps(
+        {"title": "标题", "content": [[{"tag": "text", "text": "帮我看看"}, {"tag": "a", "text": "链接"}]]}
+    )
+    service.handle_incoming(bot["id"], "oc_p", "msg-p", "ou_img", message_type="post", content_json=content)
+
+    assert sent == [("oc_p", "收到")]
+    assert "帮我看看" in prompts[0] and "标题" in prompts[0]
+
+
+def test_图片下载失败也要回话(monkeypatch) -> None:
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+
+    def boom(*a, **k):
+        raise service.FeishuError("下载飞书资源失败(404)")
+
+    monkeypatch.setattr(service, "download_message_resource", boom)
+    service.handle_incoming(
+        bot["id"], "oc_e", "msg-e", "ou_img", message_type="image", content_json=json.dumps({"image_key": "k"})
+    )
+    assert len(sent) == 1 and "没能取回来" in sent[0][1]
+
+
+def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> None:
+    """会话状态早就被拨回 idle 了,但那条说明只写进了库 —— 桌面端看得到,而在飞书里
+    发消息的人只看到沉默。这是"卡死"的另一半:开发时 --reload 尤其频繁。"""
+    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    service.handle_incoming(bot["id"], "oc_r", "msg-r", "ou_img", content_json=json.dumps({"text": "hi"}))
+    sent.clear()
+
+    with SessionLocal() as db:
+        session = db.query(AgentSession).filter_by(external_key=f"feishu:{bot['id']}:oc_r").one()
+        session.status = "running"  # 模拟一轮跑到一半进程没了
+        db.commit()
+        assert reconcile_orphaned_agent_sessions(db) == 1
+        assert service.notify_interrupted_chats(db) == 1
+
+    assert sent == [("oc_r", "上一轮对话因后端重启而中断,请重新发送。")]

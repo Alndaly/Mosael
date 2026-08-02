@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import shutil
 from pathlib import Path
 from typing import BinaryIO
@@ -98,6 +99,32 @@ def import_uploaded_asset(
     )
 
 
+def import_binary_asset(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    data: bytes,
+    original: str,
+    content_type: str | None = None,
+    source: str = "imported",
+    name: str | None = None,
+) -> Asset:
+    """字节直接入库 —— 给"从别处取回来的一坨数据"用(飞书发来的图片是第一个)。
+
+    没有新逻辑:它只是把 bytes 包成流交给 _import_stream。**不另写一份落盘/探测**,
+    因为那正是这个模块存在的理由 —— 曾经上传和按路径注册各写一份,改探测要记得改两处。
+    """
+    return _import_stream(
+        db,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        stream=io.BytesIO(data),
+        original=Path(original).name,
+        content_type=content_type,
+        name=name,
+        source=source,
+    )
 
 
 def _import_stream(

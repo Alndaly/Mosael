@@ -58,15 +58,24 @@ def main(bot_id: str) -> None:
             sender_id = getattr(sender, "sender_id", None)
             open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to an Open Studio member
             message = getattr(event, "message", None)
-            if message is None or getattr(message, "message_type", None) != "text":
+            if message is None:
+                return
+            chat_id = getattr(message, "chat_id", None)
+            if not chat_id:
                 return
             message_id = getattr(message, "message_id", "") or uuid.uuid4().hex
-            chat_id = getattr(message, "chat_id", None)
-            text = service.extract_text(getattr(message, "content", "") or "")
-            if not chat_id or not text:
-                return
+            # 消息类型交给 service 判断,这里**不再过滤**。以前这行是
+            # `if message_type != "text": return` —— 发张图片过来,worker 直接返回,
+            # 用户那边永远等不到任何回复。静默丢弃是最糟的失败方式:它和"正在处理"
+            # 长得一模一样,而人只会一直等下去。
             threading.Thread(
-                target=service.handle_incoming, args=(bot_id, chat_id, text, message_id, open_id), daemon=True
+                target=service.handle_incoming,
+                args=(bot_id, chat_id, message_id, open_id),
+                kwargs={
+                    "message_type": (getattr(message, "message_type", "") or "").lower(),
+                    "content_json": getattr(message, "content", "") or "",
+                },
+                daemon=True,
             ).start()
         except Exception:
             logger.exception("feishu event handling failed bot=%s", bot_id)
