@@ -1,0 +1,54 @@
+---
+title: Download & install
+description: Download channels, system requirements, install notes, where your data lives.
+order: 2
+---
+
+Open Studio is a local-first desktop app: editing, export and workflows all run offline; AI features (LLMs / voiceover / generation) need the corresponding API keys configured in Settings.
+
+## Download
+
+Installers are published on **[GitHub Releases](https://github.com/Alndaly/OpenStudio/releases)**:
+
+| Platform | Artifact | Notes |
+| --- | --- | --- |
+| macOS | `Open Studio-<version>-arm64.dmg` | Apple Silicon (M-series) |
+| Windows | `Open Studio Setup <version>.exe` | Windows 10 / 11 (x64), NSIS installer |
+
+The app silently checks Releases for a newer version after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version.
+
+<Aside type="note" title="Unsigned installers">
+
+Current installers are **not code-signed**:
+
+- **macOS**: if you see "cannot verify the developer" on first launch, **right-click the app → Open**, or run `xattr -cr "/Applications/Open Studio.app"` and open again.
+- **Windows**: when SmartScreen appears, click "More info → Run anyway".
+
+</Aside>
+
+- The backend engine and ffmpeg are bundled — works out of the box.
+- Local transcription / voice-clone models download on first use (hundreds of MB to several GB); keep **10GB+** of disk free.
+
+## Run from source (development)
+
+From the repository root:
+
+```bash
+pnpm install
+pnpm dev          # backend + frontend + Electron
+```
+
+Package the desktop build:
+
+```bash
+pnpm build:mac    # frontend + sidecar + publisher + backend (PyInstaller) + .app
+pnpm dist:mac     # same flow, produces a .dmg for distribution
+```
+
+Official releases are built by CI: maintainers push a `v*` tag and GitHub Actions packages mac / win and attaches both to the Release (see the repository README).
+
+## Where your data lives
+
+Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.open-studio` (Windows: `C:\Users\<you>\.open-studio`), outside the app bundle — upgrades and reinstalls keep your data.
+
+Next: [Quick start](/en/docs/start/quickstart).
