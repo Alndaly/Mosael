@@ -38,6 +38,9 @@ const KEY_MAP: Record<string, string> = {
  * 「穿透 shadow 的同款」,实际上机制换了。微信视频号的提交用的正是它,于是和 B 站一样受视口
  * 影响——而这个潜伏 bug 之所以长期没被发现,很大程度就是名字掩盖了差异。
  */
+/** 单次求值的兜底上限。调用方给了更短的预算就用更短的。 */
+const EVALUATE_TIMEOUT_MS = 20_000;
+
 export class PageDriver {
   private debuggerAttached = false;
   private abortSignal: AbortSignal | null = null;
@@ -174,16 +177,31 @@ export class PageDriver {
       .catch(() => undefined);
   }
 
-  async evaluate<T = unknown>(expression: string): Promise<T> {
+  /**
+   * 在页面里求值。`budgetMs` 是**调用方**还剩多少时间。
+   *
+   * executeJavaScript 在页面未 finish load 时会排队不返回(about:blank 和 B 站这类重前端页
+   * 都会),所以必须有兜底超时,否则 checkLogin 这种一次性探测会把认领链吊死。
+   *
+   * **但兜底不能盖过调用方的预算**。曾经这里是写死的 20s:智能体请求"等 5 秒",第一次
+   * evaluate 落在刚建好的 about:blank 上排不出来,20s 之后才抛,外层 waitForFunction 直到
+   * 那时才有机会看一眼 deadline —— 一条 5 秒的等待实际用了 22 秒。deadline 只在两次轮询
+   * **之间**检查,所以单次调用超时多久,整体就超多久。
+   */
+  async evaluate<T = unknown>(expression: string, budgetMs = EVALUATE_TIMEOUT_MS): Promise<T> {
     this.throwIfAborted();
-    // executeJavaScript 在页面未 finish load 时会排队不返回(B 站重前端页常见),
-    // 必须有兜底超时,否则 checkLogin 等一次性探测会把认领链吊死。
-    return await Promise.race([
-      this.wc.executeJavaScript(expression, true) as Promise<T>,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("evaluate timeout (page not settled)")), 20_000),
-      ),
-    ]);
+    const cap = Math.max(200, Math.min(EVALUATE_TIMEOUT_MS, budgetMs));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.wc.executeJavaScript(expression, true) as Promise<T>,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("evaluate timeout (page not settled)")), cap);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async waitForFunction(expression: string, timeout = 30_000, poll = 300): Promise<boolean> {
@@ -191,13 +209,16 @@ export class PageDriver {
     do {
       this.throwIfAborted();
       try {
-        if (await this.evaluate<boolean>(`!!(${expression})`)) {
+        // 把**剩余预算**交给 evaluate:否则一次排不出来的求值会按它自己的上限走完,
+        // 而 deadline 只在这一圈结束后才被看到 —— 5 秒的等待就变成了 20 秒。
+        if (await this.evaluate<boolean>(`!!(${expression})`, deadline - Date.now())) {
           return true;
         }
       } catch {
         // Page may be mid-navigation; retry until the deadline.
       }
-      await this.wait(poll);
+      if (Date.now() >= deadline) break;
+      await this.wait(Math.min(poll, Math.max(0, deadline - Date.now())));
     } while (Date.now() < deadline);
     return false;
   }
