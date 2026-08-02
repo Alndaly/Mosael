@@ -91,7 +91,11 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 
 现在的门控是二元的:走卡或不走卡。三档模式(手动 / auto / bypass)的设计见
 [ADR 0007](adr/0007-agent-permission-modes.md) —— 包括为什么「AI 自行判断是否放行」必须由一个
-**看不到工具返回内容**的隔离判断者来做。
+**看不到工具返回内容**的隔离判断者来做。落地方案与对 ADR 的三处修正见
+[AGENT_PERMISSION_MODES.md](AGENT_PERMISSION_MODES.md)。
+
+其中一条直接关系到上面这张表:`browser_pool_open` 现在归在 `edit` 档,而 `edit` 正是 auto 下要
+直接放行的那一档 —— 它接的却是用户**真实登录的身份**。档位要按 payload 派生,不能查静态表。
 
 ## Confirmation flow (plan §16.2/§17.2)
 

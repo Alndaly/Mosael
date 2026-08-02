@@ -2,6 +2,11 @@
 
 > 状态:**已决定,未实现**。设计定于 2026-08-02 的一次讨论,实现留给单独一轮。
 > 相关:[MCP.md](../MCP.md) 的确认门控与 `external` 档、`domain/agent/confirmations.py`。
+>
+> **落地方案见 [AGENT_PERMISSION_MODES.md](../AGENT_PERMISSION_MODES.md)**,它对照代码复验了本文的
+> 前提,并修正了三处:①`browser_pool_open` 归在 `edit` 档是错档(它接的是用户真实登录身份),
+> auto 下直接放行等于无声授权;②档位不能查静态表 —— `run_workflow` 挂 `ai-cost`,而它能执行
+> `code` / `publish` / `http_request` 节点;③建议第一版不做「AI 判断」(见该文 §2.3,**待拍板**)。
 
 ## 背景
 
