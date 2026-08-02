@@ -51,10 +51,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
-    # 交付(folder / webhook):从发布域拆出来的,它们不需要登录身份,也不该
-    # 借道 create_account 顺手建 BrowserProfile。见 models.DeliveryTarget。
-    "DeliveryTarget": ("app/domain/delivery/",),
-    "DeliveryTask": ("app/domain/delivery/",),
     # 浏览器自动化(RPA / 智能体)
     "BrowserProfile": ("app/domain/browser/",),
     "BrowserSession": ("app/domain/browser/",),

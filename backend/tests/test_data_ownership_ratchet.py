@@ -74,3 +74,18 @@ def test_every_model_has_an_owner() -> None:
     }
     unowned = model_names - set(TABLE_OWNERS)
     assert not unowned, f"这些模型没有登记数据归属(app/domain/ownership.py): {sorted(unowned)}"
+
+
+def test_归属地图里没有已经删掉的表() -> None:
+    """反向也要查:表删了而归属还留着,下一个人会以为那块领域还在。
+
+    实际发生过 —— 「移除交付目标功能」删掉了 DeliveryTarget / DeliveryTask,归属地图里那两条
+    却留了下来,而上面那条 test_every_model_has_an_owner 只查「模型有没有归属」,查不到反向。
+    """
+    import app.db.models as models
+
+    model_names = {
+        name for name, obj in vars(models).items() if isinstance(obj, type) and hasattr(obj, "__tablename__")
+    }
+    stale = sorted(set(TABLE_OWNERS) - model_names)
+    assert not stale, f"这些表已经不存在了,请从 app/domain/ownership.py 删除归属登记: {stale}"
