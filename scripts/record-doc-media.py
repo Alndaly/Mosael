@@ -169,6 +169,20 @@ def record_media(page: Page, tmp: Path) -> None:
     print(f"  → {(SITE_SHOTS / 'media.png').relative_to(ROOT)}")
 
 
+def record_agent(page: Page, tmp: Path) -> None:
+    """智能体页。
+
+    **不造假对话**:演示实例没有配供应商,跑不出真实回答,而往库里插几条假消息去凑一张
+    "看起来很能干"的截图,是在文档里说一件没发生的事。这里拍的是真实的初始状态 —— 那也正是
+    新用户第一次打开时看到的东西。能力面板渲染自工具清单,不依赖对话,是这一轮变化最大的部分。
+    """
+    page.goto(page.url.split("#")[0] + "#/ai", wait_until="networkidle")
+    page.wait_for_timeout(1200)
+    page.screenshot(path=str(MEDIA / "agent.png"))
+    shutil.copy(MEDIA / "agent.png", SITE_SHOTS / "ai-chat.png")
+    print(f"  → {(SITE_SHOTS / 'ai-chat.png').relative_to(ROOT)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", required=True, help="演示实例的会话令牌")
@@ -180,7 +194,8 @@ def main() -> int:
     for d in (MEDIA, SITE_GIFS, SITE_SHOTS):
         d.mkdir(parents=True, exist_ok=True)
     scenes = {"home": record_home, "media": record_media,
-              "plugins": record_plugins, "workflows": record_workflows}
+              "plugins": record_plugins, "workflows": record_workflows,
+              "agent": record_agent}
     if args.only:
         scenes = {k: v for k, v in scenes.items() if k == args.only}
 
