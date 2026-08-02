@@ -29,7 +29,6 @@ _ACTION_POLL_SECONDS = 0.2
 # worker 回报间隔外的兜底:running 动作超过这个时长没落终态,视为执行器掉线,回收。
 STALE_ACTION_SECONDS = 5 * 60
 
-VALID_KINDS = ("ephemeral", "named")
 # 文档用途;worker 是动作合法性的最终裁判。
 KNOWN_ACTIONS = (
     "navigate", "click", "input", "extract", "wait", "scroll",

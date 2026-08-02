@@ -71,7 +71,6 @@ from app.domain.providers import (
     pi_provider_id,
     auth_types_for_vendor,
     capability_ids_for_vendor,
-    effective_capability_ids,
     normalize_auth_type,
     normalize_capability_ids,
     supports_capability,

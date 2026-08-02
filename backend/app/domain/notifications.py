@@ -34,9 +34,15 @@ def notify(
 ) -> list[Notification]:
     """写入通知(不 commit,随调用方事务落库)。
 
+    type 必须在 NOTIFICATION_TYPES 里。以前这张清单是**摆设** —— 没有任何地方拿它校验,
+    我加 "agent" 那次它一声没吭,而前端是按 type 查图标表的:表里没有就退化成一个通用铃铛,
+    看着像正常通知,其实是个没人认领的类型。清单要么管事,要么不该存在。
+
     user_id 为空时扇出给工作区全部成员——团队模式下每个成员各一条、
     各自维护已读状态。
     """
+    if type not in NOTIFICATION_TYPES:
+        raise ValueError(f"未知的通知类型 {type!r};合法值:{NOTIFICATION_TYPES}")
     if user_id is not None:
         recipients = [user_id]
     else:
