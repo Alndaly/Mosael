@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_access
+from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_perm
 from app.db.models import PublishAccount, Sequence, ToolConfirmation, User, now
 from app.domain.sequences import operations as seq_ops
 
@@ -96,25 +96,62 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     路径,漏掉等于越权。
 
     三道闸门缺一不可:
-      - ensure_workspace_access:他得是这个工作区的人。
-      - ensure_graph_node_privileges:create_workflow / update_workflow 的卡片带着整份 graph,
-        批准即落库,是绕开 /api/workflows 的又一条落库路径,同样要挡 code 节点。按**审批者**
-        校验:卡是他批的,这次执行记在他头上。
+      - ensure_workspace_perm(edit):他得是这个工作区的人,**而且**持有 edit。这里点名 edit,
+        而不是靠 ensure_workspace_access 去看「当前请求是不是 POST」—— 那个判断读的是只在 ASGI
+        中间件里绑定的 ContextVar,默认 GET。今天两个入口都是 POST,所以校验碰巧成立;哪天批准
+        从后台线程发起(自动放行、重试、队列),viewer 的批准就会连同执行一起通过且不报错。
+        批准永远是写操作,权限就该显式写出来。
+      - ensure_graph_node_privileges:批准即落库,是绕开 /api/workflows 的又一条落库路径,
+        同样要挡 code 节点。按**审批者**校验:卡是他批的,这次执行记在他头上。要看的是
+        「这张卡批准之后会落库的那张图」—— 见 _graph_to_persist。
       - run_code 同一道门:它跑的就是 code 节点那段实现,只是入口从画布换成了对话。工作流那边
         「能编辑内容」不等于「能拥有这台服务器」,靠的正是 PRIVILEGED_NODE_TYPES 这道门 ——
         少了它,同一个人画布上存不下 code 节点,却可以让智能体替他跑一段,门就白设了。
     """
-    ensure_workspace_access(db, user, confirmation.workspace_id)
-    payload = confirmation.payload or {}
-    ensure_graph_node_privileges(db, user, payload.get("graph"))
+    ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
+    ensure_graph_node_privileges(db, user, _graph_to_persist(db, confirmation))
     if confirmation.tool == "run_code":
         ensure_graph_node_privileges(db, user, {"nodes": [{"type": "code"}]})
     return approve_confirmation(db, confirmation)
 
 
+def _graph_to_persist(db: Session, confirmation: ToolConfirmation) -> object:
+    """这张卡批准之后**会落库的那张图**。特权门禁要看的是它,不是 payload 里恰好有没有 `graph` 键。
+
+    create/update_workflow 的卡带着整份图,取 `payload["graph"]` 就是它。但 edit_workflow 只带
+    `operations` —— 图要把 ops 应用到当前图上才出现。此前门禁一律读 `payload.get("graph")`,
+    于是 edit_workflow 那条恒为 None、静默跳过:editor 在画布上存不下 code 节点(三条路由都挡),
+    却可以让智能体 add_node(type=code) 再自己批一下,门就白设了。
+
+    必须**应用后再扫**,不能只看 ops 里的 node type:`set_node_config` 能把一整张含 code 的图
+    塞进子图体里,那一手在 ops 层面看不见,在结果图上一眼就能看见(扫描器本来就递归子图体)。
+
+    ops 应用不了(图在开卡后被改过)就返回 None:同一份 apply_graph_ops 紧接着会在 _execute 里
+    再跑一次并失败,什么都不会落库 —— 这里不放行任何东西,所以不是 fail-open。
+    """
+    payload = confirmation.payload or {}
+    if confirmation.tool != "edit_workflow":
+        return payload.get("graph")
+    from app.db.models import Workflow
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.graph_ops import apply_graph_ops
+
+    workflow = db.get(Workflow, str(payload.get("workflow_id") or ""))
+    if workflow is None:
+        return None
+    try:
+        return apply_graph_ops(workflow.graph or {}, payload.get("operations") or [])
+    except WorkflowDomainError:
+        return None
+
+
 def authorize_and_reject(db: Session, user: User, confirmation: ToolConfirmation) -> ToolConfirmation:
-    """拒绝一张确认卡。不落库任何东西,所以只需要工作区归属这一道。"""
-    ensure_workspace_access(db, user, confirmation.workspace_id)
+    """拒绝一张确认卡。同样要 edit —— 拒绝是对**别人发起的待办**下结论,和批准是同一类决定。
+
+    这不是收紧:两个入口都是 POST,而 ensure_workspace_access 在 POST 上判的就是 edit,所以
+    走 HTTP 一直如此。写成显式的,是为了不让同一个人在两条调用路径上得到两种答案。
+    """
+    ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
     return reject_confirmation(db, confirmation)
 
 

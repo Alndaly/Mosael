@@ -158,3 +158,116 @@ def test_admin_may_save_code_node() -> None:
     _owner, ws, admin = _setup("admin")
     r = admin.post("/api/workflows", json={"workspace_id": ws["id"], "name": "W", "graph": CODE_GRAPH})
     assert r.status_code == 200, r.text
+
+
+# ---------------- 第四条:确认卡审批 ----------------
+#
+# 智能体那条路的形状和另外三条不一样:create/update_workflow 的卡带着**整份 graph**,
+# 而 edit_workflow 只带 operations —— 图要把 ops 应用到当前图上才出现。门禁按 payload["graph"]
+# 取值,于是 edit_workflow 那条恒为 None、静默跳过,而 add_node(type=code) 恰恰走这条路。
+# 画布没有这个形状(它总是 PATCH 整份图),所以这条路只有智能体走,也只有这里能挡。
+
+
+def _workflow_for(client, workspace_id: str) -> dict:
+    return client.post(
+        "/api/workflows", json={"workspace_id": workspace_id, "name": "W", "graph": PLAIN_GRAPH}
+    ).json()
+
+
+def _card(client, workspace_id: str, tool: str, payload: dict):
+    return client.post(
+        "/api/confirmations", json={"workspace_id": workspace_id, "tool": tool, "payload": payload}
+    )
+
+
+def test_editor_blocked_from_adding_code_node_via_agent_ops() -> None:
+    """edit_workflow 的 add_node 是第四条落库路径,门禁一样要挡。"""
+    _owner, ws, editor = _setup("editor")
+    workflow = _workflow_for(editor, ws["id"])
+    card = _card(
+        editor,
+        ws["id"],
+        "edit_workflow",
+        {
+            "workflow_id": workflow["id"],
+            "operations": [{"kind": "add_node", "type": "code", "config": {"code": "output = 1"}}],
+        },
+    )
+    assert card.status_code == 200, card.text
+    editor.post(f"/api/confirmations/{card.json()['id']}/approve")
+    after = editor.get(f"/api/workflows/{workflow['id']}").json()
+    types = [node["type"] for node in after["graph"]["nodes"]]
+    assert "code" not in types, "editor 通过智能体的 ops 路径落库了一个 code 节点"
+
+
+def test_editor_blocked_from_folding_code_into_a_subgraph_via_agent_ops() -> None:
+    """ops 不只有 add_node —— set_node_config 能把整张含 code 的图塞进子图体里。
+
+    只扫 operations 里的 node_type 会漏掉这一手;门禁要看的是**ops 应用之后**的图。
+    """
+    _owner, ws, editor = _setup("editor")
+    workflow = _workflow_for(editor, ws["id"])
+    card = _card(
+        editor,
+        ws["id"],
+        "edit_workflow",
+        {
+            "workflow_id": workflow["id"],
+            "operations": [
+                {"kind": "add_node", "type": "subgraph", "node_id": "sub_1"},
+                {"kind": "set_node_config", "node_id": "sub_1", "config": {"body": {"nodes": [CODE_NODE], "edges": []}}},
+            ],
+        },
+    )
+    assert card.status_code == 200, card.text
+    editor.post(f"/api/confirmations/{card.json()['id']}/approve")
+    after = editor.get(f"/api/workflows/{workflow['id']}").json()
+    assert privileged_nodes_in_graph(after["graph"]) == set(), "code 节点被折进子图后落库了"
+
+
+def test_editor_blocked_from_replacing_the_graph_via_agent_update() -> None:
+    """对照:update_workflow 带整份 graph,这条今天就挡住了——不能在修复里把它弄丢。"""
+    _owner, ws, editor = _setup("editor")
+    workflow = _workflow_for(editor, ws["id"])
+    card = _card(editor, ws["id"], "update_workflow", {"workflow_id": workflow["id"], "graph": CODE_GRAPH})
+    assert card.status_code == 200, card.text
+    editor.post(f"/api/confirmations/{card.json()['id']}/approve")
+    after = editor.get(f"/api/workflows/{workflow['id']}").json()
+    assert privileged_nodes_in_graph(after["graph"]) == set()
+
+
+def test_editor_may_still_make_ordinary_agent_edits() -> None:
+    """门禁只针对特权节点:普通 ops 必须照常批准并落库,否则修复就把智能体废了。"""
+    _owner, ws, editor = _setup("editor")
+    workflow = _workflow_for(editor, ws["id"])
+    card = _card(
+        editor,
+        ws["id"],
+        "edit_workflow",
+        {"workflow_id": workflow["id"], "operations": [{"kind": "add_node", "type": "template", "node_id": "t_1"}]},
+    )
+    assert card.status_code == 200, card.text
+    settled = editor.post(f"/api/confirmations/{card.json()['id']}/approve")
+    assert settled.json()["status"] == "executed", settled.text
+    after = editor.get(f"/api/workflows/{workflow['id']}").json()
+    assert [node["type"] for node in after["graph"]["nodes"]] == ["start", "template"]
+
+
+def test_admin_may_add_a_code_node_via_agent_ops() -> None:
+    """admin 走这条路应当放行——门禁是 instance-admin,不是"智能体一律不许"。"""
+    _owner, ws, admin = _setup("admin")
+    workflow = _workflow_for(admin, ws["id"])
+    card = _card(
+        admin,
+        ws["id"],
+        "edit_workflow",
+        {
+            "workflow_id": workflow["id"],
+            "operations": [{"kind": "add_node", "type": "code", "config": {"code": "output = 1"}}],
+        },
+    )
+    assert card.status_code == 200, card.text
+    settled = admin.post(f"/api/confirmations/{card.json()['id']}/approve")
+    assert settled.json()["status"] == "executed", settled.text
+    after = admin.get(f"/api/workflows/{workflow['id']}").json()
+    assert privileged_nodes_in_graph(after["graph"]) == {"code"}
