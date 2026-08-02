@@ -1123,6 +1123,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   );
 }
 
+/**
+ * 左栏顶部的四个页签。
+ *
+ * **占满余宽 + 自己横向滚**,而不是 `shrink-0`:面板拖窄时,四个中文页签会把右边的导入 /
+ * 录制两个图标按钮顶出可视区 —— 那两个按钮是这个面板最常用的动作,不该被页签挤走。
+ * 现在页签滚,按钮钉在右侧。
+ *
+ * 切页签时把选中的那个滚进视野:面板重新挂载时滚动位置归零,而选中的可能是最后一个,
+ * 不滚的话会看到一条"没有任何一项高亮"的页签栏。
+ */
 function LeftTabs({
   tab,
   onChange,
@@ -1131,36 +1141,35 @@ function LeftTabs({
   onChange: (tab: LeftTab) => void;
 }) {
   const t = useI18n();
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab]);
+
+  const tabs: { key: LeftTab; label: string }[] = [
+    { key: "media", label: t("media") },
+    { key: "transcript", label: t("transcriptTab") },
+    { key: "subtitle", label: t("subtitleTab") },
+    { key: "voice", label: t("voiceTab") },
+  ];
+
   return (
-    <div className="flex shrink-0 gap-0.5">
-      <button
-        type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "media" && "bg-secondary text-foreground hover:bg-secondary")}
-        onClick={() => onChange("media")}
-      >
-        {t("media")}
-      </button>
-      <button
-        type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "transcript" && "bg-secondary text-foreground hover:bg-secondary")}
-        onClick={() => onChange("transcript")}
-      >
-        {t("transcriptTab")}
-      </button>
-      <button
-        type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "subtitle" && "bg-secondary text-foreground hover:bg-secondary")}
-        onClick={() => onChange("subtitle")}
-      >
-        {t("subtitleTab")}
-      </button>
-      <button
-        type="button"
-        className={cn("cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground", tab === "voice" && "bg-secondary text-foreground hover:bg-secondary")}
-        onClick={() => onChange("voice")}
-      >
-        {t("voiceTab")}
-      </button>
+    <div ref={ref} className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
+      {tabs.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          data-active={item.key === tab || undefined}
+          className={cn(
+            "shrink-0 cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
+            item.key === tab && "bg-secondary text-foreground hover:bg-secondary",
+          )}
+          onClick={() => onChange(item.key)}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }

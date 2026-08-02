@@ -2,6 +2,7 @@ import { Children, isValidElement } from "react";
 import Link from "next/link";
 import { CircleAlert, Info, Lightbulb, OctagonAlert } from "lucide-react";
 
+import { QrCards } from "@/components/qr-cards";
 import { Shot } from "@/components/shot";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,7 @@ export const mdxComponents = {
   Aside,
   Steps,
   Shot,
+  QrCards,
   img: MdxImage,
   p: MdxParagraph,
   h2: anchored("h2"),

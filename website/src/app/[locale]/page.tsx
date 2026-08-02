@@ -1,8 +1,8 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowRight, BookOpen, Puzzle, Send } from "lucide-react";
 
 import { Marquee } from "@/components/marquee";
+import { QrCards } from "@/components/qr-cards";
 import { Reveal } from "@/components/reveal";
 import { Shot } from "@/components/shot";
 import { isLocale } from "@/i18n/config";
@@ -194,30 +194,13 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               <p className="m-0 max-w-(--measure) text-lg text-muted-foreground">{t.communityBody}</p>
             </div>
 
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:col-span-7 lg:mt-0">
-              {[
-                { src: "/media/qr-group.png", title: t.communityGroup, hint: t.communityGroupHint },
-                { src: "/media/qr-wechat.png", title: t.communityAuthor, hint: t.communityAuthorHint },
-              ].map((card) => (
-                <figure key={card.src} className="m-0 flex flex-col border-2 border-ink bg-card">
-                  {/* 两张二维码原图的比例和底色都不一样(一张 2:3 深底,一张 4:5 白底)。
-                      固定同一个画框 + object-contain:两张卡因此一样高、说明文字也对得齐,
-                      而二维码本身一个像素都没被裁掉 —— 裁了就扫不出来。 */}
-                  <div className="relative aspect-4/5 w-full border-b-2 border-ink bg-secondary">
-                    <Image
-                      src={card.src}
-                      alt={card.title}
-                      fill
-                      sizes="(min-width: 64rem) 22rem, 45vw"
-                      className="object-contain"
-                    />
-                  </div>
-                  <figcaption className="p-5">
-                    <p className="m-0 font-display text-lg font-bold tracking-tight">{card.title}</p>
-                    <p className="m-0 mt-1 text-sm text-muted-foreground">{card.hint}</p>
-                  </figcaption>
-                </figure>
-              ))}
+            <div className="mt-12 lg:col-span-7 lg:mt-0">
+              <QrCards
+                group={t.communityGroup}
+                groupHint={t.communityGroupHint}
+                author={t.communityAuthor}
+                authorHint={t.communityAuthorHint}
+              />
             </div>
           </Reveal>
         </div>
