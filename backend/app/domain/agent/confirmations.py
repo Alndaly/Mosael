@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_perm
 from app.db.models import PublishAccount, Sequence, ToolConfirmation, User, now
 from app.domain.sequences import operations as seq_ops
+from app.domain.workflows import external_nodes_in_graph
 
 """
 Confirmation kernel (plan §16.2/§17.2): mutating external-agent tools never
@@ -37,7 +38,9 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     # 智能体开一个隔离浏览器并导航——入口确认(用户看到目标网址再放行);后续同会话动作内联。
     "browser_open": {"permission": "edit", "cost": "none"},
     # 智能体复用用户**已登录**的浏览器池档案——跨信任边界,确认卡点名是哪个登录身份,用户逐次显式授权。
-    "browser_pool_open": {"permission": "edit", "cost": "none"},
+    # 它是 external 而不是 edit:`edit` 那一档的含义是"最坏也撤得回",而这里交出去的是用户在别人
+    # 站点上的**真实身份** —— 拿它发的帖、下的单、改的资料,这个应用一件也撤不回。
+    "browser_pool_open": {"permission": "external", "cost": "none"},
     # 后果不在这个应用里的三件事:发出去的帖子、别人服务器上的改动、本机跑过的代码。
     # 前面几档最坏是花钱或改坏自己的数据(可撤销),这一档撤不回来,所以单列一个权限档次
     # ——确认卡上的措辞得和「编辑时间线」明显不同,用户才会真的看一眼再点。
@@ -72,11 +75,12 @@ def request_confirmation(
     if definition is None:
         raise ConfirmationError(f"Unknown mutating tool: {tool}")
     _validate_payload(db, tool, workspace_id, payload)
+    external = external_nodes_in_graph(_graph_under_review(db, tool, payload))
     confirmation = ToolConfirmation(
         workspace_id=workspace_id,
         tool=tool,
-        permission=definition["permission"],
-        summary=_summarize(tool, payload),
+        permission="external" if external else definition["permission"],
+        summary=_summarize(tool, payload, external),
         payload=payload,
         requested_by=requested_by,
         session_id=session_id,
@@ -109,16 +113,41 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
         少了它,同一个人画布上存不下 code 节点,却可以让智能体替他跑一段,门就白设了。
     """
     ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
-    ensure_graph_node_privileges(db, user, _graph_to_persist(db, confirmation))
+    ensure_graph_node_privileges(db, user, _graph_to_persist(db, confirmation.tool, confirmation.payload or {}))
     if confirmation.tool == "run_code":
         ensure_graph_node_privileges(db, user, {"nodes": [{"type": "code"}]})
     return approve_confirmation(db, confirmation)
 
 
-def _graph_to_persist(db: Session, confirmation: ToolConfirmation) -> object:
-    """这张卡批准之后**会落库的那张图**。特权门禁要看的是它,不是 payload 里恰好有没有 `graph` 键。
+def effective_permission(db: Session, tool: str, payload: dict[str, Any]) -> str:
+    """这次调用**实际属于**哪一档。`TOOL_DEFS` 里的值只是下限。
 
-    create/update_workflow 的卡带着整份图,取 `payload["graph"]` 就是它。但 edit_workflow 只带
+    静态表说不清后果,因为同一个工具的后果取决于参数:`run_workflow` 挂在 `ai-cost` 上,而它要跑的
+    那张图里可能有 publish / http_request / code / browser_* —— 一张"可能产生 AI 消耗"的卡能执行
+    以上全部。反过来,一张只有 llm 节点的图就真的只是花钱。
+
+    工作流的**写入**同样按结果图定档,而不是按"这只是一次编辑":一旦 publish 节点写进图里,点着
+    它的可以是定时器或 webhook,那时没有任何卡挡在前面 —— 所以闸必须落在写进去的那一刻。
+
+    档位不是徽标而已:它决定卡片的措辞,三档权限模式下还直接决定要不要放行。定错了,放开的就是
+    错的东西。
+    """
+    definition = TOOL_DEFS.get(tool)
+    if definition is None:
+        raise ConfirmationError(f"Unknown mutating tool: {tool}")
+    if external_nodes_in_graph(_graph_under_review(db, tool, payload)):
+        return "external"
+    return definition["permission"]
+
+
+def _graph_to_persist(db: Session, tool: str, payload: dict[str, Any]) -> object:
+    """这张卡批准之后**会写进库**的那张图。**特权门禁**看的是它。
+
+    只有三个工具会落库。`run_workflow` 不在其中 —— 它执行一张**已经落过库**的图,而那张图在写入
+    的那一刻就过过门禁了;把运行也当成落库,等于让不是 instance-admin 的 editor 连别人建好的
+    工作流都跑不了(而且定时/webhook 触发根本没有"操作人"可校验)。
+
+    create/update_workflow 带着整份图,取 `payload["graph"]` 就是它。edit_workflow 只带
     `operations` —— 图要把 ops 应用到当前图上才出现。此前门禁一律读 `payload.get("graph")`,
     于是 edit_workflow 那条恒为 None、静默跳过:editor 在画布上存不下 code 节点(三条路由都挡),
     却可以让智能体 add_node(type=code) 再自己批一下,门就白设了。
@@ -129,9 +158,10 @@ def _graph_to_persist(db: Session, confirmation: ToolConfirmation) -> object:
     ops 应用不了(图在开卡后被改过)就返回 None:同一份 apply_graph_ops 紧接着会在 _execute 里
     再跑一次并失败,什么都不会落库 —— 这里不放行任何东西,所以不是 fail-open。
     """
-    payload = confirmation.payload or {}
-    if confirmation.tool != "edit_workflow":
+    if tool in ("create_workflow", "update_workflow"):
         return payload.get("graph")
+    if tool != "edit_workflow":
+        return None
     from app.db.models import Workflow
     from app.domain.workflows import WorkflowDomainError
     from app.domain.workflows.graph_ops import apply_graph_ops
@@ -143,6 +173,21 @@ def _graph_to_persist(db: Session, confirmation: ToolConfirmation) -> object:
         return apply_graph_ops(workflow.graph or {}, payload.get("operations") or [])
     except WorkflowDomainError:
         return None
+
+
+def _graph_under_review(db: Session, tool: str, payload: dict[str, Any]) -> object:
+    """这次调用会**落库或执行**的那张图。**档位派生**看的是它。
+
+    比落库那张多一个 `run_workflow`:运行不写库,但它把图里的每个节点真的执行一遍 —— 对"后果落在
+    哪"这个问题,运行恰恰是后果发生的那一刻。两个问题的答案不同,所以是两个函数而不是一个带开关的
+    (一个开关迟早会被下一个调用方按错)。
+    """
+    if tool == "run_workflow":
+        from app.db.models import Workflow
+
+        workflow = db.get(Workflow, str(payload.get("workflow_id") or ""))
+        return workflow.graph if workflow is not None else None
+    return _graph_to_persist(db, tool, payload)
 
 
 def authorize_and_reject(db: Session, user: User, confirmation: ToolConfirmation) -> ToolConfirmation:
@@ -290,7 +335,22 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
                 raise ConfirmationError("；".join(errors))
 
 
-def _summarize(tool: str, payload: dict[str, Any]) -> str:
+def _external_warning(external: set[str] | None) -> str:
+    """把「这张图会伸到应用外面去」写成人话,挂在摘要末尾。
+
+    摘要是用户点批准之前唯一会读的一行。`edit_workflow` 早就为 code 节点这么做了(见
+    test_confirmation_disclosure);同样的理由对 `run_workflow` 一字不差地成立 —— 而它此前只说
+    「可能产生 AI/渲染消耗」,把"会用你的账号发帖"整个咽了回去。
+    """
+    if not external:
+        return ""
+    from app.domain.workflows import NODE_TYPES
+
+    labels = sorted(str((NODE_TYPES.get(name) or {}).get("label") or name) for name in external)
+    return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不回)"
+
+
+def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = None) -> str:
     if tool == "edit_timeline":
         kinds = [operation.get("kind", "?") for operation in payload.get("operations", [])]
         return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
@@ -298,10 +358,11 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
         return "导出时间线为 mp4"
     if tool == "create_workflow":
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
-        return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)"
+        return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)" + _external_warning(external)
     if tool == "update_workflow":
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
-        return f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
+        head = f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
+        return head + _external_warning(external)
     if tool == "edit_workflow":
         ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
         kinds = [op.get("kind", "?") for op in ops]
@@ -311,10 +372,14 @@ def _summarize(tool: str, payload: dict[str, Any]) -> str:
             op.get("kind") == "add_node" and str(op.get("node_type") or op.get("type")) == "code" for op in ops
         )
         head = f"{len(kinds)} 个工作流编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
-        return head + ("  ⚠️ 含代码节点(运行时执行本地 Python)" if adds_code else "")
+        # code 那句更具体(点名"运行时执行本地 Python"),留着;其余外部节点走通用那句。
+        if adds_code:
+            return head + "  ⚠️ 含代码节点(运行时执行本地 Python)"
+        return head + _external_warning(external)
     if tool == "run_workflow":
         name = str(payload.get("name") or payload.get("workflow_id") or "")
-        return f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
+        head = f"运行工作流{f'「{name}」' if name else ''}(可能产生 AI/渲染消耗)"
+        return head + _external_warning(external)
     if tool == "browser_open":
         url = str(payload.get("url") or "").strip()
         mode = "具名持久" if str(payload.get("session_mode")) == "named" else "临时"

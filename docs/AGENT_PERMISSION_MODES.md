@@ -31,13 +31,14 @@
 
 ## 2. 对 ADR 0007 的三处修正
 
-### 2.1 `browser_pool_open` 是错档,必须改成 `external`
+### 2.1 `browser_pool_open` 是错档,必须改成 `external`(已改)
 
 它做的事是把智能体接到用户**真实登录的身份**上;`confirmations.py` 自己的注释写着「跨信任边界…
-用户逐次显式授权」。而它现在归在 `edit`(可撤销)档 —— 按 ADR 的表,auto 一开它就直接放行,
-等于智能体不吭声就能拿用户的登录态开会话。
+用户逐次显式授权」。而它此前归在 `edit`(可撤销)档 —— 按 ADR 的表,auto 一开它就直接放行,
+等于智能体不吭声就能拿用户的登录态开会话。**已直接改成 `external`**:不必派生,它无论参数如何
+都是这一档。
 
-### 2.2 档位不能查静态表,必须从 payload 派生
+### 2.2 档位不能查静态表,必须从 payload 派生(已做)
 
 `run_workflow` 挂在 `ai-cost` 上,但工作流节点里有 `code` / `http_request` / `publish` /
 `browser_*` / `plugin_tool` —— 一张 `ai-cost` 卡可以执行以上全部,而摘要只说「可能产生 AI/渲染
@@ -98,7 +99,7 @@
 
 | 工具 | 静态 | 派生规则 |
 | --- | --- | --- |
-| `browser_pool_open` | `edit` | 恒为 **`external`** |
+| `browser_pool_open` | ~~`edit`~~ → `external` | 不必派生,静态表直接改掉 |
 | `run_workflow` | `ai-cost` | 扫 graph:含外部节点 → **`external`**,否则 `ai-cost` |
 | `edit_workflow` | `edit` | 扫 **ops 应用后**的图(复用已有的 `_graph_to_persist`) |
 | `create/update_workflow` | `edit` | 扫 `payload["graph"]` |
@@ -112,7 +113,13 @@
 [`test_confirmation_disclosure.py`](../backend/tests/test_confirmation_disclosure.py) 已经为
 `edit_workflow` 立过这个规矩,同样的理由对 `run_workflow` 一字不差地成立。
 
-**这一节对手动档也是净收益**(卡上的措辞终于对了),所以它可以先发,不必等三档。
+**这一节对手动档也是净收益**(卡上的措辞终于对了),所以它先发了,不必等三档。
+
+落地形态:`effective_permission(db, tool, payload)` + `external_nodes_in_graph`。两个图扫描
+(特权 / 外部)共用同一段递归 —— 递归本身是易错的部分,写两遍就会有一遍将来漏掉子图体。
+另外分了两个取图函数:**落库**那张给特权门禁(`run_workflow` 不在其中,运行不是落库),
+**落库或执行**那张给档位派生(运行恰恰是后果发生的那一刻)。两个问题的答案不同,所以是两个
+函数而不是一个带开关的。
 
 ### 4.3 三档语义
 
@@ -290,7 +297,7 @@ workspaces
 
 | # | 内容 | 能不能独立发 |
 | --- | --- | --- |
-| 1 | 档位派生 + 摘要披露 + `browser_pool_open` 改档 | 能。手动档下就是净收益 |
+| 1 | 档位派生 + 摘要披露 + `browser_pool_open` 改档 | **已落地**(2026-08-03)。手动档下就是净收益 |
 | 2 | turn 令牌携带会话归属(§4.5) | 能。它也让确认卡的归属不再可伪造 |
 | 3 | 三档本体:schema + 判定 + 后台执行 + 留痕 + 常驻 UI + 「始终允许」迁移 | 本体。此时 auto 档的 `external` 一律弹卡 |
 | 4 | 准则(结构化 + 自由文本)+ `hold_until` + 隔离判断者 | 补上 auto 档 `external` 那一格 |

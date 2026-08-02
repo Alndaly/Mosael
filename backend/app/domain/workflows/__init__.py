@@ -698,14 +698,75 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
 # (见 api/routes/workflows.py 的 ensure_graph_node_privileges 与 core/permissions.ensure_instance_admin)。
 PRIVILEGED_NODE_TYPES = frozenset({"code"})
 
+#: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、
+#: 用真实浏览器点下去的按钮。它们决定确认卡的权限档 —— `edit` 撤得回、`ai-cost` 最坏是花钱,
+#: 这一档撤不回来。
+#:
+#: 浏览器节点整组算在内:一张图只要驱动浏览器,它做了什么就不再由这张图本身说了算。
+#: `plugin_tool` 算在内:插件工具可以是写类的(manifest 里的 read_only 是自报的,不是判据)。
+#: `call_workflow` 算在内是**保守**:它按 id 引用另一张图,扫描器跟不过去(跟过去要查库递归),
+#: 跟不过去就不能假装那张图是干净的。
+EXTERNAL_NODE_TYPES = frozenset(
+    {
+        "code",
+        "http_request",
+        "publish",
+        "plugin_tool",
+        "call_workflow",
+        "browser_open",
+        "browser_navigate",
+        "browser_click",
+        "browser_input",
+        "browser_upload",
+        "browser_extract",
+        "browser_wait",
+        "browser_scroll",
+        "browser_evaluate",
+        "browser_close",
+    }
+)
+
+#: 明确判定为「后果留在这个应用内」的节点。**与 EXTERNAL_NODE_TYPES 合起来必须覆盖 NODE_TYPES
+#: 全部** —— 由测试钉住。新增一个节点类型时作者必须归类,而不是让它默认落进"安全"那一边:
+#: 漏掉的那一个恰恰会是没人想过后果的那一个。
+#: 容器节点(loop/subgraph)本身是内部的 —— 危险的是它们的体,而体会被递归扫到。
+INTERNAL_NODE_TYPES = frozenset(
+    {
+        "start",
+        "llm",
+        "kb_search",
+        "transcribe_asset",
+        "export_sequence",
+        "ai_generate",
+        "condition",
+        "template",
+        "json_extract",
+        "text_transform",
+        "delay",
+        "synthesize_speech",
+        "notify",
+        "translate",
+        "loop_foreach",
+        "loop_while",
+        "asset_query",
+        "asset_tag",
+        "asset_update",
+        "project_create",
+        "output",
+        "subgraph",
+    }
+)
+
 _MAX_GRAPH_SCAN_DEPTH = 16
 
 
-def privileged_nodes_in_graph(graph: Any, *, _depth: int = 0) -> set[str]:
-    """递归找出图里用到的特权节点类型(含 loop/subgraph 的内嵌体)。
+def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> set[str]:
+    """递归找出图里用到的、属于 `types` 的节点类型(含 loop/subgraph 的内嵌体)。
 
-    必须递归:内嵌体是 config["body"] 里的一整张图,只查顶层的话,把 code 节点框选「折叠为子图」
-    就能绕过门禁。深度上限只是防御畸形/自引用输入——真实嵌套受 MAX_NEST_DEPTH 约束,远小于它。
+    **必须递归**:内嵌体是 config["body"] 里的一整张图,只查顶层的话,把节点框选「折叠为子图」
+    就能整个绕过。深度上限只是防御畸形/自引用输入——真实嵌套受 MAX_NEST_DEPTH 约束,远小于它。
+
+    两个扫描(特权 / 外部)共用这一段:递归本身是易错的部分,写两遍就会有一遍将来漏掉子图。
     """
     if _depth > _MAX_GRAPH_SCAN_DEPTH or not isinstance(graph, dict):
         return set()
@@ -714,11 +775,21 @@ def privileged_nodes_in_graph(graph: Any, *, _depth: int = 0) -> set[str]:
         if not isinstance(node, dict):
             continue
         ntype = str(node.get("type") or "")
-        if ntype in PRIVILEGED_NODE_TYPES:
+        if ntype in types:
             found.add(ntype)
         if ntype in NESTED_BODY_TYPES:
-            found |= privileged_nodes_in_graph((node.get("config") or {}).get("body"), _depth=_depth + 1)
+            found |= _nodes_of_types((node.get("config") or {}).get("body"), types, _depth=_depth + 1)
     return found
+
+
+def privileged_nodes_in_graph(graph: Any) -> set[str]:
+    """图里用到的**主机权限**节点 —— 落库要 instance-admin(见 core/permissions)。"""
+    return _nodes_of_types(graph, PRIVILEGED_NODE_TYPES)
+
+
+def external_nodes_in_graph(graph: Any) -> set[str]:
+    """图里用到的**后果在应用之外**的节点 —— 决定确认卡的权限档(见 domain/agent/confirmations)。"""
+    return _nodes_of_types(graph, EXTERNAL_NODE_TYPES)
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:

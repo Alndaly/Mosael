@@ -94,8 +94,11 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 **看不到工具返回内容**的隔离判断者来做。落地方案与对 ADR 的三处修正见
 [AGENT_PERMISSION_MODES.md](AGENT_PERMISSION_MODES.md)。
 
-其中一条直接关系到上面这张表:`browser_pool_open` 现在归在 `edit` 档,而 `edit` 正是 auto 下要
-直接放行的那一档 —— 它接的却是用户**真实登录的身份**。档位要按 payload 派生,不能查静态表。
+**权限档已经改成按 payload 派生**(第 1 期,已落地):`TOOL_DEFS` 里的值只是下限,`run_workflow`
+与工作流的建/改会扫**这次会落库或执行的那张图**,含 `code` / `publish` / `http_request` /
+`browser_*` / `plugin_tool` / `call_workflow` 的一律提到 `external`,摘要也点名图里有什么。
+`browser_pool_open` 直接改成 `external` —— 它接的是用户在别人站点上的**真实身份**,不是"可撤销
+的编辑"。档位不只是徽标:三档一上,它直接决定要不要放行,定错了放开的就是错的东西。
 
 ## Confirmation flow (plan §16.2/§17.2)
 
