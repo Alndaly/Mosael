@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""给文档录截图与 GIF —— 对着**真实界面**跑,不是画出来的。
+
+为什么是脚本而不是手工录屏:配图会过期,而过期的配图比没有配图更糟 —— 用户照着一张老截图
+找不到按钮,会以为是自己的问题。脚本化之后,界面改了就重跑一次,几分钟的事。
+
+用法(需要先起好前端与一个**独立数据目录**的后端,别对着自己的真实数据录):
+
+    OPEN_STUDIO_DATA_DIR=/tmp/demo-data backend/.venv/bin/python -m uvicorn app.main:app --port 8801
+    pnpm --dir frontend dev                      # 5173,CORS 允许的源
+    backend/.venv/bin/python scripts/record-doc-media.py --token <会话令牌>
+
+产物落在 docs/media/。GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from playwright.sync_api import Page, sync_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+#: 两处媒体各有各的消费者,别合并:docs/media 给仓库 README(GitHub 上直接渲染),
+#: docs-site/src/assets 给文档站(Astro 会做尺寸优化,必须是 src/ 下的相对引用)。
+MEDIA = ROOT / "docs" / "media"
+SITE_GIFS = ROOT / "docs-site" / "src" / "assets" / "gifs"
+SITE_SHOTS = ROOT / "docs-site" / "src" / "assets" / "screens"
+
+#: 录制视口。宽度按文档站正文宽度取,高度取到内容底边即可 —— 留一大片空白的截图在文档里
+#: 会把正文推得很散,读者还得滚过去才看到下一段。
+VIEWPORT = {"width": 1440, "height": 760}
+#: GIF 帧率。界面演示不需要高帧率,10 帧足够看清每一步,体积只有 24 帧的四成。
+FPS = 10
+
+
+def gif_from_frames(frames: Path, out: Path, fps: int = FPS) -> None:
+    """帧序列 → GIF。两遍法:先统计调色板再编码,否则渐变和阴影会出现色带。"""
+    palette = frames / "palette.png"
+    common = ["-y", "-loglevel", "error", "-framerate", str(fps)]
+    subprocess.run(
+        ["ffmpeg", *common, "-i", str(frames / "%04d.png"), "-vf", "palettegen=stats_mode=diff", str(palette)],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", *common, "-i", str(frames / "%04d.png"), "-i", str(palette),
+            "-lavfi", "paletteuse=dither=bayer:bayer_scale=3",
+            str(out),
+        ],
+        check=True,
+    )
+    print(f"  → {out.relative_to(ROOT)}  {out.stat().st_size // 1024} KB")
+
+
+class Recorder:
+    """按步录制:每 `hold` 帧重复一张截图,让观众有时间看清这一步。"""
+
+    def __init__(self, page: Page, frames: Path) -> None:
+        self.page = page
+        self.frames = frames
+        self.index = 0
+
+    def shot(self, hold: int = 6) -> None:
+        self.index += 1
+        first = self.frames / f"{self.index:04d}.png"
+        self.page.screenshot(path=str(first))
+        for _ in range(hold - 1):
+            self.index += 1
+            shutil.copy(first, self.frames / f"{self.index:04d}.png")
+
+
+def open_app(page: Page, base: str, api: str, token: str) -> None:
+    page.goto(base, wait_until="domcontentloaded")
+    page.evaluate(
+        "([api, token]) => { localStorage.setItem('openstudio.server.url', api);"
+        " localStorage.setItem('openstudio.auth.token', token); }",
+        [api, token],
+    )
+    page.goto(base, wait_until="networkidle")
+
+
+def record_plugins(page: Page, tmp: Path) -> None:
+    """插件:包 → 连接 → 能力 三层,以及"默认不开放"的勾选。"""
+    frames = tmp / "plugins"
+    frames.mkdir()
+    rec = Recorder(page, frames)
+
+    page.goto(page.url.split("#")[0] + "#/plugins", wait_until="networkidle")
+    page.wait_for_timeout(600)
+    rec.shot(10)  # 三层结构:已安装的包 / 这个包的连接 / 连接下的能力
+
+    toggle = page.get_by_role("switch").first
+    if toggle.count():
+        toggle.click()
+        page.wait_for_timeout(700)
+        rec.shot(10)  # 启用之后,工具才真正暴露给智能体与工作流
+
+    page.screenshot(path=str(MEDIA / "plugins-overview.png"))
+    print(f"  → {(MEDIA / 'plugins-overview.png').relative_to(ROOT)}")
+
+    search = page.get_by_placeholder("搜索").first
+    if search.count():
+        search.click()
+        for ch in "hash":
+            search.type(ch, delay=90)
+            rec.shot(1)
+        page.wait_for_timeout(500)
+        rec.shot(12)  # 工具多的时候靠搜索找,不靠翻
+
+    gif_from_frames(frames, MEDIA / "plugins-three-layers.gif")
+    shutil.copy(MEDIA / "plugins-three-layers.gif", SITE_GIFS / "plugins.gif")
+    shutil.copy(MEDIA / "plugins-overview.png", SITE_SHOTS / "plugins.png")
+    print(f"  → {(SITE_GIFS / 'plugins.gif').relative_to(ROOT)} / {(SITE_SHOTS / 'plugins.png').relative_to(ROOT)}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token", required=True, help="演示实例的会话令牌")
+    parser.add_argument("--base", default="http://localhost:5173")
+    parser.add_argument("--api", default="http://127.0.0.1:8801")
+    parser.add_argument("--only", default="", help="只录某一段(plugins/…)")
+    args = parser.parse_args()
+
+    for d in (MEDIA, SITE_GIFS, SITE_SHOTS):
+        d.mkdir(parents=True, exist_ok=True)
+    scenes = {"plugins": record_plugins}
+    if args.only:
+        scenes = {k: v for k, v in scenes.items() if k == args.only}
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport=VIEWPORT, device_scale_factor=2)
+        open_app(page, args.base, args.api, args.token)
+        for name, fn in scenes.items():
+            print(f"录制 {name} …")
+            with tempfile.TemporaryDirectory(prefix="os-doc-media-") as tmp:
+                fn(page, Path(tmp))
+        browser.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
