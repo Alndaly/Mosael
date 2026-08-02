@@ -11,6 +11,7 @@ import {
   type PluginTool,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -19,9 +20,23 @@ import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
+/** 扫描按钮:pending 时图标转起来、文案改成「扫描中」。
+ *
+ * 以前只是 disabled —— 点下去按钮变灰,别的什么也不发生。扫描要遍历目录、还可能替 MCP 插件
+ * 连一次 server,慢到足以让人以为没点上,于是再点一次。 */
+function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void }) {
+  const t = useI18n();
+  return (
+    <Button variant="outline" size="sm" disabled={pending} onClick={onScan}>
+      <RefreshCcw size={13} className={pending ? "animate-openstudio-spin" : undefined} />
+      {pending ? t("scanningPlugins") : t("scanPlugins")}
+    </Button>
+  );
+}
+
 /**
  * 插件页 = 主从布局(VS Code 扩展页形态):左侧插件列表,右侧选中
- * 插件的完整详情 — 概览 / 权限 / 工具试运行 / 调用历史。视觉语言与
+ * 插件的完整详情 — 概览 / 凭据 / 权限 / 工具试运行 / 调用历史。视觉语言与
  * 设置页共用同一套 SettingsGroup/Row 组件。
  */
 export function PluginsView() {
@@ -63,7 +78,8 @@ export function PluginsView() {
           body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}
           action={
             <Button disabled={scanPlugins.isPending} onClick={() => scanPlugins.mutate()}>
-              <RefreshCcw size={15} /> {t("scanPlugins")}
+              <RefreshCcw size={15} className={scanPlugins.isPending ? "animate-openstudio-spin" : undefined} />
+              {scanPlugins.isPending ? t("scanningPlugins") : t("scanPlugins")}
             </Button>
           }
         />
@@ -77,14 +93,7 @@ export function PluginsView() {
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("installed")}</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={scanPlugins.isPending}
-              onClick={() => scanPlugins.mutate()}
-            >
-              <RefreshCcw size={13} /> {t("scanPlugins")}
-            </Button>
+            <ScanButton pending={scanPlugins.isPending} onScan={() => scanPlugins.mutate()} />
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {plugins.isLoading &&
@@ -178,6 +187,15 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
     onSuccess: invalidateInvocations,
   });
 
+  const [confirmUninstall, setConfirmUninstall] = React.useState(false);
+  const uninstall = useMutation({
+    mutationFn: () => api(`/api/plugins/${plugin.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setConfirmUninstall(false);
+      void qc.invalidateQueries({ queryKey: ["plugins"] });
+      void qc.invalidateQueries({ queryKey: ["plugin-tools"] });
+    },
+  });
   const refreshTools = useMutation({
     mutationFn: () => api<Plugin>(`/api/plugins/${plugin.id}/refresh`, { method: "POST" }),
     onSuccess: () => {
@@ -199,14 +217,34 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
 
   return (
     <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
+      {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。文案里点名目录,因为「卸载」
+          在别的软件里常常只是取消注册,这里不是。 */}
+      <ConfirmDialog
+        open={confirmUninstall}
+        title={t("pluginUninstallTitle").replace("{name}", plugin.name)}
+        body={t("pluginUninstallBody")}
+        onCancel={() => setConfirmUninstall(false)}
+        onConfirm={() => uninstall.mutate()}
+      />
       <SettingsGroup
         title={plugin.name}
         description={`${plugin.id} · v${plugin.version} · ${isMcp ? t("pluginKindMcp") : t("pluginKindProcess")}`}
         actions={
-          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
-            <span>{plugin.enabled ? t("pluginOn") : t("pluginOff")}</span>
-            <Switch checked={plugin.enabled} onCheckedChange={(checked) => togglePlugin.mutate(checked)} />
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
+              <span>{plugin.enabled ? t("pluginOn") : t("pluginOff")}</span>
+              <Switch checked={plugin.enabled} onCheckedChange={(checked) => togglePlugin.mutate(checked)} />
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={uninstall.isPending}
+              onClick={() => setConfirmUninstall(true)}
+            >
+              <Trash2 size={13} /> {t("pluginUninstall")}
+            </Button>
+          </div>
         }
       >
         {(grants.data ?? []).length > 0 ? (

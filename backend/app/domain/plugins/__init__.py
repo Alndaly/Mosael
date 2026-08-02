@@ -8,6 +8,7 @@ from app.domain.plugins.registry import (
     scan_plugins,
     set_plugin_enabled,
     set_plugin_permission_grants,
+    uninstall_plugin,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "scan_plugins",
     "set_plugin_enabled",
     "set_plugin_permission_grants",
+    "uninstall_plugin",
 ]

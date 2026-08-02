@@ -10832,6 +10832,40 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Delete Plugin",
+        "description": "卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。\n\n**连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是\n\"我删了它怎么又回来了\",而这个页面上没有任何东西能解释那件事。",
+        "operationId": "delete_plugin_api_plugins__plugin_id__delete",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plugin Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/plugins/{plugin_id}/permissions": {

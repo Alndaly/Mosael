@@ -1625,6 +1625,10 @@ export const messages = {
     pluginRefreshTools: "刷新工具",
     pluginMcpToolsDesc: "工具清单由 MCP 服务提供,不写在 manifest 里。服务升级后点刷新重新拉取。",
     pluginToolReadOnly: "只读",
+    scanningPlugins: "扫描中…",
+    pluginUninstall: "卸载",
+    pluginUninstallTitle: "卸载「{name}」?",
+    pluginUninstallBody: "会删掉磁盘上的插件目录,连同它的权限、凭据与调用记录。此操作不可撤销。",
   },
   "en-US": {
     // Shell
@@ -3246,6 +3250,11 @@ export const messages = {
     pluginMcpToolsDesc:
       "The tool list comes from the MCP server itself, not the manifest. Refresh after the server is upgraded.",
     pluginToolReadOnly: "read-only",
+    scanningPlugins: "Scanning…",
+    pluginUninstall: "Uninstall",
+    pluginUninstallTitle: "Uninstall “{name}”?",
+    pluginUninstallBody:
+      "This deletes the plugin directory from disk, along with its permissions, credentials and invocation history. It cannot be undone.",
   },
 } as const;
 

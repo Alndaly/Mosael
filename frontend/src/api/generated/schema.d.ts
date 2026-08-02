@@ -3564,7 +3564,14 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Plugin
+         * @description 卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。
+         *
+         *     **连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是
+         *     "我删了它怎么又回来了",而这个页面上没有任何东西能解释那件事。
+         */
+        delete: operations["delete_plugin_api_plugins__plugin_id__delete"];
         options?: never;
         head?: never;
         /** Update Plugin */
@@ -15589,6 +15596,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PluginOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_plugin_api_plugins__plugin_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

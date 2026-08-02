@@ -104,9 +104,10 @@ MCP 插件的 `tools` 字段不是第二份清单,而是**按名字的覆盖层*
 
 | | |
 | --- | --- |
-| `POST /api/plugins/scan` | 扫描插件目录 |
+| `POST /api/plugins/scan` | 扫描插件目录;目录已不在的记录顺手清掉 |
 | `GET /api/plugins/dir` | 插件目录的真实绝对路径 |
 | `PATCH /api/plugins/{id}` | 启用 / 停用 |
+| `DELETE /api/plugins/{id}` | 卸载:删目录 + 删记录(权限/凭据/调用记录随外键级联) |
 | `GET`/`PATCH` `/api/plugins/{id}/permissions` | 权限授予 |
 | `GET`/`PATCH` `/api/plugins/{id}/credentials` | 凭据(密文回显为掩码,原样提交 = 不改) |
 | `POST /api/plugins/{id}/refresh` | 重拉 MCP 工具清单 |

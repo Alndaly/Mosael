@@ -27,6 +27,7 @@ from app.domain.plugins import (
     scan_plugins,
     set_plugin_enabled,
     set_plugin_permission_grants,
+    uninstall_plugin,
 )
 from app.domain.plugins import credentials as plugin_credentials
 
@@ -64,6 +65,20 @@ def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession, user
     ensure_instance_admin(db, user, "edit")
     try:
         return set_plugin_enabled(db, plugin_id, body.enabled)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/plugins/{plugin_id}", status_code=204)
+def delete_plugin(plugin_id: str, db: DbSession, user: CurrentUser) -> None:
+    """卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。
+
+    **连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是
+    "我删了它怎么又回来了",而这个页面上没有任何东西能解释那件事。
+    """
+    ensure_instance_admin(db, user, "edit")
+    try:
+        uninstall_plugin(db, plugin_id, settings.plugins_dir)
     except PluginDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
