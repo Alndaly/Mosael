@@ -14,7 +14,15 @@ import { cn } from "@/lib/utils";
  * `rootMargin` 把视口上沿压到距顶 96px(站头高度),下沿抬到 70% 处:于是"当前小节"指的是
  * **刚滚过站头的那个标题**,而不是屏幕正中央碰巧撞上的那个。
  */
-export function DocsToc({ entries, label }: { entries: TocEntry[]; label: string }) {
+export function DocsToc({
+  entries,
+  label,
+  className,
+}: {
+  entries: TocEntry[];
+  label: string;
+  className?: string;
+}) {
   const [active, setActive] = React.useState<string | null>(entries[0]?.id ?? null);
 
   React.useEffect(() => {
@@ -39,7 +47,7 @@ export function DocsToc({ entries, label }: { entries: TocEntry[]; label: string
   if (entries.length === 0) return null;
 
   return (
-    <nav aria-label={label} className="text-sm">
+    <nav aria-label={label} className={cn("text-sm", className)}>
       <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">{label}</p>
       <ul className="m-0 list-none border-l-2 border-ink p-0">
         {entries.map((entry) => {

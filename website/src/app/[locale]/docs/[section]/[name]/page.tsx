@@ -6,22 +6,19 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 
+import { DocsSidebar, type SidebarGroup } from "@/components/docs-sidebar";
 import { DocsToc } from "@/components/docs-toc";
 import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
-import { docHref, listDocs, readDoc } from "@/lib/docs";
-import { tableOfContents } from "@/lib/toc";
+import { DOC_SECTIONS, docHref, listDocs, readDoc } from "@/lib/docs";
 import { SITE } from "@/lib/site";
+import { tableOfContents } from "@/lib/toc";
 
 /** 24 页 × 2 语言,全部构建期出好 —— 文档是纯静态内容,没有理由到运行时才渲染。 */
 export function generateStaticParams() {
   return LOCALES.flatMap((locale) =>
-    listDocs(locale).map((doc) => ({
-      locale,
-      section: doc.section,
-      name: doc.name,
-    })),
+    listDocs(locale).map((doc) => ({ locale, section: doc.section, name: doc.name })),
   );
 }
 
@@ -32,17 +29,26 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   if (!isLocale(locale)) return {};
   const doc = readDoc(locale, section, name);
   if (!doc) return {};
-  const canonical = `/${locale}/docs/${section}/${name}`;
   return {
     title: `${doc.title} · Open Studio`,
     description: doc.description,
     alternates: {
-      canonical,
+      canonical: `/${locale}/docs/${section}/${name}`,
       languages: Object.fromEntries(LOCALES.map((item) => [item, `/${item}/docs/${section}/${name}`])),
     },
   };
 }
 
+/**
+ * 一篇文档。
+ *
+ * **三栏在同一个 grid 里**,不拆成 layout + page 两层 —— 拆开时两个网格各算各的列宽,
+ * 中间那栏对不上外层的轨道,于是正文被挤成窄窄一条,而分栏的竖线吊在半空。
+ * 侧边栏要的目录树这一页本来就要读,合在一起没有多余开销。
+ *
+ * 列之间也不画贯穿整页的竖线:导航只有十来行,正文有好几屏,那条线剩下的大半截旁边什么
+ * 都没有。分栏靠间距,归属靠每一项自己左边那道短线。
+ */
 export default async function DocPage({ params }: { params: Params }) {
   const { locale, section, name } = await params;
   if (!isLocale(locale)) notFound();
@@ -50,7 +56,6 @@ export default async function DocPage({ params }: { params: Params }) {
   if (!doc) notFound();
 
   const t = getMessages(locale).docs;
-  const sectionLabel = t.sections[doc.section];
   const { content } = await compileMDX({
     source: doc.body,
     components: mdxComponents,
@@ -64,19 +69,36 @@ export default async function DocPage({ params }: { params: Params }) {
     },
   });
 
-  const toc = tableOfContents(doc.body);
   const all = listDocs(locale);
+  const groups: SidebarGroup[] = DOC_SECTIONS.map((key) => ({
+    label: t.sections[key],
+    items: all
+      .filter((item) => item.section === key)
+      .map((item) => ({ href: docHref(locale, item), title: item.title })),
+  })).filter((group) => group.items.length > 0);
+
+  const toc = tableOfContents(doc.body);
   const index = all.findIndex((item) => item.section === section && item.name === name);
   const prev = index > 0 ? all[index - 1] : null;
   const next = index >= 0 && index < all.length - 1 ? all[index + 1] : null;
 
   return (
-    // 正文和本页目录并排。目录是这一页自己的东西(骨架拿不到 doc),所以留在页面里。
-    <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_14rem] xl:gap-10">
-      <article className="min-w-0 max-w-3xl">
+    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 py-14 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+      <div className="lg:row-span-2">
+        <DocsSidebar groups={groups} className="lg:sticky lg:top-28 lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto" />
+      </div>
+
+      {/* 本页目录在窄屏上排到正文前面 —— 那时它是"这一页讲了什么"的摘要,读完之后才给没有意义。 */}
+      <div className="xl:col-start-3 xl:row-start-1">
+        <DocsToc entries={toc} label={t.onThisPage} className="xl:sticky xl:top-28" />
+      </div>
+
+      <article className="min-w-0 lg:col-start-2 lg:row-start-1 xl:row-span-2">
         <header className="mb-12 border-b-2 border-ink pb-8">
-          <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">{sectionLabel}</p>
-          <h1 className="mt-0 mb-4 font-display text-[clamp(1.875rem,5vw,3rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
+          <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
+            {t.sections[doc.section]}
+          </p>
+          <h1 className="mt-0 mb-4 font-display text-[clamp(1.875rem,4vw,3rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
             {doc.title}
           </h1>
           {doc.description && <p className="m-0 text-lg text-muted-foreground">{doc.description}</p>}
@@ -129,10 +151,6 @@ export default async function DocPage({ params }: { params: Params }) {
           </p>
         </footer>
       </article>
-
-      <aside className="mt-14 border-t-2 border-ink pt-8 xl:mt-0 xl:border-t-0 xl:border-l-2 xl:pt-0 xl:pl-8">
-        <DocsToc entries={toc} label={t.onThisPage} />
-      </aside>
     </div>
   );
 }

@@ -10,7 +10,11 @@
     pnpm --dir frontend dev                      # 5173,CORS 允许的源
     backend/.venv/bin/python scripts/record-doc-media.py --token <会话令牌>
 
-产物落在 docs/media/。GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
+产物落在 docs/media/,并分发到旧文档站与新官网(见下面的 publish)。
+GIF 由帧序列经 ffmpeg 合成(调色板两遍法,否则渐变会脏)。
+
+**默认录深色**(`--theme dark`)。三处消费者的版面都是深底为主,浅色截图贴进去像从别处
+抠来的;应用本身的重点(时间线、监看器、画布)在深色下对比也更好读。
 """
 
 from __future__ import annotations
@@ -89,14 +93,24 @@ class Recorder:
             shutil.copy(first, self.frames / f"{self.index:04d}.png")
 
 
-def open_app(page: Page, base: str, api: str, token: str) -> None:
+def open_app(page: Page, base: str, api: str, token: str, theme: str) -> None:
+    """把服务器地址、令牌和主题一次性写进 localStorage,再重载让应用带着它们启动。
+
+    主题写的是 `openstudio.preferences`(见 frontend/src/app/preferences.tsx)——
+    不能只靠 Playwright 的 `color_scheme`:应用自己存偏好,默认 light,系统色不参与。
+    """
     page.goto(base, wait_until="domcontentloaded")
     page.evaluate(
-        "([api, token]) => { localStorage.setItem('openstudio.server.url', api);"
-        " localStorage.setItem('openstudio.auth.token', token); }",
-        [api, token],
+        "([api, token, theme]) => { localStorage.setItem('openstudio.server.url', api);"
+        " localStorage.setItem('openstudio.auth.token', token);"
+        " localStorage.setItem('openstudio.preferences', JSON.stringify({ theme, locale: 'zh-CN' })); }",
+        [api, token, theme],
     )
     page.goto(base, wait_until="networkidle")
+    # 主题切换会给 <html> 加 class,等它落定再拍 —— 否则第一帧可能还是浅色。
+    if theme == "dark":
+        page.wait_for_function("() => document.documentElement.classList.contains('dark')", timeout=5000)
+    page.wait_for_timeout(400)
 
 
 def record_plugins(page: Page, tmp: Path) -> None:
@@ -198,6 +212,9 @@ def main() -> int:
     parser.add_argument("--base", default="http://localhost:5173")
     parser.add_argument("--api", default="http://127.0.0.1:8801")
     parser.add_argument("--only", default="", help="只录某一段(plugins/…)")
+    #: 配图统一走深色。官网、README、文档三处的版面都是深底为主,而浅色截图贴进去会像
+    #: 从别处抠来的 —— 而且应用本身的重点(时间线、监看器、画布)在深色下对比更好读。
+    parser.add_argument("--theme", default="dark", choices=["dark", "light"], help="录制用的应用主题")
     args = parser.parse_args()
 
     for d in (MEDIA, SITE_GIFS, SITE_SHOTS, WEB_GIFS, WEB_SHOTS):
@@ -210,8 +227,8 @@ def main() -> int:
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT, device_scale_factor=2)
-        open_app(page, args.base, args.api, args.token)
+        page = browser.new_page(viewport=VIEWPORT, device_scale_factor=2, color_scheme=args.theme)
+        open_app(page, args.base, args.api, args.token, args.theme)
         for name, fn in scenes.items():
             print(f"录制 {name} …")
             with tempfile.TemporaryDirectory(prefix="os-doc-media-") as tmp:
