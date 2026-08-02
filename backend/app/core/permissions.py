@@ -22,14 +22,27 @@ Single permission entry point (plan §9.3).
 """
 
 
+def presented_token(
+    request: Request,
+    token: str | None = Query(default=None, include_in_schema=False),
+) -> str:
+    """这次请求带进来的凭据本身(Bearer 头,或 ?token= 那条给 <video>/<img> 用的旁路)。
+
+    只做提取,不做校验 —— 校验是 get_current_user 的事,两者读的是同一处,所以不会出现
+    「按一个来源认人、按另一个来源取值」。给需要**把调用方凭据继续往下传**的路由用:
+    工具通道要让工具体回连本 API,它需要的正是调用方这一份,而不是另铸一份没人回收的新令牌。
+    """
+    header = request.headers.get("authorization", "")
+    bearer = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else None
+    return bearer or token or ""
+
+
 def get_current_user(
     request: Request,
     db: Session = Depends(session_scope),
     token: str | None = Query(default=None, include_in_schema=False),
 ) -> User:
-    header = request.headers.get("authorization", "")
-    bearer = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else None
-    candidate = bearer or token
+    candidate = presented_token(request, token)
     if not candidate:
         raise HTTPException(status_code=401, detail="Not authenticated")
     session = db.get(AuthSession, candidate)

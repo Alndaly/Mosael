@@ -31,7 +31,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.core.permissions import ensure_workspace_member
 
 logger = logging.getLogger(__name__)
@@ -191,7 +191,12 @@ def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any]) -> dict[s
 
 @router.post("/agent/tools/{name}")
 def invoke_agent_tool(
-    name: str, body: ToolInvocation, db: DbSession, user: CurrentUser, workspace_id: str = ""
+    name: str,
+    body: ToolInvocation,
+    db: DbSession,
+    user: CurrentUser,
+    token: PresentedToken,
+    workspace_id: str = "",
 ) -> dict[str, Any]:
     """Run one registered tool as the calling user.
 
@@ -207,11 +212,13 @@ def invoke_agent_tool(
     if fn is None or not callable(fn) or name.startswith("_"):
         raise HTTPException(status_code=404, detail=f"Tool {name} not found")
 
-    # The tool bodies call back into this API over loopback, so they need the caller's own
-    # credential — bound per context, since one process serves many turns at once.
-    from app.ai.agent.host import mint_tool_token
-
-    token = mint_tool_token(db, user)
+    # 工具体回连本 API,所以要带调用方的凭据 —— 按 context 绑定,因为同一个进程同时在跑很多轮。
+    #
+    # 用**调用方这次带进来的那份**,不再另铸一个。此前每次调用 mint_tool_token 建一行
+    # AuthSession,而 finally 里只重置 contextvar、行没人删 —— AuthSession 没有过期列,于是
+    # 一次十步的任务在库里留下十个永久的全权凭据。turn 级令牌那边早就发现并撤销了(见
+    # host.py 结尾),工具级这边按更高的频次把它长了回来。调用方手里那份本来就是有效的、
+    # 而且随 turn 结束被撤销,没有任何理由再复制一份出来。
     reset = registry.set_api_token(token)
     # The tool bodies call back over loopback, and this process knows its own address. Left to
     # its import-time default the base URL is 127.0.0.1:8800, which is right only by
