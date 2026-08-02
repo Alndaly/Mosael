@@ -487,7 +487,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       // Translated in one batched, concurrent request — the same path the subtitle panel uses,
       // so a 200-cue transcript costs one round-trip's latency rather than 200.
       const texts = targetLang
-        ? (await translateTexts(sentences.map((s) => s.text), targetLang)).translations
+        ? (await translateTexts(workspace.id, sentences.map((s) => s.text), targetLang)).translations
         : sentences.map((s) => s.text);
       const cues = sentences.map((s, i) => ({
         text: (texts[i] || s.text).trim() || s.text,

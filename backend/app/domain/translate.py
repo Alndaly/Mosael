@@ -14,7 +14,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
+from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
+from app.domain import ai_retry
+from app.domain.usage import BillableCall, billable
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
@@ -73,7 +76,13 @@ def ai_translate(db, text: str, target: str, profile_id: str | None = None) -> s
     return ai_translate_with(resolve_ai_provider(db, profile_id), text, target)
 
 
-def ai_translate_with(provider: ChatTarget, text: str, target: str, client: httpx.Client | None = None) -> str:
+def ai_translate_with(
+    provider: ChatTarget,
+    text: str,
+    target: str,
+    client: httpx.Client | None = None,
+    call: BillableCall | None = None,
+) -> str:
     if not text.strip():
         return ""
     prompt = (
@@ -87,6 +96,7 @@ def ai_translate_with(provider: ChatTarget, text: str, target: str, client: http
             temperature=0.2,
             timeout=_TIMEOUT * 2,
             client=client,
+            call=call,
             label="AI 翻译",
         ).strip()
     except AiChatError as exc:
@@ -143,17 +153,25 @@ def translate_many(
     if not indexed:
         return results
 
-    with httpx.Client(timeout=_TIMEOUT * 2) as client:
-        def one(item: tuple[int, str]) -> tuple[int, str]:
-            index, text = item
-            if provider is not None:
-                return index, ai_translate_with(provider, text, target, client=client)
-            return index, google_translate(text, target, client=client)
+    workers = min(_MAX_PARALLEL, len(indexed))
 
-        workers = min(_MAX_PARALLEL, len(indexed))
+    def run(translate_one) -> None:
+        # run_in_scope:contextvars 不会自动跨进工作线程,而记账归属就在里面。
+        # map() 在消费时抛出第一个异常,所以一条失败仍然让整批失败 —— 调用方本来就是整批应用的。
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            # map() surfaces the first exception when consumed, so one failed cue still fails the
-            # batch as it did before — the caller applies translations atomically either way.
-            for index, translated in pool.map(one, indexed):
+            for index, translated in pool.map(run_in_scope(translate_one), indexed):
                 results[index] = translated
+
+    # 共享 client 用 RetryingClient 而不是裸 httpx.Client:共享连接是为了省掉每条字幕一次 TLS
+    # 握手,但不该因此丢掉重试 —— 设置页那句「连接断开/超时/限流时自动重试」管的是所有 AI 调用。
+    # 经模块引用而不是 from-import:全项目只有 ai_retry.RetryingClient 一个打桩点,
+    # 直接 import 进来会让它变成第二个,测试就得两处都打。
+    with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
+        if provider is None:  # google:免费端点,不产生供应商用量,不开记账
+            run(lambda item: (item[0], google_translate(item[1], target, client=client)))
+            return results
+        # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
+        # "这次翻译花了多少"。
+        with billable(db, capability="chat", operation="translate_batch") as call:
+            run(lambda item: (item[0], ai_translate_with(provider, item[1], target, client=client, call=call)))
     return results

@@ -100,7 +100,7 @@ def test_analyze_endpoint_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     captured: dict = {}
 
-    def fake_call(profile: ProviderProfile, messages):
+    def fake_call(profile: ProviderProfile, messages, call=None):
         captured["model_profile"] = profile.vendor
         captured["parts"] = len(messages[0]["content"])
         return "画面是一张纯红色图片。"
@@ -218,7 +218,7 @@ def test_analyze_auto_falls_back_to_frames(monkeypatch) -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset_json = make_video_asset(client, ws["id"])
     monkeypatch.setattr(service, "extract_video_frames", lambda path: [b"f1", b"f2"])
-    monkeypatch.setattr(service, "call_vision_model", lambda profile, messages: "抽帧描述")
+    monkeypatch.setattr(service, "call_vision_model", lambda profile, messages, call=None: "抽帧描述")
     with SessionLocal() as db:
         _add_native_profile(db, "minimax")  # 视觉但非原生视频
         asset = db.get(Asset, asset_json["id"])

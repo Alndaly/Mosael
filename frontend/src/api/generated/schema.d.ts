@@ -2064,7 +2064,14 @@ export interface paths {
         /** List Notifications */
         get: operations["list_notifications_api_notifications_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Notification
+         * @description 给工作区成员推一条站内通知。
+         *
+         *     工作流的「发送通知」节点走的是同一个领域函数;这条端点是为了让智能体也能用 ——
+         *     同一个能力不该因为入口不同而只存在于一边。
+         */
+        post: operations["create_notification_api_notifications_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4617,6 +4624,8 @@ export interface components {
             name?: string | null;
             /** Tags */
             tags?: string[] | null;
+            /** Project Id */
+            project_id?: string | null;
         };
         /** AuthCredentials */
         AuthCredentials: {
@@ -5833,6 +5842,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** NotifyRequest */
+        NotifyRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
         };
         /** OAuthAnswerIn */
         OAuthAnswerIn: {
@@ -7415,6 +7436,8 @@ export interface components {
         };
         /** TranslateRequest */
         TranslateRequest: {
+            /** Workspace Id */
+            workspace_id: string;
             /** Texts */
             texts: string[];
             /** Target Lang */
@@ -12328,6 +12351,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_notification_api_notifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"];
                 };
             };
             /** @description Validation Error */

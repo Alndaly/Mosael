@@ -1123,7 +1123,7 @@ def sleep(seconds: float) -> dict[str, Any]:
 
 
 @mcp.tool()
-def translate_text(text: str, target: str, engine: str = "google") -> dict[str, Any]:
+def translate_text(text: str, target: str, engine: str = "google", workspace_id: str = "") -> dict[str, Any]:
     """Runs directly: translate text into a target language.
 
     target is a language code ("zh", "en", "ja"); the source language is auto-detected.
@@ -1132,7 +1132,12 @@ def translate_text(text: str, target: str, engine: str = "google") -> dict[str, 
     """
     body = _post(
         "/api/translate",
-        {"texts": [text], "target_lang": target, "engine": engine if engine in ("google", "ai") else "google"},
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "texts": [text],
+            "target_lang": target,
+            "engine": engine if engine in ("google", "ai") else "google",
+        },
     )
     return {"text": (body.get("translations") or [""])[0]}
 

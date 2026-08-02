@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
+from app.domain.usage import BillableCall, billable
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
@@ -141,7 +142,7 @@ def _build_system_prompt(guide: PlatformGuide, ui_language: str) -> str:
     )
 
 
-def _chat_json(target: ChatTarget, system: str, user: str) -> dict:
+def _chat_json(target: ChatTarget, system: str, user: str, call: BillableCall | None = None) -> dict:
     """一次对话调用,强制 JSON 输出,解析为 dict。"""
     try:
         text = chat(
@@ -150,6 +151,7 @@ def _chat_json(target: ChatTarget, system: str, user: str) -> dict:
             temperature=0.7,
             timeout=_LLM_TIMEOUT_SECONDS,
             json_object=True,
+            call=call,
             label="提示词优化",
         ).strip()
     except AiChatError as exc:
@@ -196,7 +198,9 @@ def optimize_image_prompt(
         target = target_for(db, chat_profile, model=chat_model)
     except AiChatError as exc:
         raise PromptOptimizeError(str(exc)) from exc
-    data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip())
+    # 归属走环境上下文:路由已经过了 ensure_workspace_perm,那里把工作区绑好了。
+    with billable(db, capability="chat", operation="optimize_prompt") as call:
+        data = _chat_json(target, _build_system_prompt(guide, ui_language), raw_prompt.strip(), call)
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:
         raise PromptOptimizeError("优化结果为空")

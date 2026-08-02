@@ -10,7 +10,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
+from app.domain.usage import BillableCall, billable
 from app.domain.providers import resolve_profile
 
 """
@@ -71,17 +73,21 @@ def _entity_profile(db: Session):
         return None  # 这条连接下没有对话模型 —— 抽取是增强项,静默跳过而不是让入库失败
 
 
-def _extract_with(target: ChatTarget, text: str) -> list[dict[str, str]]:
+def _extract_with(target: ChatTarget, text: str, call: BillableCall | None = None) -> list[dict[str, str]]:
     """The network half — no Session, so it is safe to run on a worker thread.
 
     从前这句话是不成立的:函数体里调了 object_session(profile) 去解析模型名,那正是在工作
-    线程上碰 Session。现在模型名在 _entity_profile 里(调用线程)就解析进 ChatTarget 了。"""
+    线程上碰 Session。现在模型名在 _entity_profile 里(调用线程)就解析进 ChatTarget 了。
+
+    记账同理:这里只往 BillableCall 累加计量(纯内存,线程安全够用),真正落库发生在调用
+    线程上的 with 块结束时 —— 工作线程不碰 Session。"""
     try:
         content = chat(
             target,
             [{"role": "user", "content": ENTITY_PROMPT + text[:4000]}],
             temperature=0,
             timeout=180,  # 本地模型冷启动加载可能超过 60s
+            call=call,
             label="图谱实体抽取",
         )
         match = re.search(r"\[.*\]", content, re.DOTALL)
@@ -117,11 +123,19 @@ def upsert_document_graph(
         profile = _entity_profile(db)
         if profile is None:
             per_chunk: list[list[dict[str, str]]] = [[] for _ in chunks]
-        elif len(chunks) == 1:
-            per_chunk = [_extract_with(profile, chunks[0][1])]
         else:
-            with ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_EXTRACT, len(chunks))) as pool:
-                per_chunk = list(pool.map(lambda item: _extract_with(profile, item[1]), chunks))
+            # 整篇文档记**一条**账,而不是每块一条:一篇长文四十块就是四十行,Token 图会被它
+            # 淹掉,而用户想知道的是"这次入库花了多少"。
+            with billable(
+                db, capability="chat", operation="kb_graph_extract", workspace_id=workspace_id,
+                source_type="kb_document", source_id=document_id,
+            ) as call:
+                if len(chunks) == 1:
+                    per_chunk = [_extract_with(profile, chunks[0][1], call)]
+                else:
+                    with ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_EXTRACT, len(chunks))) as pool:
+                        # run_in_scope:contextvars 不会自动跨进工作线程。
+                        per_chunk = list(pool.map(run_in_scope(lambda item: _extract_with(profile, item[1], call)), chunks))
 
         for (chunk_id, text), entities in zip(chunks, per_chunk):
             session.run(

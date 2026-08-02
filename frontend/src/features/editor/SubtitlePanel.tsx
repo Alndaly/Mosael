@@ -143,7 +143,7 @@ export function SubtitlePanel({
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
         {subtitles.length > 0 && onApplyTexts && (
-          <SubtitleTranslate subtitles={subtitles} onApplyTexts={onApplyTexts} />
+          <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
       </div>
     </div>
@@ -152,9 +152,11 @@ export function SubtitlePanel({
 
 /** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),一次提交、一步撤销。 */
 function SubtitleTranslate({
+  workspaceId,
   subtitles,
   onApplyTexts,
 }: {
+  workspaceId: string;
   subtitles: { id: string; text_override?: string | null }[];
   onApplyTexts: (texts: { clip_id: string; text: string }[]) => Promise<unknown>;
 }) {
@@ -177,6 +179,7 @@ function SubtitleTranslate({
     mutationFn: async () => {
       const items = targets.filter((clip) => (clip.text_override ?? "").trim());
       const { translations } = await translateTexts(
+        workspaceId,
         items.map((clip) => clip.text_override ?? ""),
         lang,
       );

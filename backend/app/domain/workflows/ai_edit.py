@@ -13,7 +13,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.ai_chat import AiChatError, ChatTarget, UsageContext, chat, target_for
+from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
+from app.domain.usage import BillableCall, billable
 from app.domain.providers import require_profile
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
@@ -49,12 +50,6 @@ def ai_edit_graph(
         target = target_for(db, profile)
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
-    usage = (
-        UsageContext(db=db, workspace_id=workspace_id, operation="workflow_ai_edit",
-                     source_type="workflow", source_id=workflow_id)
-        if workspace_id
-        else None
-    )
     registry = json.dumps(
         {key: {"label": meta["label"], "config": meta["config"], "outputs": meta["outputs"]} for key, meta in NODE_TYPES.items()},
         ensure_ascii=False,
@@ -62,22 +57,32 @@ def ai_edit_graph(
     system = _SYSTEM % registry
     user = f"当前工作流 graph:\n{json.dumps(graph, ensure_ascii=False)}\n\n用户指令:{instruction}"
 
-    last_error = ""
-    for _attempt in range(2):
-        prompt = user if not last_error else f"{user}\n\n你上次的输出未通过校验:{last_error}\n请修正后重新输出。"
-        raw = _chat(target, system, prompt, usage)
-        try:
-            payload = _parse_json(raw)
-            new_graph = payload["graph"]
-        except (KeyError, ValueError) as exc:
-            last_error = f"JSON 解析失败: {exc}"
-            continue
-        errors = validate_graph(new_graph, require_config=False)
-        if errors:
-            last_error = "；".join(errors)
-            continue
-        return new_graph, str(payload.get("summary", ""))
-    raise WorkflowDomainError(f"AI 未能产出合法的工作流: {last_error}")
+    # 重试循环整体算**一次** AI 编排:两次 HTTP 是同一件事的两次尝试,token 累加成一条账,
+    # 而不是让用户在成本明细里看到两行不明所以的记录。
+    with billable(
+        db,
+        capability="chat",
+        operation="workflow_ai_edit",
+        workspace_id=workspace_id,
+        source_type="workflow",
+        source_id=workflow_id,
+    ) as call:
+        last_error = ""
+        for _attempt in range(2):
+            prompt = user if not last_error else f"{user}\n\n你上次的输出未通过校验:{last_error}\n请修正后重新输出。"
+            raw = _chat(target, system, prompt, call)
+            try:
+                payload = _parse_json(raw)
+                new_graph = payload["graph"]
+            except (KeyError, ValueError) as exc:
+                last_error = f"JSON 解析失败: {exc}"
+                continue
+            errors = validate_graph(new_graph, require_config=False)
+            if errors:
+                last_error = "；".join(errors)
+                continue
+            return new_graph, str(payload.get("summary", ""))
+        raise WorkflowDomainError(f"AI 未能产出合法的工作流: {last_error}")
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -93,14 +98,14 @@ def _parse_json(raw: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
-def _chat(target: ChatTarget, system: str, user: str, usage: UsageContext | None = None) -> str:
+def _chat(target: ChatTarget, system: str, user: str, call: BillableCall | None = None) -> str:
     try:
         return chat(
             target,
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=0.1,
             timeout=TIMEOUT_SECONDS,
-            usage=usage,
+            call=call,
             label="AI 编排",
         )
     except AiChatError as exc:

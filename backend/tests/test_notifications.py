@@ -88,3 +88,18 @@ def test_agent_notification_respects_workspace_boundary() -> None:
     outsider = second_client("outsider")
     denied = outsider.post("/api/notifications", json={"workspace_id": ws["id"], "title": "喂"})
     assert denied.status_code in (403, 404), denied.text
+
+
+def test_未知的通知类型当场报错() -> None:
+    """NOTIFICATION_TYPES 以前是摆设:没人拿它校验,加一个新类型它一声不吭,
+    而前端按 type 查图标表 —— 表里没有就退化成通用铃铛,看着正常其实没人认领。"""
+    import pytest
+
+    from app.core.db import SessionLocal
+    from app.domain.notifications import notify
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        with pytest.raises(ValueError, match="未知的通知类型"):
+            notify(db, ws["id"], type="还没定义的类型", title="x")

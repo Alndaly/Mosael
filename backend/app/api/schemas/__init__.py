@@ -408,6 +408,10 @@ class SetClipGainRequest(BaseModel):
 
 
 class TranslateRequest(BaseModel):
+    #: 这次翻译算在哪个工作区头上。以前没有这个字段 —— 于是这个接口回答不了「这笔钱算谁的」,
+    #: 而用量表的 workspace_id 是 NOT NULL,AI 翻译因此一条账都记不了。补的是建模缺失,
+    #: 不是一道闸门:它同时把这个接口纳入了工作区权限体系。
+    workspace_id: str
     texts: list[str] = Field(min_length=1, max_length=500)
     target_lang: str
     engine: str = Field(default="google", pattern="^(google|ai)$")

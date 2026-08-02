@@ -15,6 +15,7 @@ from sqlalchemy.orm import object_session
 from app.domain import provider_models
 from app.domain import ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
+from app.domain.usage import BillableCall, billable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -157,7 +158,9 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
     return text[:TRANSCRIPT_MAX_CHARS]
 
 
-def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) -> str:
+def call_vision_model(
+    profile: ProviderProfile, messages: list[dict[str, Any]], call: BillableCall | None = None
+) -> str:
     # 叶子函数只拿得到 ORM 对象;它必然挂在调用方的会话上,object_session 正为此而设 ——
     # 比为一个模型名把 db 串进三层签名干净。
     session = object_session(profile)
@@ -168,6 +171,7 @@ def call_vision_model(profile: ProviderProfile, messages: list[dict[str, Any]]) 
             messages,
             temperature=0.2,
             timeout=REQUEST_TIMEOUT_SECONDS,
+            call=call,
             label="分析请求",
         ).strip()
     except AiChatError as exc:
@@ -251,7 +255,11 @@ def analyze_asset(
     # 图片:始终抽一帧走视觉模型(原生视频那套对图片没意义)。
     if asset.kind == "image":
         profile = pick_analysis_profile(db, profile_id)
-        answer = call_vision_model(profile, build_messages(asset, prompt, [path.read_bytes()]))
+        with billable(
+            db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+            source_type="asset", source_id=asset.id,
+        ) as call:
+            answer = call_vision_model(profile, build_messages(asset, prompt, [path.read_bytes()]), call)
         return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(object_session(profile), profile, "chat"), "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
@@ -273,7 +281,11 @@ def analyze_asset(
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
     profile = pick_analysis_profile(db, profile_id)
     images = extract_video_frames(path)  # 帧数按时长自适应
-    answer = call_vision_model(profile, build_messages(asset, prompt, images, transcript=transcript_text))
+    with billable(
+        db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
+        source_type="asset", source_id=asset.id,
+    ) as call:
+        answer = call_vision_model(profile, build_messages(asset, prompt, images, transcript=transcript_text), call)
     return {
         "answer": answer,
         "provider": profile.vendor,

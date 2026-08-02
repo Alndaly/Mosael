@@ -551,13 +551,14 @@ export function setSubtitleStyle(sequenceId: string, style: Record<string, unkno
 }
 
 export function translateTexts(
+  workspaceId: string,
   texts: string[],
   targetLang: string,
   engine: "google" | "ai" = "google",
 ): Promise<{ translations: string[] }> {
   return api<{ translations: string[] }>("/api/translate", {
     method: "POST",
-    body: JSON.stringify({ texts, target_lang: targetLang, engine }),
+    body: JSON.stringify({ workspace_id: workspaceId, texts, target_lang: targetLang, engine }),
   });
 }
 

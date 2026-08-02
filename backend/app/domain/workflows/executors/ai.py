@@ -8,7 +8,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
-from app.domain.ai_chat import AiChatError, UsageContext, chat, target_for
+from app.core.usage_scope import workspace_scope
+from app.domain.ai_chat import AiChatError, chat, target_for
+from app.domain.usage import billable
 from app.domain.providers import require_profile
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -148,19 +150,24 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""))
         payload = _request_payload(config, target.model, messages)
-        text = chat(
-            target,
-            messages,
-            temperature=float(payload.pop("temperature", 0.4)),
-            timeout=LLM_TIMEOUT_SECONDS,
-            extra=payload,
-            max_retries=configured_max_retries(db),
-            usage=UsageContext(
-                db=db, workspace_id=workflow.workspace_id, operation="workflow_llm",
-                source_type="workflow", source_id=workflow.id,
-            ),
-            label="调用 LLM",
-        ).strip()
+        with billable(
+            db,
+            capability="chat",
+            operation="workflow_llm",
+            workspace_id=workflow.workspace_id,
+            source_type="workflow",
+            source_id=workflow.id,
+        ) as call:
+            text = chat(
+                target,
+                messages,
+                temperature=float(payload.pop("temperature", 0.4)),
+                timeout=LLM_TIMEOUT_SECONDS,
+                extra=payload,
+                max_retries=configured_max_retries(db),
+                call=call,
+                label="调用 LLM",
+            ).strip()
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
     result: dict[str, Any] = {"text": text}
@@ -179,12 +186,14 @@ def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     text = str(config.get("text", ""))
     if not text.strip():
         return {"text": ""}
-    return {
-        "text": translate_text(
+    # 工作流跑在后台线程,没有 HTTP 请求把工作区绑进上下文 —— 显式圈一下,AI 翻译的用量才有归属。
+    # workflow 可能为 None(单元测试直接调节点);那时没有归属可绑,记账会跳过并 warning。
+    with workspace_scope(getattr(workflow, "workspace_id", "") or ""):
+        translated = translate_text(
             db,
             text,
             str(config.get("target_lang") or "en"),
             engine=str(config.get("engine") or "google").lower(),
             profile_id=str(config.get("profile_id") or "") or None,
         )
-    }
+    return {"text": translated}

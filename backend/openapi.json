@@ -5886,6 +5886,46 @@
       }
     },
     "/api/notifications": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Create Notification",
+        "description": "给工作区成员推一条站内通知。\n\n工作流的「发送通知」节点走的是同一个领域函数;这条端点是为了让智能体也能用 ——\n同一个能力不该因为入口不同而只存在于一边。",
+        "operationId": "create_notification_api_notifications_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "notifications"
@@ -13875,6 +13915,18 @@
               }
             ],
             "title": "Tags"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
           }
         },
         "type": "object",
@@ -17047,6 +17099,32 @@
           "created_at"
         ],
         "title": "NotificationOut"
+      },
+      "NotifyRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Body",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "title"
+        ],
+        "title": "NotifyRequest"
       },
       "OAuthAnswerIn": {
         "properties": {
@@ -20800,6 +20878,10 @@
       },
       "TranslateRequest": {
         "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
           "texts": {
             "items": {
               "type": "string"
@@ -20833,6 +20915,7 @@
         },
         "type": "object",
         "required": [
+          "workspace_id",
           "texts",
           "target_lang"
         ],

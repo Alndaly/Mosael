@@ -16,7 +16,6 @@ from app.api.schemas import (
     PromptOptimizeResponse,
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.ai.providers import get_provider
 from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
@@ -110,6 +109,7 @@ def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUse
         )
     except PromptOptimizeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()  # 优化本身只读,但记了一笔用量;记账跟调用方事务走,得落盘
     return PromptOptimizeResponse(**result)
 
 

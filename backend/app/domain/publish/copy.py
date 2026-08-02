@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Transcript
-from app.domain.ai_chat import AiChatError, ChatTarget, UsageContext, chat, target_for
+from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
+from app.domain.usage import BillableCall, billable
 from app.domain.providers import require_profile
 from app.domain.publish import PublishDomainError
 
@@ -50,24 +51,29 @@ def generate_copy(
         target = target_for(db, profile)
     except AiChatError as exc:
         raise PublishDomainError(str(exc)) from exc
-    usage = UsageContext(
-        db=db, workspace_id=workspace_id, operation="publish_copy", source_type="asset", source_id=asset_id or ""
-    )
 
-    last_error = ""
-    for _attempt in range(2):
-        prompt = user if not last_error else f"{user}\n\n上次输出无法解析:{last_error}\n请重新只输出 JSON。"
-        raw = _chat(target, prompt, usage)
-        try:
-            payload = _parse_json(raw)
-            return {
-                "title": str(payload.get("title", ""))[:120],
-                "description": str(payload.get("description", ""))[:2000],
-                "tags": [str(tag)[:40] for tag in payload.get("tags", []) if str(tag).strip()][:12],
-            }
-        except ValueError as exc:
-            last_error = str(exc)
-    raise PublishDomainError(f"AI 未能产出合法文案: {last_error}")
+    with billable(
+        db,
+        capability="chat",
+        operation="publish_copy",
+        workspace_id=workspace_id,
+        source_type="asset",
+        source_id=asset_id or "",
+    ) as call:
+        last_error = ""
+        for _attempt in range(2):
+            prompt = user if not last_error else f"{user}\n\n上次输出无法解析:{last_error}\n请重新只输出 JSON。"
+            raw = _chat(target, prompt, call)
+            try:
+                payload = _parse_json(raw)
+                return {
+                    "title": str(payload.get("title", ""))[:120],
+                    "description": str(payload.get("description", ""))[:2000],
+                    "tags": [str(tag)[:40] for tag in payload.get("tags", []) if str(tag).strip()][:12],
+                }
+            except ValueError as exc:
+                last_error = str(exc)
+        raise PublishDomainError(f"AI 未能产出合法文案: {last_error}")
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -79,14 +85,14 @@ def _parse_json(raw: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
-def _chat(target: ChatTarget, user: str, usage: UsageContext) -> str:
+def _chat(target: ChatTarget, user: str, call: BillableCall) -> str:
     try:
         return chat(
             target,
             [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user}],
             temperature=0.7,
             timeout=TIMEOUT_SECONDS,
-            usage=usage,
+            call=call,
             label="AI 文案生成",
         )
     except AiChatError as exc:

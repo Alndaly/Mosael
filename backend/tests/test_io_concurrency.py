@@ -72,7 +72,7 @@ def test_kb_entity_extraction_overlaps_and_reads_the_db_once(monkeypatch) -> Non
 
     extracted: list[str] = []
 
-    def fake_extract(_profile, text):
+    def fake_extract(_profile, text, call=None):
         recorder()
         extracted.append(text)
         return [{"name": text, "type": "X"}]
