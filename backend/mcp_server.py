@@ -1123,14 +1123,18 @@ def sleep(seconds: float) -> dict[str, Any]:
 
 
 @mcp.tool()
-def translate_text(text: str, target: str, source: str = "") -> dict[str, Any]:
+def translate_text(text: str, target: str, engine: str = "google") -> dict[str, Any]:
     """Runs directly: translate text into a target language.
 
-    target/source are language codes ("zh", "en", "ja"); leave source empty to auto-detect.
-    Uses the configured translation provider (free Google endpoint or an AI provider).
+    target is a language code ("zh", "en", "ja"); the source language is auto-detected.
+    engine is "google" (free, no key needed) or "ai" (uses a configured AI provider).
     Do NOT use for transcribing audio — that is transcribe_asset.
     """
-    return _post("/api/translate", {"text": text, "target": target, "source": source})
+    body = _post(
+        "/api/translate",
+        {"texts": [text], "target_lang": target, "engine": engine if engine in ("google", "ai") else "google"},
+    )
+    return {"text": (body.get("translations") or [""])[0]}
 
 
 @mcp.tool()
