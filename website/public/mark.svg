@@ -1,0 +1,18 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    官网用的站标。和 public/logo.svg 是同一个记号,只有两处不同:
+      1. 圆角去掉。整站是硬边,一个 27px 圆角的方块套进直角版面里,四角会露出空当。
+      2. 底色换成品牌靛 #1b3be0,和调色板里的靛色对齐。
+    应用图标(logo.svg)保持原样:那是打包进安装器的资产,不该被官网的版面口味牵着走。
+    注:XML 注释里不能出现两个连续的减号,所以上面写的是色值而不是 CSS 变量名。
+  -->
+  <rect width="120" height="120" fill="#1b3be0"/>
+  <path d="M34 86 L34 38 L60 62 L86 38 L86 86" fill="none" stroke="#ffffff" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" opacity="0.5"/>
+  <g fill="#ffffff">
+    <circle cx="34" cy="38" r="8"/>
+    <circle cx="60" cy="62" r="8"/>
+    <circle cx="86" cy="38" r="8"/>
+    <circle cx="34" cy="86" r="8"/>
+    <circle cx="86" cy="86" r="8"/>
+  </g>
+</svg>

@@ -30,7 +30,10 @@ export type Doc = DocMeta & { body: string };
 
 const CONTENT_ROOT = path.join(process.cwd(), "content", "docs");
 
-function parseFrontmatter(raw: string): { data: Record<string, string>; body: string } {
+function parseFrontmatter(raw: string): {
+  data: Record<string, string>;
+  body: string;
+} {
   const match = /^---\n([\s\S]*?)\n---\n?/.exec(raw);
   if (!match) return { data: {}, body: raw };
   const data: Record<string, string> = {};

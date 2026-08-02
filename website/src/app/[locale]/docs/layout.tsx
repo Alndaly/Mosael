@@ -30,11 +30,12 @@ export default async function DocsLayout({
   })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12 sm:px-8 lg:flex-row lg:gap-14">
-      <div className="lg:w-52 lg:shrink-0">
-        <DocsSidebar groups={groups} className="lg:sticky lg:top-24" />
+    // 三栏:目录 | 正文 | 本页目录。右边那栏以前是空的 —— 一整栏的白不是留白,是没想好放什么。
+    <div className="mx-auto flex max-w-[96rem] flex-col gap-10 px-5 py-14 sm:px-8 lg:flex-row lg:gap-0">
+      <div className="lg:w-60 lg:shrink-0 lg:border-r-2 lg:border-ink lg:pr-8">
+        <DocsSidebar groups={groups} className="lg:sticky lg:top-28 lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto" />
       </div>
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1 lg:pl-10">{children}</div>
     </div>
   );
 }

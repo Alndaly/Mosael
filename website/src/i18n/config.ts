@@ -17,7 +17,13 @@ export const DEFAULT_LOCALE: Locale = "zh";
 export const HTML_LANG: Record<Locale, string> = { zh: "zh-CN", en: "en" };
 
 /** 语言切换器上的自称 —— 一律用该语言自己的写法,别翻译。 */
-export const LOCALE_LABEL: Record<Locale, string> = { zh: "简体中文", en: "English" };
+export const LOCALE_LABEL: Record<Locale, string> = {
+  zh: "简体中文",
+  en: "English",
+};
+
+/** 顶栏那颗方块按钮塞不下"简体中文",用两个字母的短码。 */
+export const LOCALE_SHORT: Record<Locale, string> = { zh: "中", en: "EN" };
 
 export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);

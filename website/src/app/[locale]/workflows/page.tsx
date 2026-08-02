@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowUpRight } from "lucide-react";
 
+import { PageHero } from "@/components/page-hero";
+import { Reveal } from "@/components/reveal";
 import { Shot } from "@/components/shot";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -24,58 +27,83 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
   const workflows = listWorkflows();
 
   return (
-    <div className="prose-cn mx-auto max-w-3xl px-6 py-16 font-serif sm:px-8">
-      <h1 className="mt-0 mb-5 text-3xl font-semibold sm:text-4xl">{t.title}</h1>
-      <p className="mt-0 mb-10 max-w-(--measure) text-lg text-muted-foreground">{t.lede}</p>
+    <>
+      <PageHero title={t.title} lede={t.lede} />
 
-      <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} />
-
-      <h2 className="mt-20 mb-6 text-2xl font-semibold">{t.galleryTitle}</h2>
-
-      {workflows.length === 0 ? (
-        // 空画廊比没有画廊更糟 —— 所以这里说清楚"形状已经定好、在等第一条",
-        // 而不是摆几个占位卡片假装已经有内容。
-        <div className="border-l-2 border-border py-1 pl-5">
-          <h3 className="mt-0 mb-2 text-base font-semibold">{t.galleryEmptyTitle}</h3>
-          <p className="mt-0 mb-5 max-w-(--measure) text-muted-foreground">{t.galleryEmptyBody}</p>
-          <a
-            className="font-sans text-sm underline underline-offset-4"
-            href={`${SITE.repo}/issues/new`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t.contribute}
-          </a>
+      <section className="border-b-2 border-ink bg-paper">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+          <Reveal>
+            <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} framed />
+          </Reveal>
         </div>
-      ) : (
-        <ul className="m-0 list-none border-t border-border/60 p-0">
-          {workflows.map((workflow) => (
-            <li key={workflow.id} className="m-0 border-b border-border/60 py-6">
-              <h3 className="m-0 text-lg font-semibold">{workflow.name}</h3>
-              <p className="mt-2 mb-3 max-w-(--measure) text-muted-foreground">{workflow.summary}</p>
-              <p className="m-0 font-sans text-xs text-muted-foreground">
-                {workflow.nodes} · {workflow.requires.join(" · ")} · {workflow.author}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+      </section>
 
-      <h2 className="mt-16 mb-6 text-2xl font-semibold">{t.fieldsTitle}</h2>
-      <dl className="m-0 border-t border-border/60">
-        {t.fields.map((field) => (
-          <div key={field.name} className="border-b border-border/60 py-4 sm:flex sm:gap-8">
-            <dt className="font-sans text-sm font-medium sm:w-44 sm:shrink-0">{field.name}</dt>
-            <dd className="m-0 mt-1.5 text-muted-foreground sm:mt-0">{field.body}</dd>
-          </div>
-        ))}
-      </dl>
+      {/* 画廊。空的时候不摆占位卡片 —— 那是在假装已经有内容。 */}
+      <section className="border-b-2 border-ink bg-invert text-invert-foreground">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+            {t.galleryTitle}
+          </h2>
 
-      <p className="mt-10 mb-0 font-sans text-sm">
-        <Link className="underline underline-offset-4" href={localePath(locale, "/docs/guides/workflows")}>
-          {t.guideLink}
-        </Link>
-      </p>
-    </div>
+          {workflows.length === 0 ? (
+            <Reveal className="max-w-3xl border-2 border-invert-foreground p-8 sm:p-12">
+              <h3 className="mt-0 mb-4 font-display text-2xl font-bold tracking-tight">{t.galleryEmptyTitle}</h3>
+              <p className="mt-0 mb-8 text-invert-foreground/70">{t.galleryEmptyBody}</p>
+              <a
+                className="inline-flex items-center gap-2 border-2 border-invert-foreground bg-flame px-6 py-3 font-bold text-primary-foreground transition-transform hover:-translate-y-1"
+                href={`${SITE.repo}/issues/new`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t.contribute}
+                <ArrowUpRight className="size-4" />
+              </a>
+            </Reveal>
+          ) : (
+            <ul className="m-0 grid list-none gap-6 p-0 lg:grid-cols-3">
+              {workflows.map((workflow) => (
+                <li key={workflow.id} className="m-0 border-2 border-invert-foreground p-6">
+                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">{workflow.name}</h3>
+                  <p className="mt-3 mb-4 text-invert-foreground/70">{workflow.summary}</p>
+                  <p className="m-0 font-mono text-xs text-invert-foreground/60">
+                    {workflow.nodes} · {workflow.requires.join(" · ")} · {workflow.author}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* 条目形状:编号 + 字段名 + 一句解释,像一份表格的说明,而不是四张卡。 */}
+      <section className="bg-paper">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+            {t.fieldsTitle}
+          </h2>
+          <dl className="m-0 border-t-2 border-ink">
+            {t.fields.map((field, index) => (
+              <Reveal
+                key={field.name}
+                delay={index * 60}
+                className="grid gap-2 border-b-2 border-ink py-6 sm:grid-cols-12 sm:items-baseline sm:gap-8"
+              >
+                <span className="font-mono text-xs font-bold tracking-widest text-flame uppercase sm:col-span-1">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <dt className="font-display text-lg font-bold tracking-tight sm:col-span-4">{field.name}</dt>
+                <dd className="m-0 text-muted-foreground sm:col-span-7">{field.body}</dd>
+              </Reveal>
+            ))}
+          </dl>
+
+          <p className="mt-12 mb-0 text-sm font-bold">
+            <Link className="border-b-2 border-flame pb-0.5" href={localePath(locale, "/docs/guides/workflows")}>
+              {t.guideLink}
+            </Link>
+          </p>
+        </div>
+      </section>
+    </>
   );
 }

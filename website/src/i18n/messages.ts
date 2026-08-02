@@ -32,16 +32,24 @@ const zh = {
     prev: "上一篇",
     next: "下一篇",
     editOnGitHub: "在 GitHub 上编辑此页",
+    onThisPage: "本页目录",
+    anchor: "链接到本节",
   },
   home: {
     eyebrow: "本地优先 · 桌面应用",
     title: "让灵感落进时间线",
+    /** 标题拆成两截,后半截上品牌色 —— 整行变紫会廉价,一句里挑三个字刚好。 */
+    titleLead: "让灵感落进",
+    titleAccent: "时间线",
     lede: "剪辑、AI 生成、工作流编排、一键分发 —— 一个本地工作台完成全部创作。素材留在你自己的机器上。",
     ctaDownload: "下载 App",
     ctaSource: "看看源码",
     platforms: "macOS(Apple Silicon)· Windows 10/11 x64 · 离线可用",
     heroShotAlt: "Open Studio 剪辑页:多轨时间线、双监看器、素材与逐字稿面板",
     heroShotCaption: "剪辑页 —— 多轨时间线、逐字稿驱动剪辑、调色与字幕,导出一步到位。",
+
+    /** 走马灯色带。是一句话拆成的词,不是导航,所以整条对读屏软件隐藏。 */
+    marquee: ["多轨时间线", "逐字稿驱动剪辑", "AI 智能体", "可视化工作流", "知识库", "一键分发", "本地优先", "开源"],
 
     chaptersTitle: "从一段素材到一条发布,中间不用换应用",
     chapters: [
@@ -73,9 +81,18 @@ const zh = {
 
     moreTitle: "还有",
     more: [
-      { title: "知识库", body: "导入文档与网页,本地全文 + 向量 + 图谱混合检索,喂给智能体与工作流。" },
-      { title: "发布矩阵", body: "抖音 · 小红书 · 视频号 · B 站,多账号登录态常驻,由桌面端内嵌浏览器完成真实上传。" },
-      { title: "插件", body: "本地脚本或现成的 MCP 服务,接进来就是智能体和工作流的工具,权限与凭据逐项授权。" },
+      {
+        title: "知识库",
+        body: "导入文档与网页,本地全文 + 向量 + 图谱混合检索,喂给智能体与工作流。",
+      },
+      {
+        title: "发布矩阵",
+        body: "抖音 · 小红书 · 视频号 · B 站,多账号登录态常驻,由桌面端内嵌浏览器完成真实上传。",
+      },
+      {
+        title: "插件",
+        body: "本地脚本或现成的 MCP 服务,接进来就是智能体和工作流的工具,权限与凭据逐项授权。",
+      },
     ],
 
     closingTitle: "开源,免费下载",
@@ -113,22 +130,32 @@ const zh = {
     shotCaption: "工作流画布 —— 节点分组、连线、就绪检查都在一张图上。",
     galleryTitle: "社区工作流",
     galleryEmptyTitle: "还没有收录的工作流",
-    galleryEmptyBody: "条目形状已经定好了 —— 名称、简介、节点数、需要先配好哪些能力,以及一份可以直接导入的图。第一条投稿之后这里就会变成一个画廊。",
+    galleryEmptyBody:
+      "条目形状已经定好了 —— 名称、简介、节点数、需要先配好哪些能力,以及一份可以直接导入的图。第一条投稿之后这里就会变成一个画廊。",
     contribute: "投一条上来",
     guideLink: "工作流指南",
     fieldsTitle: "一条工作流要交什么",
     fields: [
       { name: "名称 / 简介", body: "一句话说清它替人省掉了哪段重复劳动。" },
       { name: "节点数", body: "一眼看出复杂度,决定要不要现在打开。" },
-      { name: "需要的能力", body: "跑起来得先在设置里配好哪些供应商 —— 缺哪一样,导入前就知道。" },
-      { name: "可导入的图", body: "就是 /api/workflows 那份 JSON,存下来直接导入。" },
+      {
+        name: "需要的能力",
+        body: "跑起来得先在设置里配好哪些供应商 —— 缺哪一样,导入前就知道。",
+      },
+      {
+        name: "可导入的图",
+        body: "就是 /api/workflows 那份 JSON,存下来直接导入。",
+      },
     ],
   },
   footer: {
     tagline: "本地优先的 AI 视频工作台",
+    community: "社区",
+    project: "项目",
     download: "下载",
     github: "GitHub",
     contact: "联系",
+    issues: "反馈问题",
     rights: "保留所有权利。",
   },
   notFound: {
@@ -164,10 +191,14 @@ const en: Messages = {
     prev: "Previous",
     next: "Next",
     editOnGitHub: "Edit this page on GitHub",
+    onThisPage: "On this page",
+    anchor: "Link to this section",
   },
   home: {
     eyebrow: "Local-first · Desktop app",
     title: "Where ideas land on the timeline",
+    titleLead: "Where ideas land on the",
+    titleAccent: "timeline",
     lede: "Editing, AI generation, workflow orchestration, one-click publishing — one local workstation for the whole thing. Your footage stays on your own machine.",
     ctaDownload: "Download",
     ctaSource: "Read the source",
@@ -175,6 +206,17 @@ const en: Messages = {
     heroShotAlt: "The Open Studio editor: multi-track timeline, dual monitors, media and transcript panels",
     heroShotCaption:
       "The editor — multi-track timeline, transcript-driven cuts, color and subtitles, export in one step.",
+
+    marquee: [
+      "Multi-track timeline",
+      "Transcript-driven cuts",
+      "AI agent",
+      "Visual workflows",
+      "Knowledge base",
+      "One-click publishing",
+      "Local-first",
+      "Open source",
+    ],
 
     chaptersTitle: "From a raw clip to a published cut, without switching apps",
     chapters: [
@@ -262,20 +304,32 @@ const en: Messages = {
     guideLink: "Workflow guide",
     fieldsTitle: "What a workflow entry carries",
     fields: [
-      { name: "Name / summary", body: "One sentence on which piece of repetitive work it removes." },
-      { name: "Node count", body: "Complexity at a glance — enough to decide whether to open it now." },
+      {
+        name: "Name / summary",
+        body: "One sentence on which piece of repetitive work it removes.",
+      },
+      {
+        name: "Node count",
+        body: "Complexity at a glance — enough to decide whether to open it now.",
+      },
       {
         name: "Required capabilities",
         body: "Which providers must be configured before it runs, so a missing one shows up before the import, not after.",
       },
-      { name: "Importable graph", body: "The same JSON /api/workflows speaks; save it and import directly." },
+      {
+        name: "Importable graph",
+        body: "The same JSON /api/workflows speaks; save it and import directly.",
+      },
     ],
   },
   footer: {
     tagline: "A local-first AI video workstation",
+    community: "Community",
+    project: "Project",
     download: "Download",
     github: "GitHub",
     contact: "Contact",
+    issues: "Report an issue",
     rights: "All rights reserved.",
   },
   notFound: {

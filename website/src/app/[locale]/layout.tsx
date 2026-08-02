@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Serif_SC } from "next/font/google";
+import { Geist, Geist_Mono, Syne } from "next/font/google";
 import { notFound } from "next/navigation";
 
+// 思源黑体(可变字重)。**不能走 next/font/google** —— 它给 Noto Sans SC 只认 latin 子集,
+// 下载下来的字体文件里没有汉字字形,中文会一路掉到系统默认,在 macOS 上落成宋体:
+// 一个走硬边和重黑体的版面配上宋体,按钮里的两个字立刻像是另一个网站的。
+// fontsource 这份把字体按 unicode-range 切成了上百片,浏览器只取真正用到的那几片。
+import "@fontsource-variable/noto-sans-sc";
 import "../globals.css";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -10,21 +15,25 @@ import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { SITE } from "@/lib/site";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-
 /**
- * 中文衬线体。Geist 只有拉丁字形,中文会掉到系统默认(macOS 是苹方,Windows 是微软雅黑)
- * —— 两台机器上看是两个产品,而且黑体在长段落里偏硬。
+ * 字体。
  *
- * 用衬线体承载中文正文是这个站"文艺"的主要来源:它慢、有笔锋,和一个做视频剪辑的本地
- * 工具的调性对得上。字重只取 400/600 —— 思源宋体全字重加起来几 MB,而官网只需要正文和标题。
+ * **Syne 做标题**:几何、宽、字腔紧,字重拉到 800 之后是一张海报的骨架 —— 这个站走的是
+ * 撞色和硬边,配一款循规蹈矩的 grotesk 会把那股劲卸掉一半。
+ *
+ * **思源黑体(可变)承担中文**。拉丁和汉字按 font-family 顺序自然分工:Syne 没有汉字字形,
+ * 中文落到下一顺位,于是同一行里两种字重能对上。全站不用衬线体 —— 宋体的笔锋在大字号的
+ * 实色块上会被压扁,也和硬边的调子不搭。
  */
-const notoSerifSC = Noto_Serif_SC({
-  variable: "--font-serif-sc",
+const syne = Syne({
+  variable: "--font-display-latin",
   subsets: ["latin"],
-  weight: ["400", "600"],
-  display: "swap",
+  weight: ["600", "700", "800"],
+});
+const geist = Geist({ variable: "--font-body-latin", subsets: ["latin"] });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
 });
 
 /**
@@ -77,12 +86,12 @@ export default async function LocaleLayout({
     // suppressHydrationWarning:next-themes 会在客户端给 <html> 加 class,不加这个 React 会
     // 抱怨服务端与客户端不一致 —— 而那正是主题切换本来就要做的事。
     <html lang={HTML_LANG[current]} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${notoSerifSC.variable} antialiased`}>
+      <body className={`${syne.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
           {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。 */}
           <a
             href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:ring-2 focus:ring-ring"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:border-2 focus:border-ink focus:bg-flame focus:px-4 focus:py-2 focus:font-medium focus:text-primary-foreground"
           >
             {t.nav.skipToContent}
           </a>

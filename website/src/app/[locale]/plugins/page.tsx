@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowUpRight } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { PageHero } from "@/components/page-hero";
+import { Reveal } from "@/components/reveal";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins } from "@/lib/registry";
@@ -24,75 +26,112 @@ export default async function PluginsPage({ params }: { params: Params }) {
   const plugins = listPlugins();
 
   return (
-    <div className="prose-cn mx-auto max-w-3xl px-6 py-16 font-serif sm:px-8">
-      <h1 className="mt-0 mb-5 text-3xl font-semibold sm:text-4xl">{t.title}</h1>
-      <p className="mt-0 mb-12 max-w-(--measure) text-lg text-muted-foreground">{t.lede}</p>
+    <>
+      <PageHero title={t.title} lede={t.lede} />
 
-      <h2 className="mt-0 mb-6 text-2xl font-semibold">{t.howTitle}</h2>
-      <div className="mb-4 grid gap-6 sm:grid-cols-2">
-        {t.how.map((item) => (
-          <div key={item.title}>
-            <h3 className="mt-0 mb-2 text-base font-semibold">{item.title}</h3>
-            <p className="m-0 text-muted-foreground">{item.body}</p>
-          </div>
-        ))}
-      </div>
-
-      <h2 className="mt-16 mb-4 text-2xl font-semibold">{t.permissionsTitle}</h2>
-      <p className="mt-0 mb-0 max-w-(--measure) text-muted-foreground">{t.permissionsBody}</p>
-
-      <h2 className="mt-16 mb-3 text-2xl font-semibold">{t.officialTitle}</h2>
-      <p className="mt-0 mb-8 text-muted-foreground">{t.officialBody}</p>
-
-      {/* 这份列表来自仓库里真的能装的 manifest,不是另抄的一份。 */}
-      <ul className="m-0 list-none border-t border-border/60 p-0">
-        {plugins.map((plugin) => (
-          <li key={plugin.id} className="m-0 border-b border-border/60 py-6">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h3 className="m-0 text-lg font-semibold">{plugin.name}</h3>
-              <code className="font-mono text-xs text-muted-foreground">{plugin.id}</code>
-              <Badge variant="secondary" className="font-sans text-xs">
-                {plugin.kind === "mcp" ? t.kindMcp : t.kindScript}
-              </Badge>
-              <span className="font-sans text-xs text-muted-foreground">v{plugin.version}</span>
-            </div>
-            <p className="mt-3 mb-4 max-w-(--measure) text-muted-foreground">{plugin.summary}</p>
-            <div className="flex flex-wrap items-center gap-2 font-sans text-xs">
-              {plugin.permissions.length === 0 ? (
-                <span className="text-muted-foreground">{t.noPermissions}</span>
-              ) : (
-                plugin.permissions.map((permission) => (
-                  <code key={permission} className="rounded-sm bg-muted px-1.5 py-0.5 font-mono">
-                    {permission}
-                  </code>
-                ))
-              )}
-              <a
-                className="ml-auto text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                href={`${SITE.repo}/tree/main/${plugin.source}`}
-                target="_blank"
-                rel="noreferrer"
+      {/* 两种写法:并排两块,中间一条墨线 —— 它们是二选一,不是清单。 */}
+      <section className="border-b-2 border-ink bg-paper">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+            {t.howTitle}
+          </h2>
+          <div className="grid border-2 border-ink sm:grid-cols-2">
+            {t.how.map((item, index) => (
+              <Reveal
+                key={item.title}
+                delay={index * 80}
+                className="border-ink p-8 not-last:border-b-2 sm:not-last:border-r-2 sm:not-last:border-b-0"
               >
-                {t.viewSource}
-              </a>
-            </div>
-          </li>
-        ))}
-      </ul>
+                <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
+                  {String(index + 1).padStart(2, "0")}
+                </p>
+                <h3 className="mt-0 mb-3 font-display text-xl font-bold tracking-tight">{item.title}</h3>
+                <p className="m-0 text-muted-foreground">{item.body}</p>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      <p className="mt-10 mb-0 flex flex-wrap gap-6 font-sans text-sm">
-        <Link className="underline underline-offset-4" href={localePath(locale, "/docs/guides/plugins")}>
-          {t.guideLink}
-        </Link>
-        <a
-          className="underline underline-offset-4"
-          href={`${SITE.repo}/blob/main/docs/PLUGIN_MANIFEST.md`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t.manifestLink}
-        </a>
-      </p>
-    </div>
+      {/* 权限:一整幅墨色 —— 这是插件这一页真正想让人记住的一句。 */}
+      <section className="border-b-2 border-ink bg-invert text-invert-foreground">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8 lg:grid lg:grid-cols-12 lg:gap-16">
+          <h2 className="mt-0 mb-6 font-display text-[clamp(1.5rem,4vw,2.75rem)] leading-tight font-extrabold tracking-tight lg:col-span-5 lg:mb-0">
+            {t.permissionsTitle}
+          </h2>
+          <p className="m-0 text-lg text-invert-foreground/70 lg:col-span-7">{t.permissionsBody}</p>
+        </div>
+      </section>
+
+      <section className="bg-paper">
+        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+          <h2 className="mt-0 mb-3 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+            {t.officialTitle}
+          </h2>
+          <p className="mt-0 mb-10 text-muted-foreground">{t.officialBody}</p>
+
+          {/* 这份列表来自仓库里真的能装的 manifest,不是另抄的一份。 */}
+          <ul className="m-0 grid list-none gap-6 p-0 lg:grid-cols-3">
+            {plugins.map((plugin, index) => (
+              <Reveal
+                as="li"
+                key={plugin.id}
+                delay={index * 70}
+                className="flex flex-col border-2 border-ink bg-card transition-shadow hover:shadow-block"
+              >
+                <div className="flex items-center gap-3 border-b-2 border-ink px-6 py-4">
+                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">{plugin.name}</h3>
+                  <span className="ml-auto shrink-0 border-2 border-ink px-2 py-0.5 font-mono text-[0.65rem] font-bold tracking-wider uppercase">
+                    {plugin.kind === "mcp" ? t.kindMcp : t.kindScript}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col gap-4 p-6">
+                  <p className="m-0 font-mono text-xs text-muted-foreground">
+                    {plugin.id} · v{plugin.version}
+                  </p>
+                  <p className="m-0 flex-1 text-muted-foreground">{plugin.summary}</p>
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+                    {plugin.permissions.length === 0 ? (
+                      <span className="border-2 border-dashed border-muted-foreground/40 px-2 py-0.5 text-muted-foreground">
+                        {t.noPermissions}
+                      </span>
+                    ) : (
+                      plugin.permissions.map((permission) => (
+                        <span key={permission} className="bg-ink px-2 py-0.5 text-paper">
+                          {permission}
+                        </span>
+                      ))
+                    )}
+                    <a
+                      className="ml-auto inline-flex items-center gap-1 font-sans font-bold text-flame hover:underline"
+                      href={`${SITE.repo}/tree/main/${plugin.source}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t.viewSource}
+                      <ArrowUpRight className="size-3.5" />
+                    </a>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </ul>
+
+          <p className="mt-12 mb-0 flex flex-wrap gap-8 text-sm font-bold">
+            <Link className="border-b-2 border-flame pb-0.5" href={localePath(locale, "/docs/guides/plugins")}>
+              {t.guideLink}
+            </Link>
+            <a
+              className="border-b-2 border-flame pb-0.5"
+              href={`${SITE.repo}/blob/main/docs/PLUGIN_MANIFEST.md`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t.manifestLink}
+            </a>
+          </p>
+        </div>
+      </section>
+    </>
   );
 }

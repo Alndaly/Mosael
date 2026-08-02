@@ -54,6 +54,32 @@ export function Steps({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * 带锚点的标题。
+ *
+ * id 是 rehype-slug 生成的,直接透传;悬停时右边浮出一个 `#`,点了就能把这一节的链接
+ * 复制走 —— 长文档里"发给同事看第三节"是最常见的需求,而没有锚点时只能发整页。
+ */
+function anchored(Tag: "h2" | "h3") {
+  function Heading({ id, children, ...props }: React.ComponentProps<"h2">) {
+    return (
+      <Tag id={id} className="group scroll-mt-24" {...props}>
+        {children}
+        {id && (
+          <a
+            href={`#${id}`}
+            className="ml-3 align-middle font-mono text-[0.7em] text-flame no-underline opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          >
+            #
+          </a>
+        )}
+      </Tag>
+    );
+  }
+  Heading.displayName = `Anchored${Tag.toUpperCase()}`;
+  return Heading;
+}
+
 /** markdown 的 `![]()` —— 渲染成和首页同一套边框圆角的配图。 */
 function MdxImage({ src, alt }: React.ComponentProps<"img">) {
   return typeof src === "string" ? <Shot src={src} alt={alt ?? ""} className="my-7" /> : null;
@@ -66,8 +92,7 @@ function MdxImage({ src, alt }: React.ComponentProps<"img">) {
  */
 function MdxParagraph({ children, ...props }: React.ComponentProps<"p">) {
   const items = Children.toArray(children);
-  const onlyImage =
-    items.length === 1 && isValidElement(items[0]) && items[0].type === MdxImage;
+  const onlyImage = items.length === 1 && isValidElement(items[0]) && items[0].type === MdxImage;
   return onlyImage ? <>{children}</> : <p {...props}>{children}</p>;
 }
 
@@ -82,6 +107,8 @@ export const mdxComponents = {
   Shot,
   img: MdxImage,
   p: MdxParagraph,
+  h2: anchored("h2"),
+  h3: anchored("h3"),
   a: ({ href = "", children, ...props }: React.ComponentProps<"a">) => {
     const external = /^https?:/.test(href);
     if (external) {
