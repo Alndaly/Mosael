@@ -77,6 +77,10 @@ def _migrate_auth_session_expiry() -> None:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN kind VARCHAR(16) NOT NULL DEFAULT 'login'"))
         if "expires_at" not in columns:
             conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN expires_at DATETIME"))
+        # 确认卡的会话归属(§ docs/AGENT_PERMISSION_MODES.md 4.5)。老令牌留空 —— 它们要么是登录
+        # 令牌本来就没有会话,要么是上一版铸出来的 turn 令牌,而那些 turn 早就结束了。
+        if "agent_session_id" not in columns:
+            conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN agent_session_id VARCHAR(64)"))
         # 幂等:只填空值。跑第二次时上面两个分支都不进,这句也改不动任何行。
         horizon = (datetime.now(UTC).replace(tzinfo=None) + LOGIN_SESSION_TTL).isoformat(
             sep=" ", timespec="seconds"

@@ -109,7 +109,6 @@ export async function buildAllTools(
   apiBase: string,
   token: string,
   workspaceId: string,
-  sessionId?: string,
 ): Promise<AgentTool[]> {
   let specs: ToolSpec[];
   try {
@@ -147,9 +146,9 @@ export async function buildAllTools(
           const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
             arguments: args,
             requested_by: "pi-agent",
-            // 确认卡归属:只在发起它的那次对话里内联出现,不会串到别的会话去(也就不会被那边的
-            // 「本会话始终允许」自动批准)。
-            session_id: sessionId ?? "",
+            // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
+            // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
+            // 要不要自动放行。
           })) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
           if (!spec.confirmation) return jsonResult(response?.result ?? null);

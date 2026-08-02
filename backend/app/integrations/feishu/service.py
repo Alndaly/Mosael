@@ -352,7 +352,9 @@ def handle_incoming(
             return
         append_message(db, session.id, role="user", content=text)
         session.status = "running"
-        token = mint_service_session(db, user.id)  # 铸造即提交,连同上面的消息与状态
+        # 铸造即提交,连同上面的消息与状态。带上会话:确认卡的归属由令牌决定(见 core/security),
+        # 飞书这条链路同样靠它把卡送回**发起它的那个飞书会话**(announce_confirmation 按 session 找回)。
+        token = mint_service_session(db, user.id, agent_session_id=session.id)
         session_id, adapter, workspace_id, capability = (
             session.id, session.adapter, bot.workspace_id, bot.capability
         )

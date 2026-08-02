@@ -63,6 +63,10 @@ class AuthSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     #: login(人)| service(子进程回连)。决定要不要滑动续期。
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
+    #: 这份凭据属于哪次智能体会话(service 令牌;登录令牌为空)。**确认卡的归属从这里来**——
+    #: 归属由凭据决定,不由调用方在请求体里声明,否则任何拿着同一份凭据的通道都能把自己的动作
+    #: 挂到一个开了自动放行的会话上。不设外键:会话删掉之后令牌仍要能认出人来(周期结束自然消失)。
+    agent_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     #: 不给默认值:每个铸造点都必须说清这份凭据该活多久,漏了是 IntegrityError 而不是永久有效。
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

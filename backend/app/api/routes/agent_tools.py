@@ -32,6 +32,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
+from app.db.models import AuthSession
 from app.core.permissions import ensure_workspace_member
 
 logger = logging.getLogger(__name__)
@@ -65,8 +66,8 @@ class ToolInvocation(BaseModel):
     arguments: dict[str, Any] = {}
     # 确认卡上显示的请求方(如 "pi-agent");留空用注册表默认("mcp-agent")。
     requested_by: str = ""
-    # 发起这次调用的智能体会话:确认卡据此只在**它自己那次对话**里内联出现。留空 = 外部智能体。
-    session_id: str = ""
+    # **没有 session_id**:这次调用属于哪次对话,由调用方的令牌说了算(见下面 set_session_id 那段)。
+    # 参数说的可以是任何值,令牌不行。
 
 
 #: 展开成一等公民之后,这两个元工具就是同一份东西的第二条路径 —— 留着只会让模型在
@@ -227,7 +228,13 @@ def invoke_agent_tool(
 
     base_reset = registry.set_api_base(f"http://{settings.backend_host}:{settings.backend_port}")
     requested_by_reset = registry.set_requested_by(body.requested_by) if body.requested_by else None
-    session_reset = registry.set_session_id(body.session_id) if body.session_id else None
+    # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它
+    # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把
+    # 计划写进别人的对话。确认卡的归属同理,但它在 routes/confirmations 里直接读自己的令牌,
+    # 不经过这里。
+    auth = db.get(AuthSession, token)
+    agent_session_id = auth.agent_session_id if auth is not None else None
+    session_reset = registry.set_session_id(agent_session_id) if agent_session_id else None
     arguments, dropped = _fit_arguments(fn, body.arguments)
     if dropped:
         # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。

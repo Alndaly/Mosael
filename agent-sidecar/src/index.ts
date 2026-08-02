@@ -32,7 +32,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
   const { turnId, prompt } = msg;
   // 订阅计划(piProvider)没有用户填的 baseUrl —— 端点在 pi 的 Provider 定义里。
   if ((msg.provider?.baseUrl || msg.provider?.piProvider) && msg.model) {
-    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId, msg.sessionId);
+    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId);
     const result = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,

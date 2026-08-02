@@ -177,8 +177,12 @@ def set_requested_by(name: str) -> contextvars.Token:
     return _REQUESTED_BY.set(name)
 
 
-#: 发起本次工具调用的智能体会话。确认卡带上它,才能只在**它自己那次对话**里内联出现。
-#: 默认空串 = 没有会话(MCP / 飞书等外部智能体),这类卡由全局确认中心兜底。
+#: 发起本次工具调用的智能体会话 —— **由调用方的凭据认出来的**,不是它自己说的(见
+#: api/routes/agent_tools 与 core/security.mint_service_session)。给 `update_plan` 用:
+#: 计划写进哪次对话,同样不该由参数决定。
+#:
+#: 确认卡**不再**读它:归属由开卡请求自己的令牌决定(routes/confirmations)。这里少一条转述,
+#: 就少一处能和令牌打架的说法。默认空串 = 没有会话(MCP 直连等)。
 _SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_session_id", default="")
 
 
@@ -339,7 +343,6 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "edit_timeline",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"sequence_id": sequence_id, "operations": operations},
         },
     )
@@ -361,7 +364,6 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "render_sequence",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"sequence_id": sequence_id},
         },
     )
@@ -397,7 +399,6 @@ def generate_image(
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_image",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {
                 "prompt": prompt,
                 "provider": provider,
@@ -454,7 +455,6 @@ def generate_video(prompt: str, model: str = "", provider: str = "", workspace_i
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_video",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
         },
     )
@@ -485,7 +485,6 @@ def generate_audio(
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_audio",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"text": text, "engine": engine, "voice": voice, "model": model},
         },
     )
@@ -514,7 +513,6 @@ def generate_podcast(
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_podcast",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"text": text, "topic": topic, "mode": mode, "speakers": speakers or []},
         },
     )
@@ -787,7 +785,6 @@ def browser_open(url: str = "", persistent: bool = False, session_name: str = ""
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "browser_open",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {
                 "url": url,
                 "session_mode": "named" if persistent else "ephemeral",
@@ -835,7 +832,6 @@ def browser_pool_open(profile_id: str, url: str = "", workspace_id: str = "") ->
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "browser_pool_open",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"profile_id": profile_id, "url": url},
         },
     )
@@ -976,7 +972,6 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "create_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"name": name, "description": description, "graph": graph},
         },
     )
@@ -1015,7 +1010,6 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "edit_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"workflow_id": workflow_id, "operations": operations},
         },
     )
@@ -1045,7 +1039,6 @@ def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name:
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "update_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": payload,
         },
     )
@@ -1068,7 +1061,6 @@ def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspa
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "run_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"workflow_id": workflow_id, "params": params or {}},
         },
     )
@@ -1245,7 +1237,6 @@ def publish_asset(
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "publish_asset",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {
                 "account_id": account_id,
                 "asset_id": asset_id,
@@ -1281,7 +1272,6 @@ def http_request(
             "workspace_id": _default_workspace_id(),
             "tool": "http_request",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": payload,
         },
     )
@@ -1302,7 +1292,6 @@ def run_code(code: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
             "workspace_id": _default_workspace_id(),
             "tool": "run_code",
             "requested_by": _REQUESTED_BY.get(),
-            "session_id": _SESSION_ID.get() or None,
             "payload": {"code": code, "inputs": inputs or {}},
         },
     )

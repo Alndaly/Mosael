@@ -460,19 +460,25 @@ def post_user_message(
     db.add(message)
     db.commit()
 
-    token = _mint_service_token(db, user)
+    token = _mint_service_token(db, user, session.id)
     threading.Thread(target=_run_turn_thread, args=(session.id, prompt, token), daemon=True, name=TURN_THREAD_NAME).start()
     db.refresh(message)
     return message
 
 
 def mint_tool_token(db: Session, user: User) -> str:
-    """Public alias — the agent-tools endpoint needs the same short-lived credential a turn gets."""
+    """Public alias — 出进程的一次性操作(上下文压缩、订阅登录/刷新)要一份和 turn 同级的短期凭据。"""
     return _mint_service_token(db, user)
 
 
-def _mint_service_token(db: Session, user: User) -> str:
-    return mint_service_session(db, user.id)
+def _mint_service_token(db: Session, user: User, agent_session_id: str | None = None) -> str:
+    """turn 令牌带上**它属于哪次对话**——确认卡的归属从这里出发。
+
+    此前归属是靠 sidecar 把 sessionId 一路转述到开卡请求体里的,而转述就可以被伪造:任何拿着
+    同一份凭据的通道,填上别人的会话 id 就能把自己的动作挂进那次对话(三档权限模式下,那等于
+    挂进别人开的自动放行)。铸令牌的这一刻正好知道答案,所以答案从这里出发。
+    """
+    return mint_service_session(db, user.id, agent_session_id=agent_session_id)
 
 
 def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
@@ -715,7 +721,7 @@ def _drain_queue_locked(session_id: str) -> None:
             return
         session.status = "running"
         db.commit()
-        token = _mint_service_token(db, owner)
+        token = _mint_service_token(db, owner, session_id)
         content = _prompt_with_context(message.content, (message.payload or {}).get("context"))
     threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True, name=TURN_THREAD_NAME).start()
 

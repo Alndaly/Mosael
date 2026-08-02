@@ -70,22 +70,43 @@ def mint_login_session(db, user_id: str, *, commit: bool = True) -> str:
     return _mint(db, user_id, kind="login", ttl=LOGIN_SESSION_TTL, commit=commit)
 
 
-def mint_service_session(db, user_id: str) -> str:
+def mint_service_session(db, user_id: str, *, agent_session_id: str | None = None) -> str:
     """为服务侧调用(智能体回合 / 工具通道 / 飞书 bot)铸造一份短期凭据并立即提交。
+
+    `agent_session_id` 是这次 turn 属于哪次对话。**确认卡的归属从这里来** —— 铸令牌的地方正好
+    知道答案,而下游的每一跳都只是转述,转述就可以被伪造。
 
     AuthSession 行只在 auth 归属方创建(见 app/domain/ownership.py)——此前 agent host
     与飞书各自 `db.add(AuthSession(...))`,是归属棘轮里的存量债务;现在收敛到这里。
     立即 commit:token 马上要被带出去做回连请求,不能停留在未提交事务里。
     """
-    return _mint(db, user_id, kind="service", ttl=SERVICE_SESSION_TTL, commit=True)
+    return _mint(
+        db, user_id, kind="service", ttl=SERVICE_SESSION_TTL, commit=True, agent_session_id=agent_session_id
+    )
 
 
-def _mint(db, user_id: str, *, kind: str, ttl: timedelta, commit: bool) -> str:
+def _mint(
+    db,
+    user_id: str,
+    *,
+    kind: str,
+    ttl: timedelta,
+    commit: bool,
+    agent_session_id: str | None = None,
+) -> str:
     from app.db.models import AuthSession, now
 
     prune_expired_sessions(db)
     token = new_session_token()
-    db.add(AuthSession(token=token, user_id=user_id, kind=kind, expires_at=now() + ttl))
+    db.add(
+        AuthSession(
+            token=token,
+            user_id=user_id,
+            kind=kind,
+            expires_at=now() + ttl,
+            agent_session_id=agent_session_id,
+        )
+    )
     if commit:
         db.commit()
     return token

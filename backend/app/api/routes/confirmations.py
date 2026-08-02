@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.core.permissions import ensure_workspace_access
-from app.db.models import ToolConfirmation
+from app.db.models import AuthSession, ToolConfirmation
 from app.integrations.feishu.service import announce_confirmation
 from app.domain.agent.confirmations import (
     ConfirmationError,
@@ -19,8 +19,15 @@ router = APIRouter(tags=["confirmations"])
 
 
 @router.post("/confirmations", response_model=ConfirmationOut)
-def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUser) -> ToolConfirmation:
+def create_confirmation(
+    body: ConfirmationCreate, db: DbSession, user: CurrentUser, token: PresentedToken
+) -> ToolConfirmation:
     ensure_workspace_access(db, user, body.workspace_id)
+    # 归属**由凭据决定**,不由请求体声明。一次 turn 一个令牌,铸的时候正好知道是哪次对话;调用方
+    # 转述的话就可以被伪造 —— 任何拿着同一份凭据的通道,填上别人的会话 id 就能把自己的动作挂进
+    # 那次对话(三档权限模式下,那等于挂进别人开的自动放行)。没有会话的凭据(登录令牌、MCP 直连)
+    # 开出来的卡就是无主的,由全局确认中心兜底。
+    auth = db.get(AuthSession, token)
     try:
         confirmation = request_confirmation(
             db,
@@ -28,7 +35,7 @@ def create_confirmation(body: ConfirmationCreate, db: DbSession, user: CurrentUs
             tool=body.tool,
             payload=body.payload,
             requested_by=body.requested_by,
-            session_id=body.session_id,
+            session_id=auth.agent_session_id if auth is not None else None,
         )
     except ConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

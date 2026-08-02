@@ -332,15 +332,34 @@ def test_confirmations_scoped_by_session() -> None:
     此前只有 workspace_id:同工作区任何来源的待确认都会被每个对话的内联确认卡拉到,
     而内联卡的「本会话始终允许」会自动批准它们 —— 用户以为授的是「这次对话」,
     实际授的是「这个工作区里所有人的这个工具」。
+
+    归属**由凭据决定**:一次 turn 一个令牌,铸的时候就写上是哪次对话(见
+    tests/test_confirmation_session_ownership.py)。这里造卡因此要换令牌,而不是在请求体里填。
     """
+    from app.core.db import SessionLocal
+    from app.core.security import mint_service_session
+    from app.db.models import User
+
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    login_token = client.headers["Authorization"]
     # 用 browser_open:它不校验外部实体,测的是归属与筛选本身,不牵扯时间线。
     base = {"workspace_id": ws["id"], "tool": "browser_open", "payload": {"url": "https://example.com"}}
 
-    a = client.post("/api/confirmations", json={**base, "session_id": "sess-a"}).json()
-    b = client.post("/api/confirmations", json={**base, "session_id": "sess-b"}).json()
-    ext = client.post("/api/confirmations", json=base).json()  # 外部智能体:没有会话
+    def card_as(agent_session_id: str | None) -> dict:
+        if agent_session_id is None:
+            client.headers["Authorization"] = login_token  # 登录令牌 = 没有会话的外部智能体
+        else:
+            with SessionLocal() as db:
+                user = db.query(User).filter(User.username == "tester").one()
+                token = mint_service_session(db, user.id, agent_session_id=agent_session_id)
+            client.headers["Authorization"] = f"Bearer {token}"
+        return client.post("/api/confirmations", json=base).json()
+
+    a = card_as("sess-a")
+    b = card_as("sess-b")
+    ext = card_as(None)  # 外部智能体:没有会话
+    client.headers["Authorization"] = login_token
 
     assert a["session_id"] == "sess-a"
     assert ext["session_id"] is None

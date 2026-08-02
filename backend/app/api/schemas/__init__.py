@@ -1594,8 +1594,8 @@ class ConfirmationCreate(BaseModel):
     tool: str = Field(min_length=1, max_length=80)
     payload: dict = Field(default_factory=dict)
     requested_by: str = Field(default="external-agent", max_length=120)
-    #: 发起会话;外部智能体(MCP / 飞书)没有会话,留空即可。
-    session_id: str | None = Field(default=None, max_length=64)
+    #: **没有 session_id**:确认卡归属哪次对话由调用方的凭据决定(见 routes/confirmations),
+    #: 不由请求体声明 —— 声明就可以被伪造。留一个"填了也不生效"的字段,下一个人会以为它生效。
 
 
 class ConfirmationOut(OrmModel):
