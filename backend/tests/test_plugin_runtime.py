@@ -77,17 +77,19 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     plugins = client.post("/api/plugins/scan").json()
     assert plugins[0]["id"] == "dev.openstudio.text-toolkit"
-    client.patch(f"/api/plugins/{plugins[0]['id']}", json={"enabled": True})
+    # 无配置无凭据的包扫进来就自带一个默认连接;启用的是连接,不是包。
+    instance_id = plugins[0]["instances"][0]["id"]
+    client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True})
 
     res = client.post(
-        f"/api/plugins/{plugins[0]['id']}/tools/word_count/invoke",
+        f"/api/plugins/instances/{instance_id}/tools/word_count/invoke",
         json={"input": {"text": "你好世界"}},
     ).json()
     assert res["status"] == "succeeded"
     assert res["output"]["chars"] == 4
 
     failed = client.post(
-        f"/api/plugins/{plugins[0]['id']}/tools/word_count/invoke",
+        f"/api/plugins/instances/{instance_id}/tools/word_count/invoke",
         json={"input": {}},
     ).json()
     assert failed["status"] == "failed" and "text" in failed["error"]

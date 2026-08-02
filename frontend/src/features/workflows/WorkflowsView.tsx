@@ -2420,7 +2420,10 @@ function NodeInspector({
   });
   const pluginTools = useQuery({
     queryKey: ["plugin-tools"],
-    queryFn: () => api<Array<{ plugin_id: string; plugin_name: string; tool_name: string }>>("/api/plugins/tools"),
+    queryFn: () =>
+      api<Array<{ instance_id: string; instance_name: string; package_id: string; name: string }>>(
+        "/api/plugins/tools",
+      ),
     enabled: node.type === "plugin_tool",
   });
   const callableWorkflows = useQuery({
@@ -2667,7 +2670,10 @@ function NodeInspector({
   const allowsCustomValue = (key: string) => key === "model";
 
   /** (nodeType, key) → 动态下拉选项;返回 null 表示该字段不是动态选择。 */
-  const dynamicOptions = (key: string): Array<{ value: string; label: string }> | null => {
+  const dynamicOptions = (
+    key: string,
+    spec?: { plugin_instances?: boolean },
+  ): Array<{ value: string; label: string }> | null => {
     if (node.type === "llm" && key === "profile_id") {
       return (providers.data ?? []).map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
     }
@@ -2676,15 +2682,27 @@ function NodeInspector({
       // 只给下拉会把人堵死在一个「列表里没有,于是填不进去」的死角。
       return (llmModels.data ?? []).map((m) => ({ value: m.id, label: m.id }));
     }
+    // 「用哪个连接」:声明里标了 plugin_instances 的字段都走这里。插件节点(plugin.<包>.<工具>)
+    // 只列这个包的连接;老的通用 plugin_tool 节点按它 config 里选的包过滤。
+    if (spec?.plugin_instances) {
+      const parsed = node.type.startsWith("plugin.") ? node.type.slice("plugin.".length) : "";
+      const packageId = parsed ? parsed.slice(0, parsed.lastIndexOf(".")) : String(config.plugin_id ?? "");
+      const seen = new Map<string, string>();
+      for (const tool of pluginTools.data ?? []) {
+        if (packageId && tool.package_id !== packageId) continue;
+        seen.set(tool.instance_id, tool.instance_name);
+      }
+      return [...seen].map(([value, label]) => ({ value, label }));
+    }
     if (node.type === "plugin_tool" && key === "plugin_id") {
       const seen = new Map<string, string>();
-      for (const tool of pluginTools.data ?? []) seen.set(tool.plugin_id, tool.plugin_name);
+      for (const tool of pluginTools.data ?? []) seen.set(tool.package_id, tool.instance_name);
       return [...seen].map(([value, label]) => ({ value, label }));
     }
     if (node.type === "plugin_tool" && key === "tool_name") {
       return (pluginTools.data ?? [])
-        .filter((tool) => !config.plugin_id || tool.plugin_id === config.plugin_id)
-        .map((tool) => ({ value: tool.tool_name, label: tool.tool_name }));
+        .filter((tool) => !config.plugin_id || tool.package_id === config.plugin_id)
+        .map((tool) => ({ value: tool.name, label: tool.name }));
     }
     if (node.type === "publish" && key === "account_id") {
       return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
@@ -2735,7 +2753,7 @@ function NodeInspector({
           const isObject = spec?.type === "object";
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
-            : dynamicOptions(key);
+            : dynamicOptions(key, spec as { plugin_instances?: boolean } | undefined);
           const labelKey = FIELD_LABEL_KEYS[key];
           // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
           const canConnect = !isObject;

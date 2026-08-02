@@ -1,34 +1,113 @@
 {
   "id": "dev.openstudio.tikhub",
-  "name": "TikHub 抖音数据",
-  "version": "0.2.0",
-  "kind": "mcp",
-  "mcp": {
+  "name": "TikHub",
+  "version": "1.0.0",
+  "runtime": {
+    "kind": "mcp",
     "transport": "http",
     "url": "https://mcp.tikhub.io/${TIKHUB_PLATFORM}/mcp",
-    "headers": { "Authorization": "Bearer ${TIKHUB_API_KEY}" }
-  },
-  "permissions": ["network:tikhub"],
-  "credentials": [
-    {
-      "key": "TIKHUB_API_KEY",
-      "label": "TikHub API Key",
-      "help": "在 https://user.tikhub.io 生成。只注入这个插件,拿不到应用的其它凭据。",
-      "secret": true,
-      "required": true
-    },
-    {
-      "key": "TIKHUB_PLATFORM",
-      "label": "平台",
-      "help": "douyin / tiktok / xiaohongshu / bilibili / kuaishou / weibo / zhihu …(见 README)。改这一项等于换一个 MCP 端点,改完点「刷新工具」。",
-      "secret": false,
-      "required": true
+    "headers": {
+      "Authorization": "Bearer ${TIKHUB_API_KEY}"
     }
+  },
+  "permissions": [
+    "network:tikhub"
   ],
+  "instance": {
+    "multiple": true,
+    "name_template": "TikHub · {TIKHUB_PLATFORM:label}",
+    "config": [
+      {
+        "key": "TIKHUB_PLATFORM",
+        "label": "平台",
+        "type": "enum",
+        "required": true,
+        "help": "一个连接对一个平台端点。要同时用两个平台就建两个连接。",
+        "options": [
+          {
+            "value": "douyin",
+            "label": "抖音"
+          },
+          {
+            "value": "tiktok",
+            "label": "TikTok"
+          },
+          {
+            "value": "xiaohongshu",
+            "label": "小红书"
+          },
+          {
+            "value": "bilibili",
+            "label": "哔哩哔哩"
+          },
+          {
+            "value": "kuaishou",
+            "label": "快手"
+          },
+          {
+            "value": "weibo",
+            "label": "微博"
+          },
+          {
+            "value": "zhihu",
+            "label": "知乎"
+          },
+          {
+            "value": "instagram",
+            "label": "Instagram"
+          },
+          {
+            "value": "youtube",
+            "label": "YouTube"
+          },
+          {
+            "value": "twitter",
+            "label": "X / Twitter"
+          },
+          {
+            "value": "threads",
+            "label": "Threads"
+          },
+          {
+            "value": "linkedin",
+            "label": "LinkedIn"
+          },
+          {
+            "value": "reddit",
+            "label": "Reddit"
+          },
+          {
+            "value": "wechat",
+            "label": "微信"
+          },
+          {
+            "value": "others",
+            "label": "其它平台"
+          },
+          {
+            "value": "tikhub",
+            "label": "TikHub 账户工具"
+          }
+        ]
+      }
+    ],
+    "credentials": [
+      {
+        "key": "TIKHUB_API_KEY",
+        "label": "API Key",
+        "help": "在 https://user.tikhub.io 生成。只注入这个连接,拿不到应用的其它凭据。",
+        "secret": true
+      }
+    ]
+  },
   "skills": [
     {
       "id": "tikhub",
       "description": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。"
     }
-  ]
+  ],
+  "tools": {
+    "expose": "selected",
+    "recommended": []
+  }
 }

@@ -3512,8 +3512,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Scan Plugin Manifests */
-        post: operations["scan_plugin_manifests_api_plugins_scan_post"];
+        /** Scan Packages */
+        post: operations["scan_packages_api_plugins_scan_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3531,9 +3531,8 @@ export interface paths {
          * Plugins Directory
          * @description 插件目录的**真实绝对路径**,给前端的空态引导用。
          *
-         *     以前这条路径是写死在前端文案里的(`~/.open-studio/plugins/`)。那是 POSIX 写法:
-         *     Windows 上 Path.home() 是 C:\Users\<用户名>,`~/` 对用户没有任何意义,照着找是找不到的。
-         *     路径由谁算就由谁报,免得两边各写一份、还各写错一份。
+         *     这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上
+         *     `~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。
          */
         get: operations["plugins_directory_api_plugins_dir_get"];
         put?: never;
@@ -3551,8 +3550,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Plugins */
-        get: operations["list_plugins_api_plugins_get"];
+        /** List Packages */
+        get: operations["list_packages_api_plugins_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3561,7 +3560,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plugins/{plugin_id}": {
+    "/api/plugins/{package_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3572,56 +3571,53 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete Plugin
-         * @description 卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。
+         * Uninstall Package
+         * @description 卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
          *
-         *     **连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是
-         *     "我删了它怎么又回来了",而这个页面上没有任何东西能解释那件事。
+         *     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
          */
-        delete: operations["delete_plugin_api_plugins__plugin_id__delete"];
+        delete: operations["uninstall_package_api_plugins__package_id__delete"];
         options?: never;
         head?: never;
-        /** Update Plugin */
-        patch: operations["update_plugin_api_plugins__plugin_id__patch"];
+        patch?: never;
         trace?: never;
     };
-    "/api/plugins/{plugin_id}/permissions": {
+    "/api/plugins/{package_id}/instances": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Plugin Permissions */
-        get: operations["list_plugin_permissions_api_plugins__plugin_id__permissions_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** Create Instance */
+        post: operations["create_instance_api_plugins__package_id__instances_post"];
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Plugin Permissions */
-        patch: operations["update_plugin_permissions_api_plugins__plugin_id__permissions_patch"];
+        patch?: never;
         trace?: never;
     };
-    "/api/plugins/{plugin_id}/credentials": {
+    "/api/plugins/instances/{instance_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Plugin Credentials */
-        get: operations["list_plugin_credentials_api_plugins__plugin_id__credentials_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Instance */
+        delete: operations["delete_instance_api_plugins_instances__instance_id__delete"];
         options?: never;
         head?: never;
-        /** Update Plugin Credentials */
-        patch: operations["update_plugin_credentials_api_plugins__plugin_id__credentials_patch"];
+        /** Update Instance */
+        patch: operations["update_instance_api_plugins_instances__instance_id__patch"];
         trace?: never;
     };
-    "/api/plugins/{plugin_id}/refresh": {
+    "/api/plugins/instances/{instance_id}/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -3631,14 +3627,67 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Refresh Tools
-         * @description 重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。
+         * Refresh Instance Tools
+         * @description 重新向 MCP 服务要工具清单。进程类实例直接原样返回。
          */
-        post: operations["refresh_tools_api_plugins__plugin_id__refresh_post"];
+        post: operations["refresh_instance_tools_api_plugins_instances__instance_id__refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Capabilities */
+        patch: operations["update_capabilities_api_plugins_instances__instance_id__capabilities_patch"];
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Instance Permissions */
+        get: operations["list_instance_permissions_api_plugins_instances__instance_id__permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Instance Permissions */
+        patch: operations["update_instance_permissions_api_plugins_instances__instance_id__permissions_patch"];
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Instance Credentials */
+        get: operations["list_instance_credentials_api_plugins_instances__instance_id__credentials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Instance Credentials */
+        patch: operations["update_instance_credentials_api_plugins_instances__instance_id__credentials_patch"];
         trace?: never;
     };
     "/api/plugins/tools": {
@@ -3648,8 +3697,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Plugin Tools */
-        get: operations["list_plugin_tools_api_plugins_tools_get"];
+        /**
+         * List Exposed Tools
+         * @description 所有可用实例**暴露**的工具。智能体工具表与工作流节点面板读的就是这一份。
+         */
+        get: operations["list_exposed_tools_api_plugins_tools_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3658,7 +3710,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plugins/{plugin_id}/tools/{tool_name}/invoke": {
+    "/api/plugins/instances/{instance_id}/tools/{tool_name}/invoke": {
         parameters: {
             query?: never;
             header?: never;
@@ -3668,7 +3720,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Invoke Tool */
-        post: operations["invoke_tool_api_plugins__plugin_id__tools__tool_name__invoke_post"];
+        post: operations["invoke_tool_api_plugins_instances__instance_id__tools__tool_name__invoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3686,7 +3738,10 @@ export interface paths {
         get: operations["list_invocations_api_plugins_invocations_get"];
         put?: never;
         post?: never;
-        /** Clear Invocations */
+        /**
+         * Clear Invocations
+         * @description 清空调用记录;带 instance_id 只清该连接的。
+         */
         delete: operations["clear_invocations_api_plugins_invocations_delete"];
         options?: never;
         head?: never;
@@ -5838,6 +5893,13 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** PluginCapabilityUpdate */
+        PluginCapabilityUpdate: {
+            /** Tools */
+            tools?: {
+                [key: string]: boolean;
+            };
+        };
         /**
          * PluginCredentialOut
          * @description 插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。
@@ -5880,17 +5942,96 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** PluginEnableRequest */
-        PluginEnableRequest: {
+        /**
+         * PluginFieldOut
+         * @description 一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。
+         */
+        PluginFieldOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Type
+             * @default string
+             */
+            type: string;
+            /**
+             * Help
+             * @default
+             */
+            help: string;
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /**
+             * Secret
+             * @default false
+             */
+            secret: boolean;
+            /** Options */
+            options?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Default
+             * @default
+             */
+            default: string;
+        };
+        /** PluginInstanceCreate */
+        PluginInstanceCreate: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        /** PluginInstanceOut */
+        PluginInstanceOut: {
+            /** Id */
+            id: string;
+            /** Package Id */
+            package_id: string;
+            /** Name */
+            name: string;
             /** Enabled */
             enabled: boolean;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Blocked Reason
+             * @default
+             */
+            blocked_reason: string;
+            /** Tools */
+            tools?: components["schemas"]["PluginToolStateOut"][];
+        };
+        /** PluginInstanceUpdate */
+        PluginInstanceUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /** PluginInvocationOut */
         PluginInvocationOut: {
             /** Id */
             id: string;
-            /** Plugin Id */
-            plugin_id: string;
+            /** Instance Id */
+            instance_id: string;
             /** Tool Name */
             tool_name: string;
             /** Status */
@@ -5918,25 +6059,37 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** PluginOut */
-        PluginOut: {
+        /** PluginPackageOut */
+        PluginPackageOut: {
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Version */
             version: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Manifest */
-            manifest: {
-                [key: string]: unknown;
-            };
+            /**
+             * Kind
+             * @default process
+             */
+            kind: string;
+            /**
+             * Multiple
+             * @default false
+             */
+            multiple: boolean;
+            /** Permissions */
+            permissions?: string[];
+            /** Config Fields */
+            config_fields?: components["schemas"]["PluginFieldOut"][];
+            /** Credential Fields */
+            credential_fields?: components["schemas"]["PluginFieldOut"][];
+            /** Instances */
+            instances?: components["schemas"]["PluginInstanceOut"][];
         };
         /** PluginPermissionGrantOut */
         PluginPermissionGrantOut: {
-            /** Plugin Id */
-            plugin_id: string;
+            /** Instance Id */
+            instance_id: string;
             /** Permission */
             permission: string;
             /** Granted */
@@ -5959,19 +6112,24 @@ export interface components {
                 [key: string]: boolean;
             };
         };
-        /** PluginToolOut */
+        /**
+         * PluginToolOut
+         * @description 一个**已暴露**的工具。智能体工具表与工作流节点面板读的就是这个。
+         */
         PluginToolOut: {
-            /** Plugin Id */
-            plugin_id: string;
-            /** Plugin Name */
-            plugin_name: string;
+            /** Instance Id */
+            instance_id: string;
+            /** Instance Name */
+            instance_name: string;
+            /** Package Id */
+            package_id: string;
+            /** Name */
+            name: string;
             /**
-             * Kind
-             * @default process
+             * Label
+             * @default
              */
-            kind: string;
-            /** Tool Name */
-            tool_name: string;
+            label: string;
             /**
              * Description
              * @default
@@ -5986,10 +6144,35 @@ export interface components {
             input_schema?: {
                 [key: string]: unknown;
             };
-            /** Permissions */
-            permissions?: unknown[];
-            /** Skills */
-            skills?: unknown[];
+        };
+        /** PluginToolStateOut */
+        PluginToolStateOut: {
+            /** Name */
+            name: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Exposed
+             * @default false
+             */
+            exposed: boolean;
         };
         /**
          * PodcastRequest
@@ -15531,7 +15714,7 @@ export interface operations {
             };
         };
     };
-    scan_plugin_manifests_api_plugins_scan_post: {
+    scan_packages_api_plugins_scan_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -15546,7 +15729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginOut"][];
+                    "application/json": components["schemas"]["PluginPackageOut"][];
                 };
             };
             /** @description Validation Error */
@@ -15591,7 +15774,7 @@ export interface operations {
             };
         };
     };
-    list_plugins_api_plugins_get: {
+    list_packages_api_plugins_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -15606,7 +15789,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginOut"][];
+                    "application/json": components["schemas"]["PluginPackageOut"][];
                 };
             };
             /** @description Validation Error */
@@ -15620,12 +15803,12 @@ export interface operations {
             };
         };
     };
-    delete_plugin_api_plugins__plugin_id__delete: {
+    uninstall_package_api_plugins__package_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                package_id: string;
             };
             cookie?: never;
         };
@@ -15649,18 +15832,18 @@ export interface operations {
             };
         };
     };
-    update_plugin_api_plugins__plugin_id__patch: {
+    create_instance_api_plugins__package_id__instances_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                package_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PluginEnableRequest"];
+                "application/json": components["schemas"]["PluginInstanceCreate"];
             };
         };
         responses: {
@@ -15670,7 +15853,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginOut"];
+                    "application/json": components["schemas"]["PluginInstanceOut"];
                 };
             };
             /** @description Validation Error */
@@ -15684,12 +15867,142 @@ export interface operations {
             };
         };
     };
-    list_plugin_permissions_api_plugins__plugin_id__permissions_get: {
+    delete_instance_api_plugins_instances__instance_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_instance_api_plugins_instances__instance_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginInstanceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInstanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_instance_tools_api_plugins_instances__instance_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInstanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_capabilities_api_plugins_instances__instance_id__capabilities_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginCapabilityUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInstanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_instance_permissions_api_plugins_instances__instance_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
             };
             cookie?: never;
         };
@@ -15715,12 +16028,12 @@ export interface operations {
             };
         };
     };
-    update_plugin_permissions_api_plugins__plugin_id__permissions_patch: {
+    update_instance_permissions_api_plugins_instances__instance_id__permissions_patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                instance_id: string;
             };
             cookie?: never;
         };
@@ -15750,12 +16063,12 @@ export interface operations {
             };
         };
     };
-    list_plugin_credentials_api_plugins__plugin_id__credentials_get: {
+    list_instance_credentials_api_plugins_instances__instance_id__credentials_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                instance_id: string;
             };
             cookie?: never;
         };
@@ -15781,12 +16094,12 @@ export interface operations {
             };
         };
     };
-    update_plugin_credentials_api_plugins__plugin_id__credentials_patch: {
+    update_instance_credentials_api_plugins_instances__instance_id__credentials_patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                instance_id: string;
             };
             cookie?: never;
         };
@@ -15816,38 +16129,7 @@ export interface operations {
             };
         };
     };
-    refresh_tools_api_plugins__plugin_id__refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_plugin_tools_api_plugins_tools_get: {
+    list_exposed_tools_api_plugins_tools_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -15876,12 +16158,12 @@ export interface operations {
             };
         };
     };
-    invoke_tool_api_plugins__plugin_id__tools__tool_name__invoke_post: {
+    invoke_tool_api_plugins_instances__instance_id__tools__tool_name__invoke_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plugin_id: string;
+                instance_id: string;
                 tool_name: string;
             };
             cookie?: never;
@@ -15915,7 +16197,7 @@ export interface operations {
     list_invocations_api_plugins_invocations_get: {
         parameters: {
             query?: {
-                plugin_id?: string | null;
+                instance_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -15946,7 +16228,7 @@ export interface operations {
     clear_invocations_api_plugins_invocations_delete: {
         parameters: {
             query?: {
-                plugin_id?: string | null;
+                instance_id?: string | null;
             };
             header?: never;
             path?: never;

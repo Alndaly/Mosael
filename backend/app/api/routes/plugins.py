@@ -1,3 +1,9 @@
+"""插件接口:包 → 实例 → 能力。
+
+**包**是磁盘上的东西(扫描 / 卸载),**实例**是一次接入(配置 / 凭据 / 权限 / 启用),
+**能力**是实例暴露出来的工具。三层各自一组端点,别处(智能体、工作流)只读 `/plugins/tools`。
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
@@ -5,172 +11,260 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    PluginCapabilityUpdate,
     PluginCredentialOut,
     PluginCredentialUpdate,
     PluginEnableRequest,
+    PluginInstanceCreate,
+    PluginInstanceOut,
+    PluginInstanceUpdate,
     PluginInvocationOut,
     PluginInvokeRequest,
-    PluginOut,
+    PluginPackageOut,
     PluginPermissionGrantOut,
     PluginPermissionGrantUpdate,
     PluginToolOut,
 )
 from app.core.config import settings
 from app.core.permissions import ensure_instance_admin
-from app.db.models import Plugin, PluginInvocation, PluginPermissionGrant
-from app.domain.plugins import (
-    PluginDomainError,
-    invoke_plugin_tool,
-    list_enabled_plugin_tools,
-    list_plugin_permission_grants,
-    refresh_plugin_tools,
-    scan_plugins,
-    set_plugin_enabled,
-    set_plugin_permission_grants,
-    uninstall_plugin,
-)
-from app.domain.plugins import credentials as plugin_credentials
+from app.db.models import PluginInvocation, PluginPackage
+from app.domain.plugins import PluginDomainError
+from app.domain.plugins import instances as inst
+from app.domain.plugins import packages as pkg
+from app.domain.plugins import tools as tools_domain
 
 router = APIRouter(tags=["plugins"])
 
 
-@router.post("/plugins/scan", response_model=list[PluginOut])
-def scan_plugin_manifests(db: DbSession, user: CurrentUser) -> list[Plugin]:
+def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
+    return HTTPException(status_code=status, detail=str(exc))
+
+
+# --- 包 -----------------------------------------------------------------
+
+@router.post("/plugins/scan", response_model=list[PluginPackageOut])
+def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     ensure_instance_admin(db, user, "edit")
     try:
-        return scan_plugins(db, settings.plugins_dir)
+        pkg.scan(db, settings.plugins_dir)
     except PluginDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _fail(exc) from exc
+    return _packages(db)
 
 
 @router.get("/plugins/dir")
 def plugins_directory(user: CurrentUser) -> dict[str, str]:
     """插件目录的**真实绝对路径**,给前端的空态引导用。
 
-    以前这条路径是写死在前端文案里的(`~/.open-studio/plugins/`)。那是 POSIX 写法:
-    Windows 上 Path.home() 是 C:\\Users\\<用户名>,`~/` 对用户没有任何意义,照着找是找不到的。
-    路径由谁算就由谁报,免得两边各写一份、还各写错一份。
+    这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上
+    `~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。
     """
     return {"path": str(settings.plugins_dir)}
 
 
-@router.get("/plugins", response_model=list[PluginOut])
-def list_plugins(db: DbSession) -> list[Plugin]:
-    stmt = select(Plugin).order_by(Plugin.name)
-    return list(db.scalars(stmt))
+@router.get("/plugins", response_model=list[PluginPackageOut])
+def list_packages(db: DbSession) -> list[dict]:
+    return _packages(db)
 
 
-@router.patch("/plugins/{plugin_id}", response_model=PluginOut)
-def update_plugin(plugin_id: str, body: PluginEnableRequest, db: DbSession, user: CurrentUser) -> Plugin:
-    ensure_instance_admin(db, user, "edit")
-    try:
-        return set_plugin_enabled(db, plugin_id, body.enabled)
-    except PluginDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+@router.delete("/plugins/{package_id}", status_code=204)
+def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None:
+    """卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
 
-
-@router.delete("/plugins/{plugin_id}", status_code=204)
-def delete_plugin(plugin_id: str, db: DbSession, user: CurrentUser) -> None:
-    """卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。
-
-    **连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是
-    "我删了它怎么又回来了",而这个页面上没有任何东西能解释那件事。
+    **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
     """
     ensure_instance_admin(db, user, "edit")
     try:
-        uninstall_plugin(db, plugin_id, settings.plugins_dir)
+        pkg.uninstall(db, package_id, settings.plugins_dir)
     except PluginDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _fail(exc, 404) from exc
 
 
-@router.get("/plugins/{plugin_id}/permissions", response_model=list[PluginPermissionGrantOut])
-def list_plugin_permissions(plugin_id: str, db: DbSession) -> list[PluginPermissionGrant]:
-    try:
-        return list_plugin_permission_grants(db, plugin_id)
-    except PluginDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+def _packages(db: DbSession) -> list[dict]:
+    out: list[dict] = []
+    for package in db.scalars(select(PluginPackage).order_by(PluginPackage.name)):
+        manifest = pkg.manifest_of(package)
+        out.append(
+            {
+                "id": package.id,
+                "name": package.name,
+                "version": package.version,
+                "kind": manifest.runtime.kind,
+                "multiple": manifest.multiple,
+                "permissions": manifest.permissions,
+                "config_fields": [_field(f) for f in manifest.config],
+                "credential_fields": [_field(f) for f in manifest.credentials],
+                "instances": [_instance(db, i) for i in pkg.instances_of(db, package.id)],
+            }
+        )
+    return out
 
 
-@router.patch("/plugins/{plugin_id}/permissions", response_model=list[PluginPermissionGrantOut])
-def update_plugin_permissions(
-    plugin_id: str,
-    body: PluginPermissionGrantUpdate,
-    db: DbSession,
-    user: CurrentUser,
-) -> list[PluginPermissionGrant]:
-    # Granting a plugin its permissions is the escalation path: an ungated caller could grant
-    # and then invoke in two requests.
+def _field(spec) -> dict:
+    return {
+        "key": spec.key,
+        "label": spec.label,
+        "type": spec.type,
+        "help": spec.help,
+        "required": spec.required,
+        "secret": spec.secret,
+        "options": spec.options,
+        "default": spec.default,
+    }
+
+
+def _instance(db: DbSession, instance) -> dict:
+    chosen = inst.exposed_tools(db, instance.id)
+    return {
+        "id": instance.id,
+        "package_id": instance.package_id,
+        "name": instance.name,
+        "enabled": instance.enabled,
+        "config": instance.config or {},
+        "blocked_reason": inst.blocked_reason(db, instance),
+        "tools": [{**tool, "exposed": tool["name"] in chosen} for tool in tools_domain.all_tools(db, instance)],
+    }
+
+
+# --- 实例 ---------------------------------------------------------------
+
+@router.post("/plugins/{package_id}/instances", response_model=PluginInstanceOut)
+def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, user: CurrentUser) -> dict:
     ensure_instance_admin(db, user, "edit")
     try:
-        return set_plugin_permission_grants(db, plugin_id, body.grants)
+        instance = inst.create(db, package_id, body.config, body.name)
     except PluginDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _fail(exc) from exc
+    return _instance(db, instance)
 
 
-@router.get("/plugins/{plugin_id}/credentials", response_model=list[PluginCredentialOut])
-def list_plugin_credentials(plugin_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+@router.patch("/plugins/instances/{instance_id}", response_model=PluginInstanceOut)
+def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession, user: CurrentUser) -> dict:
     ensure_instance_admin(db, user, "edit")
-    plugin = db.get(Plugin, plugin_id)
-    if plugin is None:
-        raise HTTPException(status_code=404, detail="Plugin not found")
-    return plugin_credentials.describe(db, plugin)
+    try:
+        instance = inst.get(db, instance_id)
+        if body.name is not None:
+            inst.rename(db, instance, body.name)
+        if body.config is not None:
+            inst.set_config(db, instance, body.config)
+        if body.enabled is not None:
+            inst.set_enabled(db, instance, body.enabled)
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    return _instance(db, instance)
 
 
-@router.patch("/plugins/{plugin_id}/credentials", response_model=list[PluginCredentialOut])
-def update_plugin_credentials(
-    plugin_id: str, body: PluginCredentialUpdate, db: DbSession, user: CurrentUser
+@router.delete("/plugins/instances/{instance_id}", status_code=204)
+def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
+    ensure_instance_admin(db, user, "edit")
+    try:
+        db.delete(inst.get(db, instance_id))
+        db.commit()
+    except PluginDomainError as exc:
+        raise _fail(exc, 404) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/refresh", response_model=PluginInstanceOut)
+def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """重新向 MCP 服务要工具清单。进程类实例直接原样返回。"""
+    ensure_instance_admin(db, user, "edit")
+    try:
+        instance = tools_domain.refresh_tools(db, inst.get(db, instance_id))
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    return _instance(db, instance)
+
+
+@router.patch("/plugins/instances/{instance_id}/capabilities", response_model=PluginInstanceOut)
+def update_capabilities(
+    instance_id: str, body: PluginCapabilityUpdate, db: DbSession, user: CurrentUser
+) -> dict:
+    ensure_instance_admin(db, user, "edit")
+    try:
+        instance = inst.get(db, instance_id)
+        inst.set_exposed(db, instance, body.tools)
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    return _instance(db, instance)
+
+
+@router.get("/plugins/instances/{instance_id}/permissions", response_model=list[PluginPermissionGrantOut])
+def list_instance_permissions(instance_id: str, db: DbSession, user: CurrentUser) -> list:
+    ensure_instance_admin(db, user, "edit")
+    try:
+        return inst.list_permissions(db, inst.get(db, instance_id))
+    except PluginDomainError as exc:
+        raise _fail(exc, 404) from exc
+
+
+@router.patch("/plugins/instances/{instance_id}/permissions", response_model=list[PluginPermissionGrantOut])
+def update_instance_permissions(
+    instance_id: str, body: PluginPermissionGrantUpdate, db: DbSession, user: CurrentUser
+) -> list:
+    # 授权是提权路径:未门禁的调用方可以先授权再调用,两个请求就绕过了确认。
+    ensure_instance_admin(db, user, "edit")
+    try:
+        return inst.set_permissions(db, inst.get(db, instance_id), body.grants)
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/credentials", response_model=list[PluginCredentialOut])
+def list_instance_credentials(instance_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    ensure_instance_admin(db, user, "edit")
+    try:
+        return inst.describe_credentials(db, inst.get(db, instance_id))
+    except PluginDomainError as exc:
+        raise _fail(exc, 404) from exc
+
+
+@router.patch("/plugins/instances/{instance_id}/credentials", response_model=list[PluginCredentialOut])
+def update_instance_credentials(
+    instance_id: str, body: PluginCredentialUpdate, db: DbSession, user: CurrentUser
 ) -> list[dict]:
     ensure_instance_admin(db, user, "edit")
-    plugin = db.get(Plugin, plugin_id)
-    if plugin is None:
-        raise HTTPException(status_code=404, detail="Plugin not found")
     try:
-        plugin_credentials.set_values(db, plugin, body.values)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # 凭据是 MCP 插件连上 server 的前提,填完顺手重拉一次工具清单 —— 否则用户填完 key
-    # 还要再找一个"刷新"按钮点一下,而中间那段时间插件看起来像是坏的。
-    try:
-        refresh_plugin_tools(db, plugin_id)
-    except PluginDomainError:
-        pass
-    return plugin_credentials.describe(db, plugin)
-
-
-@router.post("/plugins/{plugin_id}/refresh", response_model=PluginOut)
-def refresh_tools(plugin_id: str, db: DbSession, user: CurrentUser) -> Plugin:
-    """重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。"""
-    ensure_instance_admin(db, user, "edit")
-    try:
-        return refresh_plugin_tools(db, plugin_id)
+        instance = inst.get(db, instance_id)
+        inst.set_credentials(db, instance, body.values)
+        # 凭据是连上服务的前提,填完顺手重拉一次清单 —— 否则用户填完 key 还要再找一个
+        # 「刷新」按钮点一下,而中间那段时间插件看起来像是坏的。
+        try:
+            tools_domain.refresh_tools(db, instance)
+        except PluginDomainError:
+            pass
+        return inst.describe_credentials(db, instance)
     except PluginDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _fail(exc) from exc
 
+
+# --- 能力 ---------------------------------------------------------------
 
 @router.get("/plugins/tools", response_model=list[PluginToolOut])
-def list_plugin_tools(db: DbSession) -> list[dict]:
-    return list_enabled_plugin_tools(db)
+def list_exposed_tools(db: DbSession) -> list[dict]:
+    """所有可用实例**暴露**的工具。智能体工具表与工作流节点面板读的就是这一份。"""
+    return tools_domain.exposed(db)
 
 
-@router.post("/plugins/{plugin_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
+@router.post("/plugins/instances/{instance_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
 def invoke_tool(
-    plugin_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
+    instance_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
 ) -> PluginInvocation:
     ensure_instance_admin(db, user, "edit")
     try:
-        return invoke_plugin_tool(db, plugin_id, tool_name, body.input)
+        return tools_domain.invoke(db, instance_id, tool_name, body.input)
     except PluginDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _fail(exc) from exc
 
+
+# --- 调用记录 -----------------------------------------------------------
 
 @router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
-def list_invocations(db: DbSession, user: CurrentUser, plugin_id: str | None = None) -> list[PluginInvocation]:
+def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> list[PluginInvocation]:
     ensure_instance_admin(db, user, "edit")
     stmt = select(PluginInvocation)
-    if plugin_id:
-        stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
-    stmt = stmt.order_by(PluginInvocation.created_at.desc())
-    return list(db.scalars(stmt))
+    if instance_id:
+        stmt = stmt.where(PluginInvocation.instance_id == instance_id)
+    return list(db.scalars(stmt.order_by(PluginInvocation.created_at.desc())))
 
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
@@ -183,12 +277,16 @@ def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> N
 
 
 @router.delete("/plugins/invocations", status_code=204)
-def clear_invocations(db: DbSession, user: CurrentUser, plugin_id: str | None = None) -> None:
+def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> None:
+    """清空调用记录;带 instance_id 只清该连接的。"""
     ensure_instance_admin(db, user, "edit")
-    """清空调用记录;带 plugin_id 只清该插件的。"""
     stmt = select(PluginInvocation)
-    if plugin_id:
-        stmt = stmt.where(PluginInvocation.plugin_id == plugin_id)
+    if instance_id:
+        stmt = stmt.where(PluginInvocation.instance_id == instance_id)
     for obj in db.scalars(stmt):
         db.delete(obj)
     db.commit()
+
+
+# 旧的 PluginEnableRequest 仍被 schema 引用;实例的启用走 PATCH /plugins/instances/{id}。
+__all__ = ["router", "PluginEnableRequest"]

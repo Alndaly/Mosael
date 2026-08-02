@@ -1007,20 +1007,62 @@ class ToolConfirmation(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class Plugin(Base):
-    __tablename__ = "plugins"
+class PluginPackage(Base):
+    """磁盘上的一个插件目录 + 它的 manifest。**没有「启用」状态** —— 启用的是实例。
+
+    包与实例分开,是因为一个包可以被接入多次:TikHub 一个包对应十几个平台端点,B站一个
+    实例、抖音一个实例,各有各的凭据和显示名。此前包和接入是同一行记录,于是"平台"只能
+    是一个凭据,而包名写死在 manifest 里 —— 用户配了 bilibili,面板上仍然写着「抖音」。
+    """
+
+    __tablename__ = "plugin_packages"
 
     id: Mapped[str] = mapped_column(String(160), primary_key=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     version: Mapped[str] = mapped_column(String(40), nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PluginInstance(Base):
+    """一次具体接入:包 + 一组配置 + 一个显示名 + 启用开关。凭据与授权都挂在这里。
+
+    显示名默认由包的 name_template 从配置生成(「TikHub · 哔哩哔哩」),用户可以改。
+    """
+
+    __tablename__ = "plugin_instances"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    package_id: Mapped[str] = mapped_column(ForeignKey("plugin_packages.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 明文配置(枚举 / 文本 / 数字 / 开关)。凭据不在这里 —— 那是 PluginCredential。
+    config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: MCP 实例的工具清单从服务现拉,缓存在这里(进程类插件写在 manifest 里,此列为空)。
+    discovered_tools: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class PluginCapability(Base):
+    """这个实例的某个工具暴不暴露给智能体和工作流。**默认不暴露**。
+
+    一个 MCP 端点报几十上百个工具(TikHub 的 bilibili 报了 41 个)。全量涌进节点面板和
+    智能体工具表,面板要人从四十行里找一行,工具表让每轮对话为四十条描述付 token 并挤占
+    模型在内置工具之间的选择权。要人从四十个里挑出该关的三十七个,没有人会做 ——
+    默认值就是实际行为,所以默认关,由 manifest 的 recommended 给一个起点。
+    """
+
+    __tablename__ = "plugin_capabilities"
+
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
+    tool_name: Mapped[str] = mapped_column(String(160), primary_key=True)
+    exposed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class PluginPermissionGrant(Base):
     __tablename__ = "plugin_permission_grants"
 
-    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.id", ondelete="CASCADE"), primary_key=True)
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
     permission: Mapped[str] = mapped_column(String(120), primary_key=True)
     granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
@@ -1028,12 +1070,12 @@ class PluginPermissionGrant(Base):
 
 
 class PluginCredential(Base):
-    """插件自己的凭据(API Key 等),按 manifest 的 `credentials` 声明逐条存。
+    """一个实例自己的凭据(API Key 等),按 manifest 的 `credentials` 声明逐条存。
 
     **为什么插件不能共用应用的供应商凭据**:插件运行时只向子进程透传 PATH/HOME/LANG,
     刻意不给任何应用凭据——插件因此绕不过确认卡和权限系统。但"什么都不给"也意味着任何
     需要 API Key 的插件只能自己在插件目录里放一个 config.json,让用户开终端去 cp 文件。
-    这张表是那个缺口的补丁:**只把该插件自己声明的那几个键**注入它自己的进程环境。
+    这张表是那个缺口的补丁:**只把该实例自己声明的那几个键**注入它自己的进程环境。
 
     明文存,和 provider_profiles.api_key 一致——本地优先的应用里,数据库文件本身就是
     信任边界,在同一个文件里加一层可逆加密只是把钥匙和锁放进同一个抽屉。
@@ -1041,7 +1083,7 @@ class PluginCredential(Base):
 
     __tablename__ = "plugin_credentials"
 
-    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.id", ondelete="CASCADE"), primary_key=True)
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
@@ -1052,7 +1094,7 @@ class PluginInvocation(Base):
     __tablename__ = "plugin_invocations"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    plugin_id: Mapped[str] = mapped_column(ForeignKey("plugins.id", ondelete="CASCADE"), nullable=False)
+    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=False)
     tool_name: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="running")
     input: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

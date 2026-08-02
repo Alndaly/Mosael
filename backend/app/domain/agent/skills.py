@@ -5,8 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Plugin
-from app.domain.plugins import plugin_permissions_granted
+from app.db.models import PluginInstance
 
 
 CORE_SKILLS = [
@@ -75,34 +74,43 @@ CORE_SKILLS = [
 
 
 def list_agent_skills(db: Session) -> list[dict[str, Any]]:
+    """核心技能 + 每个**可用实例**贡献的技能。
+
+    实例(而不是包)是技能的主人:同一个包的两次接入是两套凭据、两个端点,给别的智能体看的
+    也该是两条 —— 「TikHub · 哔哩哔哩」和「TikHub · 抖音」能做的事不一样。
+    """
+    from app.domain.plugins import instances as inst
+    from app.domain.plugins.tools import exposed
+
     skills = [dict(skill) for skill in CORE_SKILLS]
-    plugins = db.scalars(select(Plugin).where(Plugin.enabled.is_(True)).order_by(Plugin.name)).all()
-    for plugin in plugins:
-        if not plugin_permissions_granted(db, plugin):
-            continue
-        permissions = plugin.manifest.get("permissions", [])
-        tools = [
+    by_instance: dict[str, list[dict[str, Any]]] = {}
+    for tool in exposed(db):
+        by_instance.setdefault(tool["instance_id"], []).append(
             {
-                "name": tool.get("name"),
-                "description": tool.get("description", ""),
-                "plugin_id": plugin.id,
-                "invoke_path": f"/api/plugins/{plugin.id}/tools/{tool.get('name')}/invoke",
-                "input_schema": tool.get("input_schema", {"type": "object"}),
+                "name": tool["name"],
+                "description": tool["description"],
+                "instance_id": tool["instance_id"],
+                "invoke_path": f"/api/plugins/instances/{tool['instance_id']}/tools/{tool['name']}/invoke",
+                "input_schema": tool["input_schema"],
             }
-            for tool in plugin.manifest.get("tools", [])
-            if isinstance(tool, dict) and isinstance(tool.get("name"), str)
-        ]
-        for skill in plugin.manifest.get("skills", []):
-            if not isinstance(skill, dict) or not isinstance(skill.get("id"), str):
+        )
+    for instance_id, tools in by_instance.items():
+        instance = db.get(PluginInstance, instance_id)
+        if instance is None:
+            continue
+        manifest = inst.manifest_for(db, instance)
+        for skill in manifest.skills:
+            if not isinstance(skill.get("id"), str):
                 continue
             skills.append(
                 {
-                    "id": f"{plugin.id}:{skill['id']}",
+                    "id": f"{instance.id}:{skill['id']}",
                     "name": skill.get("name", skill["id"]),
                     "description": skill.get("description", ""),
-                    "source": f"plugin:{plugin.id}",
+                    "source": f"plugin:{instance.package_id}",
+                    "instance_name": instance.name,
                     "tools": tools,
-                    "permissions": permissions,
+                    "permissions": manifest.permissions,
                 }
             )
     return skills

@@ -105,6 +105,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "plugin_id": {"type": "string", "required": True},
             "tool_name": {"type": "string", "required": True},
+            # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它。
+            "instance_id": {"type": "string", "description": "用哪个连接;留空自动选(仅一个时)", "plugin_instances": True},
             "input": {"type": "object", "description": "工具入参,值支持 {{变量}}"},
         },
         "outputs": ["output"],

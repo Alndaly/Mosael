@@ -10682,8 +10682,8 @@
         "tags": [
           "plugins"
         ],
-        "summary": "Scan Plugin Manifests",
-        "operationId": "scan_plugin_manifests_api_plugins_scan_post",
+        "summary": "Scan Packages",
+        "operationId": "scan_packages_api_plugins_scan_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10691,10 +10691,10 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PluginOut"
+                    "$ref": "#/components/schemas/PluginPackageOut"
                   },
                   "type": "array",
-                  "title": "Response Scan Plugin Manifests Api Plugins Scan Post"
+                  "title": "Response Scan Packages Api Plugins Scan Post"
                 }
               }
             }
@@ -10718,7 +10718,7 @@
           "plugins"
         ],
         "summary": "Plugins Directory",
-        "description": "插件目录的**真实绝对路径**,给前端的空态引导用。\n\n以前这条路径是写死在前端文案里的(`~/.open-studio/plugins/`)。那是 POSIX 写法:\nWindows 上 Path.home() 是 C:\\Users\\<用户名>,`~/` 对用户没有任何意义,照着找是找不到的。\n路径由谁算就由谁报,免得两边各写一份、还各写错一份。",
+        "description": "插件目录的**真实绝对路径**,给前端的空态引导用。\n\n这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上\n`~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。",
         "operationId": "plugins_directory_api_plugins_dir_get",
         "responses": {
           "200": {
@@ -10753,8 +10753,8 @@
         "tags": [
           "plugins"
         ],
-        "summary": "List Plugins",
-        "operationId": "list_plugins_api_plugins_get",
+        "summary": "List Packages",
+        "operationId": "list_packages_api_plugins_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10762,10 +10762,10 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PluginOut"
+                    "$ref": "#/components/schemas/PluginPackageOut"
                   },
                   "type": "array",
-                  "title": "Response List Plugins Api Plugins Get"
+                  "title": "Response List Packages Api Plugins Get"
                 }
               }
             }
@@ -10783,72 +10783,22 @@
         }
       }
     },
-    "/api/plugins/{plugin_id}": {
-      "patch": {
-        "tags": [
-          "plugins"
-        ],
-        "summary": "Update Plugin",
-        "operationId": "update_plugin_api_plugins__plugin_id__patch",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Plugin Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PluginEnableRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PluginOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
+    "/api/plugins/{package_id}": {
       "delete": {
         "tags": [
           "plugins"
         ],
-        "summary": "Delete Plugin",
-        "description": "卸载插件:删掉它的目录,连同权限、凭据、调用记录一起清掉。\n\n**连目录一起删**,而不是只清记录 —— 只清记录的话,下一次扫描又把它装回来,用户看到的是\n\"我删了它怎么又回来了\",而这个页面上没有任何东西能解释那件事。",
-        "operationId": "delete_plugin_api_plugins__plugin_id__delete",
+        "summary": "Uninstall Package",
+        "description": "卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。\n\n**连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是\"我删了它怎么又回来了\"。",
+        "operationId": "uninstall_package_api_plugins__package_id__delete",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "package_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Package Id"
             }
           }
         ],
@@ -10869,21 +10819,253 @@
         }
       }
     },
-    "/api/plugins/{plugin_id}/permissions": {
-      "get": {
+    "/api/plugins/{package_id}/instances": {
+      "post": {
         "tags": [
           "plugins"
         ],
-        "summary": "List Plugin Permissions",
-        "operationId": "list_plugin_permissions_api_plugins__plugin_id__permissions_get",
+        "summary": "Create Instance",
+        "operationId": "create_instance_api_plugins__package_id__instances_post",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "package_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Package Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginInstanceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}": {
+      "patch": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Update Instance",
+        "operationId": "update_instance_api_plugins_instances__instance_id__patch",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginInstanceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Delete Instance",
+        "operationId": "delete_instance_api_plugins_instances__instance_id__delete",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/refresh": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Refresh Instance Tools",
+        "description": "重新向 MCP 服务要工具清单。进程类实例直接原样返回。",
+        "operationId": "refresh_instance_tools_api_plugins_instances__instance_id__refresh_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/capabilities": {
+      "patch": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Update Capabilities",
+        "operationId": "update_capabilities_api_plugins_instances__instance_id__capabilities_patch",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginCapabilityUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/permissions": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List Instance Permissions",
+        "operationId": "list_instance_permissions_api_plugins_instances__instance_id__permissions_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
             }
           }
         ],
@@ -10897,7 +11079,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PluginPermissionGrantOut"
                   },
-                  "title": "Response List Plugin Permissions Api Plugins  Plugin Id  Permissions Get"
+                  "title": "Response List Instance Permissions Api Plugins Instances  Instance Id  Permissions Get"
                 }
               }
             }
@@ -10918,16 +11100,16 @@
         "tags": [
           "plugins"
         ],
-        "summary": "Update Plugin Permissions",
-        "operationId": "update_plugin_permissions_api_plugins__plugin_id__permissions_patch",
+        "summary": "Update Instance Permissions",
+        "operationId": "update_instance_permissions_api_plugins_instances__instance_id__permissions_patch",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           }
         ],
@@ -10951,7 +11133,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PluginPermissionGrantOut"
                   },
-                  "title": "Response Update Plugin Permissions Api Plugins  Plugin Id  Permissions Patch"
+                  "title": "Response Update Instance Permissions Api Plugins Instances  Instance Id  Permissions Patch"
                 }
               }
             }
@@ -10969,21 +11151,21 @@
         }
       }
     },
-    "/api/plugins/{plugin_id}/credentials": {
+    "/api/plugins/instances/{instance_id}/credentials": {
       "get": {
         "tags": [
           "plugins"
         ],
-        "summary": "List Plugin Credentials",
-        "operationId": "list_plugin_credentials_api_plugins__plugin_id__credentials_get",
+        "summary": "List Instance Credentials",
+        "operationId": "list_instance_credentials_api_plugins_instances__instance_id__credentials_get",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           }
         ],
@@ -10997,7 +11179,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PluginCredentialOut"
                   },
-                  "title": "Response List Plugin Credentials Api Plugins  Plugin Id  Credentials Get"
+                  "title": "Response List Instance Credentials Api Plugins Instances  Instance Id  Credentials Get"
                 }
               }
             }
@@ -11018,16 +11200,16 @@
         "tags": [
           "plugins"
         ],
-        "summary": "Update Plugin Credentials",
-        "operationId": "update_plugin_credentials_api_plugins__plugin_id__credentials_patch",
+        "summary": "Update Instance Credentials",
+        "operationId": "update_instance_credentials_api_plugins_instances__instance_id__credentials_patch",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           }
         ],
@@ -11051,50 +11233,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PluginCredentialOut"
                   },
-                  "title": "Response Update Plugin Credentials Api Plugins  Plugin Id  Credentials Patch"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/plugins/{plugin_id}/refresh": {
-      "post": {
-        "tags": [
-          "plugins"
-        ],
-        "summary": "Refresh Tools",
-        "description": "重新向 MCP 插件的 server 要工具清单。进程类插件直接原样返回。",
-        "operationId": "refresh_tools_api_plugins__plugin_id__refresh_post",
-        "parameters": [
-          {
-            "name": "plugin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Plugin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PluginOut"
+                  "title": "Response Update Instance Credentials Api Plugins Instances  Instance Id  Credentials Patch"
                 }
               }
             }
@@ -11117,8 +11256,9 @@
         "tags": [
           "plugins"
         ],
-        "summary": "List Plugin Tools",
-        "operationId": "list_plugin_tools_api_plugins_tools_get",
+        "summary": "List Exposed Tools",
+        "description": "所有可用实例**暴露**的工具。智能体工具表与工作流节点面板读的就是这一份。",
+        "operationId": "list_exposed_tools_api_plugins_tools_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -11129,7 +11269,7 @@
                     "$ref": "#/components/schemas/PluginToolOut"
                   },
                   "type": "array",
-                  "title": "Response List Plugin Tools Api Plugins Tools Get"
+                  "title": "Response List Exposed Tools Api Plugins Tools Get"
                 }
               }
             }
@@ -11147,21 +11287,21 @@
         }
       }
     },
-    "/api/plugins/{plugin_id}/tools/{tool_name}/invoke": {
+    "/api/plugins/instances/{instance_id}/tools/{tool_name}/invoke": {
       "post": {
         "tags": [
           "plugins"
         ],
         "summary": "Invoke Tool",
-        "operationId": "invoke_tool_api_plugins__plugin_id__tools__tool_name__invoke_post",
+        "operationId": "invoke_tool_api_plugins_instances__instance_id__tools__tool_name__invoke_post",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           },
           {
@@ -11217,7 +11357,7 @@
         "operationId": "list_invocations_api_plugins_invocations_get",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "query",
             "required": false,
             "schema": {
@@ -11229,7 +11369,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           }
         ],
@@ -11265,10 +11405,11 @@
           "plugins"
         ],
         "summary": "Clear Invocations",
+        "description": "清空调用记录;带 instance_id 只清该连接的。",
         "operationId": "clear_invocations_api_plugins_invocations_delete",
         "parameters": [
           {
-            "name": "plugin_id",
+            "name": "instance_id",
             "in": "query",
             "required": false,
             "schema": {
@@ -11280,7 +11421,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Plugin Id"
+              "title": "Instance Id"
             }
           }
         ],
@@ -17011,6 +17152,19 @@
         ],
         "title": "PasswordUpdate"
       },
+      "PluginCapabilityUpdate": {
+        "properties": {
+          "tools": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "title": "PluginCapabilityUpdate"
+      },
       "PluginCredentialOut": {
         "properties": {
           "key": {
@@ -17068,18 +17222,158 @@
         "type": "object",
         "title": "PluginCredentialUpdate"
       },
-      "PluginEnableRequest": {
+      "PluginFieldOut": {
         "properties": {
-          "enabled": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "string"
+          },
+          "help": {
+            "type": "string",
+            "title": "Help",
+            "default": ""
+          },
+          "required": {
             "type": "boolean",
-            "title": "Enabled"
+            "title": "Required",
+            "default": true
+          },
+          "secret": {
+            "type": "boolean",
+            "title": "Secret",
+            "default": false
+          },
+          "options": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "default": {
+            "type": "string",
+            "title": "Default",
+            "default": ""
           }
         },
         "type": "object",
         "required": [
+          "key",
+          "label"
+        ],
+        "title": "PluginFieldOut",
+        "description": "一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。"
+      },
+      "PluginInstanceCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          }
+        },
+        "type": "object",
+        "title": "PluginInstanceCreate"
+      },
+      "PluginInstanceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config"
+          },
+          "blocked_reason": {
+            "type": "string",
+            "title": "Blocked Reason",
+            "default": ""
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/PluginToolStateOut"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "package_id",
+          "name",
           "enabled"
         ],
-        "title": "PluginEnableRequest"
+        "title": "PluginInstanceOut"
+      },
+      "PluginInstanceUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "PluginInstanceUpdate"
       },
       "PluginInvocationOut": {
         "properties": {
@@ -17087,9 +17381,9 @@
             "type": "string",
             "title": "Id"
           },
-          "plugin_id": {
+          "instance_id": {
             "type": "string",
-            "title": "Plugin Id"
+            "title": "Instance Id"
           },
           "tool_name": {
             "type": "string",
@@ -17129,7 +17423,7 @@
         "type": "object",
         "required": [
           "id",
-          "plugin_id",
+          "instance_id",
           "tool_name",
           "status",
           "input",
@@ -17150,7 +17444,7 @@
         "type": "object",
         "title": "PluginInvokeRequest"
       },
-      "PluginOut": {
+      "PluginPackageOut": {
         "properties": {
           "id": {
             "type": "string",
@@ -17164,31 +17458,58 @@
             "type": "string",
             "title": "Version"
           },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "process"
           },
-          "manifest": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Manifest"
+          "multiple": {
+            "type": "boolean",
+            "title": "Multiple",
+            "default": false
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "config_fields": {
+            "items": {
+              "$ref": "#/components/schemas/PluginFieldOut"
+            },
+            "type": "array",
+            "title": "Config Fields"
+          },
+          "credential_fields": {
+            "items": {
+              "$ref": "#/components/schemas/PluginFieldOut"
+            },
+            "type": "array",
+            "title": "Credential Fields"
+          },
+          "instances": {
+            "items": {
+              "$ref": "#/components/schemas/PluginInstanceOut"
+            },
+            "type": "array",
+            "title": "Instances"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "version",
-          "enabled",
-          "manifest"
+          "version"
         ],
-        "title": "PluginOut"
+        "title": "PluginPackageOut"
       },
       "PluginPermissionGrantOut": {
         "properties": {
-          "plugin_id": {
+          "instance_id": {
             "type": "string",
-            "title": "Plugin Id"
+            "title": "Instance Id"
           },
           "permission": {
             "type": "string",
@@ -17211,7 +17532,7 @@
         },
         "type": "object",
         "required": [
-          "plugin_id",
+          "instance_id",
           "permission",
           "granted",
           "created_at",
@@ -17234,22 +17555,63 @@
       },
       "PluginToolOut": {
         "properties": {
-          "plugin_id": {
+          "instance_id": {
             "type": "string",
-            "title": "Plugin Id"
+            "title": "Instance Id"
           },
-          "plugin_name": {
+          "instance_name": {
             "type": "string",
-            "title": "Plugin Name"
+            "title": "Instance Name"
           },
-          "kind": {
+          "package_id": {
             "type": "string",
-            "title": "Kind",
-            "default": "process"
+            "title": "Package Id"
           },
-          "tool_name": {
+          "name": {
             "type": "string",
-            "title": "Tool Name"
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Input Schema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id",
+          "instance_name",
+          "package_id",
+          "name"
+        ],
+        "title": "PluginToolOut",
+        "description": "一个**已暴露**的工具。智能体工具表与工作流节点面板读的就是这个。"
+      },
+      "PluginToolStateOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
           },
           "description": {
             "type": "string",
@@ -17266,24 +17628,17 @@
             "type": "object",
             "title": "Input Schema"
           },
-          "permissions": {
-            "items": {},
-            "type": "array",
-            "title": "Permissions"
-          },
-          "skills": {
-            "items": {},
-            "type": "array",
-            "title": "Skills"
+          "exposed": {
+            "type": "boolean",
+            "title": "Exposed",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "plugin_id",
-          "plugin_name",
-          "tool_name"
+          "name"
         ],
-        "title": "PluginToolOut"
+        "title": "PluginToolStateOut"
       },
       "PodcastRequest": {
         "properties": {

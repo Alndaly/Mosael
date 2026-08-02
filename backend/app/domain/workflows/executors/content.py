@@ -37,26 +37,49 @@ def kb_search(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     return {"text": text, "results": results}
 
 
-def _run_plugin_tool(db: Session, plugin_id: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.plugins.registry import PluginDomainError, invoke_plugin_tool
+def _run_plugin_tool(db: Session, instance_id: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.tools import invoke
 
     try:
-        invocation = invoke_plugin_tool(db, plugin_id, tool_name, payload)
-    except PluginDomainError as exc:  # 插件被停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
-        raise WorkflowDomainError(f"插件 {plugin_id} 不可用: {exc}") from exc
+        invocation = invoke(db, instance_id, tool_name, payload)
+    except PluginDomainError as exc:  # 停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
+        raise WorkflowDomainError(str(exc)) from exc
     if invocation.status != "succeeded":
         raise WorkflowDomainError(f"插件工具失败: {invocation.error or invocation.status}")
     return invocation.output
 
 
+def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str) -> str:
+    """节点上选的连接;没选而只有一个可用连接时自动用它。
+
+    自动选是有理由的:绝大多数包只会被接一次,逼用户在下拉里点一下那唯一的一项是纯仪式。
+    但有多个时**不猜** —— 从 B 站取和从抖音取是两件事,替用户选错比报错更糟。
+    """
+    from app.domain.plugins.nodes import instances_for_node, node_type_id
+
+    available = instances_for_node(db, node_type_id(package_id, tool_name))
+    if chosen:
+        if any(item["id"] == chosen for item in available):
+            return chosen
+        raise WorkflowDomainError(f"节点选的连接已不可用(插件 {package_id});请在节点上重新选一个")
+    if len(available) == 1:
+        return available[0]["id"]
+    if not available:
+        raise WorkflowDomainError(f"没有可用的「{package_id}」连接:请在插件页新建并启用一个")
+    names = "、".join(item["name"] for item in available)
+    raise WorkflowDomainError(f"有多个「{package_id}」连接({names}),请在节点上选一个")
+
+
 @register("plugin_tool")
 def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     """通用插件节点。**保留但不再进节点面板** —— 插件工具现在各自是一个节点(见下面的前缀
-    执行器),但用户磁盘上和导出文件里已经存着这种节点,它得继续跑。"""
-    output = _run_plugin_tool(
-        db, str(config.get("plugin_id", "")), str(config.get("tool_name", "")), dict(config.get("input") or {})
-    )
-    return {"output": output}
+    执行器),但用户磁盘上和导出文件里已经存着这种节点,它得继续跑。
+
+    它存的是 plugin_id(包),在实例模型下要先落到一个具体连接上。"""
+    tool_name = str(config.get("tool_name", ""))
+    instance_id = _resolve_instance(db, str(config.get("plugin_id", "")), tool_name, str(config.get("instance_id", "")))
+    return {"output": _run_plugin_tool(db, instance_id, tool_name, dict(config.get("input") or {}))}
 
 
 @register_prefix(PLUGIN_NODE_PREFIX)
@@ -74,21 +97,21 @@ def plugin_node(node_type: str):
 
     def run(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
         from app.domain.plugins.nodes import node_meta
-        from app.domain.plugins.registry import list_enabled_plugin_tools
+        from app.domain.plugins.tools import find
 
         parsed = parse_node_type(node_type)
         if parsed is None:
             raise WorkflowDomainError(f"插件节点类型不合法: {node_type}")
-        plugin_id, tool_name = parsed
+        package_id, tool_name = parsed
+        instance_id = _resolve_instance(db, package_id, tool_name, str(config.get("instance_id") or ""))
         # 空字符串是编辑器给未填字段的种子值。原样发给工具会让"没填"和"填了空串"变成同一件事,
         # 而工具的必填校验就此失效 —— 它收到的是一个存在但为空的键。
-        payload = {key: value for key, value in config.items() if value not in (None, "")}
-        output = _run_plugin_tool(db, plugin_id, tool_name, payload)
+        payload = {
+            key: value for key, value in config.items() if key != "instance_id" and value not in (None, "")
+        }
+        output = _run_plugin_tool(db, instance_id, tool_name, payload)
 
-        tool = next(
-            (t for t in list_enabled_plugin_tools(db) if t["plugin_id"] == plugin_id and t["tool_name"] == tool_name),
-            None,
-        )
+        tool = find(db, instance_id, tool_name)
         outputs = node_meta(tool)["outputs"] if tool else ["output"]
         if outputs == ["output"]:
             return {"output": output}

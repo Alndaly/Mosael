@@ -117,34 +117,63 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(outputs, list) or not outputs:
         # 默认一个口子装整份返回。插件想拆成具名输出就自己声明 outputs。
         outputs = ["output"]
-    label = str(declared.get("label") or tool.get("tool_name") or "")
+    label = str(declared.get("label") or tool.get("label") or tool.get("name") or "")
     description = str(declared.get("description") or tool.get("description") or "")
     return {
         "label": label,
         # 面板上每行都有一句说明;插件没写就退到"来自哪个插件",总比空着强。
-        "description": description or f"来自插件「{tool.get('plugin_name', '')}」的工具。",
+        "description": description or f"来自插件「{tool.get('instance_name', '')}」的工具。",
         "category": PLUGIN_NODE_CATEGORY,
-        "config": config,
+        # 「用哪个连接」是节点的一个普通配置项,和别的字段走同一套表单与校验。
+        "config": {
+            "instance_id": {
+                "type": "string",
+                "description": "用哪个连接(同一个插件可以接多个)",
+                "plugin_instances": True,
+            },
+            **config,
+        },
         "outputs": [str(name) for name in outputs],
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
-        "plugin_id": tool.get("plugin_id", ""),
-        "plugin_name": tool.get("plugin_name", ""),
-        "tool_name": tool.get("tool_name", ""),
+        "plugin_name": tool.get("instance_name", ""),
+        "tool_name": tool.get("name", ""),
     }
 
 
 def plugin_node_types(db: Session) -> dict[str, dict[str, Any]]:
-    """当前可用的插件节点类型。已启用 + 权限已授 + 凭据齐全的插件才在列。
+    """当前可用的插件节点类型。可用实例(启用 + 配置齐 + 凭据齐 + 已授权)暴露的工具才在列。
 
     **这份注册表是动态的**,这正是它不能并进 NODE_TYPES 的原因:NODE_TYPES 是这份代码的
-    常量(有测试钉着它和执行器一一对应),而插件装了什么是用户机器上的事实。
-    """
-    from app.domain.plugins.registry import list_enabled_plugin_tools
+    常量(有测试钉着它和执行器一一对应),而装了什么插件是用户机器上的事实。
 
-    return {
-        node_type_id(tool["plugin_id"], tool["tool_name"]): node_meta(tool)
-        for tool in list_enabled_plugin_tools(db)
-    }
+    **节点类型按包聚合,不按实例**:同一个包的两个实例(B站 / 抖音)提供的是同一批节点,
+    选哪个实例是节点 config 里的一个字段。工作流会被导出到别的机器,而实例是本机事实 ——
+    绑包的话,导出的图在别人机器上缺的是"连接"(可以现场建);绑实例的话缺的是"节点类型",
+    图直接打不开。
+    """
+    from app.domain.plugins.tools import exposed
+
+    out: dict[str, dict[str, Any]] = {}
+    for tool in exposed(db):
+        key = node_type_id(tool["package_id"], tool["name"])
+        if key not in out:
+            out[key] = node_meta(tool)
+    return out
+
+
+def instances_for_node(db: Session, node_type: str) -> list[dict[str, str]]:
+    """这个节点类型可以用哪些实例。节点配置里的「连接」下拉读它。"""
+    from app.domain.plugins.tools import exposed
+
+    parsed = parse_node_type(node_type)
+    if parsed is None:
+        return []
+    package_id, tool_name = parsed
+    return [
+        {"id": tool["instance_id"], "name": tool["instance_name"]}
+        for tool in exposed(db)
+        if tool["package_id"] == package_id and tool["name"] == tool_name
+    ]
 
 
 __all__ = [

@@ -78,34 +78,32 @@ PLUGIN_TOOL_PREFIX = "plugin__"
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_]+")
 
 
-def agent_tool_name(plugin_id: str, tool_name: str) -> str:
+def agent_tool_name(instance_id: str, tool_name: str) -> str:
     """插件工具在智能体工具表里的名字。
 
-    各家 API 对函数名的字符集要求都是 `[A-Za-z0-9_-]`,而插件 id 允许点号和其它符号,
-    所以非法字符统一折成下划线。折叠可能撞名(`a.b` 和 `a-b` 都变成 `a_b`),所以调用时是
-    反查这份清单、按折叠后的名字匹配,而不是把名字劈开再拼回 id —— 拼回去才是真的会错。
+    **按实例而不是按包**:同一个包的两次接入是两套工具,模型要能分辨"从 B 站取"和"从抖音取"。
+
+    各家 API 对函数名的字符集要求都是 `[A-Za-z0-9_-]`,非法字符统一折成下划线。折叠可能撞名,
+    所以调用时是反查这份清单、按折叠后的名字匹配,而不是把名字劈开再拼回 id —— 拼回去才会错。
     """
-    return f"{PLUGIN_TOOL_PREFIX}{_SAFE_NAME.sub('_', plugin_id)}__{_SAFE_NAME.sub('_', tool_name)}"
+    return f"{PLUGIN_TOOL_PREFIX}{_SAFE_NAME.sub('_', instance_id)}__{_SAFE_NAME.sub('_', tool_name)}"
 
 
 def _plugin_tool_specs(db: Any) -> list[ToolSpec]:
-    from app.domain.plugins import list_enabled_plugin_tools
+    from app.domain.plugins.tools import exposed
 
-    specs: list[ToolSpec] = []
-    for tool in list_enabled_plugin_tools(db):
-        origin = "MCP 插件" if tool.get("kind") == "mcp" else "插件"
-        description = tool.get("description") or ""
-        specs.append(
-            ToolSpec(
-                name=agent_tool_name(tool["plugin_id"], tool["tool_name"]),
-                # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件设置里看,
-                # 而不是以为 Open Studio 自己坏了。
-                description=f"[{origin}·{tool['plugin_name']}] {description}".strip(),
-                parameters=tool.get("input_schema") or {"type": "object", "properties": {}},
-                read_only=tool.get("read_only") is True,
-            )
+    return [
+        ToolSpec(
+            name=agent_tool_name(tool["instance_id"], tool["name"]),
+            # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件页看,而不是
+            # 以为 Open Studio 自己坏了。实例名(「TikHub · 哔哩哔哩」)也就在这里起作用 ——
+            # 同名工具来自不同连接时,模型靠它分辨。
+            description=f"[插件·{tool['instance_name']}] {tool['description']}".strip(),
+            parameters=tool["input_schema"] or {"type": "object", "properties": {}},
+            read_only=tool["read_only"],
         )
-    return specs
+        for tool in exposed(db)
+    ]
 
 
 @router.get("/agent/tools", response_model=list[ToolSpec])
@@ -174,16 +172,16 @@ def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any]) -> dict[s
     走的是 invoke_plugin_tool 这条**唯一**的插件执行路径 —— 权限校验、凭据注入、调用留痕
     都在那里,智能体不该有一条自己的捷径。
     """
-    from app.domain.plugins import PluginDomainError, invoke_plugin_tool as run_plugin_tool, list_enabled_plugin_tools
+    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.tools import exposed, invoke
 
-    match = next(
-        (t for t in list_enabled_plugin_tools(db) if agent_tool_name(t["plugin_id"], t["tool_name"]) == name), None
-    )
+    match = next((t for t in exposed(db) if agent_tool_name(t["instance_id"], t["name"]) == name), None)
     if match is None:
-        # 插件被停用/撤权/凭据被清空之后,模型手里还攥着上一轮的工具表。说清楚是哪一类问题。
-        raise HTTPException(status_code=404, detail=f"插件工具 {name} 不可用(插件未启用、未授权,或凭据未填写)")
+        # 连接被停用/撤权/凭据被清空、或者这个工具被取消暴露之后,模型手里还攥着上一轮的
+        # 工具表。说清楚是哪一类问题,而不是一句"找不到"。
+        raise HTTPException(status_code=404, detail=f"插件工具 {name} 不可用(连接未启用、未授权、缺凭据,或该工具未开启)")
     try:
-        invocation = run_plugin_tool(db, match["plugin_id"], match["tool_name"], arguments)
+        invocation = invoke(db, match["instance_id"], match["name"], arguments)
     except PluginDomainError as exc:
         return {"error": str(exc)[:500]}
     if invocation.status != "succeeded":

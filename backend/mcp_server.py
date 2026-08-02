@@ -539,26 +539,28 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
 
 @mcp.tool()
 def list_plugin_tools() -> list[dict[str, Any]]:
-    """Read-only: list tools contributed by enabled and permission-granted user plugins.
+    """Read-only: list tools exposed by the user's enabled plugin connections.
 
     Use only when the built-in Open Studio tools do not cover the user's request and a
-    plugin-specific capability may. Each entry has plugin_id, tool_name,
-    description, and input_schema; call with invoke_plugin_tool. Do NOT use for
-    built-in timeline/workflow/KB/media operations when a first-party tool exists.
+    plugin-specific capability may. Each entry has instance_id (which connection),
+    instance_name, name, description and input_schema; call with invoke_plugin_tool.
+    Do NOT use for built-in timeline/workflow/KB/media operations when a first-party
+    tool exists.
     """
     return _get("/api/plugins/tools")
 
 
 @mcp.tool()
-def invoke_plugin_tool(plugin_id: str, tool_name: str, input: dict[str, Any]) -> dict[str, Any]:
+def invoke_plugin_tool(instance_id: str, tool_name: str, input: dict[str, Any]) -> dict[str, Any]:
     """Runs directly: invoke one plugin tool returned by list_plugin_tools.
 
-    Use only with a plugin_id/tool_name/input_schema you got from list_plugin_tools.
-    Built-in Open Studio edits, renders, generations, KB operations, and workflow runs
-    should use their dedicated first-party tools instead. Returns status,
-    output, and error.
+    Use only with an instance_id/tool_name/input_schema you got from list_plugin_tools —
+    instance_id picks WHICH connection (the same plugin can be connected more than once,
+    e.g. one per platform). Built-in Open Studio edits, renders, generations, KB
+    operations, and workflow runs should use their dedicated first-party tools instead.
+    Returns status, output, and error.
     """
-    invocation = _post(f"/api/plugins/{plugin_id}/tools/{tool_name}/invoke", {"input": input})
+    invocation = _post(f"/api/plugins/instances/{instance_id}/tools/{tool_name}/invoke", {"input": input})
     return {
         "status": invocation["status"],
         "output": invocation.get("output") or {},

@@ -32,7 +32,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from app.domain.plugins.credentials import expand
+from app.domain.plugins.manifest import expand
 
 #: 连接 + 握手 + 一次调用的总预算。和进程类插件的 60s 对齐。
 MCP_TIMEOUT_SECONDS = 60

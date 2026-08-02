@@ -4,6 +4,8 @@ import logging
 from collections.abc import Generator
 
 import json
+import uuid
+from datetime import datetime
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -443,6 +445,8 @@ def init_db() -> None:
     _merge_openai_tts_engine()
     _migrate_job_parent()
     _migrate_browser_pool()
+    # 重命名必须在 create_all 之前:否则它会建一张空的 plugin_packages,旧数据无人认领。
+    _migrate_plugin_instances()
     Base.metadata.create_all(bind=engine)
     _migrate_partition_rename()
     _migrate_drop_local_publish_accounts()
@@ -452,6 +456,102 @@ def init_db() -> None:
     _migrate_provider_default_model_fk()
     # 回填与外键都落定之后再删旧列 —— 它们正是回填的输入。
     _drop_legacy_profile_columns()
+    # 实例表由 create_all 建好之后才能填。
+    _backfill_plugin_instances()
+
+
+def now() -> datetime:
+    return datetime.utcnow()
+
+
+def _migrate_plugin_instances() -> None:
+    """插件从「一行 = 一个包 = 一次接入」拆成「包 → 实例 → 能力」三层。
+
+    旧表 plugins 里的每一行都是"装了并且配好了的一次接入",所以逐行搬成:一个 package +
+    一个 instance,凭据 / 授权 / 调用记录改挂 instance。
+
+    **已发现的工具全部勾上**,不套新的"默认不暴露"。升级不该改变用户已经在界面上看到的
+    东西 —— 那条规矩只对之后新建的实例生效。
+
+    必须在 create_all **之前**跑重命名(否则 create_all 会建一张空的 plugin_packages,
+    旧数据留在 plugins 里无人认领),但实例表要等 create_all 建好才能填 —— 所以这个函数
+    只做重命名和列的准备,填充留给 _backfill_plugin_instances。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "plugins" not in tables or "plugin_packages" in tables:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE plugins RENAME TO plugin_packages"))
+        # 旧的子表按 plugin_id 挂着,重命名到一边等回填改挂 instance_id。
+        for table in ("plugin_permission_grants", "plugin_credentials", "plugin_invocations"):
+            if table in tables:
+                conn.execute(text(f"ALTER TABLE {table} RENAME TO {table}_legacy"))
+
+
+def _backfill_plugin_instances() -> None:
+    """给每个包建一个默认实例,把旧的凭据 / 授权 / 调用记录搬过去。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "plugin_packages_legacy_done" in tables or "plugin_permission_grants_legacy" not in tables:
+        return
+    with engine.begin() as conn:
+        packages = conn.execute(text("SELECT id, name FROM plugin_packages")).fetchall()
+        enabled_col = "enabled" in {c["name"] for c in inspector.get_columns("plugin_packages")}
+        for package_id, name in packages:
+            enabled = 0
+            if enabled_col:
+                row = conn.execute(
+                    text("SELECT enabled FROM plugin_packages WHERE id = :id"), {"id": package_id}
+                ).fetchone()
+                enabled = int(bool(row[0])) if row else 0
+            instance_id = uuid.uuid4().hex
+            tools = conn.execute(
+                text("SELECT json_extract(manifest, '$._discovered_tools') FROM plugin_packages WHERE id = :id"),
+                {"id": package_id},
+            ).scalar()
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_instances (id, package_id, name, enabled, config, discovered_tools,"
+                    " created_at, updated_at) VALUES (:i, :p, :n, :e, '{}', :t, :now, :now)"
+                ),
+                {"i": instance_id, "p": package_id, "n": name, "e": enabled, "t": tools or "[]", "now": now()},
+            )
+            # 已发现的工具全部勾上:升级不改变用户已经看到的东西。
+            for tool in json.loads(tools or "[]"):
+                if isinstance(tool, dict) and tool.get("name"):
+                    conn.execute(
+                        text("INSERT INTO plugin_capabilities (instance_id, tool_name, exposed) VALUES (:i, :t, 1)"),
+                        {"i": instance_id, "t": tool["name"]},
+                    )
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_permission_grants (instance_id, permission, granted, created_at, updated_at)"
+                    " SELECT :i, permission, granted, created_at, updated_at"
+                    " FROM plugin_permission_grants_legacy WHERE plugin_id = :p"
+                ),
+                {"i": instance_id, "p": package_id},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_credentials (instance_id, key, value, created_at, updated_at)"
+                    " SELECT :i, key, value, created_at, updated_at"
+                    " FROM plugin_credentials_legacy WHERE plugin_id = :p"
+                ),
+                {"i": instance_id, "p": package_id},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO plugin_invocations (id, instance_id, tool_name, status, input, output, error,"
+                    " created_at) SELECT id, :i, tool_name, status, input, output, error, created_at"
+                    " FROM plugin_invocations_legacy WHERE plugin_id = :p"
+                ),
+                {"i": instance_id, "p": package_id},
+            )
+        for table in ("plugin_permission_grants", "plugin_credentials", "plugin_invocations"):
+            conn.execute(text(f"DROP TABLE IF EXISTS {table}_legacy"))
+        if enabled_col:
+            conn.execute(text("ALTER TABLE plugin_packages DROP COLUMN enabled"))
 
 
 def session_scope() -> Generator[Session, None, None]:

@@ -1155,12 +1155,66 @@ class RunScheduledTaskResponse(BaseModel):
     job: JobOut
 
 
-class PluginOut(OrmModel):
+class PluginFieldOut(BaseModel):
+    """一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。"""
+
+    key: str
+    label: str
+    type: str = "string"  # string | enum | number | boolean
+    help: str = ""
+    required: bool = True
+    secret: bool = False
+    options: list[dict] = Field(default_factory=list)
+    default: str = ""
+
+
+class PluginToolStateOut(BaseModel):
+    name: str
+    label: str = ""
+    description: str = ""
+    read_only: bool = False
+    input_schema: dict = Field(default_factory=dict)
+    #: 暴不暴露给智能体与工作流。默认关 —— 一个 MCP 端点可能报几十个工具。
+    exposed: bool = False
+
+
+class PluginInstanceOut(BaseModel):
+    id: str
+    package_id: str
+    name: str
+    enabled: bool
+    config: dict = Field(default_factory=dict)
+    #: 为什么还不能用(未启用 / 缺配置 / 缺凭据 / 未授权)。空串 = 可用。
+    blocked_reason: str = ""
+    tools: list[PluginToolStateOut] = Field(default_factory=list)
+
+
+class PluginPackageOut(BaseModel):
     id: str
     name: str
     version: str
-    enabled: bool
-    manifest: dict
+    kind: str = "process"  # process | mcp
+    multiple: bool = False
+    permissions: list[str] = Field(default_factory=list)
+    config_fields: list[PluginFieldOut] = Field(default_factory=list)
+    credential_fields: list[PluginFieldOut] = Field(default_factory=list)
+    instances: list[PluginInstanceOut] = Field(default_factory=list)
+
+
+class PluginInstanceCreate(BaseModel):
+    name: str = ""
+    config: dict = Field(default_factory=dict)
+
+
+class PluginInstanceUpdate(BaseModel):
+    name: str | None = None
+    config: dict | None = None
+    enabled: bool | None = None
+
+
+class PluginCapabilityUpdate(BaseModel):
+    #: 工具名 → 暴不暴露。
+    tools: dict[str, bool] = Field(default_factory=dict)
 
 
 class PluginEnableRequest(BaseModel):
@@ -1168,7 +1222,7 @@ class PluginEnableRequest(BaseModel):
 
 
 class PluginPermissionGrantOut(OrmModel):
-    plugin_id: str
+    instance_id: str
     permission: str
     granted: bool
     created_at: datetime
@@ -1197,17 +1251,16 @@ class PluginCredentialUpdate(BaseModel):
 
 
 class PluginToolOut(BaseModel):
-    plugin_id: str
-    plugin_name: str
-    #: "process"(本地脚本)或 "mcp"(接一个 MCP server)。
-    kind: str = "process"
-    tool_name: str
+    """一个**已暴露**的工具。智能体工具表与工作流节点面板读的就是这个。"""
+
+    instance_id: str
+    instance_name: str
+    package_id: str
+    name: str
+    label: str = ""
     description: str = ""
-    #: manifest 明写 read_only 的工具才算只读;子智能体只拿只读工具。
     read_only: bool = False
     input_schema: dict = Field(default_factory=dict)
-    permissions: list = Field(default_factory=list)
-    skills: list = Field(default_factory=list)
 
 
 class PluginInvokeRequest(BaseModel):
@@ -1216,7 +1269,7 @@ class PluginInvokeRequest(BaseModel):
 
 class PluginInvocationOut(OrmModel):
     id: str
-    plugin_id: str
+    instance_id: str
     tool_name: str
     status: str
     input: dict

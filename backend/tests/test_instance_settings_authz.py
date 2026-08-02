@@ -8,7 +8,7 @@ routes are worse than they sound:
   * PUT /settings/tts sets python_path, which later becomes subprocess argv.
   * PATCH /settings/providers/{id} + GET .../models sends the STORED api key to whatever
     base_url the caller just set.
-  * PATCH /plugins/{id}/permissions grants a plugin its permissions; invoke then runs it.
+  * PATCH /plugins/instances/{id}/permissions grants a connection its permissions; invoke then runs it.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def test_an_outsider_cannot_repoint_a_provider_and_harvest_its_key(owner_and_out
 
 def test_an_outsider_cannot_grant_plugin_permissions_or_wipe_the_audit_log(owner_and_outsider) -> None:
     _, outsider = owner_and_outsider
-    assert outsider.patch("/api/plugins/any.plugin/permissions", json={"grants": {}}).status_code == 403
+    assert outsider.patch("/api/plugins/instances/any-instance/permissions", json={"grants": {}}).status_code == 403
     assert outsider.get("/api/plugins/invocations").status_code == 403
     assert outsider.delete("/api/plugins/invocations").status_code == 403
 
