@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowRight, BookOpen, Puzzle, Send } from "lucide-react";
 
@@ -183,6 +184,43 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* ── 社区:纸 ────────────────────────────────────────────────────────
+          两张二维码。放在收尾 CTA **之前** —— 下载完就走的人不会再往下滚,而"想找个人问问"
+          恰恰发生在决定下载之前。 */}
+      <section className="border-b-2 border-ink bg-paper">
+        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
+          <Reveal className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-16">
+            <div className="lg:col-span-5">
+              <h2 className="mt-0 mb-6 font-display text-[clamp(1.75rem,5vw,3.5rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
+                {t.communityTitle}
+              </h2>
+              <p className="m-0 max-w-(--measure) text-lg text-muted-foreground">{t.communityBody}</p>
+            </div>
+
+            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:col-span-7 lg:mt-0">
+              {[
+                { src: "/media/qr-group.png", title: t.communityGroup, hint: t.communityGroupHint },
+                { src: "/media/qr-wechat.png", title: t.communityAuthor, hint: t.communityAuthorHint },
+              ].map((card) => (
+                <figure key={card.src} className="m-0 border-2 border-ink bg-card">
+                  <Image
+                    src={card.src}
+                    alt={card.title}
+                    width={420}
+                    height={560}
+                    className="h-auto w-full border-b-2 border-ink bg-ink object-contain"
+                  />
+                  <figcaption className="p-5">
+                    <p className="m-0 font-display text-lg font-bold tracking-tight">{card.title}</p>
+                    <p className="m-0 mt-1 text-sm text-muted-foreground">{card.hint}</p>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 

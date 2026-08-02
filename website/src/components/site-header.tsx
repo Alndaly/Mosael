@@ -4,6 +4,7 @@ import Link from "next/link";
 import { GithubMark } from "@/components/icons";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { NavLink } from "@/components/nav-link";
+import { SearchDialog } from "@/components/search-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -42,6 +43,16 @@ export function SiteHeader({ locale }: { locale: Locale }) {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <SearchDialog
+            locale={locale}
+            labels={{
+              search: t.docs.search,
+              placeholder: t.docs.searchPlaceholder,
+              empty: t.docs.searchEmpty,
+              hint: t.docs.searchHint,
+              close: t.docs.searchClose,
+            }}
+          />
           <LocaleSwitch locale={locale} label={t.nav.language} />
           <ThemeToggle label={t.nav.theme} />
           <a

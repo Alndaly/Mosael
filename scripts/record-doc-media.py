@@ -228,6 +228,22 @@ def _goto(page: Page, view: str, wait: int = 1200) -> None:
     page.wait_for_timeout(wait)
 
 
+def _timeline_clips(page: Page) -> list:
+    """时间线上的片段,按左到右排好。
+
+    片段是带 title 的 `div[role=button]`(见 timeline/TimelineClip.tsx),但左侧素材池的
+    卡片也是这个形状 —— 只按这个选择器取会点到素材、把素材列表滚走,而片段一个都没选中。
+    时间线根节点带 `data-tool`(select / blade),用它限定范围:那是个功能属性,不是样式,
+    改版面不会把它顺手删掉。
+    """
+    found = []
+    for handle in page.locator('[data-tool] div[role="button"][title]').all():
+        box = handle.bounding_box()
+        if box and box["width"] > 12:
+            found.append((box["x"], handle))
+    return [handle for _, handle in sorted(found, key=lambda item: item[0])]
+
+
 def record_editor(page: Page, tmp: Path) -> None:
     """剪辑页 —— 官网首屏那张大图,也是文档里最常出现的一张。
 
@@ -243,24 +259,29 @@ def record_editor(page: Page, tmp: Path) -> None:
         return
     card.click()
     page.wait_for_timeout(2500)  # 等时间线和监看器把首帧解出来
+
+    # **先选中一个片段**:右侧检查器只在选中时才占栏(EditorView 的 showInspector),
+    # 不选就拍出一张"左栏 + 监看器 + 时间线"的图,而编辑器真正在用的时候是四栏都在。
+    clips = _timeline_clips(page)
+    if clips:
+        clips[0].click()
+        page.wait_for_timeout(900)
+    else:
+        print("  editor:时间线上没有片段,右侧检查器不会出现")
+
     page.screenshot(path=str(MEDIA / "editor.png"))
     publish(MEDIA / "editor.png", "editor.png")
 
     frames = tmp / "timeline"
     frames.mkdir()
     rec = Recorder(page, frames)
-    rec.shot(10)  # 起手:多轨时间线 + 双监看器
+    rec.shot(12)  # 起手:素材 / 监看器 / 时间线 / 检查器 四栏都在
 
-    # 在时间线上挪一下播放头 —— 这段录屏要说明的是"时间线是可以直接操作的"。
-    ruler = page.locator("[data-testid='timeline-ruler'], .timeline-ruler").first
-    track = ruler if ruler.count() else page.locator("canvas, [class*='timeline']").last
-    if track.count():
-        box = track.bounding_box()
-        if box:
-            for ratio in (0.25, 0.5, 0.75, 0.4):
-                page.mouse.click(box["x"] + box["width"] * ratio, box["y"] + box["height"] / 2)
-                page.wait_for_timeout(350)
-                rec.shot(4)
+    # 逐个点过去 —— 这段录屏要说明的是"选中谁,右边就跟着换成谁的参数"。
+    for clip in clips[1:4]:
+        clip.click()
+        page.wait_for_timeout(500)
+        rec.shot(9)
 
     gif_from_frames(frames, MEDIA / "timeline-edit.gif")
     publish(MEDIA / "timeline-edit.gif", "timeline-edit.gif", gif=True)

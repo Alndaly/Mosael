@@ -34,6 +34,11 @@ const zh = {
     editOnGitHub: "在 GitHub 上编辑此页",
     onThisPage: "本页目录",
     anchor: "链接到本节",
+    search: "搜索文档",
+    searchPlaceholder: "搜索文档…",
+    searchEmpty: "没有匹配的内容",
+    searchHint: "输入关键词开始搜索",
+    searchClose: "关闭",
   },
   home: {
     eyebrow: "本地优先 · 桌面应用",
@@ -94,6 +99,13 @@ const zh = {
         body: "本地脚本或现成的 MCP 服务,接进来就是智能体和工作流的工具,权限与凭据逐项授权。",
       },
     ],
+
+    communityTitle: "找个人说话",
+    communityBody: "用着别扭、想要什么功能、或者只是想看看别人怎么剪 —— 群里说比提 issue 快。",
+    communityGroup: "影像交流群",
+    communityGroupHint: "微信扫码进群",
+    communityAuthor: "作者微信",
+    communityAuthorHint: "商业授权、深度合作直接找我",
 
     closingTitle: "开源,免费下载",
     closingBody: "macOS 与 Windows 都有安装包。源码在 GitHub 上,遇到问题可以直接提 issue。",
@@ -193,6 +205,11 @@ const en: Messages = {
     editOnGitHub: "Edit this page on GitHub",
     onThisPage: "On this page",
     anchor: "Link to this section",
+    search: "Search docs",
+    searchPlaceholder: "Search the docs…",
+    searchEmpty: "Nothing matched",
+    searchHint: "Type to search",
+    searchClose: "Close",
   },
   home: {
     eyebrow: "Local-first · Desktop app",
@@ -261,6 +278,14 @@ const en: Messages = {
         body: "Local scripts or existing MCP servers become tools for the agent and workflows, with permissions and credentials granted one by one.",
       },
     ],
+
+    communityTitle: "Talk to someone",
+    communityBody:
+      "Something feels off, a feature you want, or just curious how other people cut — the group is faster than an issue.",
+    communityGroup: "WeChat group",
+    communityGroupHint: "Scan to join",
+    communityAuthor: "The author",
+    communityAuthorHint: "Commercial licensing and partnerships — reach me directly",
 
     closingTitle: "Open source, free to download",
     closingBody: "Installers for macOS and Windows. The source lives on GitHub — open an issue if something breaks.",

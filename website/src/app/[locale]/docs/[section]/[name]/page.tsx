@@ -17,9 +17,7 @@ import { tableOfContents } from "@/lib/toc";
 
 /** 24 页 × 2 语言,全部构建期出好 —— 文档是纯静态内容,没有理由到运行时才渲染。 */
 export function generateStaticParams() {
-  return LOCALES.flatMap((locale) =>
-    listDocs(locale).map((doc) => ({ locale, section: doc.section, name: doc.name })),
-  );
+  return LOCALES.flatMap((locale) => listDocs(locale).map((doc) => ({ locale, section: doc.section, name: doc.name })));
 }
 
 type Params = Promise<{ locale: string; section: string; name: string }>;
