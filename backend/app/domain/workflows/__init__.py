@@ -35,6 +35,7 @@ class WorkflowDomainError(RuntimeError):
 #: 判据是「留空也能把这个节点跑起来吗」——能,就是高级项。编辑器把它们收进折叠的「高级选项」,
 #: 不在用户第一眼就把十几个采样参数糊到脸上;AI 助手也读同一份声明,不会替用户瞎填。
 #: 反过来:required 的、以及决定这个节点在做什么的字段(提示词、模型、URL),永远留在外面。
+
 #: 节点面板的分组与**顺序**。节点类型注册表里每一项都必须落在其中一组(有测试钉着)。
 #:
 #: 顺序不是随手排的,它是一条搭工作流的动线:先有骨架(流程),再决定这一步做什么
@@ -510,14 +511,28 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
 
+def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
+    """当前可用的插件节点。延迟导入:plugins 域会反过来用到工作流的东西(插件工具执行器),
+    顶层互相 import 就成了环。"""
+    from app.domain.plugins.nodes import plugin_node_types
+
+    return plugin_node_types(db)
+
+
 def validate_graph(
     graph: dict[str, Any],
     *,
     require_start: bool = True,
     require_config: bool = True,
     allow_missing_start: bool = False,
+    extra_types: dict[str, dict[str, Any]] | None = None,
 ) -> list[str]:
     """结构校验:返回错误列表(空表 = 合法)。
+
+    extra_types 是**动态**的节点类型(目前只有插件节点,见 domain/plugins/nodes.py):形状与
+    NODE_TYPES 的条目一致,合并进来后校验、必填检查一视同仁。之所以从参数进来而不是在这里
+    直接查库:这个函数是纯的,而"装了哪些插件"是调用方那一侧的事实 —— 拿不到 db 的调用方
+    (比如子图体校验)照样能用它,只是那次校验里没有插件节点。
 
     require_config=False 用于**保存**:必填字段缺失属于「还没配完」,不该拦住存盘 —— 否则配合
     实时保存,新加一个带必填项的节点就永远存不下来。缺必填由「就绪检查」提示、由运行时拦截。
@@ -547,6 +562,17 @@ def validate_graph(
         if str(edge.get("kind", "")) == "data" and edge.get("target_input")
     }
 
+    known_types = {**NODE_TYPES, **(extra_types or {})}
+
+    def _unknown_type_error(node_type: str, node_id: str) -> str:
+        # 插件节点在别人机器上会缺:说清楚是"缺哪个插件",而不是一句让人无从下手的"未知类型"。
+        from app.domain.plugins.nodes import parse_node_type
+
+        parsed = parse_node_type(node_type)
+        if parsed:
+            return f"节点 {node_id} 来自插件「{parsed[0]}」的工具 {parsed[1]},该插件未安装或未启用"
+        return f"未知节点类型: {node_type} ({node_id})"
+
     seen_ids: set[str] = set()
     start_count = 0
     for node in nodes:
@@ -558,13 +584,13 @@ def validate_graph(
         if node_id in seen_ids:
             errors.append(f"节点 id 重复: {node_id}")
         seen_ids.add(node_id)
-        if node_type not in NODE_TYPES:
-            errors.append(f"未知节点类型: {node_type} ({node_id})")
+        if node_type not in known_types:
+            errors.append(_unknown_type_error(node_type, node_id))
             continue
         if node_type == "start":
             start_count += 1
         if require_config:
-            for key, spec in NODE_TYPES[node_type]["config"].items():
+            for key, spec in known_types[node_type]["config"].items():
                 if isinstance(spec, dict) and spec.get("required"):
                     value = (node.get("config") or {}).get(key)
                     if value in (None, "") and (node_id, key) not in data_bound:
@@ -763,7 +789,7 @@ def create_workflow(
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
     # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。
-    errors = validate_graph(graph, require_config=False, allow_missing_start=True)
+    errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
@@ -775,7 +801,7 @@ def create_workflow(
 
 def update_workflow(db: Session, workflow: Workflow, changes: dict[str, Any]) -> Workflow:
     if "graph" in changes and changes["graph"] is not None:
-        errors = validate_graph(changes["graph"], require_config=False, allow_missing_start=True)
+        errors = validate_graph(changes["graph"], require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
         if errors:
             raise WorkflowDomainError("；".join(errors))
         workflow.graph = changes["graph"]

@@ -1266,6 +1266,8 @@ class WorkflowNodeTypeOut(BaseModel):
     category: str = ""  # 面板分组;空=通用组
     config: dict
     outputs: list[str]
+    #: 插件节点带来源插件名(内置节点为空)。面板据此在同名工具之间区分是谁提供的。
+    plugin_name: str = ""
 
 
 class WorkflowAiEditRequest(BaseModel):

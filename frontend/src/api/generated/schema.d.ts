@@ -2564,7 +2564,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Node Types */
+        /**
+         * Node Types
+         * @description 节点类型清单,**按面板分组顺序排好**。
+         *
+         *     排序放在这里而不是前端:分组和顺序是这份注册表自己的性质(NODE_CATEGORIES 就在它旁边)。
+         *     让前端再排一次,等于把同一份知识抄成两份 —— 加一个分组时忘了改另一边,新节点就会静默
+         *     掉进"其它"里,而没有任何东西会报错。
+         */
         get: operations["node_types_api_workflows_node_types_get"];
         put?: never;
         post?: never;
@@ -7633,6 +7640,11 @@ export interface components {
             };
             /** Outputs */
             outputs: string[];
+            /**
+             * Plugin Name
+             * @default
+             */
+            plugin_name: string;
         };
         /** WorkflowOut */
         WorkflowOut: {

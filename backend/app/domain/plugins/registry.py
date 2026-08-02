@@ -323,7 +323,16 @@ def _apply_tool_overrides(manifest: dict[str, Any], discovered: list[dict[str, A
     """
     overrides = {tool["name"]: tool for tool in _tool_entries(manifest.get("tools"))}
     allowed = [tool for tool in discovered if tool["name"] in overrides] if overrides else discovered
-    return [{**tool, "read_only": overrides.get(tool["name"], {}).get("read_only") is True} for tool in allowed]
+    return [
+        {
+            **tool,
+            "read_only": overrides.get(tool["name"], {}).get("read_only") is True,
+            # node 声明也从覆盖层过来:MCP 插件的工具是拉回来的,想给某个工具画一张更好的
+            # 表单只能在 manifest 里说。没写就留 None,由 plugins/nodes.py 从 schema 生成。
+            "node": overrides.get(tool["name"], {}).get("node"),
+        }
+        for tool in allowed
+    ]
 
 
 def _manifest_tools(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -360,6 +369,10 @@ def _tool_descriptor(plugin: Plugin, tool: dict[str, Any]) -> dict[str, Any]:
         "description": tool.get("description", ""),
         # 只读声明。默认 False:插件跑的是别人的代码,"不确定"必须落在保守那边。
         "read_only": tool.get("read_only") is True,
+        # 插件自己写的工作流节点声明(标签 / 表单 / 输出口子),没写就是 None,由
+        # plugins/nodes.py 从 input_schema 生成。这里必须透传:少了它,插件声明的节点会
+        # 静默退化成自动生成的那一版 —— 表单能用,但标签、具名输出全没了,而且不报错。
+        "node": tool.get("node") if isinstance(tool.get("node"), dict) else None,
         "input_schema": tool.get("input_schema", {"type": "object"}),
         "permissions": plugin.manifest.get("permissions", []),
         "skills": plugin.manifest.get("skills", []),

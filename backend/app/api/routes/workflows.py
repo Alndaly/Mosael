@@ -31,6 +31,7 @@ from app.domain.workflows import (
     list_workflows,
     update_workflow,
 )
+from app.domain.plugins.nodes import plugin_node_types
 from app.domain.workflows.engine import start_workflow_job
 
 if TYPE_CHECKING:
@@ -40,7 +41,7 @@ router = APIRouter(tags=["workflows"])
 
 
 @router.get("/workflows/node-types", response_model=list[WorkflowNodeTypeOut])
-def node_types() -> list[dict]:
+def node_types(db: DbSession) -> list[dict]:
     """节点类型清单,**按面板分组顺序排好**。
 
     排序放在这里而不是前端:分组和顺序是这份注册表自己的性质(NODE_CATEGORIES 就在它旁边)。
@@ -48,6 +49,9 @@ def node_types() -> list[dict]:
     掉进"其它"里,而没有任何东西会报错。
     """
     order = {name: index for index, name in enumerate(NODE_CATEGORIES)}
+    # 插件节点跟内置节点走同一条路出去:同样的字段、同样的分组、同样的排序。前端因此不需要
+    # 知道"这一项是插件来的" —— 它在画布上就该跟别的节点没有区别。
+    registry = {**NODE_TYPES, **plugin_node_types(db)}
     items = [
         {
             "type": key,
@@ -56,8 +60,9 @@ def node_types() -> list[dict]:
             "category": meta.get("category", ""),
             "config": meta["config"],
             "outputs": list(meta["outputs"]),
+            "plugin_name": meta.get("plugin_name", ""),
         }
-        for key, meta in NODE_TYPES.items()
+        for key, meta in registry.items()
     ]
     # 组内保持注册表里的声明顺序(sorted 是稳定的)。
     return sorted(items, key=lambda item: order.get(item["category"], len(order)))

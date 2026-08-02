@@ -78,7 +78,7 @@ MCP 插件的 `tools` 字段不是第二份清单,而是**按名字的覆盖层*
 | `permissions` | 自由字符串。逐项授权,**全部授予**之后工具才可用。 |
 | `credentials` | 见下。 |
 | `skills` | 给别的智能体看的高层能力描述,进 `/api/agent/skills`。 |
-| `tools` | `name` / `description` / `input_schema`(JSON Schema)/ `read_only`。 |
+| `tools` | `name` / `description` / `input_schema`(JSON Schema)/ `read_only` / `node`。 |
 
 ## 凭据
 
@@ -91,6 +91,43 @@ MCP 插件的 `tools` 字段不是第二份清单,而是**按名字的覆盖层*
 插件因此绕不过确认卡和权限系统。凭据注入没有破坏它,只是让插件自己的密钥有地方放。
 
 必填凭据没填时,该插件的工具不进 `/api/plugins/tools`,也不进智能体的工具表。
+
+## 工作流节点
+
+**每个插件工具自动就是一个工作流节点**,类型 id 是 `plugin.<插件id>.<工具名>`。表单从
+`input_schema` 生成 —— 插件什么都不写,用户在画布上看到的就已经是一张正经表单,而不是一个
+让人对着猜的 JSON 文本框。
+
+字符串字段默认映到 `template` 那一档:工作流里的字符串入参十有八九要引用上游输出
+(`{{node.output}}`),template 会把可用变量列出来。`enum` 变成下拉,`required` 进必填校验。
+
+想要更好的标签、更细的类型、或者把返回值拆成几个具名输出口子,就在工具上写 `node`
+(参照 ComfyUI 的自定义节点 —— 节点长什么样由插件说了算,应用只规定形状):
+
+```jsonc
+{
+  "name": "fetch_one_video",
+  "node": {
+    "label": "抖音作品详情",
+    "description": "按作品 id 取一条抖音作品的完整信息。",
+    "config": {
+      "aweme_id": { "type": "template", "required": true, "description": "作品 id" }
+    },
+    "outputs": ["title", "author", "digg_count"]
+  }
+}
+```
+
+`config` 与 `outputs` 就是节点注册表里那两个字段,同一套语义、同一个编辑器、同一份校验。
+可以只写一半 —— 只想改标签就写 `label`,表单仍然自动生成。
+
+**节点的 config 就是工具的入参**,一一对应,中间没有翻译层。声明了 `outputs` 就按同名键从
+返回值里取(下游写 `{{node.title}}`),没声明就把整份返回值装进 `output`。
+
+MCP 插件同理:清单是从服务拉的,想给某个工具画一张更好的表单,在 manifest 的 `tools` 覆盖层里写。
+
+**缺插件的图**:工作流导出到没装这个插件的机器上,报的是「节点 n1 来自插件「X」的工具 Y,
+该插件未安装或未启用」—— 不是一句让人无从下手的"未知节点类型"。
 
 ## 只读
 

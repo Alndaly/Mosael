@@ -35,8 +35,35 @@ def register(node_type: str) -> Callable[[Handler], Handler]:
     return _decorator
 
 
+#: 前缀执行器:一族**动态**节点类型共用一套行为。目前只有插件节点(`plugin.` 开头)——
+#: 它们的类型 id 随用户装了什么插件而变,不可能逐个 @register。
+#:
+#: 注册的是**工厂**而不是执行器:工厂拿到具体的 node_type,返回一个绑好它的执行器。这样
+#: Handler 的签名不用为了多传一个 node_type 而全体改一遍,也不用把类型偷偷塞进 config
+#: (那等于给每个节点的入参凭空加一个保留字,而 config 的键是用户和插件说了算的)。
+PrefixFactory = Callable[[str], Handler]
+
+_PREFIX_REGISTRY: dict[str, PrefixFactory] = {}
+
+
+def register_prefix(prefix: str) -> Callable[[PrefixFactory], PrefixFactory]:
+    def _decorator(factory: PrefixFactory) -> PrefixFactory:
+        if prefix in _PREFIX_REGISTRY:
+            raise RuntimeError(f"节点前缀 {prefix} 的执行器重复注册")
+        _PREFIX_REGISTRY[prefix] = factory
+        return factory
+
+    return _decorator
+
+
 def get_executor(node_type: str) -> Handler | None:
-    return _REGISTRY.get(node_type)
+    handler = _REGISTRY.get(node_type)
+    if handler is not None:
+        return handler
+    for prefix, factory in _PREFIX_REGISTRY.items():
+        if node_type.startswith(prefix):
+            return factory(node_type)
+    return None
 
 
 def registered_types() -> frozenset[str]:

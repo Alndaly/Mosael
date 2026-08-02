@@ -411,3 +411,203 @@ def test_不在插件目录里的路径不跑_rmtree(tmp_path: Path) -> None:
 
     assert outsider.is_dir(), "插件目录之外的路径不该被删"
     assert client.get("/api/plugins").json() == []
+
+
+# ---------------------------------------------------------------------------
+# 插件自带的工作流节点
+# ---------------------------------------------------------------------------
+
+NODE_MANIFEST = {
+    "id": "dev.noded",
+    "name": "带节点的插件",
+    "version": "0.1.0",
+    "entry": "main.py",
+    "tools": [
+        {
+            "name": "shout",
+            "description": "把文本变大写。",
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要处理的文本"},
+                    "times": {"type": "integer", "description": "重复几次"},
+                    "mode": {"type": "string", "enum": ["upper", "lower"]},
+                },
+                "required": ["text"],
+            },
+        },
+        {
+            "name": "declared",
+            "description": "自带节点声明。",
+            "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}},
+            "node": {
+                "label": "大声说",
+                "description": "插件自己写的节点说明。",
+                "config": {"text": {"type": "template", "required": True, "description": "说什么"}},
+                "outputs": ["loud", "length"],
+            },
+        },
+    ],
+}
+
+NODE_ENTRY = """
+import json, sys
+req = json.loads(sys.stdin.read())
+text = str(req["input"].get("text", ""))
+times = int(req["input"].get("times") or 1)
+loud = text.upper() * times
+json.dump({"ok": True, "output": {"loud": loud, "length": len(loud), "echo": req["input"]}}, sys.stdout)
+"""
+
+
+def _install_noded():
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    shutil.rmtree(plugins_root(), ignore_errors=True)
+    plugin_dir = plugins_root() / "noded"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "open-studio.plugin.json").write_text(json.dumps(NODE_MANIFEST), encoding="utf-8")
+    (plugin_dir / "main.py").write_text(NODE_ENTRY, encoding="utf-8")
+    with SessionLocal() as db:
+        scan_plugins(db, plugins_root())
+    client.patch("/api/plugins/dev.noded", json={"enabled": True})
+    return client
+
+
+def test_插件工具自动成为一个有表单的节点() -> None:
+    """默认行为:插件什么都不写,input_schema 就够生成一张表单。以前它只能挤进那个通用的
+    「插件工具」节点 —— 画布上别的节点把参数摊在表单里,它只有一个 JSON 文本框。"""
+    client = _install_noded()
+    types = {item["type"]: item for item in client.get("/api/workflows/node-types").json()}
+    node = types["plugin.dev.noded.shout"]
+
+    assert node["category"] == "插件" and node["plugin_name"] == "带节点的插件"
+    assert node["config"]["text"] == {
+        "type": "template",  # 字符串默认给 template:工作流里的字符串入参十有八九要引用上游
+        "required": True,
+        "description": "要处理的文本",
+    }
+    assert node["config"]["times"]["type"] == "number" and "required" not in node["config"]["times"]
+    assert node["config"]["mode"]["options"] == ["upper", "lower"]
+    assert node["outputs"] == ["output"]
+
+
+def test_插件可以自己声明节点长什么样() -> None:
+    """参照 ComfyUI 的自定义节点:标签、说明、表单、输出口子都由插件说了算。"""
+    client = _install_noded()
+    types = {item["type"]: item for item in client.get("/api/workflows/node-types").json()}
+    node = types["plugin.dev.noded.declared"]
+
+    assert node["label"] == "大声说"
+    assert node["description"].endswith("插件自己写的节点说明。")
+    assert node["outputs"] == ["loud", "length"]
+
+
+def test_插件节点跑起来_config_就是工具入参() -> None:
+    """节点表单里填的每一格,就是工具 input_schema 里的一个键 —— 中间没有翻译层可以出错。"""
+    client = _install_noded()
+    ws = client.get("/api/workspaces").json()[0]["id"]
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "name": "开始", "position": {"x": 0, "y": 0}, "config": {"params": {}}},
+            {
+                "id": "n1",
+                "type": "plugin.dev.noded.shout",
+                "name": "shout",
+                "position": {"x": 240, "y": 0},
+                "config": {"text": "hi", "times": 2, "mode": ""},
+            },
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "n1"}],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF", "graph": graph}).json()
+    job = client.post(f"/api/workflows/{wf['id']}/run", json={"params": {}}).json()
+
+    import time
+
+    for _ in range(100):
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "succeeded", job.get("error")
+    # 引擎在存 result 时把复杂对象压成字符串摘要(_trim_outputs),这里就按字符串断言。
+    output = job["result"]["context"]["n1"]["output"]
+    assert "'loud': 'HIHI'" in output
+    # 空字符串是编辑器给未填字段的种子值,不该原样发给工具 —— 否则"没填"和"填了空串"变成同一件事。
+    assert "'mode'" not in output
+
+
+def test_声明了具名输出就按名字拆开() -> None:
+    client = _install_noded()
+    ws = client.get("/api/workspaces").json()[0]["id"]
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "name": "开始", "position": {"x": 0, "y": 0}, "config": {"params": {}}},
+            {
+                "id": "n1",
+                "type": "plugin.dev.noded.declared",
+                "name": "大声说",
+                "position": {"x": 240, "y": 0},
+                "config": {"text": "ok"},
+            },
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "n1"}],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF", "graph": graph}).json()
+    job = client.post(f"/api/workflows/{wf['id']}/run", json={"params": {}}).json()
+
+    import time
+
+    for _ in range(100):
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "succeeded", job.get("error")
+    # 下游因此能直接引用 {{n1.loud}},而不是 {{n1.output.loud}}
+    assert job["result"]["context"]["n1"] == {"loud": "OK", "length": 2}
+
+
+
+def test_缺插件的图报的是缺哪个插件() -> None:
+    """工作流导出到别人机器上,少了插件时报"未知节点类型"等于让人无从下手。"""
+    from app.domain.workflows import validate_graph
+
+    errors = validate_graph(
+        {"nodes": [{"id": "n1", "type": "plugin.dev.noded.shout"}], "edges": []},
+        require_start=False,
+    )
+    assert errors == ["节点 n1 来自插件「dev.noded」的工具 shout,该插件未安装或未启用"]
+
+
+def test_通用插件工具节点仍然能跑() -> None:
+    """用户磁盘上和导出文件里已经存着这种节点,新形态不能让它们变成打不开的图。"""
+    client = _install_noded()
+    ws = client.get("/api/workspaces").json()[0]["id"]
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "name": "开始", "position": {"x": 0, "y": 0}, "config": {"params": {}}},
+            {
+                "id": "n1",
+                "type": "plugin_tool",
+                "name": "插件工具",
+                "position": {"x": 240, "y": 0},
+                "config": {"plugin_id": "dev.noded", "tool_name": "shout", "input": {"text": "hi"}},
+            },
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "n1"}],
+    }
+    wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "WF", "graph": graph}).json()
+    job = client.post(f"/api/workflows/{wf['id']}/run", json={"params": {}}).json()
+
+    import time
+
+    for _ in range(100):
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "succeeded", job.get("error")
+    assert "'loud': 'HI'" in job["result"]["context"]["n1"]["output"]

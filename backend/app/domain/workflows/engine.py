@@ -41,7 +41,9 @@ def start_workflow_job(
     db: Session, workflow: Workflow, *, params: dict[str, Any] | None = None, job: Job | None = None
 ) -> Job:
     """创建(或复用)workflow job 并启动执行线程。"""
-    errors = validate_graph(workflow.graph)
+    from app.domain.plugins.nodes import plugin_node_types
+
+    errors = validate_graph(workflow.graph, extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))
     if job is None:

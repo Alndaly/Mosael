@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Project, Workflow
 from app.domain.notifications import notify
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import register
+from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
+from app.domain.workflows.executors import register, register_prefix
 from app.domain.workflows.executors.common import id_list
 
 
@@ -36,16 +37,64 @@ def kb_search(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     return {"text": text, "results": results}
 
 
-@register("plugin_tool")
-def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.plugins.registry import invoke_plugin_tool
+def _run_plugin_tool(db: Session, plugin_id: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    from app.domain.plugins.registry import PluginDomainError, invoke_plugin_tool
 
-    invocation = invoke_plugin_tool(
-        db, str(config.get("plugin_id", "")), str(config.get("tool_name", "")), dict(config.get("input") or {})
-    )
+    try:
+        invocation = invoke_plugin_tool(db, plugin_id, tool_name, payload)
+    except PluginDomainError as exc:  # 插件被停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
+        raise WorkflowDomainError(f"插件 {plugin_id} 不可用: {exc}") from exc
     if invocation.status != "succeeded":
         raise WorkflowDomainError(f"插件工具失败: {invocation.error or invocation.status}")
-    return {"output": invocation.output}
+    return invocation.output
+
+
+@register("plugin_tool")
+def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """通用插件节点。**保留但不再进节点面板** —— 插件工具现在各自是一个节点(见下面的前缀
+    执行器),但用户磁盘上和导出文件里已经存着这种节点,它得继续跑。"""
+    output = _run_plugin_tool(
+        db, str(config.get("plugin_id", "")), str(config.get("tool_name", "")), dict(config.get("input") or {})
+    )
+    return {"output": output}
+
+
+@register_prefix(PLUGIN_NODE_PREFIX)
+def plugin_node(node_type: str):
+    """插件自带节点:`plugin.<插件id>.<工具名>`。
+
+    **节点的 config 就是工具的入参**,一一对应 —— 这是「插件节点」成立的前提:用户在表单里
+    填的每一格,就是工具 input_schema 里的一个键,中间没有翻译层可以出错。
+
+    输出按节点声明的 outputs 分发:声明了具名输出就从工具返回值里按同名键取,没声明(默认
+    `["output"]`)就把整份返回值装进 output。前者让下游直接引用 `{{node.title}}`,后者保证
+    任何工具不写一个字也能用。
+    """
+    from app.domain.plugins.nodes import parse_node_type
+
+    def run(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+        from app.domain.plugins.nodes import node_meta
+        from app.domain.plugins.registry import list_enabled_plugin_tools
+
+        parsed = parse_node_type(node_type)
+        if parsed is None:
+            raise WorkflowDomainError(f"插件节点类型不合法: {node_type}")
+        plugin_id, tool_name = parsed
+        # 空字符串是编辑器给未填字段的种子值。原样发给工具会让"没填"和"填了空串"变成同一件事,
+        # 而工具的必填校验就此失效 —— 它收到的是一个存在但为空的键。
+        payload = {key: value for key, value in config.items() if value not in (None, "")}
+        output = _run_plugin_tool(db, plugin_id, tool_name, payload)
+
+        tool = next(
+            (t for t in list_enabled_plugin_tools(db) if t["plugin_id"] == plugin_id and t["tool_name"] == tool_name),
+            None,
+        )
+        outputs = node_meta(tool)["outputs"] if tool else ["output"]
+        if outputs == ["output"]:
+            return {"output": output}
+        return {name: output.get(name) for name in outputs}
+
+    return run
 
 
 @register("notify")
