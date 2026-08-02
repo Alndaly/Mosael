@@ -7,7 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans), var(--font-serif-sc), ui-sans-serif, system-ui, sans-serif;
+  /* 中文正文用宋体承载 —— 拉丁部分仍走 Geist,两者按 font-family 顺序自然分工。 */
+  --font-serif: var(--font-serif-sc), Songti SC, serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -126,5 +128,60 @@
   }
   html {
     @apply font-sans;
+  }
+}
+/* ─────────────────────────────────────────────────────────────────────────
+   中文排版
+   
+   这一层决定这个站看起来像不像"人写的"。中文正文和英文正文的需求不一样,而多数
+   Tailwind 站点直接沿用英文的默认值 —— 结果就是行距偏挤、标点占满全角挤出空洞、
+   中英混排处黏在一起。三件事分别处理:
+
+   1. 行距。汉字是方块,没有 x-height 造成的视觉留白,1.5 在英文里舒服,在中文里发闷。
+      正文取 1.8,标题因为字大、行少,反而要收紧。
+   2. 标点。全角逗号句号自带半个字宽的空白,连续标点会挤出一个洞。text-spacing-trim
+      让浏览器把这部分裁掉(Chromium 133+ 支持;不支持的浏览器退回原样,不会更糟)。
+   3. 中英混排。汉字和拉丁字母之间该有约四分之一字宽的间隙,手写 <span> 加空格是不可
+      维护的。text-autospace 让浏览器自动插 —— 同样是渐进增强。
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* 正文宽度。中文单字信息密度高于英文,一行放 34em 已经偏长,取 32em 更好读。 */
+  --measure: 32em;
+}
+
+@layer base {
+  html {
+    /* 标点挤压 + 中英自动间距。两者都是渐进增强:不支持的浏览器忽略,版面退回当前效果。 */
+    text-spacing-trim: trim-start;
+    text-autospace: normal;
+  }
+
+  body {
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 正文:行距放开,字距略收(中文不需要英文那样的字距补偿)。 */
+  .prose-cn {
+    line-height: 1.8;
+    letter-spacing: 0.01em;
+  }
+
+  .prose-cn :is(p, ul, ol, blockquote) {
+    max-width: var(--measure);
+  }
+
+  /* 标题:字号大了之后行距要反过来收,否则上下断开、不成一块。 */
+  .prose-cn :is(h1, h2, h3) {
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    text-wrap: balance; /* 标题折行时两行长度尽量均衡,避免"一长一短" */
+  }
+
+  /* 段落折行避免行末孤字 —— 中文里一个字单独占一行特别显眼。 */
+  .prose-cn p {
+    text-wrap: pretty;
   }
 }
