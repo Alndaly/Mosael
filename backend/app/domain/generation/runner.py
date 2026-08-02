@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
-import threading
 import time
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from app.domain import provider_models
 from app.domain.jobs import dispatch_job, emit_job_event
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
-from app.domain.usage import record_usage
+from app.domain.usage import billable
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -204,7 +203,6 @@ def _record_generation_usage(
     started: float,
     status: str,
 ) -> None:
-    duration_seconds = round(max(0.0, time.monotonic() - started), 1)
     units = dict(result.usage if result is not None else {})
     if "requests" not in units:
         units["requests"] = 1
@@ -219,24 +217,24 @@ def _record_generation_usage(
         units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
         units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
         units.setdefault("source_images", len(request.source_files))
-    record_usage(
+    with billable(
         db,
+        capability=generation.kind,
+        operation="generation_job",
         workspace_id=job.workspace_id,
         provider_profile_id=context.profile_id,
         provider=generation.provider,
         model=generation.model,
-        capability=generation.kind,
-        operation="generation_job",
         source_type="generation_job",
         source_id=generation.id,
-        idempotency_key=f"generation:{generation.id}:{status}",
-        status=status,
-        duration_seconds=duration_seconds,
-        units=units,
-        raw_usage=result.raw_usage if result is not None else {},
         job_id=job.id,
-    )
-
+        idempotency_key=f"generation:{generation.id}:{status}",
+        started=started,
+    ) as call:
+        call.meter(units, raw=result.raw_usage if result is not None else {})
+        if status != "succeeded":
+            # 这里的失败是**捕获后**记的(runner 自己处理了异常),billable 看不见,得显式说。
+            call.mark_failed()
 
 def _asset_name(prompt: str, model: str) -> str:
     summary = prompt.strip().splitlines()[0][:40] if prompt.strip() else "Generation"

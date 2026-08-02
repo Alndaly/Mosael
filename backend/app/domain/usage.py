@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 import re
+import time
 from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.usage_scope import current_workspace
 from app.db.models import ProviderPricingRule, ProviderUsageEvent, now
 from app.domain.jobs import emit_job_event
+
+logger = logging.getLogger(__name__)
 
 """
 Provider usage ledger.
@@ -557,3 +564,157 @@ def _token_usage(units: dict[str, Any]) -> dict[str, int]:
         "cache_write_tokens": cache_write,
         "total_tokens": total_tokens,
     }
+
+
+# ---------- 记一次可计费的供应商调用 ----------
+#
+# `record_usage` 有十八个关键字参数,而三处调用点(生成 runner、智能体 host、对话)各拼一遍:
+# 各自算耗时、各自编幂等键、各自决定失败要不要记。抄三遍的结果是它们并不一致,而且新增的调用
+# 类型(Gemini 原生视频理解、语音合成、向量化)干脆一条都不记 —— 首页那张 Token 图长期是漏的。
+#
+# 把它们并排看,只有一样东西真的因地而异:**怎么计量**。图片按张、视频按秒、对话按 token,
+# 定价规则本来就按 capability + units 查。其余全是同一个形状。
+#
+# 所以「一次可计费的调用」成为一个显式概念:不变的部分(归属、耗时、成败、幂等、落库)交给
+# 下面这个上下文管理器,变化的部分留给调用方一句 `call.meter(...)`。
+
+
+@dataclass
+class BillableCall:
+    """一次进行中的可计费调用。用 `meter()` 报计量,可以多次调用(线程池里逐块累加)。"""
+
+    capability: str
+    operation: str
+    provider: str = ""
+    model: str = ""
+    provider_profile_id: str | None = None
+    source_type: str = ""
+    source_id: str = ""
+    job_id: str | None = None
+    agent_message_id: str | None = None
+    units: dict[str, Any] = None  # type: ignore[assignment]
+    raw_usage: dict[str, Any] = None  # type: ignore[assignment]
+    cost_micros: int | None = None
+    #: 记账落库后由 billable 填上,供调用方读取算好的成本(智能体把它写进消息 payload)。
+    event: ProviderUsageEvent | None = None
+    #: 调用方**捕获了**异常自己处理时,用它显式标失败 —— 异常没往外抛,billable 看不见。
+    status: str = "succeeded"
+
+    def mark_failed(self) -> None:
+        self.status = "failed"
+
+    def __post_init__(self) -> None:
+        if self.units is None:
+            self.units = {}
+        if self.raw_usage is None:
+            self.raw_usage = {}
+
+    def describe(self, *, provider: str = "", model: str = "", provider_profile_id: str | None = None) -> None:
+        """调用发生后才知道用了哪个模型时,补登记。"""
+        if provider:
+            self.provider = provider
+        if model:
+            self.model = model
+        if provider_profile_id:
+            self.provider_profile_id = provider_profile_id
+
+    def meter(self, units: dict[str, Any] | None = None, *, raw: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        """累加计量。数值相加,其余后写覆盖 —— 线程池里每块报一次,最终合成一条账。"""
+        merged = {**(units or {}), **kwargs}
+        for key, value in merged.items():
+            if isinstance(value, (int, float)) and isinstance(self.units.get(key), (int, float)):
+                self.units[key] += value
+            else:
+                self.units[key] = value
+        if raw:
+            self.raw_usage = raw
+
+    def meter_openai_tokens(self, raw: Any) -> None:
+        """OpenAI 风格回包的 `usage` 字段。对话类调用最常见的一种计量。"""
+        tokens = raw if isinstance(raw, dict) else {}
+        self.meter(
+            input_tokens=int(tokens.get("prompt_tokens") or 0),
+            output_tokens=int(tokens.get("completion_tokens") or 0),
+            raw=tokens,
+        )
+
+
+@contextmanager
+def billable(
+    db: Session,
+    *,
+    capability: str,
+    operation: str,
+    workspace_id: str = "",
+    provider: str = "",
+    model: str = "",
+    provider_profile_id: str | None = None,
+    source_type: str = "",
+    source_id: str = "",
+    job_id: str | None = None,
+    agent_message_id: str | None = None,
+    idempotency_key: str = "",
+    started: float | None = None,
+) -> Iterator[BillableCall]:
+    """包住一次供应商调用,结束时记一条账。
+
+    - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。
+      两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
+    - **同一个事务**:落库用调用方的 Session。试过给它独立事务(理由是"钱已经花了,调用方
+      回滚不该抹掉这笔账"),但 `job_id` / `agent_message_id` 是外键,指向调用方**刚 flush
+      还没 commit** 的行 —— 独立事务看不见它们,插入直接违反外键。schema 已经把这件事定了:
+      账和它引用的东西必须同生共死。代价是只读接口(翻译、分析、提示词优化)记了账之后要
+      自己 commit 一次,那几处都写了注释。
+    - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用同样花钱(很多供应商按请求计费),
+      而且"最近失败了多少次"本身就是用户想在账上看到的。
+    - **幂等**:不给就按 operation + source 生成。重放同一次调用不会重复入账。
+    """
+    # started 可由调用方传入:生成任务跨越几分钟,那段时间不在这个 with 块里,计时该由跑任务
+    # 的人说了算(time.monotonic 的基准)。
+    began = time.monotonic() if started is None else started
+    call = BillableCall(
+        capability=capability,
+        operation=operation,
+        provider=provider,
+        model=model,
+        provider_profile_id=provider_profile_id,
+        source_type=source_type,
+        source_id=source_id,
+        job_id=job_id,
+        agent_message_id=agent_message_id,
+    )
+    try:
+        yield call
+    except BaseException:
+        call.status = "failed"
+        raise
+    finally:
+        target = workspace_id or current_workspace()
+        if not target:
+            # 记不了(workspace_id 是 NOT NULL)。喊一声:这类调用要么该在工作区闸门之后发生,
+            # 要么该显式带上归属 —— 两者都不满足是个建模问题,不该无声无息。
+            logger.warning("用量无法归属(operation=%s capability=%s):当前上下文没有工作区", operation, capability)
+        else:
+            key = idempotency_key or f"{operation}:{call.source_id or id(call)}:{int(began * 1000)}"
+            try:
+                call.event = record_usage(
+                    db,
+                    workspace_id=target,
+                    provider_profile_id=call.provider_profile_id,
+                    provider=call.provider,
+                    model=call.model,
+                    capability=call.capability,
+                    operation=call.operation,
+                    source_type=call.source_type,
+                    source_id=call.source_id,
+                    job_id=call.job_id,
+                    agent_message_id=call.agent_message_id,
+                    idempotency_key=key,
+                    status=call.status,
+                    duration_seconds=round(max(0.0, time.monotonic() - began), 3),
+                    units=call.units,
+                    raw_usage=call.raw_usage,
+                    cost_micros=call.cost_micros,
+                )
+            except Exception:  # noqa: BLE001 — 记账是旁路,不该把主流程带下水
+                logger.warning("用量入账失败(%s),已忽略", operation, exc_info=True)

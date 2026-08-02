@@ -12,6 +12,7 @@
   - **空密钥**:只有提示词优化处理了「本地端点无鉴权」。其余几处发 `Bearer `(尾随空格),
     httpx 判定为非法头值直接抛,而报错内容和鉴权毫无关系,查半天才想到是密钥没填。
   - **用量**:一条都不记。首页那张 Token 图和成本统计因此是漏的,且漏得没有提示。
+    (记账本身不在这里 —— 它归 domain/usage.billable;这里只负责把 token 报进去。)
 
 温度、超时、是否强制 JSON 这些**确实**该因用途而异,所以它们是参数;上面那四件不该。
 
@@ -39,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ProviderProfile
 from app.domain import ai_retry, provider_models
+from app.domain.usage import BillableCall
 
 logger = logging.getLogger(__name__)
 
@@ -60,19 +62,6 @@ class ChatTarget:
     profile_id: str = ""
     vendor: str = ""
     name: str = ""
-
-
-@dataclass(frozen=True)
-class UsageContext:
-    """报一条用量事件所需的最小上下文。拿不到就传 None —— 比编一个假的工作区强。"""
-
-    db: Session
-    workspace_id: str
-    #: 用来区分是谁花的这笔钱:"translate" / "publish_copy" / "kb_graph" / …
-    operation: str
-    source_type: str = ""
-    source_id: str = ""
-    job_id: str | None = None
 
 
 def target_for(db: Session, profile: ProviderProfile, *, model: str = "") -> ChatTarget:
@@ -104,13 +93,13 @@ def chat(
     extra: dict[str, Any] | None = None,
     max_retries: int | None = None,
     client: httpx.Client | None = None,
-    usage: UsageContext | None = None,
+    call: BillableCall | None = None,
     label: str = "AI 调用",
 ) -> str:
     """跑一次对话补全,返回助手消息的文本。
 
     client 给了就复用它(整批字幕共用连接,省掉每条一次 TLS 握手);此时重试由该 client 决定。
-    usage 给了就报一条用量;拿不到工作区的调用点传 None。
+    call 给了就把 token 计量报进那次记账(见 domain/usage.billable)。
     """
     payload: dict[str, Any] = {"model": target.model, "messages": messages, "temperature": temperature}
     if json_object:
@@ -142,8 +131,9 @@ def chat(
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise AiChatError(_sanitize(f"{label}失败:供应商返回的结构不认识({exc})", target.api_key)) from exc
 
-    if usage is not None:
-        _record(usage, target, body.get("usage"))
+    if call is not None:
+        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
+        call.meter_openai_tokens(body.get("usage"))
     return content
 
 
@@ -178,30 +168,3 @@ def _provider_detail(response: httpx.Response, model: str) -> str:
     return f"{response.status_code} {detail[:300]}（模型 {model}）"
 
 
-def _record(context: UsageContext, target: ChatTarget, raw: Any) -> None:
-    """记一条用量。**失败不能影响主流程** —— 统计漏一条,比因为统计把已经拿到的结果丢掉强。"""
-    from app.domain.usage import record_usage
-
-    tokens = raw if isinstance(raw, dict) else {}
-    key = f"chat:{context.operation}:{context.source_id}:{tokens.get('total_tokens', 0)}:{id(raw)}"
-    try:
-        record_usage(
-            context.db,
-            workspace_id=context.workspace_id,
-            provider_profile_id=target.profile_id or None,
-            provider=target.vendor,
-            model=target.model,
-            capability="chat",
-            operation=context.operation,
-            source_type=context.source_type,
-            source_id=context.source_id,
-            job_id=context.job_id,
-            idempotency_key=key,
-            units={
-                "input_tokens": int(tokens.get("prompt_tokens") or 0),
-                "output_tokens": int(tokens.get("completion_tokens") or 0),
-            },
-            raw_usage=tokens,
-        )
-    except Exception:  # noqa: BLE001 — 统计是旁路,不该把主流程带下水
-        logger.warning("用量上报失败(%s),已忽略", context.operation, exc_info=True)

@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
-from app.domain.usage import estimate_text_tokens, record_usage
+from app.domain.usage import billable, estimate_text_tokens
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Open Studio;
@@ -569,28 +569,29 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             db.add(assistant_message)
             db.flush()
             if provider_vendor or provider_model:
-                event = record_usage(
+                # 记账的形状交给 billable(归属、耗时、幂等、落库);这里只报计量。
+                # 成本要写进消息 payload,而它是落库时才算出来的 —— 所以在 with 块之后读回。
+                with billable(
                     db,
+                    capability="chat",
+                    operation="agent_turn",
                     workspace_id=session.workspace_id,
                     provider_profile_id=provider_profile_id,
                     provider=provider_vendor,
                     model=provider_model,
-                    capability="chat",
-                    operation="agent_turn",
                     source_type="agent_message",
                     source_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
-                    status="succeeded",
-                    duration_seconds=usage["duration_seconds"],
-                    units=usage["metering"],
-                    raw_usage=result.usage or {},
                     agent_message_id=assistant_message.id,
-                )
-                usage["cost"] = {
-                    "cost_micros": event.cost_micros,
-                    "currency": event.currency,
-                    "confidence": event.cost_confidence,
-                }
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                ) as call:
+                    call.meter(usage["metering"], raw=result.usage or {})
+                event = call.event
+                if event is not None:
+                    usage["cost"] = {
+                        "cost_micros": event.cost_micros,
+                        "currency": event.currency,
+                        "confidence": event.cost_confidence,
+                    }
                 assistant_message.payload = {
                     "usage": usage,
                     **({"timeline": timeline} if timeline else {}),
@@ -608,22 +609,22 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             db.add(assistant_message)
             db.flush()
             if provider_vendor or provider_model:
-                record_usage(
+                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次同样花了钱。
+                with billable(
                     db,
+                    capability="chat",
+                    operation="agent_turn",
                     workspace_id=session.workspace_id,
                     provider_profile_id=provider_profile_id,
                     provider=provider_vendor,
                     model=provider_model,
-                    capability="chat",
-                    operation="agent_turn",
                     source_type="agent_message",
                     source_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
-                    status="failed",
-                    duration_seconds=usage["duration_seconds"],
-                    units=usage["metering"],
                     agent_message_id=assistant_message.id,
-                )
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                ) as call:
+                    call.meter(usage["metering"])
+                    call.mark_failed()
         except Exception as exc:  # worker threads must never die silently
             logger.exception("Agent turn crashed")
             usage = _usage_from_started(turn_started)
@@ -638,22 +639,22 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             db.add(assistant_message)
             db.flush()
             if provider_vendor or provider_model:
-                record_usage(
+                # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次同样花了钱。
+                with billable(
                     db,
+                    capability="chat",
+                    operation="agent_turn",
                     workspace_id=session.workspace_id,
                     provider_profile_id=provider_profile_id,
                     provider=provider_vendor,
                     model=provider_model,
-                    capability="chat",
-                    operation="agent_turn",
                     source_type="agent_message",
                     source_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
-                    status="failed",
-                    duration_seconds=usage["duration_seconds"],
-                    units=usage["metering"],
                     agent_message_id=assistant_message.id,
-                )
+                    idempotency_key=f"agent-message:{assistant_message.id}",
+                ) as call:
+                    call.meter(usage["metering"])
+                    call.mark_failed()
         finally:
             session.status = "idle"
             session.updated_at = now()

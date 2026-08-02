@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.roles import effective_perms, has_perm, role_at_least
+from app.core.usage_scope import bind_workspace
 from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, WorkspaceMemberPerm
 
 """
@@ -69,6 +70,7 @@ def ensure_workspace_member(db: Session, user: User, workspace_id: str) -> None:
     """Pure membership gate, method-agnostic — for read-only POSTs (search / retrieval
     test) that must stay open to viewers."""
     _membership(db, user, workspace_id)
+    bind_workspace(workspace_id)
 
 
 def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
@@ -82,6 +84,10 @@ def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
         overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
         if not has_perm(member.role, overrides, "edit"):
             raise HTTPException(status_code=403, detail="Permission denied: edit")
+    # 通过闸门 = 这次请求确实是关于这个工作区的。用量记账据此归属,不必再让每个调用点
+    # 把 workspace_id 一路穿到底(见 core/usage_scope 的说明)。放在校验之后:没过闸门的
+    # 请求不该在上下文里留下痕迹。
+    bind_workspace(workspace_id)
 
 
 def member_overrides(db: Session, workspace_id: str, user_id: str) -> dict[str, bool]:
@@ -119,6 +125,7 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
     overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
     if not has_perm(member.role, overrides, perm):
         raise HTTPException(status_code=403, detail=f"Permission denied: {perm}")
+    bind_workspace(workspace_id)
 
 
 def ensure_instance_admin(db: Session, user: User, perm: str = "credentials") -> None:
