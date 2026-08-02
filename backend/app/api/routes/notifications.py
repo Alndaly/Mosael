@@ -4,12 +4,28 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import NotificationListOut, NotificationOut
+from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
 from app.core.permissions import ensure_workspace_access
 from app.db.models import Notification
-from app.domain.notifications import mark_all_read, mark_read
+from app.domain.notifications import mark_all_read, mark_read, notify
 
 router = APIRouter(tags=["notifications"])
+
+
+@router.post("/notifications", response_model=NotificationOut)
+def create_notification(body: NotifyRequest, db: DbSession, user: CurrentUser) -> Notification:
+    """给工作区成员推一条站内通知。
+
+    工作流的「发送通知」节点走的是同一个领域函数;这条端点是为了让智能体也能用 ——
+    同一个能力不该因为入口不同而只存在于一边。
+    """
+    ensure_workspace_access(db, user, body.workspace_id)
+    rows = notify(db, body.workspace_id, type="agent", title=body.title, body=body.body)
+    db.commit()
+    if not rows:
+        raise HTTPException(status_code=422, detail="该工作区没有可通知的成员")
+    db.refresh(rows[0])
+    return rows[0]
 
 
 @router.get("/notifications", response_model=NotificationListOut)

@@ -75,20 +75,27 @@ def condition(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
     return {"result": result}
 
 
-@register("http_request")
-def http_request(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    method = str(config.get("method") or "GET").upper()
-    url = str(config.get("url", ""))
-    headers = {str(k): str(v) for k, v in dict(config.get("headers") or {}).items()}
-    body = config.get("body")
-    content = None if body in (None, "") or method == "GET" else str(body).encode()
-    response = httpx.request(method, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS)
-    text = response.text[:HTTP_TEXT_CAP]
+def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> dict[str, Any]:
+    """一次外部 HTTP 调用。**工作流节点与智能体工具共用这一个实现** —— 同一个能力在两个界面
+    上应当是同一段代码,否则超时、截断上限这些约定迟早在一边被改、另一边不知道。"""
+    verb = (method or "GET").upper()
+    content = None if not body or verb == "GET" else body.encode()
+    response = httpx.request(verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS)
     try:
         parsed: Any = response.json()
     except ValueError:
         parsed = None
-    return {"status": response.status_code, "text": text, "json": parsed}
+    return {"status": response.status_code, "text": response.text[:HTTP_TEXT_CAP], "json": parsed}
+
+
+@register("http_request")
+def http_request(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    return run_http(
+        method=str(config.get("method") or "GET"),
+        url=str(config.get("url", "")),
+        headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
+        body="" if config.get("body") in (None, "") else str(config.get("body")),
+    )
 
 
 def _code_node_env() -> dict[str, str]:
@@ -117,11 +124,15 @@ def _code_node_env() -> dict[str, str]:
     return {"PATH": "/usr/bin:/bin"}
 
 
-@register("code")
-def code(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    """跑一段用户代码,返回 {"output": ...}。**工作流节点与智能体工具共用这一个实现**。
+
+    子进程 + `-I`(忽略环境与 site)+ 最小 env:后端进程里有各家模型的 API key,用户代码不该
+    看得到。两个界面共用它,那道隔离就不会只在其中一边成立。
+    """
     import subprocess
 
-    payload = json.dumps({"code": str(config.get("code", "")), "inputs": dict(config.get("input") or {})})
+    payload = json.dumps({"code": code_text, "inputs": inputs})
     try:
         completed = subprocess.run(
             [sys.executable, "-I", "-c", _CODE_WRAPPER],
@@ -139,6 +150,11 @@ def code(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, A
         return {"output": json.loads(stdout.decode())["output"]}
     except (ValueError, KeyError) as exc:
         raise WorkflowDomainError("代码节点输出无法解析(请把结果赋给 output 变量)") from exc
+
+
+@register("code")
+def code(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    return run_python(str(config.get("code", "")), dict(config.get("input") or {}))
 
 
 @register("template")

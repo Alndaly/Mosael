@@ -11,7 +11,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut
 from app.audio.service import AsrError, start_transcription
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
-from app.db.models import Asset, Clip, Transcript
+from app.db.models import Asset, Clip, Transcript, Project
 from app.core.config import settings
 from app.domain.assets import import_uploaded_asset, register_file_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -139,6 +139,16 @@ def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentU
             if value and value not in cleaned:
                 cleaned.append(value)
         asset.tags = cleaned
+    if body.project_id is not None:
+        target = body.project_id.strip()
+        if target:
+            project = db.get(Project, target)
+            # 跨工作区归档会让素材从原工作区消失 —— 拒绝而不是静默照做。
+            if project is None or project.workspace_id != asset.workspace_id:
+                raise HTTPException(status_code=422, detail="项目不存在或不属于该工作区")
+            asset.project_id = project.id
+        else:
+            asset.project_id = None  # 空串 = 移出项目
     db.commit()
     db.refresh(asset)
     return asset

@@ -154,6 +154,9 @@ class AssetOut(OrmModel):
 class AssetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=240)
     tags: list[str] | None = Field(default=None, max_length=24)
+    #: 归入某个项目;空串 = 移出项目(回到"未归档")。工作流的「素材整理」节点一直能做这件事,
+    #: 而这个接口收不了 —— 于是同一个能力在两个界面上不一样。
+    project_id: str | None = Field(default=None, max_length=64)
 
 
 class LutOut(OrmModel):
@@ -473,6 +476,12 @@ class NotificationOut(OrmModel):
     payload: dict
     read_at: datetime | None
     created_at: datetime
+
+
+class NotifyRequest(BaseModel):
+    workspace_id: str
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(default="", max_length=2000)
 
 
 class NotificationListOut(BaseModel):

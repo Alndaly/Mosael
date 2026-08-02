@@ -56,3 +56,35 @@ def test_notification_scoped_to_user() -> None:
     # 其他用户不是工作区成员:访问被拒,也收不到通知
     denied = other.get(f"/api/notifications?workspace_id={ws['id']}")
     assert denied.status_code in (403, 404)
+
+
+def test_agent_can_push_a_notification() -> None:
+    """智能体的 notify_workspace 落在这条端点上。
+
+    工作流的「发送通知」节点一直能做这件事,而对话里做不到 —— 用户让智能体跑一件长活、
+    自己走开,回来时应该有一条通知等着,和工作流跑完时一样。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    created = client.post(
+        "/api/notifications",
+        json={"workspace_id": ws["id"], "title": "渲染完成", "body": "成片已导出"},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["type"] == "agent"
+
+    listing = client.get(f"/api/notifications?workspace_id={ws['id']}").json()
+    assert listing["unread"] == 1
+    assert listing["items"][0]["title"] == "渲染完成"
+    assert listing["items"][0]["body"] == "成片已导出"
+
+
+def test_agent_notification_respects_workspace_boundary() -> None:
+    """不是这个工作区的成员,就不能往里推通知 —— 否则它成了给任意人发消息的通道。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    outsider = second_client("outsider")
+    denied = outsider.post("/api/notifications", json={"workspace_id": ws["id"], "title": "喂"})
+    assert denied.status_code in (403, 404), denied.text
