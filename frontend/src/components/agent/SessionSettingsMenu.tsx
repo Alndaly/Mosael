@@ -5,7 +5,9 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { ContextMeter, type ContextInfo } from "@/components/agent/ContextMeter";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/components/agent/PermissionModePicker";
 import { AnalysisModePicker } from "@/features/ai-studio/AnalysisModePicker";
 import { ThinkingLevelPicker } from "@/features/ai-studio/ThinkingLevelPicker";
 
@@ -38,6 +40,10 @@ export function SessionSettingsMenu({
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   if (!session) return null;
+  // 收起状态下也要看得见现在是哪一档:用户不知道自己此刻授权了什么,就等于没有授权。
+  // 默认档不显示 —— 一个"一切正常"的常驻标记只会变成背景噪音。
+  const mode = permissionModeOf(session);
+  const ModeIcon = PERMISSION_MODE_ICON[mode];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -45,14 +51,29 @@ export function SessionSettingsMenu({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="relative h-7 w-7"
           aria-label={t("agentSessionSettings")}
           title={t("agentSessionSettings")}
         >
           <SlidersHorizontal size={13} />
+          {mode !== "manual" && (
+            <span
+              className={cn(
+                "absolute right-1 top-1 size-1.5 rounded-full",
+                mode === "bypass" ? "bg-destructive" : "bg-primary",
+              )}
+            />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="grid w-[260px] gap-2.5 p-2.5">
+        {/* 权限模式排在最前:它决定智能体能不问就做什么,是这里分量最重的一项。 */}
+        <div className="grid gap-1.5">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <ModeIcon size={12} className={ACCENT[mode]} /> {t("permModeLabel")}
+          </span>
+          <PermissionModePicker session={session} />
+        </div>
         <div className="grid gap-1.5">
           <span className="text-[11px] font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
           <ThinkingLevelPicker session={session} />

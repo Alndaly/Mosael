@@ -2,6 +2,7 @@ import React from "react";
 import { Circle, CircleCheck, CircleDot, ListChecks } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { InspectorCard } from "@/components/agent/InspectorCard";
 import { cn } from "@/lib/utils";
 
 export type PlanStep = { step: string; status: "pending" | "in_progress" | "done" | string };
@@ -32,18 +33,14 @@ export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefi
   if (steps.length === 0) return null;
 
   return (
-    <div className={cn("grid gap-1.5 rounded-lg border border-border bg-panel-subtle p-2.5", className)}>
-      <button
-        type="button"
-        className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] font-bold text-muted-foreground"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <ListChecks size={13} />
-        {t("agentPlan")}
-        <span className="ml-auto font-normal tabular-nums">
-          {done}/{steps.length}
-        </span>
-      </button>
+    // 外壳与检查器其余各块共用 —— 此前它自己写了一份几乎一样但又不完全一样的标题行。
+    <InspectorCard
+      icon={ListChecks}
+      title={t("agentPlan")}
+      aside={`${done}/${steps.length}`}
+      onToggle={() => setOpen((value) => !value)}
+      className={className}
+    >
       {open && (
         <ol className="m-0 grid list-none gap-1 p-0">
           {steps.map((step, index) => (
@@ -72,6 +69,6 @@ export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefi
           ))}
         </ol>
       )}
-    </div>
+    </InspectorCard>
   );
 }

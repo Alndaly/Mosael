@@ -9,7 +9,6 @@ import {
   Copy,
   CornerDownRight,
   Database,
-  FileText,
   Loader2,
   MessageSquarePlus,
   Paperclip,
@@ -37,10 +36,10 @@ import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMe
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
-import { PermissionModePicker } from "@/components/agent/PermissionModePicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
 import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
@@ -562,9 +561,6 @@ export function ChatWorkspace({
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
-                  {/* 模式常驻主行:用户不知道此刻授权了什么就等于没有授权。它不进「会话设置」——
-                      那个弹层装的是"配好就不再动的东西",模式恰恰相反。 */}
-                  <PermissionModePicker session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                       和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
                   <SessionSettingsMenu
@@ -656,8 +652,6 @@ function ChatInspector({
     [messages, running, streamTimeline],
   );
   const [toolBrowser, setToolBrowser] = React.useState(false);
-  const userCount = messages.filter((message) => message.role === "user").length;
-  const assistantCount = messages.filter((message) => message.role === "assistant").length;
   const failedCount = messages.filter((message) => message.error).length;
   const status = session?.status ?? (running ? "running" : "idle");
   const statusLabel = running
@@ -683,64 +677,21 @@ function ChatInspector({
         </span>
       </div>
 
-      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
-        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
-          <Database size={13} /> {t("agentInspectorContext")}
-        </h3>
-        <dl className="m-0 grid gap-[7px]">
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            <dt className="truncate text-[11px] text-muted-foreground">{t("agentWorkspace")}</dt>
-            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={workspace.name}>{workspace.name}</dd>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            <dt className="truncate text-[11px] text-muted-foreground">{t("agentSession")}</dt>
-            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session?.title ?? ""}>{session?.title ?? t("agentNoActiveSession")}</dd>
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            <dt className="truncate text-[11px] text-muted-foreground">{t("agentModel")}</dt>
-            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={effectiveModel}>{effectiveModel || "—"}</dd>
-          </div>
-          {session?.adapter && (
-            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-              <dt className="truncate text-[11px] text-muted-foreground">{t("agentFramework")}</dt>
-              <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground" title={session.adapter}>{session.adapter}</dd>
-            </div>
-          )}
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-            <dt className="truncate text-[11px] text-muted-foreground">{t("agentUpdatedAt")}</dt>
-            <dd className="m-0 truncate text-[11.5px] font-[650] text-foreground">{session ? formatInspectorTime(session.updated_at) : "—"}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
-        <h3 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold text-muted-foreground">
-          <FileText size={13} /> {t("agentInspectorThread")}
-        </h3>
-        <div className="grid grid-cols-2 gap-1.5">
-          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
-            <strong className="text-[15px] leading-none text-foreground">{messages.length}</strong>
-            {t("agentMetricMessages")}
-          </span>
-          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
-            <strong className="text-[15px] leading-none text-foreground">{userCount}</strong>
-            {t("agentMetricUser")}
-          </span>
-          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
-            <strong className="text-[15px] leading-none text-foreground">{assistantCount}</strong>
-            {t("agentMetricAssistant")}
-          </span>
-          <span className="grid gap-0.5 rounded-lg border border-border bg-panel px-2 py-[7px] text-[10.5px] text-muted-foreground">
-            <strong className="text-[15px] leading-none text-foreground">{queue.length}</strong>
-            {t("agentMetricQueue")}
-          </span>
-        </div>
+      {/* 概览。此前是两块:一块五行键值(其中「当前会话」就是你正看着的这个对话、「框架 pi」是
+          内部实现、「更新」永远是刚刚),另一块把四个数字铺成盒中盒的砖(消息=用户+助手,三个数
+          说的是同一件事)。留下的是**看了会改变你下一步动作**的:在哪个工作区、用哪个模型、
+          有没有消息在排队、有没有回合失败。 */}
+      <InspectorCard icon={Database} title={t("agentInspectorOverview")}>
+        <InspectorRow label={t("agentWorkspace")} value={workspace.name} title={workspace.name} />
+        <InspectorRow label={t("agentModel")} value={effectiveModel || "—"} title={effectiveModel} />
+        {/* 排队只在真有东西排队时出现 —— 一个常驻的 0 不构成信息。 */}
+        {queue.length > 0 && <InspectorRow label={t("agentMetricQueue")} value={queue.length} />}
         {failedCount > 0 && (
           <p className="m-0 text-[11.5px] leading-normal text-destructive">
             {t("agentFailedTurns").replace("{n}", String(failedCount))}
           </p>
         )}
-      </section>
+      </InspectorCard>
 
       {/* 计划排在工具之前:等待时最想知道的是"它打算做什么、做到哪了",
           而不是"刚才调了哪个工具"。没有计划时整块不渲染。 */}
@@ -750,23 +701,22 @@ function ChatInspector({
           36 个工具铺成四行胶囊(占掉半个侧栏,而那 8 个只是注册表顺序的前 8 个)。
           合成一块:头部一行交代规模与版本,主体是可展开看参数/结果的最近调用,
           全部工具收进一个带搜索的弹层——要查一个工具能干嘛时才打开。 */}
-      <section className="grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5">
-        <h3 className="m-0 flex items-center justify-between gap-1.5 text-[11.5px] font-bold text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Wrench size={13} /> {t("agentInspectorRecentTools")}
-          </span>
-          {/* 「看全部工具」是次要动作,做成标题行右侧的一个轻链接而不是整宽按钮 ——
-              整宽 outline 按钮的分量和这块的主内容(最近调用)一样重,而它其实是偶尔才点的。
-              版本号跟到弹层里去:它是排查时才需要的信息,常驻在这里只是一串噪音。 */}
+      <InspectorCard
+        icon={Wrench}
+        title={t("agentInspectorRecentTools")}
+        aside={
+          // 「看全部工具」是次要动作,所以走标题行右侧那个位 —— 和计划的 3/3 同一个位置、同一种
+          // 分量。整宽 outline 按钮会和这块的主内容(最近调用)一样重,而它其实是偶尔才点的。
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 font-normal text-muted-foreground transition-colors hover:text-foreground"
+            className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setToolBrowser(true)}
           >
             <span className="tabular-nums">{t("agentToolsAll").replace("{n}", String(tools.length))}</span>
             <ChevronRight size={11} />
           </button>
-        </h3>
+        }
+      >
         {recentTools.length > 0 ? (
           <ul className="m-0 grid list-none p-0">
             {recentTools.map(({ key, call }) => (
@@ -782,7 +732,7 @@ function ChatInspector({
           tools={tools}
           version={manifest?.version ?? ""}
         />
-      </section>
+      </InspectorCard>
     </aside>
   );
 }
@@ -943,17 +893,6 @@ function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentT
   return tools.reverse();
 }
 
-function formatInspectorTime(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
   const payload = message.payload as

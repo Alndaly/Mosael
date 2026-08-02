@@ -2,16 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import pkg from "../package.json" with { type: "json" };
 
 // 版本号只有一个来源:**仓库根** package.json。它是 electron-builder 打包用的版本,也是
 // app.getVersion() 的返回值,发版 CI(release.yml 的 Sync app version from tag)也只 bump 它。
 // 之前这里读的是 frontend/package.json —— 那个没人 bump,于是 v0.3.0 的包在设置页显示
 // "v0.1.0",而同一页的「检查更新」(走 app.getVersion())却正确地说"已是最新版本"。
+//
+// **用 import 而不是 readFileSync**:Vite 会把配置 import 到的文件当作配置依赖并在它变化时重启
+// 开发服务器;`readFileSync` 读到的东西它看不见 —— 于是跨过一次版本 bump 的长命开发服务器会把
+// 旧版本号一直 define 下去(实际发生过:7 月 30 日起的开发服务器在 8 月 2 日 bump 到 0.8.0 之后
+// 仍然满屏显示 v0.7.0,而代码和打出来的包都是对的)。
 // 用 import.meta.dirname 而不是 __dirname:Vite 8 的 `configLoader: "native"`(未来版本的默认值)
 // 下不提供 CJS 的 __dirname,当前版本只是警告,默认值一换配置就直接加载失败。
 const here = import.meta.dirname;
-const pkg = JSON.parse(readFileSync(path.resolve(here, "..", "package.json"), "utf-8")) as { version: string };
 
 export default defineConfig({
   // Relative asset paths so the packaged Electron shell can loadFile() dist.

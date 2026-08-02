@@ -177,6 +177,10 @@ def create_app() -> FastAPI:
             "null",                    # Electron shell (file://)
             "http://localhost:5173",   # Vite dev server
             "http://127.0.0.1:5173",
+            # 第二套开发实例(.claude/launch.json 的 frontend-demo + backend-demo):同一份代码另起
+            # 一对前后端,用来在不碰你正在用的那套数据的前提下看界面。少了这两条它只能拿到 CORS 错误。
+            "http://localhost:5273",
+            "http://127.0.0.1:5273",
             "http://localhost:8800",   # backend serving the built frontend
             "http://127.0.0.1:8800",
         ],
