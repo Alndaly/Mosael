@@ -25,10 +25,6 @@ Embedding 走 OpenAI 兼容 /embeddings 端点(复用 AI 供应商配置)。
 logger = logging.getLogger(__name__)
 
 COLLECTION = "openstudio_kb_chunks"
-#: 更名前的集合名。集合名是**数据的地址** —— 直接改常量等于把用户已建好的索引丢在一个
-#: 谁也不再看的名字下(检索静默返回空)。所以配了 `_migrate_collection_name`:开客户端时
-#: 就地改名,一次,幂等。
-_LEGACY_COLLECTION = "mibu_kb_chunks"
 _client_lock = threading.Lock()
 _client: Any | None = None
 
@@ -91,23 +87,8 @@ def _get_client() -> Any:
             from pymilvus import MilvusClient
 
             _client = MilvusClient(settings.kb_milvus_path)
-            _migrate_collection_name(_client)
             _ensure_collection(_client)
         return _client
-
-
-def _migrate_collection_name(client: Any) -> None:
-    """老集合就地改名到新名。只在"老的在、新的不在"时动手,幂等。
-
-    改名而不是重建:重建意味着把全部文档重新嵌入一遍 —— 那要花钱、要很久,而且是在用户
-    毫不知情的一次启动里发生。
-    """
-    try:
-        if client.has_collection(_LEGACY_COLLECTION) and not client.has_collection(COLLECTION):
-            client.rename_collection(_LEGACY_COLLECTION, COLLECTION)
-            logger.info("知识库向量集合已改名:%s → %s", _LEGACY_COLLECTION, COLLECTION)
-    except Exception:  # noqa: BLE001 —— 改名失败不该让知识库整个不可用
-        logger.exception("知识库向量集合改名失败,检索可能落空;可在设置里重建索引")
 
 
 def _ensure_collection(client: Any) -> None:
