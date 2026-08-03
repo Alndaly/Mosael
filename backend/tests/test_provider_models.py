@@ -76,8 +76,14 @@ def test_runtime_limits_只带设过的键():
     assert provider_models.runtime_limits(None) == {}
 
 
-def test_默认指向失效时退回第一个可用模型():
-    """删掉被指向的模型行不该让整个能力变成"未配置" —— 那会让所有用到它的地方一起停摆。"""
+def test_默认指向的模型被删掉之后不会静默换一个():
+    """**这条曾经断言相反的行为**:退回"该能力下第一个可用模型"。
+
+    换掉是因为那个兜底的失败方式跑出来过 —— 界面显示 DeepSeek、回答却是「我是 Kimi」,
+    因为那个"第一个"碰巧是一条订阅计划连接。原来的担心(删一行模型让整个能力停摆)是真的,
+    但代价换错了方向:**停摆看得见,静默换一个看不见**。现在删掉之后默认为空,调用方报
+    「请先选一个模型」。
+    """
     fresh_client()
     with SessionLocal() as db:
         profile = _profile(db)
@@ -89,7 +95,7 @@ def test_默认指向失效时退回第一个可用模型():
 
         db.delete(first)
         db.commit()
-        assert provider_models.resolve_default(db, "chat").model_id == "b"
+        assert provider_models.resolve_default(db, "chat") is None, "静默换成了另一个模型"
 
 
 def test_同一连接下模型_id_唯一():

@@ -9,6 +9,24 @@ from app.db.models import ProviderProfile
 from tests.util import add_provider, fresh_client
 
 
+def _configured(client):
+    """让这个部署有一个可用的对话模型。
+
+    取默认模型没有"随便挑一个"的兜底(见 provider_models.resolve_default) —— "能对话"必须
+    被显式配出来,这也正是真实部署里管理员配完连接顺手做的那一步。
+    """
+    from app.core.db import SessionLocal
+    from tests.util import add_provider
+
+    with SessionLocal() as db:
+        add_provider(
+            db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1",
+            api_key="k", model="m", capability_ids=["chat"],
+        )
+        db.commit()
+    return client
+
+
 def wait_idle(client, session_id: str, seconds: float = 8) -> str:
     deadline = time.time() + seconds
     status = client.get(f"/api/agent/sessions/{session_id}").json()["status"]
@@ -77,6 +95,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     monkeypatch.setattr(host, "run_turn", fake_run_turn)
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     assert session["status"] == "idle"
@@ -113,6 +132,7 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
     monkeypatch.setattr(host, "run_turn", fake_run_turn)
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     res = client.post(
@@ -142,6 +162,7 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     monkeypatch.setattr(host, "run_turn", failing_run_turn)
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
@@ -166,6 +187,7 @@ def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     monkeypatch.setattr(host, "run_turn", empty_run_turn)
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
@@ -197,6 +219,7 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    # 这条**故意不配可用模型** —— 它测的就是那种状态下的报错,所以不能走 _configured。
     # Public settings now reject a missing model. Insert one invalid row directly so the agent's
     # own preflight guard remains covered against corrupted/manual state.
     with SessionLocal() as db:
@@ -238,6 +261,7 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     assert client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "one"}).status_code == 200
@@ -253,6 +277,7 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
 def test_stop_is_not_an_error_when_nothing_is_running() -> None:
     """The user pressing stop as a turn ends is a race they cannot see."""
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
 
@@ -269,6 +294,7 @@ def test_reconcile_orphaned_agent_sessions() -> None:
     from app.core.db import SessionLocal
 
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     with SessionLocal() as db:
         stuck = AgentSession(workspace_id=ws["id"], title="卡住的", status="running")
@@ -294,6 +320,7 @@ def test_reconcile_orphaned_agent_sessions() -> None:
 
 def test_session_analysis_video_mode_patch() -> None:
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
     assert session["analysis_video_mode"] == "auto"  # 默认

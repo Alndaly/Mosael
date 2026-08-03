@@ -10,6 +10,20 @@ from app.integrations.feishu import service
 from tests.util import fresh_client
 
 
+def _configured(client):
+    """让这个部署有一个可用的对话模型 —— 取默认模型没有"随便挑一个"的兜底
+    (见 provider_models.resolve_default),所以"能对话"必须被显式配出来。"""
+    from app.core.db import SessionLocal
+    from tests.util import add_provider
+
+    with SessionLocal() as db:
+        add_provider(
+            db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1",
+            api_key="k", model="m", capability_ids=["chat"],
+        )
+        db.commit()
+
+
 def test_extract_text_strips_mentions() -> None:
     assert service.extract_text('{"text": "@_user_1 @_user_2 帮我看看素材"}') == "帮我看看素材"
     assert service.extract_text('{"text": "普通消息"}') == "普通消息"
@@ -45,6 +59,7 @@ def test_bot_crud_and_permissions() -> None:
 
 def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     client = fresh_client()
+    _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     bot = client.post(
         "/api/feishu/bots",
@@ -152,6 +167,7 @@ def test_图片消息进素材库_并把素材id带进提示(monkeypatch) -> Non
     """图片走的是和桌面端回形针同一条路:入素材库 → 提示里引用 → 智能体用 analyze_asset 看图。
     不给飞书单开一套,也就不会有"飞书里能看、应用里找不到"的图片。"""
     client = fresh_client()
+    _configured(client)
     sent: list = []
     ws, bot = _bound_bot(client, monkeypatch, sent)
 
@@ -187,6 +203,7 @@ def test_富文本消息的文字和内嵌图片都收(monkeypatch) -> None:
     """带格式粘贴一段话,飞书发过来的是 post —— 它对用户来说和普通文字没有任何区别,
     以前却和图片一样被整条丢掉。"""
     client = fresh_client()
+    _configured(client)
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
     monkeypatch.setattr(service, "download_message_resource", lambda *a, **k: b"")

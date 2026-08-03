@@ -70,8 +70,11 @@ def models_for_capability(db: Session, capability: str) -> list[ProviderModel]:
 def resolve_default(db: Session, capability: str, user_id: str | None = None) -> ProviderModel | None:
     """**这个人**在某能力下的默认模型行。
 
-    默认模型是个人偏好(见 db.models.ProviderDefault):自己的 → 部署的 → 都没有就退回"该能力下
-    的第一个可用模型",让没配过的人也能直接用,而不是撞一句未配置。
+    顺序:**自己的 → 部署的 → 没有**。最后一档回 None,而不是退回"该能力下第一个可用模型"。
+
+    那个兜底删掉了,因为它的失败方式跑出来过:界面显示 DeepSeek、回答却是「我是 Kimi」——
+    那个"第一个"碰巧是一条订阅计划连接,而订阅走的是它自己的 provider 定义(自带身份、自带思考)。
+    **任何"随便挑一个"都在没有答案时编一个,而编出来的那个看起来像答案。**
 
     `user_id` 给 None 时只看部署默认 —— 后台里确实没有人的那些路径(启动扫描一类)如此。
     """
@@ -82,8 +85,7 @@ def resolve_default(db: Session, capability: str, user_id: str | None = None) ->
         model = db.get(ProviderModel, row.provider_model_id)
         if model is not None and model.enabled and model.profile is not None and model.profile.enabled:
             return model
-    candidates = models_for_capability(db, capability)
-    return candidates[0] if candidates else None
+    return None
 
 
 def runtime_limits(model: ProviderModel | None) -> dict[str, Any]:

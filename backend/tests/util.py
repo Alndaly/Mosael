@@ -116,7 +116,7 @@ def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
     return status
 
 
-def add_provider(db, *, model: str = "", capability_ids=None, owner_username: str = "", **fields):
+def add_provider(db, *, model: str = "", capability_ids=None, owner_username: str = "", make_default: bool = True, **fields):
     """建一条连接、它的模型行,以及一把钥匙。
 
     档案上不再有 default_model —— 模型是独立实体。直接构造 ProviderProfile 而不建模型行的
@@ -139,7 +139,15 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     db.add(profile)
     db.flush()
     if model:
-        provider_models.upsert(db, profile, model, source="manual", capability_ids=capability_ids)
+        row = provider_models.upsert(db, profile, model, source="manual", capability_ids=capability_ids)
+        # 顺手设成**部署默认**。取默认模型没有"随便挑一个"的兜底(见 provider_models.resolve_default),
+        # 所以"这个部署配好了一条连接"在测试里就该包含"它是默认" —— 真实部署里也是管理员配完
+        # 顺手指定的那一步。已经有默认的能力不覆盖;要测「没有默认时怎么办」传 make_default=False。
+        from app.domain import provider_defaults
+
+        for capability in provider_models.effective_capabilities(row) if make_default else ():
+            if provider_defaults.get_row(db, capability, None) is None:
+                provider_defaults.set_default(db, capability, row, owner_user_id="")
     if api_key is not None or oauth_credential is not None or secrets or model_catalog is not None:
         query = db.query(User)
         owner = (

@@ -118,9 +118,12 @@ def resolve_chat_provider(
             profile = provider_credentials.resolve(db, default.profile, user_id)
             model = model or default.model_id
     if profile is None:
-        profile = first_enabled_profile(db, user_id=user_id)
-    if profile is None:
-        return None, None, None
+        # **不再回退到"第一个启用的连接"。** 那个兜底的失败方式跑出来过:界面显示 DeepSeek、
+        # 回答却是「我是 Kimi」—— 碰巧第一个是订阅计划连接,而订阅走它自己的 provider 定义
+        # (自带身份、自带思考)。没有默认就说没有,这句话用户看得懂;悄悄换一个他看不懂。
+        raise AdapterError(
+            "还没有选好对话模型:在输入框旁边选一个,或让部署管理员在管理页设一个默认模型。"
+        )
     if not (model or "").strip():
         # 没指定模型时用这条连接下第一个能对话的模型。default_model 那个字段正在退场 ——
         # 它是"一档案一模型"时代的写法,同一条连接有多个对话模型时它给不出答案。

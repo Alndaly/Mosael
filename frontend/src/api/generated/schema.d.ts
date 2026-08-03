@@ -3478,6 +3478,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/provider-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deployment Defaults
+         * @description **部署默认模型** —— 还没设过的人用哪个。
+         *
+         *     它是必要的一层,不是可有可无:取默认模型现在**没有"随便挑一个"的兜底**(那个兜底会让
+         *     界面显示 A 而回答来自 B)。所以新人的起点必须有人替他回答,而那个人就是部署管理员。
+         *
+         *     此前它只能经 API 置位、没有任何界面 —— 一个没有界面的能力不是功能,是隐藏状态。
+         */
+        get: operations["deployment_defaults_api_admin_provider_defaults_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/overview": {
         parameters: {
             query?: never;
@@ -16092,6 +16117,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deployment_defaults_api_admin_provider_defaults_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefaultOut"][];
                 };
             };
             /** @description Validation Error */

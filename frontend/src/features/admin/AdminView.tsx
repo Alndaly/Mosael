@@ -45,6 +45,10 @@ export function AdminView() {
   const qc = useQueryClient();
   const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => api<Overview>("/api/admin/overview") });
   const users = useQuery({ queryKey: ["admin-users"], queryFn: () => api<AdminUser[]>("/api/admin/users") });
+  const defaults = useQuery({
+    queryKey: ["admin-provider-defaults"],
+    queryFn: () => api<components["schemas"]["ProviderDefaultOut"][]>("/api/admin/provider-defaults"),
+  });
 
   const setAdmin = useMutation({
     mutationFn: ({ id, granted }: { id: string; granted: boolean }) =>
@@ -148,6 +152,22 @@ export function AdminView() {
                 onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
                 aria-label={t("deployAdminsTitle")}
               />
+            </span>
+          </SettingsRow>
+        ))}
+      </SettingsGroup>
+
+      {/* 部署默认模型:**还没设过的人用哪个**。它是必要的一层 —— 取默认模型没有"随便挑一个"
+          的兜底(那个兜底会让界面显示 A 而回答来自 B),所以新人的起点必须有人替他回答。 */}
+      <SettingsGroup title={t("adminDefaultsTitle")} description={t("adminDefaultsDesc")}>
+        {(defaults.data ?? []).map((row) => (
+          <SettingsRow key={row.capability} label={t(`capability_${row.capability}` as never)}>
+            <span className="text-[12.5px] text-muted-foreground">
+              {row.model ? (
+                <code className="timecode">{row.model}</code>
+              ) : (
+                <span className="text-[12px]">{t("adminDefaultUnset")}</span>
+              )}
             </span>
           </SettingsRow>
         ))}

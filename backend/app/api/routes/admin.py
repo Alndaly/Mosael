@@ -6,12 +6,21 @@ from fastapi import APIRouter
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AdminOverviewOut, AdminUserOut, DaySeriesPoint, UserSpendPoint
+from app.api.schemas import (
+    AdminOverviewOut,
+    AdminUserOut,
+    DaySeriesPoint,
+    ProviderDefaultOut,
+    UserSpendPoint,
+)
 from app.core.permissions import ensure_deployment_admin
+from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES
 from app.db.models import (
     Asset,
     AuthSession,
     Job,
+    ProviderDefault,
+    ProviderModel,
     ProviderUsageEvent,
     User,
     Workspace,
@@ -68,6 +77,31 @@ def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
         )
         for person in people
     ]
+
+
+@router.get("/admin/provider-defaults", response_model=list[ProviderDefaultOut])
+def deployment_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
+    """**部署默认模型** —— 还没设过的人用哪个。
+
+    它是必要的一层,不是可有可无:取默认模型现在**没有"随便挑一个"的兜底**(那个兜底会让
+    界面显示 A 而回答来自 B)。所以新人的起点必须有人替他回答,而那个人就是部署管理员。
+
+    此前它只能经 API 置位、没有任何界面 —— 一个没有界面的能力不是功能,是隐藏状态。
+    """
+    ensure_deployment_admin(db, user)
+    out: list[ProviderDefaultOut] = []
+    for capability in DEFAULTABLE_CAPABILITIES:
+        row = db.get(ProviderDefault, {"capability": capability, "owner_user_id": ""})
+        model = db.get(ProviderModel, row.provider_model_id) if row and row.provider_model_id else None
+        out.append(
+            ProviderDefaultOut(
+                capability=capability,
+                provider_profile_id=model.provider_profile_id if model else None,
+                model=model.model_id if model else "",
+                is_mine=False,
+            )
+        )
+    return out
 
 
 @router.get("/admin/overview", response_model=AdminOverviewOut)

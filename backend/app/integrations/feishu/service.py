@@ -362,8 +362,11 @@ def handle_incoming(
         # 供应商解析必须在这里做(与 AI Studio 同一助手):裸调 run_turn 不带 provider,
         # pi 适配器会直接报「未配置可用的 AI 供应商」,哪怕设置里已配好。
         try:
+            # 行动人是**发消息的那个绑定成员**,不是会话的主人 —— 飞书会话是机器人建的
+            # (一个群一个,owner_user_id 为空),而群里每个人各用各的钥匙、各自的默认模型。
+            # 与上面 mint_service_session 用的是同一个人。
             provider_dict, agent_model, _profile = resolve_chat_provider(
-                db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id
+                db, session.provider_profile_id, session.model or "", user_id=user.id
             )
         except AdapterError as exc:
             provider_dict, agent_model = None, None

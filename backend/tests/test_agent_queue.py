@@ -26,6 +26,20 @@ def _slow_turn(*args, **kwargs):
 
 
 def _session(client):
+    """建会话,并让这个部署有一个可用的对话模型。
+
+    取默认模型没有"随便挑一个"的兜底(见 provider_models.resolve_default),所以"这个部署能对话"
+    必须被显式配出来 —— 真实部署里也是管理员配完连接顺手指定默认的那一步。
+    """
+    from app.core.db import SessionLocal
+    from tests.util import add_provider
+
+    with SessionLocal() as db:
+        add_provider(
+            db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1",
+            api_key="k", model="m", capability_ids=["chat"],
+        )
+        db.commit()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     return client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
 
