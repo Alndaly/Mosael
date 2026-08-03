@@ -204,3 +204,41 @@ def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
             assert resolved is not None and resolved.api_key == "sk-LEGACY", f"{username} 升级后用不了了"
     with engine.begin() as conn:
         assert "api_key" not in {row[1] for row in conn.execute(text("PRAGMA table_info(provider_profiles)"))}
+
+
+def test_the_migration_adds_missing_columns_to_an_existing_credential_table() -> None:
+    """装过中途版本的库:`provider_credentials` 已经存在,但少几列。
+
+    `create_all` 只建缺失的**表**,从不给已存在的表加列 —— 真实的升级路径上撞过这个:
+    `table provider_credentials has no column named model_catalog`,后端起不来。
+    """
+    from sqlalchemy import text
+
+    from app.core.db import _migrate_provider_credentials, engine
+
+    admin, _mate = _deployment_admin_and_member()
+    profile_id = _connection(admin)
+
+    # 退回那个形状:凭据表少两列,钥匙还在档案行上。
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE provider_credentials"))
+        conn.execute(
+            text(
+                "CREATE TABLE provider_credentials ("
+                "profile_id VARCHAR(64) NOT NULL, owner_user_id VARCHAR(64) NOT NULL, "
+                "api_key VARCHAR(500) NOT NULL DEFAULT '', oauth_credential JSON, "
+                "secrets JSON NOT NULL DEFAULT '{}', credential_version INTEGER NOT NULL DEFAULT 0, "
+                "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, "
+                "PRIMARY KEY (profile_id, owner_user_id))"
+            )
+        )
+        conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN api_key VARCHAR(500) DEFAULT ''"))
+        conn.execute(text("UPDATE provider_profiles SET api_key = 'sk-LEGACY' WHERE id = :i"), {"i": profile_id})
+
+    _migrate_provider_credentials()  # 不该抛
+
+    from app.domain import provider_credentials
+
+    with SessionLocal() as db:
+        resolved = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
+        assert resolved is not None and resolved.api_key == "sk-LEGACY"

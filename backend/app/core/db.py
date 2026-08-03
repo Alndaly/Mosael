@@ -258,11 +258,32 @@ def _migrate_provider_credentials() -> None:
     列删掉之后,漏改的读取点会当场炸,而不是悄悄读到不该读的东西。
 
     `auth_type` 留在档案上 —— 它说的是这条连接怎么鉴权,不是谁的钥匙。幂等:列没了就直接返回。
+
+    **先给 provider_credentials 补列再搬**:`create_all` 只建缺失的**表**,从不给已存在的表加列
+    —— 一个装过中途版本的库里,这张表可能已经存在但少几列,直接往里插会当场 OperationalError。
     """
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     if "provider_profiles" not in tables:
         return
+    if "provider_credentials" in tables:
+        # 查列与加列必须在**同一个连接**上:inspect 可能从池里另一条连接读,而那条连接看到的
+        # schema 未必是刚刚 DDL 之后的(tests/util.py 里记过同一种症状 —— duplicate column)。
+        with engine.begin() as conn:
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_credentials)"))}
+            for name, ddl in (
+                ("api_key", "ALTER TABLE provider_credentials ADD COLUMN api_key VARCHAR(500) NOT NULL DEFAULT ''"),
+                ("oauth_credential", "ALTER TABLE provider_credentials ADD COLUMN oauth_credential JSON"),
+                ("secrets", "ALTER TABLE provider_credentials ADD COLUMN secrets JSON NOT NULL DEFAULT '{}'"),
+                ("model_catalog", "ALTER TABLE provider_credentials ADD COLUMN model_catalog JSON"),
+                (
+                    "credential_version",
+                    "ALTER TABLE provider_credentials ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0",
+                ),
+                ("shared", "ALTER TABLE provider_credentials ADD COLUMN shared BOOLEAN NOT NULL DEFAULT 0"),
+            ):
+                if name not in existing:
+                    conn.execute(text(ddl))
     columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
     if "auth_type" not in columns:
         with engine.begin() as conn:
