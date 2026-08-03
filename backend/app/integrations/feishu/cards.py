@@ -9,8 +9,8 @@
 账号、且**此刻仍是该工作区成员**。不是发起者也一样要过这关(群里别人点同样要自己有权限),
 这正是把授权建立在账号体系上而不是「谁在群里」的意义。
 
-批准还要额外过 `ensure_graph_node_privileges`,且是**按点击者**校验 —— 与 HTTP 路由那边的
-规则一致(见 api/routes/confirmations.approve 的注释:卡片是他批的,这次执行记在他头上)。
+批准走的是与 HTTP 路由**同一个** `authorize_and_approve`,且**按点击者**校验:卡片是他批的,
+这次执行就记在他头上(见 domain/agent/confirmations 与 tests/test_agent_identity_ratchet.py)。
 
 ## 为什么不用存 message_id
 

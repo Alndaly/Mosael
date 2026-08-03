@@ -775,8 +775,8 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
     不等于能批。用 open_id 而不是 user_id:绑定表就是按 open_id 建的,两者混用会让明明绑过的人
     被拒(这是 Hermes 在飞书审批上踩过的坑)。
 
-    批准还要额外过 ensure_graph_node_privileges,且按点击者校验 —— 与 HTTP 路由同规则:
-    卡是他批的,这次执行记在他头上。
+    批准走的是与 HTTP 路由同一个 authorize_and_approve,且按点击者校验:卡是他批的,这次执行
+    就记在他头上。
 
     失败一律回 toast:原卡保持可点,好让真正有权限的人接手。
     """
