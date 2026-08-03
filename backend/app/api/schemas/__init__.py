@@ -73,15 +73,12 @@ class WorkspaceMemberOut(BaseModel):
     username: str
     display_name: str
     role: str
-    perms: dict[str, bool]  # effective perms (role defaults + overrides)
     is_self: bool = False
 
 
 class MembersOut(BaseModel):
     members: list[WorkspaceMemberOut]
     my_role: str
-    perm_keys: list[str]  # every togglable perm, for the override UI
-    role_defaults: dict[str, dict[str, bool]]  # role → its default perm set
 
 
 class InviteMemberRequest(BaseModel):
@@ -108,10 +105,6 @@ class InvitationListOut(BaseModel):
 
 class SetRoleRequest(BaseModel):
     role: str = Field(pattern="^(owner|admin|editor|viewer)$")
-
-
-class SetMemberPermsRequest(BaseModel):
-    perms: dict[str, bool]
 
 
 class ProjectCreate(BaseModel):

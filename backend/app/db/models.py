@@ -149,17 +149,6 @@ class WorkspaceInvitation(Base):
     responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class WorkspaceMemberPerm(Base):
-    """Per-member fine-grained permission override. Absence of a row = fall back to the
-    member's role default (see app/core/roles.py). Relational (one row per overridden
-    perm) so new perms need no migration. Owner always has all perms — overrides ignored."""
-
-    __tablename__ = "workspace_member_perms"
-
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    perm: Mapped[str] = mapped_column(String(40), primary_key=True)
-    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class Project(Base):

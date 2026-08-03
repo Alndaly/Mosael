@@ -91,9 +91,6 @@ export function respondInvitation(invitationId: string, accept: boolean): Promis
 export function setMemberRole(workspaceId: string, userId: string, role: string): Promise<WorkspaceMember> {
   return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });
 }
-export function setMemberPerms(workspaceId: string, userId: string, perms: Record<string, boolean>): Promise<WorkspaceMember> {
-  return api<WorkspaceMember>(`/api/workspaces/${workspaceId}/members/${userId}/perms`, { method: "PATCH", body: JSON.stringify({ perms }) });
-}
 export function removeMember(workspaceId: string, userId: string): Promise<void> {
   return api<void>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
 }

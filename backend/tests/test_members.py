@@ -77,16 +77,25 @@ def test_last_owner_cannot_be_demoted_or_removed() -> None:
     assert owner.delete(f"/api/workspaces/{ws['id']}/members/{me['id']}").status_code == 409
 
 
-def test_perm_override_grants_and_revokes() -> None:
+def test_the_role_is_the_whole_answer() -> None:
+    """成员这一栏只剩角色 —— 接口不再返回 perms,也没有逐位设置的路由(ADR 0008 D4)。
+
+    留着一个没人配的矩阵,只会让人以为它在起作用;而它记录的恰恰是"某人被单独关掉了某项能力"
+    这种最容易被误读的信息。
+    """
     owner = fresh_client()
     ws = _ws(owner)
-    _join(owner, ws["id"], "vi", "viewer")
-    m = next(mm for mm in owner.get(f"/api/workspaces/{ws['id']}/members").json()["members"] if mm["username"] == "vi")
-    granted = owner.patch(f"/api/workspaces/{ws['id']}/members/{m['user_id']}/perms", json={"perms": {"edit": True}})
-    assert granted.status_code == 200 and granted.json()["perms"]["edit"] is True
-    revoked = owner.patch(f"/api/workspaces/{ws['id']}/members/{m['user_id']}/perms", json={"perms": {}})
-    assert revoked.json()["perms"]["edit"] is False
+    mate = _join(owner, ws["id"], "mate", "editor")
+    info = owner.get(f"/api/workspaces/{ws['id']}/members").json()
 
+    assert set(info) == {"members", "my_role"}, info
+    for member in info["members"]:
+        assert set(member) >= {"user_id", "username", "role"}
+        assert "perms" not in member
+
+    me = mate.get("/api/auth/me").json()
+    gone = owner.patch(f"/api/workspaces/{ws['id']}/members/{me['id']}/perms", json={"perms": {"edit": False}})
+    assert gone.status_code == 404, gone.text
 
 def test_only_owner_can_grant_owner() -> None:
     owner = fresh_client()

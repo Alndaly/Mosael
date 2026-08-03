@@ -58,6 +58,22 @@ def _migrate_tool_confirmations_session() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
 
 
+def _drop_member_perm_overrides() -> None:
+    """删掉 workspace_member_perms 整张表(ADR 0008 D4:角色即权限)。
+
+    权限位矩阵退场之后这张表没有读它的代码了 —— 留着一张没人读的表,下一个人会以为它还在起作用,
+    而它记录的恰恰是"某人被单独关掉了某项能力"这种最容易被误读的信息。
+
+    删表是不可逆的,但这里可逆的那一半在别处:真需要逐位配置时重新加回来,那时会有真实用例说清楚
+    要哪几位 —— 而不是把一张旧形状的表当成需求。
+    """
+    inspector = inspect(engine)
+    if "workspace_member_perms" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE workspace_member_perms"))
+
+
 def _migrate_deployment_admin() -> None:
     """users 新增 is_deployment_admin,并把**最早创建的账号**提成部署管理员。
 
@@ -535,6 +551,7 @@ def init_db() -> None:
     _migrate_auth_session_expiry()
     _migrate_permission_modes()
     _migrate_deployment_admin()
+    _drop_member_perm_overrides()
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()

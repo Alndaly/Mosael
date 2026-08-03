@@ -11,7 +11,6 @@ from app.api.schemas import (
     DailyPublishOut,
     MembersOut,
     RenameRequest,
-    SetMemberPermsRequest,
     SetRoleRequest,
     WorkspaceMemberOut,
     WorkspaceSummaryOut,
@@ -19,14 +18,13 @@ from app.api.schemas import (
     InvitationListOut,
 )
 from app.core.permissions import (
-    effective_member_perms,
     ensure_deployment_admin,
     ensure_workspace_access,
     ensure_workspace_perm,
     ensure_workspace_role,
     workspace_role,
 )
-from app.core.roles import PERMS, ROLES, role_defaults
+from app.core.roles import ROLES
 from app.db.models import (
     Asset,
     Job,
@@ -129,7 +127,7 @@ def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Res
     ensure_workspace_role(db, user, workspace_id, "owner")
     workspace = db.get(Workspace, workspace_id)
     if workspace is not None:
-        db.delete(workspace)  # FK cascade removes members, perms, and all scoped resources
+        db.delete(workspace)  # FK cascade removes members and all scoped resources
         db.commit()
     return Response(status_code=204)
 
@@ -166,7 +164,6 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
             username=member_user.username,
             display_name=member_user.display_name,
             role=member.role,
-            perms=effective_member_perms(db, workspace_id, member_user.id, member.role),
             is_self=member_user.id == user.id,
         )
         for member_user, member in members_svc.list_members(db, workspace_id)
@@ -174,8 +171,6 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
     return MembersOut(
         members=members,
         my_role=my_role,
-        perm_keys=list(PERMS),
-        role_defaults={role: role_defaults(role) for role in ROLES},
     )
 
 
@@ -270,7 +265,6 @@ def set_member_role(
         username=member_user.username if member_user else user_id,
         display_name=member_user.display_name if member_user else user_id,
         role=member.role,
-        perms=effective_member_perms(db, workspace_id, user_id, member.role),
     )
 
 
@@ -291,27 +285,6 @@ def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentU
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
 
-
-@router.patch("/workspaces/{workspace_id}/members/{user_id}/perms", response_model=WorkspaceMemberOut)
-def set_member_perms(
-    workspace_id: str, user_id: str, body: SetMemberPermsRequest, db: DbSession, user: CurrentUser
-) -> WorkspaceMemberOut:
-    ensure_workspace_perm(db, user, workspace_id, "members")
-    target = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
-    if target is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    try:
-        members_svc.set_perms(db, workspace_id, user_id, body.perms)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    member_user = db.get(User, user_id)
-    return WorkspaceMemberOut(
-        user_id=user_id,
-        username=member_user.username if member_user else user_id,
-        display_name=member_user.display_name if member_user else user_id,
-        role=target.role,
-        perms=effective_member_perms(db, workspace_id, user_id, target.role),
-    )
 
 
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)

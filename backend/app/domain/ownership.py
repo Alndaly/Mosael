@@ -19,7 +19,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     #: 进这个**部署**的邀请码(与 WorkspaceInvitation 进工作区是两件事,见 ADR 0008)。
     "RegistrationInvite": ("app/api/routes/auth.py",),
     "WorkspaceMember": ("app/domain/members.py", "app/api/routes/auth.py"),
-    "WorkspaceMemberPerm": ("app/domain/members.py",),
     "WorkspaceInvitation": ("app/domain/members.py",),
     "OAuthIdentity": ("app/api/routes/oauth.py",),
     # 创作核心

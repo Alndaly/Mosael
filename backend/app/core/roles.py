@@ -1,28 +1,28 @@
-"""Workspace role ladder + permission model (ported from the predecessor project's core/workspaces.py).
+"""工作区的角色阶梯。
 
-A member has one **role** (owner > admin > editor > viewer). Each role grants a default
-set of **perms**; an admin can additionally set per-member overrides (WorkspaceMemberPerm)
-that flip a single perm on/off. Owner always has every perm — overrides can't lock the
-last owner out. Enforcement lives in app/core/permissions.py; this module is pure logic
-(no DB, no FastAPI) so it's trivially unit-testable.
+    viewer  读内容
+    editor  读写内容,可以用智能体
+    admin   editor + 改工作区设置、管成员
+    owner   admin + 删除/转让工作区
+
+**没有权限位矩阵。** 此前是「四个角色 + 九个权限位 + 每人可覆盖」,删掉后两者的理由(ADR 0008 D4):
+
+  - 身份类资源搬出工作区之后,一半的位没有对应的能力了 —— `credentials` 配的是自己的密钥,
+    `publish` 用的是自己的账号,它们不再是"工作区里谁能做什么"。
+  - 剩下的位从来没人真的分开配过:`upload / edit / delete / export / schedule` 之间的区分,
+    在一个内容工作区里想不出真实场景 —— 能改时间线却不能上传素材,是什么角色?
+  - 它还养出了一个恒真条件:editor 默认持有除 `members` 外的全部位,于是实例管理员判据的第二个
+    条件永远成立(第 1 步随判据一起清掉了)。
+
+**可逆**:真需要逐位配置时再加回来,那时会有真实用例说清楚要哪几位 —— 而不是先摆一个矩阵在这儿
+等人来用。
+
+这个模块是纯逻辑(不碰 DB、不碰 FastAPI),执行在 app/core/permissions.py。
 """
 from __future__ import annotations
 
 ROLES = ("owner", "admin", "editor", "viewer")
 _RANK = {"viewer": 0, "editor": 1, "admin": 2, "owner": 3}
-
-# Every capability the UI/permission-gate can check. Keep in sync with the frontend's
-# perm labels. New perms slot in here without a migration (overrides are relational).
-PERMS = ("upload", "edit", "delete", "export", "ai", "credentials", "schedule", "members", "publish")
-
-# Role → default perm set. Editor gets everything except member management; viewer is
-# read-only; owner/admin get everything (admin can be trimmed per-member via overrides).
-_ROLE_DEFAULTS: dict[str, dict[str, bool]] = {
-    "owner": {perm: True for perm in PERMS},
-    "admin": {perm: True for perm in PERMS},
-    "editor": {perm: perm != "members" for perm in PERMS},
-    "viewer": {perm: False for perm in PERMS},
-}
 
 
 def role_rank(role: str) -> int:
@@ -31,23 +31,3 @@ def role_rank(role: str) -> int:
 
 def role_at_least(role: str, minimum: str) -> bool:
     return role_rank(role) >= role_rank(minimum)
-
-
-def role_defaults(role: str) -> dict[str, bool]:
-    return dict(_ROLE_DEFAULTS.get(role, _ROLE_DEFAULTS["viewer"]))
-
-
-def effective_perms(role: str, overrides: dict[str, bool] | None = None) -> dict[str, bool]:
-    """Role defaults merged with per-member overrides. Owner ignores overrides (always
-    full) so the last owner can never be locked out of their own workspace."""
-    if role == "owner":
-        return {perm: True for perm in PERMS}
-    perms = role_defaults(role)
-    for perm, allowed in (overrides or {}).items():
-        if perm in perms:
-            perms[perm] = allowed
-    return perms
-
-
-def has_perm(role: str, overrides: dict[str, bool] | None, perm: str) -> bool:
-    return effective_perms(role, overrides).get(perm, False)

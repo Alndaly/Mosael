@@ -39,24 +39,30 @@ def test_viewer_blocked_from_timeline_ops() -> None:
     assert viewer.post(f"/api/sequences/{seq['id']}/text-clips", json=body).status_code == 403
 
 
-def test_perm_override_grants_edit_to_viewer() -> None:
+def test_promoting_a_viewer_is_how_you_grant_writing() -> None:
+    """逐位覆盖退场之后,「让这个人能改东西」的唯一办法是给他 editor(ADR 0008 D4)。
+
+    此前是 `PATCH .../perms {"edit": true}` —— 一个 viewer 被单独打开 edit,于是他在名单上显示
+    「查看者」却能改内容。少一种能让名单说谎的状态。
+    """
     owner, ws, viewer = _setup("viewer")
     me = viewer.get("/api/auth/me").json()
-    owner.patch(f"/api/workspaces/{ws['id']}/members/{me['id']}/perms", json={"perms": {"edit": True}})
-    # With `edit` granted, the same viewer can now create a project.
+    assert viewer.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 403
+
+    owner.patch(f"/api/workspaces/{ws['id']}/members/{me['id']}", json={"role": "editor"})
+
     assert viewer.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 200
 
 
-def test_finer_perm_override_gates_a_single_capability() -> None:
-    owner, ws, editor = _setup("editor")
-    me = editor.get("/api/auth/me").json()
-    body = {"workspace_id": ws["id"], "name": "t", "kind": "noop", "trigger_type": "manual"}
-    # Editor has `schedule` by default → the perm gate lets it through (domain may 422, never 403).
-    assert editor.post("/api/scheduled-tasks", json=body).status_code != 403
+def test_an_editor_gets_the_whole_content_tier_at_once() -> None:
+    """内容这一档不再拆成 upload / edit / delete / export / schedule 逐位配。
 
-    # Revoke just `schedule` from this editor → blocked, but `edit` is untouched.
-    owner.patch(f"/api/workspaces/{ws['id']}/members/{me['id']}/perms", json={"perms": {"schedule": False}})
-    assert editor.post("/api/scheduled-tasks", json=body).status_code == 403
+    它们之间的区分在这个产品里想不出真实场景 —— 能建定时任务却不能建项目,是什么角色?
+    """
+    _owner, ws, editor = _setup("editor")
+    task = {"workspace_id": ws["id"], "name": "t", "kind": "noop", "trigger_type": "manual"}
+
+    assert editor.post("/api/scheduled-tasks", json=task).status_code != 403
     assert editor.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 200
 
 

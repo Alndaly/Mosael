@@ -7,10 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.core.roles import effective_perms, has_perm, role_at_least
+from app.core.roles import role_at_least
 from app.core.security import renew_if_stale
 from app.core.usage_scope import bind_workspace
-from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, WorkspaceMemberPerm, now
+from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, now
 
 """
 Single permission entry point (plan §9.3).
@@ -101,24 +101,14 @@ def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
     read-only everywhere without per-route wiring. Routes needing a different perm
     (credentials, ai, delete, …) call ensure_workspace_perm explicitly instead."""
     member = _membership(db, user, workspace_id)
-    if _request_method.get() in _MUTATING:
-        overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
-        if not has_perm(member.role, overrides, "edit"):
-            raise HTTPException(status_code=403, detail="Permission denied: edit")
+    if _request_method.get() in _MUTATING and not role_at_least(member.role, "editor"):
+        raise HTTPException(status_code=403, detail="Permission denied: edit")
     # 通过闸门 = 这次请求确实是关于这个工作区的。用量记账据此归属,不必再让每个调用点
     # 把 workspace_id 一路穿到底(见 core/usage_scope 的说明)。放在校验之后:没过闸门的
     # 请求不该在上下文里留下痕迹。
     bind_workspace(workspace_id)
 
 
-def member_overrides(db: Session, workspace_id: str, user_id: str) -> dict[str, bool]:
-    rows = db.scalars(
-        select(WorkspaceMemberPerm).where(
-            WorkspaceMemberPerm.workspace_id == workspace_id,
-            WorkspaceMemberPerm.user_id == user_id,
-        )
-    )
-    return {row.perm: row.allowed for row in rows}
 
 
 def workspace_role(db: Session, user: User, workspace_id: str) -> str | None:
@@ -139,12 +129,30 @@ def ensure_workspace_role(db: Session, user: User, workspace_id: str, minimum: s
     return member.role
 
 
+#: 老权限位 → 最低角色。**这不是一层新的间接**,是给 47 处调用点一次性换名的对照表:
+#: 位与位之间的区别在这个产品里从来没有真实场景,而角色阶梯有。
+_PERM_ROLE = {
+    "upload": "editor",
+    "edit": "editor",
+    "delete": "editor",
+    "export": "editor",
+    "ai": "editor",
+    "schedule": "editor",
+    "publish": "editor",
+    "members": "admin",
+}
+
+
 def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str) -> None:
-    """Member must have `perm` — role default, adjusted by any per-member override.
-    This is the write gate: mutating routes call it instead of ensure_workspace_access."""
+    """写闸:成员的角色要够。
+
+    保留 `perm` 这个参数是为了让调用点自己说清「这是哪一类操作」—— 它读起来比一个裸的 "editor"
+    有信息(`ensure_workspace_perm(..., "publish")` 一眼看出这条路由在发东西)。但它**不再是一个
+    可以逐位开关的能力**,只是映射到一档角色(见 _PERM_ROLE)。
+    """
+    minimum = _PERM_ROLE.get(perm, "admin")
     member = _membership(db, user, workspace_id)
-    overrides = {} if member.role == "owner" else member_overrides(db, workspace_id, user.id)
-    if not has_perm(member.role, overrides, perm):
+    if not role_at_least(member.role, minimum):
         raise HTTPException(status_code=403, detail=f"Permission denied: {perm}")
     bind_workspace(workspace_id)
 
@@ -169,8 +177,6 @@ def ensure_deployment_admin(db: Session, user: User) -> None:
         raise HTTPException(status_code=403, detail="这项设置属于整个部署,只有部署管理员能改")
 
 
-def effective_member_perms(db: Session, workspace_id: str, user_id: str, role: str) -> dict[str, bool]:
-    return effective_perms(role, member_overrides(db, workspace_id, user_id))
 
 
 def require_asset(db: Session, user: User, asset_id: str) -> Asset:

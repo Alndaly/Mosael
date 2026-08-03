@@ -807,23 +807,6 @@ export interface paths {
         patch: operations["set_member_role_api_workspaces__workspace_id__members__user_id__patch"];
         trace?: never;
     };
-    "/api/workspaces/{workspace_id}/members/{user_id}/perms": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Set Member Perms */
-        patch: operations["set_member_perms_api_workspaces__workspace_id__members__user_id__perms_patch"];
-        trace?: never;
-    };
     "/api/workspaces/{workspace_id}/summary": {
         parameters: {
             query?: never;
@@ -5899,14 +5882,6 @@ export interface components {
             members: components["schemas"]["WorkspaceMemberOut"][];
             /** My Role */
             my_role: string;
-            /** Perm Keys */
-            perm_keys: string[];
-            /** Role Defaults */
-            role_defaults: {
-                [key: string]: {
-                    [key: string]: boolean;
-                };
-            };
         };
         /** MoveClipRequest */
         MoveClipRequest: {
@@ -7345,13 +7320,6 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** SetMemberPermsRequest */
-        SetMemberPermsRequest: {
-            /** Perms */
-            perms: {
-                [key: string]: boolean;
-            };
-        };
         /** SetRoleRequest */
         SetRoleRequest: {
             /** Role */
@@ -8065,10 +8033,6 @@ export interface components {
             display_name: string;
             /** Role */
             role: string;
-            /** Perms */
-            perms: {
-                [key: string]: boolean;
-            };
             /**
              * Is Self
              * @default false
@@ -9897,42 +9861,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetRoleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceMemberOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_member_perms_api_workspaces__workspace_id__members__user_id__perms_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetMemberPermsRequest"];
             };
         };
         responses: {

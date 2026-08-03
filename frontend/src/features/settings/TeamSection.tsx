@@ -26,7 +26,6 @@ import {
   listMembers,
   removeMember,
   renameWorkspace,
-  setMemberPerms,
   setMemberRole,
   type Workspace,
   type WorkspaceMember,
@@ -44,18 +43,6 @@ import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
-const PERM_ICONS: Record<string, React.ReactNode> = {
-  upload: <Upload size={13} />,
-  edit: <Pencil size={13} />,
-  delete: <Trash2 size={13} />,
-  export: <Download size={13} />,
-  ai: <Sparkles size={13} />,
-  credentials: <KeyRound size={13} />,
-  schedule: <Clock size={13} />,
-  members: <Users size={13} />,
-  publish: <Send size={13} />,
-};
-
 const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
 const atLeast = (role: string, min: string) => (ROLE_RANK[role] ?? -1) >= ROLE_RANK[min];
 const ASSIGNABLE = ["admin", "editor", "viewer"] as const;
@@ -79,11 +66,6 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
 
   const roleMut = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) => setMemberRole(wid, userId, role),
-    onSuccess: invalidate,
-    onError: onErr,
-  });
-  const permMut = useMutation({
-    mutationFn: ({ userId, perms }: { userId: string; perms: Record<string, boolean> }) => setMemberPerms(wid, userId, perms),
     onSuccess: invalidate,
     onError: onErr,
   });
@@ -154,11 +136,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
               canManage={canManage}
               isOwner={isOwner}
               selfId={user?.id}
-              permKeys={members.data!.perm_keys}
-              roleDefaults={members.data!.role_defaults}
               roleLabel={roleLabel}
               onRole={(role) => roleMut.mutate({ userId: m.user_id, role })}
-              onPerms={(perms) => permMut.mutate({ userId: m.user_id, perms })}
               onRemove={() => removeMut.mutate(m.user_id)}
             />
           ))}
@@ -205,22 +184,16 @@ function MemberRow({
   canManage,
   isOwner,
   selfId,
-  permKeys,
-  roleDefaults,
   roleLabel,
   onRole,
-  onPerms,
   onRemove,
 }: {
   member: WorkspaceMember;
   canManage: boolean;
   isOwner: boolean;
   selfId?: string;
-  permKeys: string[];
-  roleDefaults: Record<string, Record<string, boolean>>;
   roleLabel: (role: string) => string;
   onRole: (role: string) => void;
-  onPerms: (perms: Record<string, boolean>) => void;
   onRemove: () => void;
 }) {
   const t = useI18n();
@@ -229,7 +202,6 @@ function MemberRow({
   const memberName = member.display_name || member.username;
   // Only an owner may re-role an owner row; managing others needs admin+.
   const canEditRole = canManage && (member.role !== "owner" || isOwner) && !(isSelf && member.role === "owner");
-  const canOverride = canManage && member.role !== "owner";
   const canRemove = (isSelf || canManage) && member.role !== "owner";
 
   return (
@@ -260,40 +232,6 @@ function MemberRow({
           <Badge variant="outline">{roleLabel(member.role)}</Badge>
         )}
 
-        {canOverride && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={t("teamPerms")}>
-                <SlidersHorizontal size={14} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="grid w-[270px] gap-px p-[7px]" align="end">
-              <div className="mb-[5px] flex items-center gap-1.5 border-b border-border px-1.5 pb-2 pt-px text-xs font-semibold text-foreground [&_svg]:text-primary">
-                <ShieldCheck size={13} /> {t("teamPermsFor").replace("{name}", member.username)}
-              </div>
-              {permKeys.map((perm) => (
-                <label className="flex cursor-pointer items-center justify-between gap-2.5 rounded-md px-1.5 py-[5px] text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary" key={perm}>
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <span className="inline-flex text-muted-foreground">{PERM_ICONS[perm] ?? <ShieldCheck size={13} />}</span>
-                    {t(`perm_${perm}` as never) as string}
-                  </span>
-                  <Switch
-                    checked={member.perms[perm] ?? false}
-                    onCheckedChange={(next) => {
-                      const effective = { ...member.perms, [perm]: next };
-                      // Persist only deltas from the role default (mirrors the backend model).
-                      const defaults = roleDefaults[member.role] ?? {};
-                      const overrides: Record<string, boolean> = {};
-                      for (const p of permKeys) if (effective[p] !== defaults[p]) overrides[p] = effective[p];
-                      onPerms(overrides);
-                    }}
-                  />
-                </label>
-              ))}
-              <p className="mb-0 mt-1.5 border-t border-border px-1.5 pb-0 pt-[7px] text-[11px] leading-[1.45] text-muted-foreground">{t("teamPermsHint")}</p>
-            </PopoverContent>
-          </Popover>
-        )}
 
         {canRemove && (
           <>
