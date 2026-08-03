@@ -612,11 +612,11 @@ def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
     _install_llm_transport(monkeypatch, ai_nodes, handler)
 
     with SessionLocal() as db:
-        profile = ProviderProfile(
-            name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk"
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk"
         )
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
-        db.add_all([profile, workflow])
+        db.add(workflow)
         db.flush()
 
         try:

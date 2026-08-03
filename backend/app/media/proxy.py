@@ -104,7 +104,7 @@ def build_proxy(source: Path, target: Path) -> bool:
 
 
 
-def start_proxy_job(db: Session, asset: Asset, *, force: bool = False) -> Job | None:
+def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force: bool = False) -> Job | None:
     """Queue proxy generation for a video asset (in-process daemon thread).
 
     No-op (returns None) when proxies are disabled, the asset isn't a file-backed
@@ -118,6 +118,7 @@ def start_proxy_job(db: Session, asset: Asset, *, force: bool = False) -> Job | 
         db,
         workspace_id=asset.workspace_id,
         kind="proxy",
+        created_by=created_by,
         payload={"asset_id": asset.id},
         message="生成预览代理排队中",
     )
@@ -208,7 +209,7 @@ def reconcile_missing_proxies(db: Session) -> int:
             if proxy_status(asset) != "ready":
                 _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
             continue
-        if start_proxy_job(db, asset, force=True):
+        if start_proxy_job(db, asset, created_by=None, force=True):  # 启动时的补齐扫描,没有操作人
             queued += 1
     return queued
 

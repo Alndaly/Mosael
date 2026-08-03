@@ -118,7 +118,7 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
         raise HTTPException(status_code=404, detail="音色不存在")
     ensure_workspace_access(db, user, voice.workspace_id)
     try:
-        return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id)
+        return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id, created_by=user.id)
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -140,6 +140,7 @@ def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> 
             db,
             workspace_id=body.workspace_id,
             project_id=body.project_id,
+            created_by=user.id,
             text=body.text,
             topic=body.topic,
             mode=body.mode,
@@ -161,7 +162,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
     from app.audio.tts_providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, EdgeTTS, OpenAITTS
-    from app.domain.providers import profile_extra
+    from app.domain.providers import resolve_profile, profile_extra
 
     if engine == OpenAITTS.id:
         return [{"value": voice, "label": voice} for voice in OpenAITTS.VOICES]
@@ -172,7 +173,10 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     if engine != "volcano":
         return []
 
-    ak, sk = profile_extra(db, "volcano", "ak"), profile_extra(db, "volcano", "sk")
+    # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——
+    # 列音色用的是我的账号,不是"这个部署里随便谁的"。
+    volcano = resolve_profile(db, "volcano", user_id=user.id)
+    ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
     if ak and sk:
         from app.integrations.volc_openapi import VolcOpenAPIError, list_all_speakers
 
@@ -206,6 +210,7 @@ def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: C
             db,
             text=body.text,
             project_id=body.project_id,
+            created_by=user.id,
             workspace_id=body.workspace_id,
             engine=body.engine,
             engine_voice=body.engine_voice,

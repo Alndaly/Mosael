@@ -73,7 +73,7 @@ def _ensure_fts(db: Session) -> None:
     )
 
 
-def reindex_document(db: Session, document: KbDocument, dataset: KbDataset) -> int:
+def reindex_document(db: Session, document: KbDocument, dataset: KbDataset, *, user_id: str | None) -> int:
     """按 dataset 的分块设置重建该文档的 chunk 与 FTS 行;回填 chunk_count/char_count;返回 chunk 数。
     增强层(向量/图谱)索引进后台线程,失败降级。"""
     _ensure_fts(db)
@@ -132,14 +132,15 @@ def _schedule_enhanced_index(
         with SessionLocal() as session:
             try:
                 kb_vectors.upsert_document_vectors(
-                    session, workspace_id=workspace_id, document_id=document_id, chunks=chunks
+                    session, workspace_id=workspace_id, document_id=document_id, chunks=chunks, user_id=user_id
                 )
             except Exception:  # noqa: BLE001 - 降级
                 logger.exception("KB vector indexing failed for %s", document_id)
             if want_graph:
                 try:
                     kb_graph.upsert_document_graph(
-                        session, workspace_id=workspace_id, document_id=document_id, title=title, chunks=chunks
+                        session, workspace_id=workspace_id, document_id=document_id, title=title, chunks=chunks,
+                        user_id=user_id
                     )
                 except Exception:  # noqa: BLE001 - 降级
                     logger.exception("KB graph indexing failed for %s", document_id)
@@ -155,12 +156,12 @@ def delete_document(db: Session, document: KbDocument) -> None:
     db.delete(document)
 
 
-def reindex_dataset(db: Session, dataset: KbDataset) -> int:
+def reindex_dataset(db: Session, dataset: KbDataset, *, user_id: str | None) -> int:
     """整库重建(分块设置改动后调用):全量重建 chunk/FTS。"""
     documents = db.scalars(select(KbDocument).where(KbDocument.dataset_id == dataset.id)).all()
     total = 0
     for document in documents:
-        total += reindex_document(db, document, dataset)
+        total += reindex_document(db, document, dataset, user_id=user_id)
     return total
 
 
@@ -195,6 +196,7 @@ def search(
     dataset: KbDataset,
     query: str,
     *,
+    user_id: str | None,
     top_k: int | None = None,
     score_threshold: float | None = None,
 ) -> list[dict[str, Any]]:
@@ -210,7 +212,7 @@ def search(
 
     ranked_lists: list[list[tuple[str, str]]] = [_fts_ranked(db, dataset.id, cleaned, limit * 4)]
     if dataset.retrieval_mode == "hybrid":
-        dense = kb_vectors.dense_search(db, dataset.workspace_id, cleaned, limit=limit * 4)
+        dense = kb_vectors.dense_search(db, dataset.workspace_id, cleaned, user_id=user_id, limit=limit * 4)
         if dense:
             ranked_lists.append(dense)
 
@@ -339,7 +341,7 @@ def fetch_url_as_text(url: str, *, timeout: float = 20.0) -> tuple[str, str]:
     return extractor.title.strip() or url, extractor.text()
 
 
-def rebuild_all_vectors(db: Session, *, dim_changed: bool) -> None:
+def rebuild_all_vectors(db: Session, *, dim_changed: bool, user_id: str | None) -> None:
     """嵌入配置(供应商/模型/维度)变更后重嵌全部文档向量。
     维度变了先把集合丢弃重建;供应商/模型变了向量值也变,同样需要重嵌。
     调用方负责放到后台线程。逐文档失败只降级。"""
@@ -357,7 +359,7 @@ def rebuild_all_vectors(db: Session, *, dim_changed: bool) -> None:
             continue
         try:
             kb_vectors.upsert_document_vectors(
-                db, workspace_id=document.workspace_id, document_id=document.id, chunks=rows
+                db, workspace_id=document.workspace_id, document_id=document.id, chunks=rows, user_id=user_id
             )
         except Exception:  # noqa: BLE001 - 降级
             logger.exception("KB re-embed failed for %s", document.id)

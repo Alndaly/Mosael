@@ -13,6 +13,7 @@ from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.usage import billable
 from app.domain.providers import require_profile
 from app.domain.workflows import WorkflowDomainError
+from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
 
 LLM_TIMEOUT_SECONDS = 120
@@ -138,7 +139,7 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
 
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    profile = require_profile(db, config.get("profile_id"), error=WorkflowDomainError)
+    profile = require_profile(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
         messages.append({"role": "system", "content": str(config["system"])})
@@ -193,6 +194,7 @@ def translate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[s
             db,
             text,
             str(config.get("target_lang") or "en"),
+            user_id=current_actor(db),
             engine=str(config.get("engine") or "google").lower(),
             profile_id=str(config.get("profile_id") or "") or None,
         )

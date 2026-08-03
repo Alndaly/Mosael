@@ -139,13 +139,16 @@ def test_an_endpoint_without_pricing_reports_why_nothing_happened(monkeypatch, c
 def test_subscription_profile_prefills_from_its_stored_catalog(client_fixture) -> None:
     """订阅计划的目录来自登录时 pi 带回的那份(cost 用 cacheRead/cacheWrite 命名)。"""
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
+    from app.db.models import User
+    from app.domain import provider_credentials
 
     client = client_fixture
     profile_id = _profile(client, "kimi-coding", {})
     with SessionLocal() as db:
-        profile = db.get(ProviderProfile, profile_id)
-        profile.model_catalog = [
+        # 目录是**这次登录**的结果,跟着钥匙走(见 domain/provider_credentials)。
+        me = db.query(User).order_by(User.created_at).first()
+        credential = provider_credentials.upsert(db, profile_id, me.id, api_key="k")
+        credential.model_catalog = [
             {"id": "k3", "name": "K3", "cost": {"input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite": 0}},
             {"id": "k3-256k", "name": "K3 256k", "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
         ]

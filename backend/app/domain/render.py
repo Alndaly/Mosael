@@ -243,7 +243,7 @@ def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
     return style
 
 
-def start_export(db: Session, sequence_id: str, export_params: dict | None = None) -> Job:
+def start_export(db: Session, sequence_id: str, export_params: dict | None = None, *, created_by: str | None) -> Job:
     """Validate the plan, create the render job, and run FFmpeg off-thread."""
     plan = build_plan_for_sequence(db, sequence_id, export_params)  # raises before job creation
     sequence = db.get(Sequence, sequence_id)
@@ -252,6 +252,7 @@ def start_export(db: Session, sequence_id: str, export_params: dict | None = Non
         db,
         workspace_id=sequence.workspace_id,
         kind="render",
+        created_by=created_by,
         payload={
             "sequence_id": sequence_id,
             "sequence_revision": plan.sequence_revision,

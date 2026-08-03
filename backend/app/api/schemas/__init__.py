@@ -36,6 +36,9 @@ class UserOut(OrmModel):
     signature: str
     #: 空 = 未设置头像;非空时前端以 /api/auth/users/{id}/avatar?v=<key> 取图并借 key 破缓存。
     avatar_key: str = ""
+    #: 这个部署的管理员(见 core/permissions.ensure_deployment_admin)。界面据此决定要不要
+    #: 摆出「部署」那一块、以及能不能把一把钥匙共享给全员。
+    is_deployment_admin: bool = False
 
 
 class AuthOut(BaseModel):
@@ -660,6 +663,23 @@ class AnalyzeAssetResponse(BaseModel):
     used_transcript: bool = False
 
 
+class ProviderCredentialIn(BaseModel):
+    """我在某条连接上的钥匙。"""
+
+    api_key: str | None = None
+    #: VENDOR_PRESETS 里标了 secret 而不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
+    secrets: dict[str, str] = Field(default_factory=dict)
+    #: 放一把「大家都能用」的。**只有部署管理员能置位** —— 共享的钥匙是整个部署在花钱。
+    shared: bool = False
+
+
+class ProviderCredentialOut(BaseModel):
+    profile_id: str
+    key_hint: str = ""
+    is_mine: bool = True
+    shared: bool = False
+
+
 class ProviderProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     vendor: str = Field(min_length=1, max_length=60)
@@ -703,7 +723,16 @@ class ProviderProfileOut(OrmModel):
     base_url: str
     enabled: bool
     created_at: datetime
+    #: **我自己**那把钥匙的尾四位(订阅计划是「已登录」)。别人的钥匙这里一律为空 ——
+    #: 连尾数都不该露(见 domain/provider_credentials)。
     key_hint: str = ""
+    #: 我在这条连接上配过自己的钥匙吗。
+    is_mine: bool = False
+    #: 我这把钥匙是不是「大家都能用」的那把(只有部署管理员放得了)。
+    my_key_shared: bool = False
+    #: 我没配,但部署管理员放了一把大家都能用的。界面要说清这一点,否则「我没配却能用」
+    #: 看起来像 bug,或者反过来让人重复配一遍。
+    uses_shared_key: bool = False
     #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
     #: same rule as api_key/key_hint.
     extra: dict[str, str] = Field(default_factory=dict)

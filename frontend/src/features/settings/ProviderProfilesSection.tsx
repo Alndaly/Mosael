@@ -18,6 +18,7 @@ import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
+import { MyKeyDialog } from "@/features/settings/MyKeyDialog";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -95,6 +96,9 @@ export function ProviderProfilesSection({
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
+  // 「我的密钥」和「编辑连接」是两个入口:连接是部署的配置(管理员改),钥匙是谁在花钱(各人各配)。
+  const [keying, setKeying] = React.useState<ProviderProfile | null>(null);
+  const me = useQuery({ queryKey: ["auth-me"], queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me") });
   const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
@@ -470,8 +474,10 @@ export function ProviderProfilesSection({
                     </>
                   ) : profile.key_hint ? (
                     ` · ${profile.key_hint}`
+                  ) : profile.uses_shared_key ? (
+                    <> · {t("providerUsesSharedKey")}</>
                   ) : (
-                    ""
+                    <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
                   )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}
@@ -525,6 +531,7 @@ export function ProviderProfilesSection({
                         onSelect={() => logout.mutate(profile.id)}
                       />
                     )}
+                    <MenuItem icon={<KeyRound size={13} />} label={t("providerMyKeyShort")} onSelect={() => setKeying(profile)} />
                     <MenuItem icon={<Pencil size={13} />} label={t("providerEdit")} onSelect={() => openEdit(profile)} />
                     <MenuItem
                       icon={<Trash2 size={13} />}
@@ -550,6 +557,14 @@ export function ProviderProfilesSection({
         </div>
       </SettingsBlock>
 
+      {keying && (
+        <MyKeyDialog
+          profile={keying}
+          preset={(vendors.data ?? []).find((v) => v.vendor === keying.vendor)}
+          canShare={me.data?.is_deployment_admin ?? false}
+          onClose={() => setKeying(null)}
+        />
+      )}
       {authing && (
         <ProviderOAuthDialog
           profileId={authing.id}

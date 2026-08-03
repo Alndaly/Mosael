@@ -191,7 +191,7 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: Current
     workflow = _get(db, workflow_id)
     ensure_workspace_access(db, user, workflow.workspace_id)
     try:
-        return start_workflow_job(db, workflow, params=body.params)
+        return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -225,6 +225,7 @@ def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: 
             profile_id=body.profile_id,
             workspace_id=workflow.workspace_id,
             workflow_id=workflow.id,
+            user_id=user.id,
         )
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

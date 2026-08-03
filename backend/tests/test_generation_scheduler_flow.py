@@ -244,7 +244,7 @@ def test_clearing_finished_jobs_keeps_generation_history() -> None:
         session = GenerationSession(workspace_id=ws["id"], title="夜景素材", owner_user_id=me.id)
         db.add(session)
         db.flush()
-        job = create_job(db, workspace_id=ws["id"], kind="ai_generation", payload={}, message="done")
+        job = create_job(db, workspace_id=ws["id"], kind="ai_generation", payload={}, created_by=None, message="done")
         job.status = "succeeded"
         generation = GenerationJob(
             workspace_id=ws["id"], session_id=session.id, job_id=job.id,

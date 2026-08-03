@@ -29,7 +29,7 @@ from app.domain.jobs import (
     reconcile_orphaned_jobs,
     report_job,
 )
-from tests.util import fresh_client
+from tests.util import add_provider, fresh_client
 
 
 @pytest.fixture()
@@ -40,7 +40,7 @@ def external_demo(monkeypatch):
 
 def _make_job(workspace_id: str, kind: str = "demo") -> str:
     with SessionLocal() as db:
-        job = create_job(db, workspace_id=workspace_id, kind=kind, payload={"n": 1})
+        job = create_job(db, created_by=None, workspace_id=workspace_id, kind=kind, payload={"n": 1})
         db.commit()
         return job.id
 
@@ -65,7 +65,7 @@ class TestExecutionModes:
         workspace_id = _workspace()
         ran = threading.Event()
         with SessionLocal() as db:
-            job = create_job(db, workspace_id=workspace_id, kind="demo", payload={})
+            job = create_job(db, created_by=None, workspace_id=workspace_id, kind="demo", payload={})
             started = dispatch_job(db, job, ran.set)
         assert started is True
         assert ran.wait(timeout=5)
@@ -73,7 +73,7 @@ class TestExecutionModes:
     def test_dispatch_leaves_external_kinds_queued(self, external_demo) -> None:
         workspace_id = _workspace()
         with SessionLocal() as db:
-            job = create_job(db, workspace_id=workspace_id, kind="demo", payload={})
+            job = create_job(db, created_by=None, workspace_id=workspace_id, kind="demo", payload={})
             started = dispatch_job(db, job, lambda: pytest.fail("external kind 不该起线程"))
             assert started is False
             db.refresh(job)
@@ -212,7 +212,7 @@ class TestDispatchWiring:
             asset = Asset(workspace_id=workspace_id, name="a", kind="video", file_key="media/a.mp4")
             db.add(asset)
             db.commit()
-            job = start_transcription(db, asset.id)
+            job = start_transcription(db, asset.id, created_by=None)
             db.refresh(job)
             assert job.status == "queued" and job.message == "等待执行器认领"
             assert claim_next_job(db, kinds=["transcribe"]).id == job.id
@@ -223,7 +223,9 @@ class TestDispatchWiring:
         self._external(monkeypatch, "tts")
         workspace_id = _workspace()
         with SessionLocal() as db:
-            job = start_synthesis(db, text="你好", project_id=None, workspace_id=workspace_id, engine="f5")
+            job = start_synthesis(
+            db,
+            created_by=None, text="你好", project_id=None, workspace_id=workspace_id, engine="f5")
             db.refresh(job)
             assert job.status == "queued"
             assert claim_next_job(db, kinds=["tts"]).id == job.id
@@ -239,14 +241,14 @@ class TestDispatchWiring:
             from app.db.models import ProviderProfile
             from app.domain import provider_models
 
-            profile = ProviderProfile(name="百炼", vendor="alibaba", base_url="", api_key="k")
-            db.add(profile)
+            profile = add_provider(db, name="百炼", vendor="alibaba", base_url="", api_key="k")
             db.flush()
             provider_models.upsert(db, profile, "qwen-image", capability_ids=["image"])
             db.commit()
         with SessionLocal() as db:
             generation, job = create_generation_job(
-                db,
+            db,
+            created_by=None,
                 workspace_id=workspace_id,
                 session_id=None,
                 project_id=None,

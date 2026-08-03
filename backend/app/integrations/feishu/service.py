@@ -363,7 +363,7 @@ def handle_incoming(
         # pi 适配器会直接报「未配置可用的 AI 供应商」,哪怕设置里已配好。
         try:
             provider_dict, agent_model, _profile = resolve_chat_provider(
-                db, session.provider_profile_id, session.model or ""
+                db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id
             )
         except AdapterError as exc:
             provider_dict, agent_model = None, None

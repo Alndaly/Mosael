@@ -34,7 +34,7 @@ def test_batch_overlaps_instead_of_running_one_after_another(monkeypatch) -> Non
 
     texts = [f"cue {i}" for i in range(16)]
     started = time.perf_counter()
-    out = tr.translate_many(None, texts, "en")
+    out = tr.translate_many(None, texts, "en", user_id=None)
     elapsed = time.perf_counter() - started
 
     assert out == [f"[en] cue {i}" for i in range(16)], "order must survive the pool"
@@ -59,7 +59,7 @@ def test_concurrency_is_bounded(monkeypatch) -> None:
         return text
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
-    tr.translate_many(None, [f"c{i}" for i in range(64)], "en")
+    tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None)
     # Unbounded would open 64 sockets at once and get rate-limited by the free endpoint.
     assert peak <= tr._MAX_PARALLEL
 
@@ -72,7 +72,7 @@ def test_empty_cues_pass_through_without_a_network_call(monkeypatch) -> None:
         return f"T:{text}"
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
-    out = tr.translate_many(None, ["hello", "", "   ", "world"], "en")
+    out = tr.translate_many(None, ["hello", "", "   ", "world"], "en", user_id=None)
     assert out == ["T:hello", "", "", "T:world"]
     assert calls == ["hello", "world"], "blank cues must not cost a round-trip"
 
@@ -85,7 +85,7 @@ def test_one_failure_fails_the_batch(monkeypatch) -> None:
 
     monkeypatch.setattr(tr, "google_translate", fake_google)
     with pytest.raises(tr.TranslateError):
-        tr.translate_many(None, ["ok", "bad", "ok2"], "en")
+        tr.translate_many(None, ["ok", "bad", "ok2"], "en", user_id=None)
 
 
 def test_ai_provider_is_read_once_before_the_pool_starts() -> None:
@@ -106,7 +106,7 @@ def test_ai_provider_is_read_once_before_the_pool_starts() -> None:
             return None
 
     with pytest.raises(tr.TranslateError):  # no enabled provider
-        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", engine="ai")
+        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", user_id=None, engine="ai")
     assert reads, "provider was never resolved"
     assert all(name == threading.current_thread().name for name in reads), (
         "the DB was read from a worker thread"

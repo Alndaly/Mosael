@@ -254,7 +254,7 @@ def test_kb_hybrid_rrf_fusion_with_fake_dense(monkeypatch) -> None:
         chunk_b_id = chunk_b.id
 
     monkeypatch.setattr(
-        kb_domain.kb_vectors, "dense_search", lambda db, ws_, q, limit=20: [(chunk_b_id, doc_b["id"])]
+        kb_domain.kb_vectors, "dense_search", lambda db, ws_, q, **kw: [(chunk_b_id, doc_b["id"])]
     )
 
     hits = client.get(f"/api/kb/datasets/{ds}/search?q=海边").json()
@@ -305,12 +305,14 @@ def test_kb_vector_client_roundtrip_without_native_milvus(monkeypatch) -> None:
     monkeypatch.setattr(vectors, "embed_texts", fake_embed)
     monkeypatch.setattr(vectors, "_get_client", lambda: fake_client)
 
-    vectors.upsert_document_vectors(None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")])
-    hits = vectors.dense_search(None, "ws1", "abc", limit=5)
+    vectors.upsert_document_vectors(
+        None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")], user_id=None
+    )
+    hits = vectors.dense_search(None, "ws1", "abc", user_id=None, limit=5)
     assert hits and hits[0][1] == "d1"
-    assert vectors.dense_search(None, "ws-other", "abc", limit=5) == []
+    assert vectors.dense_search(None, "ws-other", "abc", user_id=None, limit=5) == []
     vectors.delete_document_vectors("d1")
-    assert vectors.dense_search(None, "ws1", "abc", limit=5) == []
+    assert vectors.dense_search(None, "ws1", "abc", user_id=None, limit=5) == []
 
 
 def test_kb_milvus_lite_roundtrip_opt_in_subprocess(tmp_path) -> None:
@@ -335,13 +337,15 @@ settings.kb_embedding_dim = 8
 settings.kb_milvus_uri = {str(tmp_path / "vec.db")!r}
 init_db()
 vectors._client = None
-vectors.embed_texts = lambda db, texts: [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
-vectors.upsert_document_vectors(None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")])
-hits = vectors.dense_search(None, "ws1", "abc", limit=5)
+vectors.embed_texts = lambda db, texts, **kw: [[float(len(t) % 7 == i) for i in range(8)] for t in texts]
+vectors.upsert_document_vectors(
+        None, workspace_id="ws1", document_id="d1", chunks=[("c1", "abc"), ("c2", "abcdefgh")], user_id=None
+    )
+hits = vectors.dense_search(None, "ws1", "abc", user_id=None, limit=5)
 assert hits and hits[0][1] == "d1"
-assert vectors.dense_search(None, "ws-other", "abc", limit=5) == []
+assert vectors.dense_search(None, "ws-other", "abc", user_id=None, limit=5) == []
 vectors.delete_document_vectors("d1")
-assert vectors.dense_search(None, "ws1", "abc", limit=5) == []
+assert vectors.dense_search(None, "ws1", "abc", user_id=None, limit=5) == []
 """
     result = subprocess.run([sys.executable, "-c", script], cwd=os.getcwd(), text=True, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr

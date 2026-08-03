@@ -201,7 +201,7 @@ def _expired_oauth_client(name: str):
     from app.api.routes import settings as settings_routes
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from tests.util import fresh_client
+    from tests.util import add_provider, fresh_client
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
@@ -209,7 +209,8 @@ def _expired_oauth_client(name: str):
     settings_routes._refresh_failed_at.clear()
     past = int((_time.time() - 3600) * 1000)
     with SessionLocal() as db:
-        profile = ProviderProfile(
+        profile = add_provider(
+            db,
             name=name,
             vendor="anthropic",
             base_url="",
@@ -217,7 +218,6 @@ def _expired_oauth_client(name: str):
             auth_type="oauth",
             oauth_credential={"type": "oauth", "access": "tok", "refresh": "r", "expires": past},
         )
-        db.add(profile)
         db.commit()
         return client, profile.id, past
 
@@ -228,13 +228,14 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
     而它只要被用到就会自己好。这条锁住:列表接口自己先刷,刷成了就不再报过期。"""
     from app.api.routes import settings as settings_routes
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
+    from app.db.models import ProviderCredential
 
     client, profile_id, past = _expired_oauth_client("隔夜的订阅")
 
     def fake_refresh(**kwargs):
+        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/provider_credentials)。
         with SessionLocal() as inner:
-            row = inner.get(ProviderProfile, profile_id)
+            row = inner.query(ProviderCredential).filter(ProviderCredential.profile_id == profile_id).one()
             row.oauth_credential = {"type": "oauth", "access": "new", "refresh": "r2", "expires": past + 10**7}
             inner.commit()
         return True
@@ -274,14 +275,14 @@ def test_令牌过期时先刷新再查(monkeypatch):
 
     from app.api.routes import settings as settings_routes
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
-    from tests.util import fresh_client
+    from tests.util import add_provider, fresh_client
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     past = int((_time.time() - 3600) * 1000)
     with SessionLocal() as db:
-        profile = ProviderProfile(
+        profile = add_provider(
+            db,
             name="过期订阅",
             vendor="anthropic",
             base_url="",
@@ -289,7 +290,6 @@ def test_令牌过期时先刷新再查(monkeypatch):
             auth_type="oauth",
             oauth_credential={"type": "oauth", "access": "old", "refresh": "r", "expires": past},
         )
-        db.add(profile)
         db.commit()
         profile_id = profile.id
 
@@ -298,8 +298,11 @@ def test_令牌过期时先刷新再查(monkeypatch):
     def fake_refresh(**kwargs):
         called.update(kwargs)
         # 模拟 pi 刷新后写回:换上一个尚未过期的令牌
+        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/provider_credentials)。
+        from app.db.models import ProviderCredential
+
         with SessionLocal() as inner:
-            row = inner.get(ProviderProfile, profile_id)
+            row = inner.query(ProviderCredential).filter(ProviderCredential.profile_id == profile_id).one()
             row.oauth_credential = {"type": "oauth", "access": "new", "refresh": "r2", "expires": past + 10**7}
             inner.commit()
         return True
@@ -324,11 +327,14 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
     混成一个"离线"会让用户去重启一个根本没问题的服务。"""
     import httpx
 
-    from app.db.models import ProviderProfile
     from app.domain import provider_health
+    from app.domain.provider_credentials import ResolvedProvider
 
-    profile = ProviderProfile(name="X", vendor="openai-compatible", base_url="http://example.invalid/v1",
-                              api_key="k", auth_type="api_key")
+    # 探活拿到的是**解析过的连接**(连接 + 这个人的钥匙),不再是 ORM 档案。
+    profile = ResolvedProvider(
+        id="p", name="X", vendor="openai-compatible", base_url="http://example.invalid/v1",
+        auth_type="api_key", enabled=True, api_key="k",
+    )
 
     class _Stub:
         def __init__(self, status): self.status = status
@@ -347,8 +353,8 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
 def test_订阅计划不探活() -> None:
     """它们没有我们持有的 base_url,端点在 pi 的 Provider 定义里。返回 supported=False,
     界面据此整列不显示,而不是显示一个假的"离线"。"""
-    from app.db.models import ProviderProfile
     from app.domain import provider_health
+    from app.domain.provider_credentials import ResolvedProvider
 
-    profile = ProviderProfile(name="Kimi", vendor="kimi", base_url="", api_key="", auth_type="oauth")
+    profile = ResolvedProvider(id="p", name="Kimi", vendor="kimi", base_url="", auth_type="oauth", enabled=True)
     assert provider_health.probe(profile).supported is False

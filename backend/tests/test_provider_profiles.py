@@ -47,7 +47,11 @@ def test_resolution_reads_enabled_profiles() -> None:
         json={"name": "主力 DashScope", "vendor": "alibaba", "config": {"api_key": "profile-key"}},
     )
     with SessionLocal() as db:
-        assert resolve_profile(db, "alibaba").name == "主力 DashScope"
+        from app.db.models import User
+
+        me = db.query(User).order_by(User.created_at).first().id
+        # 解析要说清「为谁」—— 建连接时填的那把钥匙是建它的人的。
+        assert resolve_profile(db, "alibaba", user_id=me).name == "主力 DashScope"
 
 
 def test_能力挂在模型行上而不是连接上() -> None:

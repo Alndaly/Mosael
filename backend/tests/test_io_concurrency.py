@@ -66,7 +66,7 @@ def test_kb_entity_extraction_overlaps_and_reads_the_db_once(monkeypatch) -> Non
     profile_reads: list[str] = []
     recorder = _OverlapRecorder(delay=0.05)
 
-    def fake_profile(_db):
+    def fake_profile(_db, _user_id=None):
         profile_reads.append(threading.current_thread().name)
         return object()
 
@@ -101,7 +101,7 @@ def test_kb_entity_extraction_overlaps_and_reads_the_db_once(monkeypatch) -> Non
 
     chunks = [(f"c{i}", f"text {i}") for i in range(8)]
     kb_graph.upsert_document_graph(
-        None, workspace_id="ws", document_id="doc", title="T", chunks=chunks
+        None, workspace_id="ws", document_id="doc", title="T", chunks=chunks, user_id=None
     )
 
     assert recorder.peak > 1, "chunks were extracted one after another"

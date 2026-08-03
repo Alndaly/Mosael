@@ -39,16 +39,16 @@ class EmbeddingError(RuntimeError):
     pass
 
 
-def embed_texts(db: Session, texts: list[str], *, workspace_id: str = "") -> list[list[float]]:
+def embed_texts(db: Session, texts: list[str], *, user_id: str | None, workspace_id: str = "") -> list[list[float]]:
     """向量化一批文本。**这是全项目唯一的 embedding 出口**,所以记账也放在这里。
 
     整批记一条:入库一篇文档是几十块文本一次请求,而检索是一句话一次 —— 两者都只该在账上
     留一行。workspace_id 不给就取环境上下文(检索走 HTTP 请求,闸门已经绑好了)。
     """
     cfg = kb_config.get()
-    profile = resolve_profile(db, cfg.vendor, cfg.provider_profile_id)
+    profile = resolve_profile(db, cfg.vendor, cfg.provider_profile_id, user_id=user_id)
     if profile is None:
-        raise EmbeddingError("没有可用的嵌入供应商配置")
+        raise EmbeddingError("没有可用的嵌入供应商配置,或者你还没在这条连接上填自己的密钥")
     base_url = profile.base_url.rstrip("/")
     try:
         with billable(
@@ -109,11 +109,13 @@ def _ensure_collection(client: Any) -> None:
     client.load_collection(COLLECTION)
 
 
-def upsert_document_vectors(db: Session, *, workspace_id: str, document_id: str, chunks: list[tuple[str, str]]) -> None:
+def upsert_document_vectors(
+    db: Session, *, workspace_id: str, document_id: str, chunks: list[tuple[str, str]], user_id: str | None
+) -> None:
     """chunks: [(chunk_id, text)]。同步调用方需自行放到后台线程。"""
     if not vector_tier_enabled() or not chunks:
         return
-    vectors = embed_texts(db, [text for _id, text in chunks], workspace_id=workspace_id)
+    vectors = embed_texts(db, [text for _id, text in chunks], user_id=user_id, workspace_id=workspace_id)
     client = _get_client()
     client.delete(collection_name=COLLECTION, filter=f'document_id == "{document_id}"')
     client.insert(
@@ -151,12 +153,14 @@ def reset_collection() -> None:
     _ensure_collection(client)  # recreate at kb_config.get().dim + load
 
 
-def dense_search(db: Session, workspace_id: str, query: str, *, limit: int = 20) -> list[tuple[str, str]]:
+def dense_search(
+    db: Session, workspace_id: str, query: str, *, user_id: str | None, limit: int = 20
+) -> list[tuple[str, str]]:
     """返回 [(chunk_id, document_id)],按相似度降序;失败返回空(降级)。"""
     if not vector_tier_enabled():
         return []
     try:
-        vector = embed_texts(db, [query])[0]
+        vector = embed_texts(db, [query], user_id=user_id)[0]
         hits = _get_client().search(
             collection_name=COLLECTION,
             data=[vector],

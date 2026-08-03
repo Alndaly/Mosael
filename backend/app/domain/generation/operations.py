@@ -20,6 +20,7 @@ def create_generation_job(
     workspace_id: str,
     session_id: str | None,
     project_id: str | None,
+    created_by: str | None,
     provider: str,
     model: str,
     kind: str,
@@ -54,6 +55,7 @@ def create_generation_job(
         db,
         workspace_id=workspace_id,
         kind="ai_generation",
+        created_by=created_by,
         payload={
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,

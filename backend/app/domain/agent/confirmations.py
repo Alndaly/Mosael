@@ -423,6 +423,9 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
 
 def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     payload = confirmation.payload
+    # 这一步替谁干:批准它的那个人。智能体自己不是主体 —— 它花的是批准者的额度、用的是
+    # 批准者的钥匙(见 domain/provider_credentials 与 Job.created_by)。
+    actor = confirmation.decided_by
     if confirmation.tool == "publish_asset":
         from app.db.models import Asset as AssetModel, PublishAccount
         from app.domain.publish import start_publish
@@ -441,6 +444,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             title=str(payload.get("title") or ""),
             description=str(payload.get("description") or ""),
             tags=[],
+            created_by=actor,
         )
         return {"task_id": task.id, "status": task.status}
     if confirmation.tool == "http_request":
@@ -509,6 +513,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             workspace_id=confirmation.workspace_id,
             session_id=None,
             project_id=payload.get("project_id"),
+            created_by=actor,
             provider=provider,
             model=model,
             kind=kind,
@@ -538,6 +543,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             db,
             text=str(payload.get("text") or payload.get("prompt") or ""),
             project_id=payload.get("project_id"),
+            created_by=actor,
             workspace_id=confirmation.workspace_id,
             engine=engine,
             engine_voice=str(payload.get("voice") or payload.get("engine_voice") or ""),
@@ -560,6 +566,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             db,
             workspace_id=confirmation.workspace_id,
             project_id=payload.get("project_id"),
+            created_by=actor,
             text=str(payload.get("text") or payload.get("prompt") or ""),
             topic=str(payload.get("topic") or ""),
             mode=str(payload.get("mode") or "summarize"),
@@ -608,7 +615,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
 
         workflow = db.get(Workflow, str(payload["workflow_id"]))
         assert workflow is not None
-        job = start_workflow_job(db, workflow, params=dict(payload.get("params") or {}))
+        job = start_workflow_job(db, workflow, created_by=actor, params=dict(payload.get("params") or {}))
         return {"job_id": job.id}
     raise ConfirmationError(f"No executor for tool {confirmation.tool}")
 

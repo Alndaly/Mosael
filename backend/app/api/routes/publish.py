@@ -144,6 +144,7 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
             title=body.title,
             description=body.description,
             tags=body.tags,
+            created_by=user.id,
             short_title=body.short_title,
         )
     except PublishDomainError as exc:
@@ -169,7 +170,8 @@ def generate_publish_copy(body: PublishCopyRequest, db: DbSession, user: Current
 
     try:
         return generate_copy(
-            db, workspace_id=body.workspace_id, asset_id=body.asset_id, brief=body.brief, profile_id=body.profile_id
+            db,
+            user_id=user.id, workspace_id=body.workspace_id, asset_id=body.asset_id, brief=body.brief, profile_id=body.profile_id
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

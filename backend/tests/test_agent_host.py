@@ -6,7 +6,7 @@ from app.ai.agent import adapters, host
 from app.ai.agent.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
-from tests.util import fresh_client
+from tests.util import add_provider, fresh_client
 
 
 def wait_idle(client, session_id: str, seconds: float = 8) -> str:
@@ -200,14 +200,8 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
     # Public settings now reject a missing model. Insert one invalid row directly so the agent's
     # own preflight guard remains covered against corrupted/manual state.
     with SessionLocal() as db:
-        db.add(
-            ProviderProfile(
-                name="P",
-                vendor="openai-compatible",
-                base_url="http://localhost:1/v1",
-                api_key="k",
-                enabled=True,
-            )
+        add_provider(
+            db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1", api_key="k", enabled=True
         )
         db.commit()
     session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()

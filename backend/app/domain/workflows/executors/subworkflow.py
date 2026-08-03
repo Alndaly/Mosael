@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError, interpolate, validate_body_graph
+from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
 from app.domain.workflows.executors.common import wait_for_job
 
@@ -92,7 +93,7 @@ def call_workflow(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     inputs = config.get("inputs")
     params = dict(inputs) if isinstance(inputs, dict) else {}
     # start_workflow_job 建的子 job 经 create_job 读 contextvar,parent = 当前工作流 job → 自动收纳。
-    child = start_workflow_job(db, target, params=params)
+    child = start_workflow_job(db, target, created_by=current_actor(db), params=params)
     final = wait_for_job(child.id)
     result = final.result or {}
     # 优先给「输出」节点声明的具名输出;没有则退回整份上下文(向后兼容)。

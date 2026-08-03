@@ -99,24 +99,26 @@ def wait_for_idle_turns(timeout: float = 5.0) -> bool:
 
 
 def resolve_chat_provider(
-    db: Session, provider_profile_id: str | None, model: str
+    db: Session, provider_profile_id: str | None, model: str, *, user_id: str | None
 ) -> tuple[dict | None, str | None, object | None]:
     """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
     AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
     永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
     from app.domain.providers import first_enabled_profile, resolve_profile
 
+    from app.domain import provider_credentials
+
     profile = None
     if provider_profile_id:
-        profile = resolve_profile(db, "", provider_profile_id)
+        profile = resolve_profile(db, "", provider_profile_id, user_id=user_id)
     if profile is None:
         # 默认解析已经是模型粒度的:拿到的是一行模型,连接就在它身上。
         default = provider_models.resolve_default(db, "chat")
         if default is not None:
-            profile = default.profile
+            profile = provider_credentials.resolve(db, default.profile, user_id)
             model = model or default.model_id
     if profile is None:
-        profile = first_enabled_profile(db)
+        profile = first_enabled_profile(db, user_id=user_id)
     if profile is None:
         return None, None, None
     if not (model or "").strip():
@@ -143,7 +145,7 @@ def resolve_chat_provider(
     if profile.auth_type == "oauth":
         # 订阅计划:端点、模型目录、上下文窗口都在 pi 的 Provider 定义里,这边只递身份。
         provider_dict["pi_provider"] = pi_provider_id(profile.vendor)
-        provider_dict["credential"] = read_credential(profile)
+        provider_dict["credential"] = profile.oauth_credential
     else:
         # 上下文窗口来自供应商目录(带 TTL 缓存);端点没列出这个模型就留 None,由 sidecar 用保守回退。
         catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
@@ -520,7 +522,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             agent_model: str | None = None
             if session.adapter == "pi":
                 provider_dict, agent_model, profile = resolve_chat_provider(
-                    db, session.provider_profile_id, session.model or ""
+                    db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id
                 )
                 if profile is not None:
                     provider_profile_id = profile.id
@@ -855,7 +857,7 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     adapter_state 回存,并在对话里留一条 system 消息 —— **压缩必须被看见**:静默压缩会让
     用户以为模型"忘了"早期内容,而实际上是我们主动移走的。
     """
-    provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "")
+    provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id)
     result = compact_session(
         api_base=f"http://{settings.backend_host}:{settings.backend_port}",
         token=mint_tool_token(db, user),
@@ -891,7 +893,7 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     而实际上它早就在按 32k 压缩了。
     """
     try:
-        provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "")
+        provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id)
     except Exception:  # noqa: BLE001 — 没配供应商时不该让会话详情整个失败
         return None
     if not provider_dict or not agent_model:
@@ -899,7 +901,7 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     window = provider_dict.get("context_window")
     if not window:
         # 订阅计划的窗口在 pi 的目录里,后端拿不到;登录时存下的 model_catalog 有这份。
-        for entry in session_model_catalog(db, session.provider_profile_id):
+        for entry in session_model_catalog(db, session.provider_profile_id, session.owner_user_id):
             if entry.get("id") == agent_model:
                 window = entry.get("contextWindow") or entry.get("context_window")
                 break
@@ -909,12 +911,14 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     }
 
 
-def session_model_catalog(db: Session, profile_id: str | None) -> list[dict]:
+def session_model_catalog(db: Session, profile_id: str | None, user_id: str | None) -> list[dict]:
     """订阅计划登录后存下的模型目录;没有就是空列表。"""
     if not profile_id:
         return []
-    from app.db.models import ProviderProfile
 
-    profile = db.get(ProviderProfile, profile_id)
-    catalog = profile.model_catalog if profile is not None else None
+    from app.domain import provider_credentials
+
+    # 目录跟着钥匙走:两个人的订阅档位可以不一样,拿别人的目录去算窗口是错的。
+    mine = provider_credentials.get(db, profile_id, user_id) if user_id else None
+    catalog = mine.model_catalog if mine is not None else None
     return [entry for entry in (catalog or []) if isinstance(entry, dict)]

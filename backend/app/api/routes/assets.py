@@ -178,7 +178,7 @@ def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession,
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        result = analyze_asset(db, asset, body.question, body.profile_id, mode=body.mode)
+        result = analyze_asset(db, asset, body.question, user_id=user.id, profile_id=body.profile_id, mode=body.mode)
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/usage.billable),得落盘。
@@ -223,7 +223,7 @@ def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser):
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        return start_transcription(db, asset_id)
+        return start_transcription(db, asset_id, created_by=user.id)
     except AsrError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -287,7 +287,7 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
 def regenerate_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser):
     """Force a fresh proxy transcode (e.g. after a failed one)."""
     asset = require_asset(db, user, asset_id)
-    job = start_proxy_job(db, asset, force=True)
+    job = start_proxy_job(db, asset, created_by=user.id, force=True)
     if job is None:
         raise HTTPException(status_code=422, detail="该素材不支持生成预览代理")
     return job

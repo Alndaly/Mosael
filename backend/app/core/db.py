@@ -248,28 +248,66 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
-def _migrate_provider_auth() -> None:
-    """加列迁移:provider_profiles 增加 auth_type / oauth_credential / credential_version。
+def _migrate_provider_credentials() -> None:
+    """钥匙从 `provider_profiles` 搬到 `provider_credentials`,并把那几列删掉。
 
-    老档案全部是 API Key,默认值即正确语义,不需要回填。credential_version 从 0 起,
-    它只在同一进程组内比较大小,不依赖历史值。
+    升级前所有人共用档案行上那把钥匙。迁移把它变成**最早那位部署管理员的一条共享凭据**,于是
+    升级前后所有人照样能用;而从此以后每个人可以带自己的(见 domain/provider_credentials)。
+
+    **搬走而不是并存**:密钥列留在档案行上,就等于留着一条不经过解析、读到别人钥匙的路。
+    列删掉之后,漏改的读取点会当场炸,而不是悄悄读到不该读的东西。
+
+    `auth_type` 留在档案上 —— 它说的是这条连接怎么鉴权,不是谁的钥匙。幂等:列没了就直接返回。
     """
     inspector = inspect(engine)
-    if "provider_profiles" not in set(inspector.get_table_names()):
+    tables = set(inspector.get_table_names())
+    if "provider_profiles" not in tables:
         return
     columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
-    additions = [
-        ("auth_type", "ALTER TABLE provider_profiles ADD COLUMN auth_type VARCHAR(20) NOT NULL DEFAULT 'api_key'"),
-        ("oauth_credential", "ALTER TABLE provider_profiles ADD COLUMN oauth_credential JSON"),
-        ("credential_version", "ALTER TABLE provider_profiles ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0"),
-        ("model_catalog", "ALTER TABLE provider_profiles ADD COLUMN model_catalog JSON"),
-    ]
-    missing = [sql for name, sql in additions if name not in columns]
-    if not missing:
-        return
+    if "auth_type" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE provider_profiles ADD COLUMN auth_type VARCHAR(20) NOT NULL DEFAULT 'api_key'")
+            )
+    movable = [c for c in ("api_key", "oauth_credential", "credential_version", "model_catalog") if c in columns]
+    if not movable:
+        return  # 已经搬过了
+    if "provider_credentials" not in tables or "users" not in tables:
+        return  # create_all 还没跑到(首次装机),下次启动再补
+
     with engine.begin() as conn:
-        for sql in missing:
-            conn.execute(text(sql))
+        admin = conn.execute(
+            text("SELECT id FROM users WHERE is_deployment_admin = 1 ORDER BY created_at LIMIT 1")
+        ).scalar()
+        if admin is None:
+            admin = conn.execute(text("SELECT id FROM users ORDER BY created_at LIMIT 1")).scalar()
+        if admin is not None:
+            select_cols = ", ".join(movable)
+            rows = conn.execute(text(f"SELECT id, {select_cols} FROM provider_profiles")).mappings().all()
+            for row in rows:
+                api_key = (row.get("api_key") or "") if "api_key" in movable else ""
+                oauth = row.get("oauth_credential") if "oauth_credential" in movable else None
+                if not api_key and not oauth:
+                    continue  # 从来没配过钥匙的连接不用建凭据行
+                conn.execute(
+                    text(
+                        "INSERT OR IGNORE INTO provider_credentials "
+                        "(profile_id, owner_user_id, api_key, oauth_credential, secrets, model_catalog, "
+                        " credential_version, shared, created_at, updated_at) "
+                        "VALUES (:pid, :uid, :key, :oauth, '{}', :catalog, :version, 1, :now, :now)"
+                    ),
+                    {
+                        "pid": row["id"],
+                        "uid": admin,
+                        "key": api_key,
+                        "oauth": row.get("oauth_credential") if "oauth_credential" in movable else None,
+                        "catalog": row.get("model_catalog") if "model_catalog" in movable else None,
+                        "version": row.get("credential_version") or 0 if "credential_version" in movable else 0,
+                        "now": datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" "),
+                    },
+                )
+        for column in movable:
+            conn.execute(text(f"ALTER TABLE provider_profiles DROP COLUMN {column}"))
 
 
 def _migrate_agent_thinking_level() -> None:
@@ -598,7 +636,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
-    _migrate_provider_auth()
+    _migrate_provider_credentials()
     _migrate_tool_confirmations_session()
     _migrate_auth_session_expiry()
     _migrate_permission_modes()

@@ -68,6 +68,8 @@ def run_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskR
     job = create_job(
         db,
         workspace_id=task.workspace_id,
+        # 定时执行没有"当时的操作人",但一定有一个"当初挂上去的人" —— 用它的钥匙、算它的额度。
+        created_by=task.owner_user_id,
         kind=task.kind,
         payload={
             "scheduled_task_id": task.id,

@@ -171,6 +171,7 @@ def _import_stream(
     db.add(asset)
     db.commit()
     db.refresh(asset)
-    start_proxy_job(db, asset)  # 720p preview proxy for the compositor (no-op unless video)
+    # 代理转码只是 ffmpeg,不碰任何凭据、不花额度 —— 没有主体是如实的,不是漏填。
+    start_proxy_job(db, asset, created_by=None)  # 720p preview proxy for the compositor (no-op unless video)
     return asset
 

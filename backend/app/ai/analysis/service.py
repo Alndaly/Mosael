@@ -10,7 +10,6 @@ from typing import Any
 
 import httpx
 
-from sqlalchemy.orm import object_session
 
 from app.domain import provider_models
 from app.domain import ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
@@ -21,6 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers.base import sanitize_provider_error
 from app.db.models import Asset, ProviderProfile
+from app.domain import provider_credentials
+from app.domain.provider_credentials import ResolvedProvider
 from app.media.paths import resolve_key
 
 """
@@ -65,33 +66,46 @@ class AnalysisError(RuntimeError):
     pass
 
 
-def pick_analysis_profile(db: Session, profile_id: str | None = None) -> ProviderProfile:
+def pick_analysis_profile(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedProvider:
+    """挑一条能做多模态的连接,并绑上**这个人**的钥匙。
+
+    钥匙解析不出来就报出来,而不是换一条能用的 —— 「我以为用的是自己的额度,其实花的是别人的钱」
+    是这里最坏的失败方式(见 domain/provider_credentials)。
+    """
     if profile_id:
         profile = db.get(ProviderProfile, profile_id)
         if profile is None or not profile.enabled:
             raise AnalysisError("指定的供应商配置不存在或已停用")
-        return profile
+        return _with_key(db, profile, user_id)
     profiles = db.scalars(select(ProviderProfile).where(ProviderProfile.enabled.is_(True))).all()
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in ANALYSIS_VENDOR_ORDER:
         if vendor in by_vendor:
-            return by_vendor[vendor]
+            return _with_key(db, by_vendor[vendor], user_id)
     raise AnalysisError("没有可用的多模态供应商，请在设置中添加（如 Kimi 或 MiniMax）")
 
 
-def pick_native_video_profile(db: Session, profile_id: str | None = None) -> ProviderProfile | None:
+def _with_key(db: Session, profile: ProviderProfile, user_id: str | None) -> ResolvedProvider:
+    resolved = provider_credentials.resolve(db, profile, user_id)
+    if resolved is None:
+        raise AnalysisError(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
+    return resolved
+
+
+def pick_native_video_profile(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedProvider | None:
     """挑一个支持原生视频理解的启用档案。指定 id 时必须本身是 native vendor;否则按 NATIVE_VIDEO_VENDORS
     优先级挑。没有则返回 None(交给上层回落抽帧)。"""
     if profile_id:
         profile = db.get(ProviderProfile, profile_id)
         if profile is not None and profile.enabled and profile.vendor in NATIVE_VIDEO_VENDORS:
-            return profile
+            return provider_credentials.resolve(db, profile, user_id)
         return None
     profiles = db.scalars(select(ProviderProfile).where(ProviderProfile.enabled.is_(True))).all()
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in NATIVE_VIDEO_VENDORS:
         if vendor in by_vendor:
-            return by_vendor[vendor]
+            # 原生视频是回落链的一环:钥匙没配就当这条路不存在,回落抽帧,而不是整个失败。
+            return provider_credentials.resolve(db, by_vendor[vendor], user_id)
     return None
 
 
@@ -159,15 +173,14 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
 
 
 def call_vision_model(
-    profile: ProviderProfile, messages: list[dict[str, Any]], call: BillableCall | None = None
+    db: Session, profile: ResolvedProvider, messages: list[dict[str, Any]], call: BillableCall | None = None
 ) -> str:
-    # 叶子函数只拿得到 ORM 对象;它必然挂在调用方的会话上,object_session 正为此而设 ——
-    # 比为一个模型名把 db 串进三层签名干净。
-    session = object_session(profile)
-    model = provider_models.model_id_for(session, profile, "chat") or "gpt-4o-mini"
+    # 参数是解析过的连接(连接 + 这个人的钥匙),不再是 ORM 对象 —— 此前靠 object_session 把
+    # 会话从对象上摸出来,而 ResolvedProvider 没有挂在任何会话上,db 只能显式传。
+    model = provider_models.model_id_for(db, profile, "chat") or "gpt-4o-mini"
     try:
         return chat(
-            target_for(session, profile, model=model),
+            target_for(db, profile, model=model),
             messages,
             temperature=0.2,
             timeout=REQUEST_TIMEOUT_SECONDS,
@@ -198,11 +211,11 @@ def _read_native_video(path: Path) -> tuple[bytes, str]:
 
 
 def _call_gemini_video(
-    profile: ProviderProfile, prompt: str, video: bytes, mime: str, call: BillableCall | None = None
+    db: Session, profile: ResolvedProvider, prompt: str, video: bytes, mime: str, call: BillableCall | None = None
 ) -> str:
     """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
     base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-    model = provider_models.model_id_for(object_session(profile), profile, "chat") or "gemini-2.0-flash"
+    model = provider_models.model_id_for(db, profile, "chat") or "gemini-2.0-flash"
     body = {
         "contents": [
             {
@@ -239,7 +252,8 @@ def _call_gemini_video(
 
 
 def _analyze_video_native(
-    profile: ProviderProfile,
+    db: Session,
+    profile: ResolvedProvider,
     asset: Asset,
     path: Path,
     question: str,
@@ -250,14 +264,14 @@ def _analyze_video_native(
     video, mime = _read_native_video(path)
     prompt = _prompt_text(asset, question, transcript)
     if profile.vendor in GEMINI_VIDEO_VENDORS:
-        return _call_gemini_video(profile, prompt, video, mime, call)
+        return _call_gemini_video(db, profile, prompt, video, mime, call)
     data_uri = f"data:{mime};base64,{base64.b64encode(video).decode()}"
     content = [{"type": "text", "text": prompt}, {"type": "video_url", "video_url": {"url": data_uri}}]
-    return call_vision_model(profile, [{"role": "user", "content": content}], call)
+    return call_vision_model(db, profile, [{"role": "user", "content": content}], call)
 
 
 def analyze_asset(
-    db: Session, asset: Asset, question: str, profile_id: str | None = None, mode: str = "auto"
+    db: Session, asset: Asset, question: str, *, user_id: str | None, profile_id: str | None = None, mode: str = "auto"
 ) -> dict[str, Any]:
     if asset.kind not in ("image", "video"):
         raise AnalysisError("只支持分析图片或视频素材")
@@ -273,16 +287,16 @@ def analyze_asset(
 
     # 图片:始终抽一帧走视觉模型(原生视频那套对图片没意义)。
     if asset.kind == "image":
-        profile = pick_analysis_profile(db, profile_id)
+        profile = pick_analysis_profile(db, profile_id, user_id)
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
-            answer = call_vision_model(profile, build_messages(asset, prompt, [path.read_bytes()]), call)
-        return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(object_session(profile), profile, "chat"), "mode": "image", "frames": 1}
+            answer = call_vision_model(db, profile, build_messages(asset, prompt, [path.read_bytes()]), call)
+        return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(db, profile, "chat"), "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
-    native_profile = None if mode == "frames" else pick_native_video_profile(db, profile_id)
+    native_profile = None if mode == "frames" else pick_native_video_profile(db, profile_id, user_id)
 
     # 原生视频理解:显式 native 必须有原生档案;auto 有就走、没有回落抽帧。
     if mode == "native" and native_profile is None:
@@ -293,7 +307,7 @@ def analyze_asset(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
-            answer = _analyze_video_native(native_profile, asset, path, prompt, transcript_text, call)
+            answer = _analyze_video_native(db, native_profile, asset, path, prompt, transcript_text, call)
         return {
             "answer": answer,
             "provider": native_profile.vendor,
@@ -303,13 +317,13 @@ def analyze_asset(
         }
 
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
-    profile = pick_analysis_profile(db, profile_id)
+    profile = pick_analysis_profile(db, profile_id, user_id)
     images = extract_video_frames(path)  # 帧数按时长自适应
     with billable(
         db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         source_type="asset", source_id=asset.id,
     ) as call:
-        answer = call_vision_model(profile, build_messages(asset, prompt, images, transcript=transcript_text), call)
+        answer = call_vision_model(db, profile, build_messages(asset, prompt, images, transcript=transcript_text), call)
     return {
         "answer": answer,
         "provider": profile.vendor,

@@ -207,7 +207,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
-        db.add(ProviderProfile(name="v", vendor="volcano", api_key="k"))
+        add_provider(db, name="v", vendor="volcano", api_key="k")
         db.commit()
 
     seen: dict = {}

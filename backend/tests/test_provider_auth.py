@@ -26,6 +26,16 @@ sidecar,而对话页 / 工作流 / 飞书可以同时开工;两个 sidecar 拿�
 """
 
 
+def _me() -> str:
+    """当前这个部署里的那个人。租约与凭据现在都按人定位(见 domain/provider_credentials),
+    而 owner_user_id 是真外键 —— 编一个字符串会撞约束。"""
+    from app.core.db import SessionLocal
+    from app.db.models import User
+
+    with SessionLocal() as db:
+        return db.query(User).order_by(User.created_at).first().id
+
+
 def _profile(client, vendor: str = "kimi-coding") -> str:
     resp = client.post(
         "/api/settings/providers",
@@ -56,22 +66,22 @@ def test_only_subscription_vendors_map_to_a_pi_provider() -> None:
 
 def test_second_refresher_cannot_enter_while_the_first_holds_it() -> None:
     """核心判据:持锁期间别人拿不到租约。拿得到就意味着两次刷新会同时打网络。"""
-    token = acquire_lease("p1")
+    token = acquire_lease("p1", "u")
     try:
         with pytest.raises(CredentialLeaseError):
-            acquire_lease("p1", timeout=0.2)
+            acquire_lease("p1", "u", timeout=0.2)
     finally:
-        release_lease("p1", token)
+        release_lease("p1", "u", token)
     # 释放后立刻可再取
-    second = acquire_lease("p1", timeout=0.2)
-    release_lease("p1", second)
+    second = acquire_lease("p1", "u", timeout=0.2)
+    release_lease("p1", "u", second)
 
 
 def test_different_profiles_do_not_block_each_other() -> None:
-    a = acquire_lease("p-a")
-    b = acquire_lease("p-b", timeout=0.2)
-    release_lease("p-a", a)
-    release_lease("p-b", b)
+    a = acquire_lease("p-a", "u")
+    b = acquire_lease("p-b", "u", timeout=0.2)
+    release_lease("p-a", "u", a)
+    release_lease("p-b", "u", b)
 
 
 def test_a_dead_holder_does_not_lock_the_provider_forever(monkeypatch) -> None:
@@ -79,27 +89,27 @@ def test_a_dead_holder_does_not_lock_the_provider_forever(monkeypatch) -> None:
     import app.domain.provider_auth as mod
 
     monkeypatch.setattr(mod, "LEASE_TTL_SECONDS", 0.05)
-    acquire_lease("p-dead")  # 拿了就"死"了,永不释放
+    acquire_lease("p-dead", "u")  # 拿了就"死"了,永不释放
     time.sleep(0.08)
-    revived = acquire_lease("p-dead", timeout=0.5)
-    release_lease("p-dead", revived)
+    revived = acquire_lease("p-dead", "u", timeout=0.5)
+    release_lease("p-dead", "u", revived)
 
 
 def test_waiter_gets_in_as_soon_as_the_holder_releases() -> None:
     """不是靠轮询超时才进去,而是持有者一放手就进 —— 否则每轮对话要白等一个 TTL。"""
-    held = acquire_lease("p-wait")
+    held = acquire_lease("p-wait", "u")
     entered: list[float] = []
 
     def waiter() -> None:
-        token = acquire_lease("p-wait", timeout=3.0)
+        token = acquire_lease("p-wait", "u", timeout=3.0)
         entered.append(time.monotonic())
-        release_lease("p-wait", token)
+        release_lease("p-wait", "u", token)
 
     thread = threading.Thread(target=waiter)
     thread.start()
     time.sleep(0.15)
     released_at = time.monotonic()
-    release_lease("p-wait", held)
+    release_lease("p-wait", "u", held)
     thread.join(timeout=3)
     assert entered, "等待者没能进入临界区"
     assert entered[0] - released_at < 0.5, "释放后进入得太慢,说明是靠超时而不是靠让位"
@@ -110,13 +120,13 @@ def test_stale_lease_cannot_overwrite_the_new_holders_credential(client_fixture)
     from app.core.db import SessionLocal
 
     client, profile_id = client_fixture
-    stale = acquire_lease(profile_id)
-    release_lease(profile_id, stale)  # 模拟超时后被顶替
-    fresh = acquire_lease(profile_id)
+    stale = acquire_lease(profile_id, _me())
+    release_lease(profile_id, _me(), stale)  # 模拟超时后被顶替
+    fresh = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
         with pytest.raises(CredentialLeaseError):
-            commit_credential(db, profile_id, stale, {"type": "oauth", "access": "旧的"})
-        commit_credential(db, profile_id, fresh, {"type": "oauth", "access": "新的", "refresh": "r", "expires": 1})
+            commit_credential(db, profile_id, _me(), stale, {"type": "oauth", "access": "旧的"})
+        commit_credential(db, profile_id, _me(), fresh, {"type": "oauth", "access": "新的", "refresh": "r", "expires": 1})
 
 
 def test_credential_round_trips_verbatim(client_fixture) -> None:
@@ -132,9 +142,9 @@ def test_credential_round_trips_verbatim(client_fixture) -> None:
         "endpoint": "https://copilot.example",  # 各家自带的附加字段
         "account_id": "acc",
     }
-    lease = acquire_lease(profile_id)
+    lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
-        profile = commit_credential(db, profile_id, lease, credential)
+        profile = commit_credential(db, profile_id, _me(), lease, credential)
         assert read_credential(profile) == credential
 
 
@@ -142,10 +152,10 @@ def test_garbage_is_not_stored_as_a_credential(client_fixture) -> None:
     from app.core.db import SessionLocal
 
     client, profile_id = client_fixture
-    lease = acquire_lease(profile_id)
+    lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
         with pytest.raises(CredentialLeaseError):
-            commit_credential(db, profile_id, lease, {"access": "没有 type"})
+            commit_credential(db, profile_id, _me(), lease, {"access": "没有 type"})
 
 
 def test_switching_to_api_key_clears_the_oauth_credential(client_fixture) -> None:
@@ -153,9 +163,9 @@ def test_switching_to_api_key_clears_the_oauth_credential(client_fixture) -> Non
     from app.core.db import SessionLocal
 
     client, profile_id = client_fixture
-    lease = acquire_lease(profile_id)
+    lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
-        commit_credential(db, profile_id, lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
+        commit_credential(db, profile_id, _me(), lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
     assert client.get("/api/settings/providers").json()[0]["oauth_linked"] is True
 
     resp = client.patch(f"/api/settings/providers/{profile_id}", json={"auth_type": "api_key"})
@@ -169,9 +179,9 @@ def test_the_api_never_hands_back_the_token(client_fixture) -> None:
     from app.core.db import SessionLocal
 
     client, profile_id = client_fixture
-    lease = acquire_lease(profile_id)
+    lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
-        commit_credential(db, profile_id, lease, {"type": "oauth", "access": "机密令牌", "refresh": "r", "expires": 1})
+        commit_credential(db, profile_id, _me(), lease, {"type": "oauth", "access": "机密令牌", "refresh": "r", "expires": 1})
     body = client.get("/api/settings/providers").text
     assert "机密令牌" not in body
 

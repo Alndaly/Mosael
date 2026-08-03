@@ -18,7 +18,12 @@ def translate_texts(body: TranslateRequest, db: DbSession, user: CurrentUser) ->
     ensure_workspace_member(db, user, body.workspace_id)
     try:
         out = translate_many(
-            db, list(body.texts), body.target_lang, engine=body.engine, profile_id=body.profile_id
+            db,
+            list(body.texts),
+            body.target_lang,
+            user_id=user.id,
+            engine=body.engine,
+            profile_id=body.profile_id,
         )
     except TranslateError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

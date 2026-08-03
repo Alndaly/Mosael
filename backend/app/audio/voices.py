@@ -156,6 +156,7 @@ def start_synthesis(
     *,
     text: str,
     project_id: str | None,
+    created_by: str | None,
     voice_id: str | None = None,
     workspace_id: str = "",
     engine: str = "clone",
@@ -188,6 +189,7 @@ def start_synthesis(
         db,
         workspace_id=workspace_id,
         kind="tts",
+        created_by=created_by,
         payload={
             "voice_id": voice_id,
             "project_id": project_id,
@@ -389,7 +391,8 @@ def _synthesize_remote(
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
-    profile = resolve_profile(db, engine, provider_profile_id)
+    # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
+    profile = resolve_profile(db, engine, provider_profile_id, user_id=job.created_by)
     api_key = (profile.api_key if profile else None) or ""
     model = model_override or voice_resource or provider_models.model_id_for(db, profile, "tts")
     provider = build_remote_provider(
@@ -442,6 +445,7 @@ def start_podcast(
     *,
     workspace_id: str,
     project_id: str | None,
+    created_by: str | None,
     text: str = "",
     topic: str = "",
     mode: str = "summarize",
@@ -467,6 +471,7 @@ def start_podcast(
         db,
         workspace_id=workspace_id,
         kind="podcast",
+        created_by=created_by,
         payload={
             "project_id": project_id,
             "mode": mode,
@@ -524,7 +529,7 @@ def _run_podcast_body(
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-        profile = resolve_profile(db, "volcano-podcast", provider_profile_id)
+        profile = resolve_profile(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
         # The token lives in api_key and the appid in extra — the podcast socket takes both,
         # and neither is the v3 speech API Key.
         token = (profile.api_key if profile else None) or ""

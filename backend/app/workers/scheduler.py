@@ -108,7 +108,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             job.payload = {**job.payload, "workflow_id": workflow.id}
             run.status = "running"
             db.commit()
-            start_workflow_job(db, workflow, params=dict(payload.get("params") or {}), job=job)
+            start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
         elif task.kind == "ai_generation":
             from app.domain.generation import create_generation_job
             from app.domain.generation.runner import start_generation_thread
@@ -128,6 +128,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 workspace_id=task.workspace_id,
                 session_id=None,
                 project_id=task.project_id,
+                created_by=task.owner_user_id,
                 provider=provider,
                 model=model,
                 kind=kind,
@@ -146,7 +147,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             from app.domain.render import start_export
 
             sequence_id = str(payload.get("sequence_id", ""))
-            export_job = start_export(db, sequence_id)
+            export_job = start_export(db, sequence_id, created_by=task.owner_user_id)
             job.status = "running"
             job.message = f"Dispatched export {export_job.id}"
             run.status = "running"

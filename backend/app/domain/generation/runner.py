@@ -53,9 +53,10 @@ def _run_generation(generation_id: str) -> None:
 
         from app.domain.providers import resolve_profile
 
-        profile = resolve_profile(db, generation.provider, generation.provider_profile_id)
+        # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
+        profile = resolve_profile(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
         if provider.requires_credentials() and (profile is None or not profile.api_key):
-            _fail(db, job, f"Provider profile for {generation.provider} is not configured")
+            _fail(db, job, f"供应商 {generation.provider} 还没有配置你的密钥,请先在设置里填写")
             return
         context = ProviderContext(
             profile_id=profile.id if profile is not None else None,

@@ -39,6 +39,8 @@ from app.api.schemas import (
     ProviderProfileCreate,
     ProviderModelUpdate,
     ProviderQuotaOut,
+    ProviderCredentialIn,
+    ProviderCredentialOut,
     ProviderProfileOut,
     ProviderProfileUpdate,
     VendorFieldOut,
@@ -50,11 +52,14 @@ from app.db.models import (
     AiRuntimeConfig,
     NetworkConfig,
     KbEmbeddingConfig,
+    ProviderCredential,
     ProviderDefault,
     ProviderPricingRule,
     ProviderProfile,
     new_id,
 )
+from app.domain import provider_credentials
+from app.domain.provider_credentials import ResolvedProvider
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain import kb
 from app.domain.kb import config as kb_config
@@ -85,17 +90,30 @@ from app.domain.usage import (
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
-def _profile_out(db: DbSession, profile: ProviderProfile) -> ProviderProfileOut:
+def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ProviderProfileOut:
+    """一条连接在**某个人**眼里的样子。
+
+    `user` 是必填的:钥匙状态(尾四位、登没登录、过没过期)说的全都是**他自己**那把。此前这些
+    字段读的是档案行上那唯一一把,于是所有人看到同一份 —— 而那把是谁的没人说得清。
+    """
     out = ProviderProfileOut.model_validate(profile)
     # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
     out.capability_ids = provider_models.profile_capabilities(db, profile)
-    out.key_hint = f"…{profile.api_key[-4:]}" if profile.api_key else ""
-    out.extra = _masked_extra(profile)
-    out.config = _masked_config(db, profile)
+    mine = provider_credentials.get(db, profile.id, user.id)
+    shared = provider_credentials.shared_credential(db, profile.id)
+    credential = mine if mine is not None else None
+    out.key_hint = provider_credentials.key_hint(credential)
+    out.is_mine = mine is not None
+    out.my_key_shared = bool(mine is not None and mine.shared)
+    # 我自己没配,但部署管理员放了一把大家都能用的 —— 界面要说清这一点,否则用户会以为
+    # 「我没配却能用」是个 bug,或者反过来重复配一遍。
+    out.uses_shared_key = mine is None and shared is not None
+    out.extra = _masked_extra(profile, credential)
+    out.config = _masked_config(db, profile, credential)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
-    out.oauth_linked = bool(profile.oauth_credential)
+    out.oauth_linked = bool(credential and credential.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
-    out.oauth_expired = out.oauth_linked and is_expired(read_credential(profile))
+    out.oauth_expired = out.oauth_linked and is_expired(read_credential(credential))
     return out
 
 
@@ -107,11 +125,20 @@ def _field_storage(spec: dict) -> str:
     return str(spec.get("storage") or "extra")
 
 
-def _read_config_field(db: DbSession, profile: ProviderProfile, spec: dict) -> str:
+def _read_config_field(
+    db: DbSession, profile: ProviderProfile, spec: dict, credential: ProviderCredential | None = None
+) -> str:
+    """表单上的一个字段当前的值。
+
+    密的那几个跟着**钥匙**走(见 domain/provider_credentials):`credential` 是读的那个人自己的
+    那把,给 None 就当没配过 —— 别人的钥匙在这里读不出来,连尾四位也读不出来。
+    """
     storage = _field_storage(spec)
     key = str(spec.get("key", ""))
     if storage == "api_key":
-        return profile.api_key or ""
+        return (credential.api_key if credential else "") or ""
+    if spec.get("secret"):
+        return str((credential.secrets if credential else {}).get(key) or "")
     if storage == "base_url":
         return profile.base_url or ""
     if storage == "default_model":
@@ -123,11 +150,21 @@ def _read_config_field(db: DbSession, profile: ProviderProfile, spec: dict) -> s
     return str(value) if value else ""
 
 
-def _write_config_field(profile: ProviderProfile, spec: dict, value: str) -> None:
+def _write_config_field(
+    profile: ProviderProfile, spec: dict, value: str, credential: ProviderCredential | None = None
+) -> None:
+    """写一个表单字段。密的落到**写的人自己**那把钥匙上,其余落到这条连接上。"""
     storage = _field_storage(spec)
     key = str(spec.get("key", ""))
     if storage == "api_key":
-        profile.api_key = value
+        if credential is not None:
+            credential.api_key = value
+        return
+    if spec.get("secret"):
+        if credential is not None:
+            credential.secrets = {**(credential.secrets or {}), key: value} if value else {
+                k: v for k, v in (credential.secrets or {}).items() if k != key
+            }
         return
     if storage == "base_url":
         profile.base_url = value
@@ -143,24 +180,27 @@ def _write_config_field(profile: ProviderProfile, spec: dict, value: str) -> Non
     profile.extra = merged
 
 
-def _masked_config(db: DbSession, profile: ProviderProfile) -> dict[str, str]:
+def _masked_config(
+    db: DbSession, profile: ProviderProfile, credential: ProviderCredential | None = None
+) -> dict[str, str]:
     out: dict[str, str] = {}
     for spec in _field_specs(profile.vendor):
         key = str(spec.get("key", ""))
-        value = _read_config_field(db, profile, spec)
+        value = _read_config_field(db, profile, spec, credential)
         if not key or not value:
             continue
         out[key] = f"…{value[-4:]}" if spec.get("secret") else value
     return out
 
 
-def _masked_extra(profile: ProviderProfile) -> dict[str, str]:
+def _masked_extra(profile: ProviderProfile, credential: ProviderCredential | None = None) -> dict[str, str]:
     """Secret extras leave the server only as a hint; identifiers come back in full.
 
     An App ID is not a secret and the form needs to show it back, but an AK/SK is — sending
     those to the browser would undo the reason api_key is never serialised either.
     """
-    stored = profile.extra or {}
+    # 连接的非密附加配置 + **我自己**那把钥匙上的密字段。别人的密字段这里取不到。
+    stored = {**(profile.extra or {}), **((credential.secrets if credential else {}) or {})}
     secret_keys = {
         spec["key"] for spec in _field_specs(profile.vendor) if _field_storage(spec) == "extra" and spec.get("secret")
     }
@@ -198,10 +238,17 @@ def _config_from_body(body: ProviderProfileCreate | ProviderProfileUpdate) -> di
     return dict(body.config or {})
 
 
-def _apply_profile_config(db: DbSession, profile: ProviderProfile, incoming: dict[str, str], *, creating: bool) -> None:
+def _apply_profile_config(
+    db: DbSession,
+    profile: ProviderProfile,
+    incoming: dict[str, str],
+    *,
+    creating: bool,
+    credential: ProviderCredential | None = None,
+) -> None:
+    """把表单值折进这条连接;密的那几个折进 `credential`(写的人自己那把)。"""
     preset = VENDOR_PRESETS.get(profile.vendor, {})
     if creating:
-        profile.api_key = ""
         profile.base_url = str(preset.get("base_url", "") or "")
         profile.extra = {}
 
@@ -214,20 +261,20 @@ def _apply_profile_config(db: DbSession, profile: ProviderProfile, incoming: dic
         default_value = str(spec.get("default", "") or "")
         if raw_value is None:
             if creating and default_value:
-                _write_config_field(profile, spec, default_value)
+                _write_config_field(profile, spec, credential=credential, value=default_value)
             continue
 
         value = str(raw_value or "").strip()
         if value:
-            _write_config_field(profile, spec, value)
+            _write_config_field(profile, spec, credential=credential, value=value)
             continue
 
         if spec.get("secret") and not creating:
             continue
         if default_value and creating:
-            _write_config_field(profile, spec, default_value)
+            _write_config_field(profile, spec, credential=credential, value=default_value)
         else:
-            _write_config_field(profile, spec, "")
+            _write_config_field(profile, spec, credential=credential, value="")
 
     def _submitted(spec: dict) -> str:
         """校验用的值。default_model 这类字段落成的是模型行,而模型行在校验**之后**才建 ——
@@ -239,10 +286,13 @@ def _apply_profile_config(db: DbSession, profile: ProviderProfile, incoming: dic
             )
         return _read_config_field(db, profile, spec)
 
+    # 必填只管**连接自己的**字段(端点、区域一类)。密钥类的必填由存钥匙那条路管:
+    # 一条还没有任何人填过钥匙的连接是完全正常的状态 —— 每个人带自己的那把(见
+    # domain/provider_credentials),建连接的人不必替所有人先填一个。
     missing = [
         str(spec.get("label") or spec.get("key"))
         for spec in specs
-        if spec.get("required") and not _submitted(spec).strip()
+        if spec.get("required") and not spec.get("secret") and not _submitted(spec).strip()
     ]
     if missing:
         raise HTTPException(status_code=422, detail=f"缺少必要配置: {', '.join(missing)}")
@@ -283,10 +333,10 @@ def _auto_refresh_expired(db: DbSession, user: CurrentUser, profiles) -> None:
     刷不动才让 oauth_expired 保持 True —— 那时它是真的需要用户重新授权。
     """
     now = time.monotonic()
-    for profile in profiles:
-        if profile.auth_type != "oauth" or not profile.oauth_credential:
+    for profile, row in profiles:
+        if profile.auth_type != "oauth" or row is None or not row.oauth_credential:
             continue
-        credential = read_credential(profile)
+        credential = read_credential(row)
         if credential is None or not is_expired(credential):
             _refresh_failed_at.pop(profile.id, None)
             continue
@@ -306,14 +356,54 @@ def _auto_refresh_expired(db: DbSession, user: CurrentUser, profiles) -> None:
             _refresh_failed_at[profile.id] = now
             continue
         _refresh_failed_at.pop(profile.id, None)
-        db.refresh(profile)
+        db.refresh(row)
+
+
+@router.put("/settings/providers/{profile_id}/credential", response_model=ProviderCredentialOut)
+def put_my_credential(
+    profile_id: str, body: ProviderCredentialIn, db: DbSession, user: CurrentUser
+) -> ProviderCredentialOut:
+    """填**我自己**在这条连接上的钥匙。
+
+    这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
+    共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。
+    """
+    profile = _require_profile(db, profile_id)
+    if body.shared:
+        ensure_deployment_admin(db, user)
+    credential = provider_credentials.upsert(
+        db,
+        profile.id,
+        user.id,
+        api_key=(body.api_key or "").strip() if body.api_key is not None else None,
+        secrets={k: v for k, v in (body.secrets or {}).items() if v.strip()} or None,
+        shared=body.shared,
+    )
+    db.commit()
+    db.refresh(credential)
+    return ProviderCredentialOut(
+        profile_id=profile.id,
+        key_hint=provider_credentials.key_hint(credential),
+        is_mine=True,
+        shared=bool(credential.shared),
+    )
+
+
+@router.delete("/settings/providers/{profile_id}/credential", status_code=204)
+def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """撤回我自己的钥匙。**连接不动** —— 它不是我的。"""
+    _require_profile(db, profile_id)
+    provider_credentials.forget(db, profile_id, user.id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/settings/providers", response_model=list[ProviderProfileOut])
 def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
     profiles = db.scalars(select(ProviderProfile).order_by(ProviderProfile.created_at)).all()
-    _auto_refresh_expired(db, user, profiles)
-    return [_profile_out(db, profile) for profile in profiles]
+    # 自动续期只碰**我自己**那把钥匙 —— 过期的是谁的,谁登录的时候才刷得动。
+    _auto_refresh_expired(db, user, [(p, provider_credentials.get(db, p.id, user.id)) for p in profiles])
+    return [_profile_out(db, profile, user) for profile in profiles]
 
 
 def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str, str]) -> None:
@@ -362,16 +452,19 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
             key = str(spec.get("key", ""))
             if incoming.get(key, "").strip():
                 continue  # 显式提供的密钥优先
-            copied = _read_config_field(db, source, spec)
+            copied = _read_config_field(db, source, spec, provider_credentials.get(db, source.id, user.id))
             if copied:
                 incoming[key] = copied
-    _apply_profile_config(db, profile, incoming, creating=True)
     db.add(profile)
     db.flush()
+    # 表单里填的密钥落成**填表这个人**的钥匙,而不是连接上的一列。管理员建连接时顺手填的
+    # 那把因此是他自己的;要给全员用得显式共享(见 PUT .../credential 的 shared)。
+    credential = provider_credentials.upsert(db, profile.id, user.id)
+    _apply_profile_config(db, profile, incoming, creating=True, credential=credential)
     _sync_model_row(db, profile, incoming)
     db.commit()
     db.refresh(profile)
-    return _profile_out(db, profile)
+    return _profile_out(db, profile, user)
 
 
 @router.patch("/settings/providers/{profile_id}", response_model=ProviderProfileOut)
@@ -394,19 +487,26 @@ def update_provider_profile(
         next_auth = normalize_auth_type(profile.vendor, body.auth_type)
         if next_auth != profile.auth_type:
             profile.auth_type = next_auth
-            if next_auth == "api_key":
-                profile.oauth_credential = None
-            else:
-                profile.api_key = ""
-            profile.credential_version = (profile.credential_version or 0) + 1
+            # 切换鉴权方式清掉另一侧的凭据 —— 留着的那份既不会被用到,又会让「已登录」说谎。
+            # 清的是**我自己**那把:别人的钥匙不该被管理员改连接时顺手抹掉。
+            mine = provider_credentials.get(db, profile.id, user.id)
+            if mine is not None:
+                if next_auth == "api_key":
+                    mine.oauth_credential = None
+                else:
+                    mine.api_key = ""
+                mine.credential_version = (mine.credential_version or 0) + 1
     incoming = _config_from_body(body)
     if incoming:
-        _apply_profile_config(db, profile, incoming, creating=False)
+        _apply_profile_config(
+            db, profile, incoming, creating=False,
+            credential=provider_credentials.upsert(db, profile.id, user.id),
+        )
     db.flush()
     _sync_model_row(db, profile, incoming)
     db.commit()
     db.refresh(profile)
-    return _profile_out(db, profile)
+    return _profile_out(db, profile, user)
 
 
 def _require_profile(db: DbSession, profile_id: str) -> ProviderProfile:
@@ -444,14 +544,15 @@ def _login_out(session, db: DbSession | None = None) -> OAuthLoginOut:
     )
 
 
-def _store_login_catalog(db: DbSession, profile: ProviderProfile, session) -> None:
+def _store_login_catalog(db: DbSession, profile: ProviderProfile, session, user: CurrentUser) -> None:
     """登录成功后把该账号的模型目录落库,并在没有默认模型时先挑一个。
 
     不挑的话用户回到设置页只会看到一个空的模型选择器,而「登录成功但用不了」比登录失败更费解。
     """
     if session.status != "done" or not session.models:
         return
-    profile.model_catalog = session.models
+    # 目录是**这次登录**的结果 —— 两个人的订阅档位可以不一样,所以它跟着钥匙走。
+    provider_credentials.upsert(db, profile.id, user.id).model_catalog = session.models
     # 登录带回目录后,若这条连接一个模型行都没有,先把第一个建上 ——
     # 否则「登录成功但用不了」,比登录失败更费解。
     if not provider_models.list_models(db, profile.id):
@@ -463,8 +564,11 @@ def _store_login_catalog(db: DbSession, profile: ProviderProfile, session) -> No
 
 @router.post("/settings/providers/{profile_id}/oauth/login", response_model=OAuthLoginOut)
 def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
-    """发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。"""
-    ensure_deployment_admin(db, user)
+    """发起订阅计划的授权登录 —— 登的是**自己**的账号。
+
+    这里不再要求部署管理员:订阅计划(Claude Pro/Max、Kimi Code)是按人计费的,一个部署里
+    每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。
+    """
     profile = _oauth_profile(db, profile_id)
     from app.ai.agent.host import mint_tool_token
 
@@ -475,7 +579,7 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
             pi_provider=pi_provider_id(profile.vendor),
             api_base=f"http://{settings_config.backend_host}:{settings_config.backend_port}",
             token=mint_tool_token(db, user),
-            credential=read_credential(profile),
+            credential=read_credential(provider_credentials.get(db, profile.id, user.id)),
         )
     except LoginError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -484,12 +588,11 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
 
 @router.get("/settings/providers/{profile_id}/oauth/login/{login_id}", response_model=OAuthLoginOut)
 def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
-    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="登录会话已结束")
-    _store_login_catalog(db, profile, session)
+    _store_login_catalog(db, profile, session, user)
     return _login_out(session)
 
 
@@ -497,7 +600,6 @@ def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curren
 def answer_oauth_login(
     profile_id: str, login_id: str, body: OAuthAnswerIn, db: DbSession, user: CurrentUser
 ) -> OAuthLoginOut:
-    ensure_deployment_admin(db, user)
     _oauth_profile(db, profile_id)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
@@ -509,7 +611,6 @@ def answer_oauth_login(
 
 @router.delete("/settings/providers/{profile_id}/oauth/login/{login_id}", status_code=204)
 def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_deployment_admin(db, user)
     _oauth_profile(db, profile_id)
     cancel_login(login_id)
 
@@ -522,7 +623,7 @@ def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> 
     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
     """
     profile = _require_profile(db, profile_id)
-    result = provider_health.probe(profile)
+    result = provider_health.probe(_resolved_or_bare(db, profile, user))
     return ProviderHealthOut(
         supported=result.supported,
         online=result.online,
@@ -542,12 +643,12 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
     查不到不抛 5xx:"这家不支持"和"这次没查成"都是正常结果,前端要据此显示不同的话,
     500 会被统一的错误提示吞成一句"请求失败"。
     """
-    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     pi_provider = pi_provider_id(profile.vendor)
     if not supports_quota(pi_provider):
         return ProviderQuotaOut(supported=False)
-    credential = read_credential(profile)
+    mine = provider_credentials.get(db, profile.id, user.id)
+    credential = read_credential(mine)
     # 令牌过期就先刷新再查。自动刷新原本只发生在对话路径上(pi 解析模型鉴权时按 expires 判),
     # 于是"很久没聊天"之后这条旁路一律撞 401,而档案上明明写着已授权。刷新协议仍在 pi 那边,
     # 这里只是让它跑一次。
@@ -560,8 +661,8 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
                 profile_id=profile.id,
                 credential=credential,
             )
-            db.refresh(profile)
-            credential = read_credential(profile)
+            db.refresh(mine) if mine is not None else None
+            credential = read_credential(provider_credentials.get(db, profile.id, user.id))
         except AdapterError as exc:
             return ProviderQuotaOut(supported=True, error=f"令牌刷新失败:{exc}")
     try:
@@ -573,19 +674,24 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
 
 @router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)
 def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
-    """解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。"""
-    ensure_deployment_admin(db, user)
+    """解除**我自己**在这条连接上的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做。"""
     profile = _oauth_profile(db, profile_id)
-    lease = acquire_lease(profile.id)
-    commit_credential(db, profile.id, lease, None)
-    profile.model_catalog = None
+    lease = acquire_lease(profile.id, user.id)
+    commit_credential(db, profile.id, user.id, lease, None)
+    mine = provider_credentials.get(db, profile.id, user.id)
+    if mine is not None:
+        mine.model_catalog = None
     db.commit()
     db.refresh(profile)
-    return _profile_out(db, profile)
+    return _profile_out(db, profile, user)
 
 
-def _catalog_rates(profile: ProviderProfile) -> list[tuple[str, dict[str, float | None]]]:
-    """(模型 id, 每百万 token 报价) —— 两种档案取自各自的目录来源,单位已对齐。"""
+def _catalog_rates(profile: ResolvedProvider) -> list[tuple[str, dict[str, float | None]]]:
+    """(模型 id, 每百万 token 报价) —— 两种档案取自各自的目录来源,单位已对齐。
+
+    参数是**解析过的**连接(连接 + 这个人的钥匙):订阅目录在他自己那把钥匙上,API Key 档案
+    要拿他的钥匙去打 /models。
+    """
     if profile.auth_type == "oauth":
         # 订阅计划:登录时 pi 带回来的目录(cost 是 {input, output, cacheRead, cacheWrite})。
         out = []
@@ -631,7 +737,10 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
-    rates = _catalog_rates(profile)
+    resolved = provider_credentials.resolve(db, profile, user.id)
+    if resolved is None:
+        raise HTTPException(status_code=422, detail="这条连接还没有你的密钥,先填一把再来取目录报价")
+    rates = _catalog_rates(resolved)
     created = 0
     priced = 0
     for model_id, model_rates in rates:
@@ -808,7 +917,25 @@ def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser)
     return Response(status_code=204)
 
 
-def _catalog_entries(profile: ProviderProfile) -> dict[str, dict]:
+def _resolved_or_bare(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ResolvedProvider:
+    """这条连接 + 我的钥匙;没有钥匙时给一个不带钥匙的 —— 目录取不到就是空列表,
+    而「还没填密钥」不该让整个模型页 500。
+
+    我自己那一行即使还没有密钥也要用上:订阅登录会先把模型目录存进这一行,而**目录不是钥匙**
+    —— 按"有没有密钥"把它跳过去,会让刚登录完的人看到一个空的模型选择器。
+    """
+    resolved = provider_credentials.resolve(db, profile, user.id)
+    if resolved is not None:
+        return resolved
+    mine = provider_credentials.get(db, profile.id, user.id)
+    return ResolvedProvider(
+        id=profile.id, name=profile.name, vendor=profile.vendor, base_url=profile.base_url or "",
+        auth_type=profile.auth_type, enabled=profile.enabled, extra=dict(profile.extra or {}),
+        model_catalog=mine.model_catalog if mine is not None else None,
+    )
+
+
+def _catalog_entries(profile: ResolvedProvider) -> dict[str, dict]:
     """该连接的**目录**(供应商说它有什么)。订阅计划的目录只有登录才知道(Copilot 随档位变、
     OpenRouter 有几百个),登录时由 pi 带回存下;API Key 档案现打 /models(带 TTL 缓存)。"""
     if profile.vendor == "comfyui":
@@ -875,7 +1002,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     """
     ensure_deployment_admin(db, user)
     profile = _require_profile(db, profile_id)
-    catalog = _catalog_entries(profile)
+    catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
     rows = [_model_out(model, catalog) for model in configured]
     known = {row.id for row in rows}
@@ -908,7 +1035,7 @@ def add_provider_model(
     model_id = (body.model_id or "").strip()
     if not model_id:
         raise HTTPException(status_code=422, detail="模型 id 不能为空")
-    catalog = _catalog_entries(profile)
+    catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     fields = body.model_dump(exclude_unset=True, exclude={"model_id", "capability_ids"})
     model = provider_models.upsert(
         db,
@@ -948,7 +1075,7 @@ def update_provider_model(
     if "capability_ids" in patch:
         model.capability_ids = normalize_capability_ids(body.capability_ids) or []
     db.commit()
-    return _model_out(model, _catalog_entries(profile))
+    return _model_out(model, _catalog_entries(_resolved_or_bare(db, profile, user)))
 
 
 @router.delete("/settings/providers/{profile_id}/models/{model_id:path}", status_code=204)
@@ -1016,11 +1143,13 @@ def set_kb_embedding(
     )
     if changed and new.enabled:
         dim_changed = old.dim != new.dim
+        # 后台重嵌用**发起这次改动的人**的钥匙 —— 后台线程没有请求身份,但这活儿是他要的。
+        actor_id = user.id
 
         def run() -> None:
             try:
                 with SessionLocal() as session:
-                    kb.rebuild_all_vectors(session, dim_changed=dim_changed)
+                    kb.rebuild_all_vectors(session, dim_changed=dim_changed, user_id=actor_id)
             except Exception:  # noqa: BLE001 - background rebuild must not poison request/test processes
                 logger.exception("KB embedding rebuild failed")
 

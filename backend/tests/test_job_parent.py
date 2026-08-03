@@ -25,7 +25,7 @@ def test_create_job_defaults_to_top_level() -> None:
     """没有父上下文时,create_job 造的是顶层任务(parent 为 None)。"""
     _, ws = _workspace()
     with SessionLocal() as db:
-        job = create_job(db, workspace_id=ws, kind="publish", payload={})
+        job = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={})
         db.commit()
         assert job.parent_job_id is None
 
@@ -36,13 +36,13 @@ def test_create_job_captures_ambient_parent() -> None:
     token = set_parent_job("wf-job-abc")
     try:
         with SessionLocal() as db:
-            child = create_job(db, workspace_id=ws, kind="publish", payload={})
+            child = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={})
             db.commit()
             assert child.parent_job_id == "wf-job-abc"
     finally:
         reset_parent_job(token)
     with SessionLocal() as db:
-        after = create_job(db, workspace_id=ws, kind="publish", payload={})
+        after = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={})
         db.commit()
         assert after.parent_job_id is None  # reset 后不再泄漏父上下文
 
@@ -57,7 +57,7 @@ def test_ambient_parent_propagates_inside_threadpool() -> None:
         token = set_parent_job(parent_id)
         try:
             with SessionLocal() as db:
-                job = create_job(db, workspace_id=ws, kind="publish", payload={})
+                job = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={})
                 db.commit()
                 captured[parent_id] = job.parent_job_id
         finally:
@@ -73,9 +73,9 @@ def test_top_level_filter_and_children_endpoint() -> None:
     """/api/jobs?top_level=true 收起子任务;默认列全部;/children 取某父的子任务。"""
     client, ws = _workspace()
     with SessionLocal() as db:
-        parent = create_job(db, workspace_id=ws, kind="workflow", payload={})
+        parent = create_job(db, created_by=None, workspace_id=ws, kind="workflow", payload={})
         db.flush()
-        child = create_job(db, workspace_id=ws, kind="publish", payload={}, parent_job_id=parent.id)
+        child = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={}, parent_job_id=parent.id)
         db.commit()
         parent_id, child_id = parent.id, child.id
 
@@ -96,14 +96,14 @@ def test_cancel_workflow_cascades_to_descendants() -> None:
     """取消工作流 → 级联取消它派生的发布子任务(及嵌套孙任务);不相干的顶层任务不受牵连。"""
     _, ws = _workspace()
     with SessionLocal() as db:
-        parent = create_job(db, workspace_id=ws, kind="workflow", payload={})
+        parent = create_job(db, created_by=None, workspace_id=ws, kind="workflow", payload={})
         parent.status = "running"
         db.flush()
-        child = create_job(db, workspace_id=ws, kind="publish", payload={}, parent_job_id=parent.id)
+        child = create_job(db, created_by=None, workspace_id=ws, kind="publish", payload={}, parent_job_id=parent.id)
         child.status = "running"
-        grandchild = create_job(db, workspace_id=ws, kind="export_sequence", payload={}, parent_job_id=child.id)
+        grandchild = create_job(db, created_by=None, workspace_id=ws, kind="export_sequence", payload={}, parent_job_id=child.id)
         grandchild.status = "running"
-        other = create_job(db, workspace_id=ws, kind="workflow", payload={})  # 不相干的顶层任务
+        other = create_job(db, created_by=None, workspace_id=ws, kind="workflow", payload={})  # 不相干的顶层任务
         other.status = "running"
         db.commit()
         ids = (parent.id, child.id, grandchild.id, other.id)

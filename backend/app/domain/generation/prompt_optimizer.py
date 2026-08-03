@@ -172,6 +172,7 @@ def optimize_image_prompt(
     provider: str,
     model: str,
     profile_id: str | None = None,
+    user_id: str | None = None,
     ui_language: str = "zh",
 ) -> dict:
     """把 raw_prompt 按 provider/model 平台习惯优化,返回 {prompt, negative_prompt, notes, platform}。
@@ -186,10 +187,14 @@ def optimize_image_prompt(
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。
     default = provider_models.resolve_default(db, "chat")
-    chat_profile = default.profile if default is not None else None
+    from app.domain import provider_credentials
+
+    chat_profile = (
+        provider_credentials.resolve(db, default.profile, user_id) if default is not None else None
+    )
     chat_model = default.model_id if default is not None else ""
     if chat_profile is None:
-        chat_profile = require_profile(db, profile_id, error=PromptOptimizeError)
+        chat_profile = require_profile(db, profile_id, user_id=user_id, error=PromptOptimizeError)
     if not chat_model:
         chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:

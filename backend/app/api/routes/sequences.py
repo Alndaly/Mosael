@@ -427,7 +427,7 @@ def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser, body: Ex
     sequence = require_sequence_access(db, user, sequence_id)
     ensure_workspace_perm(db, user, sequence.workspace_id, "export")
     try:
-        return start_export(db, sequence_id, body.model_dump() if body else None)
+        return start_export(db, sequence_id, body.model_dump() if body else None, created_by=user.id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RenderPlanError as exc:

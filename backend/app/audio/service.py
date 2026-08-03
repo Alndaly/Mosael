@@ -151,7 +151,7 @@ def _watch_model_download(job_id: str, provider: str) -> threading.Event:
     return stop
 
 
-def start_transcription(db: Session, asset_id: str) -> Job:
+def start_transcription(db: Session, asset_id: str, *, created_by: str | None) -> Job:
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise AsrError("Asset not found")
@@ -164,6 +164,7 @@ def start_transcription(db: Session, asset_id: str) -> Job:
         workspace_id=asset.workspace_id,
         kind="transcribe",
         payload={"asset_id": asset_id},
+        created_by=created_by,
         message="转写排队中",
     )
     dispatch_job(db, job, lambda: _run_transcription(job.id, asset_id))

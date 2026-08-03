@@ -24,7 +24,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderProfile
+from app.db.models import ProviderCredential, ProviderProfile
+from app.domain import provider_credentials
 
 #: 持有租约期间只做一次刷新 HTTP 调用,给足余量。超过即视为持有者已死。
 LEASE_TTL_SECONDS = 30.0
@@ -53,64 +54,80 @@ def _now() -> float:
     return time.monotonic()
 
 
-def acquire_lease(profile_id: str, *, timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> str:
-    """取得该档案凭据的独占写入权,返回租约 token。"""
+def _lease_key(profile_id: str, user_id: str) -> str:
+    """租约按 (连接, 人) 键。
+
+    凭据归人之后,两个人在同一条连接上各刷各的钥匙是完全独立的两件事 —— 按档案键会让他们
+    互相阻塞,而互斥本来要防的是「同一把钥匙被刷两次」。
+    """
+    return f"{profile_id}:{user_id}"
+
+
+def acquire_lease(profile_id: str, user_id: str, *, timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> str:
+    """取得**我自己**那把钥匙的独占写入权,返回租约 token。"""
+    key = _lease_key(profile_id, user_id)
     deadline = _now() + timeout
     while True:
         with _lock:
-            held = _leases.get(profile_id)
+            held = _leases.get(key)
             if held is None or held.expires_at <= _now():
                 token = secrets.token_urlsafe(16)
-                _leases[profile_id] = _Lease(token=token, expires_at=_now() + LEASE_TTL_SECONDS)
+                _leases[key] = _Lease(token=token, expires_at=_now() + LEASE_TTL_SECONDS)
                 return token
         if _now() >= deadline:
             raise CredentialLeaseError("凭据正被另一次刷新占用,请重试")
         time.sleep(_POLL_SECONDS)
 
 
-def release_lease(profile_id: str, token: str) -> None:
+def release_lease(profile_id: str, user_id: str, token: str) -> None:
     """释放租约。token 不匹配(自己的租约已超时被顶替)时静默返回 —— 顶替者的租约不该被误伤。"""
+    key = _lease_key(profile_id, user_id)
     with _lock:
-        held = _leases.get(profile_id)
+        held = _leases.get(key)
         if held is not None and held.token == token:
-            _leases.pop(profile_id, None)
+            _leases.pop(key, None)
 
 
-def _check_lease(profile_id: str, token: str) -> None:
+def _check_lease(key: str, token: str) -> None:
     with _lock:
-        held = _leases.get(profile_id)
+        held = _leases.get(key)
     if held is None or held.token != token:
         raise CredentialLeaseError("租约已失效(超时或被顶替),本次刷新结果不予写入")
     if held.expires_at <= _now():
         raise CredentialLeaseError("租约已超时,本次刷新结果不予写入")
 
 
-def read_credential(profile: ProviderProfile) -> dict | None:
-    """该档案存着的 OAuth 凭据(pi 的 Credential 原样),没有则 None。"""
-    credential = profile.oauth_credential
-    return dict(credential) if isinstance(credential, dict) else None
+def read_credential(credential: ProviderCredential | None) -> dict | None:
+    """这把钥匙上存着的 OAuth 凭据(pi 的 Credential 原样),没有则 None。
+
+    参数是**一把具体的钥匙**而不是档案:凭据归人之后,「这个档案的凭据」不再是一个有答案的
+    问题 —— 得先说清是谁的(见 domain/provider_credentials)。
+    """
+    stored = credential.oauth_credential if credential is not None else None
+    return dict(stored) if isinstance(stored, dict) else None
 
 
 def commit_credential(
-    db: Session, profile_id: str, lease_token: str, credential: dict | None
-) -> ProviderProfile:
+    db: Session, profile_id: str, user_id: str, lease_token: str, credential: dict | None
+) -> ProviderCredential:
     """持租约写回凭据(credential=None 即登出)。写完即释放。
 
     凭据**原样**存:各家 OAuth 的附加字段由 pi 解释,这里拆一次就等于把协议复制进 Python。
     只校验最低限度的形状,把明显不是凭据的东西挡在库外。
     """
-    _check_lease(profile_id, lease_token)
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        release_lease(profile_id, lease_token)
+    key = _lease_key(profile_id, user_id)
+    _check_lease(key, lease_token)
+    if db.get(ProviderProfile, profile_id) is None:
+        release_lease(profile_id, user_id, lease_token)
         raise CredentialLeaseError("供应商不存在")
     if credential is not None:
         if not isinstance(credential, dict) or credential.get("type") not in AUTH_TYPES:
-            release_lease(profile_id, lease_token)
+            release_lease(profile_id, user_id, lease_token)
             raise CredentialLeaseError("凭据格式无法识别(缺少 type)")
-    profile.oauth_credential = credential
-    profile.credential_version = (profile.credential_version or 0) + 1
+    row = provider_credentials.upsert(db, profile_id, user_id)
+    row.oauth_credential = credential
+    row.credential_version = (row.credential_version or 0) + 1
     db.commit()
-    db.refresh(profile)
-    release_lease(profile_id, lease_token)
-    return profile
+    db.refresh(row)
+    release_lease(profile_id, user_id, lease_token)
+    return row

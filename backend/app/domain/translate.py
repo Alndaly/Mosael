@@ -49,10 +49,11 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-def resolve_ai_provider(db, profile_id: str | None = None) -> ChatTarget:
+def resolve_ai_provider(db, profile_id: str | None, user_id: str | None) -> ChatTarget:
     from sqlalchemy import select
 
     from app.db.models import ProviderProfile
+    from app.domain import provider_credentials
 
     profile = None
     if profile_id:
@@ -63,17 +64,20 @@ def resolve_ai_provider(db, profile_id: str | None = None) -> ChatTarget:
         ).first()
     if profile is None or not profile.enabled:
         raise TranslateError("没有可用的 AI 供应商,请先在设置里添加")
+    resolved = provider_credentials.resolve(db, profile, user_id)
+    if resolved is None:
+        raise TranslateError(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
     try:
-        return target_for(db, profile)
+        return target_for(db, resolved)
     except AiChatError as exc:
         raise TranslateError(str(exc)) from exc
 
 
-def ai_translate(db, text: str, target: str, profile_id: str | None = None) -> str:
+def ai_translate(db, text: str, target: str, profile_id: str | None, user_id: str | None) -> str:
     """Translate via an enabled AI provider (LLM). Reused by the workflow node + the API."""
     if not text.strip():
         return ""
-    return ai_translate_with(resolve_ai_provider(db, profile_id), text, target)
+    return ai_translate_with(resolve_ai_provider(db, profile_id, user_id), text, target)
 
 
 def ai_translate_with(
@@ -103,10 +107,10 @@ def ai_translate_with(
         raise TranslateError(str(exc)) from exc
 
 
-def translate(db, text: str, target: str, engine: str = "google", profile_id: str | None = None) -> str:
+def translate(db, text: str, target: str, *, user_id: str | None, engine: str = "google", profile_id: str | None = None) -> str:
     """Dispatch to the requested engine."""
     if engine == "ai":
-        return ai_translate(db, text, target, profile_id)
+        return ai_translate(db, text, target, profile_id, user_id)
     return google_translate(text, target)
 
 
@@ -133,6 +137,8 @@ def translate_many(
     db,
     texts: list[str],
     target: str,
+    *,
+    user_id: str | None,
     engine: str = "google",
     profile_id: str | None = None,
 ) -> list[str]:
@@ -147,7 +153,7 @@ def translate_many(
     """
     if not texts:
         return []
-    provider = resolve_ai_provider(db, profile_id) if engine == "ai" else None
+    provider = resolve_ai_provider(db, profile_id, user_id) if engine == "ai" else None
     indexed = [(i, text) for i, text in enumerate(texts) if text.strip()]
     results = [""] * len(texts)
     if not indexed:

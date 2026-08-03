@@ -432,6 +432,13 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 这活儿**替谁干**。后台线程手里只有一个 job:没有这一栏,它就答不出该用谁的钥匙、
+    #: 花谁的额度,于是只能全体共用一把(见 domain/provider_credentials)。定时触发的任务
+    #: 记的是挂它的那个人(ScheduledTask.owner_user_id)—— 定时执行没有"当时的操作人",
+    #: 但一定有一个"当初挂上去的人"。
+    created_by: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(40), nullable=False)
     # 工作流节点派生的子任务(发布/导出/转写/生成/配音)挂在父工作流 job 上,任务中心据此收纳、
     # 不再与父工作流平铺成两行。顶层任务(用户直接发起)为 None。软引用,不设外键级联。
@@ -661,28 +668,53 @@ class ProviderProfile(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     vendor: Mapped[str] = mapped_column(String(60), nullable=False)  # alibaba|bytedance|openai|moonshot|minimax|openai-compatible|...
     base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    api_key: Mapped[str] = mapped_column(String(500), nullable=False)
-    #: 鉴权方式。"api_key" = 上面那把;"oauth" = 订阅计划(Claude Pro/Max、Kimi Code 等),
-    #: 密钥在 oauth_credential 里,api_key 留空。哪些方式可用由 VENDOR_PRESETS 声明。
+    #: 鉴权方式。"api_key" = 每个人自己的那把(见 ProviderCredential);"oauth" = 订阅计划
+    #: (Claude Pro/Max、Kimi Code 等),密钥同样按人存。哪些方式可用由 VENDOR_PRESETS 声明。
     auth_type: Mapped[str] = mapped_column(String(20), nullable=False, default="api_key")
+    #: 这条连接的**非密**附加配置(区域、端点变体等)。密的那几个(火山 ak/sk、快手 secret_key)
+    #: 跟着钥匙走,存在 ProviderCredential.secrets 里 —— 哪些字段是密的由 VENDOR_PRESETS 的
+    #: `secret: True` 声明,而那也正是渲染表单的同一份声明。
+    extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class ProviderCredential(Base):
+    """某个人在某条连接上的钥匙。
+
+    **为什么钥匙不能待在 ProviderProfile 上**:那张表回答的是「怎么连到这家供应商」——
+    端点、模型目录、定价规则,那是部署的配置,由部署管理员维护。而钥匙回答的是「谁在花钱、
+    以谁的身份调用」。压在一起的后果跑出来过:能发起一轮对话的人就能 acquire 到那份明文
+    凭据,而普通成员又没法带自己的钥匙 —— 订阅制账号(Claude Pro/Max)被多人共用,供应商
+    那边看到的是同一个账号。
+
+    解析顺序见 domain/provider_credentials.resolve:**自己的 → 部署管理员共享的 → 没有**。
+    """
+
+    __tablename__ = "provider_credentials"
+
+    profile_id: Mapped[str] = mapped_column(
+        ForeignKey("provider_profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     #: pi 的 Credential **原样**存放({type, access, refresh, expires, ...})。刻意不拆成列:
     #: 各家 OAuth 的附加字段(Copilot 的 endpoint、Codex 的 account_id)由 pi 自己解释,
     #: 这边拆一次就等于把各家协议复制进 Python,下次上游加字段就悄悄丢了。
     oauth_credential: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    #: VENDOR_PRESETS 里标了 `secret: True` 而又不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
+    secrets: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    #: 订阅计划登录后拿到的可用模型目录([{id, name, contextWindow, maxTokens}])。跟着钥匙走:
+    #: 它是**这次登录**的结果 —— Copilot 的模型随订阅档位变,两个人的订阅目录可以不一样。
+    model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
     #: 乐观并发版本号。多个会话可以同时开对话,各自 spawn 一个 sidecar;若两个同时刷新
     #: 同一份 OAuth 凭据,后写的会把已被服务端轮换作废的 refresh token 覆盖回去 ——
     #: 表现为用户莫名其妙被登出。写入时带上读到的版本,不匹配就拒绝(见 credentials 路由)。
-    credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    #: 订阅计划登录后拿到的可用模型目录([{id, name, contextWindow, maxTokens}])。
-    #: 只有登录才知道:Copilot 的模型随订阅档位变,OpenRouter 有几百个。API Key 档案不用它
-    #: —— 那边现取现用(见 app.ai.model_catalog)。
-    model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
-    #: Vendor-specific credentials that do not fit the single api_key slot. 火山 is the reason
-    #: this exists: its speech v3 API Key, the podcast appid+token, and the account AK/SK for
-    #: listing voices are three unrelated credentials from three different consoles. Which keys
-    #: a vendor uses is declared by its VENDOR_PRESETS entry, which is also what renders the form.
-    extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    #: 部署管理员放的一把「大家都能用」的钥匙。**只有部署管理员能置位** —— 共享的钥匙是整个
+    #: 部署在花钱,普通成员不能替部署做这个决定。这也正是升级前的行为,只是现在它是显式的。
+    shared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

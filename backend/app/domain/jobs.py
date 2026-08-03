@@ -196,17 +196,39 @@ def create_job(
     workspace_id: str,
     kind: str,
     payload: dict[str, Any],
+    created_by: str | None,
     message: str = "Queued",
     parent_job_id: str | None = None,
 ) -> Job:
+    """建一个后台任务。
+
+    `created_by` 是**必填**关键字(可以是 None,但必须显式写出来):后台线程手里只有一个 job,
+    它得能答出这活儿替谁干 —— 用谁的钥匙、花谁的额度。做成必填参数而不是可选,是因为漏掉的
+    那个调用点会安静地建出一个无主任务,然后在运行时退回"随便找一把钥匙"。
+    """
     # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
     parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
-    job = Job(workspace_id=workspace_id, kind=kind, payload=payload, message=message, parent_job_id=parent)
+    job = Job(
+        workspace_id=workspace_id, kind=kind, payload=payload, message=message,
+        parent_job_id=parent, created_by=created_by,
+    )
     db.add(job)
     db.flush()
     db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))
     logger.info("job %s [%s] created (workspace=%s)", job.id, kind, workspace_id)
     return job
+
+
+def current_actor(db: Session) -> str | None:
+    """当前工作流 job 的操作人。
+
+    工作流节点派生的子任务替的是**同一个人** —— 执行器签名是固定的 `(db, workflow, config)`,
+    拿不到调用者,但父 job 上记着这活儿是替谁干的,而子任务与父任务的关系本来就是显式建立的
+    (见 `_current_parent_job`)。
+    """
+    parent = _current_parent_job.get()
+    job = db.get(Job, parent) if parent else None
+    return job.created_by if job is not None else None
 
 
 def reconcile_orphaned_jobs(db: Session) -> int:

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Transcript, Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
+from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import wait_for_job
 
 
@@ -22,7 +23,7 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     from app.audio.service import start_transcription
 
     asset_id = str(config.get("asset_id", ""))
-    child = start_transcription(db, asset_id)
+    child = start_transcription(db, asset_id, created_by=current_actor(db))
     wait_for_job(child.id)
     transcript = db.scalars(
         select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.id.desc())
@@ -38,7 +39,7 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
 def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.render import start_export
 
-    child = start_export(db, str(config.get("sequence_id", "")))
+    child = start_export(db, str(config.get("sequence_id", "")), created_by=current_actor(db))
     final = wait_for_job(child.id)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}
@@ -73,6 +74,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         workspace_id=workflow.workspace_id,
         session_id=None,
         project_id=None,
+        created_by=current_actor(db),
         provider=provider,
         model=model,
         kind=kind,
@@ -93,7 +95,11 @@ def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -
     from app.audio.voices import start_synthesis
 
     child = start_synthesis(
-        db, voice_id=str(config.get("voice_id", "")), text=str(config.get("text", "")), project_id=None
+        db,
+        voice_id=str(config.get("voice_id", "")),
+        text=str(config.get("text", "")),
+        project_id=None,
+        created_by=current_actor(db),
     )
     final = wait_for_job(child.id)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
@@ -117,6 +123,7 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
         asset=asset,
         title=str(config.get("title", "")),
         description=str(config.get("description", "")),
+        created_by=current_actor(db),
         tags=[],
     )
     final = wait_for_job(task.job_id or "")

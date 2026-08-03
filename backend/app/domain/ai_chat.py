@@ -38,7 +38,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderProfile
+from app.domain.provider_credentials import ResolvedProvider
 from app.domain import ai_retry, provider_models
 from app.domain.usage import BillableCall
 
@@ -64,7 +64,7 @@ class ChatTarget:
     name: str = ""
 
 
-def target_for(db: Session, profile: ProviderProfile, *, model: str = "") -> ChatTarget:
+def target_for(db: Session, profile: ResolvedProvider, *, model: str = "") -> ChatTarget:
     """在**持有 Session 的线程上**把一条连接解析成可跨线程的调用目标。
 
     model 留空时按这条连接的 chat 能力解析;解析不出来当场报错,而不是发一个空 model 让供应商

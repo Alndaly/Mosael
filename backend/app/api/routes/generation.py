@@ -108,6 +108,7 @@ def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUse
     try:
         result = optimize_image_prompt(
             db,
+            user_id=user.id,
             raw_prompt=body.prompt,
             provider=body.provider,
             model=body.model,
@@ -129,7 +130,7 @@ def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | N
 
     from app.domain import provider_models
 
-    profile = resolve_profile(db, "comfyui", profile_id)
+    profile = resolve_profile(db, "comfyui", profile_id, user_id=user.id)
     base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
     try:
         workflows = ComfyUIClient(base).list_workflows()
@@ -157,7 +158,7 @@ def get_comfyui_workflow_params(
     from app.ai.providers.comfyui_client import ComfyUIClient
     from app.domain.providers import resolve_profile
 
-    profile = resolve_profile(db, "comfyui", profile_id)
+    profile = resolve_profile(db, "comfyui", profile_id, user_id=user.id)
     base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
     try:
         return ComfyUIClient(base).fetch_workflow_params(workflow)
@@ -169,7 +170,7 @@ def get_comfyui_workflow_params(
 def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
     try:
-        generation, job = create_generation_job(db, **body.model_dump())
+        generation, job = create_generation_job(db, created_by=user.id, **body.model_dump())
     except GenerationDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     start_generation_thread(generation.id)

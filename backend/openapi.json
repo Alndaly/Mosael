@@ -8979,6 +8979,93 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/credential": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Put My Credential",
+        "description": "填**我自己**在这条连接上的钥匙。\n\n这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。\n共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。",
+        "operationId": "put_my_credential_api_settings_providers__profile_id__credential_put",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCredentialIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCredentialOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete My Credential",
+        "description": "撤回我自己的钥匙。**连接不动** —— 它不是我的。",
+        "operationId": "delete_my_credential_api_settings_providers__profile_id__credential_delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers": {
       "get": {
         "tags": [
@@ -9144,7 +9231,7 @@
           "settings"
         ],
         "summary": "Start Oauth Login",
-        "description": "发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。",
+        "description": "发起订阅计划的授权登录 —— 登的是**自己**的账号。\n\n这里不再要求部署管理员:订阅计划(Claude Pro/Max、Kimi Code)是按人计费的,一个部署里\n每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。",
         "operationId": "start_oauth_login_api_settings_providers__profile_id__oauth_login_post",
         "parameters": [
           {
@@ -9427,7 +9514,7 @@
           "settings"
         ],
         "summary": "Logout Oauth Provider",
-        "description": "解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。",
+        "description": "解除**我自己**在这条连接上的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做。",
         "operationId": "logout_oauth_provider_api_settings_providers__profile_id__oauth_delete",
         "parameters": [
           {
@@ -18576,6 +18663,64 @@
         ],
         "title": "PromptOptimizeResponse"
       },
+      "ProviderCredentialIn": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Secrets"
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ProviderCredentialIn",
+        "description": "我在某条连接上的钥匙。"
+      },
+      "ProviderCredentialOut": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "key_hint": {
+            "type": "string",
+            "title": "Key Hint",
+            "default": ""
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": true
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_id"
+        ],
+        "title": "ProviderCredentialOut"
+      },
       "ProviderDefaultOut": {
         "properties": {
           "capability": {
@@ -19365,6 +19510,21 @@
             "type": "string",
             "title": "Key Hint",
             "default": ""
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": false
+          },
+          "my_key_shared": {
+            "type": "boolean",
+            "title": "My Key Shared",
+            "default": false
+          },
+          "uses_shared_key": {
+            "type": "boolean",
+            "title": "Uses Shared Key",
+            "default": false
           },
           "extra": {
             "additionalProperties": {
@@ -21741,6 +21901,11 @@
             "type": "string",
             "title": "Avatar Key",
             "default": ""
+          },
+          "is_deployment_admin": {
+            "type": "boolean",
+            "title": "Is Deployment Admin",
+            "default": false
           }
         },
         "type": "object",

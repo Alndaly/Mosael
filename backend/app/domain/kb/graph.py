@@ -57,14 +57,14 @@ def _get_driver() -> Any:
 _MAX_PARALLEL_EXTRACT = 4
 
 
-def _entity_profile(db: Session):
+def _entity_profile(db: Session, user_id: str | None):
     """The provider used for entity extraction, read on the CALLING thread.
 
     Resolving it needs the Session, and a Session belongs to one thread — so it is looked up
     once here rather than per chunk inside a worker. That also removes a redundant DB read per
     chunk that the per-chunk version was doing."""
     vendor = settings.kb_embedding_vendor  # 复用同一供应商配置做轻量抽取
-    profile = resolve_profile(db, vendor) if vendor else None
+    profile = resolve_profile(db, vendor, user_id=user_id) if vendor else None
     if profile is None:
         return None
     try:
@@ -105,7 +105,7 @@ def _extract_with(target: ChatTarget, text: str, call: BillableCall | None = Non
 
 
 def upsert_document_graph(
-    db: Session, *, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]]
+    db: Session, *, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]], user_id: str | None
 ) -> None:
     """chunks: [(chunk_id, text)]。每个 chunk 独立抽实体并写图。"""
     if not graph_tier_enabled() or not chunks:
@@ -120,7 +120,7 @@ def upsert_document_graph(
         # One LLM round-trip per chunk, and they do not depend on each other — so extract them
         # all first, concurrently, then write the graph. The writes stay on this thread because
         # a neo4j Session is no more thread-safe than a SQLAlchemy one.
-        profile = _entity_profile(db)
+        profile = _entity_profile(db, user_id)
         if profile is None:
             per_chunk: list[list[dict[str, str]]] = [[] for _ in chunks]
         else:

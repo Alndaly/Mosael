@@ -128,6 +128,7 @@ def start_publish(
     title: str,
     description: str,
     tags: list[str],
+    created_by: str | None,
     short_title: str = "",
 ) -> PublishTask:
     if not account.enabled:
@@ -143,6 +144,7 @@ def start_publish(
         db,
         workspace_id=workspace_id,
         kind="publish",
+        created_by=created_by,
         payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform},
         message=f"等待桌面发布器认领: {title or asset.name}",
     )

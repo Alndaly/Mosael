@@ -72,7 +72,9 @@ def _require_document(db: DbSession, user: CurrentUser, document_id: str) -> KbD
     return document
 
 
-def _create_note_document(db: DbSession, dataset: KbDataset, body: KbDocumentCreate) -> KbDocumentOut:
+def _create_note_document(
+    db: DbSession, dataset: KbDataset, body: KbDocumentCreate, user_id: str | None
+) -> KbDocumentOut:
     document = KbDocument(
         workspace_id=dataset.workspace_id,
         dataset_id=dataset.id,
@@ -86,7 +88,7 @@ def _create_note_document(db: DbSession, dataset: KbDataset, body: KbDocumentCre
     db.add(document)
     db.commit()
     db.refresh(document)
-    _enqueue_ingest(document.id)
+    _enqueue_ingest(document.id, user_id)
     return _doc_out(document, with_content=True)
 
 
@@ -153,7 +155,7 @@ def update_dataset(dataset_id: str, body: KbDatasetUpdate, db: DbSession, user: 
         dataset.chunk_overlap = body.chunk_overlap
         reindex = True
     if reindex:
-        kb.reindex_dataset(db, dataset)
+        kb.reindex_dataset(db, dataset, user_id=user.id)
     db.commit()
     db.refresh(dataset)
     count = db.scalar(select(func.count(KbDocument.id)).where(KbDocument.dataset_id == dataset_id)) or 0
@@ -173,11 +175,15 @@ def delete_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> Respons
 # ---------- 文档(挂在 dataset 下) ----------
 
 
-def _reindex_now(db: DbSession, document: KbDocument, dataset: KbDataset) -> None:
-    """就地(同步)重建索引,回填状态/错误。用于编辑/重建这类正文已就绪的快路径。"""
+def _reindex_now(db: DbSession, document: KbDocument, dataset: KbDataset, user_id: str | None) -> None:
+    """就地(同步)重建索引,回填状态/错误。用于编辑/重建这类正文已就绪的快路径。
+
+    `user_id` 是**要这次入库的那个人** —— 嵌入要花他的额度、用他的钥匙(见
+    domain/provider_credentials)。后台线程拿不到请求身份,所以它在入队时就被带上。
+    """
     document.status = "processing"
     try:
-        kb.reindex_document(db, document, dataset)
+        kb.reindex_document(db, document, dataset, user_id=user_id)
         document.status = "completed"
         document.error = ""
     except Exception as exc:  # noqa: BLE001 - 失败落库,不再 500 死路
@@ -185,7 +191,9 @@ def _reindex_now(db: DbSession, document: KbDocument, dataset: KbDataset) -> Non
         document.error = str(exc)[:800]
 
 
-def _enqueue_ingest(document_id: str, *, temp_path: str | None = None, temp_filename: str | None = None) -> None:
+def _enqueue_ingest(
+    document_id: str, user_id: str | None, *, temp_path: str | None = None, temp_filename: str | None = None
+) -> None:
     """后台摄取:抓取(url)/转换(file)/分块/索引,全程更新 status;失败落 error。
     导入接口据此立即返回 queued 文档,不再阻塞在数百秒的 MinerU/抓取上。"""
 
@@ -215,7 +223,7 @@ def _enqueue_ingest(document_id: str, *, temp_path: str | None = None, temp_file
                         if not textc.strip():
                             raise kb_convert.KbConvertError(f"{temp_filename or '文件'} 没有可提取的文本内容")
                         document.content = textc[:400_000]
-                    kb.reindex_document(db, document, dataset)
+                    kb.reindex_document(db, document, dataset, user_id=user_id)
                     document.status = "completed"
                     document.error = ""
                     db.commit()
@@ -246,7 +254,7 @@ def list_documents(dataset_id: str, db: DbSession, user: CurrentUser) -> list[Kb
 def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
     """建笔记文档:立即返回 queued,后台分块/索引。"""
     dataset = _require_dataset(db, user, dataset_id)
-    return _create_note_document(db, dataset, body)
+    return _create_note_document(db, dataset, body, user.id)
 
 
 @router.post("/kb/datasets/{dataset_id}/documents/import-url", response_model=KbDocumentOut)
@@ -265,7 +273,7 @@ def import_url(dataset_id: str, body: KbUrlImportRequest, db: DbSession, user: C
     db.add(document)
     db.commit()
     db.refresh(document)
-    _enqueue_ingest(document.id)
+    _enqueue_ingest(document.id, user.id)
     return _doc_out(document, with_content=True)
 
 
@@ -306,7 +314,7 @@ def import_file(
     db.add(document)
     db.commit()
     db.refresh(document)
-    _enqueue_ingest(document.id, temp_path=handle.name, temp_filename=filename)
+    _enqueue_ingest(document.id, user.id, temp_path=handle.name, temp_filename=filename)
     return _doc_out(document, with_content=True)
 
 
@@ -331,7 +339,7 @@ def update_document(document_id: str, body: KbDocumentUpdate, db: DbSession, use
     if changed_text:
         dataset = db.get(KbDataset, document.dataset_id)
         if dataset is not None:
-            _reindex_now(db, document, dataset)
+            _reindex_now(db, document, dataset, user.id)
     db.commit()
     db.refresh(document)
     return _doc_out(document, with_content=True)
@@ -360,7 +368,7 @@ def reindex_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDo
     dataset = db.get(KbDataset, document.dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    _reindex_now(db, document, dataset)
+    _reindex_now(db, document, dataset, user.id)
     db.commit()
     db.refresh(document)
     return _doc_out(document, with_content=True)
@@ -379,13 +387,13 @@ def retrieval_test(
     if dataset is None:
         raise HTTPException(status_code=404, detail="知识库不存在")
     ensure_workspace_member(db, user, dataset.workspace_id)
-    return kb.search(db, dataset, body.query, top_k=body.top_k, score_threshold=body.score_threshold)
+    return kb.search(db, dataset, body.query, user_id=user.id, top_k=body.top_k, score_threshold=body.score_threshold)
 
 
 @router.get("/kb/datasets/{dataset_id}/search", response_model=list[KbSearchResultOut])
 def search_dataset(dataset_id: str, q: str, db: DbSession, user: CurrentUser, limit: int = 8) -> list[dict]:
     dataset = _require_dataset(db, user, dataset_id)
-    return kb.search(db, dataset, q, top_k=max(1, min(50, limit)))
+    return kb.search(db, dataset, q, user_id=user.id, top_k=max(1, min(50, limit)))
 
 
 # ---------- 知识图谱可视化 ----------

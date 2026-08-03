@@ -2993,6 +2993,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put My Credential
+         * @description 填**我自己**在这条连接上的钥匙。
+         *
+         *     这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
+         *     共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。
+         */
+        put: operations["put_my_credential_api_settings_providers__profile_id__credential_put"];
+        post?: never;
+        /**
+         * Delete My Credential
+         * @description 撤回我自己的钥匙。**连接不动** —— 它不是我的。
+         */
+        delete: operations["delete_my_credential_api_settings_providers__profile_id__credential_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers": {
         parameters: {
             query?: never;
@@ -3040,7 +3067,10 @@ export interface paths {
         put?: never;
         /**
          * Start Oauth Login
-         * @description 发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。
+         * @description 发起订阅计划的授权登录 —— 登的是**自己**的账号。
+         *
+         *     这里不再要求部署管理员:订阅计划(Claude Pro/Max、Kimi Code)是按人计费的,一个部署里
+         *     每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。
          */
         post: operations["start_oauth_login_api_settings_providers__profile_id__oauth_login_post"];
         delete?: never;
@@ -3146,7 +3176,7 @@ export interface paths {
         post?: never;
         /**
          * Logout Oauth Provider
-         * @description 解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。
+         * @description 解除**我自己**在这条连接上的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做。
          */
         delete: operations["logout_oauth_provider_api_settings_providers__profile_id__oauth_delete"];
         options?: never;
@@ -6537,6 +6567,43 @@ export interface components {
              */
             platform: string;
         };
+        /**
+         * ProviderCredentialIn
+         * @description 我在某条连接上的钥匙。
+         */
+        ProviderCredentialIn: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Secrets */
+            secrets?: {
+                [key: string]: string;
+            };
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
+        };
+        /** ProviderCredentialOut */
+        ProviderCredentialOut: {
+            /** Profile Id */
+            profile_id: string;
+            /**
+             * Key Hint
+             * @default
+             */
+            key_hint: string;
+            /**
+             * Is Mine
+             * @default true
+             */
+            is_mine: boolean;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
+        };
         /** ProviderDefaultOut */
         ProviderDefaultOut: {
             /** Capability */
@@ -6814,6 +6881,21 @@ export interface components {
              * @default
              */
             key_hint: string;
+            /**
+             * Is Mine
+             * @default false
+             */
+            is_mine: boolean;
+            /**
+             * My Key Shared
+             * @default false
+             */
+            my_key_shared: boolean;
+            /**
+             * Uses Shared Key
+             * @default false
+             */
+            uses_shared_key: boolean;
             /** Extra */
             extra?: {
                 [key: string]: string;
@@ -7834,6 +7916,11 @@ export interface components {
              * @default
              */
             avatar_key: string;
+            /**
+             * Is Deployment Admin
+             * @default false
+             */
+            is_deployment_admin: boolean;
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -14721,6 +14808,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VendorPresetOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_my_credential_api_settings_providers__profile_id__credential_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderCredentialIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCredentialOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_my_credential_api_settings_providers__profile_id__credential_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

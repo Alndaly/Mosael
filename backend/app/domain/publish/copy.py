@@ -26,9 +26,15 @@ _SYSTEM = """你是短视频发布运营。根据素材信息写发布文案,只
 
 
 def generate_copy(
-    db: Session, *, workspace_id: str, asset_id: str | None = None, brief: str = "", profile_id: str | None = None
+    db: Session,
+    *,
+    workspace_id: str,
+    user_id: str | None,
+    asset_id: str | None = None,
+    brief: str = "",
+    profile_id: str | None = None,
 ) -> dict[str, Any]:
-    profile = require_profile(db, profile_id, error=PublishDomainError)
+    profile = require_profile(db, profile_id, user_id=user_id, error=PublishDomainError)
     parts: list[str] = []
     if brief.strip():
         parts.append(f"创作者要求:{brief.strip()}")

@@ -38,6 +38,15 @@ def test_a_secret_extra_never_leaves_the_server_in_full() -> None:
     assert "SKsupersecret" not in str(out)
 
 
+def _my_secrets(db, profile_id: str) -> dict:
+    """当前这个部署里那个人在这条连接上的密字段。"""
+    from app.db.models import ProviderCredential, User
+
+    me = db.query(User).order_by(User.created_at).first()
+    row = db.get(ProviderCredential, {"profile_id": profile_id, "owner_user_id": me.id})
+    return dict(row.secrets or {}) if row is not None else {}
+
+
 def test_a_non_secret_extra_comes_back_verbatim() -> None:
     """An App ID is an identifier, and the form has to show it back to be editable."""
     client = _admin_client()
@@ -63,7 +72,9 @@ def test_saving_the_form_without_a_secret_keeps_the_stored_one() -> None:
     with SessionLocal() as db:
         stored = db.get(ProviderProfile, created["id"])
         assert stored.name == "renamed"
-        assert stored.extra == {"ak": "AKLTsecret", "sk": "SKsupersecret"}
+        # 密的附加字段跟着**钥匙**走(见 domain/provider_credentials);「空 = 不变」这条规则
+        # 没变,变的只是它存在哪。
+        assert _my_secrets(db, created["id"]) == {"ak": "AKLTsecret", "sk": "SKsupersecret"}
 
 
 def test_blanking_a_required_visible_field_is_rejected() -> None:
@@ -90,7 +101,7 @@ def test_an_untouched_extra_survives_an_unrelated_patch() -> None:
     client.patch(f"/api/settings/providers/{created['id']}", json={"enabled": False})
 
     with SessionLocal() as db:
-        assert db.get(ProviderProfile, created["id"]).extra == {"ak": "AKLTsecret"}
+        assert _my_secrets(db, created["id"]) == {"ak": "AKLTsecret"}
 
 
 def test_the_form_spec_is_served_with_the_vendor() -> None:

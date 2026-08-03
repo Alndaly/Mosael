@@ -115,19 +115,43 @@ def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
     return status
 
 
-def add_provider(db, *, model: str = "", capability_ids=None, **fields):
-    """建一条连接,并把它的模型建成一行。
+def add_provider(db, *, model: str = "", capability_ids=None, owner_username: str = "", **fields):
+    """建一条连接、它的模型行,以及一把钥匙。
 
     档案上不再有 default_model —— 模型是独立实体。直接构造 ProviderProfile 而不建模型行的
     话,任何按能力解析模型的地方都会拿到空串(这正是重构时十几条测试红掉的原因,而它们红得
     有道理:少了模型行,那条连接确实没有可用模型)。
+
+    钥匙同理:`api_key` / `oauth_credential` 不再是连接上的列(见 domain/provider_credentials),
+    传进来的会落成**一把共享凭据**,归最早那个账号(部署管理员)所有 —— 也就是升级前的语义:
+    这一把大家都能用。要测「各人各自的钥匙」时传 owner_username 指名道姓。
     """
-    from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.db.models import ProviderProfile, User
+    from app.domain import provider_credentials, provider_models
+
+    api_key = fields.pop("api_key", None)
+    oauth_credential = fields.pop("oauth_credential", None)
+    secrets = fields.pop("secrets", None)
+    model_catalog = fields.pop("model_catalog", None)
 
     profile = ProviderProfile(**fields)
     db.add(profile)
     db.flush()
     if model:
         provider_models.upsert(db, profile, model, source="manual", capability_ids=capability_ids)
+    if api_key is not None or oauth_credential is not None or secrets or model_catalog is not None:
+        query = db.query(User)
+        owner = (
+            query.filter(User.username == owner_username).one()
+            if owner_username
+            else query.order_by(User.created_at).first()
+        )
+        if owner is not None:
+            credential = provider_credentials.upsert(
+                db, profile.id, owner.id, api_key=api_key or "", secrets=secrets or None,
+                shared=not owner_username,
+            )
+            credential.oauth_credential = oauth_credential
+            credential.model_catalog = model_catalog
+    db.flush()
     return profile

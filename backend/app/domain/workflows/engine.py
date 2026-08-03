@@ -38,7 +38,7 @@ MAX_PARALLEL_NODES = 8
 
 
 def start_workflow_job(
-    db: Session, workflow: Workflow, *, params: dict[str, Any] | None = None, job: Job | None = None
+    db: Session, workflow: Workflow, *, created_by: str | None, params: dict[str, Any] | None = None, job: Job | None = None
 ) -> Job:
     """创建(或复用)workflow job 并启动执行线程。"""
     from app.domain.plugins.nodes import plugin_node_types
@@ -51,6 +51,7 @@ def start_workflow_job(
             db,
             workspace_id=workflow.workspace_id,
             kind="workflow",
+            created_by=created_by,
             payload={"workflow_id": workflow.id, "params": params or {}},
             message=f"工作流排队中: {workflow.name}",
         )

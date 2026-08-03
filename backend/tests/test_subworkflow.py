@@ -21,7 +21,7 @@ def _ws() -> str:
 def _run(wf_id: str, params: dict | None = None) -> tuple[str, dict, str | None, str]:
     with SessionLocal() as db:
         wf = db.get(Workflow, wf_id)
-        job = start_workflow_job(db, wf, params=params or {})
+        job = start_workflow_job(db, wf, created_by=None, params=params or {})
         jid = job.id
     for _ in range(150):
         with SessionLocal() as db:

@@ -185,9 +185,13 @@ def test_logout_clears_both_the_credential_and_the_catalog(fake_sidecar, client_
     )
     _poll_until(client, profile_id, login_id, lambda s: s["status"] == "done")
     # 真实流程里凭据由 sidecar 经 CredentialStore 写回;假 sidecar 不做这步,这里补上。
-    lease = acquire_lease(profile_id)
+    from app.db.models import User
+
     with SessionLocal() as db:
-        commit_credential(db, profile_id, lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
+        me = db.query(User).order_by(User.created_at).first().id
+    lease = acquire_lease(profile_id, me)
+    with SessionLocal() as db:
+        commit_credential(db, profile_id, me, lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
     assert client.get("/api/settings/providers").json()[0]["oauth_linked"] is True
 
     resp = client.delete(f"/api/settings/providers/{profile_id}/oauth")
