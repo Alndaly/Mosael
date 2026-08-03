@@ -116,6 +116,23 @@ def packages(client) -> dict[str, dict]:
 
 # --- 包与实例 -----------------------------------------------------------
 
+def test_通用文件名被改成规范名() -> None:
+    """`plugin.json` 是个谁都在用的通用名。扫描时改成规范名 —— 一个目录一份清单,一个名字。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    shutil.rmtree(plugins_root(), ignore_errors=True)
+    directory = plugins_root() / "generic-name"
+    directory.mkdir(parents=True)
+    (directory / "plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
+    (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
+    with SessionLocal() as db:
+        installer.sync(db, plugins_root())
+
+    assert (directory / "open-studio.plugin.json").exists()
+    assert not (directory / "plugin.json").exists()
+    assert "dev.legacy" in packages(client)
+
+
 def test_无配置的包装上就自动有一个默认连接() -> None:
     """text-toolkit 这种装上就能用的东西,不该逼用户先去"新建一个连接"。"""
     client = install(SIMPLE)
@@ -417,25 +434,6 @@ def test_迁移是幂等的_跑第二次不再改动() -> None:
         installer.sync(db, plugins_root())
     assert path.read_text(encoding="utf-8") == first
     assert client is not None
-
-
-def test_更名前的文件名被改成规范名() -> None:
-    """`mibu.plugin.json` 是更名前的写法。以前是读的时候多认一个名字,现在是扫的时候改掉它 ——
-    一个目录一份清单,一个名字。"""
-    client = fresh_client()
-    client.post("/api/workspaces", json={"name": "W"})
-    shutil.rmtree(plugins_root(), ignore_errors=True)
-    directory = plugins_root() / "old-name"
-    directory.mkdir(parents=True)
-    (directory / "mibu.plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
-    (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
-    with SessionLocal() as db:
-        installer.sync(db, plugins_root())
-
-    assert (directory / "open-studio.plugin.json").exists()
-    assert not (directory / "mibu.plugin.json").exists()
-    assert (directory / "mibu.plugin.json.bak").exists()
-    assert "dev.legacy" in packages(client)
 
 
 def test_目录被手动删掉后_扫描顺手清掉那条记录() -> None:

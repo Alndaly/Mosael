@@ -39,7 +39,7 @@ function friendlyAuthError(raw: string, mode: "login" | "register", t: (key: Mes
 export function LoginView() {
   const t = useI18n();
   const { locale, setLocale } = usePreferences();
-  const { hasUsers, login, register } = useAuth();
+  const { hasUsers, openRegistration, login, register } = useAuth();
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
   const [legalDoc, setLegalDoc] = React.useState<LegalDoc | null>(null);
 
@@ -112,8 +112,11 @@ export function LoginView() {
             <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground">
               <Film size={21} />
             </div>
-            <h1>{mode === "login" ? t("loginWelcomeBack") : t("loginCreateTitle")}</h1>
-            <p>{mode === "login" ? t("loginSubtitle") : t("registerSubtitle")}</p>
+            {/* 空库 = 这个部署还没有管理员。直说他正在创建什么,而不是一句泛泛的"创建账户"。 */}
+            <h1>{mode === "login" ? t("loginWelcomeBack") : hasUsers ? t("loginCreateTitle") : t("bootstrapTitle")}</h1>
+            <p>
+              {mode === "login" ? t("loginSubtitle") : hasUsers ? t("registerSubtitle") : t("bootstrapSubtitle")}
+            </p>
           </div>
 
           <Form {...form}>
@@ -153,9 +156,9 @@ export function LoginView() {
                   )}
                 />
               )}
-              {/* 邀请码只在**已经有人**的部署上出现:空库时第一个账号引导这个部署,那时没有任何人
-                  可以给他发码。开放注册的部署留空即可 —— 所以不做必填,后端说了算。 */}
-              {mode === "register" && hasUsers && (
+              {/* 邀请码只在**关掉了自助注册**的部署上出现。开放的部署摆一个永远不用填的框,
+                  等于让每个新人先去问一句"这个要填吗";空库时更没有任何人可以给他发码。 */}
+              {mode === "register" && hasUsers && !openRegistration && (
                 <FormField
                   control={form.control}
                   name="inviteCode"

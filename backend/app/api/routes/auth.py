@@ -11,6 +11,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AuthCredentials,
     AuthOut,
+    BootstrapOut,
     DeploymentAdminUpdate,
     InviteCreate,
     PasswordUpdate,
@@ -257,11 +258,17 @@ def logout(request: Request, db: DbSession, user: CurrentUser) -> dict:
     return {"ok": True}
 
 
-@router.get("/auth/bootstrap")
-def bootstrap(db: DbSession) -> dict:
-    """Whether any local account exists — decides register vs login screen."""
+@router.get("/auth/bootstrap", response_model=BootstrapOut)
+def bootstrap(db: DbSession) -> BootstrapOut:
+    """登录页开屏要知道的两件事:**这个部署里有人了吗**、**收不收自助注册**。
+
+    不需要登录 —— 这就是登录之前那一屏在问的。只回两个布尔,不泄露任何账号信息;而"库里有没有
+    人"本来就能从"不带邀请码注册能不能成"推出来。
+
+    没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。
+    """
     count = db.scalar(select(func.count()).select_from(User)) or 0
-    return {"has_users": count > 0}
+    return BootstrapOut(has_users=count > 0, open_registration=settings.open_registration)
 
 
 def _create_session(db: DbSession, user: User) -> str:

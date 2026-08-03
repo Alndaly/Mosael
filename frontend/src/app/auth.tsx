@@ -17,6 +17,8 @@ type AuthState = {
   status: "loading" | "anonymous" | "authenticated";
   user: User | null;
   hasUsers: boolean;
+  /** 这个部署收不收自助注册。不收时注册要邀请码,登录页才摆那个框。 */
+  openRegistration: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName?: string, inviteCode?: string) => Promise<void>;
   /** 第三方登录轮询取到票后直接落座(token+user 已由后端铸好)。 */
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<AuthState["status"]>("loading");
   const [user, setUser] = React.useState<User | null>(null);
   const [hasUsers, setHasUsers] = React.useState(true);
+  const [openRegistration, setOpenRegistration] = React.useState(true);
 
   const qc = useQueryClient();
 
@@ -46,10 +49,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // those entries go stale.
     qc.clear();
     try {
-      const bootstrap = await api<{ has_users: boolean }>("/api/auth/bootstrap");
+      const bootstrap = await api<{ has_users: boolean; open_registration: boolean }>("/api/auth/bootstrap");
       setHasUsers(bootstrap.has_users);
+      setOpenRegistration(bootstrap.open_registration);
     } catch {
+      // 探不到就按"有人且不开放"渲染:那是更保守的一屏(要求登录、要邀请码),
+      // 而不是对着一个连不上的后端摆出「创建管理员账户」。
       setHasUsers(true);
+      setOpenRegistration(false);
     }
     setStatus("anonymous");
   }, [qc]);
@@ -102,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     status,
     user,
     hasUsers,
+    openRegistration,
     login: async (username, password) => {
       applyAuth(await api<AuthOut>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }));
     },

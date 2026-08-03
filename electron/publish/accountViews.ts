@@ -12,44 +12,7 @@ const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
 /** 发布账号登录分区前缀(完整名 persist:<PARTITION_PREFIX>-<accountId>)。
  *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。 */
 export const PARTITION_PREFIX = "openstudio";
-const LEGACY_PARTITION_PREFIX = "mibu";
 
-/**
- * 更名遗留分区目录的**惰性**迁移:persist:openstudio-X 首次被用到时,若它的目录还不存在、
- * 而老的 mibu-X 目录在,就地改名。
- *
- * 为什么惰性而不是启动时批量:分区名同时记在数据库(后端改)和磁盘(这里改),两个进程各改一半。
- * 任何"先改一边"的方案都存在空窗——库里已指向新名、磁盘还是老名 → Electron 开出一个空分区,
- * 表现为全部平台登录失效。改成"用到谁迁谁",顺序就无关紧要了,且天然幂等。
- */
-export function migrateLegacyPartitionDir(partition: string): void {
-  const name = partition.startsWith("persist:") ? partition.slice("persist:".length) : partition;
-  if (!name.startsWith(`${PARTITION_PREFIX}-`)) return;
-  const root = path.join(app.getPath("userData"), "Partitions");
-  const target = path.join(root, name);
-  const legacy = path.join(root, `${LEGACY_PARTITION_PREFIX}-${name.slice(PARTITION_PREFIX.length + 1)}`);
-  try {
-    if (!fs.existsSync(legacy)) return; // 没有遗留目录 = 早就迁完了,或本来就是新装
-    if (fs.existsSync(target)) {
-      // 目标已存在**不代表迁移完成**。Chromium 一旦碰过这个分区就会把目录建出来,所以只要有
-      // 任何一次「在改名之前先用上了分区」(或上次改名失败后又被用过),就会留下一个空的新目录,
-      // 而真正的登录数据还躺在老目录里 —— 原来的 `existsSync(target) → return` 会让这个状态
-      // **永久锁死**:老目录一直在,却永远不会被搬过去,用户只看到「所有平台都要重新登录」。
-      // 所以这里只在目标是空目录时才认定它是那个占位,清掉后继续搬。
-      if (fs.readdirSync(target).length > 0) return; // 目标有内容 = 真的迁完了
-      fs.rmSync(target, { recursive: true, force: true });
-    }
-    fs.renameSync(legacy, target);
-  } catch (err) {
-    // 跨进程没法做成原子:分区名记在数据库(后端改)和磁盘(这里改)。惰性迁移已经让**顺序**
-    // 不重要,但改名本身仍可能失败(目录被占用、权限)。失败时唯一的正确做法是让它可见 ——
-    // 静默吞掉的话,用户看到的是「莫名其妙全部掉登录」,而登录数据其实还完好地躺在老目录里。
-    console.error(
-      `[open-studio] 登录分区目录迁移失败,该账号需要重新登录;原数据仍在 ${legacy}`,
-      err,
-    );
-  }
-}
 
 /**
  * 后台任务的「悬浮面板」几何。
@@ -188,7 +151,6 @@ export class AccountViewManager {
    *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
   async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
     // 池档案的分区名直接来自数据库,不经 partitionFor,故这里也要触发一次遗留目录迁移。
-    migrateLegacyPartitionDir(opts.partition);
     this.partitions.set(opts.viewId, opts.partition);
     if (opts.name) this.names.set(opts.viewId, opts.name);
     const normalizedProxy = opts.proxy?.trim() || null;
@@ -214,7 +176,6 @@ export class AccountViewManager {
    * persist:openstudio-* 互不相干。
    */
   registerSession(viewId: string, partition: string): PageDriver {
-    migrateLegacyPartitionDir(partition);
     this.partitions.set(viewId, partition);
     return this.ensure(viewId).driver;
   }
@@ -553,7 +514,6 @@ export class AccountViewManager {
     // 登记过的(池档案)用其显式分区;未登记的(发布账号)按约定 persist:<prefix>-<id>。
     const partition = this.partitions.get(id) ?? `persist:${PARTITION_PREFIX}-${id}`;
     // 拿分区名的每条路径最终都会落到这里,所以遗留目录的惰性改名挂在这一处即可(幂等)。
-    migrateLegacyPartitionDir(partition);
     return partition;
   }
 

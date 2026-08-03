@@ -13,23 +13,6 @@ app.setAppUserModelId("dev.openstudio.app");
 // 更名(Mibu → Open Studio)迁移:userData = appData/app.getName(),改名会把登录分区
 // (Partitions)与日志留在旧目录下。启动最早、任何 userData 使用之前,把旧目录整体平移到
 // 新名下(仅当新目录尚不存在)。失败不致命——大不了当作全新安装。
-try {
-  const fs = require("node:fs");
-  const appData = app.getPath("appData");
-  const newUserData = path.join(appData, app.getName());
-  // 旧名大小写不确定(setName 曾为 "Mibu",打包/文档里也见过小写 "mibu"),两者都试一遍。
-  if (!fs.existsSync(newUserData)) {
-    for (const legacy of ["Mibu", "mibu"]) {
-      const oldUserData = path.join(appData, legacy);
-      if (oldUserData !== newUserData && fs.existsSync(oldUserData)) {
-        fs.renameSync(oldUserData, newUserData);
-        break;
-      }
-    }
-  }
-} catch (err) {
-  console.warn("[open-studio] userData migration skipped:", err);
-}
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。

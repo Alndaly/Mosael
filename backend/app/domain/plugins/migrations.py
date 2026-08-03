@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 #: 清单的规范文件名。别的名字会在迁移时被改成它 —— 一个目录一份清单,一个名字。
 CANONICAL_FILENAME = "open-studio.plugin.json"
 
-#: 迁移时会被认出来并改名的历史写法。`plugin.json` 是通用名,`mibu.plugin.json` 是更名前的。
-LEGACY_FILENAMES = ("plugin.json", "mibu.plugin.json")
+#: 迁移时会被认出来并改名的历史写法。`plugin.json` 是通用名。
+LEGACY_FILENAMES = ("plugin.json",)
 
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。
 MANIFEST_VERSION = 1

@@ -90,9 +90,6 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
 # 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
 # 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
 WORKFLOW_FILE_FORMAT = "openstudio-workflow"
-#: 更名前导出的文件带的是旧标识。导出一律写新名,导入两者都收——这个字符串已经躺在用户
-#: 磁盘上的 .json 里了,只认新名等于让他们此前导出的工作流全部打不开。
-LEGACY_WORKFLOW_FILE_FORMATS = ("mibu-workflow",)
 WORKFLOW_FILE_VERSION = 1
 WORKFLOW_FILE_SUFFIX = f".{WORKFLOW_FILE_FORMAT}.json"
 
@@ -124,7 +121,7 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     data = body.data
-    accepted = (WORKFLOW_FILE_FORMAT, *LEGACY_WORKFLOW_FILE_FORMATS)
+    accepted = (WORKFLOW_FILE_FORMAT,)
     if data.get("format") not in accepted or not isinstance(data.get("graph"), dict):
         raise HTTPException(status_code=422, detail="不是有效的 Open Studio 工作流文件")
     try:

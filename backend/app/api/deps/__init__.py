@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
-from app.core.worker_key import LEGACY_WORKER_KEY_HEADER, WORKER_KEY_HEADER, verify_worker_key
+from app.core.worker_key import WORKER_KEY_HEADER, verify_worker_key
 from app.core.permissions import ensure_deployment_admin, get_current_user, presented_token
 from app.db.models import User
 
@@ -26,6 +26,6 @@ def require_worker_key(request: Request) -> None:
     able to reach 127.0.0.1.
     """
     # 旧头名一并接受:升级后第一次启动可能是「新壳 + 复用的旧后端」,反之亦然。
-    sent = request.headers.get(WORKER_KEY_HEADER) or request.headers.get(LEGACY_WORKER_KEY_HEADER)
+    sent = request.headers.get(WORKER_KEY_HEADER)
     if not verify_worker_key(sent):
         raise HTTPException(status_code=401, detail="Invalid or missing worker key")

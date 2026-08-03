@@ -7,36 +7,6 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "OPEN_STUDIO_"
-_LEGACY_ENV_PREFIX = "MIBU_"  # 更名前的前缀,仅用于向后兼容(勿随全局替换一起改掉)
-
-
-def _adopt_legacy_env() -> None:
-    """更名前的 MIBU_* 配置继续生效:把它们镜像成 OPEN_STUDIO_*(新名已设则不覆盖)。
-
-    真实环境变量与 .env 文件都要照顾——pydantic-settings 按前缀读 .env,单改前缀会让用户
-    既有的 .env 静默失效(数据目录/端口/密钥全部回默认,像是"配置丢了")。这里在 Settings
-    构造前把两处的老键都补成新键,老部署无需改任何文件。
-    """
-    sources: list[tuple[str, str]] = [(k, v) for k, v in os.environ.items()]
-    env_file = Path(".env")
-    if env_file.is_file():
-        try:
-            for raw in env_file.read_text(encoding="utf-8").splitlines():
-                line = raw.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                sources.append((key.strip(), value.strip().strip("\"'")))
-        except OSError:
-            pass
-    for key, value in sources:
-        if not key.startswith(_LEGACY_ENV_PREFIX):
-            continue
-        new_key = ENV_PREFIX + key[len(_LEGACY_ENV_PREFIX) :]
-        os.environ.setdefault(new_key, value)
-
-
-_adopt_legacy_env()
 
 
 class Settings(BaseSettings):
@@ -45,10 +15,16 @@ class Settings(BaseSettings):
     data_dir: Path = Path.home() / ".open-studio"
     backend_host: str = "127.0.0.1"
 
-    #: 引导之后还允不允许自助注册。**默认不允许** —— 这是个多租户产品,一个后端可以服务多个人,
-    #: 而开放注册让「任何能连到这个端口的人」直接成为里面的一个租户。空库时第一个账号照常能注册
-    #: (没有人可以给他发邀请),之后只能由已有成员邀请。内网 demo 之类想开放的,显式打开。
-    open_registration: bool = False
+    #: 允不允许自助注册。**默认开放。**
+    #:
+    #: 它一度默认关(ADR 0008 第 0 步),理由是那条跑出来过的链的第一环:注册 → 自己建工作区
+    #: → 满足当时那道自助的实例管理员判据 → 改实例配置 / 在服务端跑任意 Python。**那条链的
+    #: 中段和末段后来各自断了**:第 1 步把部署配置收到 `is_deployment_admin`(自己建工作区不再
+    #: 带来任何部署权限),第 5 步把代码执行搬进隔离环境。关注册当时是止血,伤口已经缝上了。
+    #:
+    #: 现在陌生人注册拿到的是**他自己的**工作区:看不到别人的东西(D3)、用不了别人的钥匙(D4)、
+    #: 跑不了伤到别人的代码(D2)。想关的部署把它设成 0 —— 那是部署的选择,不是产品的默认姿态。
+    open_registration: bool = True
 
     backend_port: int = 8800
     # 后端日志级别(OPEN_STUDIO_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
@@ -154,10 +130,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 _DEFAULT_DATA_DIR = Path.home() / ".open-studio"
-#: 只保留 .mibu-cut —— v0.1.0 / v0.2.0 是用它发布的,现有用户的数据都在那里。
-#: 更早的 .mibu-video / .mibu-new 属于本仓库之前的前身项目,从未公开发布过,已移除。
-_LEGACY_DATA_DIRS = (Path.home() / ".mibu-cut",)
-_DB_NAMES = ("open-studio.db", "mibu.db")
+_DB_NAMES = ("open-studio.db",)
 
 
 def _db_has_rows(path: Path) -> bool:
@@ -185,60 +158,6 @@ def _dir_has_user_data(directory: Path) -> bool:
     return any(_db_has_rows(directory / name) for name in _DB_NAMES)
 
 
-def _migrate_data_dir() -> None:
-    """数据目录更名迁移:.mibu-cut(v0.1.0 / v0.2.0 的发布路径)→ .open-studio。
-
-    只在默认路径上做 —— OPEN_STUDIO_DATA_DIR 显式指过别处的部署不动。
-
-    判据是**新目录里有没有用户数据**,而不是"新目录存不存在"。后者踩过一次:任何一个进程
-    (哪怕只是导入了 app.core.db,它在模块层就 mkdir)都会先把空的新目录建出来,此后迁移
-    条件永远不成立 —— 老数据原地不动、应用却开在空库上,用户看到的是"所有项目都没了"。
-    新目录已被空壳占位时,把空壳挪到 .stale 备份名下再平移老目录(不删任何东西)。
-    """
-    if settings.data_dir != _DEFAULT_DATA_DIR or _dir_has_user_data(_DEFAULT_DATA_DIR):
-        return
-    if not _DEFAULT_DATA_DIR.exists():
-        # 快路径:新目录还没建 → 第一个存在的老目录整体平移(同卷 rename,原子且瞬时)。
-        legacy = next((d for d in _LEGACY_DATA_DIRS if d.is_dir()), None)
-        if legacy is not None:
-            legacy.rename(_DEFAULT_DATA_DIR)
-        return
-    # 新目录已被空壳占位:只有当某个老目录确有用户数据时才值得动它(空目录之间来回搬没意义)。
-    legacy = next((d for d in _LEGACY_DATA_DIRS if d.is_dir() and _dir_has_user_data(d)), None)
-    if legacy is None:
-        return
-    stale = _DEFAULT_DATA_DIR.with_name(_DEFAULT_DATA_DIR.name + ".stale")
-    index = 1
-    while stale.exists():
-        index += 1
-        stale = _DEFAULT_DATA_DIR.with_name(f"{_DEFAULT_DATA_DIR.name}.stale{index}")
-    _DEFAULT_DATA_DIR.rename(stale)  # 不删任何东西,只是让开
-    legacy.rename(_DEFAULT_DATA_DIR)
-
-
-def _migrate_db_filename() -> None:
-    """库文件更名 mibu.db → open-studio.db。
-
-    必须早于任何 SQLAlchemy 连接:一旦连上,SQLite 会先把新名建成空库。同样以"有没有数据"
-    为判据 —— 只看文件在不在的话,那个空库会让真数据永远搬不过来。
-    -wal/-shm 是同一库的同伴文件,必须一起搬,否则残留的 WAL 会被当成另一个库的日志。
-    """
-    # 判据不对称是有意的:同一个数据目录里存在 mibu.db,本身就说明"这个装机用的是旧库名",
-    # 即便它是空的也该采纳(那就是这个装机的库)。只需守住一点:新库已有数据时绝不覆盖。
-    legacy_db = settings.data_dir / "mibu.db"
-    if not legacy_db.is_file() or _db_has_rows(settings.db_path):
-        return
-    if settings.db_path.exists():  # 空壳占位 → 让开
-        settings.db_path.rename(settings.db_path.with_name(settings.db_path.name + ".stale"))
-    legacy_db.rename(settings.db_path)
-    for _suffix in ("-wal", "-shm"):
-        sidecar = legacy_db.with_name(legacy_db.name + _suffix)
-        if sidecar.is_file():
-            sidecar.replace(settings.db_path.with_name(settings.db_path.name + _suffix))
-
-
-_migrate_data_dir()
-_migrate_db_filename()
 
 
 def app_version() -> str:

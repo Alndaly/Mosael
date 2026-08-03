@@ -41,6 +41,15 @@ class UserOut(OrmModel):
     is_deployment_admin: bool = False
 
 
+class BootstrapOut(BaseModel):
+    """登录页开屏问的两件事(见 routes/auth.bootstrap)。不需要登录就能读。"""
+
+    #: 这个部署里已经有账号了吗。没有 → 界面进「创建管理员账户」。
+    has_users: bool = False
+    #: 收不收自助注册。不收时注册要邀请码,界面才摆那个框。
+    open_registration: bool = True
+
+
 class AuthOut(BaseModel):
     token: str
     user: UserOut

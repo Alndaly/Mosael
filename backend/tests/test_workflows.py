@@ -964,25 +964,6 @@ def test_workflow_export_import_roundtrip() -> None:
     assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": envelope}).json()["name"] == "出海流程 (3)"
 
 
-def test_workflow_import_accepts_the_pre_rename_format() -> None:
-    """更名前导出的 .mibu-workflow.json 必须还能导入。
-
-    这个字符串已经躺在用户磁盘上的文件里了——只认新标识等于让他们此前导出的所有工作流
-    一夜之间打不开。导出一律写新名,导入两者都收。
-    """
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    legacy_file = {
-        "format": "mibu-workflow",  # 旧标识,勿随全局替换改掉
-        "version": 1,
-        "name": "更名前导出的流程",
-        "graph": linear_graph(),
-    }
-    res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": legacy_file})
-    assert res.status_code == 200, res.text
-    assert res.json()["graph"] == linear_graph()
-
-
 def test_workflow_export_writes_the_current_format() -> None:
     """导出只写新标识——兼容是单向的,不能让旧名靠导出重新繁殖。"""
     client = fresh_client()

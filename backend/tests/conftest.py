@@ -1,7 +1,7 @@
 """Isolate every test run in a throwaway data dir BEFORE app modules import.
 
 Without this, reset_db() would drop tables in the developer's live
-~/.mibu-cut/mibu.db. Environment variables outrank .env in pydantic-settings,
+~/.open-studio/open-studio.db. Environment variables outrank .env in pydantic-settings,
 so setting OPEN_STUDIO_DATA_DIR here is sufficient.
 """
 
