@@ -67,7 +67,7 @@ def list_generation_sessions(workspace_id: str, db: DbSession, user: CurrentUser
 def update_generation_session(
     session_id: str, body: GenerationSessionUpdate, db: DbSession, user: CurrentUser
 ) -> GenerationSession:
-    session = _require_generation_session(db, user, session_id)
+    session = _require_generation_session(db, user, session_id, perm="ai")
     fields = body.model_fields_set
     if "title" in fields and body.title is not None:
         session.title = body.title
@@ -84,7 +84,7 @@ def update_generation_session(
 
 @router.delete("/generation/sessions/{session_id}", status_code=204)
 def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = _require_generation_session(db, user, session_id)
+    session = _require_generation_session(db, user, session_id, perm="ai")
     generations = list(db.scalars(select(GenerationJob).where(GenerationJob.session_id == session.id)))
     job_ids = [generation.job_id for generation in generations if generation.job_id]
     db.execute(delete(GenerationJob).where(GenerationJob.session_id == session.id))
@@ -240,11 +240,14 @@ def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) ->
             gen.cost_confidence = "unknown"  # type: ignore[attr-defined]
 
 
-def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str) -> GenerationSession:
+def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str, *, perm: str | None = None) -> GenerationSession:
     session = db.get(GenerationSession, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, session.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, session.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, session.workspace_id, perm)
     # 看不见还不够:猜到 id 也得用不了,否则「私有」只是列表上的一层遮挡。
     if not sharing.may_use(db, "generation_session", session, user):
         raise HTTPException(status_code=404, detail="Not found")

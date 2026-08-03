@@ -111,23 +111,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         stop_all_connections()
 
 
-class _MethodBindingMiddleware:
-    """Pure-ASGI middleware: bind the request's HTTP method into a contextvar so the
-    workspace access chokepoint can write-gate mutations. Pure ASGI (not
-    BaseHTTPMiddleware) so the contextvar is set in the same context that FastAPI later
-    copies into the threadpool for sync route handlers."""
-
-    def __init__(self, app: object) -> None:
-        self.app = app
-
-    async def __call__(self, scope: dict, receive: object, send: object) -> None:
-        if scope["type"] == "http":
-            from app.core.permissions import bind_request_method
-
-            bind_request_method(scope.get("method", "GET"))
-        await self.app(scope, receive, send)  # type: ignore[operator]
-
-
 def _prepare_network() -> None:
     """把库里的出站代理设置装进本进程的环境变量,后端自己的 httpx 调用随即生效。
 
@@ -157,7 +140,6 @@ def _prepare_network() -> None:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Open Studio API", version="0.1.0", lifespan=lifespan)
-    app.add_middleware(_MethodBindingMiddleware)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
     # than a same-origin policy.

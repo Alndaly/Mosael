@@ -79,12 +79,6 @@ def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
 # Lets the shared access chokepoint stay read-open but write-gated without every route
 # passing the method through. Defaults to GET so non-HTTP call paths (tests, workers,
 # daemon jobs) are treated as reads and never spuriously 403.
-_request_method: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_request_method", default="GET")
-_MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
-
-def bind_request_method(method: str) -> None:
-    _request_method.set((method or "GET").upper())
 
 
 def ensure_workspace_member(db: Session, user: User, workspace_id: str) -> None:
@@ -95,14 +89,17 @@ def ensure_workspace_member(db: Session, user: User, workspace_id: str) -> None:
 
 
 def ensure_workspace_access(db: Session, user: User, workspace_id: str) -> None:
-    """The universal scoped-route chokepoint (also reached via require_asset /
-    require_sequence_access). Any member may read; a mutating request additionally
-    requires the `edit` perm, so viewers — and members with `edit` revoked — are
-    read-only everywhere without per-route wiring. Routes needing a different perm
-    (credentials, ai, delete, …) call ensure_workspace_perm explicitly instead."""
-    member = _membership(db, user, workspace_id)
-    if _request_method.get() in _MUTATING and not role_at_least(member.role, "editor"):
-        raise HTTPException(status_code=403, detail="Permission denied: edit")
+    """**只读闸**:他是不是这个工作区的人。任何成员都能过。
+
+    此前它还兼职判写权限 —— 「当前请求是不是 POST?是就额外要 edit」。那个方法名读自一个只在
+    ASGI 中间件里绑定的 ContextVar,**默认 GET**,于是这道闸的正确性不取决于路由写了什么,而
+    取决于它碰巧是从哪儿被调用的:后台线程(定时器、自动放行、工作流引擎、飞书回调)里同一个
+    函数会安静地放行 viewer(ADR 0008 §2.2 与 D5,tests/test_write_permission_is_explicit.py
+    里有复现)。
+
+    现在要写的路由自己点名 `ensure_workspace_perm(..., "edit")`。少一个"聪明"的推断。
+    """
+    _membership(db, user, workspace_id)
     # 通过闸门 = 这次请求确实是关于这个工作区的。用量记账据此归属,不必再让每个调用点
     # 把 workspace_id 一路穿到底(见 core/usage_scope 的说明)。放在校验之后:没过闸门的
     # 请求不该在上下文里留下痕迹。
@@ -179,17 +176,26 @@ def ensure_deployment_admin(db: Session, user: User) -> None:
 
 
 
-def require_asset(db: Session, user: User, asset_id: str) -> Asset:
+def require_asset(db: Session, user: User, asset_id: str, *, perm: str | None = None) -> Asset:
+    """取素材并过闸。`perm` 是**写**路由必须点名的那一项(见 ensure_workspace_perm);
+    只读路由不传,拿到的就是只读闸。"""
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, asset.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, asset.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, asset.workspace_id, perm)
     return asset
 
 
-def require_sequence_access(db: Session, user: User, sequence_id: str) -> Sequence:
+def require_sequence_access(db: Session, user: User, sequence_id: str, *, perm: str | None = None) -> Sequence:
+    """取序列并过闸。写路由传 `perm="edit"` —— 权限写在调用点上,而不是从请求方法推。"""
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, sequence.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, sequence.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, sequence.workspace_id, perm)
     return sequence

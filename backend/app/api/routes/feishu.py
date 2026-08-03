@@ -28,7 +28,7 @@ def list_bots(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Feish
 
 @router.post("/feishu/bots", response_model=FeishuBotOut)
 def create_bot(body: FeishuBotCreate, db: DbSession, user: CurrentUser) -> FeishuBot:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     bot = FeishuBot(**body.model_dump())
     db.add(bot)
     db.commit()
@@ -43,7 +43,7 @@ def create_bot(body: FeishuBotCreate, db: DbSession, user: CurrentUser) -> Feish
 
 @router.patch("/feishu/bots/{bot_id}", response_model=FeishuBotOut)
 def update_bot(bot_id: str, body: FeishuBotUpdate, db: DbSession, user: CurrentUser) -> FeishuBot:
-    bot = _require_bot(db, user, bot_id)
+    bot = _require_bot(db, user, bot_id, perm="edit")
     changes = body.model_dump(exclude_unset=True)
     for key, value in changes.items():
         if value is not None:
@@ -60,7 +60,7 @@ def update_bot(bot_id: str, body: FeishuBotUpdate, db: DbSession, user: CurrentU
 
 @router.delete("/feishu/bots/{bot_id}", status_code=204)
 def delete_bot(bot_id: str, db: DbSession, user: CurrentUser) -> Response:
-    bot = _require_bot(db, user, bot_id)
+    bot = _require_bot(db, user, bot_id, perm="edit")
     service.stop_connection(bot.id)
     db.delete(bot)
     db.commit()
@@ -69,7 +69,7 @@ def delete_bot(bot_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/feishu/bots/{bot_id}/restart", response_model=FeishuBotOut)
 def restart_bot(bot_id: str, db: DbSession, user: CurrentUser) -> FeishuBot:
-    bot = _require_bot(db, user, bot_id)
+    bot = _require_bot(db, user, bot_id, perm="edit")
     service.stop_connection(bot.id)
     service.start_connection(bot.id)
     db.refresh(bot)
@@ -78,7 +78,7 @@ def restart_bot(bot_id: str, db: DbSession, user: CurrentUser) -> FeishuBot:
 
 @router.post("/feishu/onboarding/{workspace_id}", response_model=FeishuOnboardingOut)
 def begin_onboarding(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_access(db, user, workspace_id)
+    ensure_workspace_perm(db, user, workspace_id, "edit")
     try:
         return service.begin_onboarding(workspace_id)
     except service.FeishuError as exc:
@@ -91,11 +91,14 @@ def onboarding_status(workspace_id: str, db: DbSession, user: CurrentUser) -> di
     return service.onboarding_status(workspace_id)
 
 
-def _require_bot(db: DbSession, user: CurrentUser, bot_id: str) -> FeishuBot:
+def _require_bot(db: DbSession, user: CurrentUser, bot_id: str, *, perm: str | None = None) -> FeishuBot:
     bot = db.get(FeishuBot, bot_id)
     if bot is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, bot.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, bot.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, bot.workspace_id, perm)
     return bot
 
 
@@ -103,7 +106,7 @@ def _require_bot(db: DbSession, user: CurrentUser, bot_id: str) -> FeishuBot:
 def issue_bind_code(bot_id: str, db: DbSession, user: CurrentUser) -> FeishuBindCodeOut:
     """Any member issues a one-time code, then sends it to the bot from Feishu to bind their
     own Feishu account. The bot then acts with THIS member's permissions."""
-    bot = _require_bot(db, user, bot_id)
+    bot = _require_bot(db, user, bot_id, perm="edit")
     code, expires = service.issue_bind_code(db, bot.workspace_id, user.id)
     return FeishuBindCodeOut(code=code, expires_at=expires)
 

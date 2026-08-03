@@ -23,7 +23,7 @@ from app.api.schemas import (
     KbUrlImportRequest,
 )
 from app.core.config import settings
-from app.core.permissions import ensure_workspace_access, ensure_workspace_member
+from app.core.permissions import ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
 from app.db.models import KbChunk, KbDataset, KbDocument
 from app.domain import kb
 from app.domain.kb import convert as kb_convert
@@ -56,19 +56,25 @@ def _dataset_out(dataset: KbDataset, *, document_count: int = 0) -> KbDatasetOut
     return payload
 
 
-def _require_dataset(db: DbSession, user: CurrentUser, dataset_id: str) -> KbDataset:
+def _require_dataset(db: DbSession, user: CurrentUser, dataset_id: str, *, perm: str | None = None) -> KbDataset:
     dataset = db.get(KbDataset, dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    ensure_workspace_access(db, user, dataset.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, dataset.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, dataset.workspace_id, perm)
     return dataset
 
 
-def _require_document(db: DbSession, user: CurrentUser, document_id: str) -> KbDocument:
+def _require_document(db: DbSession, user: CurrentUser, document_id: str, *, perm: str | None = None) -> KbDocument:
     document = db.get(KbDocument, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="文档不存在")
-    ensure_workspace_access(db, user, document.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, document.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, document.workspace_id, perm)
     return document
 
 
@@ -113,7 +119,7 @@ def list_datasets(workspace_id: str, db: DbSession, user: CurrentUser) -> list[K
 
 @router.post("/kb/datasets", response_model=KbDatasetOut)
 def create_dataset(body: KbDatasetCreate, db: DbSession, user: CurrentUser) -> KbDatasetOut:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     dataset = KbDataset(
         workspace_id=body.workspace_id,
         name=body.name.strip(),
@@ -134,7 +140,7 @@ def get_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> KbDatasetO
 
 @router.patch("/kb/datasets/{dataset_id}", response_model=KbDatasetOut)
 def update_dataset(dataset_id: str, body: KbDatasetUpdate, db: DbSession, user: CurrentUser) -> KbDatasetOut:
-    dataset = _require_dataset(db, user, dataset_id)
+    dataset = _require_dataset(db, user, dataset_id, perm="edit")
     reindex = False
     if body.name is not None:
         dataset.name = body.name.strip()
@@ -164,7 +170,7 @@ def update_dataset(dataset_id: str, body: KbDatasetUpdate, db: DbSession, user: 
 
 @router.delete("/kb/datasets/{dataset_id}", status_code=204)
 def delete_dataset(dataset_id: str, db: DbSession, user: CurrentUser) -> Response:
-    dataset = _require_dataset(db, user, dataset_id)
+    dataset = _require_dataset(db, user, dataset_id, perm="edit")
     for document in db.scalars(select(KbDocument).where(KbDocument.dataset_id == dataset_id)):
         kb.delete_document(db, document)
     db.delete(dataset)
@@ -253,14 +259,14 @@ def list_documents(dataset_id: str, db: DbSession, user: CurrentUser) -> list[Kb
 @router.post("/kb/datasets/{dataset_id}/documents", response_model=KbDocumentOut)
 def create_document(dataset_id: str, body: KbDocumentCreate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
     """建笔记文档:立即返回 queued,后台分块/索引。"""
-    dataset = _require_dataset(db, user, dataset_id)
+    dataset = _require_dataset(db, user, dataset_id, perm="edit")
     return _create_note_document(db, dataset, body, user.id)
 
 
 @router.post("/kb/datasets/{dataset_id}/documents/import-url", response_model=KbDocumentOut)
 def import_url(dataset_id: str, body: KbUrlImportRequest, db: DbSession, user: CurrentUser) -> KbDocumentOut:
     """导入网页:立即返回 queued,后台抓取正文 + 索引;抓取失败落 status=error。"""
-    dataset = _require_dataset(db, user, dataset_id)
+    dataset = _require_dataset(db, user, dataset_id, perm="edit")
     document = KbDocument(
         workspace_id=dataset.workspace_id,
         dataset_id=dataset.id,
@@ -286,7 +292,7 @@ def import_file(
 ) -> KbDocumentOut:
     """上传文件:同步只做类型/大小校验 + 落盘临时文件,立即返回 queued;
     后台转换(MinerU/markitdown/纯文本)+ 索引,转换失败落 status=error。"""
-    dataset = _require_dataset(db, user, dataset_id)
+    dataset = _require_dataset(db, user, dataset_id, perm="edit")
     filename = file.filename or "upload"
     suffix = Path(filename).suffix.lower()
     supported = kb_convert.TEXT_SUFFIXES | kb_convert.CONVERTIBLE_SUFFIXES | kb_convert.MINERU_SUFFIXES
@@ -326,7 +332,7 @@ def get_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDocume
 
 @router.patch("/kb/documents/{document_id}", response_model=KbDocumentOut)
 def update_document(document_id: str, body: KbDocumentUpdate, db: DbSession, user: CurrentUser) -> KbDocumentOut:
-    document = _require_document(db, user, document_id)
+    document = _require_document(db, user, document_id, perm="edit")
     changed_text = False
     if body.title is not None:
         document.title = body.title.strip()
@@ -347,7 +353,7 @@ def update_document(document_id: str, body: KbDocumentUpdate, db: DbSession, use
 
 @router.delete("/kb/documents/{document_id}", status_code=204)
 def delete_document(document_id: str, db: DbSession, user: CurrentUser) -> Response:
-    document = _require_document(db, user, document_id)
+    document = _require_document(db, user, document_id, perm="edit")
     kb.delete_document(db, document)
     db.commit()
     return Response(status_code=204)
@@ -364,7 +370,7 @@ def list_chunks(document_id: str, db: DbSession, user: CurrentUser) -> list[KbCh
 
 @router.post("/kb/documents/{document_id}/reindex", response_model=KbDocumentOut)
 def reindex_document(document_id: str, db: DbSession, user: CurrentUser) -> KbDocumentOut:
-    document = _require_document(db, user, document_id)
+    document = _require_document(db, user, document_id, perm="edit")
     dataset = db.get(KbDataset, document.dataset_id)
     if dataset is None:
         raise HTTPException(status_code=404, detail="知识库不存在")

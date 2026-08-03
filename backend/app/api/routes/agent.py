@@ -224,7 +224,7 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
 
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = _require_session(db, user, session_id)
+    session = _require_session(db, user, session_id, perm="ai")
     db.delete(session)
     db.commit()
     return Response(status_code=204)
@@ -263,11 +263,14 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
     )
 
 
-def _require_session(db: DbSession, user: CurrentUser, session_id: str) -> AgentSession:
+def _require_session(db: DbSession, user: CurrentUser, session_id: str, *, perm: str | None = None) -> AgentSession:
     session = db.get(AgentSession, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, session.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, session.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, session.workspace_id, perm)
     # 看不见就是不存在(404,不是 403)—— 和工作区边界同一条口径,不泄露"这里有一个你看不到的东西"。
     if not sharing.may_use(db, "agent_session", session, user):
         raise HTTPException(status_code=404, detail="Not found")

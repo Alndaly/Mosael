@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import FontOut
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Font
 from app.domain.fonts import FontError, delete_font_files, import_uploaded_font
 from app.media.paths import resolve_key
@@ -21,11 +21,14 @@ _MEDIA_TYPES = {
 }
 
 
-def _require_font(db: DbSession, user: CurrentUser, font_id: str) -> Font:
+def _require_font(db: DbSession, user: CurrentUser, font_id: str, *, perm: str | None = None) -> Font:
     font = db.get(Font, font_id)
     if font is None:
         raise HTTPException(status_code=404, detail="Font not found")
-    ensure_workspace_access(db, user, font.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, font.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, font.workspace_id, perm)
     return font
 
 
@@ -43,7 +46,7 @@ def upload_font(
     workspace_id: str = Form(...),
     file: UploadFile = File(...),
 ) -> Font:
-    ensure_workspace_access(db, user, workspace_id)
+    ensure_workspace_perm(db, user, workspace_id, "upload")
     try:
         return import_uploaded_font(db, workspace_id=workspace_id, upload=file)
     except FontError as exc:
@@ -64,7 +67,7 @@ def get_font_file(font_id: str, db: DbSession, user: CurrentUser) -> FileRespons
 
 @router.delete("/fonts/{font_id}", status_code=204)
 def delete_font(font_id: str, db: DbSession, user: CurrentUser) -> Response:
-    font = _require_font(db, user, font_id)
+    font = _require_font(db, user, font_id, perm="upload")
     delete_font_files(font)
     db.delete(font)
     db.commit()

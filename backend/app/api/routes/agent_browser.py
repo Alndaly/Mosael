@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import BrowserSession
 from app.domain import browser
 
@@ -31,17 +31,20 @@ class CloseRequest(BaseModel):
     session_id: str
 
 
-def _verify(db, user, workspace_id: str, session_id: str) -> BrowserSession:
+def _verify(db, user, workspace_id: str, session_id: str, *, perm: str | None = None) -> BrowserSession:
     session = db.get(BrowserSession, session_id)
     if session is None or session.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="浏览器会话不存在")
-    ensure_workspace_access(db, user, session.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, session.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, session.workspace_id, perm)
     return session
 
 
 @router.post("/agent-browser/act")
 def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
-    _verify(db, user, body.workspace_id, body.session_id)
+    _verify(db, user, body.workspace_id, body.session_id, perm="edit")
     try:
         result = browser.run_action(body.session_id, body.action, body.args)
     except browser.BrowserDomainError as exc:
@@ -51,6 +54,6 @@ def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
 
 @router.post("/agent-browser/close")
 def close(body: CloseRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
-    _verify(db, user, body.workspace_id, body.session_id)
+    _verify(db, user, body.workspace_id, body.session_id, perm="edit")
     browser.close_session(db, body.session_id)
     return {"ok": True}

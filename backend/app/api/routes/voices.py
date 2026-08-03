@@ -57,7 +57,7 @@ def upload_voice(
     reference_text: str = Form(""),
     file: UploadFile = File(...),
 ) -> dict:
-    ensure_workspace_access(db, user, workspace_id)
+    ensure_workspace_perm(db, user, workspace_id, "ai")
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename or "ref").suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = Path(tmp.name)
@@ -79,7 +79,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
     asset = db.get(Asset, body.asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="素材不存在")
-    ensure_workspace_access(db, user, asset.workspace_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         voice = voices.create_from_speaker(
             db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name
@@ -94,7 +94,7 @@ def delete_voice(voice_id: str, db: DbSession, user: CurrentUser) -> Response:
     voice = voices.get_voice(db, voice_id)
     if voice is None:
         raise HTTPException(status_code=404, detail="音色不存在")
-    ensure_workspace_access(db, user, voice.workspace_id)
+    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     voices.delete_voice(db, voice)
     return Response(status_code=204)
 
@@ -116,7 +116,7 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
     voice = voices.get_voice(db, voice_id)
     if voice is None:
         raise HTTPException(status_code=404, detail="音色不存在")
-    ensure_workspace_access(db, user, voice.workspace_id)
+    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
         return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id, created_by=user.id)
     except voices.VoiceError as exc:
@@ -269,7 +269,9 @@ def list_tts_models(user: CurrentUser) -> list[dict]:
 
 
 @router.post("/tts/models/{engine_id}/download", response_model=TtsEngineOut)
-def download_tts_model(engine_id: str, user: CurrentUser) -> dict:
+def download_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict:
+    # 下载模型是往**后端主机**上装东西 —— 部署级动作,不属于任何工作区。
+    ensure_deployment_admin(db, user)
     try:
         return tts_models.start_download(engine_id)
     except KeyError as exc:

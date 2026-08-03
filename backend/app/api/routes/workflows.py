@@ -21,7 +21,7 @@ from app.api.schemas import (
     WorkflowRunRequest,
     WorkflowUpdate,
 )
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, Workflow
 from app.domain.workflows import (
     NODE_CATEGORIES,
@@ -76,7 +76,7 @@ def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Workfl
 
 @router.post("/workflows", response_model=WorkflowOut)
 def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
         return create_workflow(
             db, workspace_id=body.workspace_id, name=body.name, description=body.description, graph=body.graph
@@ -122,7 +122,7 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/workflows/import", response_model=WorkflowOut)
 def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     data = body.data
     accepted = (WORKFLOW_FILE_FORMAT, *LEGACY_WORKFLOW_FILE_FORMATS)
     if data.get("format") not in accepted or not isinstance(data.get("graph"), dict):
@@ -165,7 +165,7 @@ def get_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Workflow:
 @router.patch("/workflows/{workflow_id}", response_model=WorkflowOut)
 def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentUser) -> Workflow:
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     changes = body.model_dump(exclude_unset=True)
     try:
         return update_workflow(db, workflow, changes)
@@ -176,7 +176,7 @@ def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentU
 @router.delete("/workflows/{workflow_id}", status_code=204)
 def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     db.delete(workflow)
     db.commit()
     return Response(status_code=204)
@@ -185,7 +185,7 @@ def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 @router.post("/workflows/{workflow_id}/run", response_model=JobOut)
 def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: CurrentUser) -> Job:
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     try:
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
     except WorkflowDomainError as exc:
@@ -210,7 +210,7 @@ def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 5
 @router.post("/workflows/{workflow_id}/ai-edit", response_model=WorkflowAiEditResponse)
 def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: CurrentUser) -> dict:
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     from app.domain.workflows.ai_edit import ai_edit_graph
 
     try:
@@ -236,7 +236,7 @@ def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -
     「默认会话」(get-or-create),保持老调用方语义不变。
     """
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     from sqlalchemy import select
 
     from app.ai.agent import host
@@ -282,7 +282,7 @@ def create_workflow_agent_session(workflow_id: str, db: DbSession, user: Current
     from app.ai.agent import host
 
     workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     return host.create_session(
         db,
         workspace_id=workflow.workspace_id,

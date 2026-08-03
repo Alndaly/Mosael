@@ -122,9 +122,12 @@ def delete_project(project_id: str, db: DbSession, user: CurrentUser) -> Respons
     return Response(status_code=204)
 
 
-def _require_project(db: DbSession, user: CurrentUser, project_id: str) -> Project:
+def _require_project(db: DbSession, user: CurrentUser, project_id: str, *, perm: str | None = None) -> Project:
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_access(db, user, project.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, project.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, project.workspace_id, perm)
     return project

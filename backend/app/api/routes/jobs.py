@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import JobOut, TaskEventOut
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain.jobs import cancel_job, clear_finished_jobs
 
@@ -34,7 +34,7 @@ def list_jobs(
 
 @router.delete("/jobs/finished")
 def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_access(db, user, workspace_id)
+    ensure_workspace_perm(db, user, workspace_id, "edit")
     return {"removed": clear_finished_jobs(db, workspace_id)}
 
 
@@ -63,7 +63,7 @@ def cancel_job_route(job_id: str, db: DbSession, user: CurrentUser) -> Job:
     job = db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    ensure_workspace_access(db, user, job.workspace_id)
+    ensure_workspace_perm(db, user, job.workspace_id, "edit")
     try:
         return cancel_job(db, job)
     except ValueError as exc:

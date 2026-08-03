@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ToolConfirmation, now
 from app.integrations.feishu.service import announce_confirmation
 from app.domain.agent import autopilot
@@ -23,7 +23,7 @@ router = APIRouter(tags=["confirmations"])
 def create_confirmation(
     body: ConfirmationCreate, db: DbSession, user: CurrentUser, token: PresentedToken
 ) -> ToolConfirmation:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     # 归属**由凭据决定**,不由请求体声明。一次 turn 一个令牌,铸的时候正好知道是哪次对话;调用方
     # 转述的话就可以被伪造 —— 任何拿着同一份凭据的通道,填上别人的会话 id 就能把自己的动作挂进
     # 那次对话(三档权限模式下,那等于挂进别人开的自动放行)。没有会话的凭据(登录令牌、MCP 直连)
@@ -125,7 +125,10 @@ def _get_or_404(db: DbSession, confirmation_id: str) -> ToolConfirmation:
     return confirmation
 
 
-def _require(db: DbSession, user: CurrentUser, confirmation_id: str) -> ToolConfirmation:
+def _require(db: DbSession, user: CurrentUser, confirmation_id: str, *, perm: str | None = None) -> ToolConfirmation:
     confirmation = _get_or_404(db, confirmation_id)
-    ensure_workspace_access(db, user, confirmation.workspace_id)
+    if perm is None:
+        ensure_workspace_access(db, user, confirmation.workspace_id)
+    else:
+        ensure_workspace_perm(db, user, confirmation.workspace_id, perm)
     return confirmation

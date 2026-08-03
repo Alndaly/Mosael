@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
-from app.core.permissions import ensure_workspace_access
+from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import BrowserProfile, PublishAccount, User
 from app.domain import browser
 
@@ -55,7 +55,7 @@ def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[B
 
 @router.post("/browser/profiles", response_model=BrowserProfileOut)
 def create_profile(body: BrowserProfileCreate, db: DbSession, user: CurrentUser) -> BrowserProfileOut:
-    ensure_workspace_access(db, user, body.workspace_id)
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
     prof = browser.create_profile(db, workspace_id=body.workspace_id, name=body.name, owner=user, proxy=body.proxy)
     db.commit()
     return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", body.workspace_id))
@@ -68,7 +68,7 @@ def update_profile(
     prof = db.get(BrowserProfile, profile_id)
     if prof is None:
         raise HTTPException(status_code=404, detail="浏览器档案不存在")
-    ensure_workspace_access(db, user, prof.workspace_id)
+    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     fields = body.model_fields_set
     try:
         prof = browser.update_profile(
@@ -89,7 +89,7 @@ def delete_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Respons
     prof = db.get(BrowserProfile, profile_id)
     if prof is None:
         raise HTTPException(status_code=404, detail="浏览器档案不存在")
-    ensure_workspace_access(db, user, prof.workspace_id)
+    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
     try:
         browser.delete_profile(db, prof.workspace_id, profile_id)
     except browser.BrowserDomainError as exc:

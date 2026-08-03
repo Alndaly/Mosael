@@ -286,7 +286,7 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
 @router.post("/assets/{asset_id}/proxy", response_model=JobOut)
 def regenerate_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser):
     """Force a fresh proxy transcode (e.g. after a failed one)."""
-    asset = require_asset(db, user, asset_id)
+    asset = require_asset(db, user, asset_id, perm="edit")
     job = start_proxy_job(db, asset, created_by=user.id, force=True)
     if job is None:
         raise HTTPException(status_code=422, detail="该素材不支持生成预览代理")
