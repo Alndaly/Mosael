@@ -21,6 +21,10 @@ class RegisterCredentials(AuthCredentials):
     invite_code: str = Field(default="", max_length=64)
 
 
+class DeploymentAdminUpdate(BaseModel):
+    granted: bool
+
+
 class InviteCreate(BaseModel):
     note: str = Field(default="", max_length=120)
 

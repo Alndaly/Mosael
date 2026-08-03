@@ -1,8 +1,11 @@
 """`code` 节点是主机权限,不是内容权限。
 
 code 节点在后端主机上跑任意 Python:子进程隔离 + 超时 + 输出上限,但不是沙箱——里面的代码
-能读写文件系统、发网络请求。而工作流的所有写路由只要 `edit`,editor 默认就有 `edit`。团队/
-远程后端下,这等于任何 editor 都能拿服务器。这些用例把「落库入口一律要 instance-admin」钉死。
+能读写文件系统、发网络请求。而工作流的所有写路由只要 `edit`,editor 默认就有 `edit`。共享部署下
+这等于任何 editor 都能拿服务器。这些用例把「落库入口一律要**部署管理员**」钉死。
+
+判据本身换过一次:此前是「在任意工作区里是 owner/admin」,而工作区可以自助新建 —— 那道闸是
+自助的(ADR 0008 §2.1 有复现)。现在读 `users.is_deployment_admin` 一列。
 
 覆盖四条落库路径(create / import / patch / 确认卡审批),以及递归:把 code 节点框选
 「折叠为子图」后它藏在 config["body"] 里,只查顶层的门禁会被这一步整个绕过。
@@ -153,10 +156,22 @@ def test_editor_blocked_from_importing_code_node() -> None:
     assert r.status_code == 403, r.text
 
 
-def test_admin_may_save_code_node() -> None:
-    """门禁是 instance-admin,不是 owner-only——admin 应当放行。"""
+def test_a_workspace_admin_is_not_enough() -> None:
+    """门禁是**部署管理员**,不是"某个工作区里的 admin"。
+
+    此前是后者 —— 而任何人都能新建一个自己是 owner 的工作区,所以那道闸是自助的(ADR 0008)。
+    工作区里的 admin 管的是那个工作区的内容与成员;「能不能在这台服务器上跑代码」不在其中。
+    """
     _owner, ws, admin = _setup("admin")
     r = admin.post("/api/workflows", json={"workspace_id": ws["id"], "name": "W", "graph": CODE_GRAPH})
+    assert r.status_code == 403, r.text
+
+
+def test_the_deployment_admin_may_save_code_node() -> None:
+    """门禁不是 owner-only,也不是"谁都不行" —— 对这个部署负责的那个人应当放行。"""
+    owner = fresh_client()  # 引导账号 = 部署管理员
+    ws = owner.post("/api/workspaces", json={"name": "W"}).json()
+    r = owner.post("/api/workflows", json={"workspace_id": ws["id"], "name": "W", "graph": CODE_GRAPH})
     assert r.status_code == 200, r.text
 
 
@@ -253,9 +268,10 @@ def test_editor_may_still_make_ordinary_agent_edits() -> None:
     assert [node["type"] for node in after["graph"]["nodes"]] == ["start", "template"]
 
 
-def test_admin_may_add_a_code_node_via_agent_ops() -> None:
-    """admin 走这条路应当放行——门禁是 instance-admin,不是"智能体一律不许"。"""
-    _owner, ws, admin = _setup("admin")
+def test_the_deployment_admin_may_add_a_code_node_via_agent_ops() -> None:
+    """部署管理员走这条路应当放行 —— 门禁是身份,不是"智能体一律不许"。"""
+    admin = fresh_client()  # 引导账号 = 部署管理员
+    ws = admin.post("/api/workspaces", json={"name": "W"}).json()
     workflow = _workflow_for(admin, ws["id"])
     card = _card(
         admin,

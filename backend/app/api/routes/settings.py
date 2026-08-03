@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.permissions import ensure_instance_admin
+from app.core.permissions import ensure_deployment_admin
 from app.ai.agent.login import (
     LoginError,
     answer as answer_login,
@@ -342,7 +342,7 @@ def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str,
 
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = ProviderProfile(
         name=body.name,
         vendor=body.vendor,
@@ -378,7 +378,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
 def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -464,7 +464,7 @@ def _store_login_catalog(db: DbSession, profile: ProviderProfile, session) -> No
 @router.post("/settings/providers/{profile_id}/oauth/login", response_model=OAuthLoginOut)
 def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
     """发起订阅计划的授权登录。返回的状态里会陆续出现授权链接 / 设备码,前端轮询展示。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     from app.ai.agent.host import mint_tool_token
 
@@ -484,7 +484,7 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
 
 @router.get("/settings/providers/{profile_id}/oauth/login/{login_id}", response_model=OAuthLoginOut)
 def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
@@ -497,7 +497,7 @@ def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curren
 def answer_oauth_login(
     profile_id: str, login_id: str, body: OAuthAnswerIn, db: DbSession, user: CurrentUser
 ) -> OAuthLoginOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     _oauth_profile(db, profile_id)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
@@ -509,7 +509,7 @@ def answer_oauth_login(
 
 @router.delete("/settings/providers/{profile_id}/oauth/login/{login_id}", status_code=204)
 def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     _oauth_profile(db, profile_id)
     cancel_login(login_id)
 
@@ -542,7 +542,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
     查不到不抛 5xx:"这家不支持"和"这次没查成"都是正常结果,前端要据此显示不同的话,
     500 会被统一的错误提示吞成一句"请求失败"。
     """
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     pi_provider = pi_provider_id(profile.vendor)
     if not supports_quota(pi_provider):
@@ -574,7 +574,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
 @router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)
 def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     """解除该档案的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做(见 credentials.ts)。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _oauth_profile(db, profile_id)
     lease = acquire_lease(profile.id)
     commit_credential(db, profile.id, lease, None)
@@ -627,7 +627,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
     """
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = db.get(ProviderProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
@@ -672,7 +672,7 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
     界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
     """
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     return [
@@ -694,7 +694,7 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
 def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderDefaultOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     model = None
@@ -769,7 +769,7 @@ def list_provider_pricing_rules(
 def create_provider_pricing_rule(
     body: ProviderPricingRuleCreate, db: DbSession, user: CurrentUser
 ) -> ProviderPricingRuleOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     payload = _pricing_payload_with_profile_defaults(db, body.model_dump())
     try:
         rule = create_pricing_rule(db, **payload)
@@ -784,7 +784,7 @@ def create_provider_pricing_rule(
 def update_provider_pricing_rule(
     rule_id: str, body: ProviderPricingRuleUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderPricingRuleOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     rule = db.get(ProviderPricingRule, rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -800,7 +800,7 @@ def update_provider_pricing_rule(
 
 @router.delete("/settings/provider-pricing-rules/{rule_id}", status_code=204)
 def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     rule = db.get(ProviderPricingRule, rule_id)
     if rule is not None:
         delete_pricing_rule(db, rule)
@@ -873,7 +873,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
     已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
     """
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _require_profile(db, profile_id)
     catalog = _catalog_entries(profile)
     configured = provider_models.list_models(db, profile_id)
@@ -903,7 +903,7 @@ def add_provider_model(
 ) -> ProviderModelOut:
     """把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
     手填是为了私有部署与别名:目录查不到不等于不能用。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _require_profile(db, profile_id)
     model_id = (body.model_id or "").strip()
     if not model_id:
@@ -932,7 +932,7 @@ def update_provider_model(
     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = _require_profile(db, profile_id)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is None:
@@ -955,7 +955,7 @@ def update_provider_model(
 def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is not None:
         db.delete(model)
@@ -965,7 +965,7 @@ def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: C
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
 def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     profile = db.get(ProviderProfile, profile_id)
     if profile is not None:
         db.delete(profile)
@@ -990,7 +990,7 @@ def get_kb_embedding(db: DbSession, user: CurrentUser) -> KbEmbeddingConfigOut:
 def set_kb_embedding(
     body: KbEmbeddingConfigUpdate, db: DbSession, user: CurrentUser
 ) -> KbEmbeddingConfigOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     if body.provider_profile_id:
         profile = db.get(ProviderProfile, body.provider_profile_id)
         if profile is None:
@@ -1038,7 +1038,7 @@ def _network_out(row: NetworkConfig) -> NetworkConfigOut:
 
 @router.get("/settings/network", response_model=NetworkConfigOut)
 def get_network_config(db: DbSession, user: CurrentUser) -> NetworkConfigOut:
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     return _network_out(get_network(db))
 
 
@@ -1049,7 +1049,7 @@ def update_network_config(body: NetworkConfigUpdate, db: DbSession, user: Curren
     内嵌浏览器由 Electron 侧自己拉取(桌面端启动时和改动后各取一次)——主进程与后端是两个
     进程,共享不了环境变量,只能各自读同一份配置。
     """
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     row = get_network(db)
     patch = body.model_dump(exclude_unset=True)
     if "proxy_url" in patch and body.proxy_url is not None:
@@ -1073,7 +1073,7 @@ def get_ai_runtime(db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
 def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
     """AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。"""
-    ensure_instance_admin(db, user, "credentials")
+    ensure_deployment_admin(db, user)
     row = db.get(AiRuntimeConfig, "default")
     if row is None:
         row = AiRuntimeConfig(id="default")

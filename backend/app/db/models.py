@@ -39,6 +39,17 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    #: 他对**这个后端实例**负责吗 —— 网络出口、插件启用、解释器路径、模型下载。
+    #:
+    #: 此前这件事没有对应物,只能用「在任意工作区里是 owner/admin」去近似,而任何人都能新建
+    #: 工作区并在里面是 owner —— 那个近似是**自助的**(ADR 0008 §2.1 有复现)。把它变成数据之后,
+    #: 判据不再能被自己造出来。
+    #:
+    #: **不叫「机器主人」**:共享部署里跑这个后端的人未必是任何一个用户。这说的是谁对这个部署
+    #: 负责,不是谁拥有这台机器。库里第一个账号自动持有,之后只能由已有的部署管理员授予。
+    is_deployment_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     display_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     signature: Mapped[str] = mapped_column(Text, nullable=False, default="")
     # 头像文件相对 data_dir 的 key(avatars/<uid>-<ts>.<ext>);空 = 未设置,前端回退首字母。

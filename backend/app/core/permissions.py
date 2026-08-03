@@ -149,27 +149,24 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
     bind_workspace(workspace_id)
 
 
-def ensure_instance_admin(db: Session, user: User, perm: str = "credentials") -> None:
-    """Gate for configuration that belongs to the INSTANCE, not to a workspace.
+def ensure_deployment_admin(db: Session, user: User) -> None:
+    """守**这个后端实例**的配置:网络出口、插件启用、解释器路径、模型下载。
 
-    Provider profiles and their keys, the TTS interpreter path, and plugin enablement are
-    shared by every workspace, so there is no workspace id to scope them by — which is why
-    these routes had no gate at all and "logged in" was the only bar. That is far too weak
-    for settings that reach the local filesystem and make outbound requests carrying stored
-    credentials: any viewer, in any workspace, could repoint a provider at a host they own
-    or set the interpreter path that later gets executed.
+    判据是 `users.is_deployment_admin` 一列 —— 一个事实,不是一个推断。
 
-    Require the caller to be owner/admin somewhere AND to hold `perm` there. A single-user
-    install is unaffected — that user owns their default workspace.
+    此前它叫 `ensure_deployment_admin`,判据是「在**任意**工作区里是 owner/admin 且在那里持有某个
+    权限位」。而任何登录用户都能新建工作区并在里面是 owner,所以那个判据是**自助的**:
+
+        viewer 改实例级网络设置                  403
+        他自己新建一个工作区之后再改一次          200   ← 复现过
+
+    顺带,它的第二个条件从来没起过作用:editor 默认持有除 `members` 外的全部权限位,于是
+    「持有 perm」恒真 —— 真正的判据只剩「角色 ≥ admin」。所以新判据不再接受 perm 参数。
+
+    单机安装不受影响:那个人就是引导账号,库里第一个用户自动持有这一列。
     """
-    memberships = list(db.scalars(select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)))
-    for member in memberships:
-        if not role_at_least(member.role, "admin"):
-            continue
-        overrides = {} if member.role == "owner" else member_overrides(db, member.workspace_id, user.id)
-        if has_perm(member.role, overrides, perm):
-            return
-    raise HTTPException(status_code=403, detail=f"Instance settings require admin with '{perm}'")
+    if not user.is_deployment_admin:
+        raise HTTPException(status_code=403, detail="这项设置属于整个部署,只有部署管理员能改")
 
 
 def effective_member_perms(db: Session, workspace_id: str, user_id: str, role: str) -> dict[str, bool]:
@@ -203,7 +200,7 @@ def ensure_graph_node_privileges(db: Session, user: User, graph: object) -> None
     without this check "can edit content" silently implies "can own the server".
 
     Same reasoning that already put provider credentials and the interpreter path behind
-    `ensure_instance_admin` (see its docstring); this closes the remaining path to the same
+    `ensure_deployment_admin` (see its docstring); this closes the remaining path to the same
     capability. Checked when the graph is *persisted*, not when it runs: scheduler and webhook
     triggers have no acting user to check, and a graph that could never store a `code` node does
     not need a run-time gate. A single-user install owns its default workspace and is unaffected.
@@ -224,9 +221,9 @@ def ensure_graph_node_privileges(db: Session, user: User, graph: object) -> None
             detail=f"这个部署关闭了服务端代码执行,无法保存含「{labels}」的内容",
         )
     try:
-        ensure_instance_admin(db, user, "credentials")
+        ensure_deployment_admin(db, user)
     except HTTPException as exc:
-        # ensure_instance_admin 的通用文案是「Instance settings require admin with 'credentials'」,
+        # ensure_deployment_admin 的通用文案是「Instance settings require admin with 'credentials'」,
         # 对着一张工作流画布看到这句没人懂自己撞了什么。换成点名节点的说法。
         labels = "、".join(sorted(str(NODE_TYPES.get(t, {}).get("label") or t) for t in used))
         raise HTTPException(

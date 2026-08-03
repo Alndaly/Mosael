@@ -20,7 +20,7 @@ from app.api.schemas import (
 )
 from app.core.permissions import (
     effective_member_perms,
-    ensure_instance_admin,
+    ensure_deployment_admin,
     ensure_workspace_access,
     ensure_workspace_perm,
     ensure_workspace_role,
@@ -105,15 +105,15 @@ def set_autopilot_rules(
     incoming = autopilot_rules.normalize(body.rules)
     # 名单类的东西属于这个工作区(发布账号、浏览器档案本来就挂在它上面),工作区管理员说了算。
     # **但「在这台机器上跑代码」不是** —— 它和工作流里的 code 节点是同一个能力,所以走同一道闸
-    # (ensure_instance_admin)。同一个能力两个门槛的话,低的那个说了算,而承担风险的是机器的主人。
+    # (ensure_deployment_admin)。同一个能力两个门槛的话,低的那个说了算,而承担风险的是机器的主人。
     #
-    # 那道闸今天有多高要说清楚:`ensure_instance_admin` 的实际语义是「在**任意**一个工作区里是
+    # 那道闸今天有多高要说清楚:`ensure_deployment_admin` 的实际语义是「在**任意**一个工作区里是
     # owner/admin」,不是「这台机器的主人」—— 它拦得住 editor,拦不住别处的管理员。这不是这条准则
     # 的问题,是整套作用域模型里缺一层(见 docs/ADR 待议)。共用同一道闸的意义正在于此:那天它收紧,
     # 这里跟着一起收紧,不需要有人记得回来改第二处。
     if incoming["run_code"] == "judge" and autopilot_rules.normalize(workspace.autopilot_rules)["run_code"] != "judge":
         try:
-            ensure_instance_admin(db, user, "credentials")
+            ensure_deployment_admin(db, user)
         except HTTPException as exc:
             raise HTTPException(
                 status_code=403,

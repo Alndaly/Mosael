@@ -8,8 +8,18 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AuthCredentials, AuthOut, InviteCreate, PasswordUpdate, RegisterCredentials, UserOut, UserProfileUpdate
+from app.api.schemas import (
+    AuthCredentials,
+    AuthOut,
+    DeploymentAdminUpdate,
+    InviteCreate,
+    PasswordUpdate,
+    RegisterCredentials,
+    UserOut,
+    UserProfileUpdate,
+)
 from app.core.config import settings
+from app.core.permissions import ensure_deployment_admin
 from app.core.security import hash_password, mint_login_session, new_session_token, verify_password
 from app.db.models import AuthSession, RegistrationInvite, User, Workspace, WorkspaceMember, now
 
@@ -26,7 +36,7 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为
     里面的一个租户。那正是下面这条(跑出来过的)链的第一环:
 
-        注册 → 自己建一个工作区(在里面是 owner)→ 满足 ensure_instance_admin
+        注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据
              → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python
 
     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
@@ -42,11 +52,15 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     existing = db.scalar(select(User).where(User.username == username))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Username already exists")
+    # 库里第一个账号引导这个部署 —— 那时没有任何人可以授予他,而没有部署管理员的部署是块砖头。
+    # 与 _adopt_orphan_workspaces(第一个账号继承登录前建的工作区)同一条理由。
+    bootstrapping = db.scalar(select(User).limit(1)) is None
     user = User(
         username=username,
         display_name=_clean_display_name(body.display_name, username),
         signature="",
         password_hash=hash_password(body.password),
+        is_deployment_admin=bootstrapping,
     )
     db.add(user)
     db.flush()
@@ -56,12 +70,6 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     token = _create_session(db, user)
     db.commit()
     return AuthOut(token=token, user=UserOut.model_validate(user))
-
-
-def _is_bootstrap_account(db: DbSession, user: User) -> bool:
-    """他是不是引导这个部署的那个账号(库里最早创建的)。第 1 步用一列取代它。"""
-    first = db.scalar(select(User).order_by(User.created_at.asc(), User.id.asc()).limit(1))
-    return first is not None and first.id == user.id
 
 
 def _usable_invite(db: DbSession, code: str) -> RegistrationInvite | None:
@@ -79,15 +87,9 @@ def _usable_invite(db: DbSession, code: str) -> RegistrationInvite | None:
 def create_registration_invite(body: InviteCreate, db: DbSession, user: CurrentUser) -> dict:
     """发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。
 
-    判据是「你是不是引导这个部署的那个账号」。**不用 ensure_instance_admin** —— 那道闸恰恰是自助的
-    (ADR 0008 §2.1),拿它守发码等于没守;而且它要求你在某个工作区里是 admin,引导账号可能还没建
-    过工作区,连自己都发不出码。
-
-    第 1 步会把这个事实落成 `users.is_deployment_admin` 一列,那时这个函数改成读那一列 ——
-    语义不变,只是从「按创建时间猜」变成「按数据说」。
+    「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。
     """
-    if not _is_bootstrap_account(db, user):
-        raise HTTPException(status_code=403, detail="只有引导这个部署的账号可以发注册邀请码")
+    ensure_deployment_admin(db, user)
     invite = RegistrationInvite(
         code=new_session_token()[:32],
         created_by=user.id,
@@ -101,8 +103,7 @@ def create_registration_invite(body: InviteCreate, db: DbSession, user: CurrentU
 
 @router.get("/auth/invites")
 def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
-    if not _is_bootstrap_account(db, user):
-        raise HTTPException(status_code=403, detail="只有引导这个部署的账号可以查看注册邀请码")
+    ensure_deployment_admin(db, user)
     rows = db.scalars(select(RegistrationInvite).order_by(RegistrationInvite.created_at.desc()).limit(50))
     return [
         {
@@ -113,6 +114,30 @@ def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
         }
         for row in rows
     ]
+
+
+@router.post("/auth/users/{user_id}/deployment-admin")
+def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSession, user: CurrentUser) -> dict:
+    """授予 / 收回「部署管理员」。只有部署管理员能改 —— 能自己给自己发就又回到自助了。
+
+    最后一个部署管理员不能被收回:没有他,实例配置改不了、注册邀请码也发不出来,这个部署就成了
+    一块砖头,而且**没有任何应用内的路可以救回来**。
+    """
+    ensure_deployment_admin(db, user)
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not body.granted:
+        others = db.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.is_deployment_admin.is_(True), User.id != target.id)
+        )
+        if not others:
+            raise HTTPException(status_code=409, detail="这是最后一个部署管理员,收回之后没人能管这个部署了")
+    target.is_deployment_admin = bool(body.granted)
+    db.commit()
+    return {"user_id": target.id, "is_deployment_admin": target.is_deployment_admin}
 
 
 @router.post("/auth/login", response_model=AuthOut)

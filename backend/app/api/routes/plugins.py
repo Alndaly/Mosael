@@ -26,7 +26,7 @@ from app.api.schemas import (
     PluginToolOut,
 )
 from app.core.config import settings
-from app.core.permissions import ensure_instance_admin
+from app.core.permissions import ensure_deployment_admin
 from app.db.models import PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst
@@ -46,7 +46,7 @@ def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
 
 @router.post("/plugins/scan", response_model=list[PluginPackageOut])
 def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         installer.sync(db, settings.plugins_dir)
     except PluginDomainError as exc:
@@ -75,7 +75,7 @@ def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None
 
     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
     """
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         pkg.uninstall(db, package_id, settings.plugins_dir)
     except PluginDomainError as exc:
@@ -132,7 +132,7 @@ def _instance(db: DbSession, instance) -> dict:
 
 @router.post("/plugins/{package_id}/instances", response_model=PluginInstanceOut)
 def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         instance = inst.create(db, package_id, body.config, body.name)
     except PluginDomainError as exc:
@@ -142,7 +142,7 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
 
 @router.patch("/plugins/instances/{instance_id}", response_model=PluginInstanceOut)
 def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         instance = inst.get(db, instance_id)
         if body.name is not None:
@@ -158,7 +158,7 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession,
 
 @router.delete("/plugins/instances/{instance_id}", status_code=204)
 def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         db.delete(inst.get(db, instance_id))
         db.commit()
@@ -169,7 +169,7 @@ def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
 @router.post("/plugins/instances/{instance_id}/refresh", response_model=PluginInstanceOut)
 def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
     """重新向 MCP 服务要工具清单。进程类实例直接原样返回。"""
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         instance = tools_domain.refresh_tools(db, inst.get(db, instance_id))
     except PluginDomainError as exc:
@@ -181,7 +181,7 @@ def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -
 def update_capabilities(
     instance_id: str, body: PluginCapabilityUpdate, db: DbSession, user: CurrentUser
 ) -> dict:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         instance = inst.get(db, instance_id)
         inst.set_exposed(db, instance, body.tools)
@@ -192,7 +192,7 @@ def update_capabilities(
 
 @router.get("/plugins/instances/{instance_id}/permissions", response_model=list[PluginPermissionGrantOut])
 def list_instance_permissions(instance_id: str, db: DbSession, user: CurrentUser) -> list:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         return inst.list_permissions(db, inst.get(db, instance_id))
     except PluginDomainError as exc:
@@ -204,7 +204,7 @@ def update_instance_permissions(
     instance_id: str, body: PluginPermissionGrantUpdate, db: DbSession, user: CurrentUser
 ) -> list:
     # 授权是提权路径:未门禁的调用方可以先授权再调用,两个请求就绕过了确认。
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         return inst.set_permissions(db, inst.get(db, instance_id), body.grants)
     except PluginDomainError as exc:
@@ -213,7 +213,7 @@ def update_instance_permissions(
 
 @router.get("/plugins/instances/{instance_id}/credentials", response_model=list[PluginCredentialOut])
 def list_instance_credentials(instance_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         return inst.describe_credentials(db, inst.get(db, instance_id))
     except PluginDomainError as exc:
@@ -224,7 +224,7 @@ def list_instance_credentials(instance_id: str, db: DbSession, user: CurrentUser
 def update_instance_credentials(
     instance_id: str, body: PluginCredentialUpdate, db: DbSession, user: CurrentUser
 ) -> list[dict]:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         instance = inst.get(db, instance_id)
         inst.set_credentials(db, instance, body.values)
@@ -251,7 +251,7 @@ def list_exposed_tools(db: DbSession) -> list[dict]:
 def invoke_tool(
     instance_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
 ) -> PluginInvocation:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     try:
         return tools_domain.invoke(db, instance_id, tool_name, body.input)
     except PluginDomainError as exc:
@@ -262,7 +262,7 @@ def invoke_tool(
 
 @router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
 def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> list[PluginInvocation]:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     stmt = select(PluginInvocation)
     if instance_id:
         stmt = stmt.where(PluginInvocation.instance_id == instance_id)
@@ -271,7 +271,7 @@ def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None =
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
 def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     obj = db.get(PluginInvocation, invocation_id)
     if obj is not None:
         db.delete(obj)
@@ -281,7 +281,7 @@ def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> N
 @router.delete("/plugins/invocations", status_code=204)
 def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> None:
     """清空调用记录;带 instance_id 只清该连接的。"""
-    ensure_instance_admin(db, user, "edit")
+    ensure_deployment_admin(db, user)
     stmt = select(PluginInvocation)
     if instance_id:
         stmt = stmt.where(PluginInvocation.instance_id == instance_id)

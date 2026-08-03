@@ -695,7 +695,7 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
 # code 节点是子进程隔离 + 超时 + 输出上限,但**不是沙箱** —— 里面的 Python 能读写文件系统、
 # 发网络请求。单机安装下这无所谓(作者就是机器主人);团队/远程后端下,持有 edit 的 editor
 # 本来能存这样一张图,等于把「能改内容」升格成「能拿服务器」。落库入口因此额外要 instance-admin
-# (见 api/routes/workflows.py 的 ensure_graph_node_privileges 与 core/permissions.ensure_instance_admin)。
+# (见 api/routes/workflows.py 的 ensure_graph_node_privileges 与 core/permissions.ensure_deployment_admin)。
 PRIVILEGED_NODE_TYPES = frozenset({"code"})
 
 #: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、

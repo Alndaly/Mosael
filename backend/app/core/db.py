@@ -58,6 +58,35 @@ def _migrate_tool_confirmations_session() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
 
 
+def _migrate_deployment_admin() -> None:
+    """users 新增 is_deployment_admin,并把**最早创建的账号**提成部署管理员。
+
+    此前「谁对这个部署负责」没有对应物,只能用「在任意工作区里是 admin」去近似 —— 而工作区可以
+    自助新建,所以那个近似是自助的。这次把它变成数据。
+
+    回填选最早的账号:单机安装里那就是本人;团队安装里那是当初装起这台后端的人 —— 两种情况下
+    都是对的那个人,而且与 `_adopt_orphan_workspaces`(第一个账号继承登录前建的工作区)同一条理由。
+    幂等:已经有人持有就不再动(管理员可能已经把它转给了别人)。
+    """
+    inspector = inspect(engine)
+    if "users" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        if "is_deployment_admin" not in {c["name"] for c in inspector.get_columns("users")}:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN is_deployment_admin BOOLEAN NOT NULL DEFAULT 0")
+            )
+        already = conn.execute(text("SELECT COUNT(*) FROM users WHERE is_deployment_admin = 1")).scalar()
+        if already:
+            return
+        conn.execute(
+            text(
+                "UPDATE users SET is_deployment_admin = 1 WHERE id = ("
+                "SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1)"
+            )
+        )
+
+
 def _migrate_permission_modes() -> None:
     """三档权限模式的两组列(agent_sessions 的模式、tool_confirmations 的留痕)。
 
@@ -505,6 +534,7 @@ def init_db() -> None:
     _migrate_tool_confirmations_session()
     _migrate_auth_session_expiry()
     _migrate_permission_modes()
+    _migrate_deployment_admin()
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
