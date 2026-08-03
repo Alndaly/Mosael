@@ -76,7 +76,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 
 - Open Studio hosts a specialized external coding-agent (user decision — opencode-style, not a homegrown loop): agent_sessions/agent_messages (schema), pi sidecar adapter (Node embedding pi-agent-core; tools call back over REST with a minted service token; continuity via serialized adapter_state; specialized system prompt teaching the confirmation contract); single-flight turns, errors become assistant messages.
 - Chat Workspace in AI Studio (对话/生成 tabs): sessions, bubble thread, thinking indicator, composer. Verified with a real agent turn calling list_assets.
-- Feishu binding ported from mibu-video: lark-oapi long-connection worker (one child process per bot), tenant-token send, message dedupe + mention stripping, chats map to agent sessions (external_key feishu:bot:chat) with capability-tier prompts; 扫码一键创建 via device-authorization grant + manual App ID/Secret; Settings section with QR, bot list, status, capability; autostart on app launch, cleanup on shutdown.
+- Feishu binding ported from the predecessor project: lark-oapi long-connection worker (one child process per bot), tenant-token send, message dedupe + mention stripping, chats map to agent sessions (external_key feishu:bot:chat) with capability-tier prompts; 扫码一键创建 via device-authorization grant + manual App ID/Secret; Settings section with QR, bot list, status, capability; autostart on app launch, cleanup on shutdown.
 
 ### Mutating MCP tools + confirmation cards (plan §16.2/§17.2/§17.4)
 
@@ -112,7 +112,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Audio-track clips render their sliced waveform (pure slicePeaks/downsample kernel, tested) as an SVG inside the clip.
 - Monitor drives a hidden audio element in lockstep with the active audio-track clip (gain/mute honored); playback clock switched from rAF to interval so it survives occluded/background windows.
 
-### Editing boost round 1 (parity work vs mibu-video)
+### Editing boost round 1 (parity work vs the predecessor project)
 
 - split_clip operation (cut-in-two at a source point, single invertible op) + S key / clip context menu at the playhead; ⌘D duplicate appends a copy at track end.
 - set_track_state operation (mute/lock, undoable) with hover tools on track headers; muted video tracks drop their overlays from the render plan; locked tracks already reject drags.
@@ -133,7 +133,7 @@ Workspace → project → import (thumbnails generated) → create timeline → 
 - Subtitle tracks: clips.asset_id nullable, text clips via insert_text_clip/set_clip_text (undoable), SRT burn-in on export, purple text clips on the timeline, Monitor overlay, Inspector textarea, 在播放头加字幕 toolbar action.
 - Chrome: page headers removed app-wide (slim action toolbars instead), AI Studio 对话/生成 segmented control in the chat sidebar, visible timeline clip-action buttons, redesigned monitor transport (circular play, custom volume), hairline-only panel resizers, ChatGPT-grade assistant message typography, media-library covers fixed (missing auth token on thumbnail URLs).
 
-### Professional color grading (mibu-video parity + beyond)
+### Professional color grading (predecessor parity + beyond)
 
 Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the Monitor's CSS/SVG preview both consume it, and it burns into FFmpeg on export.
 
@@ -184,7 +184,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 ### Publish + account matrix (plan §6.9, Phase 13)
 
 - Platform registry holds **only login-bearing real platforms** (douyin/bilibili/xiaohongshu/weixin-channels), all browser-driven; per-platform `title_max` enforced at create; Chinese aliases. The old `executor` split (`local` = folder/webhook/mock) is gone — see the 2026-07-31 entry.
-- Full Electron publisher ported from mibu-video: per-account persistent session partitions, CDP file upload, adapters, foreground/background view management, cross-account concurrency with same-account serialization.
+- Full Electron publisher ported from the predecessor project: per-account persistent session partitions, CDP file upload, adapters, foreground/background view management, cross-account concurrency with same-account serialization.
 - Worker queue protocol (claim / report rich statuses / claim-check / mark-due / heartbeat) — see [PUBLISHING.md](PUBLISHING.md) for the protocol and the **hard constraints** learned the hard way.
 - Account matrix moved out of the Publish page into the **浏览器池** tab (see below): binding badges, platform nickname, last-check time, login / recheck / enable / rename / delete; checking-deadlock self-heal. The Publish page now shows publish records + 新建发布 only.
 - AI publish copy; publish workflow node; **`browser_upload` node** ("浏览器·上传文件") sets a file on a page's `<input type=file>` via CDP `DOM.setFileInputFiles` (no OS dialog) — takes an `asset_id` (e.g. `{{export_1.asset_id}}`) or a local `file_path`, the key primitive for publishing via workflow.
@@ -192,7 +192,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 ### Browser pool / persistent-login (BrowserProfile)
 
 - Every persistent browser login is unified into one concept: `BrowserProfile` (DB table `browser_profiles`) = a reusable login identity = a persistent session partition + proxy + metadata. **发布账号 = 挂了平台的档案** (`publish_accounts.profile_id`); **通用档案 = 不挂平台**, reusable for any site.
-- Migration by **composition, not merge**: `publish_accounts` keeps its table + gains `profile_id`; each publish account gets a profile that reuses its existing partition `persist:mibu-<accountId>` (logins preserved). Generic profiles use `persist:pool-<id>`.
+- Migration by **composition, not merge**: `publish_accounts` keeps its table + gains `profile_id`; each publish account gets a profile that reuses its existing partition `persist:openstudio-<accountId>` (logins preserved). Generic profiles use `persist:pool-<id>`.
 - New **浏览器池** tab (`frontend/src/features/browser-pool/BrowserPoolView.tsx`, Boxes icon, between 工作流 and 定时任务); adding/managing accounts and generic profiles happens here.
 - **Lease**: one active session per profile at a time (`domain/browser.open_session`). **Login**: both publish accounts and generic profiles log in via the same app-embedded WebContentsView with a "返回 Open Studio" button — not a separate OS window.
 - **Reusable by workflows**: the `browser_open` node gained `session_mode: pool` + `profile_id` → runs RPA reusing a pool profile's login.
@@ -213,7 +213,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
 
 - **Style system rebuilt**: every handwritten global class inlined as Tailwind v4 classes on JSX (`styles.css` 10.4k → ~40 lines of portal overrides); dual palettes redesigned (warm-paper light `#f6f4f0`+`#6a5cd8`, warm-sandalwood dark `#141218`+`#8a7bf0`, independently calibrated), `--radius: 8px` scale (sm6/md8/lg10/xl14), pill segmented controls, **no drop shadows anywhere** (hairline borders + surface steps), solid `--field` form fills, CVD-validated chart palettes.
 - **Team membership is invitation-based**: admins invite by username (`workspace_invitations`), invitees accept/decline from actionable notification cards; four roles + per-permission overrides remain. Admin-created accounts removed.
-- **Editor interaction parity with mibu-video**: pool→timeline drags on dnd-kit (native HTML5 DnD dead under Electron); transform-based clip drags with 200ms settle glide and animated insert-ripple parting; **two-tier snapping** (target-track edges beat playhead/cross-track candidates); true insert edits (a clip straddling the drop point splits, its tail ripples — move and pool-drop alike, undo/redo carries the split); vertical auto-scroll while dragging.
+- **Editor interaction parity with the predecessor project**: pool→timeline drags on dnd-kit (native HTML5 DnD dead under Electron); transform-based clip drags with 200ms settle glide and animated insert-ripple parting; **two-tier snapping** (target-track edges beat playhead/cross-track candidates); true insert edits (a clip straddling the drop point splits, its tail ripples — move and pool-drop alike, undo/redo carries the split); vertical auto-scroll while dragging.
 - **Import hardening**: duration-less MediaRecorder webm (camera/screen/mic) losslessly remuxed at import + startup backfill for legacy assets; recorder rejects empty capture (<2KB) with a retry prompt instead of importing dead files.
 - **Login redesigned**: split-screen photo hero (`public/login-hero.jpg`, gradient fallback), labeled form fields, Terms of Service / Privacy Policy dialogs (`features/auth/legal.tsx`, zh/en) with an implicit-consent line on registration.
 - **Global search (⌘K) fixed**: palette does its own CJK/pinyin/server matching so cmdk's value-filter is disabled, manual empty state waits out in-flight searches, controlled first-item highlight restores Enter, deep links retry at 80/300/800ms.
@@ -244,7 +244,7 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   into a subgraph would otherwise walk straight past the gate.
 - **Dead code removed**: the unwired 方案 Y cluster (`OfflineFrameRenderer`, `OfflineVideoSource`,
   `frame_encoder`, the export-proxy builders and route), 8 `_migrate_*` functions predating the first
-  public release, predecessor-project fallbacks (`.mibu-video` / `.mibu-new` data dirs, sibling-venv
+  public release, predecessor-project fallbacks (old data dirs, sibling-venv
   and Fish Speech probes), and the 30 Alembic migrations — never executed at runtime and drifted from
   `models.py` since 2026-07-23. Migrations that serve v0.1.0/v0.2.0 users are kept; the retirement
   rule is in ARCHITECTURE.md.

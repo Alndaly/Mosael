@@ -7,7 +7,7 @@
 
 目标(用户确认):**多知识库(datasets)+ 完整 Dify 式 + Neo4j 关联知识图谱增强**。检索核心仍是 SQLite FTS5(不强上外部检索 SaaS),向量为可选既有层;Neo4j 知识图谱为一等增强(优雅降级:无 Neo4j 时纯 FTS,图谱标签页显示"配置后启用")。
 
-> 注:这**推翻**了旧记忆 `mibu-kb-architecture` 里"拒绝外部检索服务"的表述——用户现在明确要 Neo4j 自托管知识图谱。Milvus 向量仍为可选。
+> 注:这**推翻**了旧记忆「知识库架构」里"拒绝外部检索服务"的表述——用户现在明确要 Neo4j 自托管知识图谱。Milvus 向量仍为可选。
 
 ## 数据模型(重建 KB 三表)
 - **`KbDataset`**(新):`id, workspace_id(FK cascade), name, description`,检索设置 `top_k=5, score_threshold(nullable float), retrieval_mode('fts'|'hybrid')`,分块设置 `chunk_size=500, chunk_overlap=60`,`graph_enabled(bool)`,`created_at, updated_at`。

@@ -5,13 +5,13 @@ Status: Draft for review
 
 ## Problem
 
-Mibu's workflow canvas is Dify/Coze-shaped: an edge means **execution order + branch
+Open Studio's workflow canvas is Dify/Coze-shaped: an edge means **execution order + branch
 routing**, and data flows separately through `{{node.output}}` string references inside
 config fields. This is flexible but the data flow is **invisible** — you can't see, on the
 canvas, that node B's input is fed by node A's output. ComfyUI makes data flow visible and
 first-class (an edge *is* a typed data wire), which reads much better.
 
-But pure ComfyUI is **not enough** for Mibu: sometimes there is no parameter to pass — you
+But pure ComfyUI is **not enough** for Open Studio: sometimes there is no parameter to pass — you
 just want "run B after A" or "run A and B concurrently". A model where every edge must carry
 typed data can't express pure ordering/concurrency.
 
@@ -33,7 +33,7 @@ Goals:
 
 Non-goals (for this design):
 - Full type enforcement (hard-blocking incompatible connections). Type *hints* are a later,
-  optional phase — see [[mibu-workflow-type-matching]]; data edges are strings under the hood
+  optional phase — see [[workflow-type-matching]]; data edges are strings under the hood
   so validation stays **soft** (warn, not block).
 - Replacing control edges or the `{{var}}` syntax. Both stay.
 - Sub-graph / group nodes.
@@ -136,5 +136,5 @@ Each `WfNode` renders:
 2. **Data wire only** — a data edge already implies "B waits for A"; no separate control wire
    between the same pair. Control edges are used only for pure ordering/concurrency (no data).
 3. **Per-output sockets** (ComfyUI-style) — one socket per declared output on the node's right
-   side; drag from the specific output. Most Mibu nodes have 1–3 outputs, so the dots are cheap
+   side; drag from the specific output. Most Open Studio nodes have 1–3 outputs, so the dots are cheap
    and make "which output" obvious at a glance.

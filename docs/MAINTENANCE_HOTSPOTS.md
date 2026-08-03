@@ -81,27 +81,28 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 **删之前必须核对发布时间**(`gh release list` 的时间是 UTC,git log 默认本地时区,边界很容易算反),
 以及那一版实际用的数据目录/库文件名——删错的代价是用户打开看到空工作室。
 
-## 7. 更名的残留会**持续**制造真 bug,不只是不好看
+## 7. 兼容垫片会**持续**制造真 bug — ✅ 已清除(2026-08-04)
 
-「Mibu → Open Studio」改了名却没同步的地方,已经出过下面这些**功能性**问题——全都不是文案问题:
+上一次改名(旧名 → Open Studio)留下的一批"单向兼容垫片"曾经出过下面这些**功能性**问题,
+全都不是文案问题:
 
-- `create_account` 仍造 `persist:mibu-<id>` 分区 → 每个新发布账号一出生就是"待迁移的旧数据"
-- npm dev 脚本只认 `MIBU_BACKEND_PORT`,而 `main.cjs` 只认 `OPEN_STUDIO_BACKEND_PORT` → 设新变量会让后端与壳连到**不同端口**
-- `usePersistentTab` 写 `mibu:tab:*`,而 storageMigration 每次启动把它搬走 → tab 状态反复迁移
-- 一个断言 `not startswith("persist:mibu-")` 在前缀改名后,变成在防一个**已不存在**的名字,真正的碰撞面无人看守
-- i18n 提示还在描述已被删除的「同级 mibu-video venv」回退 → UI 对用户撒谎
+- 建发布账号仍造旧前缀的登录分区 → 每个新账号一出生就是"待迁移的旧数据"
+- npm dev 脚本认旧环境变量名而壳认新的 → 设新变量会让后端与壳连到**不同端口**
+- 前端写旧前缀的 localStorage 键,而启动时的迁移每次把它搬走 → tab 状态反复迁移
+- 一个断言在前缀改名后变成在防一个**已不存在**的名字,真正的碰撞面无人看守
+- i18n 提示还在描述已被删除的回退路径 → UI 对用户撒谎
 
-**规范名见 [CONTEXT.md 的「命名」段](../CONTEXT.md)**;`MIBU_*` / `persist:mibu-*` / `mibu.*` 键 /
-`mibu.plugin.json` / `mibu-workflow` / `mibu_kb_chunks` 是**单向兼容垫片**,只许读、不许在新代码里写。
+**垫片已全部删除**:环境变量前缀、数据目录/库文件改名、登录分区改名、worker 头名、工作流导入
+格式、插件清单名、localStorage 键迁移、向量集合名 —— 连同它们的测试。
 
-核验(应当只剩兼容层、其测试与其说明):
+留下的教训,比那份清单更重要:
 
-```bash
-grep -rniE "mibu" . | grep -vE "node_modules|/\.git/|pnpm-lock|publish\.bundle\.cjs|/dist/|/release/|__pycache__|\.tsbuildinfo|/\.codegraph/"
-```
-
-**别忘了生成物**:改了后端默认值/字段要重跑 `cd frontend && pnpm gen:api`,改了 `pyproject.toml` 的
-包名要重跑 `uv lock`——否则旧名会从生成文件里长回来。
+- **垫片的成本不在它自己,在它制造的"两种写法都行"**。只要两种都读得通,新代码就会随机长出
+  旧的那一种,而它在读取期永远不报错。
+- **单向垫片也有半衰期**。它是迁移的一部分,不是架构的一部分 —— 迁完就该有人来删。判据是
+  "还有没有处在旧形态的装机",而那是个能问清楚的问题。
+- **改名要连生成物一起改**:后端默认值/字段改了要重跑 `cd frontend && pnpm gen:api`,
+  `pyproject.toml` 的包名改了要重跑 `uv lock` —— 否则旧名会从生成文件里长回来。
 
 ## 8. 打包产物的初始化顺序:类型和单测都看不见
 
