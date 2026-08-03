@@ -5,6 +5,7 @@ import { Pencil, Plus, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import type { MessageKey } from "@/app/messages";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -495,7 +496,9 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               </div>
             </div>
           ))}
-          {rules.data && ruleList.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("pricingRulesEmpty")}</p>}
+          {rules.data && ruleList.length === 0 && (
+            <EmptyState size="compact" icon={<ReceiptText size={15} />} title={t("pricingRulesEmpty")} />
+          )}
         </div>
       </SettingsBlock>
     </SettingsGroup>

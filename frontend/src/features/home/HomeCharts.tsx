@@ -1,7 +1,9 @@
 import React from "react";
+import { Activity, Coins, FolderOpen, Rocket } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "recharts";
 
 import type { WorkspaceSummary } from "@/api/client";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import {
   ChartContainer,
@@ -60,7 +62,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
   const t = useI18n();
   const max = Math.max(...daily.map((day) => day.succeeded + day.failed));
   if (max === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyActivity")}</p>;
+    return <EmptyState size="compact" icon={<Activity size={15} />} title={t("homeChartEmptyActivity")} />;
   }
   const config: ChartConfig = {
     succeeded: { ...activityConfig.succeeded, label: t("homeLegendSucceeded") },
@@ -104,20 +106,28 @@ export function UsageCostChart({
   const totalEvents = rows.reduce((sum, day) => sum + day.events, 0);
   const maxCost = Math.max(0, ...rows.map((day) => day.cost_micros));
   if (totalEvents === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyUsage")}</p>;
+    return <EmptyState size="compact" icon={<Coins size={15} />} title={t("homeChartEmptyUsage")} />;
   }
   if (maxCost === 0 && unknown > 0) {
     return (
-      <div className="m-0 py-6 text-center text-xs text-muted-foreground">
-        <span>{t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}</span>
-        <button type="button" className="ml-2 inline-flex cursor-pointer items-center border-0 bg-transparent text-primary hover:underline" onClick={() => gotoSettings("provider-pricing")}>
-          {t("homeChartUsageConfigurePricing")}
-        </button>
-      </div>
+      <EmptyState
+        size="compact"
+        icon={<Coins size={15} />}
+        title={t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}
+        action={
+          <button
+            type="button"
+            className="cursor-pointer border-0 bg-transparent text-[11.5px] text-primary hover:underline"
+            onClick={() => gotoSettings("provider-pricing")}
+          >
+            {t("homeChartUsageConfigurePricing")}
+          </button>
+        }
+      />
     );
   }
   if (maxCost === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartUsageZeroCost").replace("{n}", String(totalEvents))}</p>;
+    return <EmptyState size="compact" icon={<Coins size={15} />} title={t("homeChartUsageZeroCost").replace("{n}", String(totalEvents))} />;
   }
   const config: ChartConfig = {
     cost: { ...usageConfigBase.cost, label: t("homeLegendCost") },
@@ -156,7 +166,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
   const rows = daily ?? [];
   const maxTokens = Math.max(0, ...rows.map((day) => day.total_tokens));
   if (maxTokens === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyTokens")}</p>;
+    return <EmptyState size="compact" icon={<Coins size={15} />} title={t("homeChartEmptyTokens")} />;
   }
   const config: ChartConfig = {
     cacheRead: { ...tokenConfigBase.cacheRead, label: t("homeLegendCacheReadTokens") },
@@ -219,7 +229,7 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
     .reduce((sum, [, count]) => sum + count, 0);
   const total = known.reduce((sum, entry) => sum + entry.count, 0) + other;
   if (total === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyAssets")}</p>;
+    return <EmptyState size="compact" icon={<FolderOpen size={15} />} title={t("homeChartEmptyAssets")} />;
   }
 
   const segments = [
@@ -284,7 +294,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
   const t = useI18n();
   const max = Math.max(...daily.map((day) => day.succeeded + day.failed + day.active + day.blocked));
   if (max === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyPublishActivity")}</p>;
+    return <EmptyState size="compact" icon={<Rocket size={15} />} title={t("homeChartEmptyPublishActivity")} />;
   }
   const config: ChartConfig = {
     succeeded: { ...publishConfigBase.succeeded, label: t("homeLegendSucceeded") },
@@ -348,7 +358,7 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
     .sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((sum, [, count]) => sum + count, 0);
   if (total === 0) {
-    return <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("homeChartEmptyPublishPlatforms")}</p>;
+    return <EmptyState size="compact" icon={<Rocket size={15} />} title={t("homeChartEmptyPublishPlatforms")} />;
   }
 
   const segments = entries.map(([platform, count], index) => ({

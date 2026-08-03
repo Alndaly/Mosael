@@ -1,23 +1,11 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Activity,
-  CheckCircle2,
-  CircleAlert,
-  Download,
-  GitBranch,
-  Loader2,
-  Mic,
-  Send,
-  Sparkles,
-  Timer,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, Download, GitBranch, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
 import { api, type Job } from "@/api/client";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
 import { gotoRecord } from "@/lib/deepLink";
@@ -177,7 +165,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           {finished.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
           ))}
-          {all.length === 0 && <p className="m-0 px-3 py-[18px] text-center text-xs leading-[1.6] text-muted-foreground">{t("noJobs")}</p>}
+          {all.length === 0 && (
+            <EmptyState size="compact" icon={<ListChecks size={15} />} title={t("noJobsTitle")} body={t("noJobs")} />
+          )}
         </div>
       </PopoverContent>
       <JobDetailDialog

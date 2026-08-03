@@ -705,10 +705,7 @@ function GenerateWorkspace({
           )}
         >
           {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground">
-              <MessageSquarePlus size={16} className="text-primary opacity-70" />
-              <span>{t("generationNoSessions")}</span>
-            </div>
+            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("generationNoSessions")} />
           )}
           {(sessions.data ?? []).map((item) => (
             <ContextMenu key={item.id}>

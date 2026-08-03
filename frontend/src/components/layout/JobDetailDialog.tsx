@@ -1,8 +1,9 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Loader2, ExternalLink } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2 } from "lucide-react";
 
 import { getJob, listJobChildren, listJobEvents, type Job } from "@/api/client";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -133,7 +134,7 @@ export function JobDetailDialog({
 
           <div className="grid gap-1 border-t border-border pt-2">
             <span className="text-[11px] font-semibold text-muted-foreground">{t("jobDetailEvents")}</span>
-            {(events.data ?? []).length === 0 && <p className="m-0 text-[11.5px] text-muted-foreground">{t("jobDetailNoEvents")}</p>}
+            {(events.data ?? []).length === 0 && <EmptyState size="compact" icon={<Activity size={15} />} title={t("jobDetailNoEvents")} />}
             <ol className="m-0 grid max-h-60 list-none gap-0 overflow-y-auto p-0">
               {(events.data ?? []).map((event) => (
                 <li className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2 py-[5px] [&+&]:border-t [&+&]:border-border" key={event.id}>

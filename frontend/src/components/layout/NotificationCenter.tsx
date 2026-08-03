@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Bot, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
+import { Bell, BellOff, Bot, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
 
 import {
   listNotifications,
@@ -10,6 +10,7 @@ import {
   respondInvitation,
   type AppNotification,
 } from "@/api/client";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -172,7 +173,9 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}
             </button>
           ))}
-          {items.length === 0 && pendingInvites.length === 0 && <p className="m-0 px-3 py-[18px] text-center text-xs leading-[1.6] text-muted-foreground">{t("notifEmpty")}</p>}
+          {items.length === 0 && pendingInvites.length === 0 && (
+            <EmptyState size="compact" icon={<BellOff size={15} />} title={t("notifEmptyTitle")} body={t("notifEmpty")} />
+          )}
         </div>
       </PopoverContent>
     </Popover>

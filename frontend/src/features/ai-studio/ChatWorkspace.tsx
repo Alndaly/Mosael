@@ -1,26 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Bot,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleDot,
-  Copy,
-  CornerDownRight,
-  Database,
-  Loader2,
-  MessageSquarePlus,
-  Paperclip,
-  Pencil,
-  Plus,
-  Send,
-  Sparkles,
-  Square,
-  Trash2,
-  Wrench,
-  X,
-} from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -398,10 +378,7 @@ export function ChatWorkspace({
           )}
         >
           {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground">
-              <MessageSquarePlus size={16} className="text-primary opacity-70" />
-              <span>{t("chatNoSessions")}</span>
-            </div>
+            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("chatNoSessions")} />
           )}
           {(sessions.data ?? []).map((item) => (
             <ContextMenu key={item.id}>
@@ -864,7 +841,21 @@ function ToolBrowser({
           {matched.map((tool) => (
             <ToolBrowserRow key={tool.name} tool={tool} />
           ))}
-          {matched.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("agentToolNoMatch")}</p>}
+          {/* 「搜不到」和「还没有」是两回事:前者的下一步是**清掉筛选**,所以给一个能点的出口,
+              而不是一句无处可去的灰字。 */}
+          {matched.length === 0 && (
+            <EmptyState
+              size="compact"
+              icon={<SearchX size={15} />}
+              title={t("agentToolNoMatch")}
+              body={t("agentToolNoMatchBody").replace("{q}", query)}
+              action={
+                <Button size="sm" variant="outline" onClick={() => setQuery("")}>
+                  {t("clearSearch")}
+                </Button>
+              }
+            />
+          )}
         </div>
         {version && (
           <p className="m-0 text-right text-[10.5px] text-muted-foreground">
