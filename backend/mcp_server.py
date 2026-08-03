@@ -168,6 +168,72 @@ CONFIRMATION_TOOLS = frozenset(
     }
 )
 
+#: **真正只读**的工具:跑完之后这个世界和跑之前一样。
+#:
+#: 这个标记有两个消费者,而它此前是**算**出来的(「不在 CONFIRMATION_TOOLS 里」= 只读)——对确认
+#: 门控自然成立(那就是它的定义),对第二个消费者却是错的:sidecar 只把只读工具交给**子智能体**
+#: (它的中间过程用户不看)。浏览器动作正是反例 —— browser_type / click / upload / evaluate 都不
+#: 走确认卡(入口 browser_open / browser_pool_open 走过一次),于是被算成只读交了出去。而池会话
+#: 用的是用户在别人站点上的**真实登录身份**:一张入口卡之后,子智能体可以用那个身份填表、点提交、
+#: 传文件、跑任意 JS,全程零张卡。
+#:
+#: 所以改成**显式声明**,而且默认落在「会改东西」那一边:新增工具漏了声明,测试会红
+#: (tests/test_tool_read_only_flag.py),而不是让它悄悄变成子智能体的能力。
+READ_ONLY_TOOLS = frozenset(
+    {
+        "analyze_asset",
+        "browser_pool_list",
+        "browser_read",
+        "browser_wait",
+        "fetch_url",
+        "get_confirmation",
+        "get_job",
+        "get_workflow",
+        "inspect_sequence",
+        "list_assets",
+        "list_generation_models",
+        "list_memories",
+        "list_plugin_tools",
+        "list_projects",
+        "list_publish_accounts",
+        "list_workflow_node_types",
+        "list_workflows",
+        "read_kb_document",
+        "search_kb",
+        "sleep",
+        "translate_text",
+        "web_search",
+    }
+)
+
+#: 会改动东西、但**不走确认卡**的工具。单独列出来是为了让「漏声明」这件事看得见:它和
+#: READ_ONLY_TOOLS、CONFIRMATION_TOOLS 三者合起来必须覆盖全部内置工具(由测试钉住)。
+#:
+#: 浏览器那一组在这里而不是在确认卡里:每次点击都弹一张卡等于让浏览器自动化不可用,入口那张卡
+#: (browser_open / browser_pool_open)才是该看清的地方。但「不弹卡」不等于「只读」——这正是上面
+#: 那段说的两件事。
+MUTATING_TOOLS = frozenset(
+    {
+        "browser_click",
+        "browser_close",
+        "browser_evaluate",
+        "browser_navigate",
+        "browser_scroll",
+        "browser_type",
+        "browser_upload",
+        "create_kb_note",
+        "create_project",
+        "forget",
+        "invoke_plugin_tool",
+        "notify_workspace",
+        "remember",
+        "transcribe_asset",
+        "update_asset",
+        "update_asset_tags",
+        "update_plan",
+    }
+)
+
 # 确认卡上显示的请求方。经 /api/agent/tools 间接调用时由调用方标注(如 "pi-agent"),
 # 直连 MCP(Claude CLI 等)保持默认。
 _REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_requested_by", default="mcp-agent")

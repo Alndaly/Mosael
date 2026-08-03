@@ -119,7 +119,9 @@ def list_agent_tools(db: DbSession, user: CurrentUser) -> list[ToolSpec]:
             # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
             parameters=tool.input_schema or {"type": "object", "properties": {}},
             confirmation=tool.name in registry.CONFIRMATION_TOOLS,
-            read_only=tool.name not in registry.CONFIRMATION_TOOLS,
+            # 显式声明,不再由「有没有确认卡」推出来 —— 那个推论对浏览器动作是错的,
+            # 而这个标记决定的是子智能体拿得到什么(见 mcp_server.READ_ONLY_TOOLS)。
+            read_only=tool.name in registry.READ_ONLY_TOOLS,
         )
         for tool in tools
         if tool.name not in _PLUGIN_META_TOOLS

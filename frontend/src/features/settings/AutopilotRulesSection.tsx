@@ -1,9 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, ShieldCheck, X } from "lucide-react";
+import { Lock, Plus, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { api, type Workspace } from "@/api/client";
+import { api, listMembers, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,12 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
     queryKey: ["autopilot-rules", workspace.id],
     queryFn: () => api<{ rules: Rules }>(`/api/workspaces/${workspace.id}/autopilot-rules`),
   });
+  // 改准则要 admin(后端 ensure_workspace_role)。**没权限就别给可编辑的控件** —— 让人填完一整页
+  // 再用一个 403 告诉他不行,是把"看得见但做不到"当成了提示。
+  const members = useQuery({ queryKey: ["members", workspace.id], queryFn: () => listMembers(workspace.id) });
+  const role = members.data?.my_role ?? "viewer";
+  const canEdit = role === "admin" || role === "owner";
+
   const [draft, setDraft] = React.useState<Rules>(EMPTY);
   React.useEffect(() => {
     if (query.data) setDraft(query.data.rules);
@@ -61,9 +67,15 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       title={t("autopilotTitle")}
       description={t("autopilotDesc")}
       actions={
-        <Button size="sm" loading={save.isPending} onClick={() => save.mutate(draft)}>
-          {t("save")}
-        </Button>
+        canEdit ? (
+          <Button size="sm" loading={save.isPending} onClick={() => save.mutate(draft)}>
+            {t("save")}
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <Lock size={12} /> {t("autopilotAdminOnly")}
+          </span>
+        )
       }
     >
       <SettingsRow
@@ -76,6 +88,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
           placeholder="api.example.com"
           addLabel={t("autopilotAddHost")}
           emptyLabel={t("autopilotNothingAllowed")}
+          readOnly={!canEdit}
           onChange={(http_allow_hosts) => patch({ http_allow_hosts })}
         />
       </SettingsRow>
@@ -89,6 +102,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
           placeholder="acc-…"
           addLabel={t("autopilotAddAccount")}
           emptyLabel={t("autopilotNothingAllowed")}
+          readOnly={!canEdit}
           onChange={(publish_allow_accounts) => patch({ publish_allow_accounts })}
         />
       </SettingsRow>
@@ -96,6 +110,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
         <Select
           key={draft.run_code}
           value={draft.run_code}
+          disabled={!canEdit}
           onValueChange={(value) => patch({ run_code: value as Rules["run_code"] })}
         >
           <SelectTrigger className="h-8 w-[180px] text-xs">
@@ -114,6 +129,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       >
         <Textarea
           className="min-h-[80px] text-xs"
+          readOnly={!canEdit}
           value={draft.notes}
           placeholder={t("autopilotNotesPlaceholder")}
           onChange={(event) => patch({ notes: event.currentTarget.value })}
@@ -134,12 +150,14 @@ function TokenList({
   placeholder,
   addLabel,
   emptyLabel,
+  readOnly,
   onChange,
 }: {
   values: string[];
   placeholder: string;
   addLabel: string;
   emptyLabel: string;
+  readOnly?: boolean;
   onChange: (next: string[]) => void;
 }) {
   const [entry, setEntry] = React.useState("");
@@ -161,18 +179,21 @@ function TokenList({
               className="inline-flex items-center gap-1 rounded-full border border-border bg-panel px-2 py-0.5 text-[11.5px]"
             >
               <code className="timecode">{value}</code>
-              <button
-                type="button"
-                aria-label={`remove ${value}`}
-                className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-destructive"
-                onClick={() => onChange(values.filter((item) => item !== value))}
-              >
-                <X size={11} />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  aria-label={`remove ${value}`}
+                  className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-destructive"
+                  onClick={() => onChange(values.filter((item) => item !== value))}
+                >
+                  <X size={11} />
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {readOnly ? null : (
       <div className="flex gap-1.5">
         <Input
           className="h-8 max-w-[280px] text-xs"
@@ -190,6 +211,7 @@ function TokenList({
           <Plus size={13} /> {addLabel}
         </Button>
       </div>
+      )}
     </div>
   );
 }

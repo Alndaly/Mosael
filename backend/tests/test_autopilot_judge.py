@@ -402,3 +402,51 @@ def test_a_session_used_by_someone_else_still_falls_back_to_manual(monkeypatch) 
     with SessionLocal() as db:
         assert db.get(ToolConfirmation, created["id"]).status == "pending"
     assert calls == []
+
+
+def test_opening_run_code_to_the_judge_shares_the_code_node_gate() -> None:
+    """「在这台机器上跑代码」这一项,和工作流里的 code 节点走**同一道闸**。
+
+    同一个能力必须同一个门槛,否则承担风险的人不是做决定的人。所以这条准则不只要工作区 admin,
+    还要过 `ensure_instance_admin` —— 与 `ensure_graph_node_privileges` 完全一样的那道。
+
+    **注意它现在有多高**:`ensure_instance_admin` 的实际语义是「在任意一个工作区里是 owner/admin」,
+    不是「这台机器的主人」。所以今天它拦得住 editor,拦不住任何一个别处的管理员。这不是本条准则的
+    问题,是整套作用域模型里缺一层 —— 一旦那道闸收紧,这里跟着一起收紧,这正是共用它的意义。
+    """
+    from tests.util import second_client
+
+    owner = fresh_client()
+    workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
+    mate = second_client("mate")
+    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "mate", "role": "editor"})
+    invitation = mate.get("/api/invitations").json()["invitations"][0]
+    mate.post(f"/api/invitations/{invitation['id']}/accept")
+
+    denied = mate.put(
+        f"/api/workspaces/{workspace['id']}/autopilot-rules", json={"rules": {"run_code": "judge"}}
+    )
+    assert denied.status_code == 403, denied.text
+
+    allowed = owner.put(
+        f"/api/workspaces/{workspace['id']}/autopilot-rules", json={"rules": {"run_code": "judge"}}
+    )
+    assert allowed.status_code == 200, allowed.text
+
+
+def test_the_lists_are_workspace_level() -> None:
+    """名单类的确实是这个工作区的事:发布账号、浏览器档案本来就挂在它上面。"""
+    from tests.util import second_client
+
+    owner = fresh_client()
+    workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
+    mate = second_client("mate")
+    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "mate", "role": "admin"})
+    invitation = mate.get("/api/invitations").json()["invitations"][0]
+    mate.post(f"/api/invitations/{invitation['id']}/accept")
+
+    saved = mate.put(
+        f"/api/workspaces/{workspace['id']}/autopilot-rules",
+        json={"rules": {"http_allow_hosts": ["api.example.com"]}},
+    )
+    assert saved.status_code == 200, saved.text
