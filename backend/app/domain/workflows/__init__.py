@@ -691,13 +691,6 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
     return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 input 与体内节点"]
 
 
-# 「能在后端主机上跑任意代码」的节点类型。这类节点的写入权限不是内容权限,而是主机权限:
-# code 节点是子进程隔离 + 超时 + 输出上限,但**不是沙箱** —— 里面的 Python 能读写文件系统、
-# 发网络请求。单机安装下这无所谓(作者就是机器主人);团队/远程后端下,持有 edit 的 editor
-# 本来能存这样一张图,等于把「能改内容」升格成「能拿服务器」。落库入口因此额外要 instance-admin
-# (见 api/routes/workflows.py 的 ensure_graph_node_privileges 与 core/permissions.ensure_deployment_admin)。
-PRIVILEGED_NODE_TYPES = frozenset({"code"})
-
 #: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、
 #: 用真实浏览器点下去的按钮。它们决定确认卡的权限档 —— `edit` 撤得回、`ai-cost` 最坏是花钱,
 #: 这一档撤不回来。
@@ -780,11 +773,6 @@ def _nodes_of_types(graph: Any, types: frozenset[str], *, _depth: int = 0) -> se
         if ntype in NESTED_BODY_TYPES:
             found |= _nodes_of_types((node.get("config") or {}).get("body"), types, _depth=_depth + 1)
     return found
-
-
-def privileged_nodes_in_graph(graph: Any) -> set[str]:
-    """图里用到的**主机权限**节点 —— 落库要 instance-admin(见 core/permissions)。"""
-    return _nodes_of_types(graph, PRIVILEGED_NODE_TYPES)
 
 
 def external_nodes_in_graph(graph: Any) -> set[str]:

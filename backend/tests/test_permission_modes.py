@@ -169,7 +169,12 @@ def test_bypass_lets_external_through() -> None:
 
 
 def test_bypass_does_not_bypass_authorisation() -> None:
-    """bypass 绕过的是同意,不是权限。editor 不是 instance-admin,照样存不下 code 节点。"""
+    """bypass 绕过的是**同意**,不是权限。
+
+    此前这条用 editor + code 节点来证(editor 不是部署管理员,存不下 code 节点)。那道闸随隔离
+    执行器一起撤掉了(ADR 0008 D2),于是换成一条更基本、也更贴近真实事故的:**人被移出工作区
+    之后,他手里那个开着 bypass 的会话不该还能替这个工作区做决定**。会话是长命的,成员关系不是。
+    """
     owner = fresh_client()
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
     mate = second_client("mate")
@@ -180,7 +185,7 @@ def test_bypass_does_not_bypass_authorisation() -> None:
     session_id = mate.post(
         "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "T"}
     ).json()["id"]
-    # editor 开不了 bypass(要 admin),所以直接写库模拟"他有办法开到" —— 测的是闸,不是入口。
+    # viewer 开不了 bypass(要 admin),所以直接写库模拟"他有办法开到" —— 测的是闸,不是入口。
     with SessionLocal() as db:
         user = db.query(User).filter(User.username == "mate").one()
         session = db.get(AgentSession, session_id)
@@ -193,8 +198,15 @@ def test_bypass_does_not_bypass_authorisation() -> None:
         json={"workspace_id": workspace["id"], "name": "WF", "graph": {"nodes": [START], "edges": []}},
     ).json()
 
+    # 他离开了这个工作区 —— 而会话与令牌都还在。
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.username == "mate").one()
+        from app.domain import members as members_svc
+
+        members_svc.remove_member(db, workspace["id"], user.id)
+
     mate.headers["Authorization"] = f"Bearer {token}"
-    card = mate.post(
+    made = mate.post(
         "/api/confirmations",
         json={
             "workspace_id": workspace["id"],
@@ -204,14 +216,13 @@ def test_bypass_does_not_bypass_authorisation() -> None:
                 "operations": [{"kind": "add_node", "type": "code", "config": {"code": "output = 1"}}],
             },
         },
-    ).json()
+    )
     wait_for_idle_autopilot()
 
+    assert made.status_code in (403, 404), f"bypass 把授权校验一起绕过去了:{made.text}"
     with SessionLocal() as db:
-        row = db.get(ToolConfirmation, card["id"])
-        assert row.status == "pending", "bypass 把授权校验一起绕过去了"
         graph = db.get(Workflow, workflow["id"]).graph
-    assert [node["type"] for node in graph["nodes"]] == ["start"]
+    assert [node["type"] for node in graph["nodes"]] == ["start"], "图被一个已经不在这个工作区的人改了"
 
 
 # ---------------- 作用域 ----------------

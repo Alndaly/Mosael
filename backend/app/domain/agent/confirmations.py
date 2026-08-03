@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.permissions import ensure_graph_node_privileges, ensure_workspace_perm
+from app.core.permissions import ensure_workspace_perm
 from app.db.models import PublishAccount, Sequence, ToolConfirmation, User, now
 from app.domain.sequences import operations as seq_ops
 from app.domain.workflows import external_nodes_in_graph
@@ -99,23 +99,19 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     一份 —— 之前是两边各抄一遍,谁往路由里加第四道校验,飞书那条就会静默漏掉,而这恰恰是授权
     路径,漏掉等于越权。
 
-    三道闸门缺一不可:
+    两道闸门缺一不可:
       - ensure_workspace_perm(edit):他得是这个工作区的人,**而且**持有 edit。这里点名 edit,
         而不是靠 ensure_workspace_access 去看「当前请求是不是 POST」—— 那个判断读的是只在 ASGI
         中间件里绑定的 ContextVar,默认 GET。今天两个入口都是 POST,所以校验碰巧成立;哪天批准
         从后台线程发起(自动放行、重试、队列),viewer 的批准就会连同执行一起通过且不报错。
         批准永远是写操作,权限就该显式写出来。
-      - ensure_graph_node_privileges:批准即落库,是绕开 /api/workflows 的又一条落库路径,
-        同样要挡 code 节点。按**审批者**校验:卡是他批的,这次执行记在他头上。要看的是
-        「这张卡批准之后会落库的那张图」—— 见 _graph_to_persist。
-      - run_code 同一道门:它跑的就是 code 节点那段实现,只是入口从画布换成了对话。工作流那边
-        「能编辑内容」不等于「能拥有这台服务器」,靠的正是 PRIVILEGED_NODE_TYPES 这道门 ——
-        少了它,同一个人画布上存不下 code 节点,却可以让智能体替他跑一段,门就白设了。
+      - 记在谁头上:decided_by。
+
+    此前这里还有第三道 —— `ensure_graph_node_privileges`,专门挡 code 节点。它随隔离执行器一起
+    撤掉了(ADR 0008 D2):那道闸本来就是缺沙箱的补丁,而「谁有资格写代码」是个错问题。代码现在
+    跑在内核强制的隔离里(见 domain/sandbox),写它就是普通的内容编辑。
     """
     ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
-    ensure_graph_node_privileges(db, user, _graph_to_persist(db, confirmation.tool, confirmation.payload or {}))
-    if confirmation.tool == "run_code":
-        ensure_graph_node_privileges(db, user, {"nodes": [{"type": "code"}]})
     # 记在谁头上。自动放行也有人 —— 这次 turn 是以他的身份跑的,上面三道闸也是按他校验的。
     # `decision_mode` 不在这里定:默认就是 manual(人点的),自动放行会在派活之前先改掉它。
     confirmation.decided_by = user.id
@@ -249,12 +245,14 @@ def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
 
 def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[str, Any]) -> None:
     if tool == "run_code":
-        # 部署级开关先判:这个部署压根不执行服务端代码时,不该开一张注定执行不了的卡去等用户点。
-        # 它跑的就是 code 节点那段实现,只是入口从画布换成了对话 —— 同一个开关。
-        from app.core.config import settings
+        # 这台机器上隔离不住就不开卡 —— 不该开一张注定执行不了的卡去等用户点。
+        # 判据是**有没有真的隔离得住**,不是一个开关(见 domain/sandbox)。
+        from app.domain import sandbox
 
-        if not settings.server_side_code_execution:
-            raise ConfirmationError("这个部署关闭了服务端代码执行,无法运行代码")
+        if sandbox.active_backend() is None:
+            raise ConfirmationError(
+                "这台机器上没有可用的代码隔离环境,因此不执行代码。请在部署机上安装并启动 Docker。"
+            )
     if tool == "browser_open":
         url = str(payload.get("url") or "").strip()
         if url and not (url.startswith("http://") or url.startswith("https://")):

@@ -125,31 +125,20 @@ def _code_node_env() -> dict[str, str]:
 
 
 def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
-    """跑一段用户代码,返回 {"output": ...}。**工作流节点与智能体工具共用这一个实现**。
+    """跑一段用户代码,返回 `{"output": ...}`。**工作流节点与智能体工具共用这一个实现**。
 
-    子进程 + `-I`(忽略环境与 site)+ 最小 env:后端进程里有各家模型的 API key,用户代码不该
-    看得到。两个界面共用它,那道隔离就不会只在其中一边成立。
+    隔离在 `domain/sandbox` 里(内核强制的沙箱 / 独立容器);这里只做领域错误的转换。此前这个
+    函数自己"隔离":子进程 + `-I` + 最小 env —— 而那拦不住读库、写盘、连本机服务(见
+    tests/test_sandbox.py 开头跑出来的那几行)。
     """
-    import subprocess
+    from app.domain import sandbox
 
-    payload = json.dumps({"code": code_text, "inputs": inputs})
     try:
-        completed = subprocess.run(
-            [sys.executable, "-I", "-c", _CODE_WRAPPER],
-            input=payload.encode(),
-            capture_output=True,
-            timeout=CODE_TIMEOUT_SECONDS,
-            env=_code_node_env(),
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise WorkflowDomainError(f"代码节点超时({CODE_TIMEOUT_SECONDS}s)") from exc
-    if completed.returncode != 0:
-        raise WorkflowDomainError(f"代码节点出错: {completed.stderr.decode(errors='replace')[:500]}")
-    stdout = completed.stdout[:CODE_OUTPUT_CAP]
-    try:
-        return {"output": json.loads(stdout.decode())["output"]}
-    except (ValueError, KeyError) as exc:
-        raise WorkflowDomainError("代码节点输出无法解析(请把结果赋给 output 变量)") from exc
+        return sandbox.run_code(code_text, inputs, timeout=CODE_TIMEOUT_SECONDS)
+    except sandbox.SandboxUnavailable as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    except sandbox.SandboxError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
 
 
 @register("code")

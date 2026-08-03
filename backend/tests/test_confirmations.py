@@ -512,22 +512,25 @@ def test_http_request_confirmation_refuses_non_http_urls() -> None:
     assert "http(s)" in denied.json()["detail"]
 
 
-def test_run_code_confirmation_needs_the_same_privilege_as_a_code_node() -> None:
-    """画布上存不下 code 节点的人,不该能让智能体替他跑一段 —— 否则那道门白设了。
+def test_approving_run_code_still_requires_edit() -> None:
+    """批准永远是写操作 —— 只读的人批不了,哪怕代码本身跑在隔离里。
 
-    工作流那边「能编辑内容」不等于「能拥有这台服务器」,靠的正是这道门;换个入口就该同样挡。
+    此前这里挡的是「不是部署管理员就不能跑代码」;那道闸随隔离执行器撤掉了(ADR 0008 D2 ——
+    「谁有资格写代码」是个错问题)。**剩下的这条仍然成立而且更基本**:viewer 不能替工作区做
+    任何写决定,run_code 也不例外。
     """
     from tests.util import second_client
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     member = second_client("member")
-    invited = client.post(f"/api/workspaces/{ws['id']}/invitations", json={"username": "member", "role": "editor"})
+    invited = client.post(f"/api/workspaces/{ws['id']}/invitations", json={"username": "member", "role": "viewer"})
     assert invited.status_code == 200, invited.text
     invitation = member.get("/api/invitations").json()["invitations"][0]
     assert member.post(f"/api/invitations/{invitation['id']}/accept").status_code == 200
 
-    confirmation = member.post(
+    # 卡由 owner 开(开卡本身就要 edit),viewer 去批 —— 这样隔离出的正是**批准**那道闸。
+    confirmation = client.post(
         "/api/confirmations",
         json={
             "workspace_id": ws["id"],
