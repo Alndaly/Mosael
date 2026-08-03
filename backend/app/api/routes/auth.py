@@ -116,6 +116,25 @@ def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
     ]
 
 
+@router.get("/auth/users")
+def list_deployment_users(db: DbSession, user: CurrentUser) -> list[dict]:
+    """这个部署里的所有账号。给部署管理员用 —— 授予/收回那一列需要知道有谁。
+
+    只有部署管理员能看:成员名单在工作区里各自可见,而**跨工作区的全量名单**是部署级信息。
+    """
+    ensure_deployment_admin(db, user)
+    rows = db.scalars(select(User).order_by(User.created_at.asc()))
+    return [
+        {
+            "id": row.id,
+            "username": row.username,
+            "display_name": row.display_name,
+            "is_deployment_admin": row.is_deployment_admin,
+        }
+        for row in rows
+    ]
+
+
 @router.post("/auth/users/{user_id}/deployment-admin")
 def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSession, user: CurrentUser) -> dict:
     """授予 / 收回「部署管理员」。只有部署管理员能改 —— 能自己给自己发就又回到自助了。

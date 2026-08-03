@@ -18,7 +18,7 @@ type AuthState = {
   user: User | null;
   hasUsers: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, displayName?: string) => Promise<void>;
+  register: (username: string, password: string, displayName?: string, inviteCode?: string) => Promise<void>;
   /** 第三方登录轮询取到票后直接落座(token+user 已由后端铸好)。 */
   adoptAuth: (auth: { token: string; user: User }) => void;
   updateProfile: (profile: { username: string; display_name: string; signature: string }) => Promise<User>;
@@ -105,11 +105,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login: async (username, password) => {
       applyAuth(await api<AuthOut>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }));
     },
-    register: async (username, password, displayName) => {
+    register: async (username, password, displayName, inviteCode) => {
       applyAuth(
         await api<AuthOut>("/api/auth/register", {
           method: "POST",
-          body: JSON.stringify({ username, password, display_name: displayName || username }),
+          body: JSON.stringify({
+            username,
+            password,
+            display_name: displayName || username,
+            // 空库的第一个账号不需要码;之后这个部署要么开放注册,要么得有人给他一个。
+            invite_code: inviteCode ?? "",
+          }),
         }),
       );
     },

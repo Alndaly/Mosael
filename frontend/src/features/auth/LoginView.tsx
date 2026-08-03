@@ -12,13 +12,13 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import loginHeroUrl from "@/assets/login-hero.jpg";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
 
-type LoginValues = { username: string; displayName: string; password: string; confirm: string };
+type LoginValues = { username: string; displayName: string; password: string; confirm: string; inviteCode: string };
 
 /** Map a raw API error body to a friendly, accurate message — instead of always
  * blaming the credentials (a server/network error is not a wrong password). */
@@ -47,6 +47,7 @@ export function LoginView() {
     const base = z.object({
       username: z.string().min(1, t("fieldRequired")),
       displayName: z.string(),
+      inviteCode: z.string(),
       password: z.string().min(4, t("passwordTooShort")),
       confirm: z.string(),
     });
@@ -59,7 +60,7 @@ export function LoginView() {
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "", displayName: "", password: "", confirm: "" },
+    defaultValues: { username: "", displayName: "", password: "", confirm: "", inviteCode: "" },
     mode: "onSubmit",
   });
 
@@ -75,7 +76,7 @@ export function LoginView() {
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       if (mode === "login") await login(values.username, values.password);
-      else await register(values.username, values.password, values.displayName);
+      else await register(values.username, values.password, values.displayName, values.inviteCode);
     } catch (err) {
       form.setError("root", { message: friendlyAuthError((err as Error).message, mode, t) });
     }
@@ -147,6 +148,24 @@ export function LoginView() {
                       <FormControl>
                         <Input autoComplete="name" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {/* 邀请码只在**已经有人**的部署上出现:空库时第一个账号引导这个部署,那时没有任何人
+                  可以给他发码。开放注册的部署留空即可 —— 所以不做必填,后端说了算。 */}
+              {mode === "register" && hasUsers && (
+                <FormField
+                  control={form.control}
+                  name="inviteCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("inviteCode")}</FormLabel>
+                      <FormControl>
+                        <Input autoComplete="off" placeholder={t("inviteCodePlaceholder")} {...field} />
+                      </FormControl>
+                      <FormDescription>{t("inviteCodeHint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -49,6 +49,7 @@
           "auth"
         ],
         "summary": "Register",
+        "description": "注册。**引导之后转邀请制** —— 见 ADR 0008 §0。\n\n这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为\n里面的一个租户。那正是下面这条(跑出来过的)链的第一环:\n\n    注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据\n         → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python\n\n空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请\n(见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。",
         "operationId": "register_api_auth_register_post",
         "requestBody": {
           "content": {
@@ -67,6 +68,176 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invites": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List Registration Invites",
+        "operationId": "list_registration_invites_api_auth_invites_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Registration Invites Api Auth Invites Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create Registration Invite",
+        "description": "发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。\n\n「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。",
+        "operationId": "create_registration_invite_api_auth_invites_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Create Registration Invite Api Auth Invites Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List Deployment Users",
+        "description": "这个部署里的所有账号。给部署管理员用 —— 授予/收回那一列需要知道有谁。\n\n只有部署管理员能看:成员名单在工作区里各自可见,而**跨工作区的全量名单**是部署级信息。",
+        "operationId": "list_deployment_users_api_auth_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Deployment Users Api Auth Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users/{user_id}/deployment-admin": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set Deployment Admin",
+        "description": "授予 / 收回「部署管理员」。只有部署管理员能改 —— 能自己给自己发就又回到自助了。\n\n最后一个部署管理员不能被收回:没有他,实例配置改不了、注册邀请码也发不出来,这个部署就成了\n一块砖头,而且**没有任何应用内的路可以救回来**。",
+        "operationId": "set_deployment_admin_api_auth_users__user_id__deployment_admin_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Set Deployment Admin Api Auth Users  User Id  Deployment Admin Post"
                 }
               }
             }
@@ -1459,6 +1630,104 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/autopilot-rules": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Get Autopilot Rules",
+        "description": "auto 档下 `external` 的放行准则(见 domain/agent/rules)。读:工作区成员即可。",
+        "operationId": "get_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Autopilot Rules Api Workspaces  Workspace Id  Autopilot Rules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Set Autopilot Rules",
+        "description": "改准则要 admin。\n\n它决定的是「什么可以不问就发出去」—— 往主机白名单里加一行,等于让智能体从此可以不经确认\n对那个地址发写请求。这和开 bypass 是同一级别的授权动作,不该是每个编辑都能改的。",
+        "operationId": "set_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutopilotRulesBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Set Autopilot Rules Api Workspaces  Workspace Id  Autopilot Rules Put"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -14020,6 +14289,18 @@
         ],
         "title": "AuthOut"
       },
+      "AutopilotRulesBody": {
+        "properties": {
+          "rules": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Rules",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "AutopilotRulesBody"
+      },
       "Body_import_asset_api_assets_import_post": {
         "properties": {
           "workspace_id": {
@@ -14940,6 +15221,19 @@
         ],
         "title": "DailyUsageTokensOut",
         "description": "一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。"
+      },
+      "DeploymentAdminUpdate": {
+        "properties": {
+          "granted": {
+            "type": "boolean",
+            "title": "Granted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "granted"
+        ],
+        "title": "DeploymentAdminUpdate"
       },
       "EngineSynthesizeRequest": {
         "properties": {
@@ -15968,6 +16262,18 @@
           "created_at"
         ],
         "title": "InvitationOut"
+      },
+      "InviteCreate": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "InviteCreate"
       },
       "InviteMemberRequest": {
         "properties": {
@@ -19767,6 +20073,12 @@
             "type": "string",
             "maxLength": 120,
             "title": "Display Name",
+            "default": ""
+          },
+          "invite_code": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Invite Code",
             "default": ""
           }
         },

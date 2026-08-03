@@ -34,8 +34,88 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register */
+        /**
+         * Register
+         * @description 注册。**引导之后转邀请制** —— 见 ADR 0008 §0。
+         *
+         *     这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为
+         *     里面的一个租户。那正是下面这条(跑出来过的)链的第一环:
+         *
+         *         注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据
+         *              → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python
+         *
+         *     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
+         *     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。
+         */
         post: operations["register_api_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Registration Invites */
+        get: operations["list_registration_invites_api_auth_invites_get"];
+        put?: never;
+        /**
+         * Create Registration Invite
+         * @description 发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。
+         *
+         *     「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。
+         */
+        post: operations["create_registration_invite_api_auth_invites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deployment Users
+         * @description 这个部署里的所有账号。给部署管理员用 —— 授予/收回那一列需要知道有谁。
+         *
+         *     只有部署管理员能看:成员名单在工作区里各自可见,而**跨工作区的全量名单**是部署级信息。
+         */
+        get: operations["list_deployment_users_api_auth_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/users/{user_id}/deployment-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Deployment Admin
+         * @description 授予 / 收回「部署管理员」。只有部署管理员能改 —— 能自己给自己发就又回到自助了。
+         *
+         *     最后一个部署管理员不能被收回:没有他,实例配置改不了、注册邀请码也发不出来,这个部署就成了
+         *     一块砖头,而且**没有任何应用内的路可以救回来**。
+         */
+        post: operations["set_deployment_admin_api_auth_users__user_id__deployment_admin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -569,6 +649,33 @@ export interface paths {
         head?: never;
         /** Rename Workspace */
         patch: operations["rename_workspace_api_workspaces__workspace_id__patch"];
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/autopilot-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Autopilot Rules
+         * @description auto 档下 `external` 的放行准则(见 domain/agent/rules)。读:工作区成员即可。
+         */
+        get: operations["get_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_get"];
+        /**
+         * Set Autopilot Rules
+         * @description 改准则要 admin。
+         *
+         *     它决定的是「什么可以不问就发出去」—— 往主机白名单里加一行,等于让智能体从此可以不经确认
+         *     对那个地址发写请求。这和开 bypass 是同一级别的授权动作,不该是每个编辑都能改的。
+         */
+        put: operations["set_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/home/poem": {
@@ -4656,6 +4763,16 @@ export interface components {
             token: string;
             user: components["schemas"]["UserOut"];
         };
+        /** AutopilotRulesBody */
+        AutopilotRulesBody: {
+            /**
+             * Rules
+             * @default {}
+             */
+            rules: {
+                [key: string]: unknown;
+            };
+        };
         /** Body_import_asset_api_assets_import_post */
         Body_import_asset_api_assets_import_post: {
             /** Workspace Id */
@@ -4999,6 +5116,11 @@ export interface components {
             cache_write_tokens: number;
             /** Total Tokens */
             total_tokens: number;
+        };
+        /** DeploymentAdminUpdate */
+        DeploymentAdminUpdate: {
+            /** Granted */
+            granted: boolean;
         };
         /**
          * EngineSynthesizeRequest
@@ -5394,6 +5516,14 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** InviteCreate */
+        InviteCreate: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
         };
         /** InviteMemberRequest */
         InviteMemberRequest: {
@@ -6984,6 +7114,11 @@ export interface components {
              * @default
              */
             display_name: string;
+            /**
+             * Invite Code
+             * @default
+             */
+            invite_code: string;
         };
         /** RenameRequest */
         RenameRequest: {
@@ -8207,6 +8342,140 @@ export interface operations {
             };
         };
     };
+    list_registration_invites_api_auth_invites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_registration_invite_api_auth_invites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_deployment_users_api_auth_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_deployment_admin_api_auth_users__user_id__deployment_admin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeploymentAdminUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -9304,6 +9573,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RenameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_autopilot_rules_api_workspaces__workspace_id__autopilot_rules_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutopilotRulesBody"];
             };
         };
         responses: {
