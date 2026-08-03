@@ -3455,6 +3455,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description 这个部署里的人:身份、最近在用吗、跑的是哪一版。
+         *
+         *     版本取他**最近一次**用到的那份凭据上报的 —— 一个人可以同时开着桌面端和网页端,而管理员
+         *     要回答的是"他现在跑的是哪一版"。
+         */
+        get: operations["list_users_api_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Overview
+         * @description 这一页顶部的几个数,加上两张图。
+         *
+         *     **花销按人分**,不是只给一个总数:管理员要回答的是"谁在花" —— 一个总数说明不了任何该做的
+         *     决定,而按人分的那一列直接指向要谈的那个人。
+         */
+        get: operations["overview_api_admin_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/confirmations": {
         parameters: {
             query?: never;
@@ -4420,6 +4466,69 @@ export interface components {
             /** Kind */
             kind: string;
         };
+        /** AdminOverviewOut */
+        AdminOverviewOut: {
+            /**
+             * Users
+             * @default 0
+             */
+            users: number;
+            /**
+             * Active Users 7D
+             * @default 0
+             */
+            active_users_7d: number;
+            /**
+             * Workspaces
+             * @default 0
+             */
+            workspaces: number;
+            /**
+             * Assets
+             * @default 0
+             */
+            assets: number;
+            /** Jobs By Day */
+            jobs_by_day?: components["schemas"]["DaySeriesPoint"][];
+            /** Spend By User */
+            spend_by_user?: components["schemas"]["UserSpendPoint"][];
+            /**
+             * Window Days
+             * @default 30
+             */
+            window_days: number;
+        };
+        /**
+         * AdminUserOut
+         * @description 管理员看到的一个人。
+         */
+        AdminUserOut: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Is Deployment Admin */
+            is_deployment_admin: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Seen At */
+            last_seen_at?: string | null;
+            /**
+             * Client Version
+             * @default
+             */
+            client_version: string;
+            /**
+             * Workspaces
+             * @default 0
+             */
+            workspaces: number;
+        };
         /**
          * AgentCompactOut
          * @description 一次手动压缩的结果。
@@ -5197,6 +5306,21 @@ export interface components {
             cache_write_tokens: number;
             /** Total Tokens */
             total_tokens: number;
+        };
+        /** DaySeriesPoint */
+        DaySeriesPoint: {
+            /** Day */
+            day: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
         };
         /** DeploymentAdminUpdate */
         DeploymentAdminUpdate: {
@@ -7950,6 +8074,29 @@ export interface components {
              * @default
              */
             signature: string;
+        };
+        /** UserSpendPoint */
+        UserSpendPoint: {
+            /**
+             * User Id
+             * @default
+             */
+            user_id: string;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /**
+             * Cost Micros
+             * @default 0
+             */
+            cost_micros: number;
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -15916,6 +16063,64 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_users_api_admin_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_api_admin_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverviewOut"];
                 };
             };
             /** @description Validation Error */

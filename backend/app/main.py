@@ -19,6 +19,7 @@ from app.api.routes.assets import router as assets_router
 from app.api.routes.voices import router as voices_router
 from app.api.routes.translate import router as translate_router
 from app.api.routes.websearch import router as websearch_router
+from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.oauth import router as oauth_router
 from app.api.routes.confirmations import router as confirmations_router
@@ -203,6 +204,7 @@ def create_app() -> FastAPI:
     app.include_router(publish_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)
     app.include_router(shares_router, prefix="/api", dependencies=protected)
+    app.include_router(admin_router, prefix="/api", dependencies=protected)
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)

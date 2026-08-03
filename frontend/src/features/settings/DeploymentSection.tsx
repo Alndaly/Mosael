@@ -28,7 +28,7 @@ type Invite = { code: string; note: string; used: boolean; expires_at: string };
  *
  * 这一页只有部署管理员看得见(后端同判据);其他人连列表都取不到。
  */
-export function DeploymentSection() {
+export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean } = {}) {
   const t = useI18n();
   const qc = useQueryClient();
   const users = useQuery({
@@ -150,6 +150,7 @@ export function DeploymentSection() {
       </SettingsGroup>
       )}
 
+      {showAdmins && (
       <SettingsGroup title={t("deployAdminsTitle")} description={t("deployAdminsDesc")}>
         {(users.data ?? []).map((row) => (
           <SettingsRow
@@ -174,11 +175,14 @@ export function DeploymentSection() {
           </SettingsRow>
         ))}
       </SettingsGroup>
-      {/* 这是一条**规则说明**,不是列表里的一个人。此前它被摆成同一组里的第三行、右边还配一个
-          绿勾,读起来像"最后一个不能收回"是某位管理员的名字、而那个勾是他的开关。 */}
-      <p className="mt-1.5 px-0.5 text-[11px] leading-relaxed text-muted-foreground">
-        {t("deployLastAdminDesc")}
-      </p>
+      )}
+      {/* 这是一条**规则说明**,不是列表里的一个人。此前它被摆成同一组里的第三行、右边还配
+          一个绿勾,读起来像"最后一个不能收回"是某位管理员的名字、而那个勾是他的开关。 */}
+      {showAdmins && (
+        <p className="mt-1.5 px-0.5 text-[11px] leading-relaxed text-muted-foreground">
+          {t("deployLastAdminDesc")}
+        </p>
+      )}
     </>
   );
 }

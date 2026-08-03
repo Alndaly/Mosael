@@ -41,6 +41,45 @@ class UserOut(OrmModel):
     is_deployment_admin: bool = False
 
 
+class AdminUserOut(BaseModel):
+    """管理员看到的一个人。"""
+
+    id: str
+    username: str
+    display_name: str
+    is_deployment_admin: bool
+    created_at: datetime
+    #: 最近一次用到这个部署。空 = 从没登录过(或老会话还没记过)。
+    last_seen_at: datetime | None = None
+    #: 他现在跑的客户端版本。**由客户端自报**,空 = 那个客户端不报(老版本)——
+    #: 空着而不是编一个,"不知道"和"0.0.0"是两回事。
+    client_version: str = ""
+    workspaces: int = 0
+
+
+class DaySeriesPoint(BaseModel):
+    day: str
+    total: int = 0
+    failed: int = 0
+
+
+class UserSpendPoint(BaseModel):
+    user_id: str = ""
+    username: str = ""
+    cost_micros: int = 0
+    calls: int = 0
+
+
+class AdminOverviewOut(BaseModel):
+    users: int = 0
+    active_users_7d: int = 0
+    workspaces: int = 0
+    assets: int = 0
+    jobs_by_day: list[DaySeriesPoint] = Field(default_factory=list)
+    spend_by_user: list[UserSpendPoint] = Field(default_factory=list)
+    window_days: int = 30
+
+
 class BootstrapOut(BaseModel):
     """登录页开屏问的两件事(见 routes/auth.bootstrap)。不需要登录就能读。"""
 

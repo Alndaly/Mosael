@@ -20,7 +20,6 @@ import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
-import { DeploymentSection } from "@/features/settings/DeploymentSection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
 import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
@@ -50,7 +49,6 @@ type SectionId =
   | "ai-runtime"
   | "agent-memory"
   | "agent-autopilot"
-  | "deployment"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -69,7 +67,6 @@ const SECTION_IDS: SectionId[] = [
   "ai-runtime",
   "agent-memory",
   "agent-autopilot",
-  "deployment",
   "transcribe",
   "voice",
   "feishu",
@@ -143,7 +140,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
     // 部署与本地后端挨着:两者说的都是"这台后端",而不是某个工作区。
-    { id: "deployment", label: t("deployTitle"), icon: <ShieldCheck size={14} /> },
     { id: "backend", label: t("settingsBackend"), icon: <Server size={14} /> },
   ];
 
@@ -190,7 +186,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           {section === "ai-runtime" && <AiRuntimeSection />}
           {section === "agent-memory" && <AgentMemorySection workspace={workspace} />}
           {section === "agent-autopilot" && <AutopilotRulesSection workspace={workspace} />}
-          {section === "deployment" && <DeploymentSection />}
           {section === "provider-image" && (
             <>
               <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability} />

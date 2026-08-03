@@ -333,6 +333,19 @@ def _migrate_provider_defaults_per_person() -> None:
         conn.execute(text("ALTER TABLE provider_defaults_new RENAME TO provider_defaults"))
 
 
+def _migrate_client_version() -> None:
+    """`auth_sessions` 补 `client_version` / `last_seen_at`:这个人跑的是哪一版、还在不在用。"""
+    inspector = inspect(engine)
+    if "auth_sessions" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(auth_sessions)"))}
+        if "client_version" not in existing:
+            conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN client_version VARCHAR(32) NOT NULL DEFAULT ''"))
+        if "last_seen_at" not in existing:
+            conn.execute(text("ALTER TABLE auth_sessions ADD COLUMN last_seen_at DATETIME"))
+
+
 def _migrate_job_actor() -> None:
     """`jobs` 补 `created_by`:这活儿**替谁干**。
 
@@ -753,6 +766,7 @@ def init_db() -> None:
     _migrate_provider_defaults_per_person()
     # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
     _migrate_encrypt_secrets()
+    _migrate_client_version()
     _migrate_job_actor()
     _migrate_provider_credentials()
     _drop_shared_credentials()

@@ -276,7 +276,12 @@ export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrant
 export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const auth: Record<string, string> = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  // 客户端自报版本。后端知道的是**它自己**那个进程的版本 —— 分布式部署里每个人跑的壳可以
+  // 各不相同,而"某人还停在旧版"正是管理员要看的:它解释了为什么只有他撞得到那个早修好的 bug。
+  const auth: Record<string, string> = {
+    "X-Open-Studio-Client": __APP_VERSION__,
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+  };
   const headers =
     init?.body instanceof FormData
       ? { ...auth, ...(init?.headers as Record<string, string> | undefined) }

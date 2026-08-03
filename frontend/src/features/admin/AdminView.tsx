@@ -1,0 +1,154 @@
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
+import { ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+
+import { api } from "@/api/client";
+import type { components } from "@/api/generated/schema";
+import { useI18n } from "@/app/preferences";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/app/chart";
+import { DeploymentSection } from "@/features/settings/DeploymentSection";
+import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { relativeTime } from "@/lib/time";
+
+type AdminUser = components["schemas"]["AdminUserOut"];
+type Overview = components["schemas"]["AdminOverviewOut"];
+
+/**
+ * 管理员控制台 —— **这台部署**的状况。
+ *
+ * 和「设置」是两件事,所以它是侧边栏里独立的一格,不挤在设置页里:设置回答"我怎么用这个应用"
+ * (外观、我的密钥、我的默认模型);这里回答"这台部署怎么样" —— 谁进来了、谁在花钱、谁的
+ * 客户端还停在旧版本。
+ *
+ * 入口只对部署管理员显示(见 AppShell),后端每条路由也各自把关 —— 藏起来的入口不是权限。
+ */
+
+const jobsConfig = {
+  total: { label: "", color: "var(--chart-ok)" },
+  failed: { label: "", color: "var(--chart-fail)" },
+} satisfies ChartConfig;
+
+export function AdminView() {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => api<Overview>("/api/admin/overview") });
+  const users = useQuery({ queryKey: ["admin-users"], queryFn: () => api<AdminUser[]>("/api/admin/users") });
+
+  const setAdmin = useMutation({
+    mutationFn: ({ id, granted }: { id: string; granted: boolean }) =>
+      api(`/api/auth/users/${id}/deployment-admin`, { method: "POST", body: JSON.stringify({ granted }) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin-users"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const stats = overview.data;
+  const admins = (users.data ?? []).filter((row) => row.is_deployment_admin).length;
+  const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
+
+  return (
+    <div className="grid content-start gap-4 overflow-y-auto p-4">
+      {/* 四个数放在最上面:它们是"这台部署现在多大"的一句话回答。 */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label={t("adminStatUsers")} value={stats?.users} hint={t("adminStatActive").replace("{n}", String(stats?.active_users_7d ?? 0))} />
+        <Stat label={t("adminStatWorkspaces")} value={stats?.workspaces} />
+        <Stat label={t("adminStatAssets")} value={stats?.assets} />
+        <Stat label={t("adminStatWindow")} value={stats?.window_days} hint={t("adminStatWindowHint")} />
+      </div>
+
+      <SettingsGroup title={t("adminJobsTitle")} description={t("adminJobsDesc")}>
+        <div className="w-full">
+          {(stats?.jobs_by_day ?? []).length === 0 ? (
+            <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("adminNoData")}</p>
+          ) : (
+            <ChartContainer config={jobsConfig} className="h-[180px]">
+              <BarChart data={stats?.jobs_by_day ?? []}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} tickFormatter={(day: string) => day.slice(5)} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="total" fill="var(--color-total)" radius={2} />
+                <Bar dataKey="failed" fill="var(--color-failed)" radius={2} />
+              </BarChart>
+            </ChartContainer>
+          )}
+        </div>
+      </SettingsGroup>
+
+      {/* 花销**按人分**:一个总数说明不了任何该做的决定,而按人分的这一列直接指向要谈的那个人。 */}
+      <SettingsGroup title={t("adminSpendTitle")} description={t("adminSpendDesc")}>
+        {spend.length === 0 ? (
+          <p className="m-0 py-2 text-xs text-muted-foreground">{t("adminNoSpend")}</p>
+        ) : (
+          <ul className="m-0 grid w-full list-none gap-1 p-0">
+            {spend.map((row) => (
+              <li key={row.user_id || "unknown"} className="flex items-center gap-2 text-[12px]">
+                <span className="w-28 shrink-0 truncate">{row.username || t("adminNoOwner")}</span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <span
+                    className="block h-full rounded-full bg-primary"
+                    style={{ width: `${Math.max(2, (row.cost_micros / spend[0].cost_micros) * 100)}%` }}
+                  />
+                </span>
+                <span className="w-24 shrink-0 text-right tabular-nums text-muted-foreground">
+                  ¥{(row.cost_micros / 1_000_000).toFixed(2)} · {row.calls}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup title={t("adminUsersTitle")} description={t("adminUsersDesc")}>
+        {(users.data ?? []).map((row) => (
+          <SettingsRow
+            key={row.id}
+            label={row.display_name || row.username}
+            description={`@${row.username} · ${
+              row.last_seen_at ? t("adminSeen").replace("{t}", relativeTime(row.last_seen_at, "zh-CN")) : t("adminNeverSeen")
+            } · ${row.workspaces} ${t("adminWorkspacesUnit")}`}
+          >
+            <span className="flex items-center gap-2">
+              {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。 */}
+              <code className="timecode text-[11px] text-muted-foreground">
+                {row.client_version ? `v${row.client_version}` : t("adminUnknownVersion")}
+              </code>
+              {row.is_deployment_admin && (
+                <Badge variant="default" className="gap-1">
+                  <ShieldCheck size={11} /> {t("deployAdminBadge")}
+                </Badge>
+              )}
+              <Switch
+                checked={row.is_deployment_admin}
+                // 最后一个部署管理员不能被收回 —— 后端会 409,这里先不给点。
+                disabled={setAdmin.isPending || (row.is_deployment_admin && admins <= 1)}
+                onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
+                aria-label={t("deployAdminsTitle")}
+              />
+            </span>
+          </SettingsRow>
+        ))}
+      </SettingsGroup>
+
+      {/* 邀请码与部署管理员的授予仍是同一段逻辑,原样复用,不复制一份。 */}
+      <DeploymentSection showAdmins={false} />
+    </div>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value?: number; hint?: string }) {
+  return (
+    <div className="grid gap-0.5 rounded-lg border border-border bg-panel p-3">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <strong className="text-[22px] font-semibold tabular-nums leading-none">{value ?? "—"}</strong>
+      {hint && <span className="text-[10.5px] text-muted-foreground">{hint}</span>}
+    </div>
+  );
+}

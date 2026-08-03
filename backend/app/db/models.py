@@ -89,6 +89,12 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     #: 不给默认值:每个铸造点都必须说清这份凭据该活多久,漏了是 IntegrityError 而不是永久有效。
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    #: 这个客户端自报的版本(见 core/permissions.get_current_user)。**必须由客户端报** ——
+    #: 后端进程的 app_version 是它自己的版本,回答不了"分布式部署里某个人装的是哪一版",
+    #: 而那正是管理员要看的:它解释了为什么只有他撞得到那个早就修好的 bug。
+    client_version: Mapped[str] = mapped_column(String(32), nullable=False, default="", server_default="")
+    #: 这份凭据最近一次被用到。管理员据此看"他还在用吗" —— 停用一个账号之前总要先知道这个。
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class OAuthIdentity(Base):

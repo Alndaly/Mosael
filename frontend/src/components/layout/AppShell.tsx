@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
@@ -19,12 +19,13 @@ import {
   Scissors,
   Search,
   Settings,
+  ShieldCheck,
   Sun,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { api, createWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,8 @@ export type StudioView =
   | "workflows"
   | "scheduler"
   | "plugins"
-  | "browser-pool";
+  | "browser-pool"
+  | "admin";
 
 const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
   { view: "home", icon: <Home size={17} />, labelKey: "navHome" },
@@ -66,6 +68,10 @@ const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: 
   { view: "scheduler", icon: <CalendarClock size={17} />, labelKey: "schedulerTitle" },
   { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
 ];
+
+/** 只对部署管理员显示的那一格。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由各自把关,
+ *  这里只是不给不相干的人添乱。 */
+const ADMIN_NAV = { view: "admin" as StudioView, icon: <ShieldCheck size={17} />, labelKey: "navAdmin" as MessageKey };
 
 /** 只有「剪辑」工作在"当前项目"语境 —— 它编辑的就是某个项目的时间线。
     其余页面的面包屑显示页面名,否则设置/插件页也挂着项目名,既不合理也容易误解。
@@ -108,6 +114,13 @@ export function AppShell({
 }) {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
+  // 管理入口只对部署管理员显示。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由各自
+  // 把关;这里只是不给不相干的人添乱。
+  const me = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me"),
+  });
+  const isDeploymentAdmin = me.data?.is_deployment_admin ?? false;
 
   // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
   React.useEffect(() => {
@@ -222,7 +235,7 @@ export function AppShell({
           </RailButton>
         ))}
         <div className="my-2 h-px w-6 bg-border" />
-        {SECONDARY_NAV.map((item) => (
+        {[...SECONDARY_NAV, ...(isDeploymentAdmin ? [ADMIN_NAV] : [])].map((item) => (
           <RailButton
             key={item.view}
             label={t(item.labelKey)}

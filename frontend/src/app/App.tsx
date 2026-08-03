@@ -31,6 +31,7 @@ import { KbView } from "@/features/kb/KbView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { AdminView } from "@/features/admin/AdminView";
 import { SettingsView } from "@/features/settings/SettingsView";
 
 // 页面是条件挂载(切页整棵卸载/重挂),默认 staleTime:0 会让每次切页都重拉 → 首帧空态闪一下。
@@ -287,7 +288,7 @@ function WorkspaceGate() {
   return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
 }
 
-const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "publish", "kb", "settings", "workflows", "scheduler", "plugins", "browser-pool"];
+const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "publish", "kb", "settings", "workflows", "scheduler", "plugins", "browser-pool", "admin"];
 
 function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
@@ -415,6 +416,7 @@ function Studio({
       {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}
       {view === "kb" && <KbView workspace={workspace} />}
       {view === "settings" && <SettingsView workspace={workspace} />}
+      {view === "admin" && <AdminView />}
       {view === "workflows" && <WorkflowsView workspace={workspace} />}
       {view === "scheduler" && <SchedulerView workspace={workspace} project={project} />}
       {view === "plugins" && <PluginsView />}

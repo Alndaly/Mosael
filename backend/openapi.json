@@ -10495,6 +10495,74 @@
         }
       }
     },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Users",
+        "description": "这个部署里的人:身份、最近在用吗、跑的是哪一版。\n\n版本取他**最近一次**用到的那份凭据上报的 —— 一个人可以同时开着桌面端和网页端,而管理员\n要回答的是\"他现在跑的是哪一版\"。",
+        "operationId": "list_users_api_admin_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Users Api Admin Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/overview": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Overview",
+        "description": "这一页顶部的几个数,加上两张图。\n\n**花销按人分**,不是只给一个总数:管理员要回答的是\"谁在花\" —— 一个总数说明不了任何该做的\n决定,而按人分的那一列直接指向要谈的那个人。",
+        "operationId": "overview_api_admin_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOverviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/confirmations": {
       "post": {
         "tags": [
@@ -13511,6 +13579,108 @@
         ],
         "title": "AddTrackRequest"
       },
+      "AdminOverviewOut": {
+        "properties": {
+          "users": {
+            "type": "integer",
+            "title": "Users",
+            "default": 0
+          },
+          "active_users_7d": {
+            "type": "integer",
+            "title": "Active Users 7D",
+            "default": 0
+          },
+          "workspaces": {
+            "type": "integer",
+            "title": "Workspaces",
+            "default": 0
+          },
+          "assets": {
+            "type": "integer",
+            "title": "Assets",
+            "default": 0
+          },
+          "jobs_by_day": {
+            "items": {
+              "$ref": "#/components/schemas/DaySeriesPoint"
+            },
+            "type": "array",
+            "title": "Jobs By Day"
+          },
+          "spend_by_user": {
+            "items": {
+              "$ref": "#/components/schemas/UserSpendPoint"
+            },
+            "type": "array",
+            "title": "Spend By User"
+          },
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "title": "AdminOverviewOut"
+      },
+      "AdminUserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "is_deployment_admin": {
+            "type": "boolean",
+            "title": "Is Deployment Admin"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "client_version": {
+            "type": "string",
+            "title": "Client Version",
+            "default": ""
+          },
+          "workspaces": {
+            "type": "integer",
+            "title": "Workspaces",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "display_name",
+          "is_deployment_admin",
+          "created_at"
+        ],
+        "title": "AdminUserOut",
+        "description": "管理员看到的一个人。"
+      },
       "AgentCompactOut": {
         "properties": {
           "context": {
@@ -15469,6 +15639,29 @@
         ],
         "title": "DailyUsageTokensOut",
         "description": "一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。"
+      },
+      "DaySeriesPoint": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "DaySeriesPoint"
       },
       "DeploymentAdminUpdate": {
         "properties": {
@@ -21950,6 +22143,32 @@
           "display_name"
         ],
         "title": "UserProfileUpdate"
+      },
+      "UserSpendPoint": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "default": ""
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "default": ""
+          },
+          "cost_micros": {
+            "type": "integer",
+            "title": "Cost Micros",
+            "default": 0
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "UserSpendPoint"
       },
       "ValidationError": {
         "properties": {

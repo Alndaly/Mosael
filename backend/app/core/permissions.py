@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextvars
+import re
 
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy import select
@@ -38,6 +39,10 @@ def presented_token(
     return bearer or token or ""
 
 
+#: 客户端自报版本的请求头。前端在 api/client 里统一带上(见 __APP_VERSION__)。
+CLIENT_VERSION_HEADER = "X-Open-Studio-Client"
+
+
 def get_current_user(
     request: Request,
     db: Session = Depends(session_scope),
@@ -59,7 +64,32 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     renew_if_stale(db, session)
+    _record_client(db, session, request)
     return user
+
+
+#: 版本号里能出现的字符。请求头是**外部输入** —— 只收像版本号的东西,别让这一栏变成一条
+#: 能塞任意文本的通道(它会被原样显示在管理员的表格里)。
+_VERSION_SHAPE = re.compile(r"^[0-9A-Za-z.+\-]{1,32}$")
+
+
+def _record_client(db: Session, session: AuthSession, request: Request) -> None:
+    """记下"这个人现在跑的是哪一版、最近一次是什么时候"。
+
+    放在这里是因为它是**唯一**的登录身份收口点:每一个带凭据的请求都经过它,所以不需要在
+    任何路由上再挂一次,也就不会有"这条路由忘了记"。
+    """
+    reported = (request.headers.get(CLIENT_VERSION_HEADER) or "").strip()
+    version = reported if _VERSION_SHAPE.match(reported) else ""
+    stamp = now()
+    # 每个请求都写一次太吵(登录会话一天几千个请求)。只在版本变了、或上次记录已经过了一分钟
+    # 时才写 —— "最近在用"这件事不需要秒级精度。
+    if version and version != session.client_version:
+        session.client_version = version
+    elif session.last_seen_at is not None and (stamp - session.last_seen_at).total_seconds() < 60:
+        return
+    session.last_seen_at = stamp
+    db.commit()
 
 
 def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
