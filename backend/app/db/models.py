@@ -1011,6 +1011,9 @@ class AgentSession(Base):
     permission_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual", server_default="manual")
     #: 模式是**谁**开的。行动人不是他就退回手动:飞书群聊共用一个会话,群里任何人发消息都跑在
     #: 同一个会话上 —— 没有这一条,A 开的 bypass 会替 B 做决定。而会话本身不记 owner。
+    #: 谁开的这个模式。**不能用 owner_user_id 顶替**(ADR 0008 D6 曾经提过这个简化):会话可以
+    #: 被共享,共享之后别的成员也能改模式 —— 那时"谁开的"与"谁的会话"是两个人,而模式是一次
+    #: **授权动作**,只对做出授权的那个人生效。合并两列等于把一个人的授权悄悄转给另一个人。
     mode_set_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: 开启时刻。计费卡「连续自动放行几张」从这里起算。
     mode_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

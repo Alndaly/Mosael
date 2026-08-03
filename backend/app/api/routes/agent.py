@@ -205,8 +205,9 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
     """切换这次对话的权限模式。
 
     - 要 `ai` 权限:它决定的是"智能体能不问就做什么",和能不能用智能体是同一件事的两半。
-    - **bypass 另要 admin**:它等价于「让智能体替我在这台机器上跑代码」,而那本来就是
-      instance-admin 级别的能力(见 core/permissions.ensure_graph_node_privileges)。
+    - **bypass 另要 admin**:它是「不问我就做」——发布、花钱、对外的动作都不再经过一次人眼。
+      隔离执行器到位之后,"跑代码"本身已经不是提权(见 domain/sandbox),但**不问就做**仍然是
+      一个工作区级别的决定,不是每个 editor 自己能给自己开的。
     - **飞书会话不给 bypass**:那是一个群里所有人共用的对话,而 bypass 不该由一个人替一群人开。
     - 记下**是谁开的**:授权只对做出授权的那个人生效(见 domain/agent/autopilot.decide)。
     """
