@@ -44,6 +44,7 @@ import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
+import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -423,6 +424,7 @@ export function ChatWorkspace({
                 <ContextMenuItem onSelect={() => setRenamingSession(item)}>
                   <Pencil /> {t("rename")}
                 </ContextMenuItem>
+                <SessionShareMenuItem session={item} kind="agent_session" workspaceId={workspace.id} queryKey="agent-sessions" />
                 <ContextMenuSeparator />
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
                   <Trash2 /> {t("delete")}

@@ -64,6 +64,7 @@ import {
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -730,6 +731,7 @@ function GenerateWorkspace({
                 <ContextMenuItem onSelect={() => setRenamingSession(item)}>
                   <Pencil /> {t("rename")}
                 </ContextMenuItem>
+                <SessionShareMenuItem session={item} kind="generation_session" workspaceId={workspace.id} queryKey="generation-sessions" />
                 <ContextMenuSeparator />
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
                   <Trash2 /> {t("delete")}

@@ -4510,6 +4510,18 @@ export interface components {
             id: string;
             /** Workspace Id */
             workspace_id: string;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Is Mine
+             * @default true
+             */
+            is_mine: boolean;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
             /** Project Id */
             project_id: string | null;
             /** Title */
@@ -5426,6 +5438,18 @@ export interface components {
             id: string;
             /** Workspace Id */
             workspace_id: string;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Is Mine
+             * @default true
+             */
+            is_mine: boolean;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
             /** Title */
             title: string;
             /** Provider Profile Id */
@@ -7206,6 +7230,18 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /**
+             * Is Mine
+             * @default true
+             */
+            is_mine: boolean;
+            /**
+             * Shared
+             * @default true
+             */
+            shared: boolean;
         };
         /** ScheduledTaskRunOut */
         ScheduledTaskRunOut: {

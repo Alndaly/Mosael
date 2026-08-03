@@ -13754,6 +13754,27 @@
             "type": "string",
             "title": "Workspace Id"
           },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": true
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
+          },
           "project_id": {
             "anyOf": [
               {
@@ -16127,6 +16148,27 @@
           "workspace_id": {
             "type": "string",
             "title": "Workspace Id"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": true
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
           },
           "title": {
             "type": "string",
@@ -20378,6 +20420,27 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": true
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": true
           }
         },
         "type": "object",

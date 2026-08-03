@@ -17,6 +17,7 @@ from app.api.schemas import (
 )
 from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
+from app.domain import sharing
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
@@ -39,9 +40,12 @@ def create_generation_session(
         kind=body.kind,
     )
     db.add(session)
+    db.flush()
+    # 生成记录是**他的**私人工作线程 —— 默认不共享给工作区(见 domain/sharing.KINDS)。
+    sharing.claim(db, "generation_session", session, user)
     db.commit()
     db.refresh(session)
-    return session
+    return sharing.annotate(db, "generation_session", [session], user, session.workspace_id)[0]
 
 
 @router.get("/generation/sessions", response_model=list[GenerationSessionOut])
@@ -49,11 +53,14 @@ def list_generation_sessions(workspace_id: str, db: DbSession, user: CurrentUser
     ensure_workspace_access(db, user, workspace_id)
     stmt = (
         select(GenerationSession)
-        .where(GenerationSession.workspace_id == workspace_id)
+        .where(
+            GenerationSession.workspace_id == workspace_id,
+            sharing.visible_filter("generation_session", user, workspace_id),
+        )
         .order_by(GenerationSession.updated_at.desc())
         .limit(50)
     )
-    return list(db.scalars(stmt))
+    return sharing.annotate(db, "generation_session", list(db.scalars(stmt)), user, workspace_id)
 
 
 @router.patch("/generation/sessions/{session_id}", response_model=GenerationSessionOut)
@@ -181,7 +188,15 @@ def list_generation_jobs(
     session_id: str | None = None,
 ) -> list[GenerationJob]:
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(GenerationJob).where(GenerationJob.workspace_id == workspace_id)
+    # 记录跟着它所属的会话走:私有会话里生成的东西不该在工作区的总列表里露出来 —— 否则「私有」
+    # 只挡住了标题,内容还在。不属于任何会话的老记录(session_id 为空)照旧全工作区可见。
+    visible_sessions = select(GenerationSession.id).where(
+        sharing.visible_filter("generation_session", user, workspace_id)
+    )
+    stmt = select(GenerationJob).where(
+        GenerationJob.workspace_id == workspace_id,
+        (GenerationJob.session_id.is_(None)) | (GenerationJob.session_id.in_(visible_sessions)),
+    )
     if session_id:
         session = _require_generation_session(db, user, session_id)
         if session.workspace_id != workspace_id:
@@ -229,4 +244,7 @@ def _require_generation_session(db: DbSession, user: CurrentUser, session_id: st
     if session is None:
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_access(db, user, session.workspace_id)
+    # 看不见还不够:猜到 id 也得用不了,否则「私有」只是列表上的一层遮挡。
+    if not sharing.may_use(db, "generation_session", session, user):
+        raise HTTPException(status_code=404, detail="Not found")
     return session

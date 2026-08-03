@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     AgentSession,
     BrowserProfile,
+    GenerationSession,
     PublishAccount,
     ResourceShare,
     ScheduledTask,
@@ -17,15 +18,16 @@ from app.db.models import (
 """归属与共享。
 
 此前它们是同一件事:把东西放进工作区,既是存储方式**也是**共享方式 —— 于是没有「放进来但仍然是
-我的」这种状态。而有四类东西并不是工作区的资产:
+我的」这种状态。而有五类东西并不是工作区的资产:
 
-    publish_accounts   某人在平台上的登录态
-    browser_profiles   某人已登录的浏览器
-    agent_sessions     某人的对话
-    scheduled_tasks    替某人跑的自动化
+    publish_accounts    某人在平台上的登录态
+    browser_profiles    某人已登录的浏览器
+    agent_sessions      某人的对话
+    generation_sessions 某人的生成记录
+    scheduled_tasks     替某人跑的自动化
 
 拆开之后:`owner_user_id` 说这是谁的,`resource_shares` 里的一行说主人把它放进了哪个工作区。
-一条规则覆盖四类,不是四个特例。
+一条规则覆盖五类,不是五个特例。
 """
 
 #: 资源种类 → (模型, 这一类新建时默认共享给它所在的工作区吗)。
@@ -37,6 +39,7 @@ KINDS: dict[str, tuple[type, bool]] = {
     "publish_account": (PublishAccount, False),
     "browser_profile": (BrowserProfile, False),
     "agent_session": (AgentSession, False),
+    "generation_session": (GenerationSession, False),
     "scheduled_task": (ScheduledTask, True),
 }
 
@@ -127,6 +130,32 @@ def is_shared_with(db: Session, kind: str, resource_id: str, workspace_id: str) 
         )
         is not None
     )
+
+
+def shared_ids(db: Session, kind: str, workspace_id: str) -> set[str]:
+    """这个工作区里被共享进来的这一类资源 id。一次查询顶一整个列表。"""
+    return set(
+        db.scalars(
+            select(ResourceShare.resource_id).where(
+                ResourceShare.kind == kind, ResourceShare.workspace_id == workspace_id
+            )
+        )
+    )
+
+
+def annotate(db: Session, kind: str, rows: list, user: User, workspace_id: str) -> list:
+    """给一批直接按 ORM 序列化出去的行标上 `is_mine` / `shared`。
+
+    界面要回答两个问题:这是不是我的(决定给不给共享开关),以及它现在在不在这个工作区里。
+    两个都不是表上的列 —— 一个要和当前用户比,一个在 resource_shares 里。自己拼 Out 对象的路由
+    直接用 `shared_ids`;这两条路共用同一个查询,免得第二处列表算出不同的答案。
+    """
+    shared = shared_ids(db, kind, workspace_id)
+    for row in rows:
+        # 非映射属性:只为序列化而挂,不会被 flush 写回。
+        row.is_mine = row.owner_user_id == user.id
+        row.shared = row.id in shared
+    return rows
 
 
 def visible_filter(kind: str, user: User, workspace_id: str):

@@ -1113,6 +1113,10 @@ class GenerationSessionUpdate(BaseModel):
 class GenerationSessionOut(OrmModel):
     id: str
     workspace_id: str
+    # 归属(见 domain/sharing):生成记录和对话一样,默认只有自己看得见。
+    owner_user_id: str | None = None
+    is_mine: bool = True
+    shared: bool = False
     title: str
     provider_profile_id: str | None = None
     model: str | None = None
@@ -1157,6 +1161,11 @@ class ScheduledTaskOut(OrmModel):
     last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # 归属(见 domain/sharing):是不是我的、在不在这个工作区里。定时任务默认共享,但仍有主人 ——
+    # 事后要知道这段自动化是谁挂上去的。
+    owner_user_id: str | None = None
+    is_mine: bool = True
+    shared: bool = True
 
 
 class ScheduledTaskRunOut(OrmModel):
@@ -1494,6 +1503,10 @@ class AgentSessionUpdate(BaseModel):
 class AgentSessionOut(OrmModel):
     id: str
     workspace_id: str
+    # 归属(见 domain/sharing):对话默认只有自己看得见,主人可以把某一次拿出来给同事看。
+    owner_user_id: str | None = None
+    is_mine: bool = True
+    shared: bool = False
     project_id: str | None
     title: str
     origin: str

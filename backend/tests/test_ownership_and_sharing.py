@@ -267,3 +267,75 @@ def test_the_owner_sees_it_flagged_as_mine() -> None:
     owner, workspace, _mate = _team()
     made = owner.post("/api/browser/profiles", json={"workspace_id": workspace["id"], "name": "我的"}).json()
     assert made["is_mine"] is True and made["shared"] is False
+
+
+def test_a_session_can_be_shared_and_withdrawn() -> None:
+    """私人对话默认只有自己看得见,但主人可以把某一次对话拿出来给同事看。"""
+    owner, workspace, mate = _team()
+    session = owner.post(
+        "/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "查一下这个报错"}
+    ).json()
+    assert session["is_mine"] is True and session["shared"] is False
+
+    owner.post(f"/api/shares/agent_session/{session['id']}", json={"workspace_id": workspace["id"]})
+    listed = mate.get(f"/api/agent/sessions?workspace_id={workspace['id']}").json()
+    assert [row["id"] for row in listed] == [session["id"]]
+    assert listed[0]["is_mine"] is False, "同事看到的应该标成别人的"
+    assert mate.get(f"/api/agent/sessions/{session['id']}/messages").status_code == 200
+
+    owner.request(
+        "DELETE", f"/api/shares/agent_session/{session['id']}", json={"workspace_id": workspace["id"]}
+    )
+    assert mate.get(f"/api/agent/sessions/{session['id']}/messages").status_code == 404
+
+
+def test_a_scheduled_task_carries_its_owner() -> None:
+    """定时任务默认共享,但仍然有主人 —— 定时执行没有"当时的操作人",事后要能查出是谁挂的。"""
+    owner, workspace, mate = _team()
+    task = owner.post(
+        "/api/scheduled-tasks",
+        json={"workspace_id": workspace["id"], "name": "每晚发布", "kind": "noop", "trigger_type": "manual"},
+    ).json()
+
+    seen = mate.get(f"/api/scheduled-tasks?workspace_id={workspace['id']}").json()[0]
+    assert seen["id"] == task["id"]
+    assert seen["shared"] is True
+    assert seen["is_mine"] is False and seen["owner_user_id"] == _user_id("tester")
+
+
+def test_a_generation_session_is_private_by_default() -> None:
+    """生成记录和对话是同一类东西:某人的私人工作线程,不是工作区的公共资产。"""
+    owner, workspace, mate = _team()
+    session = owner.post(
+        "/api/generation/sessions", json={"workspace_id": workspace["id"], "title": "试几张封面"}
+    ).json()
+    assert session["is_mine"] is True and session["shared"] is False
+
+    assert mate.get(f"/api/generation/sessions?workspace_id={workspace['id']}").json() == []
+    assert mate.get(f"/api/generation/jobs?workspace_id={workspace['id']}&session_id={session['id']}").status_code == 404
+
+    owner.post(f"/api/shares/generation_session/{session['id']}", json={"workspace_id": workspace["id"]})
+    assert mate.get(f"/api/generation/jobs?workspace_id={workspace['id']}&session_id={session['id']}").status_code == 200
+
+
+def test_a_private_sessions_images_do_not_show_up_in_the_workspace_list() -> None:
+    """会话私有,里面生成的东西也得跟着私有 —— 否则"私有"只挡住了标题,内容还在。"""
+    from app.db.models import GenerationJob
+
+    owner, workspace, mate = _team()
+    session = owner.post(
+        "/api/generation/sessions", json={"workspace_id": workspace["id"], "title": "试封面"}
+    ).json()
+    with SessionLocal() as db:
+        db.add(
+            GenerationJob(
+                workspace_id=workspace["id"], session_id=session["id"], kind="image", provider="openai", model="x"
+            )
+        )
+        db.commit()
+
+    listed = mate.get(f"/api/generation/jobs?workspace_id={workspace['id']}").json()
+    assert listed == [], "私有会话里生成的图出现在了工作区总列表里"
+
+    owner.post(f"/api/shares/generation_session/{session['id']}", json={"workspace_id": workspace["id"]})
+    assert len(mate.get(f"/api/generation/jobs?workspace_id={workspace['id']}").json()) == 1

@@ -19,7 +19,7 @@ from app.domain import browser
 router = APIRouter(tags=["browser-profiles"])
 
 
-def _serialize(db, prof: BrowserProfile, user: User) -> BrowserProfileOut:
+def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> BrowserProfileOut:
     """回档案 + 若被发布账号绑定则带上平台/账号 id(pool 页标注用)。"""
     account = db.scalar(select(PublishAccount).where(PublishAccount.profile_id == prof.id))
     return BrowserProfileOut(
@@ -37,7 +37,7 @@ def _serialize(db, prof: BrowserProfile, user: User) -> BrowserProfileOut:
         last_checked_at=account.last_checked_at if account else None,
         last_error=account.last_error if account else None,
         is_mine=prof.owner_user_id == user.id,
-        shared=sharing.is_shared_with(db, "browser_profile", prof.id, prof.workspace_id),
+        shared=prof.id in shared,
     )
 
 
@@ -45,8 +45,9 @@ def _serialize(db, prof: BrowserProfile, user: User) -> BrowserProfileOut:
 def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[BrowserProfileOut]:
     ensure_workspace_access(db, user, workspace_id)
     # 档案存的是**某人已登录的浏览器** —— 默认只有主人看得见(见 domain/sharing)。
+    shared = sharing.shared_ids(db, "browser_profile", workspace_id)
     return [
-        _serialize(db, prof, user)
+        _serialize(db, prof, user, shared)
         for prof in browser.list_profiles(db, workspace_id)
         if sharing.may_use(db, "browser_profile", prof, user)
     ]
@@ -57,7 +58,7 @@ def create_profile(body: BrowserProfileCreate, db: DbSession, user: CurrentUser)
     ensure_workspace_access(db, user, body.workspace_id)
     prof = browser.create_profile(db, workspace_id=body.workspace_id, name=body.name, owner=user, proxy=body.proxy)
     db.commit()
-    return _serialize(db, prof, user)
+    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", body.workspace_id))
 
 
 @router.patch("/browser/profiles/{profile_id}", response_model=BrowserProfileOut)
@@ -80,7 +81,7 @@ def update_profile(
         )
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _serialize(db, prof, user)
+    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
 
 
 @router.delete("/browser/profiles/{profile_id}", status_code=204)

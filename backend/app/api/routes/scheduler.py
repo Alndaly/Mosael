@@ -31,7 +31,7 @@ def create_task(body: ScheduledTaskCreate, db: DbSession, user: CurrentUser) -> 
     # "当时的操作人",而事后要知道这段自动化是谁挂上去的。
     sharing.claim(db, "scheduled_task", task, user)
     db.commit()
-    return task
+    return sharing.annotate(db, "scheduled_task", [task], user, task.workspace_id)[0]
 
 
 @router.get("/scheduled-tasks", response_model=list[ScheduledTaskOut])
@@ -44,7 +44,7 @@ def list_tasks(workspace_id: str, db: DbSession, user: CurrentUser, project_id: 
     if project_id:
         stmt = stmt.where(ScheduledTask.project_id == project_id)
     stmt = stmt.order_by(ScheduledTask.created_at.desc())
-    return list(db.scalars(stmt))
+    return sharing.annotate(db, "scheduled_task", list(db.scalars(stmt)), user, workspace_id)
 
 
 @router.patch("/scheduled-tasks/{task_id}", response_model=ScheduledTaskOut)

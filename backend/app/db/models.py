@@ -908,6 +908,10 @@ class GenerationSession(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 谁的(见 domain/sharing)。生成会话和对话一样是**某人的私人工作线程**,默认只有自己看得见。
+    owner_user_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新生成")
     provider_profile_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True

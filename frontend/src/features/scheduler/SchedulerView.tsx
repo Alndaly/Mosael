@@ -1,12 +1,13 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   API_BASE,
   api,
   listWorkflows,
+  setResourceShared,
   type Job,
   type Project,
   type RunScheduledTaskResponse,
@@ -45,6 +46,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     queryFn: () => api<ScheduledTask[]>(`/api/scheduled-tasks?workspace_id=${workspace.id}`),
   });
   const refreshTasks = () => void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
+  // 定时任务默认共享(团队基建),但主人可以把它收成自己的 —— 归属决定的是谁能改、事后谁负责。
+  const menuShare = useMutation({
+    mutationFn: ({ id, shared }: { id: string; shared: boolean }) =>
+      setResourceShared("scheduled_task", id, workspace.id, shared),
+    onSuccess: refreshTasks,
+  });
   const menuRun = useMutation({
     mutationFn: (id: string) => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${id}/run`, { method: "POST" }),
     onSuccess: refreshTasks,
@@ -144,6 +151,11 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   <ContextMenuItem onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}>
                     <Power /> {task.enabled ? t("pluginOff") : t("pluginOn")}
                   </ContextMenuItem>
+                  {task.is_mine && (
+                    <ContextMenuItem onSelect={() => menuShare.mutate({ id: task.id, shared: !task.shared })}>
+                      <Users2 /> {task.shared ? t("taskUnshare") : t("taskShare")}
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(task)}>
                     <Trash2 /> {t("delete")}

@@ -751,7 +751,7 @@ export function createBrowserProfile(body: {
 
 /** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */
 export function setResourceShared(
-  kind: "publish_account" | "browser_profile" | "agent_session" | "scheduled_task",
+  kind: "publish_account" | "browser_profile" | "agent_session" | "generation_session" | "scheduled_task",
   resourceId: string,
   workspaceId: string,
   shared: boolean,

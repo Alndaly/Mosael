@@ -233,13 +233,15 @@ def test_clearing_finished_jobs_keeps_generation_history() -> None:
     """生成记录是创作历史:任务中心「清空已完成」删 job 后,记录必须还在
     (job_id 置空),会话列表接口也仍要返回它。曾因 CASCADE 全部丢失。"""
     from app.domain.jobs import create_job
-    from app.db.models import GenerationSession
+    from app.db.models import GenerationSession, User
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
 
     with SessionLocal() as db:
-        session = GenerationSession(workspace_id=ws["id"], title="夜景素材")
+        # 会话得有主人 —— 没有主人的会话谁都看不见(见 domain/sharing)。
+        me = db.query(User).order_by(User.created_at).first()
+        session = GenerationSession(workspace_id=ws["id"], title="夜景素材", owner_user_id=me.id)
         db.add(session)
         db.flush()
         job = create_job(db, workspace_id=ws["id"], kind="ai_generation", payload={}, message="done")

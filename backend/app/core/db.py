@@ -59,7 +59,7 @@ def _migrate_tool_confirmations_session() -> None:
 
 
 def _migrate_resource_ownership() -> None:
-    """四张表补 `owner_user_id`,并给每条已存在的记录建一行「共享给它当前所在的工作区」。
+    """五张表补 `owner_user_id`,并给每条已存在的记录建一行「共享给它当前所在的工作区」。
 
     **升级前后行为完全一致**:今天同工作区的人看得见的,升级之后仍然看得见;而**从此以后新建的
     默认私有**(见 domain/sharing.KINDS)。不这么做的话,升级会把同事的发布账号、浏览器档案、
@@ -74,6 +74,7 @@ def _migrate_resource_ownership() -> None:
         "publish_account": "publish_accounts",
         "browser_profile": "browser_profiles",
         "agent_session": "agent_sessions",
+        "generation_session": "generation_sessions",
         "scheduled_task": "scheduled_tasks",
     }
     for table in kinds.values():

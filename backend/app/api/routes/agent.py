@@ -50,7 +50,7 @@ def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentU
     # 对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
     sharing.claim(db, "agent_session", session, user)
     db.commit()
-    return session
+    return sharing.annotate(db, "agent_session", [session], user, session.workspace_id)[0]
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
@@ -66,7 +66,7 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
         .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
-    return list(db.scalars(stmt))
+    return sharing.annotate(db, "agent_session", list(db.scalars(stmt)), user, workspace_id)
 
 
 @router.get("/agent/sessions/{session_id}/messages", response_model=list[AgentMessageOut])
