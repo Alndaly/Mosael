@@ -8,6 +8,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSO
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+from app.core.secrets_at_rest import EncryptedJSON, EncryptedText
 
 
 def new_id() -> str:
@@ -550,7 +551,7 @@ class PublishAccount(Base):
     )
     platform: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
-    config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    config: Mapped[dict[str, Any]] = mapped_column(EncryptedJSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # 该账号内嵌视图走的代理(矩阵防关联):http(s)://[user:pass@]host:port 或 socks5://host:port。
     # 空 = 直连。执行器把它喂给该账号 session 分区的 setProxy。
@@ -698,13 +699,13 @@ class ProviderCredential(Base):
         ForeignKey("provider_profiles.id", ondelete="CASCADE"), primary_key=True
     )
     owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
+    api_key: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="", server_default="")
     #: pi 的 Credential **原样**存放({type, access, refresh, expires, ...})。刻意不拆成列:
     #: 各家 OAuth 的附加字段(Copilot 的 endpoint、Codex 的 account_id)由 pi 自己解释,
     #: 这边拆一次就等于把各家协议复制进 Python,下次上游加字段就悄悄丢了。
-    oauth_credential: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    oauth_credential: Mapped[dict | None] = mapped_column(EncryptedJSON, nullable=True, default=None)
     #: VENDOR_PRESETS 里标了 `secret: True` 而又不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
-    secrets: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    secrets: Mapped[dict] = mapped_column(EncryptedJSON, nullable=False, default=dict, server_default="{}")
     #: 订阅计划登录后拿到的可用模型目录([{id, name, contextWindow, maxTokens}])。跟着钥匙走:
     #: 它是**这次登录**的结果 —— Copilot 的模型随订阅档位变,两个人的订阅目录可以不一样。
     model_catalog: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
@@ -776,13 +777,24 @@ class ProviderModel(Base):
 
 
 class ProviderDefault(Base):
-    """每种能力的默认供应商 + 模型(统一到 ProviderProfile)。
-    capability 作主键:chat / image / video / tts / podcast(embedding 单独走 KbEmbeddingConfig,
-    因其还带向量维度)。用到该能力且未显式指定时取此默认。"""
+    """某个人在某种能力下默认用哪个模型。
+
+    capability:chat / image / video / tts / podcast(embedding 单独走 KbEmbeddingConfig,因其
+    还带向量维度)。用到该能力且未显式指定时取此默认。
+
+    **默认模型是个人偏好,不是部署配置**:同一条连接,两个人完全可以各自默认不同的模型。此前它
+    只按 capability 建行、且要部署管理员才能改 —— 那是把「钥匙归人」那把尺子没量到底(ADR 0008
+    D3 的同一条道理)。
+
+    `owner_user_id = ""` 是**部署默认**:给还没设过的人一个起点,由部署管理员放。解析顺序因此和
+    凭据一致:自己的 → 部署的 → 没有。用空串而不是 NULL 作哨兵,是因为 SQLite 允许 PRIMARY KEY
+    列为 NULL —— 那会让"部署默认"这一行可以重复插入而不报错。
+    """
 
     __tablename__ = "provider_defaults"
 
     capability: Mapped[str] = mapped_column(String(24), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(String(64), primary_key=True, default="", server_default="")
     provider_profile_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )
@@ -1084,7 +1096,7 @@ class FeishuBot(Base):
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False, default="Open Studio 助手")
     app_id: Mapped[str] = mapped_column(String(120), nullable=False)
-    app_secret: Mapped[str] = mapped_column(String(200), nullable=False)
+    app_secret: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     capability: Mapped[str] = mapped_column(String(24), nullable=False, default="editor")  # readonly|editor|full
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="offline")  # offline|connecting|online|error
@@ -1233,7 +1245,7 @@ class PluginCredential(Base):
 
     instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), primary_key=True)
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
-    value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    value: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

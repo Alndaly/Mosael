@@ -762,6 +762,9 @@ class ProviderDefaultOut(BaseModel):
     capability: str
     provider_profile_id: str | None = None
     model: str = ""
+    #: 这是我自己设的,还是部署给的起点(见 db.models.ProviderDefault)。界面据此区分,
+    #: 否则"我没设过却有值"看着像 bug。
+    is_mine: bool = False
 
 
 class CapabilityModelOut(BaseModel):
@@ -785,6 +788,8 @@ class CapabilityModelOut(BaseModel):
 class ProviderDefaultUpdate(BaseModel):
     provider_profile_id: str | None = None
     model: str = Field(default="", max_length=120)
+    #: 写**部署默认**那一行(给所有还没设过的人的起点)。只有部署管理员能置位。
+    for_deployment: bool = False
 
 
 class ProviderPricingRuleCreate(BaseModel):

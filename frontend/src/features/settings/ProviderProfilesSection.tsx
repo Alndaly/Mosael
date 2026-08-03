@@ -7,6 +7,7 @@ import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, MoreHorizontal, Pen
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,6 @@ import { CodeEditor } from "@/components/app/code-editor";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
-import { MyKeyDialog } from "@/features/settings/MyKeyDialog";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
@@ -97,8 +97,9 @@ export function ProviderProfilesSection({
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
   // 「我的密钥」和「编辑连接」是两个入口:连接是部署的配置(管理员改),钥匙是谁在花钱(各人各配)。
-  const [keying, setKeying] = React.useState<ProviderProfile | null>(null);
   const me = useQuery({ queryKey: ["auth-me"], queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me") });
+  // 连接是部署的配置;密钥是我自己的。同一个弹窗里,前者只有部署管理员改得动。
+  const canEditConnection = me.data?.is_deployment_admin ?? false;
   const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
@@ -200,19 +201,41 @@ export function ProviderProfilesSection({
       void refresh();
     },
   });
+  /* 一个弹窗,两件事:**连接**(端点、名字 —— 部署的配置)和**我的密钥**(我自己的)。
+     它们走不同的接口、要不同的权限,但对用户是同一件事「配好这个供应商」,所以不该是两个入口。
+     密钥字段在这里被拆出来单独 PUT:普通成员改不了连接,但永远配得了自己的密钥。 */
   const update = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: ProfileForm }) =>
-      api<ProviderProfile>(`/api/settings/providers/${id}`, {
+    mutationFn: async ({ id, values }: { id: string; values: ProfileForm }) => {
+      const specs = (vendors.data ?? []).find((v) => v.vendor === values.vendor)?.fields ?? [];
+      const secretKeys = new Set(specs.filter((f) => f.secret).map((f) => f.key));
+      const config = cleanConfig(values.config);
+      const secrets: Record<string, string> = {};
+      for (const key of Object.keys(config)) {
+        if (secretKeys.has(key)) {
+          secrets[key] = config[key];
+          delete config[key];
+        }
+      }
+      const apiKeyField = specs.find((f) => f.secret && f.storage === "api_key")?.key;
+      const apiKey = apiKeyField ? secrets[apiKeyField] : undefined;
+      if (apiKeyField) delete secrets[apiKeyField];
+      if (apiKey || Object.keys(secrets).length) {
+        await api(`/api/settings/providers/${id}/credential`, {
+          method: "PUT",
+          body: JSON.stringify({ api_key: apiKey ?? null, secrets }),
+        });
+      }
+      if (!canEditConnection) return;
+      await api<ProviderProfile>(`/api/settings/providers/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          name: values.name.trim(),
-          config: cleanConfig(values.config),
-        }),
-      }),
+        body: JSON.stringify({ name: values.name.trim(), config }),
+      });
+    },
     onSuccess: () => {
       closeModal();
       void refresh();
     },
+    onError: (error: Error) => toast.error(error.message),
   });
   const submit = form.handleSubmit((values) => {
     if (editing) update.mutate({ id: editing.id, values });
@@ -360,6 +383,7 @@ export function ProviderProfilesSection({
                       )}
                     </FormLabel>
                     <FormControl>
+                      {/* 密的字段是**我的**,谁都能改;其余是连接的配置,只有部署管理员改得动。 */}
                       {spec.multiline ? (
                         <CodeEditor
                           language="json"
@@ -373,6 +397,7 @@ export function ProviderProfilesSection({
                       ) : (
                         <Input
                           type={spec.secret ? "password" : "text"}
+                          disabled={!spec.secret && !canEditConnection}
                           placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
                           {...field}
                           value={field.value ?? ""}
@@ -531,7 +556,6 @@ export function ProviderProfilesSection({
                         onSelect={() => logout.mutate(profile.id)}
                       />
                     )}
-                    <MenuItem icon={<KeyRound size={13} />} label={t("providerMyKeyShort")} onSelect={() => setKeying(profile)} />
                     <MenuItem icon={<Pencil size={13} />} label={t("providerEdit")} onSelect={() => openEdit(profile)} />
                     <MenuItem
                       icon={<Trash2 size={13} />}
@@ -557,14 +581,6 @@ export function ProviderProfilesSection({
         </div>
       </SettingsBlock>
 
-      {keying && (
-        <MyKeyDialog
-          profile={keying}
-          preset={(vendors.data ?? []).find((v) => v.vendor === keying.vendor)}
-          canShare={me.data?.is_deployment_admin ?? false}
-          onClose={() => setKeying(null)}
-        />
-      )}
       {authing && (
         <ProviderOAuthDialog
           profileId={authing.id}

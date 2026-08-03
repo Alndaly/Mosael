@@ -111,7 +111,7 @@ def set_autopilot_rules(
     # 这里跟着一起收紧,不需要有人记得回来改第二处。
     if incoming["run_code"] == "judge" and autopilot_rules.normalize(workspace.autopilot_rules)["run_code"] != "judge":
         try:
-            ensure_deployment_admin(db, user)
+            ensure_workspace_role(db, user, workspace_id, "admin")
         except HTTPException as exc:
             raise HTTPException(
                 status_code=403,

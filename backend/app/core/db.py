@@ -248,6 +248,74 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
+def _migrate_encrypt_secrets() -> None:
+    """把老库里明文躺着的密钥就地加密(见 core/secrets_at_rest)。
+
+    哪些列装秘密登记在 `ENCRYPTED_COLUMNS` 一处;这里按那份清单逐列扫。**只在迁移里判断
+    "这串是不是已经加密过的"** —— 运行时不做这种判断,那会变成读取期的两路兼容(ADR 0006)。
+
+    幂等:已经是密文的跳过。解不开的也跳过(不是本部署的密钥,再加一层只会更糟)。
+    """
+    from app.core.secrets_at_rest import ENCRYPTED_COLUMNS, encrypt, looks_encrypted
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    for table, column in sorted(ENCRYPTED_COLUMNS):
+        if table not in tables:
+            continue
+        if column not in {c["name"] for c in inspector.get_columns(table)}:
+            continue
+        with engine.begin() as conn:
+            # 主键列名各表不同,用 rowid —— SQLite 每张普通表都有。
+            rows = conn.execute(
+                text(f"SELECT rowid, {column} FROM {table} WHERE {column} IS NOT NULL AND {column} != ''")
+            ).all()
+            for rowid, value in rows:
+                raw = str(value)
+                if looks_encrypted(raw):
+                    continue
+                conn.execute(
+                    text(f"UPDATE {table} SET {column} = :v WHERE rowid = :r"),
+                    {"v": encrypt(raw), "r": rowid},
+                )
+
+
+def _migrate_provider_defaults_per_person() -> None:
+    """`provider_defaults` 从「一项能力一行」变成「一个人一项能力一行」。
+
+    老库里那一行是**整个部署共用的默认**,迁移把它就地变成 `owner_user_id = ''` 那一行 ——
+    也就是"还没设过的人用这个"。升级前后行为一致:所有人看到的默认还是同一个;而从此以后
+    每个人可以设自己的(见 db.models.ProviderDefault)。
+
+    SQLite 改不了主键,所以按重建表的老办法:建新表 → 搬数据 → 换名。
+    """
+    inspector = inspect(engine)
+    if "provider_defaults" not in set(inspector.get_table_names()):
+        return
+    if "owner_user_id" in {c["name"] for c in inspector.get_columns("provider_defaults")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE provider_defaults_new ("
+                "capability VARCHAR(24) NOT NULL, owner_user_id VARCHAR(64) NOT NULL DEFAULT '', "
+                "provider_profile_id VARCHAR(64), model VARCHAR(120) NOT NULL DEFAULT '', "
+                "provider_model_id VARCHAR(64), updated_at DATETIME NOT NULL, "
+                "PRIMARY KEY (capability, owner_user_id))"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO provider_defaults_new "
+                "(capability, owner_user_id, provider_profile_id, model, provider_model_id, updated_at) "
+                "SELECT capability, '', provider_profile_id, model, provider_model_id, updated_at "
+                "FROM provider_defaults"
+            )
+        )
+        conn.execute(text("DROP TABLE provider_defaults"))
+        conn.execute(text("ALTER TABLE provider_defaults_new RENAME TO provider_defaults"))
+
+
 def _migrate_job_actor() -> None:
     """`jobs` 补 `created_by`:这活儿**替谁干**。
 
@@ -262,6 +330,16 @@ def _migrate_job_actor() -> None:
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
         if "created_by" not in existing:
             conn.execute(text("ALTER TABLE jobs ADD COLUMN created_by VARCHAR(64)"))
+
+
+def _encrypted(value: object) -> str | None:
+    """迁移里往加密列写值时用。空值原样返回(空不是秘密)。"""
+    from app.core.secrets_at_rest import encrypt, looks_encrypted
+
+    if value is None or value == "":
+        return value if value is None else ""
+    raw = value if isinstance(value, str) else str(value)
+    return raw if looks_encrypted(raw) else encrypt(raw)
 
 
 def _migrate_provider_credentials() -> None:
@@ -336,8 +414,11 @@ def _migrate_provider_credentials() -> None:
                     {
                         "pid": row["id"],
                         "uid": admin,
-                        "key": api_key,
-                        "oauth": row.get("oauth_credential") if "oauth_credential" in movable else None,
+                        # 目标列是加密列(见 core/secrets_at_rest):这条迁移自己写密文,
+                        # 而不是指望后面那趟 _migrate_encrypt_secrets 来补 —— 每条迁移
+                        # 跑完之后库都该是自洽的。
+                        "key": _encrypted(api_key),
+                        "oauth": _encrypted(row.get("oauth_credential")) if "oauth_credential" in movable else None,
                         "catalog": row.get("model_catalog") if "model_catalog" in movable else None,
                         "version": row.get("credential_version") or 0 if "credential_version" in movable else 0,
                         "now": datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" "),
@@ -673,6 +754,9 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
+    _migrate_provider_defaults_per_person()
+    # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
+    _migrate_encrypt_secrets()
     _migrate_job_actor()
     _migrate_provider_credentials()
     _migrate_tool_confirmations_session()

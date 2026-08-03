@@ -3216,7 +3216,7 @@ export interface paths {
         };
         /**
          * List Provider Defaults
-         * @description 每种能力的默认供应商+模型;未配置的返回空默认。
+         * @description **我**在每种能力下的默认供应商+模型;我没设过的回落部署默认,再没有就是空。
          */
         get: operations["list_provider_defaults_api_settings_provider_defaults_get"];
         put?: never;
@@ -3236,7 +3236,8 @@ export interface paths {
         };
         /**
          * List Capability Models
-         * @description 某能力下所有可用模型,跨连接。
+         * @description 某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛
+         *     选自己的默认模型(见 tests/test_who_owns_each_setting.py)。
          *
          *     界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
          *     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
@@ -3258,7 +3259,13 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set Provider Default */
+        /**
+         * Set Provider Default
+         * @description 设**我自己**在这项能力下的默认模型。
+         *
+         *     这条不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
+         *     `for_deployment` 是例外 —— 那一行是给所有还没设过的人的起点,替整个部署做的决定。
+         */
         put: operations["set_provider_default_api_settings_provider_defaults__capability__put"];
         post?: never;
         delete?: never;
@@ -6615,6 +6622,11 @@ export interface components {
              * @default
              */
             model: string;
+            /**
+             * Is Mine
+             * @default false
+             */
+            is_mine: boolean;
         };
         /** ProviderDefaultUpdate */
         ProviderDefaultUpdate: {
@@ -6625,6 +6637,11 @@ export interface components {
              * @default
              */
             model: string;
+            /**
+             * For Deployment
+             * @default false
+             */
+            for_deployment: boolean;
         };
         /**
          * ProviderHealthOut

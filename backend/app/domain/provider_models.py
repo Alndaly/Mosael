@@ -67,13 +67,17 @@ def models_for_capability(db: Session, capability: str) -> list[ProviderModel]:
     return [model for model in rows if capability in effective_capabilities(model)]
 
 
-def resolve_default(db: Session, capability: str) -> ProviderModel | None:
-    """某能力的默认模型行。
+def resolve_default(db: Session, capability: str, user_id: str | None = None) -> ProviderModel | None:
+    """**这个人**在某能力下的默认模型行。
 
-    优先读 ProviderDefault 指向的那一行;它没指(老数据、或指向的行被删了)就退回
-    "该能力下的第一个可用模型" —— 让"没显式配过默认"的实例仍然能直接用,而不是报未配置。
+    默认模型是个人偏好(见 db.models.ProviderDefault):自己的 → 部署的 → 都没有就退回"该能力下
+    的第一个可用模型",让没配过的人也能直接用,而不是撞一句未配置。
+
+    `user_id` 给 None 时只看部署默认 —— 后台里确实没有人的那些路径(启动扫描一类)如此。
     """
-    row = db.get(ProviderDefault, capability)
+    from app.domain.provider_defaults import get_row
+
+    row = get_row(db, capability, user_id)
     if row is not None and row.provider_model_id:
         model = db.get(ProviderModel, row.provider_model_id)
         if model is not None and model.enabled and model.profile is not None and model.profile.enabled:
@@ -126,7 +130,9 @@ def upsert(
     return model
 
 
-def model_id_for(db: Session, profile: ProviderProfile | None, capability: str) -> str:
+def model_id_for(
+    db: Session, profile: ProviderProfile | None, capability: str, user_id: str | None = None
+) -> str:
     """这条连接在某能力下该用的模型 id。取不到返回空串。
 
     取代了此前散在二十来处的 `profile.default_model` —— 那个字段是"一档案一模型"时代的写法,
@@ -137,7 +143,7 @@ def model_id_for(db: Session, profile: ProviderProfile | None, capability: str) 
     """
     if profile is None:
         return ""
-    chosen = resolve_default(db, capability)
+    chosen = resolve_default(db, capability, user_id)
     if chosen is not None and chosen.provider_profile_id == profile.id:
         return chosen.model_id
     for model in list_models(db, profile.id, enabled_only=True):

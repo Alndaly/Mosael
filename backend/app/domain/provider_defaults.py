@@ -13,9 +13,24 @@ capability: chat / image / video / tts / podcast(embedding 走 KbEmbeddingConfig
 DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "tts", "podcast")
 
 
-def resolve_default(db: Session, capability: str) -> tuple[ProviderProfile | None, str]:
+def get_row(db: Session, capability: str, user_id: str | None) -> ProviderDefault | None:
+    """这个人在这项能力下的默认:**自己的 → 部署的 → 没有**。
+
+    和凭据解析同一个形状(见 domain/provider_credentials.pick)—— 因为它们是同一类东西:
+    个人偏好,加上一份"还没设过的人用这个"的部署起点。
+    """
+    if user_id:
+        mine = db.get(ProviderDefault, {"capability": capability, "owner_user_id": user_id})
+        if mine is not None:
+            return mine
+    return db.get(ProviderDefault, {"capability": capability, "owner_user_id": ""})
+
+
+def resolve_default(
+    db: Session, capability: str, user_id: str | None = None
+) -> tuple[ProviderProfile | None, str]:
     """返回该能力默认的 (启用的 profile, model);未配置或供应商已停用返回 (None, model)。"""
-    row = db.get(ProviderDefault, capability)
+    row = get_row(db, capability, user_id)
     if row is None:
         return None, ""
     profile = None
@@ -26,8 +41,12 @@ def resolve_default(db: Session, capability: str) -> tuple[ProviderProfile | Non
     return profile, row.model
 
 
-def set_default(db: Session, capability: str, model: ProviderModel | None) -> None:
-    """把某能力的默认指到一行模型上。`None` = 清除。
+def set_default(
+    db: Session, capability: str, model: ProviderModel | None, *, owner_user_id: str
+) -> None:
+    """把**某个人**某项能力的默认指到一行模型上。`None` = 清除。
+
+    `owner_user_id=""` 写的是部署默认 —— 授权由路由层把关(只有部署管理员能写那一行)。
 
     写在这里而不是 provider_models 里:ProviderDefault 归本模块所有(见 domain/ownership.py),
     跨域直接构造会绕过归属约束 —— 棘轮测试当场拦下过。
@@ -35,9 +54,9 @@ def set_default(db: Session, capability: str, model: ProviderModel | None) -> No
     旧的 (provider_profile_id, model) 两列仍然同步写:生成侧还有一批读取点在用它们,
     留下两份会漂移的真相比多写两个字段危险得多。
     """
-    row = db.get(ProviderDefault, capability)
+    row = db.get(ProviderDefault, {"capability": capability, "owner_user_id": owner_user_id})
     if row is None:
-        row = ProviderDefault(capability=capability)
+        row = ProviderDefault(capability=capability, owner_user_id=owner_user_id)
         db.add(row)
     row.provider_model_id = model.id if model is not None else None
     row.provider_profile_id = model.provider_profile_id if model is not None else None

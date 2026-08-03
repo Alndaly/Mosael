@@ -83,7 +83,7 @@ def test_默认指向失效时退回第一个可用模型():
         profile = _profile(db)
         first = provider_models.upsert(db, profile, "a", capability_ids=["chat"])
         provider_models.upsert(db, profile, "b", capability_ids=["chat"])
-        set_default(db, "chat", first)
+        set_default(db, "chat", first, owner_user_id="")
         db.commit()
         assert provider_models.resolve_default(db, "chat").model_id == "a"
 

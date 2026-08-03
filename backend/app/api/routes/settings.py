@@ -759,16 +759,19 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
-    """每种能力的默认供应商+模型;未配置的返回空默认。"""
-    rows = {row.capability: row for row in db.scalars(select(ProviderDefault))}
+    """**我**在每种能力下的默认供应商+模型;我没设过的回落部署默认,再没有就是空。"""
+    from app.domain.provider_defaults import get_row
+
     out: list[ProviderDefaultOut] = []
     for capability in DEFAULTABLE_CAPABILITIES:
-        row = rows.get(capability)
+        row = get_row(db, capability, user.id)
         out.append(
             ProviderDefaultOut(
                 capability=capability,
                 provider_profile_id=row.provider_profile_id if row else None,
                 model=row.model if row else "",
+                # 界面要说清这是我自己设的、还是部署给的起点 —— 否则"我没设却有值"看着像 bug。
+                is_mine=bool(row is not None and row.owner_user_id == user.id),
             )
         )
     return out
@@ -776,12 +779,12 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
 
 @router.get("/settings/capability-models/{capability}", response_model=list[CapabilityModelOut])
 def list_capability_models(capability: str, db: DbSession, user: CurrentUser) -> list[CapabilityModelOut]:
-    """某能力下所有可用模型,跨连接。
+    """某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛
+    选自己的默认模型(见 tests/test_who_owns_each_setting.py)。
 
     界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
     先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
     """
-    ensure_deployment_admin(db, user)
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     return [
@@ -803,7 +806,14 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
 def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderDefaultOut:
-    ensure_deployment_admin(db, user)
+    """设**我自己**在这项能力下的默认模型。
+
+    这条不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
+    `for_deployment` 是例外 —— 那一行是给所有还没设过的人的起点,替整个部署做的决定。
+    """
+    owner_user_id = "" if body.for_deployment else user.id
+    if body.for_deployment:
+        ensure_deployment_admin(db, user)
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     model = None
@@ -827,13 +837,14 @@ def set_provider_default(
             # 逼他先去列表里加一遍纯属多一步。
             model = provider_models.upsert(db, profile, model_id, source="manual")
     # 指向模型行(旧的两列由 set_default 同步写,生成侧还在读)。
-    set_default(db, capability, model)
+    set_default(db, capability, model, owner_user_id=owner_user_id)
     db.commit()
-    row = db.get(ProviderDefault, capability)
+    row = db.get(ProviderDefault, {"capability": capability, "owner_user_id": owner_user_id})
     return ProviderDefaultOut(
         capability=capability,
         provider_profile_id=row.provider_profile_id if row else None,
         model=row.model if row else "",
+        is_mine=not body.for_deployment,
     )
 
 
@@ -1000,7 +1011,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
     已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
     """
-    ensure_deployment_admin(db, user)
+    # 只读:任何登录用户都看得到这条连接下有哪些模型 —— 他要据此选自己的默认。
     profile = _require_profile(db, profile_id)
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
