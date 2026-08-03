@@ -1,7 +1,8 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Camera, Check, Database, ImageIcon, Loader2, LogOut, MessageSquare, Mic, MonitorCog, Moon, Palette, ReceiptText, RefreshCw, RotateCcw, Server, Sun, Upload, UserRound, Users, Video, X,
-  Brain,} from "lucide-react";
+  Brain,
+  ShieldCheck,} from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, userAvatarUrl, type Workspace } from "@/api/client";
@@ -18,6 +19,7 @@ import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
+import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
 import { TeamSection } from "@/features/settings/TeamSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
@@ -46,6 +48,7 @@ type SectionId =
   | "provider-pricing"
   | "ai-runtime"
   | "agent-memory"
+  | "agent-autopilot"
   | "transcribe"
   | "voice"
   | "feishu"
@@ -63,6 +66,7 @@ const SECTION_IDS: SectionId[] = [
   "provider-pricing",
   "ai-runtime",
   "agent-memory",
+  "agent-autopilot",
   "transcribe",
   "voice",
   "feishu",
@@ -130,6 +134,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "ai-runtime", label: t("aiRuntimeTitle"), icon: <RefreshCw size={14} /> },
     // 记忆和供应商/重试挨着:它们都是"智能体怎么工作"的设置,而不是某种能力的配置。
     { id: "agent-memory", label: t("agentMemoryTitle"), icon: <Brain size={14} /> },
+    // 放行准则和记忆并排:同样是"智能体怎么工作"的设置,而不是某种能力的配置。
+    { id: "agent-autopilot", label: t("autopilotTitle"), icon: <ShieldCheck size={14} /> },
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
@@ -178,6 +184,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "ai-runtime" && <AiRuntimeSection />}
           {section === "agent-memory" && <AgentMemorySection workspace={workspace} />}
+          {section === "agent-autopilot" && <AutopilotRulesSection workspace={workspace} />}
           {section === "provider-image" && (
             <>
               <ProviderDefaultsSection capabilities={["image"]} focusCapability={focusProviderCapability} />
