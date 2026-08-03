@@ -19,11 +19,20 @@ export type SidebarGroup = {
   items: { href: string; title: string }[];
 };
 
-export function DocsSidebar({ groups, className }: { groups: SidebarGroup[]; className?: string }) {
+export function DocsSidebar({
+  groups,
+  label,
+  className,
+}: {
+  groups: SidebarGroup[];
+  /** 窄屏折叠起来之后,那一行写什么。 */
+  label: string;
+  className?: string;
+}) {
   const pathname = usePathname();
 
-  return (
-    <nav className={cn("text-sm", className)}>
+  const list = (
+    <>
       {groups.map((group) => (
         <div key={group.label} className="mb-8">
           <p className="m-0 mb-3 font-mono text-xs font-bold tracking-widest text-flame uppercase">{group.label}</p>
@@ -50,6 +59,18 @@ export function DocsSidebar({ groups, className }: { groups: SidebarGroup[]; cla
           </ul>
         </div>
       ))}
-    </nav>
+    </>
+  );
+
+  return (
+    <>
+      {/* 手机上把整棵目录塞在正文前面,要滚过两屏导航才看得到内容。折起来,想翻再点开。
+          `<details>` 而不是自己写一套开合状态:无 JS 也能用,键盘和读屏软件都认。 */}
+      <details className="border-2 border-ink text-sm lg:hidden">
+        <summary className="cursor-pointer list-none px-4 py-3 font-display font-bold tracking-tight">{label}</summary>
+        <div className="border-t-2 border-ink px-4 pt-4 pb-1">{list}</div>
+      </details>
+      <nav className={cn("hidden text-sm lg:block", className)}>{list}</nav>
+    </>
   );
 }

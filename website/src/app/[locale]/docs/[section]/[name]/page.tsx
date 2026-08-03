@@ -88,6 +88,7 @@ export default async function DocPage({ params }: { params: Params }) {
           被拉满的元素在自己的格子里没有可滑动的余量,`position: sticky` 就完全不起作用。 */}
       <DocsSidebar
         groups={groups}
+        label={t.allDocs}
         className="lg:sticky lg:top-sticky lg:col-start-1 lg:row-start-1 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto"
       />
 

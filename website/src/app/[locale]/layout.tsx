@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Syne } from "next/font/google";
 import { notFound } from "next/navigation";
 
@@ -44,6 +44,17 @@ const geistMono = Geist_Mono({
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
 }
+
+/**
+ * 视口。**必须显式写**:少了这一条,手机浏览器会按 980px 的假想桌面宽度排版再整体缩小,
+ * 于是正文小到看不清、而所有断点都当自己在宽屏上 —— 移动端等于没有适配。
+ *
+ * 不锁 `maximumScale`:那会连双指放大都禁掉,对看不清小字的人是硬伤。
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
