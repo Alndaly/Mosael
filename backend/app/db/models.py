@@ -795,12 +795,8 @@ class ProviderDefault(Base):
 
     capability: Mapped[str] = mapped_column(String(24), primary_key=True)
     owner_user_id: Mapped[str] = mapped_column(String(64), primary_key=True, default="", server_default="")
-    provider_profile_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
-    )
-    model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    #: 指向具体的模型行。**这才是"某能力的默认"该指的东西** —— 上面那对
-    #: (provider_profile_id, model) 是模型还不是实体时的写法,行为一致但没法引用、没法查询。
+    #: 指向具体的模型行 —— 一件事只存一处。此前这里还并存着 (provider_profile_id, model)
+    #: 那一对:模型还不是实体时的写法。两份会漂移的真相里总有一份是错的,已删。
     provider_model_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_models.id", ondelete="SET NULL"), nullable=True
     )

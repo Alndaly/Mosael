@@ -26,21 +26,6 @@ def get_row(db: Session, capability: str, user_id: str | None) -> ProviderDefaul
     return db.get(ProviderDefault, {"capability": capability, "owner_user_id": ""})
 
 
-def resolve_default(
-    db: Session, capability: str, user_id: str | None = None
-) -> tuple[ProviderProfile | None, str]:
-    """返回该能力默认的 (启用的 profile, model);未配置或供应商已停用返回 (None, model)。"""
-    row = get_row(db, capability, user_id)
-    if row is None:
-        return None, ""
-    profile = None
-    if row.provider_profile_id:
-        profile = db.get(ProviderProfile, row.provider_profile_id)
-        if profile is not None and not profile.enabled:
-            profile = None
-    return profile, row.model
-
-
 def set_default(
     db: Session, capability: str, model: ProviderModel | None, *, owner_user_id: str
 ) -> None:
@@ -51,13 +36,9 @@ def set_default(
     写在这里而不是 provider_models 里:ProviderDefault 归本模块所有(见 domain/ownership.py),
     跨域直接构造会绕过归属约束 —— 棘轮测试当场拦下过。
 
-    旧的 (provider_profile_id, model) 两列仍然同步写:生成侧还有一批读取点在用它们,
-    留下两份会漂移的真相比多写两个字段危险得多。
     """
     row = db.get(ProviderDefault, {"capability": capability, "owner_user_id": owner_user_id})
     if row is None:
         row = ProviderDefault(capability=capability, owner_user_id=owner_user_id)
         db.add(row)
     row.provider_model_id = model.id if model is not None else None
-    row.provider_profile_id = model.provider_profile_id if model is not None else None
-    row.model = model.model_id if model is not None else ""

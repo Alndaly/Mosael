@@ -79,7 +79,7 @@ def tick(db: Session) -> list[str]:
             # No reentry (plan §13.4): push the schedule forward and skip.
             from app.domain.scheduler.operations import compute_next_run_at
 
-            task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule)
+            task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone)
             db.commit()
             continue
         run, job = run_scheduled_task(db, task)

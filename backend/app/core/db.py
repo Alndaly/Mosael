@@ -604,15 +604,19 @@ def _migrate_provider_default_model_fk() -> None:
     with engine.begin() as conn:
         if "provider_model_id" not in columns:
             conn.execute(text("ALTER TABLE provider_defaults ADD COLUMN provider_model_id VARCHAR(64)"))
-        conn.execute(
-            text(
-                "UPDATE provider_defaults SET provider_model_id = ("
-                "  SELECT pm.id FROM provider_models pm"
-                "  WHERE pm.provider_profile_id = provider_defaults.provider_profile_id"
-                "    AND pm.model_id = provider_defaults.model"
-                ") WHERE provider_model_id IS NULL"
+        if "provider_profile_id" in columns and "model" in columns:
+            conn.execute(
+                text(
+                    "UPDATE provider_defaults SET provider_model_id = ("
+                    "  SELECT pm.id FROM provider_models pm"
+                    "  WHERE pm.provider_profile_id = provider_defaults.provider_profile_id"
+                    "    AND pm.model_id = provider_defaults.model"
+                    ") WHERE provider_model_id IS NULL"
+                )
             )
-        )
+            # 搬完就删:同一件事留两份,总有一份会漂移成错的。
+            for legacy in ("provider_profile_id", "model"):
+                conn.execute(text(f"ALTER TABLE provider_defaults DROP COLUMN {legacy}"))
 
 
 def _drop_legacy_profile_columns() -> None:

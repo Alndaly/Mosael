@@ -54,6 +54,7 @@ from app.db.models import (
     KbEmbeddingConfig,
     ProviderCredential,
     ProviderDefault,
+    ProviderModel,
     ProviderPricingRule,
     ProviderProfile,
     new_id,
@@ -765,11 +766,13 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
     out: list[ProviderDefaultOut] = []
     for capability in DEFAULTABLE_CAPABILITIES:
         row = get_row(db, capability, user.id)
+        # 默认只存一处(指向模型行),连接与模型名从那一行推导出来给界面。
+        model = db.get(ProviderModel, row.provider_model_id) if row and row.provider_model_id else None
         out.append(
             ProviderDefaultOut(
                 capability=capability,
-                provider_profile_id=row.provider_profile_id if row else None,
-                model=row.model if row else "",
+                provider_profile_id=model.provider_profile_id if model else None,
+                model=model.model_id if model else "",
                 # 界面要说清这是我自己设的、还是部署给的起点 —— 否则"我没设却有值"看着像 bug。
                 is_mine=bool(row is not None and row.owner_user_id == user.id),
             )
@@ -839,11 +842,10 @@ def set_provider_default(
     # 指向模型行(旧的两列由 set_default 同步写,生成侧还在读)。
     set_default(db, capability, model, owner_user_id=owner_user_id)
     db.commit()
-    row = db.get(ProviderDefault, {"capability": capability, "owner_user_id": owner_user_id})
     return ProviderDefaultOut(
         capability=capability,
-        provider_profile_id=row.provider_profile_id if row else None,
-        model=row.model if row else "",
+        provider_profile_id=model.provider_profile_id if model is not None else None,
+        model=model.model_id if model is not None else "",
         is_mine=not body.for_deployment,
     )
 
