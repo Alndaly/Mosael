@@ -10234,6 +10234,181 @@
         }
       }
     },
+    "/api/shares/{kind}/{resource_id}": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Share Resource",
+        "operationId": "share_resource_api_shares__kind___resource_id__post",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Share Resource Api Shares  Kind   Resource Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Unshare Resource",
+        "operationId": "unshare_resource_api_shares__kind___resource_id__delete",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Unshare Resource Api Shares  Kind   Resource Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "List Shares",
+        "operationId": "list_shares_api_shares__kind___resource_id__get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Shares Api Shares  Kind   Resource Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/confirmations": {
       "post": {
         "tags": [
@@ -14523,6 +14698,16 @@
               }
             ],
             "title": "Last Error"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": true
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "default": false
           }
         },
         "type": "object",
@@ -20681,6 +20866,19 @@
         },
         "type": "object",
         "title": "SetTrackStateRequest"
+      },
+      "ShareRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "ShareRequest"
       },
       "SplitClipPointsRequest": {
         "properties": {

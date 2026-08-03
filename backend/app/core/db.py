@@ -58,6 +58,57 @@ def _migrate_tool_confirmations_session() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
 
 
+def _migrate_resource_ownership() -> None:
+    """四张表补 `owner_user_id`,并给每条已存在的记录建一行「共享给它当前所在的工作区」。
+
+    **升级前后行为完全一致**:今天同工作区的人看得见的,升级之后仍然看得见;而**从此以后新建的
+    默认私有**(见 domain/sharing.KINDS)。不这么做的话,升级会把同事的发布账号、浏览器档案、
+    对话从他们眼前一次性拿走 —— 那不是收紧权限,那是弄坏了正在用的东西。
+
+    归属回填成**该工作区的 owner**:老数据里没有记谁建的,而工作区的 owner 是现在对它们负责的人。
+    幂等:只填空的那些,共享行靠唯一约束去重。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    kinds = {
+        "publish_account": "publish_accounts",
+        "browser_profile": "browser_profiles",
+        "agent_session": "agent_sessions",
+        "scheduled_task": "scheduled_tasks",
+    }
+    for table in kinds.values():
+        if table not in tables:
+            continue
+        if "owner_user_id" not in {c["name"] for c in inspector.get_columns(table)}:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN owner_user_id VARCHAR(64)"))
+    if "resource_shares" not in set(inspect(engine).get_table_names()):
+        return  # create_all 还没跑到(首次装机),下次启动再补
+    with engine.begin() as conn:
+        for kind, table in kinds.items():
+            if table not in tables:
+                continue
+            conn.execute(
+                text(
+                    f"UPDATE {table} SET owner_user_id = ("
+                    "SELECT user_id FROM workspace_members "
+                    f"WHERE workspace_members.workspace_id = {table}.workspace_id AND role = 'owner' "
+                    "LIMIT 1) WHERE owner_user_id IS NULL"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO resource_shares (id, kind, resource_id, workspace_id, shared_by, created_at) "
+                    f"SELECT lower(hex(randomblob(16))), :kind, {table}.id, {table}.workspace_id, "
+                    f"COALESCE({table}.owner_user_id, ''), CURRENT_TIMESTAMP FROM {table} "
+                    "WHERE NOT EXISTS (SELECT 1 FROM resource_shares s "
+                    f"WHERE s.kind = :kind AND s.resource_id = {table}.id "
+                    f"AND s.workspace_id = {table}.workspace_id)"
+                ),
+                {"kind": kind},
+            )
+
+
 def _drop_member_perm_overrides() -> None:
     """删掉 workspace_member_perms 整张表(ADR 0008 D4:角色即权限)。
 
@@ -574,6 +625,8 @@ def init_db() -> None:
     _drop_legacy_profile_columns()
     # 实例表由 create_all 建好之后才能填。
     _backfill_plugin_instances()
+    # 必须在 create_all 之后:resource_shares 是新表。
+    _migrate_resource_ownership()
 
 
 def now() -> datetime:

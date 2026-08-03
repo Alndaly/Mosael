@@ -9,16 +9,17 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
+from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
 from app.core.permissions import ensure_workspace_access
-from app.db.models import BrowserProfile, PublishAccount
+from app.db.models import BrowserProfile, PublishAccount, User
 from app.domain import browser
 
 router = APIRouter(tags=["browser-profiles"])
 
 
-def _serialize(db, prof: BrowserProfile) -> BrowserProfileOut:
+def _serialize(db, prof: BrowserProfile, user: User) -> BrowserProfileOut:
     """回档案 + 若被发布账号绑定则带上平台/账号 id(pool 页标注用)。"""
     account = db.scalar(select(PublishAccount).where(PublishAccount.profile_id == prof.id))
     return BrowserProfileOut(
@@ -35,20 +36,28 @@ def _serialize(db, prof: BrowserProfile) -> BrowserProfileOut:
         binding_status=account.binding_status if account else None,
         last_checked_at=account.last_checked_at if account else None,
         last_error=account.last_error if account else None,
+        is_mine=prof.owner_user_id == user.id,
+        shared=sharing.is_shared_with(db, "browser_profile", prof.id, prof.workspace_id),
     )
 
 
 @router.get("/browser/profiles", response_model=list[BrowserProfileOut])
 def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[BrowserProfileOut]:
     ensure_workspace_access(db, user, workspace_id)
-    return [_serialize(db, prof) for prof in browser.list_profiles(db, workspace_id)]
+    # 档案存的是**某人已登录的浏览器** —— 默认只有主人看得见(见 domain/sharing)。
+    return [
+        _serialize(db, prof, user)
+        for prof in browser.list_profiles(db, workspace_id)
+        if sharing.may_use(db, "browser_profile", prof, user)
+    ]
 
 
 @router.post("/browser/profiles", response_model=BrowserProfileOut)
 def create_profile(body: BrowserProfileCreate, db: DbSession, user: CurrentUser) -> BrowserProfileOut:
     ensure_workspace_access(db, user, body.workspace_id)
-    prof = browser.create_profile(db, workspace_id=body.workspace_id, name=body.name, proxy=body.proxy)
-    return _serialize(db, prof)
+    prof = browser.create_profile(db, workspace_id=body.workspace_id, name=body.name, owner=user, proxy=body.proxy)
+    db.commit()
+    return _serialize(db, prof, user)
 
 
 @router.patch("/browser/profiles/{profile_id}", response_model=BrowserProfileOut)
@@ -71,7 +80,7 @@ def update_profile(
         )
     except browser.BrowserDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _serialize(db, prof)
+    return _serialize(db, prof, user)
 
 
 @router.delete("/browser/profiles/{profile_id}", status_code=204)

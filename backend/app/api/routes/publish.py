@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
+from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     PublishAccountCreate,
@@ -49,7 +50,7 @@ def list_accounts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
     return list(
         db.scalars(
             select(PublishAccount)
-            .where(PublishAccount.workspace_id == workspace_id)
+            .where(PublishAccount.workspace_id == workspace_id, sharing.visible_filter('publish_account', user, workspace_id))
             .order_by(PublishAccount.created_at)
         )
     )
@@ -65,6 +66,7 @@ def create_account_route(body: PublishAccountCreate, db: DbSession, user: Curren
             platform=body.platform,
             name=body.name,
             config=body.config,
+            owner=user,
             proxy=body.proxy,
         )
     except PublishDomainError as exc:

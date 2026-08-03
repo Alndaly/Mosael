@@ -1371,6 +1371,9 @@ class BrowserProfileOut(BaseModel):
     binding_status: str | None = None
     last_checked_at: datetime | None = None
     last_error: str | None = None
+    # 归属:是不是我的、有没有被放进当前工作区(见 domain/sharing)。只有主人能改共享状态。
+    is_mine: bool = True
+    shared: bool = False
 
 
 class BrowserProfileCreate(BaseModel):

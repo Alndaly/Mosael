@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2, Users } from "lucide-react";
+import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,6 +11,7 @@ import {
   listPublishPlatforms,
   patchPublishAccount,
   recheckPublishAccount,
+  setResourceShared,
   updateBrowserProfile,
   type BrowserProfile,
   type Workspace,
@@ -98,6 +99,16 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
     onSuccess: refresh,
     onError: (e: Error) => toast.error(e.message),
   });
+  // 共享的是**这个登录身份**:发布账号和它的浏览器档案会一起动(耦合在后端 domain/sharing 里,
+  // 这里只按卡片实际代表的那一类发一次请求)。
+  const share = useMutation({
+    mutationFn: ({ p, shared }: { p: BrowserProfile; shared: boolean }) =>
+      p.bound_account_id
+        ? setResourceShared("publish_account", p.bound_account_id, workspace.id, shared)
+        : setResourceShared("browser_profile", p.id, workspace.id, shared),
+    onSuccess: refresh,
+  });
+
   const recheck = useMutation({
     mutationFn: (accountId: string) => recheckPublishAccount(accountId),
     onSuccess: refresh,
@@ -185,6 +196,14 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           <Globe size={10} /> {t("publishProxyOn")}
                         </em>
                       )}
+                      {p.shared && (
+                        <em
+                          className="rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground"
+                          title={t("poolSharedHint")}
+                        >
+                          <Users2 size={10} className="inline align-[-1px]" />
+                        </em>
+                      )}
                       {bound && (
                         <em
                           className={cn(
@@ -245,6 +264,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                   <ContextMenuItem onSelect={() => setProxyEditing(p)}>
                     <Globe /> {t("publishProxySet")}
                   </ContextMenuItem>
+                  {p.is_mine && (
+                    <ContextMenuItem onSelect={() => share.mutate({ p, shared: !p.shared })}>
+                      <Users2 /> {p.shared ? t("poolUnshare") : t("poolShare")}
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setRemoving(p)}>
                     <Trash2 /> {t("delete")}
                   </ContextMenuItem>

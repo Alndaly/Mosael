@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import PARTITION_PREFIX
-from app.db.models import Asset, Job, PublishAccount, PublishTask
+from app.db.models import Asset, Job, PublishAccount, PublishTask, User
+from app.domain import sharing
 from app.domain.jobs import create_job, register_external_kind
 
 # 发布任务由桌面端执行器经 claim/report 驱动,跨后端重启存活;
@@ -89,7 +90,7 @@ def normalize_platform(platform: str) -> str:
 
 
 def create_account(
-    db: Session, *, workspace_id: str, platform: str, name: str, config: dict[str, Any], proxy: str | None = None
+    db: Session, *, workspace_id: str, platform: str, name: str, config: dict[str, Any], owner: User, proxy: str | None = None
 ) -> PublishAccount:
     platform = normalize_platform(platform)
     meta = PUBLISH_PLATFORMS[platform]
@@ -100,6 +101,9 @@ def create_account(
         workspace_id=workspace_id, platform=platform, name=name, config=config, proxy=(proxy or "").strip() or None
     )
     db.add(account)
+    db.flush()
+    # 平台登录态是某人的身份 —— 默认只有他自己看得见,要给同事用得由他显式共享(见 domain/sharing)。
+    sharing.claim(db, "publish_account", account, owner)
     db.commit()
     db.refresh(account)
     # 发布账号即浏览器池档案(组合):按其登录分区 persist:<PARTITION_PREFIX>-<id> 建档并回填,pool 页统一可见,
@@ -107,7 +111,7 @@ def create_account(
     from app.domain import browser
 
     profile = browser.create_profile(
-        db, workspace_id=workspace_id, name=name, proxy=account.proxy, partition=f"persist:{PARTITION_PREFIX}-{account.id}"
+        db, workspace_id=workspace_id, name=name, owner=owner, proxy=account.proxy, partition=f"persist:{PARTITION_PREFIX}-{account.id}"
     )
     account.profile_id = profile.id
     db.commit()

@@ -749,6 +749,19 @@ export function createBrowserProfile(body: {
   return api<BrowserProfile>("/api/browser/profiles", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */
+export function setResourceShared(
+  kind: "publish_account" | "browser_profile" | "agent_session" | "scheduled_task",
+  resourceId: string,
+  workspaceId: string,
+  shared: boolean,
+): Promise<{ workspaces: string[] }> {
+  return api(`/api/shares/${kind}/${resourceId}`, {
+    method: shared ? "POST" : "DELETE",
+    body: JSON.stringify({ workspace_id: workspaceId }),
+  });
+}
+
 export function updateBrowserProfile(
   profileId: string,
   body: { name?: string; proxy?: string | null; enabled?: boolean },

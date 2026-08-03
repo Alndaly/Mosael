@@ -112,6 +112,28 @@ class WorkspaceMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class ResourceShare(Base):
+    """主人把某样东西放进了某个工作区。**归属与共享是两件事**(见 domain/sharing)。
+
+    此前只有归属这一半的位置(`workspace_id`),而它同时兼任了共享 —— 于是没有「放进来但仍然是
+    我的」这种状态,某人的平台登录态、已登录的浏览器、私人对话全都是工作区的公共资产。
+    """
+
+    __tablename__ = "resource_shares"
+    __table_args__ = (
+        UniqueConstraint("kind", "resource_id", "workspace_id", name="uq_resource_share"),
+        Index("idx_resource_shares_lookup", "kind", "workspace_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: publish_account / browser_profile / agent_session / scheduled_task(见 domain/sharing.KINDS)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    shared_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class RegistrationInvite(Base):
     """**进这个部署**的邀请码 —— 与 WorkspaceInvitation(进某个工作区)是两件事。
 
@@ -458,6 +480,9 @@ class ScheduledTask(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
+    #: (归属与共享见 domain/sharing)。
+    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     kind: Mapped[str] = mapped_column(String(60), nullable=False)
@@ -508,6 +533,9 @@ class PublishAccount(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
+    #: (归属与共享见 domain/sharing)。
+    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     # 组合(非合并):发布账号复用浏览器池档案的持久身份(分区/代理),自己只留发布语义
     # (platform/config/binding_status…)。迁移时按同 partition 建档并回填(见 core/db 迁移)。
     profile_id: Mapped[str | None] = mapped_column(
@@ -565,6 +593,9 @@ class BrowserProfile(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
+    #: (归属与共享见 domain/sharing)。
+    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
     partition: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     proxy: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -922,6 +953,9 @@ class AgentSession(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
+    #: (归属与共享见 domain/sharing)。
+    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu

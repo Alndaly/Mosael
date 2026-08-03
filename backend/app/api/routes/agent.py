@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.ai.agent import host
+from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AgentManifestOut,
@@ -37,7 +38,7 @@ router = APIRouter(tags=["agent"])
 @router.post("/agent/sessions", response_model=AgentSessionOut)
 def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentUser) -> AgentSession:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    return host.create_session(
+    session = host.create_session(
         db,
         workspace_id=body.workspace_id,
         project_id=body.project_id,
@@ -46,6 +47,10 @@ def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentU
         provider_profile_id=body.provider_profile_id,
         model=body.model,
     )
+    # 对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
+    sharing.claim(db, "agent_session", session, user)
+    db.commit()
+    return session
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
@@ -53,7 +58,11 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
     ensure_workspace_access(db, user, workspace_id)
     stmt = (
         select(AgentSession)
-        .where(AgentSession.workspace_id == workspace_id, AgentSession.origin == "ui")
+        .where(
+            AgentSession.workspace_id == workspace_id,
+            AgentSession.origin == "ui",
+            sharing.visible_filter("agent_session", user, workspace_id),
+        )
         .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
@@ -259,6 +268,9 @@ def _require_session(db: DbSession, user: CurrentUser, session_id: str) -> Agent
     if session is None:
         raise HTTPException(status_code=404, detail="Not found")
     ensure_workspace_access(db, user, session.workspace_id)
+    # 看不见就是不存在(404,不是 403)—— 和工作区边界同一条口径,不泄露"这里有一个你看不到的东西"。
+    if not sharing.may_use(db, "agent_session", session, user):
+        raise HTTPException(status_code=404, detail="Not found")
     return session
 
 

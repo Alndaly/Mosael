@@ -46,6 +46,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "TaskEvent": ("app/domain/jobs.py",),
     "Notification": ("app/domain/notifications.py",),
     # 编排
+    # 「谁的」与「共享给谁」是同一张表管的,所以它只归 sharing 域写。
+    "ResourceShare": ("app/domain/sharing.py",),
     "ScheduledTask": ("app/domain/scheduler/",),
     "ScheduledTaskRun": ("app/domain/scheduler/", "app/workers/scheduler.py"),
     "Workflow": ("app/domain/workflows/",),

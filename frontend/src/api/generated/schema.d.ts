@@ -3395,6 +3395,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shares/{kind}/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Shares */
+        get: operations["list_shares_api_shares__kind___resource_id__get"];
+        put?: never;
+        /** Share Resource */
+        post: operations["share_resource_api_shares__kind___resource_id__post"];
+        /** Unshare Resource */
+        delete: operations["unshare_resource_api_shares__kind___resource_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/confirmations": {
         parameters: {
             query?: never;
@@ -4847,6 +4866,16 @@ export interface components {
             last_checked_at?: string | null;
             /** Last Error */
             last_error?: string | null;
+            /**
+             * Is Mine
+             * @default true
+             */
+            is_mine: boolean;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
         };
         /** BrowserProfileUpdate */
         BrowserProfileUpdate: {
@@ -7354,6 +7383,11 @@ export interface components {
             solo?: boolean | null;
             /** Duck */
             duck?: boolean | null;
+        };
+        /** ShareRequest */
+        ShareRequest: {
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** SplitClipPointsRequest */
         SplitClipPointsRequest: {
@@ -15570,6 +15604,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRuntimeConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_shares_api_shares__kind___resource_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_resource_api_shares__kind___resource_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshare_resource_api_shares__kind___resource_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

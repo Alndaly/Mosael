@@ -19,7 +19,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import BrowserAction, BrowserProfile, BrowserSession, PublishAccount, now
+from app.domain import sharing
+from app.db.models import BrowserAction, BrowserProfile, BrowserSession, PublishAccount, User, now
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
 
@@ -55,14 +56,20 @@ def _partition_for(session: BrowserSession) -> str:
 
 
 def create_profile(
-    db: Session, *, workspace_id: str, name: str, proxy: str | None = None, partition: str | None = None
+    db: Session, *, workspace_id: str, name: str, owner: User, proxy: str | None = None, partition: str | None = None
 ) -> BrowserProfile:
     """新建一个池档案。默认通用档案分区 persist:pool-<id>;发布账号建档时传 partition=
-    persist:openstudio-<accountId> 沿用其既有登录分区(见 publish.create_account,登录态不丢)。"""
+    persist:openstudio-<accountId> 沿用其既有登录分区(见 publish.create_account,登录态不丢)。
+
+    `owner` 是必填的:一个已登录的浏览器是**某人的身份**,不是工作区的公共资产。做成必填参数
+    而不是"事后由调用点补一句 claim",是因为漏掉的那个调用点建出来的档案会没有主人 —— 于是谁
+    都看不见它,或者(改成默认公开的话)谁都用得上它。
+    """
     prof = BrowserProfile(workspace_id=workspace_id, name=(name or "").strip()[:160], proxy=(proxy or None), enabled=True)
     db.add(prof)
     db.flush()
     prof.partition = partition or f"persist:pool-{prof.id}"
+    sharing.claim(db, "browser_profile", prof, owner)
     db.commit()
     db.refresh(prof)
     return prof
