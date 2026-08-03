@@ -501,7 +501,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         provider = str(payload.get("provider", "")).strip()
         model = str(payload.get("model", "")).strip()
         if not provider or not model:
-            default = provider_models.resolve_default(db, kind)
+            default = provider_models.resolve_default(db, kind, actor)
             if default is not None:
                 provider, model = default.profile.vendor, default.model_id
         if not provider or not model:
@@ -530,7 +530,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         engine = str(payload.get("engine") or payload.get("provider") or "").strip()
         model = str(payload.get("model") or "").strip()
         if not engine:
-            default = provider_models.resolve_default(db, "tts")
+            default = provider_models.resolve_default(db, "tts", actor)
             if default is not None:
                 profile_id = default.provider_profile_id
                 engine = default.profile.vendor
@@ -557,7 +557,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
 
         profile_id = str(payload.get("provider_profile_id") or "").strip()
         if not profile_id:
-            default = provider_models.resolve_default(db, "podcast")
+            default = provider_models.resolve_default(db, "podcast", actor)
             if default is not None:
                 profile_id = default.provider_profile_id
         job = start_podcast(

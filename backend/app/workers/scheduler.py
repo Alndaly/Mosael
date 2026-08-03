@@ -118,7 +118,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             provider = str(payload.get("provider", "")).strip()
             model = str(payload.get("model", "")).strip()
             if not provider or not model:
-                default = provider_models.resolve_default(db, kind)
+                default = provider_models.resolve_default(db, kind, task.owner_user_id)
                 if default is not None:
                     provider, model = default.profile.vendor, default.model_id
             if not provider or not model:

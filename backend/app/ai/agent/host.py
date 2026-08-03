@@ -113,7 +113,7 @@ def resolve_chat_provider(
         profile = resolve_profile(db, "", provider_profile_id, user_id=user_id)
     if profile is None:
         # 默认解析已经是模型粒度的:拿到的是一行模型,连接就在它身上。
-        default = provider_models.resolve_default(db, "chat")
+        default = provider_models.resolve_default(db, "chat", user_id)
         if default is not None:
             profile = provider_credentials.resolve(db, default.profile, user_id)
             model = model or default.model_id

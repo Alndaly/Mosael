@@ -186,7 +186,7 @@ def optimize_image_prompt(
     # 用「对话」默认 LLM 重写(与助手同一个),不是图像模型本身:图像 provider 的 default_model 是
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。
-    default = provider_models.resolve_default(db, "chat")
+    default = provider_models.resolve_default(db, "chat", user_id)
     from app.domain import provider_credentials
 
     chat_profile = (

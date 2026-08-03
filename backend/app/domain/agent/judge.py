@@ -113,7 +113,7 @@ def ask(request: JudgeRequest) -> Verdict:
 def _pick_profile(db):
     from app.domain import provider_models
 
-    default = provider_models.resolve_default(db, "chat")
+    default = provider_models.resolve_default(db, "chat", user_id)
     return default.profile if default is not None else None
 
 
