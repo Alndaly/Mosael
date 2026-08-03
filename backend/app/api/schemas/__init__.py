@@ -17,6 +17,12 @@ class AuthCredentials(BaseModel):
 
 class RegisterCredentials(AuthCredentials):
     display_name: str = Field(default="", max_length=120)
+    #: 进这个部署的邀请码。空库的第一个账号不需要;开放注册的部署也不需要。
+    invite_code: str = Field(default="", max_length=64)
+
+
+class InviteCreate(BaseModel):
+    note: str = Field(default="", max_length=120)
 
 
 class UserOut(OrmModel):

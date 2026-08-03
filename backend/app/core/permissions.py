@@ -208,11 +208,21 @@ def ensure_graph_node_privileges(db: Session, user: User, graph: object) -> None
     triggers have no acting user to check, and a graph that could never store a `code` node does
     not need a run-time gate. A single-user install owns its default workspace and is unaffected.
     """
+    from app.core.config import settings
     from app.domain.workflows import NODE_TYPES, privileged_nodes_in_graph
 
     used = privileged_nodes_in_graph(graph)
     if not used:
         return
+    # 部署级开关先于任何角色判断:这项能力**在这个部署里存不存在**,和「谁有资格用它」是两个问题。
+    # 默认关 —— 见 core/config.server_side_code_execution 的说明,以及 ADR 0008 D2:
+    # 真正的解法是隔离执行器,这个开关是它到位之前的止血。
+    if not settings.server_side_code_execution:
+        labels = "、".join(sorted(str(NODE_TYPES.get(t, {}).get("label") or t) for t in used))
+        raise HTTPException(
+            status_code=403,
+            detail=f"这个部署关闭了服务端代码执行,无法保存含「{labels}」的内容",
+        )
     try:
         ensure_instance_admin(db, user, "credentials")
     except HTTPException as exc:

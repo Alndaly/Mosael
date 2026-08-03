@@ -1,22 +1,43 @@
 from __future__ import annotations
 
 import time
+from datetime import timedelta
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AuthCredentials, AuthOut, PasswordUpdate, RegisterCredentials, UserOut, UserProfileUpdate
+from app.api.schemas import AuthCredentials, AuthOut, InviteCreate, PasswordUpdate, RegisterCredentials, UserOut, UserProfileUpdate
 from app.core.config import settings
-from app.core.security import hash_password, mint_login_session, verify_password
-from app.db.models import AuthSession, User, Workspace, WorkspaceMember
+from app.core.security import hash_password, mint_login_session, new_session_token, verify_password
+from app.db.models import AuthSession, RegistrationInvite, User, Workspace, WorkspaceMember, now
 
 router = APIRouter(tags=["auth"])
+
+#: 邀请码的有效期。够对方从收到消息到坐下来注册,又不至于长期挂在那儿。
+INVITE_TTL = timedelta(days=7)
 
 
 @router.post("/auth/register", response_model=AuthOut)
 def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
+    """注册。**引导之后转邀请制** —— 见 ADR 0008 §0。
+
+    这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为
+    里面的一个租户。那正是下面这条(跑出来过的)链的第一环:
+
+        注册 → 自己建一个工作区(在里面是 owner)→ 满足 ensure_instance_admin
+             → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python
+
+    空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
+    (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。
+    """
+    invite = _usable_invite(db, body.invite_code)
+    if not settings.open_registration and invite is None and db.scalar(select(User).limit(1)) is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="这个部署不开放自助注册,请向管理员要一个邀请码",
+        )
     username = _normalize_username(body.username)
     existing = db.scalar(select(User).where(User.username == username))
     if existing is not None:
@@ -30,9 +51,68 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     db.add(user)
     db.flush()
     _adopt_orphan_workspaces(db, user)
+    if invite is not None:
+        invite.used_by = user.id  # 一次性:同一个码不能再换第二个账号
     token = _create_session(db, user)
     db.commit()
     return AuthOut(token=token, user=UserOut.model_validate(user))
+
+
+def _is_bootstrap_account(db: DbSession, user: User) -> bool:
+    """他是不是引导这个部署的那个账号(库里最早创建的)。第 1 步用一列取代它。"""
+    first = db.scalar(select(User).order_by(User.created_at.asc(), User.id.asc()).limit(1))
+    return first is not None and first.id == user.id
+
+
+def _usable_invite(db: DbSession, code: str) -> RegistrationInvite | None:
+    """还能用的注册邀请码:存在、没用过、没过期。看不懂的码一律当作没有。"""
+    code = (code or "").strip()
+    if not code:
+        return None
+    invite = db.get(RegistrationInvite, code)
+    if invite is None or invite.used_by or invite.expires_at <= now():
+        return None
+    return invite
+
+
+@router.post("/auth/invites")
+def create_registration_invite(body: InviteCreate, db: DbSession, user: CurrentUser) -> dict:
+    """发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。
+
+    判据是「你是不是引导这个部署的那个账号」。**不用 ensure_instance_admin** —— 那道闸恰恰是自助的
+    (ADR 0008 §2.1),拿它守发码等于没守;而且它要求你在某个工作区里是 admin,引导账号可能还没建
+    过工作区,连自己都发不出码。
+
+    第 1 步会把这个事实落成 `users.is_deployment_admin` 一列,那时这个函数改成读那一列 ——
+    语义不变,只是从「按创建时间猜」变成「按数据说」。
+    """
+    if not _is_bootstrap_account(db, user):
+        raise HTTPException(status_code=403, detail="只有引导这个部署的账号可以发注册邀请码")
+    invite = RegistrationInvite(
+        code=new_session_token()[:32],
+        created_by=user.id,
+        note=body.note.strip()[:120],
+        expires_at=now() + INVITE_TTL,
+    )
+    db.add(invite)
+    db.commit()
+    return {"code": invite.code, "note": invite.note, "expires_at": invite.expires_at.isoformat()}
+
+
+@router.get("/auth/invites")
+def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
+    if not _is_bootstrap_account(db, user):
+        raise HTTPException(status_code=403, detail="只有引导这个部署的账号可以查看注册邀请码")
+    rows = db.scalars(select(RegistrationInvite).order_by(RegistrationInvite.created_at.desc()).limit(50))
+    return [
+        {
+            "code": row.code,
+            "note": row.note,
+            "used": bool(row.used_by),
+            "expires_at": row.expires_at.isoformat(),
+        }
+        for row in rows
+    ]
 
 
 @router.post("/auth/login", response_model=AuthOut)

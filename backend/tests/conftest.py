@@ -13,6 +13,12 @@ import tempfile
 os.environ["OPEN_STUDIO_DATA_DIR"] = tempfile.mkdtemp(prefix="open-studio-test-")
 # Tests drive the scheduler tick() directly; the background loop stays off.
 os.environ["OPEN_STUDIO_SCHEDULER_ENABLED"] = "0"
+# 两个部署级开关在**测试里**打开:整套用例早于它们存在,而且要覆盖的正是它们背后的行为
+# (自由注册第二个用户、工作流的 code 节点)。开关自己的用例
+# (test_registration_and_code_execution.py)显式把它们按回生产默认值,并单独断言**声明的默认值**
+# 是关的 —— 这样"默认关"这件事不会因为测试环境开着而失去保护。
+os.environ["OPEN_STUDIO_OPEN_REGISTRATION"] = "1"
+os.environ["OPEN_STUDIO_SERVER_SIDE_CODE_EXECUTION"] = "1"
 os.environ["OPEN_STUDIO_FEISHU_AUTOSTART"] = "0"
 # Don't spawn ffmpeg proxy threads on every video import during the suite;
 # test_proxy.py re-enables it explicitly to exercise the pipeline.

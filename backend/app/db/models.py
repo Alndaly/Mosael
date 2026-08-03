@@ -101,6 +101,27 @@ class WorkspaceMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class RegistrationInvite(Base):
+    """**进这个部署**的邀请码 —— 与 WorkspaceInvitation(进某个工作区)是两件事。
+
+    关掉自助注册之后必须有这个:老的邀请流程是「按用户名邀请一个**已注册**账号」,而账号从哪来
+    正是被关掉的那条路。两层划分在这里第一次显形 —— 一个是部署的门,一个是工作区的门。
+
+    码是随机串,由管理员带外发给对方;对方拿它注册并**自己设密码** —— 保持仓库既有的那条
+    「密码不经过任何第三人之手」(见 domain/members 的说明)。
+    """
+
+    __tablename__ = "registration_invites"
+
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    #: 给谁的(仅备注,不做校验)—— 管理员自己看得出这个码发给了谁。
+    note: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    used_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class WorkspaceInvitation(Base):
     """工作区邀请(邀请制):受邀人从通知里 接受/拒绝,接受才写成员行。"""
 

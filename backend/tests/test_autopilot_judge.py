@@ -96,14 +96,17 @@ ALLOW = judge_module.Verdict(allow=True, reason="命中用户准则")
 def test_a_rule_can_allow_without_calling_the_judge(monkeypatch) -> None:
     """确定性的答案不该花一次模型调用 —— 也不该让一次模型调用有机会否掉它。"""
     chat = Chat()
-    chat.set_rules({"http_allow_hosts": ["api.example.com"]})
+    # 主机名指向一个**关着的本地端口**:这条用例测的是"规则放行了没有",不是那次 HTTP 的结果。
+    # 用一个真实域名会让执行线程去做一次带 60s 超时的出站请求,而排空只等 5 秒 —— 那样这条用例
+    # 就成了一条依赖网络与时序的用例(全量跑时随机红过一次)。
+    chat.set_rules({"http_allow_hosts": ["127.0.0.1"]})
     calls: list = []
     _stub_judge(monkeypatch, REFUSE, record=calls)
 
-    card = chat.card("http_request", {"url": "https://api.example.com/things", "method": "POST"})
+    card = chat.card("http_request", {"url": "http://127.0.0.1:9/none", "method": "POST"})
 
-    assert card["status"] in ("executed", "failed"), card
-    assert card["decision_mode"] == "auto"
+    assert card["decision_mode"] == "auto", card
+    assert card["detail"]["rule"]["outcome"] == "allow", card
     assert calls == [], "规则已经给出答案,判断者不该被叫起来"
 
 

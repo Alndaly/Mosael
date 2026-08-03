@@ -248,6 +248,13 @@ def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
 
 
 def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[str, Any]) -> None:
+    if tool == "run_code":
+        # 部署级开关先判:这个部署压根不执行服务端代码时,不该开一张注定执行不了的卡去等用户点。
+        # 它跑的就是 code 节点那段实现,只是入口从画布换成了对话 —— 同一个开关。
+        from app.core.config import settings
+
+        if not settings.server_side_code_execution:
+            raise ConfirmationError("这个部署关闭了服务端代码执行,无法运行代码")
     if tool == "browser_open":
         url = str(payload.get("url") or "").strip()
         if url and not (url.startswith("http://") or url.startswith("https://")):

@@ -44,6 +44,23 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path.home() / ".open-studio"
     backend_host: str = "127.0.0.1"
+
+    #: 引导之后还允不允许自助注册。**默认不允许** —— 这是个多租户产品,一个后端可以服务多个人,
+    #: 而开放注册让「任何能连到这个端口的人」直接成为里面的一个租户。空库时第一个账号照常能注册
+    #: (没有人可以给他发邀请),之后只能由已有成员邀请。内网 demo 之类想开放的,显式打开。
+    open_registration: bool = False
+
+    #: 允不允许在**服务端**执行用户代码(工作流的 code 节点、智能体的 run_code)。
+    #: **默认不允许,而且这是止血、不是设计。**
+    #:
+    #: 现在的执行器明确不是沙箱(见 domain/workflows/executors/basic.run_python 的说明:
+    #: 子进程 + 超时 + 输出上限,但里面的 Python 能读写文件系统、发网络请求)。一个多租户产品
+    #: 不该默认让任何人在服务端跑这种东西 —— 而此前挡着它的只有一道**自助可得**的角色闸。
+    #:
+    #: 真正的解法是把执行器搬进隔离环境(ADR 0008 D2,参照 dify-sandbox:seccomp 系统调用白名单、
+    #: chroot、非 root、独立网络)。**那之后这个开关就该撤掉** —— 隔离到位之后,写 code 节点就是
+    #: 普通的内容编辑,不需要开关也不需要角色闸。
+    server_side_code_execution: bool = False
     backend_port: int = 8800
     # 后端日志级别(OPEN_STUDIO_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
     # 不配的话 app.* 日志会冒泡到没挂 handler 的 root 被丢弃——见 core/logging.py。
