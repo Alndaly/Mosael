@@ -10,10 +10,6 @@ app.setName("Open Studio");
 // 保留旧的 AppUserModelId(Windows 任务栏归组的不透明 id;改了等于换一个应用,得不偿失)。
 app.setAppUserModelId("dev.openstudio.app");
 
-// 更名(Mibu → Open Studio)迁移:userData = appData/app.getName(),改名会把登录分区
-// (Partitions)与日志留在旧目录下。启动最早、任何 userData 使用之前,把旧目录整体平移到
-// 新名下(仅当新目录尚不存在)。失败不致命——大不了当作全新安装。
-
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
 app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
@@ -76,7 +72,7 @@ function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
     // 走 `python -m uvicorn` 而不是 .venv/bin/uvicorn:后者是带 shebang 的 console script,
-    // 解释器路径在建 venv 时被**写死成绝对路径**——仓库目录一改名(mibu-cut → OpenStudio 就发生过),
+    // 解释器路径在建 venv 时被**写死成绝对路径**——仓库目录一改名,
     // 53 个脚本同时变成 "bad interpreter",而 .venv/bin/python 是符号链接、照常可用。
     // venv 布局分平台:POSIX 是 .venv/bin/python,Windows 是 .venv\Scripts\python.exe。
     // 之前写死了 bin/python,Windows 上开发模式压根拉不起后端。

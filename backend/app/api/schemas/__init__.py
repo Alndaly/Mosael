@@ -678,15 +678,12 @@ class ProviderCredentialIn(BaseModel):
     api_key: str | None = None
     #: VENDOR_PRESETS 里标了 secret 而不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
     secrets: dict[str, str] = Field(default_factory=dict)
-    #: 放一把「大家都能用」的。**只有部署管理员能置位** —— 共享的钥匙是整个部署在花钱。
-    shared: bool = False
 
 
 class ProviderCredentialOut(BaseModel):
     profile_id: str
     key_hint: str = ""
     is_mine: bool = True
-    shared: bool = False
 
 
 class ProviderProfileCreate(BaseModel):
@@ -735,13 +732,8 @@ class ProviderProfileOut(OrmModel):
     #: **我自己**那把钥匙的尾四位(订阅计划是「已登录」)。别人的钥匙这里一律为空 ——
     #: 连尾数都不该露(见 domain/provider_credentials)。
     key_hint: str = ""
-    #: 我在这条连接上配过自己的钥匙吗。
+    #: 我在这条连接上配过自己的钥匙吗。没配 → 这条连接对我不可用,界面直说。
     is_mine: bool = False
-    #: 我这把钥匙是不是「大家都能用」的那把(只有部署管理员放得了)。
-    my_key_shared: bool = False
-    #: 我没配,但部署管理员放了一把大家都能用的。界面要说清这一点,否则「我没配却能用」
-    #: 看起来像 bug,或者反过来让人重复配一遍。
-    uses_shared_key: bool = False
     #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
     #: same rule as api_key/key_hint.
     extra: dict[str, str] = Field(default_factory=dict)

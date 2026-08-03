@@ -11,10 +11,6 @@
 产品名,也是仓库名。一切对外可见处一律用它——GitHub(`Alndaly/OpenStudio`,大小写敏感:
 更新检查直连 GitHub API,写错大小写会吃 301,而检查失败是静默的)、App 名、文档站、README、
 数据目录 `~/.open-studio/` 与主库 `open-studio.db`、打包二进制 `open-studio-backend`。
-_Avoid_: Mibu(对外)、mibu-cut、open-studio(作为 GitHub 仓库名)
-
-**内部标识符也已改名**:
-不存在「对外 Open Studio、对内 Mibu」的双轨——内部标识符同样是 Open Studio 族,写新代码时按这套用:
 
 | | 规范名 |
 | --- | --- |
@@ -23,15 +19,6 @@ _Avoid_: Mibu(对外)、mibu-cut、open-studio(作为 GitHub 仓库名)
 | 深链事件通道 | `openstudio:open-*` |
 | 浏览器分区前缀 | `openstudio` |
 | MCP 环境变量 | `OPEN_STUDIO_API` / `OPEN_STUDIO_TOKEN` |
-
-_Avoid_: 在新代码里写任何 `MIBU_` / `mibuDesktop` / `mibu:` / `mibu-` 标识符
-
-**旧名兼容层**:
-`MIBU_` 前缀的环境变量、`persist:mibu-*` 分区目录、`mibu.*` localStorage 键**仍然能用**,
-但它们是**单向兼容垫片**(`config._adopt_legacy_env`、`migrateLegacyPartitionDir`、
-`storageMigration.ts`),只为让 v0.1.0 / v0.2.0 的装机平滑升级,**不是可选的第二套命名**。
-文档、示例、`.env` 模板一律只写规范名——教用户写旧名等于把垫片变成永久契约。
-_Avoid_: 把兼容垫片当「两种写法都行」;在文档里示范 `MIBU_*`
 
 ### 进程与协议
 

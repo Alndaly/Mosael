@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import contextlib
 import time
 from pathlib import Path
 
@@ -22,7 +23,7 @@ def _assert_disposable_data_dir() -> None:
 
     conftest.py points OPEN_STUDIO_DATA_DIR at a mkdtemp() before anything imports settings — but
     conftest only loads under pytest. Calling these helpers directly (e.g. `python -c "from
-    tests.util import fresh_client"`) would otherwise resolve to the REAL ~/.mibu-cut and
+    tests.util import fresh_client"`) would otherwise resolve to the REAL ~/.open-studio and
     drop every table in the user's live database. Fail loudly instead of silently wiping it.
     """
     data_dir = Path(settings.data_dir).resolve()
@@ -123,10 +124,10 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     有道理:少了模型行,那条连接确实没有可用模型)。
 
     钥匙同理:`api_key` / `oauth_credential` 不再是连接上的列(见 domain/provider_credentials),
-    传进来的会落成**一把共享凭据**,归最早那个账号(部署管理员)所有 —— 也就是升级前的语义:
-    这一把大家都能用。要测「各人各自的钥匙」时传 owner_username 指名道姓。
+    传进来的落成**某个人**的钥匙 —— 默认是最早那个账号。要指名给谁就传 owner_username。
+    没有"共享钥匙"这回事:每个人配自己的。
     """
-    from app.db.models import ProviderProfile, User
+    from app.db.models import Workspace, ProviderProfile, User
     from app.domain import provider_credentials, provider_models
 
     api_key = fields.pop("api_key", None)
@@ -148,10 +149,38 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
         )
         if owner is not None:
             credential = provider_credentials.upsert(
-                db, profile.id, owner.id, api_key=api_key or "", secrets=secrets or None,
-                shared=not owner_username,
+                db, profile.id, owner.id, api_key=api_key or "", secrets=secrets or None
             )
             credential.oauth_credential = oauth_credential
             credential.model_catalog = model_catalog
     db.flush()
     return profile
+
+
+@contextlib.contextmanager
+def acting_as(db, user_id: str | None = None):
+    """以某个人的身份跑一个工作流节点。
+
+    引擎跑工作流时,节点通过 `jobs.current_actor` 拿到"这活儿替谁干"(父 job 上记着)。测试直接
+    调节点时没有父 job —— 于是取供应商会拿不到任何钥匙。这里补上引擎本来会建立的那层上下文,
+    而不是让领域代码去容忍"没有人"(那正是钥匙归人要消灭的状态)。
+
+    用**调用方自己的会话**建这个 job:另开一个会话会和调用方尚未提交的行打架。
+    """
+    from app.db.models import User, Workspace
+    from app.domain import jobs as jobs_domain
+
+    actor = user_id or db.query(User).order_by(User.created_at).first().id
+    job = jobs_domain.create_job(
+        db,
+        workspace_id=db.query(Workspace).first().id,
+        kind="workflow",
+        payload={},
+        created_by=actor,
+    )
+    db.flush()
+    token = jobs_domain._current_parent_job.set(job.id)
+    try:
+        yield actor
+    finally:
+        jobs_domain._current_parent_job.reset(token)

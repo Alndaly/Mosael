@@ -531,7 +531,7 @@
           "auth"
         ],
         "summary": "Bootstrap",
-        "description": "Whether any local account exists — decides register vs login screen.",
+        "description": "登录页开屏要知道的两件事:**这个部署里有人了吗**、**收不收自助注册**。\n\n不需要登录 —— 这就是登录之前那一屏在问的。只回两个布尔,不泄露任何账号信息;而\"库里有没有\n人\"本来就能从\"不带邀请码注册能不能成\"推出来。\n\n没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。",
         "operationId": "bootstrap_api_auth_bootstrap_get",
         "responses": {
           "200": {
@@ -539,9 +539,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Bootstrap Api Auth Bootstrap Get"
+                  "$ref": "#/components/schemas/BootstrapOut"
                 }
               }
             }
@@ -8985,7 +8983,7 @@
           "settings"
         ],
         "summary": "Put My Credential",
-        "description": "填**我自己**在这条连接上的钥匙。\n\n这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。\n共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。",
+        "description": "填**我自己**在这条连接上的钥匙。\n\n不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。",
         "operationId": "put_my_credential_api_settings_providers__profile_id__credential_put",
         "parameters": [
           {
@@ -14671,6 +14669,23 @@
         ],
         "title": "Body_upload_voice_api_voices_upload_post"
       },
+      "BootstrapOut": {
+        "properties": {
+          "has_users": {
+            "type": "boolean",
+            "title": "Has Users",
+            "default": false
+          },
+          "open_registration": {
+            "type": "boolean",
+            "title": "Open Registration",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "BootstrapOut",
+        "description": "登录页开屏问的两件事(见 routes/auth.bootstrap)。不需要登录就能读。"
+      },
       "BrowserProfileCreate": {
         "properties": {
           "workspace_id": {
@@ -18683,11 +18698,6 @@
             },
             "type": "object",
             "title": "Secrets"
-          },
-          "shared": {
-            "type": "boolean",
-            "title": "Shared",
-            "default": false
           }
         },
         "type": "object",
@@ -18709,11 +18719,6 @@
             "type": "boolean",
             "title": "Is Mine",
             "default": true
-          },
-          "shared": {
-            "type": "boolean",
-            "title": "Shared",
-            "default": false
           }
         },
         "type": "object",
@@ -19525,16 +19530,6 @@
           "is_mine": {
             "type": "boolean",
             "title": "Is Mine",
-            "default": false
-          },
-          "my_key_shared": {
-            "type": "boolean",
-            "title": "My Key Shared",
-            "default": false
-          },
-          "uses_shared_key": {
-            "type": "boolean",
-            "title": "Uses Shared Key",
             "default": false
           },
           "extra": {

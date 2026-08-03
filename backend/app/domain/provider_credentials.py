@@ -16,9 +16,8 @@ from app.db.models import ProviderCredential, ProviderProfile, User
 压在一起的后果跑出来过:能发起一轮对话的人就能 acquire 到那份明文凭据;而普通成员又没法带
 自己的钥匙,所有人共用部署管理员那一把 —— 订阅制账号被多人共用,供应商那边看到的是同一个账号。
 
-**解析顺序:自己的 → 部署管理员共享的 → 没有。** 最后一档回 None 而不是回退到"随便找一把能用
-的",因为"我以为用的是自己的额度,其实花的是别人的钱"是这里最坏的失败方式 —— 报「请先配置」
-是能看懂的,悄悄用了别人的不是。
+**每个人用自己的钥匙,没有回退。** 取不到就回 None,调用方报「请先配置」——"我以为用的是自己的
+额度,其实花的是别人的钱"是这里最坏的失败方式,而任何形式的回退都在制造它。
 """
 
 
@@ -43,41 +42,28 @@ class ResolvedProvider:
     credential_version: int = 0
     #: 连接自身的非密配置,叠上这把钥匙带的密字段(火山 ak/sk 之类)。
     extra: dict[str, Any] = field(default_factory=dict)
-    #: 这把钥匙是谁的。共享钥匙时是那位部署管理员。
+    #: 这把钥匙是谁的。
     owner_user_id: str | None = None
-    shared: bool = False
 
 
 def get(db: Session, profile_id: str, user_id: str) -> ProviderCredential | None:
     return db.get(ProviderCredential, {"profile_id": profile_id, "owner_user_id": user_id})
 
 
-def shared_credential(db: Session, profile_id: str) -> ProviderCredential | None:
-    """部署管理员放的那把「大家都能用」的。"""
-    return db.scalar(
-        select(ProviderCredential)
-        .join(User, User.id == ProviderCredential.owner_user_id)
-        .where(
-            ProviderCredential.profile_id == profile_id,
-            ProviderCredential.shared.is_(True),
-            User.is_deployment_admin.is_(True),
-        )
-        .order_by(ProviderCredential.created_at)
-        .limit(1)
-    )
-
-
 def pick(db: Session, profile_id: str, user_id: str | None) -> ProviderCredential | None:
-    """自己的 → 部署管理员共享的 → None。"""
-    if user_id:
-        mine = get(db, profile_id, user_id)
-        if mine is not None and _has_secret(mine):
-            return mine
-    return shared_credential(db, profile_id)
+    """**他自己那把**,没有就没有。
+
+    这里没有回退。曾经有过「部署管理员共享的那一把」作为兜底,删掉了:它没有界面,而且回退到
+    别人的钥匙正是这张表要消灭的东西 —— 「我以为花的是自己的额度,其实花的是别人的钱」。
+    """
+    if not user_id:
+        return None
+    mine = get(db, profile_id, user_id)
+    return mine if mine is not None and _has_secret(mine) else None
 
 
 def _has_secret(credential: ProviderCredential) -> bool:
-    """一行空凭据不算「我配过了」—— 否则删掉钥匙之后会卡在自己那把空的上,永远够不到共享的。"""
+    """一行空凭据不算「我配过了」—— 空行只是"曾经填过又清掉",不该被当成配置过。"""
     return bool((credential.api_key or "").strip() or credential.oauth_credential or credential.secrets)
 
 
@@ -103,7 +89,6 @@ def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -
         credential_version=credential.credential_version or 0,
         extra=extra,
         owner_user_id=credential.owner_user_id,
-        shared=bool(credential.shared),
     )
 
 
@@ -114,9 +99,8 @@ def upsert(
     *,
     api_key: str | None = None,
     secrets: dict | None = None,
-    shared: bool | None = None,
 ) -> ProviderCredential:
-    """写我自己的那把。`shared` 的授权由路由层把关(只有部署管理员能置位)。"""
+    """写我自己的那把。"""
     credential = get(db, profile_id, user_id)
     if credential is None:
         credential = ProviderCredential(profile_id=profile_id, owner_user_id=user_id)
@@ -125,8 +109,6 @@ def upsert(
         credential.api_key = api_key
     if secrets is not None:
         credential.secrets = {**(credential.secrets or {}), **secrets}
-    if shared is not None:
-        credential.shared = shared
     return credential
 
 

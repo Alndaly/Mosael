@@ -9,6 +9,15 @@ import pytest
 from app.ai.analysis import service
 from app.core.db import SessionLocal
 from app.db.models import Asset, ProviderProfile
+def _me() -> str:
+    """钥匙归人之后,取供应商必须说清"为谁" —— 测试里就是第一个账号。"""
+    from app.core.db import SessionLocal
+    from app.db.models import User
+
+    with SessionLocal() as db:
+        return db.query(User).order_by(User.created_at).first().id
+
+
 from tests.util import add_provider, make_video_asset
 from tests.util import fresh_client
 
@@ -154,10 +163,13 @@ def test_pick_native_video_profile_priority() -> None:
         _add_native_profile(db, "moonshot")
         _add_native_profile(db, "alibaba")
     with SessionLocal() as db:
-        assert service.pick_native_video_profile(db, None, None).vendor == "alibaba"  # google>alibaba>moonshot
+        from app.db.models import User
+
+        me = db.query(User).order_by(User.created_at).first().id
+        assert service.pick_native_video_profile(db, None, me).vendor == "alibaba"  # google>alibaba>moonshot
         _add_native_profile(db, "google", base_url="https://gl/v1beta", model="gemini-2.0-flash")
     with SessionLocal() as db:
-        assert service.pick_native_video_profile(db, None, None).vendor == "google"
+        assert service.pick_native_video_profile(db, None, _me()).vendor == "google"
 
 
 def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
@@ -175,7 +187,7 @@ def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
     with SessionLocal() as db:
         _add_native_profile(db, "alibaba", base_url="https://dashscope/compatible-mode/v1", model="qwen-vl-max")
         asset = db.get(Asset, asset_json["id"])
-        result = service.analyze_asset(db, asset, "讲了什么", mode="native", user_id=None)
+        result = service.analyze_asset(db, asset, "讲了什么", mode="native", user_id=_me())
     assert result["mode"] == "native" and result["provider"] == "alibaba"
     assert result["answer"] == "海边散步的女孩"
     content = captured["json"]["messages"][0]["content"]
@@ -199,7 +211,7 @@ def test_analyze_video_native_gemini_inline_data(monkeypatch) -> None:
     with SessionLocal() as db:
         _add_native_profile(db, "google", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.0-flash")
         asset = db.get(Asset, asset_json["id"])
-        result = service.analyze_asset(db, asset, "描述", mode="native", user_id=None)
+        result = service.analyze_asset(db, asset, "描述", mode="native", user_id=_me())
     assert result["mode"] == "native" and result["provider"] == "google"
     assert ":generateContent" in captured["url"]
     assert captured["params"]["key"] == "sk-google"
@@ -214,7 +226,7 @@ def test_analyze_native_without_provider_errors() -> None:
     with SessionLocal() as db:
         asset = db.get(Asset, asset_json["id"])
         with pytest.raises(service.AnalysisError):
-            service.analyze_asset(db, asset, "?", mode="native", user_id=None)
+            service.analyze_asset(db, asset, "?", mode="native", user_id=_me())
 
 
 def test_analyze_auto_falls_back_to_frames(monkeypatch) -> None:
@@ -226,7 +238,7 @@ def test_analyze_auto_falls_back_to_frames(monkeypatch) -> None:
     with SessionLocal() as db:
         _add_native_profile(db, "minimax")  # 视觉但非原生视频
         asset = db.get(Asset, asset_json["id"])
-        result = service.analyze_asset(db, asset, "?", mode="auto", user_id=None)
+        result = service.analyze_asset(db, asset, "?", mode="auto", user_id=_me())
     assert result["mode"] == "frames" and result["frames"] == 2
 
 
@@ -239,4 +251,4 @@ def test_native_video_size_guard(monkeypatch) -> None:
         _add_native_profile(db, "alibaba")
         asset = db.get(Asset, asset_json["id"])
         with pytest.raises(service.AnalysisError):
-            service.analyze_asset(db, asset, "?", mode="native", user_id=None)
+            service.analyze_asset(db, asset, "?", mode="native", user_id=_me())

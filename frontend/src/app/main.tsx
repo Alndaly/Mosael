@@ -1,6 +1,3 @@
-// 必须第一个导入:把旧前缀 mibu.* 的 localStorage 键迁成 openstudio.*,早于任何读取它们的模块
-// (api/client.ts 在模块加载时就读 token / 服务器地址)。见 storageMigration.ts。
-import "@/app/storageMigration";
 
 import { createRoot } from "react-dom/client";
 

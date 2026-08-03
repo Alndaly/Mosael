@@ -100,15 +100,9 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     out = ProviderProfileOut.model_validate(profile)
     # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
     out.capability_ids = provider_models.profile_capabilities(db, profile)
-    mine = provider_credentials.get(db, profile.id, user.id)
-    shared = provider_credentials.shared_credential(db, profile.id)
-    credential = mine if mine is not None else None
+    credential = provider_credentials.get(db, profile.id, user.id)
     out.key_hint = provider_credentials.key_hint(credential)
-    out.is_mine = mine is not None
-    out.my_key_shared = bool(mine is not None and mine.shared)
-    # 我自己没配,但部署管理员放了一把大家都能用的 —— 界面要说清这一点,否则用户会以为
-    # 「我没配却能用」是个 bug,或者反过来重复配一遍。
-    out.uses_shared_key = mine is None and shared is not None
+    out.is_mine = credential is not None
     out.extra = _masked_extra(profile, credential)
     out.config = _masked_config(db, profile, credential)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
@@ -366,19 +360,15 @@ def put_my_credential(
 ) -> ProviderCredentialOut:
     """填**我自己**在这条连接上的钥匙。
 
-    这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
-    共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。
+    不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
     """
     profile = _require_profile(db, profile_id)
-    if body.shared:
-        ensure_deployment_admin(db, user)
     credential = provider_credentials.upsert(
         db,
         profile.id,
         user.id,
         api_key=(body.api_key or "").strip() if body.api_key is not None else None,
         secrets={k: v for k, v in (body.secrets or {}).items() if v.strip()} or None,
-        shared=body.shared,
     )
     db.commit()
     db.refresh(credential)
@@ -386,7 +376,6 @@ def put_my_credential(
         profile_id=profile.id,
         key_hint=provider_credentials.key_hint(credential),
         is_mine=True,
-        shared=bool(credential.shared),
     )
 
 
@@ -459,7 +448,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
     db.add(profile)
     db.flush()
     # 表单里填的密钥落成**填表这个人**的钥匙,而不是连接上的一列。管理员建连接时顺手填的
-    # 那把因此是他自己的;要给全员用得显式共享(见 PUT .../credential 的 shared)。
+    # 那把因此是他自己的 —— 别人各配各的。
     credential = provider_credentials.upsert(db, profile.id, user.id)
     _apply_profile_config(db, profile, incoming, creating=True, credential=credential)
     _sync_model_row(db, profile, incoming)

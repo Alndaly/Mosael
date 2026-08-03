@@ -241,7 +241,12 @@ export interface paths {
         };
         /**
          * Bootstrap
-         * @description Whether any local account exists — decides register vs login screen.
+         * @description 登录页开屏要知道的两件事:**这个部署里有人了吗**、**收不收自助注册**。
+         *
+         *     不需要登录 —— 这就是登录之前那一屏在问的。只回两个布尔,不泄露任何账号信息;而"库里有没有
+         *     人"本来就能从"不带邀请码注册能不能成"推出来。
+         *
+         *     没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。
          */
         get: operations["bootstrap_api_auth_bootstrap_get"];
         put?: never;
@@ -3005,8 +3010,7 @@ export interface paths {
          * Put My Credential
          * @description 填**我自己**在这条连接上的钥匙。
          *
-         *     这条不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
-         *     共享(`shared`)是例外 —— 那把钥匙是整个部署在花钱,只有部署管理员能置位。
+         *     不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
          */
         put: operations["put_my_credential_api_settings_providers__profile_id__credential_put"];
         post?: never;
@@ -4875,6 +4879,22 @@ export interface components {
             /** File */
             file: string;
         };
+        /**
+         * BootstrapOut
+         * @description 登录页开屏问的两件事(见 routes/auth.bootstrap)。不需要登录就能读。
+         */
+        BootstrapOut: {
+            /**
+             * Has Users
+             * @default false
+             */
+            has_users: boolean;
+            /**
+             * Open Registration
+             * @default true
+             */
+            open_registration: boolean;
+        };
         /** BrowserProfileCreate */
         BrowserProfileCreate: {
             /** Workspace Id */
@@ -6585,11 +6605,6 @@ export interface components {
             secrets?: {
                 [key: string]: string;
             };
-            /**
-             * Shared
-             * @default false
-             */
-            shared: boolean;
         };
         /** ProviderCredentialOut */
         ProviderCredentialOut: {
@@ -6605,11 +6620,6 @@ export interface components {
              * @default true
              */
             is_mine: boolean;
-            /**
-             * Shared
-             * @default false
-             */
-            shared: boolean;
         };
         /** ProviderDefaultOut */
         ProviderDefaultOut: {
@@ -6903,16 +6913,6 @@ export interface components {
              * @default false
              */
             is_mine: boolean;
-            /**
-             * My Key Shared
-             * @default false
-             */
-            my_key_shared: boolean;
-            /**
-             * Uses Shared Key
-             * @default false
-             */
-            uses_shared_key: boolean;
             /** Extra */
             extra?: {
                 [key: string]: string;
@@ -8854,9 +8854,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["BootstrapOut"];
                 };
             };
         };

@@ -690,7 +690,9 @@ class ProviderCredential(Base):
     凭据,而普通成员又没法带自己的钥匙 —— 订阅制账号(Claude Pro/Max)被多人共用,供应商
     那边看到的是同一个账号。
 
-    解析顺序见 domain/provider_credentials.resolve:**自己的 → 部署管理员共享的 → 没有**。
+    **没有"共享钥匙"这回事**:每个人配自己的。曾经有过一个 `shared` 位,是为了让升级无缝 ——
+    但它没有任何界面(等于隐藏状态),而且和这张表存在的理由自相矛盾:钥匙归人,正是为了不再
+    「所有人共用一把、花的是同一个人的钱」。
     """
 
     __tablename__ = "provider_credentials"
@@ -713,9 +715,6 @@ class ProviderCredential(Base):
     #: 同一份 OAuth 凭据,后写的会把已被服务端轮换作废的 refresh token 覆盖回去 ——
     #: 表现为用户莫名其妙被登出。写入时带上读到的版本,不匹配就拒绝(见 credentials 路由)。
     credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    #: 部署管理员放的一把「大家都能用」的钥匙。**只有部署管理员能置位** —— 共享的钥匙是整个
-    #: 部署在花钱,普通成员不能替部署做这个决定。这也正是升级前的行为,只是现在它是显式的。
-    shared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

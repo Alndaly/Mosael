@@ -247,6 +247,24 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
+def _drop_shared_credentials() -> None:
+    """去掉 `provider_credentials.shared`。
+
+    这个位是为了让第 4 步的升级无缝而加的:老库里那把大家共用的钥匙,迁移后仍然大家能用。
+    但它**没有任何界面**(等于一个只有迁移能置位的隐藏状态),而且和这张表存在的理由自相矛盾 ——
+    钥匙归人,正是为了不再「所有人共用一把、花的是同一个人的钱」。
+
+    已经存在的行不动:它们仍然属于那位部署管理员,只是不再对别人生效。
+    """
+    inspector = inspect(engine)
+    if "provider_credentials" not in set(inspector.get_table_names()):
+        return
+    if "shared" not in {c["name"] for c in inspector.get_columns("provider_credentials")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE provider_credentials DROP COLUMN shared"))
+
+
 def _migrate_encrypt_secrets() -> None:
     """把老库里明文躺着的密钥就地加密(见 core/secrets_at_rest)。
 
@@ -344,8 +362,9 @@ def _encrypted(value: object) -> str | None:
 def _migrate_provider_credentials() -> None:
     """钥匙从 `provider_profiles` 搬到 `provider_credentials`,并把那几列删掉。
 
-    升级前所有人共用档案行上那把钥匙。迁移把它变成**最早那位部署管理员的一条共享凭据**,于是
-    升级前后所有人照样能用;而从此以后每个人可以带自己的(见 domain/provider_credentials)。
+    升级前所有人共用档案行上那把钥匙。迁移把它归到**最早那位部署管理员**名下 —— 有主人,而且
+    只有他能用。别人各配各的(见 domain/provider_credentials:没有"共享钥匙"这回事,它没有界面,
+    而且回退到别人的钥匙正是这张表要消灭的东西)。
 
     **搬走而不是并存**:密钥列留在档案行上,就等于留着一条不经过解析、读到别人钥匙的路。
     列删掉之后,漏改的读取点会当场炸,而不是悄悄读到不该读的东西。
@@ -373,8 +392,7 @@ def _migrate_provider_credentials() -> None:
                     "credential_version",
                     "ALTER TABLE provider_credentials ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 0",
                 ),
-                ("shared", "ALTER TABLE provider_credentials ADD COLUMN shared BOOLEAN NOT NULL DEFAULT 0"),
-            ):
+                ):
                 if name not in existing:
                     conn.execute(text(ddl))
     columns = {col["name"] for col in inspector.get_columns("provider_profiles")}
@@ -407,8 +425,8 @@ def _migrate_provider_credentials() -> None:
                     text(
                         "INSERT OR IGNORE INTO provider_credentials "
                         "(profile_id, owner_user_id, api_key, oauth_credential, secrets, model_catalog, "
-                        " credential_version, shared, created_at, updated_at) "
-                        "VALUES (:pid, :uid, :key, :oauth, '{}', :catalog, :version, 1, :now, :now)"
+                        " credential_version, created_at, updated_at) "
+                        "VALUES (:pid, :uid, :key, :oauth, '{}', :catalog, :version, :now, :now)"
                     ),
                     {
                         "pid": row["id"],
@@ -737,6 +755,7 @@ def init_db() -> None:
     _migrate_encrypt_secrets()
     _migrate_job_actor()
     _migrate_provider_credentials()
+    _drop_shared_credentials()
     _migrate_tool_confirmations_session()
     _migrate_auth_session_expiry()
     _migrate_permission_modes()

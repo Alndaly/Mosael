@@ -7,7 +7,7 @@ import httpx
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, default_graph, interpolate, topo_order, validate_graph
-from tests.util import add_provider, fresh_client
+from tests.util import acting_as, add_provider, fresh_client
 
 
 def _install_llm_transport(monkeypatch, module, handler) -> None:
@@ -485,27 +485,32 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
         db.add(workflow)
         db.flush()
 
-        result = ai_nodes.llm(
-            db,
-            workflow,
-            {
-                "profile_id": profile.id,
-                "system": "只返回 JSON",
-                "prompt": "生成标题",
-                "model": "gpt-custom",
-                "temperature": "0.2",
-                "top_p": "0.8",
-                "max_tokens": "128",
-                "frequency_penalty": "0.1",
-                "presence_penalty": "0.2",
-                "seed": "42",
-                "stop": "END\nDONE",
-                "response_format": "json_schema",
-                "json_schema_name": "scene_plan",
-                "json_schema_strict": "true",
-                "json_schema": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]},
-            },
-        )
+        with acting_as(db):
+            result = ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "system": "只返回 JSON",
+                    "prompt": "生成标题",
+                    "model": "gpt-custom",
+                    "temperature": "0.2",
+                    "top_p": "0.8",
+                    "max_tokens": "128",
+                    "frequency_penalty": "0.1",
+                    "presence_penalty": "0.2",
+                    "seed": "42",
+                    "stop": "END\nDONE",
+                    "response_format": "json_schema",
+                    "json_schema_name": "scene_plan",
+                    "json_schema_strict": "true",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                    },
+                },
+            )
 
     assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
     assert captured["url"] == "https://example.test/v1/chat/completions"
@@ -553,7 +558,8 @@ def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
         db.flush()
 
         try:
-            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "x", "response_format": "json_object"})
+            with acting_as(db):
+                ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "x", "response_format": "json_object"})
         except WorkflowDomainError as exc:
             assert "合法 JSON" in str(exc)
         else:
@@ -589,7 +595,8 @@ def test_llm_node_surfaces_provider_error_body(monkeypatch) -> None:
         db.flush()
 
         try:
-            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})
+            with acting_as(db):
+                ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})
         except WorkflowDomainError as exc:
             msg = str(exc)
             assert "400" in msg
@@ -620,7 +627,8 @@ def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
         db.flush()
 
         try:
-            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "   "})
+            with acting_as(db):
+                ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "   "})
         except WorkflowDomainError as exc:
             assert "提示词为空" in str(exc)
         else:
@@ -1063,7 +1071,8 @@ def test_llm_节点会把用量记进账(monkeypatch) -> None:
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
         db.add(workflow)
         db.flush()
-        assert ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})["text"] == "hi"
+        with acting_as(db):
+            assert ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "hi"})["text"] == "hi"
         db.commit()
 
     with SessionLocal() as db:

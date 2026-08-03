@@ -106,52 +106,17 @@ def test_an_ordinary_member_still_cannot_change_the_connection() -> None:
 # ---------------- 解析顺序:自己的 → 部署管理员共享的 → 没有 ----------------
 
 
-def test_my_own_key_wins_over_the_shared_one() -> None:
-    from app.domain import provider_credentials
-
-    admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
-    admin.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-ADMIN", "shared": True})
-    mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE"})
-
-    with SessionLocal() as db:
-        mine = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate"))
-        assert mine is not None and mine.api_key == "sk-MATE"
-
-
-def test_the_shared_key_is_the_fallback() -> None:
-    """部署管理员可以放一把大家都能用的钥匙 —— 这正是升级前的行为,现在它是显式的。"""
-    from app.domain import provider_credentials
-
-    admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
-    admin.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-ADMIN", "shared": True})
-
-    with SessionLocal() as db:
-        fallback = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate"))
-        assert fallback is not None and fallback.api_key == "sk-ADMIN"
-
-
-def test_an_unshared_admin_key_is_not_a_fallback() -> None:
-    """管理员没说要共享,就不共享 —— 默认不是"因为他是管理员所以他的钥匙是大家的"。"""
+def test_each_person_uses_their_own_key() -> None:
     from app.domain import provider_credentials
 
     admin, mate = _deployment_admin_and_member()
     profile_id = _connection(admin)
     admin.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-ADMIN"})
+    mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE"})
 
     with SessionLocal() as db:
-        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
-
-
-def test_only_a_deployment_admin_can_share_a_key() -> None:
-    """共享的钥匙是整个部署在花钱 —— 普通成员不能替部署做这个决定。"""
-    admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
-    denied = mate.put(
-        f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE", "shared": True}
-    )
-    assert denied.status_code == 403, denied.text
+        mine = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate"))
+        assert mine is not None and mine.api_key == "sk-MATE"
 
 
 def test_without_any_key_it_says_so_instead_of_silently_using_someone_elses() -> None:
@@ -168,6 +133,21 @@ def test_without_any_key_it_says_so_instead_of_silently_using_someone_elses() ->
     assert "密钥" in refused.text or "配置" in refused.text, refused.text
 
 
+def test_there_is_no_such_thing_as_a_shared_key() -> None:
+    """**没有回退。** 曾经有过一个 `shared` 位(部署管理员放一把大家都能用的),删掉了:它没有
+    任何界面(等于隐藏状态),而且回退到别人的钥匙正是这张表要消灭的东西。"""
+    from app.db.models import ProviderCredential
+    from app.domain import provider_credentials
+
+    admin, _mate = _deployment_admin_and_member()
+    profile_id = _connection(admin)
+    admin.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-ADMIN"})
+
+    assert "shared" not in set(ProviderCredential.__table__.columns.keys())
+    with SessionLocal() as db:
+        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
+
+
 # ---------------- 搬走,而不是并存 ----------------
 
 
@@ -179,8 +159,8 @@ def test_the_profile_table_no_longer_holds_secrets() -> None:
 
 
 def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
-    """升级前所有人共用档案上那把钥匙。迁移把它变成**部署管理员的一条共享凭据**,
-    于是升级前后所有人都照样能用;而从此以后每个人可以带自己的。"""
+    """升级前所有人共用档案上那把钥匙。迁移把它归到**最早那位部署管理员**名下 —— 有主人,
+    而且只有他能用;别人各配各的(没有"共享钥匙"这回事)。"""
     from sqlalchemy import text
 
     from app.core.db import _migrate_provider_credentials, engine
@@ -199,9 +179,9 @@ def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
     from app.domain import provider_credentials
 
     with SessionLocal() as db:
-        for username in ("tester", "mate"):
-            resolved = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id(username))
-            assert resolved is not None and resolved.api_key == "sk-LEGACY", f"{username} 升级后用不了了"
+        mine = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
+        assert mine is not None and mine.api_key == "sk-LEGACY", "老钥匙没有归到管理员名下"
+        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
     with engine.begin() as conn:
         assert "api_key" not in {row[1] for row in conn.execute(text("PRAGMA table_info(provider_profiles)"))}
 

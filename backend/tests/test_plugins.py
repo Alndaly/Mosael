@@ -416,7 +416,7 @@ def test_旧写法的清单在扫描时就地迁移成新写法() -> None:
     assert "kind" not in migrated and "credentials" not in migrated            # 老字段清干净
 
     # 原文件留一份备份,并且不再作为清单被认出来。
-    assert (directory / "open-studio.plugin.json.bak").exists() or (directory / "mibu.plugin.json.bak").exists()
+    assert (directory / "open-studio.plugin.json.bak").exists()
 
     # 迁移完照样能用,而且工具没被悄悄关掉。
     package = packages(client)["dev.legacy"]

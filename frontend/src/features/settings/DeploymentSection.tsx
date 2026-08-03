@@ -52,6 +52,14 @@ export function DeploymentSection() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  // 这个部署收不收自助注册。开放时整段邀请码都不该出现 —— 摆一个用不上的生成按钮,
+  // 等于让人以为"不发码别人就进不来",而实际上谁都进得来。
+  const bootstrap = useQuery({
+    queryKey: ["auth-bootstrap"],
+    queryFn: () => api<{ open_registration: boolean }>("/api/auth/bootstrap"),
+  });
+  const inviteOnly = bootstrap.data?.open_registration === false;
+
   const [note, setNote] = React.useState("");
   const createInvite = useMutation({
     mutationFn: () =>
@@ -78,6 +86,11 @@ export function DeploymentSection() {
 
   return (
     <>
+      {!inviteOnly ? (
+        <SettingsGroup title={t("deployInvitesOpenTitle")} description={t("deployInvitesOpenDesc")}>
+          <></>
+        </SettingsGroup>
+      ) : (
       <SettingsGroup title={t("deployInvitesTitle")} description={t("deployInvitesDesc")}>
         <SettingsRow
           label={t("deployInviteNew")}
@@ -135,6 +148,7 @@ export function DeploymentSection() {
           </SettingsRow>
         )}
       </SettingsGroup>
+      )}
 
       <SettingsGroup title={t("deployAdminsTitle")} description={t("deployAdminsDesc")}>
         {(users.data ?? []).map((row) => (
@@ -159,10 +173,12 @@ export function DeploymentSection() {
             </span>
           </SettingsRow>
         ))}
-        <SettingsRow label={t("deployLastAdmin")} description={t("deployLastAdminDesc")}>
-          <Check size={14} className="text-success" />
-        </SettingsRow>
       </SettingsGroup>
+      {/* 这是一条**规则说明**,不是列表里的一个人。此前它被摆成同一组里的第三行、右边还配一个
+          绿勾,读起来像"最后一个不能收回"是某位管理员的名字、而那个勾是他的开关。 */}
+      <p className="mt-1.5 px-0.5 text-[11px] leading-relaxed text-muted-foreground">
+        {t("deployLastAdminDesc")}
+      </p>
     </>
   );
 }

@@ -171,7 +171,7 @@ cd frontend && pnpm gen:api              # 后端 OpenAPI 变更后重生成 TS 
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.open-studio/open-studio.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…;旧装机的 `mibu.db` 首次启动自动改名) |
+| `~/.open-studio/open-studio.db` | SQLite 主库(工作区/项目/素材/序列/任务/账号…; |
 | `~/.open-studio/media/` | 导入与导出的媒体文件 |
 | `~/.open-studio/kb_vectors.db` | 知识库向量(Milvus Lite,可配远程) |
 | `<userData>/logs/publisher.log` | 发布执行器全链路(认领/goto/登录/巡检/回报) |

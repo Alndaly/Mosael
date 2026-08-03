@@ -45,7 +45,7 @@ def test_browser_open_confirmation_opens_agent_session() -> None:
     with SessionLocal() as db:
         session = db.get(BrowserSession, sid)
         assert session is not None and session.owner_kind == "agent"
-        assert session.partition == f"ephemeral-{sid}"  # 隔离,非 persist:mibu-*
+        assert session.partition == f"ephemeral-{sid}"  # 隔离,非 persist:openstudio-*
 
 
 def test_browser_open_rejects_non_http_url() -> None:

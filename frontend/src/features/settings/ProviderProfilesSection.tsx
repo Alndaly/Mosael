@@ -499,8 +499,6 @@ export function ProviderProfilesSection({
                     </>
                   ) : profile.key_hint ? (
                     ` · ${profile.key_hint}`
-                  ) : profile.uses_shared_key ? (
-                    <> · {t("providerUsesSharedKey")}</>
                   ) : (
                     <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
                   )}
