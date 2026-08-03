@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import "@fontsource-variable/noto-sans-sc";
 import "../globals.css";
 import { SiteFooter } from "@/components/site-footer";
+import { NavProgress } from "@/components/nav-progress";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
@@ -106,6 +107,7 @@ export default async function LocaleLayout({
           >
             {t.nav.skipToContent}
           </a>
+          <NavProgress />
           <SiteHeader locale={current} />
           <main id="main">{children}</main>
           <SiteFooter locale={current} />
