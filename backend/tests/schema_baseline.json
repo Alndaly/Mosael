@@ -1,0 +1,640 @@
+{
+  "agent_memories": [
+    "content",
+    "created_at",
+    "id",
+    "project_id",
+    "source",
+    "updated_at",
+    "workspace_id"
+  ],
+  "agent_messages": [
+    "content",
+    "created_at",
+    "error",
+    "id",
+    "payload",
+    "role",
+    "session_id"
+  ],
+  "agent_sessions": [
+    "adapter",
+    "adapter_state",
+    "analysis_video_mode",
+    "created_at",
+    "external_key",
+    "id",
+    "model",
+    "origin",
+    "project_id",
+    "provider_profile_id",
+    "status",
+    "title",
+    "updated_at",
+    "workspace_id"
+  ],
+  "ai_runtime_config": [
+    "id",
+    "max_retries",
+    "updated_at"
+  ],
+  "assets": [
+    "created_at",
+    "file_key",
+    "id",
+    "kind",
+    "media_info",
+    "name",
+    "original_filename",
+    "project_id",
+    "source",
+    "tags",
+    "updated_at",
+    "workspace_id"
+  ],
+  "auth_sessions": [
+    "created_at",
+    "token",
+    "user_id"
+  ],
+  "browser_actions": [
+    "action",
+    "args",
+    "created_at",
+    "error",
+    "id",
+    "result",
+    "session_id",
+    "status",
+    "updated_at",
+    "workspace_id"
+  ],
+  "browser_profiles": [
+    "created_at",
+    "enabled",
+    "id",
+    "last_used_at",
+    "name",
+    "partition",
+    "proxy",
+    "updated_at",
+    "workspace_id"
+  ],
+  "browser_sessions": [
+    "created_at",
+    "id",
+    "kind",
+    "last_url",
+    "name",
+    "owner_id",
+    "owner_kind",
+    "partition",
+    "status",
+    "updated_at",
+    "workspace_id"
+  ],
+  "clip_transcript_refs": [
+    "clip_id",
+    "id",
+    "segment_id",
+    "transcript_id"
+  ],
+  "clips": [
+    "asset_id",
+    "created_at",
+    "effects",
+    "gain",
+    "id",
+    "linked_clip_id",
+    "muted",
+    "sequence_id",
+    "speed",
+    "src_in",
+    "src_out",
+    "text_override",
+    "timeline_start",
+    "track_id",
+    "transform",
+    "updated_at",
+    "workspace_id"
+  ],
+  "feishu_bind_codes": [
+    "code",
+    "expires_at",
+    "user_id",
+    "workspace_id"
+  ],
+  "feishu_bindings": [
+    "created_at",
+    "open_id",
+    "user_id",
+    "workspace_id"
+  ],
+  "feishu_bots": [
+    "app_id",
+    "app_secret",
+    "capability",
+    "created_at",
+    "enabled",
+    "id",
+    "name",
+    "status",
+    "status_detail",
+    "updated_at",
+    "workspace_id"
+  ],
+  "fonts": [
+    "created_at",
+    "family",
+    "file_key",
+    "id",
+    "original_filename",
+    "size",
+    "updated_at",
+    "workspace_id"
+  ],
+  "generated_assets": [
+    "asset_id",
+    "job_id",
+    "model",
+    "parameters",
+    "prompt",
+    "provider"
+  ],
+  "generation_jobs": [
+    "created_at",
+    "id",
+    "job_id",
+    "kind",
+    "model",
+    "provider",
+    "provider_profile_id",
+    "request",
+    "result_asset_id",
+    "session_id",
+    "updated_at",
+    "workspace_id"
+  ],
+  "generation_sessions": [
+    "created_at",
+    "id",
+    "kind",
+    "model",
+    "provider_profile_id",
+    "title",
+    "updated_at",
+    "workspace_id"
+  ],
+  "jobs": [
+    "created_at",
+    "error",
+    "id",
+    "kind",
+    "message",
+    "payload",
+    "progress",
+    "result",
+    "status",
+    "updated_at",
+    "workspace_id"
+  ],
+  "kb_chunks": [
+    "char_count",
+    "chunk_index",
+    "dataset_id",
+    "document_id",
+    "id",
+    "text",
+    "workspace_id"
+  ],
+  "kb_datasets": [
+    "chunk_overlap",
+    "chunk_size",
+    "created_at",
+    "description",
+    "graph_enabled",
+    "id",
+    "name",
+    "retrieval_mode",
+    "score_threshold",
+    "top_k",
+    "updated_at",
+    "workspace_id"
+  ],
+  "kb_documents": [
+    "char_count",
+    "chunk_count",
+    "content",
+    "created_at",
+    "dataset_id",
+    "error",
+    "id",
+    "source_ref",
+    "source_type",
+    "status",
+    "summary",
+    "tags",
+    "title",
+    "updated_at",
+    "workspace_id"
+  ],
+  "kb_embedding_config": [
+    "dim",
+    "id",
+    "model",
+    "provider_profile_id",
+    "updated_at"
+  ],
+  "luts": [
+    "created_at",
+    "file_key",
+    "id",
+    "name",
+    "original_filename",
+    "size",
+    "updated_at",
+    "workspace_id"
+  ],
+  "network_config": [
+    "id",
+    "no_proxy",
+    "proxy_url",
+    "updated_at"
+  ],
+  "notifications": [
+    "body",
+    "created_at",
+    "id",
+    "link",
+    "payload",
+    "read_at",
+    "title",
+    "type",
+    "user_id",
+    "workspace_id"
+  ],
+  "oauth_identities": [
+    "created_at",
+    "email",
+    "provider",
+    "subject",
+    "user_id"
+  ],
+  "plugin_capabilities": [
+    "exposed",
+    "instance_id",
+    "tool_name"
+  ],
+  "plugin_credentials": [
+    "created_at",
+    "instance_id",
+    "key",
+    "updated_at",
+    "value"
+  ],
+  "plugin_instances": [
+    "config",
+    "created_at",
+    "discovered_tools",
+    "enabled",
+    "id",
+    "name",
+    "package_id",
+    "updated_at"
+  ],
+  "plugin_invocations": [
+    "created_at",
+    "error",
+    "id",
+    "input",
+    "instance_id",
+    "output",
+    "status",
+    "tool_name"
+  ],
+  "plugin_packages": [
+    "id",
+    "manifest",
+    "name",
+    "version"
+  ],
+  "plugin_permission_grants": [
+    "created_at",
+    "granted",
+    "instance_id",
+    "permission",
+    "updated_at"
+  ],
+  "projects": [
+    "active_sequence_id",
+    "created_at",
+    "id",
+    "name",
+    "updated_at",
+    "workspace_id"
+  ],
+  "provider_credentials": [
+    "created_at",
+    "profile_id",
+    "updated_at"
+  ],
+  "provider_defaults": [
+    "capability",
+    "model",
+    "provider_profile_id",
+    "updated_at"
+  ],
+  "provider_models": [
+    "capability_ids",
+    "context_window",
+    "created_at",
+    "developer_role",
+    "display_name",
+    "enabled",
+    "id",
+    "max_output_tokens",
+    "model_id",
+    "provider_profile_id",
+    "reasoning",
+    "reasoning_effort",
+    "source",
+    "updated_at",
+    "vision"
+  ],
+  "provider_pricing_rules": [
+    "billing_unit",
+    "capability",
+    "created_at",
+    "currency",
+    "effective_from",
+    "effective_to",
+    "id",
+    "model",
+    "notes",
+    "provider",
+    "provider_profile_id",
+    "source",
+    "unit_amount_micros",
+    "updated_at",
+    "workspace_id"
+  ],
+  "provider_profiles": [
+    "base_url",
+    "created_at",
+    "enabled",
+    "extra",
+    "id",
+    "name",
+    "updated_at",
+    "vendor"
+  ],
+  "provider_usage_events": [
+    "agent_message_id",
+    "capability",
+    "cost_confidence",
+    "cost_micros",
+    "created_at",
+    "currency",
+    "duration_seconds",
+    "id",
+    "idempotency_key",
+    "job_id",
+    "model",
+    "operation",
+    "pricing_rule_id",
+    "provider",
+    "provider_profile_id",
+    "raw_usage",
+    "source_id",
+    "source_type",
+    "status",
+    "units",
+    "workspace_id"
+  ],
+  "publish_accounts": [
+    "binding_status",
+    "config",
+    "created_at",
+    "enabled",
+    "id",
+    "last_checked_at",
+    "last_error",
+    "name",
+    "platform",
+    "profile_name",
+    "proxy",
+    "workspace_id"
+  ],
+  "publish_tasks": [
+    "account_id",
+    "asset_id",
+    "created_at",
+    "description",
+    "error_message",
+    "id",
+    "job_id",
+    "screenshot_path",
+    "short_title",
+    "status",
+    "tags",
+    "title",
+    "updated_at",
+    "workspace_id"
+  ],
+  "registration_invites": [
+    "code",
+    "created_at",
+    "created_by",
+    "expires_at",
+    "note",
+    "used_by"
+  ],
+  "resource_shares": [
+    "created_at",
+    "id",
+    "kind",
+    "resource_id",
+    "shared_by",
+    "workspace_id"
+  ],
+  "scheduled_task_runs": [
+    "error",
+    "finished_at",
+    "id",
+    "job_id",
+    "result",
+    "scheduled_task_id",
+    "started_at",
+    "status"
+  ],
+  "scheduled_tasks": [
+    "created_at",
+    "enabled",
+    "id",
+    "kind",
+    "last_run_at",
+    "name",
+    "next_run_at",
+    "payload",
+    "project_id",
+    "schedule",
+    "timezone",
+    "trigger_type",
+    "updated_at",
+    "workspace_id"
+  ],
+  "sequence_operations": [
+    "actor_id",
+    "created_at",
+    "id",
+    "kind",
+    "payload",
+    "reverted",
+    "revision_after",
+    "revision_before",
+    "sequence_id",
+    "undo_of",
+    "workspace_id"
+  ],
+  "sequence_revisions": [
+    "created_at",
+    "id",
+    "render_plan_hash",
+    "revision",
+    "sequence_id",
+    "summary",
+    "workspace_id"
+  ],
+  "sequences": [
+    "created_at",
+    "fps",
+    "height",
+    "id",
+    "name",
+    "project_id",
+    "reframe",
+    "revision",
+    "subtitle_style",
+    "updated_at",
+    "width",
+    "workspace_id"
+  ],
+  "task_events": [
+    "created_at",
+    "id",
+    "job_id",
+    "payload",
+    "type"
+  ],
+  "tool_confirmations": [
+    "created_at",
+    "error",
+    "id",
+    "payload",
+    "permission",
+    "requested_by",
+    "resolved_at",
+    "result",
+    "status",
+    "summary",
+    "tool",
+    "workspace_id"
+  ],
+  "tracks": [
+    "duck",
+    "id",
+    "kind",
+    "locked",
+    "muted",
+    "name",
+    "position",
+    "sequence_id",
+    "solo"
+  ],
+  "transcript_segments": [
+    "end_time",
+    "id",
+    "speaker",
+    "start_time",
+    "text",
+    "transcript_id"
+  ],
+  "transcript_tokens": [
+    "end_time",
+    "id",
+    "segment_id",
+    "start_time",
+    "text",
+    "token_index"
+  ],
+  "transcripts": [
+    "asset_id",
+    "created_at",
+    "id",
+    "language",
+    "source",
+    "status",
+    "workspace_id"
+  ],
+  "tts_config": [
+    "engine",
+    "fish_model_dir",
+    "fish_repo_dir",
+    "id",
+    "python_path",
+    "source",
+    "updated_at"
+  ],
+  "users": [
+    "avatar_key",
+    "created_at",
+    "display_name",
+    "id",
+    "password_hash",
+    "signature",
+    "username"
+  ],
+  "voices": [
+    "created_at",
+    "id",
+    "name",
+    "reference_key",
+    "reference_text",
+    "source",
+    "source_asset_id",
+    "source_speaker",
+    "updated_at",
+    "workspace_id"
+  ],
+  "workflows": [
+    "created_at",
+    "description",
+    "graph",
+    "id",
+    "name",
+    "updated_at",
+    "workspace_id"
+  ],
+  "workspace_invitations": [
+    "created_at",
+    "id",
+    "invitee_id",
+    "inviter_id",
+    "responded_at",
+    "role",
+    "status",
+    "workspace_id"
+  ],
+  "workspace_members": [
+    "created_at",
+    "role",
+    "user_id",
+    "workspace_id"
+  ],
+  "workspaces": [
+    "created_at",
+    "id",
+    "name",
+    "updated_at"
+  ]
+}

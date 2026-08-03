@@ -248,6 +248,22 @@ def _migrate_provider_capabilities() -> None:
             conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN capability_ids JSON"))
 
 
+def _migrate_job_actor() -> None:
+    """`jobs` 补 `created_by`:这活儿**替谁干**。
+
+    后台线程手里只有一个 job,没有这一栏就答不出该用谁的钥匙、花谁的额度(见 domain/jobs.create_job
+    与 domain/provider_credentials)。老任务回填成 NULL —— 它们跑完了,而"当初是谁要的"这件事
+    老数据里确实没有记过,编一个出来比留空更糟。
+    """
+    inspector = inspect(engine)
+    if "jobs" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
+        if "created_by" not in existing:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN created_by VARCHAR(64)"))
+
+
 def _migrate_provider_credentials() -> None:
     """钥匙从 `provider_profiles` 搬到 `provider_credentials`,并把那几列删掉。
 
@@ -657,6 +673,7 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
     _migrate_provider_capabilities()
+    _migrate_job_actor()
     _migrate_provider_credentials()
     _migrate_tool_confirmations_session()
     _migrate_auth_session_expiry()
