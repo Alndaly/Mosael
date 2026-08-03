@@ -96,6 +96,7 @@ export function ProviderProfilesSection({
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
+  const [removing, setRemoving] = React.useState<ProviderProfile | null>(null);
   // 「我的密钥」和「编辑连接」是两个入口:连接是部署的配置(管理员改),钥匙是谁在花钱(各人各配)。
   const me = useQuery({ queryKey: ["auth-me"], queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me") });
   // 连接是部署的配置;密钥是我自己的。同一个弹窗里,前者只有部署管理员改得动。
@@ -437,6 +438,18 @@ export function ProviderProfilesSection({
       </ModalShell>
 
       <ConfirmDialog
+        open={removing !== null}
+        title={t("providerDeleteConnection")}
+        body={t("providerDeleteConnectionBody")
+          .replace("{name}", removing?.name ?? "")
+          .replace("{caps}", (removing?.capability_ids ?? []).map((id) => t(`capability_${id}` as never)).join("、") || "—")}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing) remove.mutate(removing.id);
+          setRemoving(null);
+        }}
+      />
+      <ConfirmDialog
         open={bulkDeleting}
         title={t("bulkDeleteConfirm").replace("{n}", String(bulk.count))}
         body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
@@ -555,11 +568,14 @@ export function ProviderProfilesSection({
                       />
                     )}
                     <MenuItem icon={<Pencil size={13} />} label={t("providerEdit")} onSelect={() => openEdit(profile)} />
+                    {/* 删的是**整条连接**,不是"从这个能力里移除" —— 一条连接可以同时供
+                        对话与生图(能力在模型行上)。在能力分区里点「删除」很容易被读成后者,
+                        所以这里点名它会连带什么消失,并且要过一次确认。 */}
                     <MenuItem
                       icon={<Trash2 size={13} />}
-                      label={t("delete")}
+                      label={t("providerDeleteConnection")}
                       destructive
-                      onSelect={() => remove.mutate(profile.id)}
+                      onSelect={() => setRemoving(profile)}
                     />
                   </PopoverContent>
                 </Popover>

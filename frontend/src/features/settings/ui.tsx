@@ -23,7 +23,9 @@ export function SettingsGroup({
   title: string;
   description?: string;
   actions?: React.ReactNode;
-  children: React.ReactNode;
+  /** 没有内容时**不画那个框** —— 只有标题和说明的分组(比如"自助注册已开放")本来就没有行,
+   *  空着渲染出来是一条无缘无故的横线。 */
+  children?: React.ReactNode;
 }) {
   return (
     <section className="grid gap-2 [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
@@ -34,7 +36,11 @@ export function SettingsGroup({
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
-      <div className="grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">{children}</div>
+      {React.Children.toArray(children).some(Boolean) && (
+        <div className="grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">
+          {children}
+        </div>
+      )}
     </section>
   );
 }

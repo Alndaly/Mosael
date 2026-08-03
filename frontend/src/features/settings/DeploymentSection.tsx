@@ -87,9 +87,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
   return (
     <>
       {!inviteOnly ? (
-        <SettingsGroup title={t("deployInvitesOpenTitle")} description={t("deployInvitesOpenDesc")}>
-          <></>
-        </SettingsGroup>
+        <SettingsGroup title={t("deployInvitesOpenTitle")} description={t("deployInvitesOpenDesc")} />
       ) : (
       <SettingsGroup title={t("deployInvitesTitle")} description={t("deployInvitesDesc")}>
         <SettingsRow

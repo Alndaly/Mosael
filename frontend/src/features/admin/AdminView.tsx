@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { ShieldCheck } from "lucide-react";
+import { Activity, Coins, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api/client";
@@ -15,6 +15,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/app/chart";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { DeploymentSection } from "@/features/settings/DeploymentSection";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
@@ -32,8 +33,10 @@ type Overview = components["schemas"]["AdminOverviewOut"];
  * 入口只对部署管理员显示(见 AppShell),后端每条路由也各自把关 —— 藏起来的入口不是权限。
  */
 
+// 成功 vs 失败,而不是"总数 vs 失败" —— 后者在全失败的部署上等于把同一根柱子画两遍,
+// 一眼看不出任何东西。堆叠之后柱子的高度仍然是当天的总数。
 const jobsConfig = {
-  total: { label: "", color: "var(--chart-ok)" },
+  succeeded: { label: "", color: "var(--chart-ok)" },
   failed: { label: "", color: "var(--chart-fail)" },
 } satisfies ChartConfig;
 
@@ -67,15 +70,21 @@ export function AdminView() {
       <SettingsGroup title={t("adminJobsTitle")} description={t("adminJobsDesc")}>
         <div className="w-full">
           {(stats?.jobs_by_day ?? []).length === 0 ? (
-            <p className="m-0 py-6 text-center text-xs text-muted-foreground">{t("adminNoData")}</p>
+            /* 空状态走全局那一个 —— 自己糊一行灰字,和别处的空状态长得不一样,读者会以为
+               "这里坏了"而不是"这里还没有东西"。 */
+            <EmptyState
+              icon={<Activity size={18} />}
+              title={t("adminNoDataTitle")}
+              body={t("adminNoData")}
+            />
           ) : (
             <ChartContainer config={jobsConfig} className="h-[180px]">
               <BarChart data={stats?.jobs_by_day ?? []}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tickFormatter={(day: string) => day.slice(5)} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="total" fill="var(--color-total)" radius={2} />
-                <Bar dataKey="failed" fill="var(--color-failed)" radius={2} />
+                <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" radius={[0, 0, 2, 2]} />
+                <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ChartContainer>
           )}
@@ -85,7 +94,11 @@ export function AdminView() {
       {/* 花销**按人分**:一个总数说明不了任何该做的决定,而按人分的这一列直接指向要谈的那个人。 */}
       <SettingsGroup title={t("adminSpendTitle")} description={t("adminSpendDesc")}>
         {spend.length === 0 ? (
-          <p className="m-0 py-2 text-xs text-muted-foreground">{t("adminNoSpend")}</p>
+          <EmptyState
+            icon={<Coins size={18} />}
+            title={t("adminNoSpendTitle")}
+            body={t("adminNoSpend")}
+          />
         ) : (
           <ul className="m-0 grid w-full list-none gap-1 p-0">
             {spend.map((row) => (
@@ -107,6 +120,9 @@ export function AdminView() {
       </SettingsGroup>
 
       <SettingsGroup title={t("adminUsersTitle")} description={t("adminUsersDesc")}>
+        {users.isSuccess && (users.data ?? []).length === 0 && (
+          <EmptyState icon={<Users size={18} />} title={t("adminNoUsersTitle")} body={t("adminNoUsers")} />
+        )}
         {(users.data ?? []).map((row) => (
           <SettingsRow
             key={row.id}
