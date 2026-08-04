@@ -107,3 +107,22 @@ def test_an_ordinary_member_cannot_read_or_set_it() -> None:
     client, _other, _mine, _me = _deployment_with_two_connections()
     mate = second_client("mate")
     assert mate.get("/api/admin/provider-defaults").status_code == 403
+
+
+def test_an_admin_sets_the_deployment_default_through_the_same_endpoint() -> None:
+    """管理页写的是同一条路由,只是带上 for_deployment —— 不为它另开一个接口。
+
+    选模型这件事已经解决过一次(一个下拉、跨连接列候选);这里复用那条路,读写换成
+    /api/admin 那一对即可。
+    """
+    client, _other, mine, _me = _deployment_with_two_connections()
+
+    saved = client.put(
+        "/api/settings/provider-defaults/chat",
+        json={"provider_profile_id": mine, "model": "the-one", "for_deployment": True},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["is_mine"] is False
+
+    rows = {row["capability"]: row for row in client.get("/api/admin/provider-defaults").json()}
+    assert rows["chat"]["model"] == "the-one"

@@ -47,8 +47,11 @@ function DefaultRow({
   label,
   current,
   highlighted,
+  forDeployment = false,
 }: {
   capability: string;
+  /** 写**部署那一行**(还没设过的人用哪个),而不是我自己的。只有部署管理员能写。 */
+  forDeployment?: boolean;
   label: string;
   current: ProviderDefault | undefined;
   highlighted?: boolean;
@@ -70,7 +73,10 @@ function DefaultRow({
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
-      api(`/api/settings/provider-defaults/${capability}`, { method: "PUT", body: JSON.stringify(patch) }),
+      api(`/api/settings/provider-defaults/${capability}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...patch, for_deployment: forDeployment }),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
   });
 
@@ -117,9 +123,16 @@ function DefaultRow({
 export function ProviderDefaultsSection({
   capabilities,
   focusCapability,
+  forDeployment = false,
+  title,
+  description,
 }: {
   capabilities?: string[];
   focusCapability?: string | null;
+  /** 管理页用:改的是**部署默认**(还没设过的人用哪个),读写都换成 /api/admin 那一对。 */
+  forDeployment?: boolean;
+  title?: string;
+  description?: string;
 }) {
   const t = useI18n();
   const providers = useQuery({
@@ -127,8 +140,9 @@ export function ProviderDefaultsSection({
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
   });
   const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+    queryKey: forDeployment ? ["admin-provider-defaults"] : ["provider-defaults"],
+    queryFn: () =>
+      api<ProviderDefault[]>(forDeployment ? "/api/admin/provider-defaults" : "/api/settings/provider-defaults"),
   });
 
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
@@ -152,7 +166,10 @@ export function ProviderDefaultsSection({
   }, [focusCapability]);
 
   return (
-    <SettingsGroup title={t("providerDefaultsTitle")} description={t("providerDefaultsDesc")}>
+    <SettingsGroup
+      title={title ?? t("providerDefaultsTitle")}
+      description={description ?? t("providerDefaultsDesc")}
+    >
       {enabled.length === 0 ? (
         <SettingsBlock>
           <p className="m-0 text-xs text-muted-foreground">{t("kbEmbedNoProvider")}</p>
@@ -166,6 +183,7 @@ export function ProviderDefaultsSection({
               label={row.label}
               current={byCapability.get(row.capability)}
               highlighted={focusCapability === row.capability}
+              forDeployment={forDeployment}
             />
           ))}
         </>
