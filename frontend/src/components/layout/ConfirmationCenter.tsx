@@ -43,6 +43,10 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
   // 旧写法是「只要有任何内联面就整体返回 null」,于是一开聊天面板,外部智能体的卡也跟着被藏掉。
   const handledSessions = useInlineConfirmSessions();
 
+  // 此刻在飞的是哪一张卡的哪一档 —— 同 InlineConfirmations。直接读 `settle.isPending` 的话,
+  // 屏上每张卡的每个按钮会一起转:转圈的意思是"我正在做这件事",而它们没有。
+  const busy = settle.isPending ? settle.variables : null;
+
   const items = (pending.data ?? []).filter(
     (item) => !item.session_id || !handledSessions.includes(item.session_id),
   );
@@ -70,9 +74,11 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
             <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
           <div className="flex gap-1.5">
+            {/* 转的只有被点的那一个;同一张卡的另一个禁掉 —— 一张卡只能有一个结论。 */}
             <Button
               size="sm"
-              loading={settle.isPending}
+              loading={busy?.id === item.id && busy.action === "approve"}
+              disabled={busy?.id === item.id}
               onClick={() => settle.mutate({ id: item.id, action: "approve" })}
             >
               <Check size={13} /> {t("confirmApprove")}
@@ -80,7 +86,8 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
             <Button
               size="sm"
               variant="outline"
-              loading={settle.isPending}
+              loading={busy?.id === item.id && busy.action === "reject"}
+              disabled={busy?.id === item.id}
               onClick={() => settle.mutate({ id: item.id, action: "reject" })}
             >
               <X size={13} /> {t("confirmReject")}

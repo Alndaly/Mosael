@@ -26,6 +26,21 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
  * 行为取决于某个 React 组件在不在,飞书和 MCP 那两条入口更是完全够不着。现在点它只是把工具名
  * 写进会话的白名单,放行由后端在开卡的那一刻判定(domain/agent/autopilot)。
  */
+/** 三档动作。顺序固定:允许一次 → 本会话始终允许 → 拒绝,从最小授权到最大再到否。 */
+type Choice = "once" | "session" | "reject";
+
+const CHOICES = [
+  { choice: "once", icon: Check, label: "confirmAllowOnce", variant: undefined, className: undefined },
+  { choice: "session", icon: CheckCheck, label: "confirmAllowSession", variant: "outline", className: undefined },
+  { choice: "reject", icon: X, label: "confirmReject", variant: "outline", className: "text-destructive" },
+] as const satisfies readonly {
+  choice: Choice;
+  icon: typeof Check;
+  label: "confirmAllowOnce" | "confirmAllowSession" | "confirmReject";
+  variant?: "outline";
+  className?: string;
+}[];
+
 /** `allowKey` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。 */
 export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: string; allowKey: string }) {
   const t = useI18n();
@@ -46,9 +61,32 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
     refetchOnWindowFocus: true,
   });
 
-  const settle = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
-      api<Confirmation>(`/api/confirmations/${id}/${action}`, { method: "POST" }),
+  /**
+   * 三档动作走**同一个** mutation —— 因为「谁在转」要由它的变量说了算。
+   *
+   * 此前是两个 mutation、三个按钮共读 `isPending`,于是点任何一个,同屏所有卡的所有按钮一起转。
+   * 转圈的意思是"我正在做这件事";六个一起转说的是另一件事,而这张卡正是需要知情同意的地方。
+   * 变量里带上卡的 id 和选了哪一档,`decide.variables` 就直接是"此刻在飞的是哪一个"。
+   *
+   * 「本会话始终允许」的两步(写白名单 → 批准)也收在这里顺序 await:它对用户是一个动作,
+   * 就该从头到尾转同一个按钮 —— 拆成两个 mutation 时,第二步一起手,转的会变成隔壁那个。
+   */
+  const decide = useMutation({
+    mutationFn: async ({ id, tool, choice }: { id: string; tool: string; choice: Choice }) => {
+      if (choice === "session") {
+        // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
+        const session = await api<AgentSession>(`/api/agent/sessions/${allowKey}`);
+        const next = Array.from(new Set([...(session.auto_allow_tools ?? []), tool]));
+        await api(`/api/agent/sessions/${allowKey}`, {
+          method: "PATCH",
+          body: JSON.stringify({ auto_allow_tools: next }),
+        });
+        void qc.invalidateQueries({ queryKey: ["agent-session", allowKey] });
+      }
+      return api<Confirmation>(`/api/confirmations/${id}/${choice === "reject" ? "reject" : "approve"}`, {
+        method: "POST",
+      });
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
       void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "unowned"] });
@@ -60,20 +98,8 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
     },
   });
 
-  /** 把这个工具加进会话白名单 —— 后端从此在开卡那一刻就放行它,不必等某个组件挂着。 */
-  const allowTool = useMutation({
-    mutationFn: async (tool: string) => {
-      const session = await api<AgentSession>(`/api/agent/sessions/${allowKey}`);
-      const next = Array.from(new Set([...(session.auto_allow_tools ?? []), tool]));
-      return api(`/api/agent/sessions/${allowKey}`, {
-        method: "PATCH",
-        body: JSON.stringify({ auto_allow_tools: next }),
-      });
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-session", allowKey] });
-    },
-  });
+  // 此刻在飞的是哪一张卡的哪一档。没有就是 null。
+  const busy = decide.isPending ? decide.variables : null;
 
   const items = pending.data ?? [];
   if (items.length === 0) return null;
@@ -95,32 +121,22 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
             <summary className="cursor-pointer select-none text-[11px] text-muted-foreground">{t("confirmPayload")}</summary>
             <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
+          {/* 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
+              别的卡完全不受影响 —— 它等的不是同一件事。 */}
           <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" loading={settle.isPending} onClick={() => settle.mutate({ id: item.id, action: "approve" })}>
-              <Check size={13} /> {t("confirmAllowOnce")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              loading={settle.isPending || allowTool.isPending}
-              onClick={() => {
-                // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
-                allowTool.mutate(item.tool, {
-                  onSuccess: () => settle.mutate({ id: item.id, action: "approve" }),
-                });
-              }}
-            >
-              <CheckCheck size={13} /> {t("confirmAllowSession")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive"
-              loading={settle.isPending}
-              onClick={() => settle.mutate({ id: item.id, action: "reject" })}
-            >
-              <X size={13} /> {t("confirmReject")}
-            </Button>
+            {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
+              <Button
+                key={choice}
+                size="sm"
+                variant={variant}
+                className={className}
+                loading={busy?.id === item.id && busy.choice === choice}
+                disabled={busy?.id === item.id}
+                onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
+              >
+                <Icon size={13} /> {t(label)}
+              </Button>
+            ))}
           </div>
         </div>
       ))}
