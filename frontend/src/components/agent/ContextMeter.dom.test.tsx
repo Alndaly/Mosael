@@ -1,4 +1,7 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -27,7 +30,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { CompactionNotice, ContextBreakdown, ContextMeter } from "@/components/agent/ContextMeter";
+import { CompactionNotice, ContextBreakdown, ContextMeter, PART_COLORS } from "@/components/agent/ContextMeter";
 
 describe("上下文水位", () => {
   it("窗口未知时整条不渲染", () => {
@@ -128,5 +131,18 @@ describe("压缩标记", () => {
   it("摘要为空时不给展开 —— 点开一片空白比不给展开更像坏了", () => {
     render(<CompactionNotice info={{ ...info, summary: "" }} />);
     expect(screen.queryByText("expand")).toBeNull();
+  });
+});
+
+describe("分项配色", () => {
+  it("只用 tokens.css 里真实存在的变量", () => {
+    // 编一个不存在的 CSS 变量不会报错,只会渲染成**透明**。第一版写了 --chart-2/--chart-4,
+    // 于是占了 35% 的工具定义那一段在水位条上完全看不见,图例里的色块也是空的 —— 一个
+    // "画出来了但看不见"的 bug,没有任何断言会红。所以这一条直接对着令牌文件核。
+    const tokens = readFileSync(resolve(__dirname, "../../design/tokens.css"), "utf8");
+    const used = Object.values(PART_COLORS).flatMap((cls) => [...cls.matchAll(/var\((--[\w-]+)\)/g)].map((m) => m[1]));
+
+    expect(used.length).toBe(Object.keys(PART_COLORS).length);
+    for (const name of used) expect(tokens).toContain(`${name}:`);
   });
 });

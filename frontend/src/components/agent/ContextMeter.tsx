@@ -35,12 +35,16 @@ export interface ContextInfo {
 /**
  * 分项的顺序与配色。**固定顺序**:同一段永远在同一个位置,水位变化时眼睛才追得住。
  *
+ * 颜色只用 tokens.css 里真实存在的 `--chart-*`(dataviz 校验过的明暗两档)。编一个不存在的
+ * 变量名不会报错,只会渲染成**透明** —— 第一版写了 `--chart-2/--chart-4`,于是占了 35% 的
+ * 那两段在条上完全看不见,而图例里的色块也是空的。ContextMeter.dom.test 里有一条守着这个。
+ *
  * `free` 用的是条本身的底色,所以不在这里给色 —— 它是"没被占"的那段,不是第四种内容。
  */
-const PART_COLORS: Record<string, string> = {
-  messages: "bg-primary",
-  tools: "bg-[var(--chart-2)]",
-  system: "bg-[var(--chart-4)]",
+export const PART_COLORS: Record<string, string> = {
+  messages: "bg-[var(--chart-ok)]",
+  tools: "bg-[var(--chart-audio)]",
+  system: "bg-[var(--chart-image)]",
 };
 const PART_ORDER = ["messages", "tools", "system", "free"] as const;
 
