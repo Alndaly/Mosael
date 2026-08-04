@@ -62,7 +62,9 @@ export function AdminView() {
   const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
 
   return (
-    <div className="grid content-start gap-4 overflow-y-auto p-4">
+    <div className="grid h-full min-h-0 content-start gap-4 overflow-y-auto p-4">
+      {/* `overflow-y-auto` 只有在**高度被约束**时才会滚:没有 h-full/min-h-0,这个 grid 会一直
+          长下去、把溢出甩给外层,而外层并没在滚 —— 于是整页卡住。仓库里能滚的几页都是这个写法。 */}
       {/* 四个数放在最上面:它们是"这台部署现在多大"的一句话回答。 */}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t("adminStatUsers")} value={stats?.users} hint={t("adminStatActive").replace("{n}", String(stats?.active_users_7d ?? 0))} />
