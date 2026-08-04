@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -14,6 +15,7 @@ from app.api.schemas import (
     UserSpendPoint,
 )
 from app.core.permissions import ensure_deployment_admin
+from app.domain import deployment
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES
 from app.db.models import (
     Asset,
@@ -77,6 +79,19 @@ def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
         )
         for person in people
     ]
+
+
+class RegistrationSwitch(BaseModel):
+    open: bool
+
+
+@router.put("/admin/registration")
+def set_registration(body: RegistrationSwitch, db: DbSession, user: CurrentUser) -> dict:
+    """开关自助注册。**谁能进这个部署**是部署级的决定 —— 和发邀请码、授予管理员同一类。"""
+    ensure_deployment_admin(db, user)
+    deployment.set_open_registration(db, body.open)
+    db.commit()
+    return {"open": deployment.open_registration(db)}
 
 
 @router.get("/admin/provider-defaults", response_model=list[ProviderDefaultOut])

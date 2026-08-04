@@ -333,6 +333,32 @@ def _migrate_provider_defaults_per_person() -> None:
         conn.execute(text("ALTER TABLE provider_defaults_new RENAME TO provider_defaults"))
 
 
+def _migrate_deployment_config() -> None:
+    """建部署配置行,并用**环境变量播一次种**。
+
+    老部署可能显式设过 `OPEN_STUDIO_OPEN_REGISTRATION=0`,那是它的选择,不该在升级时被默认值
+    冲掉。播种只发生一次:库里有行之后环境变量再变也不影响 —— 唯一真相是库。
+    """
+    import os
+
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return  # create_all 还没跑到(首次装机),下次启动再补
+    with engine.begin() as conn:
+        exists = conn.execute(text("SELECT 1 FROM deployment_config WHERE id = 'default'")).scalar()
+        if exists:
+            return
+        raw = (os.environ.get("OPEN_STUDIO_OPEN_REGISTRATION") or "").strip().lower()
+        seeded = 0 if raw in ("0", "false", "no", "off") else 1
+        conn.execute(
+            text(
+                "INSERT INTO deployment_config (id, open_registration, updated_at) "
+                "VALUES ('default', :open, :now)"
+            ),
+            {"open": seeded, "now": datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")},
+        )
+
+
 def _migrate_client_version() -> None:
     """`auth_sessions` 补 `client_version` / `last_seen_at`:这个人跑的是哪一版、还在不在用。"""
     inspector = inspect(engine)
@@ -766,6 +792,7 @@ def init_db() -> None:
     _migrate_provider_defaults_per_person()
     # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
     _migrate_encrypt_secrets()
+    _migrate_deployment_config()
     _migrate_client_version()
     _migrate_job_actor()
     _migrate_provider_credentials()

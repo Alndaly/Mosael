@@ -25,8 +25,13 @@ from tests.util import fresh_client, second_client
 
 
 def test_registration_is_open_by_default() -> None:
-    """默认开放 —— 关闭它现在是部署的选择,不再是产品的默认姿态。"""
-    assert Settings.model_fields["open_registration"].default is True
+    """默认开放 —— 关闭它现在是部署的选择,不再是产品的默认姿态。
+
+    判据从 Settings 换成了库:开关搬进 DeploymentConfig,环境变量只在首次迁移时播种。
+    """
+    from app.db.models import DeploymentConfig
+
+    assert DeploymentConfig.__table__.c.open_registration.default.arg is True
 
 
 def test_a_stranger_can_register_once_someone_is_there() -> None:
@@ -37,9 +42,14 @@ def test_a_stranger_can_register_once_someone_is_there() -> None:
 
 
 def test_a_deployment_can_still_close_it(monkeypatch) -> None:
-    """关得掉:内网部署、或者就是不想让人自助进来。"""
+    """关得掉:内网部署、或者就是不想让人自助进来 —— 现在在管理页里关,不必改环境变量。"""
+    from app.core.db import SessionLocal
+    from app.domain import deployment
+
     fresh_client()
-    monkeypatch.setattr(settings, "open_registration", False)
+    with SessionLocal() as db:
+        deployment.set_open_registration(db, False)
+        db.commit()
     refused = second_client.__wrapped__ if hasattr(second_client, "__wrapped__") else None
     from fastapi.testclient import TestClient
 

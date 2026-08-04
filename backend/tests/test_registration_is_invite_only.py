@@ -44,6 +44,16 @@ def _register(username: str = "stranger") -> TestClient:
 # ---------------- 注册 ----------------
 
 
+def _set_open(value: bool) -> None:
+    """开关搬进库了(见 db.models.DeploymentConfig)—— 测试也走同一处,不再改 settings。"""
+    from app.core.db import SessionLocal
+    from app.domain import deployment
+
+    with SessionLocal() as db:
+        deployment.set_open_registration(db, value)
+        db.commit()
+
+
 def test_the_first_account_can_always_register() -> None:
     """引导必须走得通 —— 空库上没有人可以发邀请。"""
     fresh_client()  # 建库并占掉第一个账号
@@ -52,8 +62,8 @@ def test_the_first_account_can_always_register() -> None:
 
 def test_a_stranger_cannot_register_once_someone_is_there(monkeypatch) -> None:
     """引导之后,注册不再是自助的。"""
-    monkeypatch.setattr(settings, "open_registration", False)
     fresh_client()
+    _set_open(False)  # 必须在 fresh_client 之后 —— 它会重建库,先写就没了
     stranger = TestClient(app)
 
     denied = stranger.post("/api/auth/register", json={"username": "stranger", "password": "whatever123"})
@@ -65,7 +75,8 @@ def test_a_stranger_cannot_register_once_someone_is_there(monkeypatch) -> None:
 def test_an_open_deployment_can_opt_back_in(monkeypatch) -> None:
     """有的部署确实想开放注册(比如内网 demo)—— 让他们显式说。"""
     fresh_client()
-    monkeypatch.setattr(settings, "open_registration", True)
+    _set_open(False)  # 这一条守的是**邀请制**下的行为;默认是开放的
+    _set_open(True)
     stranger = TestClient(app)
 
     allowed = stranger.post("/api/auth/register", json={"username": "stranger", "password": "whatever123"})
@@ -80,8 +91,8 @@ def test_an_invited_person_can_still_get_in(monkeypatch) -> None:
     所以需要两种邀请:一种进这个**部署**(拿到账号),一种进某个**工作区**。这正是 ADR 0008
     那条两层划分在实现里第一次显形的地方。
     """
-    monkeypatch.setattr(settings, "open_registration", False)
     owner = fresh_client()
+    _set_open(False)  # 必须在 fresh_client 之后 —— 它会重建库
     invite = owner.post("/api/auth/invites", json={"note": "给 mate"})
     assert invite.status_code == 200, invite.text
     code = invite.json()["code"]

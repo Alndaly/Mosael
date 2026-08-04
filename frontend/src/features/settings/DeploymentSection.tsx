@@ -59,6 +59,16 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
     queryFn: () => api<{ open_registration: boolean }>("/api/auth/bootstrap"),
   });
   const inviteOnly = bootstrap.data?.open_registration === false;
+  // 开关在这里改,不必去改环境变量重启后端 —— 谁能进这个部署,是部署管理员在界面上就该能做
+  // 的决定(和发邀请码、授予管理员同一类)。
+  const setRegistration = useMutation({
+    mutationFn: (open: boolean) => api("/api/admin/registration", { method: "PUT", body: JSON.stringify({ open }) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["auth-bootstrap"] });
+      void qc.invalidateQueries({ queryKey: ["registration-invites"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const [note, setNote] = React.useState("");
   const createInvite = useMutation({
@@ -86,9 +96,18 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
 
   return (
     <>
-      {!inviteOnly ? (
-        <SettingsGroup title={t("deployInvitesOpenTitle")} description={t("deployInvitesOpenDesc")} />
-      ) : (
+      <SettingsGroup title={t("deployRegistrationTitle")} description={t("deployRegistrationDesc")}>
+        <SettingsRow label={t("deployRegistrationOpen")} description={t("deployRegistrationOpenHint")}>
+          <Switch
+            checked={!inviteOnly}
+            disabled={setRegistration.isPending || bootstrap.isLoading}
+            onCheckedChange={(open) => setRegistration.mutate(open)}
+            aria-label={t("deployRegistrationOpen")}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      {!inviteOnly ? null : (
       <SettingsGroup title={t("deployInvitesTitle")} description={t("deployInvitesDesc")}>
         <SettingsRow
           label={t("deployInviteNew")}

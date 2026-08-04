@@ -908,6 +908,24 @@ class AiRuntimeConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class DeploymentConfig(Base):
+    """Singleton (id='default') 部署级开关 —— **这台后端**怎么对外。
+
+    为什么进库而不是留在环境变量里:改它是部署管理员在界面上就该能做的决定(和发邀请码、
+    授予管理员同一类),而环境变量意味着要能碰到部署机、要重启进程。
+
+    **库是唯一真相**;环境变量只在首次迁移时播一次种(见 core/db._migrate_deployment_config),
+    之后不再读 —— 不做"两边都读"的兼容,那样一个部署会同时有两个答案,而谁赢取决于代码里的顺序。
+    """
+
+    __tablename__ = "deployment_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    #: 陌生人能不能自己建账号。关掉之后要邀请码(见 routes/auth.register)。
+    open_registration: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class NetworkConfig(Base):
     """Singleton (id='default') 出站网络代理。
 

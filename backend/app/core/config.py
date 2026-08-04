@@ -15,16 +15,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path.home() / ".open-studio"
     backend_host: str = "127.0.0.1"
 
-    #: 允不允许自助注册。**默认开放。**
-    #:
-    #: 它一度默认关(ADR 0008 第 0 步),理由是那条跑出来过的链的第一环:注册 → 自己建工作区
-    #: → 满足当时那道自助的实例管理员判据 → 改实例配置 / 在服务端跑任意 Python。**那条链的
-    #: 中段和末段后来各自断了**:第 1 步把部署配置收到 `is_deployment_admin`(自己建工作区不再
-    #: 带来任何部署权限),第 5 步把代码执行搬进隔离环境。关注册当时是止血,伤口已经缝上了。
-    #:
-    #: 现在陌生人注册拿到的是**他自己的**工作区:看不到别人的东西(D3)、用不了别人的钥匙(D4)、
-    #: 跑不了伤到别人的代码(D2)。想关的部署把它设成 0 —— 那是部署的选择,不是产品的默认姿态。
-    open_registration: bool = True
+    # 「允不允许自助注册」曾经在这里。它搬进库了(见 db.models.DeploymentConfig):改它是
+    # 部署管理员在界面上就该能做的决定,而环境变量意味着要能碰到部署机、要重启进程。
+    # `OPEN_STUDIO_OPEN_REGISTRATION` 仍然被读一次 —— 只在首次迁移时播种(core/db)。
 
     backend_port: int = 8800
     # 后端日志级别(OPEN_STUDIO_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。

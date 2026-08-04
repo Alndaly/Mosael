@@ -22,6 +22,7 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.core.permissions import ensure_deployment_admin
 from app.core.security import hash_password, mint_login_session, new_session_token, verify_password
+from app.domain import deployment
 from app.db.models import AuthSession, RegistrationInvite, User, Workspace, WorkspaceMember, now
 
 router = APIRouter(tags=["auth"])
@@ -44,7 +45,7 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。
     """
     invite = _usable_invite(db, body.invite_code)
-    if not settings.open_registration and invite is None and db.scalar(select(User).limit(1)) is not None:
+    if not deployment.open_registration(db) and invite is None and db.scalar(select(User).limit(1)) is not None:
         raise HTTPException(
             status_code=403,
             detail="这个部署不开放自助注册,请向管理员要一个邀请码",
@@ -268,7 +269,7 @@ def bootstrap(db: DbSession) -> BootstrapOut:
     没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。
     """
     count = db.scalar(select(func.count()).select_from(User)) or 0
-    return BootstrapOut(has_users=count > 0, open_registration=settings.open_registration)
+    return BootstrapOut(has_users=count > 0, open_registration=deployment.open_registration(db))
 
 
 def _create_session(db: DbSession, user: User) -> str:

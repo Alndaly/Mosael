@@ -1006,9 +1006,12 @@ export const messages = {
     deployInvitesTitle: "注册邀请码",
     deployInvitesDesc:
       "这个部署**关掉了**自助注册,新成员需要一个邀请码才能建账号。码是一次性的,7 天后失效。把它带外发给对方,他自己设密码 —— 密码不经过任何第三人之手。",
-    deployInvitesOpenTitle: "自助注册已开放",
-    deployInvitesOpenDesc:
-      "任何能连到这个后端的人都可以自己建账号,不需要邀请码。他拿到的是他自己的工作区:看不到别人的内容、用不了别人的密钥,也碰不到这台机器的设置。要关掉自助注册,把后端的 OPEN_STUDIO_OPEN_REGISTRATION 设为 0,这里就会出现邀请码。",
+    deployRegistrationTitle: "谁能进这个部署",
+    deployRegistrationDesc:
+      "不论从哪扇门进来,他拿到的都是他自己的工作区:看不到别人的内容、用不了别人的密钥,也碰不到这台机器的设置。",
+    deployRegistrationOpen: "开放自助注册",
+    deployRegistrationOpenHint:
+      "开着:任何能连到这个后端的人都可以自己建账号。关掉:要一个邀请码,下面就会出现发码的地方。",
     deployInviteNew: "生成一个新码",
     deployInviteNewDesc: "备注只给你自己看,记一下这个码发给了谁。",
     deployInviteNotePlaceholder: "例如:给小李",
@@ -2748,9 +2751,12 @@ export const messages = {
     deployInvitesTitle: "Registration invites",
     deployInvitesDesc:
       "This deployment has self-serve signup **turned off**. A new member needs an invite code to create an account. Codes are single-use and expire after 7 days. Send one out of band — they choose their own password, so it never passes through anyone else's hands.",
-    deployInvitesOpenTitle: "Self-serve signup is open",
-    deployInvitesOpenDesc:
-      "Anyone who can reach this backend can create their own account; no invite needed. They get their own workspace: they cannot see anyone else's content, use anyone else's keys, or touch this machine's settings. To close it, set OPEN_STUDIO_OPEN_REGISTRATION=0 on the backend and invite codes will appear here.",
+    deployRegistrationTitle: "Who can join this deployment",
+    deployRegistrationDesc:
+      "Whichever door they come through, they get their own workspace: they cannot see anyone else's content, use anyone else's keys, or touch this machine's settings.",
+    deployRegistrationOpen: "Open self-serve signup",
+    deployRegistrationOpenHint:
+      "On: anyone who can reach this backend creates their own account. Off: they need an invite code, and the place to issue one appears below.",
     deployInviteNew: "Create a code",
     deployInviteNewDesc: "The note is for you — a reminder of who you sent it to.",
     deployInviteNotePlaceholder: "e.g. for Sam",

@@ -47,6 +47,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Notification": ("app/domain/notifications.py",),
     # 编排
     # 「谁的」与「共享给谁」是同一张表管的,所以它只归 sharing 域写。
+    # 部署级开关只归 deployment 域写 —— 「这台后端怎么对外」只该有一处答案。
+    "DeploymentConfig": ("app/domain/deployment.py",),
     "ResourceShare": ("app/domain/sharing.py",),
     # 钥匙只归 provider_credentials 域写 —— 「谁的钥匙」这个问题只该有一处答案。
     "ProviderCredential": ("app/domain/provider_credentials.py", "app/domain/provider_auth.py"),
