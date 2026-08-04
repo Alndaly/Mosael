@@ -10531,6 +10531,50 @@
         }
       }
     },
+    "/api/admin/registration": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set Registration",
+        "description": "开关自助注册。**谁能进这个部署**是部署级的决定 —— 和发邀请码、授予管理员同一类。",
+        "operationId": "set_registration_api_admin_registration_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Set Registration Api Admin Registration Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/provider-defaults": {
       "get": {
         "tags": [
@@ -13722,14 +13766,12 @@
           "context": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/AgentContextOut"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Context"
+            ]
           },
           "compaction": {
             "anyOf": [
@@ -13747,6 +13789,57 @@
         "type": "object",
         "title": "AgentCompactOut",
         "description": "一次手动压缩的结果。\n\n`compaction` 为 None 表示没有可压缩的内容(对话还太短)—— 界面据此说\"暂时不需要整理\",\n而不是显示一个\"压缩了 0 条\"的空结果。"
+      },
+      "AgentContextOut": {
+        "properties": {
+          "tokens": {
+            "type": "integer",
+            "title": "Tokens"
+          },
+          "window": {
+            "type": "integer",
+            "title": "Window"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/AgentContextPart"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "tokens",
+          "window",
+          "used"
+        ],
+        "title": "AgentContextOut",
+        "description": "窗口被**什么**占满了,不只是占了多少。\n\n一个百分比回答不了任何该做的决定:满了要清什么?清对话有用吗?而这个应用里最大的一块\n往往**不是对话** —— 工具定义每轮重发一遍,一条消息没有时它也在。分项由后端算:它需要\n系统提示的实际内容和工具清单,那两样都在服务端,前端猜出来的分项比没有分项更糟。"
+      },
+      "AgentContextPart": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "tokens": {
+            "type": "integer",
+            "title": "Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "tokens"
+        ],
+        "title": "AgentContextPart",
+        "description": "堆叠条里的一段。kind ∈ messages|tools|system|free。"
       },
       "AgentManifestOut": {
         "properties": {
@@ -14153,14 +14246,12 @@
           "context": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/AgentContextOut"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Context"
+            ]
           },
           "plan": {
             "anyOf": [
@@ -20630,6 +20721,19 @@
           "password"
         ],
         "title": "RegisterCredentials"
+      },
+      "RegistrationSwitch": {
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "title": "Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open"
+        ],
+        "title": "RegistrationSwitch"
       },
       "RenameRequest": {
         "properties": {

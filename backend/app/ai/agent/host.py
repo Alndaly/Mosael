@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+import math
 import threading
 import time
 
@@ -13,7 +15,7 @@ from app.ai.model_catalog import find_model
 from app.domain.provider_auth import read_credential
 from app.domain import provider_models
 from app.domain.agent import memory as agent_memory
-from app.domain.context_meter import context_tokens
+from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context_tokens
 from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -502,24 +504,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         # building the prompt) must still write an error message and reset session.status —
         # otherwise the worker dies silently and the session hangs in "running" forever.
         try:
-            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-                workspace_id=session.workspace_id,
-            )
-            # 跨会话记忆:每轮都注入,这正是它区别于知识库的地方(不用检索也生效)。
-            # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
-            system_prompt += agent_memory.memory_prompt(db, session.workspace_id, session.project_id)
-            # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。
-            if session.plan:
-                system_prompt += "\n\n【当前任务计划】(用 update_plan 更新)\n" + "\n".join(
-                    f"- [{step.get('status', 'pending')}] {step.get('step', '')}"
-                    for step in session.plan
-                    if isinstance(step, dict)
-                )
-            # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
-            if session.analysis_video_mode == "native":
-                system_prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'
-            elif session.analysis_video_mode == "frames":
-                system_prompt += '\n\n【用户设定】本次会话视频分析方式=抽帧:调用 analyze_asset 分析视频时必须传 mode="frames"(抽帧+转写)。'
+            system_prompt = build_system_prompt(db, session)
             # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
             provider_dict: dict | None = None
             agent_model: str | None = None
@@ -880,12 +865,57 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
             )
         )
     db.commit()
-    return {"context": result.context, "compaction": result.compaction}
+    # 压完的水位**在这边重算**,不用 sidecar 回报的那份:后者只有 {tokens, window},没有分项。
+    # 两条路给两种形状,界面就得判断"这次有没有明细" —— 而那正是同一个数有两个来源的代价。
+    return {"context": session_context(db, session), "compaction": result.compaction}
 
 
 #: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的 FALLBACK_CONTEXT_WINDOW 一致** ——
 #: 运行时压缩用的就是那个数,界面显示另一个数会让水位和实际行为对不上。
 FALLBACK_CONTEXT_WINDOW = 32000
+
+
+def build_system_prompt(db: Session, session: AgentSession) -> str:
+    """这一轮实际发出去的系统提示。
+
+    **只有一份**:跑一轮用它,算上下文水位也用它。分成两份的话,水位里那条"系统提示占了多少"
+    会慢慢变成一个和真实请求无关的数 —— 而它看起来仍然像测量结果。
+    """
+    prompt = SYSTEM_PROMPT_TEMPLATE.format(workspace_id=session.workspace_id)
+    # 跨会话记忆:每轮都注入,这正是它区别于知识库的地方(不用检索也生效)。
+    # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
+    prompt += agent_memory.memory_prompt(db, session.workspace_id, session.project_id)
+    # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。
+    if session.plan:
+        prompt += "\n\n【当前任务计划】(用 update_plan 更新)\n" + "\n".join(
+            f"- [{step.get('status', 'pending')}] {step.get('step', '')}"
+            for step in session.plan
+            if isinstance(step, dict)
+        )
+    # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
+    if session.analysis_video_mode == "native":
+        prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'
+    elif session.analysis_video_mode == "frames":
+        prompt += '\n\n【用户设定】本次会话视频分析方式=抽帧:调用 analyze_asset 分析视频时必须传 mode="frames"(抽帧+转写)。'
+    return prompt
+
+
+def tool_definition_tokens(db: Session) -> int:
+    """工具定义每轮重发一遍占掉多少 —— 这个应用里通常是**最大的一块**。
+
+    按 sidecar 实际发出去的形状估:名字 + 描述 + 参数 schema 的 JSON。它不随对话增长,所以
+    一条消息都没有的会话也已经占掉了一大块 —— 那正是这一屏要说清的事。
+    """
+    from app.domain.agent.tool_manifest import agent_tool_specs
+
+    payload = json.dumps(
+        [
+            {"name": spec.name, "description": spec.description, "parameters": spec.parameters}
+            for spec in agent_tool_specs(db)
+        ],
+        ensure_ascii=False,
+    )
+    return math.ceil(len(payload) / CHARS_PER_TOKEN)
 
 
 def session_context(db: Session, session: AgentSession) -> dict | None:
@@ -908,9 +938,18 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
             if entry.get("id") == agent_model:
                 window = entry.get("contextWindow") or entry.get("context_window")
                 break
+    window = int(window) if window else FALLBACK_CONTEXT_WINDOW
     return {
         "tokens": context_tokens(session.adapter_state),
-        "window": int(window) if window else FALLBACK_CONTEXT_WINDOW,
+        "window": window,
+        # 分项由**后端**给:算它需要系统提示的实际内容和工具清单,那两样都在服务端。前端猜不
+        # 出来,而猜出来的分项比没有分项更糟 —— 它看起来是测量结果。
+        **context_breakdown(
+            session.adapter_state,
+            system_prompt=build_system_prompt(db, session),
+            tool_tokens=tool_definition_tokens(db),
+            window=window,
+        ),
     }
 
 

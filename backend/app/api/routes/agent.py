@@ -18,6 +18,7 @@ from app.api.schemas import (
     AgentPlanUpdate,
     AgentMessageCreate,
     AgentCompactOut,
+    AgentContextOut,
     AgentMessageOut,
     AgentSessionCreate,
     AgentSessionOut,
@@ -92,7 +93,8 @@ def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -
 def get_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentSessionOut:
     session = _require_session(db, user, session_id)
     out = AgentSessionOut.model_validate(session)
-    out.context = host.session_context(db, session)
+    context = host.session_context(db, session)
+    out.context = AgentContextOut.model_validate(context) if context else None
     return out
 
 

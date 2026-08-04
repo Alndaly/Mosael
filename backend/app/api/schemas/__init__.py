@@ -615,6 +615,29 @@ class OAuthLoginOut(BaseModel):
     models: list[ProviderModelOut] = Field(default_factory=list)
 
 
+class AgentContextPart(BaseModel):
+    """堆叠条里的一段。kind ∈ messages|tools|system|free。"""
+
+    kind: str
+    tokens: int
+
+
+class AgentContextOut(BaseModel):
+    """窗口被**什么**占满了,不只是占了多少。
+
+    一个百分比回答不了任何该做的决定:满了要清什么?清对话有用吗?而这个应用里最大的一块
+    往往**不是对话** —— 工具定义每轮重发一遍,一条消息没有时它也在。分项由后端算:它需要
+    系统提示的实际内容和工具清单,那两样都在服务端,前端猜出来的分项比没有分项更糟。
+    """
+
+    #: 供应商上次实际看到的量(锚点用量 + 之后新增的估算)。水位条读 `used`,这个留给明细。
+    tokens: int
+    window: int
+    #: 各分项之和 = window。堆叠条按它画。
+    used: int
+    parts: list[AgentContextPart] = []
+
+
 class AgentCompactOut(BaseModel):
     """一次手动压缩的结果。
 
@@ -622,7 +645,7 @@ class AgentCompactOut(BaseModel):
     而不是显示一个"压缩了 0 条"的空结果。
     """
 
-    context: dict | None = None
+    context: AgentContextOut | None = None
     compaction: dict | None = None
 
 
@@ -1593,10 +1616,10 @@ class AgentSessionOut(OrmModel):
     analysis_video_mode: str = "auto"
     thinking_level: str = "off"
     status: str
-    #: 当前上下文水位 {tokens, window}。**每次请求现算**,而不是等某一轮回报 ——
-    #: 打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数,
-    #: 而"还能聊多久"这个问题恰恰在开口之前就要有答案。窗口取当前模型的,换模型即变。
-    context: dict | None = None
+    #: 当前上下文水位。**每次请求现算**,而不是等某一轮回报 —— 打开旧会话、刚换过模型、
+    #: 上一轮失败了,这些时候都没有新的一轮可以带回这个数,而"还能聊多久"这个问题恰恰在
+    #: 开口之前就要有答案。窗口取当前模型的,换模型即变。
+    context: AgentContextOut | None = None
     #: 当前任务计划 `[{"step","status"}]`;还没有计划时为 None(界面据此整块不显示)。
     plan: list[dict] | None = None
     created_at: datetime

@@ -13,14 +13,21 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 // 带占位符的那几条要返回真实模板,否则 .replace("{n}", …) 无从发生,断言就成了空过。
-const TEMPLATES: Record<string, string> = { agentContextLeft: "剩余 {n}%", agentCompacted: "移出 {n} 条,腾出 {saved}" };
+const TEMPLATES: Record<string, string> = {
+  agentContextLeft: "剩余 {n}%",
+  agentCompacted: "移出 {n} 条,腾出 {saved}",
+  agentContextPart_messages: "对话",
+  agentContextPart_tools: "工具定义",
+  agentContextPart_system: "系统提示",
+  agentContextPart_free: "剩余",
+};
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => TEMPLATES[key] ?? key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { CompactionNotice, ContextMeter } from "@/components/agent/ContextMeter";
+import { CompactionNotice, ContextBreakdown, ContextMeter } from "@/components/agent/ContextMeter";
 
 describe("上下文水位", () => {
   it("窗口未知时整条不渲染", () => {
@@ -53,8 +60,58 @@ describe("上下文水位", () => {
 
   it("只是读数,不再承载操作 —— 整理入口移进了会话设置", () => {
     const { container } = render(<ContextMeter context={{ tokens: 90, window: 100 }} />);
+    // 没有分项时连展开都没有:点开是空的浮层,比不给展开更像坏了。
     expect(container.querySelector("button")).toBeNull();
     expect(container.textContent).toContain("10");
+  });
+
+  it("按**实际占用**报剩余,而不是按对话那部分", () => {
+    // 工具定义与系统提示每轮重发,一条消息都没有的会话也已经占掉了三成。拿对话量当分子,
+    // 水位会在开口前显示"剩余 100%",而它不是 —— 而偏乐观的水位是最坏的那种。
+    const { container } = render(
+      <ContextMeter
+        context={{
+          tokens: 0,
+          window: 32_000,
+          used: 11_535,
+          parts: [
+            { kind: "messages", tokens: 0 },
+            { kind: "tools", tokens: 10_907 },
+            { kind: "system", tokens: 628 },
+            { kind: "free", tokens: 20_465 },
+          ],
+        }}
+      />,
+    );
+    expect(container.textContent).toContain("64");
+    expect(container.textContent).not.toContain("100");
+  });
+});
+
+describe("上下文明细", () => {
+  const context = {
+    tokens: 0,
+    window: 32_000,
+    used: 11_535,
+    parts: [
+      { kind: "messages", tokens: 0 },
+      { kind: "tools", tokens: 10_907 },
+      { kind: "system", tokens: 628 },
+      { kind: "free", tokens: 20_465 },
+    ],
+  };
+
+  it("说清楚窗口被**什么**占的 —— 这里最大的一块不是对话", () => {
+    const { container } = render(<ContextBreakdown context={context} />);
+    expect(container.textContent).toContain("工具定义");
+    expect(container.textContent).toContain("11k");
+    // 为 0 的分项不列:一行"对话 0 · 0%"只是噪音。
+    expect(container.textContent).not.toContain("对话");
+  });
+
+  it("有分项时水位可以点开", () => {
+    render(<ContextMeter context={context} />);
+    expect(screen.getByRole("button")).toBeTruthy();
   });
 });
 

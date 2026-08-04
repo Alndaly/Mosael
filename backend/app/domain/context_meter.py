@@ -69,7 +69,43 @@ def context_tokens(messages: Any) -> int:
     if anchor < 0:
         return sum(estimate_tokens(message) for message in messages)
     usage = messages[anchor]["usage"]
-    total = int(usage.get("input") or 0) + int(usage.get("output") or 0)
+    # **cacheRead 也占窗口。** 它在计价上另算(便宜十倍),但"还能装多少"问的是占地方,
+    # 两者没有区别。此前漏掉它,于是水位系统性偏乐观 —— 而偏乐观的水位是最坏的那种:
+    # 它让人以为还早,直到某一轮突然被压缩。
+    total = (
+        int(usage.get("input") or 0)
+        + int(usage.get("output") or 0)
+        + int(usage.get("cacheRead") or 0)
+    )
     for index in range(anchor + 1, len(messages)):
         total += estimate_tokens(messages[index])
     return total
+
+
+def context_breakdown(
+    messages: Any, *, system_prompt: str = "", tool_tokens: int = 0, window: int
+) -> dict[str, Any]:
+    """窗口被**什么**占满了,不只是占了多少。
+
+    单个百分比回答不了任何该做的决定:满了要清什么?清对话有用吗?而这个应用里真正的大头往往
+    **不是对话** —— 每次请求的完整 prompt 约 12k,其中会话可能只有几条消息,剩下几乎全是工具
+    定义(几十个工具的 JSON schema,每次请求重发一遍)。只给百分比,用户会去删对话,而那恰恰
+    是最小的一块。
+
+    各分项之和**正好等于窗口**(不足的部分记进 free)—— 否则那条堆叠条读起来就是错的。
+    """
+    system = math.ceil(len(system_prompt) / CHARS_PER_TOKEN)
+    used = context_tokens(messages)
+    # 会话那部分 = 总占用减去随每次请求重发的固定开销。锚点用量里已经含了它们。
+    conversation = max(0, used - system - tool_tokens)
+    occupied = min(window, system + tool_tokens + conversation)
+    return {
+        "window": window,
+        "used": occupied,
+        "parts": [
+            {"kind": "messages", "tokens": min(conversation, window)},
+            {"kind": "tools", "tokens": min(tool_tokens, max(0, window - conversation))},
+            {"kind": "system", "tokens": min(system, max(0, window - conversation - tool_tokens))},
+            {"kind": "free", "tokens": max(0, window - occupied)},
+        ],
+    }

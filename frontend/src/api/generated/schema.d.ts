@@ -3478,6 +3478,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Registration
+         * @description 开关自助注册。**谁能进这个部署**是部署级的决定 —— 和发邀请码、授予管理员同一类。
+         */
+        put: operations["set_registration_api_admin_registration_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/provider-defaults": {
         parameters: {
             query?: never;
@@ -4562,14 +4582,42 @@ export interface components {
          *     而不是显示一个"压缩了 0 条"的空结果。
          */
         AgentCompactOut: {
-            /** Context */
-            context?: {
-                [key: string]: unknown;
-            } | null;
+            context?: components["schemas"]["AgentContextOut"] | null;
             /** Compaction */
             compaction?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * AgentContextOut
+         * @description 窗口被**什么**占满了,不只是占了多少。
+         *
+         *     一个百分比回答不了任何该做的决定:满了要清什么?清对话有用吗?而这个应用里最大的一块
+         *     往往**不是对话** —— 工具定义每轮重发一遍,一条消息没有时它也在。分项由后端算:它需要
+         *     系统提示的实际内容和工具清单,那两样都在服务端,前端猜出来的分项比没有分项更糟。
+         */
+        AgentContextOut: {
+            /** Tokens */
+            tokens: number;
+            /** Window */
+            window: number;
+            /** Used */
+            used: number;
+            /**
+             * Parts
+             * @default []
+             */
+            parts: components["schemas"]["AgentContextPart"][];
+        };
+        /**
+         * AgentContextPart
+         * @description 堆叠条里的一段。kind ∈ messages|tools|system|free。
+         */
+        AgentContextPart: {
+            /** Kind */
+            kind: string;
+            /** Tokens */
+            tokens: number;
         };
         /** AgentManifestOut */
         AgentManifestOut: {
@@ -4733,10 +4781,7 @@ export interface components {
             thinking_level: string;
             /** Status */
             status: string;
-            /** Context */
-            context?: {
-                [key: string]: unknown;
-            } | null;
+            context?: components["schemas"]["AgentContextOut"] | null;
             /** Plan */
             plan?: {
                 [key: string]: unknown;
@@ -7395,6 +7440,11 @@ export interface components {
              * @default
              */
             invite_code: string;
+        };
+        /** RegistrationSwitch */
+        RegistrationSwitch: {
+            /** Open */
+            open: boolean;
         };
         /** RenameRequest */
         RenameRequest: {
@@ -16117,6 +16167,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_registration_api_admin_registration_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSwitch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
