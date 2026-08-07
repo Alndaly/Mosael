@@ -126,7 +126,7 @@ function PublishViewBar() {
   };
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[200] flex h-12 items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[84px]">
+    <div className="fixed inset-x-0 top-0 z-[200] flex h-12 items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[88px]">
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <button
           type="button"

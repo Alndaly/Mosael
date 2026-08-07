@@ -117,22 +117,28 @@ def test_setting_a_default_is_never_a_decision_for_everyone() -> None:
 # ---------------- 只读的东西不该挡 ----------------
 
 
-def test_anyone_can_see_which_models_exist() -> None:
-    """挡住"有哪些模型可选",等于让人闭着眼睛选自己的默认。"""
+def test_i_can_see_the_models_under_my_own_connections() -> None:
+    """挡住"有哪些模型可选",等于让人闭着眼睛选自己的默认 —— 但看到的只是**自己**连接下的那些。
+
+    连接归人之后,"别人的模型目录"这件事不存在了(见 test_connections_belong_to_a_person)。
+    """
+    _admin, mate, _workspace = _admin_and_member()
+    mine = _connection(mate)
+    mate.post(f"/api/settings/providers/{mine}/models", json={"model_id": "gpt-image-2"})
+
+    listed = mate.get("/api/settings/capability-models/image")
+    assert listed.status_code == 200
+    assert [row["model"] for row in listed.json()] == ["gpt-image-2"]
+    assert mate.get(f"/api/settings/providers/{mine}/models").status_code == 200
+
+
+def test_someone_elses_catalogue_is_not_even_visible() -> None:
+    """模型目录属于连接,连接属于人 —— 所以是 404 不是 403:他连它存不存在都不该知道。"""
     admin, mate, _workspace = _admin_and_member()
     profile_id = _connection(admin)
-    admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
-
-    assert mate.get("/api/settings/capability-models/image").status_code == 200
-    assert mate.get(f"/api/settings/providers/{profile_id}/models").status_code == 200
-
-
-def test_an_ordinary_member_still_cannot_change_the_catalogue() -> None:
-    """看得见不等于改得动:模型目录属于连接,连接是部署的配置。"""
-    admin, mate, _workspace = _admin_and_member()
-    profile_id = _connection(admin)
-    denied = mate.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "偷偷加一个"})
-    assert denied.status_code == 403, denied.text
+    assert mate.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "偷偷加一个"}).status_code == 404
+    assert mate.get(f"/api/settings/providers/{profile_id}/models").status_code == 404
+    assert mate.get("/api/settings/capability-models/image").json() == []
 
 
 # ---------------- 工作区的规则归工作区 ----------------
@@ -170,12 +176,17 @@ def test_an_editor_cannot_change_the_workspaces_autopilot_rules() -> None:
     "method,path,body",
     [
         ("put", "/api/settings/network", {"proxy_url": "http://127.0.0.1:1"}),
-        ("post", "/api/settings/providers", {"name": "X", "vendor": "openai", "config": {}}),
+        ("put", "/api/settings/ai-runtime", {"max_retries": 9}),
         ("post", "/api/auth/invites", {}),
     ],
 )
 def test_these_really_are_deployment_wide(method: str, path: str, body: dict) -> None:
-    """后果落在整台机器上的,仍然只有部署管理员能动:出网、连接怎么连、谁能进来。"""
+    """后果落在整台机器上的,仍然只有部署管理员能动:出网、重试、谁能进来。
+
+    **供应商连接已经不在这张表里了** —— 它归建它的那个人,谁都能建自己的(见
+    test_connections_belong_to_a_person)。判据始终是"后果落在谁身上":代理设置改的是这台机器
+    怎么出网,而一条连接花的是他自己的钱。
+    """
     _admin, mate, _workspace = _admin_and_member()
     denied = getattr(mate, method)(path, json=body)
     assert denied.status_code == 403, f"{path} 不该让普通成员改:{denied.text}"

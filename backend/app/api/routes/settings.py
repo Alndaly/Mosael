@@ -91,28 +91,17 @@ from app.domain.usage import (
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
-#: 端点字段的判据:`storage == "base_url"`,或者键名里带 endpoint / base_url。
-#: 按**形状**认而不是列一张名单 —— 名单会在下一个 vendor 加进来时漏掉一个,而漏掉不会有
-#: 任何东西报错。
-def _looks_like_endpoint(key: str, storage: str) -> bool:
-    key = key.lower()
-    return storage == "base_url" or "base_url" in key or "endpoint" in key
-
-
 def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ProviderProfileOut:
     """一条连接在**某个人**眼里的样子。
 
     `user` 是必填的:钥匙状态(尾四位、登没登录、过没过期)说的全都是**他自己**那把。此前这些
     字段读的是档案行上那唯一一把,于是所有人看到同一份 —— 而那把是谁的没人说得清。
 
-    **端点地址只给改得了它的人看。** 连接是部署级配置,只有部署管理员建得了改得了;而端点常常
-    是身份 —— 阿里云百炼的专属部署地址里带着租户标识,私有部署带着内网域名。密钥早就分级了
-    (别人的取不到,自己的只回尾四位),端点没有,因为它"看起来不像秘密"。判据不该是像不像
-    秘密,而是他能不能改它:改不了却看得见,只有泄露没有用处。
+    端点地址不再需要遮:连接归人(见 db.models.ProviderProfile),他能看到的连接全是自己的。
+    上一轮为了挡住"别人的私有部署地址印在他的列表里"加过一层按角色遮蔽 —— 那是打补丁,而且
+    它会让一个普通成员看不到**自己那条**连接的地址。根因是那条连接本来就不该出现在他的列表里。
     """
     out = ProviderProfileOut.model_validate(profile)
-    if not user.is_deployment_admin:
-        out.base_url = ""
     # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
     out.capability_ids = provider_models.profile_capabilities(db, profile)
     credential = provider_credentials.get(db, profile.id, user.id)
@@ -120,15 +109,6 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     out.is_mine = credential is not None
     out.extra = _masked_extra(profile, credential)
     out.config = _masked_config(db, profile, credential)
-    if not user.is_deployment_admin:
-        # extra / config 里也放着端点(自建代理、区域端点、图像生成 endpoint)。只遮 base_url
-        # 而漏掉这些,等于把同一件事做了一半 —— 而漏的那一半没有任何东西会报错。
-        out.extra = {k: v for k, v in out.extra.items() if not _looks_like_endpoint(k, "extra")}
-        out.config = {
-            k: v
-            for k, v in out.config.items()
-            if not _looks_like_endpoint(k, _field_storage(_spec_for(profile.vendor, k)))
-        }
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(credential and credential.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
@@ -390,7 +370,7 @@ def put_my_credential(
 
     不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
     """
-    profile = _require_profile(db, profile_id)
+    profile = _require_profile(db, profile_id, user)
     credential = provider_credentials.upsert(
         db,
         profile.id,
@@ -410,7 +390,7 @@ def put_my_credential(
 @router.delete("/settings/providers/{profile_id}/credential", status_code=204)
 def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
     """撤回我自己的钥匙。**连接不动** —— 它不是我的。"""
-    _require_profile(db, profile_id)
+    _require_profile(db, profile_id, user)
     provider_credentials.forget(db, profile_id, user.id)
     db.commit()
     return Response(status_code=204)
@@ -418,7 +398,13 @@ def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> R
 
 @router.get("/settings/providers", response_model=list[ProviderProfileOut])
 def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
-    profiles = db.scalars(select(ProviderProfile).order_by(ProviderProfile.created_at)).all()
+    # **只给他自己的**。连接归人(见 db.models.ProviderProfile):此前这里不做任何过滤,
+    # 于是新账号一进设置页就看到八条别人建的连接,每条底下一行「未配置你的密钥」。
+    profiles = db.scalars(
+        select(ProviderProfile)
+        .where(ProviderProfile.owner_user_id == user.id)
+        .order_by(ProviderProfile.created_at)
+    ).all()
     # 自动续期只碰**我自己**那把钥匙 —— 过期的是谁的,谁登录的时候才刷得动。
     _auto_refresh_expired(db, user, [(p, provider_credentials.get(db, p.id, user.id)) for p in profiles])
     return [_profile_out(db, profile, user) for profile in profiles]
@@ -450,10 +436,15 @@ def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str,
 
 @router.post("/settings/providers", response_model=ProviderProfileOut)
 def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
-    ensure_deployment_admin(db, user)
+    """建一条**我自己的**连接。
+
+    不再要求部署管理员:这是他自己的连接、他自己的钥匙、他自己的账单。要管理员才建得了的年代,
+    普通成员只能看着别人的连接干瞪眼 —— 看得见、用不了、也建不了自己的。
+    """
     profile = ProviderProfile(
         name=body.name,
         vendor=body.vendor,
+        owner_user_id=user.id,
         auth_type=normalize_auth_type(body.vendor, body.auth_type),
     )
     # 服务端凭据复制:同一把 Key 要配到另一能力的独立档案时,密钥从既有档案
@@ -461,9 +452,8 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
     # 先注入 secret 字段,再走常规配置应用 —— 显式传入的值仍可覆盖,必填校验共用。
     incoming = _config_from_body(body)
     if body.copy_credentials_from:
-        source = db.get(ProviderProfile, body.copy_credentials_from)
-        if source is None:
-            raise HTTPException(status_code=404, detail="复制来源档案不存在")
+        # 只能从**自己的**连接复制密钥 —— 否则这就是一条读到别人钥匙的路。
+        source = _require_profile(db, body.copy_credentials_from, user)
         for spec in _field_specs(body.vendor):
             if not spec.get("secret"):
                 continue
@@ -489,10 +479,7 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
 def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
-    ensure_deployment_admin(db, user)
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        raise HTTPException(status_code=404, detail="Not found")
+    profile = _require_profile(db, profile_id, user)
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch and body.name is not None:
         profile.name = body.name
@@ -527,17 +514,23 @@ def update_provider_profile(
     return _profile_out(db, profile, user)
 
 
-def _require_profile(db: DbSession, profile_id: str) -> ProviderProfile:
+def _require_profile(db: DbSession, profile_id: str, user: CurrentUser) -> ProviderProfile:
+    """**我自己那条**连接,不是就 404。
+
+    连接归人(见 db.models.ProviderProfile)。"别人的连接"和"不存在的连接"对他是同一件事 ——
+    回 403 等于告诉他这个 id 有效,而他连它存不存在都不该知道。
+
+    归属判定只此一处:每个路由各写一遍 `db.get(ProviderProfile, id)` 的话,漏掉任何一处都不会
+    报错,只会让那条路径能读到、改到别人的东西。
+    """
     profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
+    if profile is None or profile.owner_user_id != user.id:
         raise HTTPException(status_code=404, detail="供应商不存在")
     return profile
 
 
-def _oauth_profile(db: DbSession, profile_id: str) -> ProviderProfile:
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        raise HTTPException(status_code=404, detail="供应商不存在")
+def _oauth_profile(db: DbSession, profile_id: str, user: CurrentUser) -> ProviderProfile:
+    profile = _require_profile(db, profile_id, user)
     if profile.auth_type != "oauth" or not pi_provider_id(profile.vendor):
         raise HTTPException(status_code=400, detail="该供应商不是订阅计划,不需要授权登录")
     return profile
@@ -587,7 +580,7 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
     这里不再要求部署管理员:订阅计划(Claude Pro/Max、Kimi Code)是按人计费的,一个部署里
     每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。
     """
-    profile = _oauth_profile(db, profile_id)
+    profile = _oauth_profile(db, profile_id, user)
     from app.ai.agent.host import mint_tool_token
 
     try:
@@ -606,7 +599,7 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
 
 @router.get("/settings/providers/{profile_id}/oauth/login/{login_id}", response_model=OAuthLoginOut)
 def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> OAuthLoginOut:
-    profile = _oauth_profile(db, profile_id)
+    profile = _oauth_profile(db, profile_id, user)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="登录会话已结束")
@@ -618,7 +611,7 @@ def poll_oauth_login(profile_id: str, login_id: str, db: DbSession, user: Curren
 def answer_oauth_login(
     profile_id: str, login_id: str, body: OAuthAnswerIn, db: DbSession, user: CurrentUser
 ) -> OAuthLoginOut:
-    _oauth_profile(db, profile_id)
+    _oauth_profile(db, profile_id, user)
     session = get_login_session(login_id)
     if session is None or session.profile_id != profile_id:
         raise HTTPException(status_code=404, detail="登录会话已结束")
@@ -629,7 +622,7 @@ def answer_oauth_login(
 
 @router.delete("/settings/providers/{profile_id}/oauth/login/{login_id}", status_code=204)
 def cancel_oauth_login(profile_id: str, login_id: str, db: DbSession, user: CurrentUser) -> None:
-    _oauth_profile(db, profile_id)
+    _oauth_profile(db, profile_id, user)
     cancel_login(login_id)
 
 
@@ -640,7 +633,7 @@ def probe_provider_health(profile_id: str, db: DbSession, user: CurrentUser) -> 
     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
     """
-    profile = _require_profile(db, profile_id)
+    profile = _require_profile(db, profile_id, user)
     result = provider_health.probe(_resolved_or_bare(db, profile, user))
     return ProviderHealthOut(
         supported=result.supported,
@@ -661,7 +654,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
     查不到不抛 5xx:"这家不支持"和"这次没查成"都是正常结果,前端要据此显示不同的话,
     500 会被统一的错误提示吞成一句"请求失败"。
     """
-    profile = _oauth_profile(db, profile_id)
+    profile = _oauth_profile(db, profile_id, user)
     pi_provider = pi_provider_id(profile.vendor)
     if not supports_quota(pi_provider):
         return ProviderQuotaOut(supported=False)
@@ -693,7 +686,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
 @router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)
 def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
     """解除**我自己**在这条连接上的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做。"""
-    profile = _oauth_profile(db, profile_id)
+    profile = _oauth_profile(db, profile_id, user)
     lease = acquire_lease(profile.id, user.id)
     commit_credential(db, profile.id, user.id, lease, None)
     mine = provider_credentials.get(db, profile.id, user.id)
@@ -819,7 +812,7 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
             reasoning=model.reasoning,
             reasoning_effort=model.reasoning_effort,
         )
-        for model in provider_models.models_for_capability(db, capability)
+        for model in provider_models.models_for_capability(db, capability, user.id)
     ]
 
 
@@ -1030,7 +1023,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
     """
     # 只读:任何登录用户都看得到这条连接下有哪些模型 —— 他要据此选自己的默认。
-    profile = _require_profile(db, profile_id)
+    profile = _require_profile(db, profile_id, user)
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
     rows = [_model_out(model, catalog) for model in configured]
@@ -1059,8 +1052,7 @@ def add_provider_model(
 ) -> ProviderModelOut:
     """把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
     手填是为了私有部署与别名:目录查不到不等于不能用。"""
-    ensure_deployment_admin(db, user)
-    profile = _require_profile(db, profile_id)
+    profile = _require_profile(db, profile_id, user)
     model_id = (body.model_id or "").strip()
     if not model_id:
         raise HTTPException(status_code=422, detail="模型 id 不能为空")
@@ -1088,8 +1080,7 @@ def update_provider_model(
     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。"""
-    ensure_deployment_admin(db, user)
-    profile = _require_profile(db, profile_id)
+    profile = _require_profile(db, profile_id, user)
     model = provider_models.get_model(db, profile_id, model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="该连接下没有这个模型")
@@ -1111,7 +1102,7 @@ def update_provider_model(
 def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: CurrentUser) -> Response:
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""
-    ensure_deployment_admin(db, user)
+    _require_profile(db, profile_id, user)  # 归属判定,和这条连接上其余操作同一道门
     model = provider_models.get_model(db, profile_id, model_id)
     if model is not None:
         db.delete(model)
@@ -1121,8 +1112,7 @@ def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: C
 
 @router.delete("/settings/providers/{profile_id}", status_code=204)
 def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_deployment_admin(db, user)
-    profile = db.get(ProviderProfile, profile_id)
+    profile = _require_profile(db, profile_id, user)
     if profile is not None:
         db.delete(profile)
         db.commit()

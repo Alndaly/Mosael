@@ -118,5 +118,6 @@ def test_a_stranger_still_cannot_touch_the_deployment() -> None:
     stranger = second_client("stranger2")
     stranger.post("/api/workspaces", json={"name": "他自己的"})
     assert stranger.put("/api/settings/network", json={"proxy_url": "http://x"}).status_code == 403
-    assert stranger.post("/api/settings/providers", json={"name": "X", "vendor": "openai", "config": {}}).status_code == 403
     assert stranger.get("/api/auth/users").status_code == 403
+    # 他建得了**自己的**供应商连接(花他自己的钱),但看不到任何别人的。
+    assert stranger.get("/api/settings/providers").json() == []

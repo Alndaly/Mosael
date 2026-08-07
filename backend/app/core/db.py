@@ -352,6 +352,35 @@ def _migrate_hash_session_tokens() -> None:
             )
 
 
+def _migrate_connections_get_an_owner() -> None:
+    """给每条供应商连接补上主人。
+
+    老库里连接是部署级的、没有主人。**归给这台部署的管理员** —— 因为建连接一直需要部署管理员
+    权限,所以现存的每一条都是某个管理员建的。多个管理员时取最早那个:库里没记 creator,而"最早
+    的那个管理员"是唯一还能猜的答案,猜错的代价也只是他要把连接让给同事(而不是谁的钥匙串了)。
+
+    钥匙本来就是按人的,所以这一步不会让任何人拿到别人的钥匙:连接归了 A,B 在那条连接上的钥匙
+    行还在,只是 B 从此看不到那条连接 —— 这正是要的效果(见 tests/test_connections_belong_to_a_person)。
+    """
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("provider_profiles")}
+    with engine.begin() as conn:
+        if "owner_user_id" not in columns:
+            conn.execute(
+                text("ALTER TABLE provider_profiles ADD COLUMN owner_user_id VARCHAR(64) NOT NULL DEFAULT ''")
+            )
+        admin = conn.execute(
+            text("SELECT id FROM users WHERE is_deployment_admin = 1 ORDER BY created_at LIMIT 1")
+        ).scalar()
+        if admin:
+            conn.execute(
+                text("UPDATE provider_profiles SET owner_user_id = :uid WHERE owner_user_id = ''"),
+                {"uid": admin},
+            )
+
+
 def _migrate_drop_deployment_defaults() -> None:
     """删掉「部署默认模型」那些行 —— 这一档不存在了。
 
@@ -835,6 +864,7 @@ def init_db() -> None:
     _migrate_encrypt_secrets()
     _migrate_deployment_config()
     _migrate_drop_deployment_defaults()
+    _migrate_connections_get_an_owner()
     _migrate_hash_session_tokens()
     _migrate_client_version()
     _migrate_job_actor()

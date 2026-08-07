@@ -3034,7 +3034,13 @@ export interface paths {
         /** List Provider Profiles */
         get: operations["list_provider_profiles_api_settings_providers_get"];
         put?: never;
-        /** Create Provider Profile */
+        /**
+         * Create Provider Profile
+         * @description 建一条**我自己的**连接。
+         *
+         *     不再要求部署管理员:这是他自己的连接、他自己的钥匙、他自己的账单。要管理员才建得了的年代,
+         *     普通成员只能看着别人的连接干瞪眼 —— 看得见、用不了、也建不了自己的。
+         */
         post: operations["create_provider_profile_api_settings_providers_post"];
         delete?: never;
         options?: never;

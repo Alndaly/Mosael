@@ -131,12 +131,16 @@ def test_no_code_path_still_reads_the_empty_owner_row() -> None:
         return lines
 
     def cleanup_lines(source: str) -> set[int]:
-        """那个**删除**这些行的迁移不算违规 —— 禁掉它等于禁掉清理本身。它是唯一的例外,
-        按函数名点名放行,而不是放行整个文件。"""
+        """清理这些行的那两个迁移不算违规 —— 禁掉它们等于禁掉清理本身。"""
+        # 这两个迁移都必须碰那一列:一个删掉无主的默认行,一个给无主的连接补上主人。
+        # 禁掉它们等于禁掉清理本身。按函数名点名放行,而不是放行整个文件。
+        # **两个都要收**:上一版 `return` 在第一个匹配就出去了,于是另一个照样被判违规。
+        allowed = {"_migrate_drop_deployment_defaults", "_migrate_connections_get_an_owner"}
+        lines: set[int] = set()
         for node in ast.walk(ast.parse(source)):
-            if isinstance(node, ast.FunctionDef) and node.name == "_migrate_drop_deployment_defaults":
-                return set(range(node.lineno, (node.end_lineno or node.lineno) + 1))
-        return set()
+            if isinstance(node, ast.FunctionDef) and node.name in allowed:
+                lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+        return lines
 
     root = pathlib.Path(__file__).resolve().parents[1] / "app"
     offenders = []

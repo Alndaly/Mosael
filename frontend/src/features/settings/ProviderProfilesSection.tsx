@@ -97,10 +97,10 @@ export function ProviderProfilesSection({
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
   const [removing, setRemoving] = React.useState<ProviderProfile | null>(null);
-  // 「我的密钥」和「编辑连接」是两个入口:连接是部署的配置(管理员改),钥匙是谁在花钱(各人各配)。
-  const me = useQuery({ queryKey: ["auth-me"], queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me") });
-  // 连接是部署的配置;密钥是我自己的。同一个弹窗里,前者只有部署管理员改得动。
-  const canEditConnection = me.data?.is_deployment_admin ?? false;
+  // 连接归建它的那个人(见后端 db.models.ProviderProfile),而列表里只会出现自己的 ——
+  // 所以这里**没有**按角色分档的必要了:能看到它就说明它是我的,我就改得动。
+  // 此前这里按 is_deployment_admin 把连接字段设成只读,那是"连接属于部署"年代的写法,
+  // 它让一个普通成员看得见自己的连接却改不了任何一个字段。
   const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
@@ -226,7 +226,6 @@ export function ProviderProfilesSection({
           body: JSON.stringify({ api_key: apiKey ?? null, secrets }),
         });
       }
-      if (!canEditConnection) return;
       await api<ProviderProfile>(`/api/settings/providers/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ name: values.name.trim(), config }),
@@ -398,7 +397,6 @@ export function ProviderProfilesSection({
                       ) : (
                         <Input
                           type={spec.secret ? "password" : "text"}
-                          disabled={!spec.secret && !canEditConnection}
                           placeholder={spec.secret && editing ? t("providerKeyKeepPlaceholder") : spec.default || ""}
                           {...field}
                           value={field.value ?? ""}

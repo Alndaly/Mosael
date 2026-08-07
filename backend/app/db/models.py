@@ -666,12 +666,26 @@ class BrowserAction(Base):
 
 
 class ProviderProfile(Base):
-    """A user-configured AI provider account. Multiple profiles per vendor
-    are allowed (e.g. two OpenAI-compatible endpoints with different keys)."""
+    """某个人配的一条供应商连接。同一家可以配多条(两个 OpenAI 兼容端点、两把 key)。
+
+    **归建它的那个人。** 曾经是部署级的:任何登录用户都看得见全部连接,而只有部署管理员建得了、
+    改得了。理由写的是"怎么连到这家供应商是部署的配置" —— 那在单人机器上成立,在多租户产品里
+    不成立,而这个应用是后者。
+
+    代价跑出来过:新账号一进设置页就看到八条别人建的连接,每条底下一行红字「未配置你的密钥」——
+    看得见、用不了、也建不了自己的。端点泄露也是同一个根(别人的私有部署地址印在他的列表里),
+    当时是遮住地址,那只是打补丁。
+
+    现在钥匙和连接归同一个人,所以它们其实是一件事的两半;ProviderCredential 仍然单独一张表,
+    因为它装的是 oauth 令牌、模型目录这些**会变**的东西,而连接是用户填的那份配置。
+    """
 
     __tablename__ = "provider_profiles"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 谁的。不设外键、也不做级联:账号删除走 domain/members.delete_account 那条统一的路
+    #: (它按 schema 扫所有指向人的列),FK 在这里只会多一种删不掉账号的失败方式。
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="", index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     vendor: Mapped[str] = mapped_column(String(60), nullable=False)  # alibaba|bytedance|openai|moonshot|minimax|openai-compatible|...
     base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")

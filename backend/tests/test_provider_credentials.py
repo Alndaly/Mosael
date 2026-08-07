@@ -61,9 +61,9 @@ def _user_id(username: str) -> str:
 
 
 def test_an_ordinary_member_can_bring_their_own_key() -> None:
-    """配自己的钥匙不需要部署管理员 —— 否则所有人只能共用管理员那一把。"""
-    admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
+    """配自己的钥匙不需要部署管理员 —— 连接现在也归他自己(见 test_connections_belong_to_a_person)。"""
+    _admin, mate = _deployment_admin_and_member()
+    profile_id = _connection(mate)
 
     saved = mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE-1234"})
     assert saved.status_code == 200, saved.text
@@ -85,38 +85,43 @@ def test_my_key_is_not_readable_by_anyone_else() -> None:
 
 
 def test_deleting_my_key_leaves_the_connection_alone() -> None:
-    """钥匙是我的,连接不是 —— 撤回自己的钥匙不该把这条连接从别人那儿也拿走。"""
-    admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
+    """撤回钥匙 ≠ 删掉连接:端点、模型行都还在,只是这条连接暂时没钥匙可用。"""
+    _admin, mate = _deployment_admin_and_member()
+    profile_id = _connection(mate)
     mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE-1234"})
 
     assert mate.delete(f"/api/settings/providers/{profile_id}/credential").status_code == 204
-    assert mate.get("/api/settings/providers").json()[0]["key_hint"] == ""
-    assert admin.get("/api/settings/providers").status_code == 200
+    rows = mate.get("/api/settings/providers").json()
+    assert len(rows) == 1 and rows[0]["key_hint"] == "", "连接被一起删掉了"
 
 
-def test_an_ordinary_member_still_cannot_change_the_connection() -> None:
-    """端点、模型目录、定价是部署的配置,不是谁的钥匙。"""
+def test_i_cannot_change_someone_elses_connection() -> None:
+    """连接归人之后这条更强了:改不了,连"它存在"都不该知道 —— 所以是 404 不是 403。"""
     admin, mate = _deployment_admin_and_member()
     profile_id = _connection(admin)
     denied = mate.patch(f"/api/settings/providers/{profile_id}", json={"name": "改个名"})
-    assert denied.status_code == 403, denied.text
+    assert denied.status_code == 404, denied.text
 
 
-# ---------------- 解析顺序:自己的 → 部署管理员共享的 → 没有 ----------------
+# ---------------- 解析顺序:他自己那把,没有就是没有 ----------------
 
 
 def test_each_person_uses_their_own_key() -> None:
+    """两个人各配各的连接、各配各的钥匙,取到的必须是自己那把。"""
     from app.domain import provider_credentials
 
     admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
-    admin.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-ADMIN"})
-    mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE"})
+    theirs = _connection(admin)
+    mine = _connection(mate)
+    admin.put(f"/api/settings/providers/{theirs}/credential", json={"api_key": "sk-ADMIN"})
+    mate.put(f"/api/settings/providers/{mine}/credential", json={"api_key": "sk-MATE"})
 
     with SessionLocal() as db:
-        mine = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate"))
-        assert mine is not None and mine.api_key == "sk-MATE"
+        resolved = provider_credentials.resolve(db, db.get(ProviderProfile, mine), _user_id("mate"))
+        assert resolved is not None and resolved.api_key == "sk-MATE"
+        # 别人那条连接就算硬拿到 id,钥匙也不是他的。
+        others = provider_credentials.resolve(db, db.get(ProviderProfile, theirs), _user_id("mate"))
+        assert others is None or not others.api_key
 
 
 def test_without_any_key_it_says_so_instead_of_silently_using_someone_elses() -> None:

@@ -54,16 +54,20 @@ def get_model(db: Session, profile_id: str, model_id: str) -> ProviderModel | No
     ).first()
 
 
-def models_for_capability(db: Session, capability: str) -> list[ProviderModel]:
-    """所有启用且声明了该能力的模型(其连接也必须是启用的)。
+def models_for_capability(db: Session, capability: str, user_id: str | None = None) -> list[ProviderModel]:
+    """**他自己的**连接下,启用且声明了该能力的模型。
 
     选择器据此列项 —— 此前列的是"档案",于是同一个端点的对话模型和生图模型没法分别出现。
+
+    `user_id` 是必要的:连接归人(见 db.models.ProviderProfile),不过滤的话选择器会列出别人
+    连接下的模型 —— 选中一个之后调用必然失败,因为那条连接他根本看不到、也没有钥匙。
     """
-    rows = db.scalars(
-        select(ProviderModel).join(ProviderProfile).where(
-            ProviderModel.enabled.is_(True), ProviderProfile.enabled.is_(True)
-        )
-    ).all()
+    stmt = select(ProviderModel).join(ProviderProfile).where(
+        ProviderModel.enabled.is_(True), ProviderProfile.enabled.is_(True)
+    )
+    if user_id is not None:
+        stmt = stmt.where(ProviderProfile.owner_user_id == user_id)
+    rows = db.scalars(stmt).all()
     return [model for model in rows if capability in effective_capabilities(model)]
 
 

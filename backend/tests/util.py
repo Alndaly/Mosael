@@ -135,6 +135,15 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     secrets = fields.pop("secrets", None)
     model_catalog = fields.pop("model_catalog", None)
 
+    # 连接归人(见 db.models.ProviderProfile)。**主人和钥匙的主人是同一个** —— 分开的话
+    # 造出来的是一条没人能用的连接:主人看得见但没钥匙,有钥匙的那个看不见它。
+    query = db.query(User)
+    owner = (
+        query.filter(User.username == owner_username).one()
+        if owner_username
+        else query.order_by(User.created_at).first()
+    )
+    fields.setdefault("owner_user_id", owner.id if owner is not None else "")
     profile = ProviderProfile(**fields)
     db.add(profile)
     db.flush()
@@ -147,22 +156,10 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
         from app.domain import provider_defaults
 
         if make_default:
-            query = db.query(User)
-            owner = (
-                query.filter(User.username == owner_username).one()
-                if owner_username
-                else query.order_by(User.created_at).first()
-            )
             for capability in provider_models.effective_capabilities(row) if owner is not None else ():
                 if provider_defaults.get_row(db, capability, owner.id) is None:
                     provider_defaults.set_default(db, capability, row, owner_user_id=owner.id)
     if api_key is not None or oauth_credential is not None or secrets or model_catalog is not None:
-        query = db.query(User)
-        owner = (
-            query.filter(User.username == owner_username).one()
-            if owner_username
-            else query.order_by(User.created_at).first()
-        )
         if owner is not None:
             credential = provider_credentials.upsert(
                 db, profile.id, owner.id, api_key=api_key or "", secrets=secrets or None

@@ -26,13 +26,12 @@ def owner_and_outsider():
     return owner, second_client("outsider")
 
 
+#: 后果落在**这台机器**上的那些写操作。建供应商连接已经不在这张表里 —— 它归建它的那个人,
+#: 谁都能建自己的(见 tests/test_connections_belong_to_a_person):它花的是他自己的钱,
+#: 而 tts 的 python_path、插件扫描动的是这台机器本身。
 ADMIN_ONLY_WRITES = [
     ("put", "/api/settings/tts", {"engine": "f5-tts", "python_path": "/tmp/evil"}),
-    (
-        "post",
-        "/api/settings/providers",
-        {"name": "p", "vendor": "openai", "config": {"api_key": "k", "base_url": "http://x/v1"}},
-    ),
+    ("put", "/api/settings/network", {"proxy_url": "http://127.0.0.1:1"}),
     ("post", "/api/plugins/scan", None),
 ]
 
@@ -60,17 +59,15 @@ def test_an_outsider_cannot_repoint_a_provider_and_harvest_its_key(owner_and_out
     assert profile.status_code == 200, profile.text
     profile_id = profile.json()["id"]
 
-    # 改地址是布局,模型探测是那一步"把密钥发出去"的动作。
+    # 改地址是布局,模型探测是那一步"把密钥发出去"的动作。连接归人之后这两步连门都摸不到:
+    # 404 而不是 403 —— 他连这条连接存不存在都不该知道。
     assert outsider.patch(
         f"/api/settings/providers/{profile_id}", json={"config": {"base_url": "http://attacker.example/v1"}}
-    ).status_code == 403
-    assert outsider.delete(f"/api/settings/providers/{profile_id}").status_code == 403
+    ).status_code == 404
+    assert outsider.delete(f"/api/settings/providers/{profile_id}").status_code == 404
 
-    # 列模型现在**对所有登录用户开放**(他要据此选自己的默认模型),但那已经带不走任何东西:
-    # 密钥归人之后,探测用的是**发起者自己**那把 —— 他没有,就什么都不带(见 domain/provider_credentials)。
-    assert outsider.get(f"/api/settings/providers/{profile_id}/models").status_code == 200
-    listed = outsider.get("/api/settings/providers").json()
-    assert all(row["key_hint"] == "" for row in listed), "别人的钥匙提示露出来了"
+    assert outsider.get(f"/api/settings/providers/{profile_id}/models").status_code == 404
+    assert outsider.get("/api/settings/providers").json() == [], "别人的连接出现在他的列表里"
     acquired = outsider.post(f"/api/agent/provider-credentials/{profile_id}/acquire")
     assert acquired.json().get("credential") is None, "outsider 拿到了别人的凭据"
 

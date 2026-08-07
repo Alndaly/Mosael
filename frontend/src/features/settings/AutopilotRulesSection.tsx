@@ -81,7 +81,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       <SettingsRow
         label={t("autopilotHosts")}
         description={t("autopilotHostsDesc")}
-        className="grid-cols-1 items-start"
+        className="grid-cols-1 items-start gap-2"
       >
         <TokenList
           values={draft.http_allow_hosts}
@@ -95,7 +95,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       <SettingsRow
         label={t("autopilotAccounts")}
         description={t("autopilotAccountsDesc")}
-        className="grid-cols-1 items-start"
+        className="grid-cols-1 items-start gap-2"
       >
         <TokenList
           values={draft.publish_allow_accounts}
@@ -125,7 +125,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       <SettingsRow
         label={t("autopilotNotes")}
         description={t("autopilotNotesDesc")}
-        className="grid-cols-1 items-start"
+        className="grid-cols-1 items-start gap-2"
       >
         <Textarea
           className="min-h-[80px] text-xs"
@@ -162,13 +162,13 @@ function TokenList({
 }) {
   const [entry, setEntry] = React.useState("");
   const add = () => {
-    const value = entry.trim().toLowerCase();
+    const value = entry.trim();
     if (!value || values.includes(value)) return setEntry("");
     onChange([...values, value]);
     setEntry("");
   };
   return (
-    <div className="grid w-full gap-2">
+    <div className="grid w-full gap-1.5">
       {values.length === 0 ? (
         <p className="m-0 text-[11.5px] text-muted-foreground">{emptyLabel}</p>
       ) : (
