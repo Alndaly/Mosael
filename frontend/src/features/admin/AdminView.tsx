@@ -1,13 +1,15 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { Activity, Coins, ShieldCheck, Users } from "lucide-react";
+import { Activity, Coins, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/app/modals";
 import { Switch } from "@/components/ui/switch";
 import {
   ChartContainer,
@@ -45,6 +47,21 @@ export function AdminView() {
   const qc = useQueryClient();
   const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => api<Overview>("/api/admin/overview") });
   const users = useQuery({ queryKey: ["admin-users"], queryFn: () => api<AdminUser[]>("/api/admin/users") });
+
+  // 删账号:此前完全没有这条路 —— 能授予、能收回管理员,却删不掉一个账号,于是"清掉那个测试
+  // 账号"只能去手改数据库。删的范围与边界在后端(domain/members.delete_account):他独占的
+  // 工作区跟着走,还有别人在的挡下来并说清是哪几个。
+  const [removing, setRemoving] = React.useState<AdminUser | null>(null);
+  const removeUser = useMutation({
+    mutationFn: (id: string) => api(`/api/admin/users/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setRemoving(null);
+      void qc.invalidateQueries({ queryKey: ["admin-users"] });
+      void qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
+    // 挡下来的那句话(哪几个工作区里还有别人)本身就是下一步该做什么,原样给他看。
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const setAdmin = useMutation({
     mutationFn: ({ id, granted }: { id: string; granted: boolean }) =>
@@ -150,6 +167,17 @@ export function AdminView() {
                 onCheckedChange={(granted) => setAdmin.mutate({ id: row.id, granted })}
                 aria-label={t("deployAdminsTitle")}
               />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-destructive"
+                // 最后一个管理员删不得,同上。
+                disabled={removeUser.isPending || (row.is_deployment_admin && admins <= 1)}
+                onClick={() => setRemoving(row)}
+                aria-label={t("adminDeleteUser")}
+              >
+                <Trash2 size={13} />
+              </Button>
             </span>
           </SettingsRow>
         ))}
@@ -157,6 +185,15 @@ export function AdminView() {
 
       {/* 邀请码与部署管理员的授予仍是同一段逻辑,原样复用,不复制一份。 */}
       <DeploymentSection showAdmins={false} />
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("adminDeleteUser")}
+        // 说清后果再问 —— 这一步不可撤销,而"删掉账号"四个字没说他的工作区也跟着走。
+        body={t("adminDeleteUserBody").replace("{name}", removing?.display_name || removing?.username || "")}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && removeUser.mutate(removing.id)}
+      />
     </div>
   );
 }

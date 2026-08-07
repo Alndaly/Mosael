@@ -10531,6 +10531,42 @@
         }
       }
     },
+    "/api/admin/users/{user_id}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete User",
+        "description": "删掉一个账号,以及只属于他的那些东西(见 domain/members.delete_account)。\n\n此前没有这条路:管理页能授予、能收回部署管理员,却删不掉一个账号 —— 于是\"清理掉那个测试\n账号\"只能去手改数据库,而手改必然漏(有些指向人的列有意不设外键)。",
+        "operationId": "delete_user_api_admin_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/registration": {
       "put": {
         "tags": [

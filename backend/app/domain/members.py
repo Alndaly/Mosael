@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.db.models import User, Workspace, WorkspaceInvitation, WorkspaceMember
@@ -154,3 +154,81 @@ def remove_member(db: Session, workspace_id: str, user_id: str) -> None:
 
 
 
+
+
+#: 指向"某个人"的列。删账号时要跟着走的就是这些 —— **按 schema 认,不手写清单**:
+#: 新加一张带 owner_user_id 的表时,手写清单不会有任何东西提醒你漏了它,而漏掉的那些行会
+#: 变成指向不存在的人的孤儿(这些列有意不设外键,见 db.models)。
+PERSON_COLUMNS = ("user_id", "owner_user_id")
+
+
+def _tables_pointing_at_a_person() -> list[tuple[str, str]]:
+    from app.db.models import Base
+
+    return [
+        (table.name, column.name)
+        for table in Base.metadata.sorted_tables
+        for column in table.columns
+        if column.name in PERSON_COLUMNS
+    ]
+
+
+def solo_workspaces(db: Session, user_id: str) -> list[Workspace]:
+    """只有他一个成员的工作区。"""
+    rows = db.scalars(select(WorkspaceMember).where(WorkspaceMember.user_id == user_id)).all()
+    out: list[Workspace] = []
+    for member in rows:
+        others = db.scalar(
+            select(func.count())
+            .select_from(WorkspaceMember)
+            .where(WorkspaceMember.workspace_id == member.workspace_id, WorkspaceMember.user_id != user_id)
+        )
+        if not others:
+            workspace = db.get(Workspace, member.workspace_id)
+            if workspace is not None:
+                out.append(workspace)
+    return out
+
+
+def shared_workspaces(db: Session, user_id: str) -> list[Workspace]:
+    """他在里面、但还有别人的工作区。删账号时这些**不跟着走**。"""
+    solo = {w.id for w in solo_workspaces(db, user_id)}
+    rows = db.scalars(select(WorkspaceMember).where(WorkspaceMember.user_id == user_id)).all()
+    return [w for w in (db.get(Workspace, m.workspace_id) for m in rows) if w is not None and w.id not in solo]
+
+
+def delete_account(db: Session, user: User) -> None:
+    """删掉这个账号,以及只属于他的那些东西。
+
+    **他独占的工作区跟着他走**(里面只有他自己的内容,留着就是一堆没人看得见的行);**还有别人
+    在的不跟着走** —— 那里面有同事的素材、时间线、对话,宁可让管理员先去转让,也不要一次点击
+    毁掉别人的工作。
+
+    删的范围按 schema 推导(见 PERSON_COLUMNS),不手写清单:`agent_sessions.owner_user_id`
+    这类列有意不设外键,手写清单漏掉一张表不会有任何东西报错,只会留下指向不存在的人的孤儿行。
+
+    和「不能收回最后一个部署管理员」同一条:最后一个管理员不能删,否则这台部署没人管了。
+    """
+    with _lock:
+        if user.is_deployment_admin:
+            others = db.scalar(
+                select(func.count()).select_from(User).where(User.is_deployment_admin.is_(True), User.id != user.id)
+            )
+            if not others:
+                raise MemberError("这是最后一个部署管理员 —— 先把管理员给别人,再删这个账号。")
+        blocked = shared_workspaces(db, user.id)
+        if blocked:
+            names = "、".join(w.name for w in blocked)
+            raise MemberError(f"这些工作区里还有别人,不能跟着账号一起删:{names}。先转让或把他移出去。")
+
+        for workspace in solo_workspaces(db, user.id):
+            db.delete(workspace)  # 内容靠 FK CASCADE 跟着走
+        db.flush()
+
+        # 剩下的按列扫。users 那一行留到最后 —— 有 CASCADE 的表会自己走,没有的在这里清掉。
+        for table, column in _tables_pointing_at_a_person():
+            if table == "users":
+                continue
+            db.execute(text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": user.id})
+        db.delete(user)
+        db.commit()

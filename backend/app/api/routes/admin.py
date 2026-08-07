@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
@@ -14,7 +14,7 @@ from app.api.schemas import (
     UserSpendPoint,
 )
 from app.core.permissions import ensure_deployment_admin
-from app.domain import deployment
+from app.domain import deployment, members
 from app.db.models import (
     Asset,
     AuthSession,
@@ -75,6 +75,24 @@ def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
         )
         for person in people
     ]
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """删掉一个账号,以及只属于他的那些东西(见 domain/members.delete_account)。
+
+    此前没有这条路:管理页能授予、能收回部署管理员,却删不掉一个账号 —— 于是"清理掉那个测试
+    账号"只能去手改数据库,而手改必然漏(有些指向人的列有意不设外键)。
+    """
+    ensure_deployment_admin(db, user)
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    try:
+        members.delete_account(db, target)
+    except members.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=204)
 
 
 class RegistrationSwitch(BaseModel):
