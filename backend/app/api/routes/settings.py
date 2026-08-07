@@ -91,13 +91,28 @@ from app.domain.usage import (
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
+#: 端点字段的判据:`storage == "base_url"`,或者键名里带 endpoint / base_url。
+#: 按**形状**认而不是列一张名单 —— 名单会在下一个 vendor 加进来时漏掉一个,而漏掉不会有
+#: 任何东西报错。
+def _looks_like_endpoint(key: str, storage: str) -> bool:
+    key = key.lower()
+    return storage == "base_url" or "base_url" in key or "endpoint" in key
+
+
 def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ProviderProfileOut:
     """一条连接在**某个人**眼里的样子。
 
     `user` 是必填的:钥匙状态(尾四位、登没登录、过没过期)说的全都是**他自己**那把。此前这些
     字段读的是档案行上那唯一一把,于是所有人看到同一份 —— 而那把是谁的没人说得清。
+
+    **端点地址只给改得了它的人看。** 连接是部署级配置,只有部署管理员建得了改得了;而端点常常
+    是身份 —— 阿里云百炼的专属部署地址里带着租户标识,私有部署带着内网域名。密钥早就分级了
+    (别人的取不到,自己的只回尾四位),端点没有,因为它"看起来不像秘密"。判据不该是像不像
+    秘密,而是他能不能改它:改不了却看得见,只有泄露没有用处。
     """
     out = ProviderProfileOut.model_validate(profile)
+    if not user.is_deployment_admin:
+        out.base_url = ""
     # 连接对外提供的能力 = 它下面所有启用模型能力的并集(没有模型行时回落 vendor 预设)。
     out.capability_ids = provider_models.profile_capabilities(db, profile)
     credential = provider_credentials.get(db, profile.id, user.id)
@@ -105,11 +120,24 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     out.is_mine = credential is not None
     out.extra = _masked_extra(profile, credential)
     out.config = _masked_config(db, profile, credential)
+    if not user.is_deployment_admin:
+        # extra / config 里也放着端点(自建代理、区域端点、图像生成 endpoint)。只遮 base_url
+        # 而漏掉这些,等于把同一件事做了一半 —— 而漏的那一半没有任何东西会报错。
+        out.extra = {k: v for k, v in out.extra.items() if not _looks_like_endpoint(k, "extra")}
+        out.config = {
+            k: v
+            for k, v in out.config.items()
+            if not _looks_like_endpoint(k, _field_storage(_spec_for(profile.vendor, k)))
+        }
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(credential and credential.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
     out.oauth_expired = out.oauth_linked and is_expired(read_credential(credential))
     return out
+
+
+def _spec_for(vendor: str, key: str) -> dict:
+    return next((spec for spec in _field_specs(vendor) if str(spec.get("key", "")) == key), {})
 
 
 def _field_specs(vendor: str) -> list[dict]:
