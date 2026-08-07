@@ -209,9 +209,11 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           {section === "provider-embedding" && (
             <>
               <KbEmbeddingSection />
+              {/* 标题和上面那块不能同名:这一屏原本上下两个分组都叫「知识库嵌入」,
+                  上面是配置、下面是连接列表,而读者只看到同一个标题出现两次。 */}
               <ProviderProfilesSection
                 capability="embedding"
-                title={t("providerEmbeddingTitle")}
+                title={t("providerEmbeddingConnTitle")}
                 description={t("providerEmbeddingDesc")}
               />
             </>

@@ -8,6 +8,7 @@ import { AlertTriangle } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -91,6 +92,11 @@ export function KbEmbeddingSection() {
     (profile) => profile.enabled && (profile.capability_ids ?? []).includes("embedding"),
   );
   const watched = useWatch({ control: form.control });
+  // **这套配置到底在不在工作**,由后端说了算(model + 供应商都得有)。真实撞到过的形状:
+  // 用户删掉了那条 Ollama 连接,外键 SET NULL 把供应商清空,而模型名和维度原样留着 ——
+  // 于是界面渲染出一个填得满满的表单、右下角写着"已保存",而知识库检索一点都没在跑。
+  // 半截配置比空配置更坏:空的会让人去配,半截的让人以为配好了。
+  const off = config.data !== undefined && config.data.enabled === false;
   const dimChanged = (watched.dim ?? 0) !== initialDim;
   // 两个查询都就绪再挂表单:否则 Radix Select 会在选项挂载前拿到 value,显示空占位。
   const ready = profiles.data !== undefined && config.data !== undefined;
@@ -178,7 +184,15 @@ export function KbEmbeddingSection() {
               />
               <div className="mt-1 flex justify-end gap-1.5">
                 <small className="flex-1 self-center text-muted-foreground">{t("kbEmbedRebuildNote")}</small>
-                <small className="self-center whitespace-nowrap text-[11.5px] text-muted-foreground">{save.isPending ? t("wfSaving") : t("wfSavedShort")}</small>
+                {/* 没在工作的时候不说"已保存" —— 存是存下了,但那不是用户想知道的事。 */}
+                <small
+                  className={cn(
+                    "self-center whitespace-nowrap text-[11.5px]",
+                    off ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {off ? t("kbEmbedOff") : save.isPending ? t("wfSaving") : t("wfSavedShort")}
+                </small>
               </div>
             </div>
           </Form>
