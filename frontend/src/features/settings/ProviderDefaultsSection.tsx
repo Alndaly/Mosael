@@ -77,7 +77,13 @@ function DefaultRow({
         method: "PUT",
         body: JSON.stringify({ ...patch, for_deployment: forDeployment }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
+    onSuccess: () => {
+      // **两个列表两个键**:管理页读 /api/admin/provider-defaults(部署那一行),设置页读
+      // /api/settings/provider-defaults(我自己那一行)。只失效后者的话,管理页存完不刷新 ——
+      // 值确实写进去了,界面却纹丝不动,看起来就像这个开关不生效。
+      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+      void qc.invalidateQueries({ queryKey: ["admin-provider-defaults"] });
+    },
   });
 
   return (
