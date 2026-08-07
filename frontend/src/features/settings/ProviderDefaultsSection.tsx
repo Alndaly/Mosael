@@ -47,11 +47,8 @@ function DefaultRow({
   label,
   current,
   highlighted,
-  forDeployment = false,
 }: {
   capability: string;
-  /** 写**部署那一行**(还没设过的人用哪个),而不是我自己的。只有部署管理员能写。 */
-  forDeployment?: boolean;
   label: string;
   current: ProviderDefault | undefined;
   highlighted?: boolean;
@@ -75,15 +72,9 @@ function DefaultRow({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
       api(`/api/settings/provider-defaults/${capability}`, {
         method: "PUT",
-        body: JSON.stringify({ ...patch, for_deployment: forDeployment }),
+        body: JSON.stringify(patch),
       }),
-    onSuccess: () => {
-      // **两个列表两个键**:管理页读 /api/admin/provider-defaults(部署那一行),设置页读
-      // /api/settings/provider-defaults(我自己那一行)。只失效后者的话,管理页存完不刷新 ——
-      // 值确实写进去了,界面却纹丝不动,看起来就像这个开关不生效。
-      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
-      void qc.invalidateQueries({ queryKey: ["admin-provider-defaults"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["provider-defaults"] }),
   });
 
   return (
@@ -129,14 +120,11 @@ function DefaultRow({
 export function ProviderDefaultsSection({
   capabilities,
   focusCapability,
-  forDeployment = false,
   title,
   description,
 }: {
   capabilities?: string[];
   focusCapability?: string | null;
-  /** 管理页用:改的是**部署默认**(还没设过的人用哪个),读写都换成 /api/admin 那一对。 */
-  forDeployment?: boolean;
   title?: string;
   description?: string;
 }) {
@@ -145,10 +133,11 @@ export function ProviderDefaultsSection({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
   });
+  // 只有**我自己**那一份。曾经还有一份部署默认(管理页读 /api/admin/provider-defaults)——
+  // 删掉了:一个我没选过的模型替我回答,花我的额度、用我的钥匙,而我从没同意过。
   const defaults = useQuery({
-    queryKey: forDeployment ? ["admin-provider-defaults"] : ["provider-defaults"],
-    queryFn: () =>
-      api<ProviderDefault[]>(forDeployment ? "/api/admin/provider-defaults" : "/api/settings/provider-defaults"),
+    queryKey: ["provider-defaults"],
+    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
   });
 
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
@@ -189,7 +178,6 @@ export function ProviderDefaultsSection({
               label={row.label}
               current={byCapability.get(row.capability)}
               highlighted={focusCapability === row.capability}
-              forDeployment={forDeployment}
             />
           ))}
         </>

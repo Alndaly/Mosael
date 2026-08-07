@@ -140,14 +140,22 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     db.flush()
     if model:
         row = provider_models.upsert(db, profile, model, source="manual", capability_ids=capability_ids)
-        # 顺手设成**部署默认**。取默认模型没有"随便挑一个"的兜底(见 provider_models.resolve_default),
-        # 所以"这个部署配好了一条连接"在测试里就该包含"它是默认" —— 真实部署里也是管理员配完
-        # 顺手指定的那一步。已经有默认的能力不覆盖;要测「没有默认时怎么办」传 make_default=False。
+        # 顺手设成**钥匙主人自己的**默认。取默认模型没有任何兜底(既没有"随便挑一个",也没有
+        # "部署默认"——见 provider_models.resolve_default),所以"配好了一条连接"在测试里必须包含
+        # "某个人把它设成了自己的默认"。真实使用里也是同一步:谁配的钥匙,谁顺手选一下。
+        # 已经有默认的能力不覆盖;要测「没有默认时怎么办」传 make_default=False。
         from app.domain import provider_defaults
 
-        for capability in provider_models.effective_capabilities(row) if make_default else ():
-            if provider_defaults.get_row(db, capability, None) is None:
-                provider_defaults.set_default(db, capability, row, owner_user_id="")
+        if make_default:
+            query = db.query(User)
+            owner = (
+                query.filter(User.username == owner_username).one()
+                if owner_username
+                else query.order_by(User.created_at).first()
+            )
+            for capability in provider_models.effective_capabilities(row) if owner is not None else ():
+                if provider_defaults.get_row(db, capability, owner.id) is None:
+                    provider_defaults.set_default(db, capability, row, owner_user_id=owner.id)
     if api_key is not None or oauth_credential is not None or secrets or model_catalog is not None:
         query = db.query(User)
         owner = (

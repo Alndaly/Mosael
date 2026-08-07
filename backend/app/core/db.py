@@ -302,11 +302,12 @@ def _migrate_encrypt_secrets() -> None:
 def _migrate_provider_defaults_per_person() -> None:
     """`provider_defaults` 从「一项能力一行」变成「一个人一项能力一行」。
 
-    老库里那一行是**整个部署共用的默认**,迁移把它就地变成 `owner_user_id = ''` 那一行 ——
-    也就是"还没设过的人用这个"。升级前后行为一致:所有人看到的默认还是同一个;而从此以后
-    每个人可以设自己的(见 db.models.ProviderDefault)。
+    老库里那一行是**整个部署共用的默认**,没有主人。它曾被搬成 `owner_user_id = ''`(那时还有
+    "部署默认"这一档),而那一档已经删掉了 —— 所以这里**不搬**:一行没有主人的默认,找不到
+    任何一个人可以诚实地记在他名下。搬给所有人等于替每个人做了一次他没做过的选择,正是删掉
+    这一档要避免的事。升级后每个人第一次用时自己选一个(见 domain/provider_defaults.get_row)。
 
-    SQLite 改不了主键,所以按重建表的老办法:建新表 → 搬数据 → 换名。
+    SQLite 改不了主键,所以按重建表的老办法:建新表 → 换名。
     """
     inspector = inspect(engine)
     if "provider_defaults" not in set(inspector.get_table_names()):
@@ -321,14 +322,6 @@ def _migrate_provider_defaults_per_person() -> None:
                 "provider_profile_id VARCHAR(64), model VARCHAR(120) NOT NULL DEFAULT '', "
                 "provider_model_id VARCHAR(64), updated_at DATETIME NOT NULL, "
                 "PRIMARY KEY (capability, owner_user_id))"
-            )
-        )
-        conn.execute(
-            text(
-                "INSERT INTO provider_defaults_new "
-                "(capability, owner_user_id, provider_profile_id, model, provider_model_id, updated_at) "
-                "SELECT capability, '', provider_profile_id, model, provider_model_id, updated_at "
-                "FROM provider_defaults"
             )
         )
         conn.execute(text("DROP TABLE provider_defaults"))
@@ -357,6 +350,28 @@ def _migrate_hash_session_tokens() -> None:
                 text("UPDATE auth_sessions SET token = :hashed WHERE token = :raw"),
                 {"hashed": token_digest(str(stored)), "raw": stored},
             )
+
+
+def _migrate_drop_deployment_defaults() -> None:
+    """删掉「部署默认模型」那些行 —— 这一档不存在了。
+
+    它看起来温和:只在你没设过时生效。但造成的正是这个应用里反复出现的那种误解 —— 界面上你
+    没选过任何模型,回答却来自某个你不知道的模型,花的是你的额度、用的是你的钥匙,而你从没
+    同意过。**替人做的选择必须是他自己做的。**
+
+    **不把它下发给每个人**:那样所有人都会"已经有一个默认",而那个默认仍然不是他选的 ——
+    只是把同一个问题从一处挪到了每一处。删掉之后他会看到"还没选好模型,去选一个",这句话
+    他看得懂,而且知道下一步做什么。
+
+    针对的是已经做过按人拆分那一步的库(比如已经在跑的部署);更老的库在上一个迁移里就不搬了。
+    """
+    inspector = inspect(engine)
+    if "provider_defaults" not in set(inspector.get_table_names()):
+        return
+    if "owner_user_id" not in {c["name"] for c in inspector.get_columns("provider_defaults")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM provider_defaults WHERE owner_user_id = ''"))
 
 
 def _migrate_deployment_config() -> None:
@@ -819,6 +834,7 @@ def init_db() -> None:
     # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
     _migrate_encrypt_secrets()
     _migrate_deployment_config()
+    _migrate_drop_deployment_defaults()
     _migrate_hash_session_tokens()
     _migrate_client_version()
     _migrate_job_actor()

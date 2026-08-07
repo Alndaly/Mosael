@@ -791,9 +791,13 @@ class ProviderDefault(Base):
     只按 capability 建行、且要部署管理员才能改 —— 那是把「钥匙归人」那把尺子没量到底(ADR 0008
     D3 的同一条道理)。
 
-    `owner_user_id = ""` 是**部署默认**:给还没设过的人一个起点,由部署管理员放。解析顺序因此和
-    凭据一致:自己的 → 部署的 → 没有。用空串而不是 NULL 作哨兵,是因为 SQLite 允许 PRIMARY KEY
-    列为 NULL —— 那会让"部署默认"这一行可以重复插入而不报错。
+    **没有"部署默认"这一档。** 曾经有过一行 `owner_user_id=""` 当作"还没设过的人的起点",
+    删掉了(见 domain/provider_defaults.get_row):它看起来温和 —— 只在你没设时生效 —— 但造成的
+    正是这个应用里反复出现的那种误解:界面上你没选过任何模型,回答却来自某个你不知道的模型,
+    花的是你的额度、用的是你的钥匙。没设就说没设。
+
+    `owner_user_id` 用空串而不是 NULL 作默认值,是因为 SQLite 允许 PRIMARY KEY 列为 NULL ——
+    那会让同一个人的同一项能力可以重复插入而不报错。
     """
 
     __tablename__ = "provider_defaults"

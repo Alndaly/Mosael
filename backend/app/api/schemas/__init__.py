@@ -851,8 +851,6 @@ class CapabilityModelOut(BaseModel):
 class ProviderDefaultUpdate(BaseModel):
     provider_profile_id: str | None = None
     model: str = Field(default="", max_length=120)
-    #: 写**部署默认**那一行(给所有还没设过的人的起点)。只有部署管理员能置位。
-    for_deployment: bool = False
 
 
 class ProviderPricingRuleCreate(BaseModel):

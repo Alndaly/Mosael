@@ -3220,7 +3220,7 @@ export interface paths {
         };
         /**
          * List Provider Defaults
-         * @description **我**在每种能力下的默认供应商+模型;我没设过的回落部署默认,再没有就是空。
+         * @description **我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。
          */
         get: operations["list_provider_defaults_api_settings_provider_defaults_get"];
         put?: never;
@@ -3265,10 +3265,11 @@ export interface paths {
         get?: never;
         /**
          * Set Provider Default
-         * @description 设**我自己**在这项能力下的默认模型。
+         * @description 设**我自己**在这项能力下的默认模型。**只有这一档。**
          *
-         *     这条不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
-         *     `for_deployment` 是例外 —— 那一行是给所有还没设过的人的起点,替整个部署做的决定。
+         *     不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
+         *     曾经有过 `for_deployment` —— 写那一行 `owner_user_id=""` 当作"还没设过的人的起点" ——
+         *     删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。
          */
         put: operations["set_provider_default_api_settings_provider_defaults__capability__put"];
         post?: never;
@@ -3491,31 +3492,6 @@ export interface paths {
          * @description 开关自助注册。**谁能进这个部署**是部署级的决定 —— 和发邀请码、授予管理员同一类。
          */
         put: operations["set_registration_api_admin_registration_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/provider-defaults": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Deployment Defaults
-         * @description **部署默认模型** —— 还没设过的人用哪个。
-         *
-         *     它是必要的一层,不是可有可无:取默认模型现在**没有"随便挑一个"的兜底**(那个兜底会让
-         *     界面显示 A 而回答来自 B)。所以新人的起点必须有人替他回答,而那个人就是部署管理员。
-         *
-         *     此前它只能经 API 置位、没有任何界面 —— 一个没有界面的能力不是功能,是隐藏状态。
-         */
-        get: operations["deployment_defaults_api_admin_provider_defaults_get"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -6841,11 +6817,6 @@ export interface components {
              * @default
              */
             model: string;
-            /**
-             * For Deployment
-             * @default false
-             */
-            for_deployment: boolean;
         };
         /**
          * ProviderHealthOut
@@ -16202,35 +16173,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deployment_defaults_api_admin_provider_defaults_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderDefaultOut"][];
                 };
             };
             /** @description Validation Error */

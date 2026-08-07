@@ -78,30 +78,40 @@ def test_my_default_is_mine_and_does_not_touch_anyone_else() -> None:
     assert theirs["image"]["model"] == "gpt-image-3", "他改默认模型改到了别人头上"
 
 
-def test_the_deployment_default_is_the_fallback() -> None:
-    """新人不该面对一排空下拉。部署管理员放的那份是**没设过的人**的起点,不是命令。"""
+def test_a_newcomer_starts_with_nothing_chosen() -> None:
+    """新人面对的是一排空下拉,而这是**对的**。
+
+    曾经有一层部署默认给他当起点,删掉了:一个他没选过的模型替他回答,花的是他的额度、用的是
+    他的钥匙。空下拉配上一句"先选一个"是能看懂的;悄悄替他选一个,他连发生了什么都不知道。
+    """
     admin, mate, _workspace = _admin_and_member()
     profile_id = _connection(admin)
     admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
     admin.put(
         "/api/settings/provider-defaults/image",
-        json={"provider_profile_id": profile_id, "model": "gpt-image-2", "for_deployment": True},
+        json={"provider_profile_id": profile_id, "model": "gpt-image-2"},
     )
 
     theirs = {row["capability"]: row for row in mate.get("/api/settings/provider-defaults").json()}
-    assert theirs["image"]["model"] == "gpt-image-2"
-    assert theirs["image"]["is_mine"] is False, "该说清这是部署给的默认,不是他自己设的"
+    assert theirs["image"]["model"] == "", "拿到了管理员的默认"
+    assert theirs["image"]["is_mine"] is False
 
 
-def test_only_a_deployment_admin_can_set_the_deployment_default() -> None:
-    """部署默认影响所有没设过的人 —— 那是替整个部署做决定。"""
+def test_setting_a_default_is_never_a_decision_for_everyone() -> None:
+    """写默认永远只写自己那一条 —— 没有"替整个部署做决定"这条路了,所以也不需要更高的权限。"""
     admin, mate, _workspace = _admin_and_member()
     profile_id = _connection(admin)
-    denied = mate.put(
+    admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
+
+    allowed = mate.put(
         "/api/settings/provider-defaults/image",
-        json={"provider_profile_id": profile_id, "model": "x", "for_deployment": True},
+        json={"provider_profile_id": profile_id, "model": "gpt-image-2"},
     )
-    assert denied.status_code == 403, denied.text
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["is_mine"] is True
+
+    ours = {row["capability"]: row for row in admin.get("/api/settings/provider-defaults").json()}
+    assert ours["image"]["model"] == "", "他设自己的默认设到了别人头上"
 
 
 # ---------------- 只读的东西不该挡 ----------------

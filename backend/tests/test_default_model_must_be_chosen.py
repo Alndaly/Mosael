@@ -1,14 +1,17 @@
-"""默认模型:我的 → 部署的 → **报错**,不再"随便挑一个"。
+"""默认模型:**我自己设的 → 报错**。就这两档。
 
-第三层曾经是「该能力下第一个可用模型」。它的失败方式跑出来过:界面显示 DeepSeek,回答却是
-「我是 Kimi」—— 因为那个"第一个"碰巧是一条 oauth 订阅连接,而订阅计划走的是它自己的 provider
-定义(自带身份、自带思考)。用户看不出发生了什么,只会怀疑自己。
+先后删掉了两层兜底,理由是同一条。
 
-**任何"随便挑一个"都在制造这种失败**:它在没有答案的时候编一个,而编出来的那个看起来像答案。
-现在没有默认就说没有 —— 「请先选一个模型」是能看懂的,悄悄换一个不是。
+第一层是「该能力下第一个可用模型」。它的失败方式跑出来过:界面显示 DeepSeek,回答却是
+「我是 Kimi」—— 那个"第一个"碰巧是一条 oauth 订阅连接,而订阅计划走它自己的 provider 定义
+(自带身份、自带思考)。用户看不出发生了什么,只会怀疑自己。
 
-部署默认因此变成必要的一层(而不是可有可无):它让管理员替**还没设过的人**回答这个问题,
-于是新人不会一上来就撞一句报错。这一层现在有界面(管理员页),不再是只有 API 能置位的隐藏状态。
+第二层是「部署默认」,曾经被当成必要的一层:让管理员替**还没设过的人**回答这个问题,新人于是
+不会一上来就撞一句报错。它温和得多,但造成的是同一种误解 —— 你没选过任何模型,回答却来自某个
+你不知道的模型,花的是你的额度、用的是你的钥匙。
+
+**任何"替他挑一个"都在没有答案时编一个,而编出来的那个看起来像答案。** 没有默认就说没有:
+「请先选一个模型」是能看懂的,而且知道下一步做什么。
 """
 
 from __future__ import annotations
@@ -56,31 +59,12 @@ def test_the_agent_says_so_instead_of_picking_someone_elses_model() -> None:
         assert "模型" in str(caught.value)
 
 
-def test_the_deployment_default_catches_the_newcomer() -> None:
-    """管理员替还没设过的人回答 —— 新人不会一上来就撞报错。"""
+def test_my_own_default_decides_it() -> None:
+    """两条连接都在,选的是我设过的那一条 —— 而不是碰巧排在前面的那一条。"""
     from app.ai.agent.host import resolve_chat_provider
 
     _client, _other, mine, me = _deployment_with_two_connections()
     with SessionLocal() as db:
-        chosen = provider_models.get_model(db, mine, "the-one")
-        provider_defaults.set_default(db, "chat", chosen, owner_user_id="")  # 部署默认
-        db.commit()
-
-    newcomer = second_client("newcomer")
-    # 他仍然要配自己的钥匙 —— 部署默认省的是「选哪个模型」,不是「用谁的钥匙」(没有共享钥匙)。
-    newcomer.put(f"/api/settings/providers/{mine}/credential", json={"api_key": "his-own"})
-    with SessionLocal() as db:
-        who = db.query(User).filter(User.username == "newcomer").one().id
-        _dict, model, profile = resolve_chat_provider(db, None, "", user_id=who)
-        assert model == "the-one" and profile is not None and profile.id == mine
-
-
-def test_my_own_default_still_wins_over_the_deployments() -> None:
-    from app.ai.agent.host import resolve_chat_provider
-
-    _client, other, mine, me = _deployment_with_two_connections()
-    with SessionLocal() as db:
-        provider_defaults.set_default(db, "chat", provider_models.get_model(db, other, "not-mine"), owner_user_id="")
         provider_defaults.set_default(db, "chat", provider_models.get_model(db, mine, "the-one"), owner_user_id=me)
         db.commit()
     with SessionLocal() as db:
@@ -88,41 +72,18 @@ def test_my_own_default_still_wins_over_the_deployments() -> None:
         assert model == "the-one"
 
 
-# ---------------- 部署默认不再是隐藏状态 ----------------
+def test_someone_elses_default_does_not_answer_for_me() -> None:
+    """别人设过不等于我设过。删掉部署那一档之后,这是唯一还可能"替我回答"的东西。"""
+    from app.ai.agent.host import AdapterError, resolve_chat_provider
 
-
-def test_the_deployment_default_is_readable_by_an_admin() -> None:
-    """管理页要显示它 —— 一个没有界面的能力不是功能,是隐藏状态。"""
-    client, _other, mine, me = _deployment_with_two_connections()
+    _client, _other, mine, me = _deployment_with_two_connections()
     with SessionLocal() as db:
-        provider_defaults.set_default(db, "chat", provider_models.get_model(db, mine, "the-one"), owner_user_id="")
+        provider_defaults.set_default(db, "chat", provider_models.get_model(db, mine, "the-one"), owner_user_id=me)
         db.commit()
 
-    rows = {row["capability"]: row for row in client.get("/api/admin/provider-defaults").json()}
-    assert rows["chat"]["model"] == "the-one"
-    assert rows["chat"]["provider_profile_id"] == mine
-
-
-def test_an_ordinary_member_cannot_read_or_set_it() -> None:
-    client, _other, _mine, _me = _deployment_with_two_connections()
     mate = second_client("mate")
-    assert mate.get("/api/admin/provider-defaults").status_code == 403
-
-
-def test_an_admin_sets_the_deployment_default_through_the_same_endpoint() -> None:
-    """管理页写的是同一条路由,只是带上 for_deployment —— 不为它另开一个接口。
-
-    选模型这件事已经解决过一次(一个下拉、跨连接列候选);这里复用那条路,读写换成
-    /api/admin 那一对即可。
-    """
-    client, _other, mine, _me = _deployment_with_two_connections()
-
-    saved = client.put(
-        "/api/settings/provider-defaults/chat",
-        json={"provider_profile_id": mine, "model": "the-one", "for_deployment": True},
-    )
-    assert saved.status_code == 200, saved.text
-    assert saved.json()["is_mine"] is False
-
-    rows = {row["capability"]: row for row in client.get("/api/admin/provider-defaults").json()}
-    assert rows["chat"]["model"] == "the-one"
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        with pytest.raises(AdapterError):
+            resolve_chat_provider(db, None, "", user_id=mate_id)
+    assert mate.get("/api/auth/me").status_code == 200

@@ -749,7 +749,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
-    """**我**在每种能力下的默认供应商+模型;我没设过的回落部署默认,再没有就是空。"""
+    """**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。"""
     from app.domain.provider_defaults import get_row
 
     out: list[ProviderDefaultOut] = []
@@ -762,8 +762,9 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
                 capability=capability,
                 provider_profile_id=model.provider_profile_id if model else None,
                 model=model.model_id if model else "",
-                # 界面要说清这是我自己设的、还是部署给的起点 —— 否则"我没设却有值"看着像 bug。
-                is_mine=bool(row is not None and row.owner_user_id == user.id),
+                # 恒真:能拿到行就说明是我自己设的(get_row 只查我这一条)。字段留着是因为
+                # 前端还在读它,而且它现在表达的是"这一格有没有被我设过"。
+                is_mine=row is not None,
             )
         )
     return out
@@ -798,14 +799,12 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
 def set_provider_default(
     capability: str, body: ProviderDefaultUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderDefaultOut:
-    """设**我自己**在这项能力下的默认模型。
+    """设**我自己**在这项能力下的默认模型。**只有这一档。**
 
-    这条不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
-    `for_deployment` 是例外 —— 那一行是给所有还没设过的人的起点,替整个部署做的决定。
+    不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
+    曾经有过 `for_deployment` —— 写那一行 `owner_user_id=""` 当作"还没设过的人的起点" ——
+    删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。
     """
-    owner_user_id = "" if body.for_deployment else user.id
-    if body.for_deployment:
-        ensure_deployment_admin(db, user)
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail="未知能力")
     model = None
@@ -829,13 +828,13 @@ def set_provider_default(
             # 逼他先去列表里加一遍纯属多一步。
             model = provider_models.upsert(db, profile, model_id, source="manual")
     # 指向模型行(旧的两列由 set_default 同步写,生成侧还在读)。
-    set_default(db, capability, model, owner_user_id=owner_user_id)
+    set_default(db, capability, model, owner_user_id=user.id)
     db.commit()
     return ProviderDefaultOut(
         capability=capability,
         provider_profile_id=model.provider_profile_id if model is not None else None,
         model=model.model_id if model is not None else "",
-        is_mine=not body.for_deployment,
+        is_mine=True,
     )
 
 

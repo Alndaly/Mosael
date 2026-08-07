@@ -9598,7 +9598,7 @@
           "settings"
         ],
         "summary": "List Provider Defaults",
-        "description": "**我**在每种能力下的默认供应商+模型;我没设过的回落部署默认,再没有就是空。",
+        "description": "**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。",
         "operationId": "list_provider_defaults_api_settings_provider_defaults_get",
         "responses": {
           "200": {
@@ -9681,7 +9681,7 @@
           "settings"
         ],
         "summary": "Set Provider Default",
-        "description": "设**我自己**在这项能力下的默认模型。\n\n这条不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。\n`for_deployment` 是例外 —— 那一行是给所有还没设过的人的起点,替整个部署做的决定。",
+        "description": "设**我自己**在这项能力下的默认模型。**只有这一档。**\n\n不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。\n曾经有过 `for_deployment` —— 写那一行 `owner_user_id=\"\"` 当作\"还没设过的人的起点\" ——\n删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。",
         "operationId": "set_provider_default_api_settings_provider_defaults__capability__put",
         "parameters": [
           {
@@ -10558,42 +10558,6 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Set Registration Api Admin Registration Put"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/provider-defaults": {
-      "get": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Deployment Defaults",
-        "description": "**部署默认模型** —— 还没设过的人用哪个。\n\n它是必要的一层,不是可有可无:取默认模型现在**没有\"随便挑一个\"的兜底**(那个兜底会让\n界面显示 A 而回答来自 B)。所以新人的起点必须有人替他回答,而那个人就是部署管理员。\n\n此前它只能经 API 置位、没有任何界面 —— 一个没有界面的能力不是功能,是隐藏状态。",
-        "operationId": "deployment_defaults_api_admin_provider_defaults_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProviderDefaultOut"
-                  },
-                  "type": "array",
-                  "title": "Response Deployment Defaults Api Admin Provider Defaults Get"
                 }
               }
             }
@@ -19099,11 +19063,6 @@
             "maxLength": 120,
             "title": "Model",
             "default": ""
-          },
-          "for_deployment": {
-            "type": "boolean",
-            "title": "For Deployment",
-            "default": false
           }
         },
         "type": "object",

@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
+from app.db.models import User
 from app.db.models import ProviderProfile
 from app.domain import provider_models
 from app.domain.provider_defaults import set_default
@@ -86,16 +87,18 @@ def test_默认指向的模型被删掉之后不会静默换一个():
     """
     fresh_client()
     with SessionLocal() as db:
+        # 默认永远挂在**某个人**身上 —— 部署那一档也删掉了(见 test_no_deployment_default_model)。
+        me = db.query(User).order_by(User.created_at).first().id
         profile = _profile(db)
         first = provider_models.upsert(db, profile, "a", capability_ids=["chat"])
         provider_models.upsert(db, profile, "b", capability_ids=["chat"])
-        set_default(db, "chat", first, owner_user_id="")
+        set_default(db, "chat", first, owner_user_id=me)
         db.commit()
-        assert provider_models.resolve_default(db, "chat").model_id == "a"
+        assert provider_models.resolve_default(db, "chat", me).model_id == "a"
 
         db.delete(first)
         db.commit()
-        assert provider_models.resolve_default(db, "chat") is None, "静默换成了另一个模型"
+        assert provider_models.resolve_default(db, "chat", me) is None, "静默换成了另一个模型"
 
 
 def test_同一连接下模型_id_唯一():

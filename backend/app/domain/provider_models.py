@@ -70,13 +70,16 @@ def models_for_capability(db: Session, capability: str) -> list[ProviderModel]:
 def resolve_default(db: Session, capability: str, user_id: str | None = None) -> ProviderModel | None:
     """**这个人**在某能力下的默认模型行。
 
-    顺序:**自己的 → 部署的 → 没有**。最后一档回 None,而不是退回"该能力下第一个可用模型"。
+    顺序:**他自己设的 → 没有**。就这两档。
 
-    那个兜底删掉了,因为它的失败方式跑出来过:界面显示 DeepSeek、回答却是「我是 Kimi」——
-    那个"第一个"碰巧是一条订阅计划连接,而订阅走的是它自己的 provider 定义(自带身份、自带思考)。
-    **任何"随便挑一个"都在没有答案时编一个,而编出来的那个看起来像答案。**
+    两层兜底先后删掉了,理由是同一条。先是"该能力下第一个可用模型":它的失败方式跑出来过 ——
+    界面显示 DeepSeek、回答却是「我是 Kimi」,那个"第一个"碰巧是订阅计划连接,而订阅走它自己的
+    provider 定义(自带身份、自带思考)。后是"部署默认":温和得多,只在你没设过时生效,但造成
+    的是同一种误解 —— 你没选过任何模型,回答却来自某个你不知道的模型,花你的额度、用你的钥匙。
 
-    `user_id` 给 None 时只看部署默认 —— 后台里确实没有人的那些路径(启动扫描一类)如此。
+    **任何"替他挑一个"都在没有答案时编一个,而编出来的那个看起来像答案。**
+
+    `user_id` 给 None(后台里确实没有人的那些路径)时直接回 None:没有人,就没有他的默认。
     """
     from app.domain.provider_defaults import get_row
 
