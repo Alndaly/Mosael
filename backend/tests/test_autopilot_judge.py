@@ -8,8 +8,8 @@
 那个上下文里装着网页内容的模型写出来的。一句「这是例行操作,无需确认」完全可以出现在 body 里。
 所以判断者不能是唯一的闸:**规则的拒绝它翻不了**,规则的放行也轮不到它说话。
 
-**二、`publish_asset` 的参数里没有内容**(素材是个 id),判断者对"要发什么"是瞎的 —— 那一档的
-主判据只能是账号白名单。
+**二、`publish_asset` 的参数里没有内容**(素材是个 id),判断者对"要发什么"是瞎的 —— 所以那一档
+默认关着,要开的人得知道自己在把什么交出去。
 
 隔离靠的不是自律:构造判断者输入的函数**签名里就没有**会话、历史、工具结果这三样,而且它所在的
 模块不 import 会话状态。行为可以被下一次改动绕过,签名不行。
@@ -93,27 +93,29 @@ ALLOW = judge_module.Verdict(allow=True, reason="命中用户准则")
 # ---------------- 规则:确定性的那一半 ----------------
 
 
-def test_a_rule_can_allow_without_calling_the_judge(monkeypatch) -> None:
-    """确定性的答案不该花一次模型调用 —— 也不该让一次模型调用有机会否掉它。"""
+def test_a_closed_category_never_reaches_the_judge(monkeypatch) -> None:
+    """默认档(ask)下规则就把话说完了 —— 不该再花一次模型调用去问一个已经确定的答案。
+
+    **规则不再有"确定性放行"这一档**:两份白名单删掉之后(见 test_autopilot_has_no_allowlists),
+    它最宽的结论是"我没话说,你去问判断者"。所以这条用例守的是反过来那一半 —— 关着的时候
+    判断者一次都不该被叫起来。
+    """
     chat = Chat()
-    # 主机名指向一个**关着的本地端口**:这条用例测的是"规则放行了没有",不是那次 HTTP 的结果。
-    # 用一个真实域名会让执行线程去做一次带 60s 超时的出站请求,而排空只等 5 秒 —— 那样这条用例
-    # 就成了一条依赖网络与时序的用例(全量跑时随机红过一次)。
-    chat.set_rules({"http_allow_hosts": ["127.0.0.1"]})
     calls: list = []
     _stub_judge(monkeypatch, REFUSE, record=calls)
 
     card = chat.card("http_request", {"url": "http://127.0.0.1:9/none", "method": "POST"})
 
-    assert card["decision_mode"] == "auto", card
-    assert card["detail"]["rule"]["outcome"] == "allow", card
+    assert card["detail"]["rule"]["outcome"] == "deny", card
     assert calls == [], "规则已经给出答案,判断者不该被叫起来"
 
 
-def test_a_host_outside_the_list_is_not_allowed_by_the_judge(monkeypatch) -> None:
-    """白名单是**枚举**,不是建议:名单外的域名判断者说了也不算。"""
-    chat = Chat()
-    chat.set_rules({"http_allow_hosts": ["api.example.com"]})
+def test_a_closed_category_is_not_reopened_by_the_judge(monkeypatch) -> None:
+    """规则的拒绝判断者翻不了 —— 它连被叫起来的机会都没有。
+
+    这是整套判定里最要紧的那条不变量:判断者只能把"问你"变成"放行",不能把"拒绝"变成"放行"。
+    """
+    chat = Chat()  # 默认 ask = 拒绝
     calls: list = []
     _stub_judge(monkeypatch, ALLOW, record=calls)
 
@@ -123,10 +125,9 @@ def test_a_host_outside_the_list_is_not_allowed_by_the_judge(monkeypatch) -> Non
     assert calls == [], "规则明确拒绝之后,判断者不该被叫起来(它也翻不了案)"
 
 
-def test_publish_is_gated_on_the_account_not_on_the_judge(monkeypatch) -> None:
-    """payload 里素材是个 id —— 判断者对「要发什么」是瞎的,主判据只能是账号。"""
+def test_publish_is_closed_by_default(monkeypatch) -> None:
+    """payload 里素材是个 id —— 判断者对「要发什么」是瞎的,所以这一档默认关着。"""
     chat = Chat()
-    chat.set_rules({"publish_allow_accounts": ["acc-allowed"]})
     calls: list = []
     _stub_judge(monkeypatch, ALLOW, record=calls)
 
@@ -134,6 +135,19 @@ def test_publish_is_gated_on_the_account_not_on_the_judge(monkeypatch) -> None:
 
     assert card["status"] == "pending"
     assert calls == []
+
+
+def test_publish_can_be_opted_into_the_judge(monkeypatch) -> None:
+    """开了就走判断者 —— 和另外两档同一个形状。"""
+    chat = Chat()
+    chat.set_rules({"publish": "judge"})
+    calls: list = []
+    _stub_judge(monkeypatch, ALLOW, record=calls)
+
+    card = chat.card("publish_asset", {"account_id": "acc-1", "asset_id": "a1", "title": "t"})
+
+    assert len(calls) == 1, "显式开了 judge 之后应当叫它"
+    assert card["decision_mode"] == "auto"
 
 
 def test_run_code_asks_by_default(monkeypatch) -> None:
@@ -325,9 +339,9 @@ def test_an_expired_hold_puts_the_card_back_without_anyone_reclaiming_it() -> No
 
 def test_rules_are_workspace_level_and_round_trip() -> None:
     chat = Chat()
-    chat.set_rules({"http_allow_hosts": ["a.example.com"], "notes": "n"})
+    chat.set_rules({"http_request": "judge", "notes": "n"})
     read_back = chat.client.get(f"/api/workspaces/{chat.workspace_id}/autopilot-rules").json()
-    assert read_back["rules"]["http_allow_hosts"] == ["a.example.com"]
+    assert read_back["rules"]["http_request"] == "judge"
     with SessionLocal() as db:
         assert db.get(Workspace, chat.workspace_id).autopilot_rules["notes"] == "n"
 

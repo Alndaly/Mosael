@@ -1,33 +1,44 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, Plus, ShieldCheck, X } from "lucide-react";
+import { Lock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, listMembers, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
+type Level = "ask" | "judge";
 type Rules = {
-  http_allow_hosts: string[];
-  publish_allow_accounts: string[];
-  run_code: "ask" | "judge";
+  http_request: Level;
+  publish: Level;
+  run_code: Level;
   notes: string;
 };
 
-const EMPTY: Rules = { http_allow_hosts: [], publish_allow_accounts: [], run_code: "ask", notes: "" };
+const EMPTY: Rules = { http_request: "ask", publish: "ask", run_code: "ask", notes: "" };
+
+/** 三类撤不回来的操作,同一种判据。顺序即页面顺序。 */
+const GATES = [
+  { key: "http_request", label: "autopilotHttp", desc: "autopilotHttpDesc" },
+  { key: "publish", label: "autopilotPublish", desc: "autopilotPublishDesc" },
+  { key: "run_code", label: "autopilotRunCode", desc: "autopilotRunCodeDesc" },
+] as const;
 
 /**
  * 自动放行的准则 —— 「自动放行」档下,**撤不回来**的那类操作按什么判。
  *
- * 这一页配的是确定性的那一半:名单命中就放行、不命中就问你,判断者翻不了案。名单之外的情况才
- * 交给一个看不到对话内容的判断者,而「补充说明」是喂给它的唯一自由文本 —— 它单独放行不了任何东西。
+ * 三类操作、同一种判据:默认一律问你;想让那个与对话隔离的判断者接管,就把那一档显式打开。
  *
- * 主机名**精确匹配,不做通配**:`*.example.com` 里哪些子域算数取决于谁在解析它,而白名单要能被
- * 逐条读懂,不是被逐条猜。
+ * 曾经有两份白名单(允许的请求主机、允许的发布账号)。删掉的理由是它们**没在工作**:那份清单
+ * 既难写(精确匹配、不支持通配)又难维护(换个 CDN 域名就失效),于是绝大多数人的名单永远是空的
+ * —— 也就是说「自动放行」对这两类从来没生效过,只是每次都多问一遍。而页面上那句"名单之外的情况
+ * 交给判断者"只对 run_code 成立,对这两项是错的(它们不命中直接拒绝,判断者根本不参与)。
+ *
+ * 删掉之后是**收紧**:此前名单命中是确定性放行、连判断者都不过;现在最宽也要过判断者那一关。
+ * 「补充说明」仍是喂给判断者的唯一自由文本 —— 它单独放行不了任何东西。
  */
 export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -78,50 +89,24 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
         )
       }
     >
-      <SettingsRow
-        label={t("autopilotHosts")}
-        description={t("autopilotHostsDesc")}
-        className="grid-cols-1 items-start gap-2"
-      >
-        <TokenList
-          values={draft.http_allow_hosts}
-          placeholder="api.example.com"
-          addLabel={t("autopilotAddHost")}
-          emptyLabel={t("autopilotNothingAllowed")}
-          readOnly={!canEdit}
-          onChange={(http_allow_hosts) => patch({ http_allow_hosts })}
-        />
-      </SettingsRow>
-      <SettingsRow
-        label={t("autopilotAccounts")}
-        description={t("autopilotAccountsDesc")}
-        className="grid-cols-1 items-start gap-2"
-      >
-        <TokenList
-          values={draft.publish_allow_accounts}
-          placeholder="acc-…"
-          addLabel={t("autopilotAddAccount")}
-          emptyLabel={t("autopilotNothingAllowed")}
-          readOnly={!canEdit}
-          onChange={(publish_allow_accounts) => patch({ publish_allow_accounts })}
-        />
-      </SettingsRow>
-      <SettingsRow label={t("autopilotRunCode")} description={t("autopilotRunCodeDesc")}>
-        <Select
-          key={draft.run_code}
-          value={draft.run_code}
-          disabled={!canEdit}
-          onValueChange={(value) => patch({ run_code: value as Rules["run_code"] })}
-        >
-          <SelectTrigger className="h-8 w-[180px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ask">{t("autopilotRunCodeAsk")}</SelectItem>
-            <SelectItem value="judge">{t("autopilotRunCodeJudge")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </SettingsRow>
+      {GATES.map((gate) => (
+        <SettingsRow key={gate.key} label={t(gate.label)} description={t(gate.desc)}>
+          <Select
+            key={draft[gate.key]}
+            value={draft[gate.key]}
+            disabled={!canEdit}
+            onValueChange={(value) => patch({ [gate.key]: value as Level })}
+          >
+            <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ask">{t("autopilotGateAsk")}</SelectItem>
+              <SelectItem value="judge">{t("autopilotGateJudge")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+      ))}
       <SettingsRow
         label={t("autopilotNotes")}
         description={t("autopilotNotesDesc")}
@@ -141,77 +126,5 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
         </span>
       </SettingsRow>
     </SettingsGroup>
-  );
-}
-
-/** 一串可增删的条目。名单就该长成名单,而不是一个要自己记住用逗号分隔的输入框。 */
-function TokenList({
-  values,
-  placeholder,
-  addLabel,
-  emptyLabel,
-  readOnly,
-  onChange,
-}: {
-  values: string[];
-  placeholder: string;
-  addLabel: string;
-  emptyLabel: string;
-  readOnly?: boolean;
-  onChange: (next: string[]) => void;
-}) {
-  const [entry, setEntry] = React.useState("");
-  const add = () => {
-    const value = entry.trim();
-    if (!value || values.includes(value)) return setEntry("");
-    onChange([...values, value]);
-    setEntry("");
-  };
-  return (
-    <div className="grid w-full gap-1.5">
-      {values.length === 0 ? (
-        <p className="m-0 text-[11.5px] text-muted-foreground">{emptyLabel}</p>
-      ) : (
-        <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-          {values.map((value) => (
-            <li
-              key={value}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-panel px-2 py-0.5 text-[11.5px]"
-            >
-              <code className="timecode">{value}</code>
-              {!readOnly && (
-                <button
-                  type="button"
-                  aria-label={`remove ${value}`}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-destructive"
-                  onClick={() => onChange(values.filter((item) => item !== value))}
-                >
-                  <X size={11} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {readOnly ? null : (
-      <div className="flex gap-1.5">
-        <Input
-          className="h-8 max-w-[280px] text-xs"
-          value={entry}
-          placeholder={placeholder}
-          onChange={(event) => setEntry(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              add();
-            }
-          }}
-        />
-        <Button size="sm" variant="outline" onClick={add} disabled={!entry.trim()}>
-          <Plus size={13} /> {addLabel}
-        </Button>
-      </div>
-      )}
-    </div>
   );
 }
