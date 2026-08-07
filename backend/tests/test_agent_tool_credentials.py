@@ -17,6 +17,7 @@ from __future__ import annotations
 import mcp_server
 
 from app.core.db import SessionLocal
+from app.core.security import find_session
 from app.db.models import AuthSession
 from tests.util import fresh_client
 
@@ -70,7 +71,8 @@ def test_the_tool_body_gets_a_credential_that_resolves_to_the_caller(monkeypatch
     caller_token = client.headers["Authorization"].removeprefix("Bearer ")
     assert seen[0] == caller_token, "工具体拿的不是调用方自己的凭据"
     with SessionLocal() as db:
-        assert db.get(AuthSession, seen[0]) is not None, "这个令牌在库里不存在,回连会 401"
+        # 库里存的是哈希(见 core/tokens),按来客手上那串取行要走 find_session。
+        assert find_session(db, seen[0]) is not None, "这个令牌在库里不存在,回连会 401"
 
 
 def test_the_callers_own_session_survives_the_call(monkeypatch) -> None:

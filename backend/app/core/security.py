@@ -6,17 +6,22 @@ import secrets
 from datetime import timedelta
 
 from app.core.config import LOGIN_SESSION_TTL, SERVICE_SESSION_TTL
+# 哈希是纯函数,单独一个模块 —— 迁移那边也要用它,而 core/db 不能认识 core/security(会成环)。
+from app.core.tokens import TOKEN_SCHEME, token_digest
 
 """Password hashing (stdlib PBKDF2) and opaque session tokens."""
 
 __all__ = [
     "LOGIN_SESSION_TTL",
     "SERVICE_SESSION_TTL",
+    "find_session",
     "hash_password",
     "mint_login_session",
     "mint_service_session",
     "new_session_token",
     "prune_expired_sessions",
+    "token_digest",
+    "revoke_session",
     "renew_if_stale",
     "verify_password",
 ]
@@ -43,6 +48,25 @@ def verify_password(password: str, stored: str) -> bool:
 
 def new_session_token() -> str:
     return secrets.token_hex(32)
+
+
+def find_session(db, raw: str | None):
+    """按来客手上那串取凭据行。**取凭据只此一处** —— 五个调用点各自 `db.get(AuthSession, token)`
+    的写法漏掉任何一处都不会报错,只会让那条路径静默地认不出人来。"""
+    from app.db.models import AuthSession
+
+    if not raw:
+        return None
+    return db.get(AuthSession, token_digest(raw))
+
+
+def revoke_session(db, raw: str | None) -> bool:
+    """用完就撤(turn 令牌、登出)。回 True 表示确实删掉了一行。"""
+    session = find_session(db, raw)
+    if session is None:
+        return False
+    db.delete(session)
+    return True
 
 
 #: 剩余不足这么多就续期。不是每次请求都写库 —— 那是一次登录换来每个请求一次 UPDATE。
@@ -100,7 +124,7 @@ def _mint(
     token = new_session_token()
     db.add(
         AuthSession(
-            token=token,
+            token=token_digest(token),
             user_id=user_id,
             kind=kind,
             expires_at=now() + ttl,

@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import text
 
 from app.core.config import LOGIN_SESSION_TTL
+from app.core.tokens import token_digest
 from app.core.db import _migrate_auth_session_expiry, engine
 from tests.util import fresh_client
 
@@ -90,4 +91,4 @@ def test_it_is_a_no_op_once_the_columns_exist() -> None:
     _migrate_auth_session_expiry()
 
     assert _rows() == before
-    assert live in before
+    assert token_digest(live) in before  # 库里存的是哈希

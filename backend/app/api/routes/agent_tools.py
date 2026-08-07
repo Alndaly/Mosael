@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.db.models import AuthSession
 from app.core.permissions import ensure_workspace_member
+from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 # 这里重新导出,是因为它们此前就叫这些名字(测试、mcp_server 的注释都指着这里)。
 from app.domain.agent.tool_manifest import (  # noqa: F401  (re-exported)
@@ -169,7 +170,7 @@ def invoke_agent_tool(
     # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把
     # 计划写进别人的对话。确认卡的归属同理,但它在 routes/confirmations 里直接读自己的令牌,
     # 不经过这里。
-    auth = db.get(AuthSession, token)
+    auth = find_session(db, token)
     agent_session_id = auth.agent_session_id if auth is not None else None
     session_reset = registry.set_session_id(agent_session_id) if agent_session_id else None
     arguments, dropped = _fit_arguments(fn, body.arguments)

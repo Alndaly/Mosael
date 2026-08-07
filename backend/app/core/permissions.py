@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.roles import role_at_least
-from app.core.security import renew_if_stale
+from app.core.security import find_session, renew_if_stale
 from app.core.usage_scope import bind_workspace
 from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, now
 
@@ -51,7 +51,7 @@ def get_current_user(
     candidate = presented_token(request, token)
     if not candidate:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    session = db.get(AuthSession, candidate)
+    session = find_session(db, candidate)
     if session is not None and session.expires_at <= now():
         # 撞见就顺手删掉:过期的行不该在库里等着某次清理。铸造时的批量清理管的是"没人再碰的
         # 那些",这一条管的是"正好被碰到的那一条"——两者合起来,表不会因为无人重启而涨。

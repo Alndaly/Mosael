@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.core.security import mint_service_session
+from app.core.security import find_session, mint_service_session
 from app.db.models import AuthSession, ToolConfirmation, User
 from tests.util import fresh_client
 
@@ -53,7 +53,7 @@ def test_a_turn_token_carries_its_session() -> None:
     with SessionLocal() as db:
         user = db.query(User).filter(User.username == "tester").one()
         token = mint_service_session(db, user.id, agent_session_id=session["id"])
-        assert db.get(AuthSession, token).agent_session_id == session["id"]
+        assert find_session(db, token).agent_session_id == session["id"]
 
 
 def test_the_card_belongs_to_the_session_the_token_names() -> None:

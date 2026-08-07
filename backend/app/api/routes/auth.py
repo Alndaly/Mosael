@@ -21,7 +21,7 @@ from app.api.schemas import (
 )
 from app.core.config import settings
 from app.core.permissions import ensure_deployment_admin
-from app.core.security import hash_password, mint_login_session, new_session_token, verify_password
+from app.core.security import find_session, hash_password, mint_login_session, new_session_token, verify_password
 from app.domain import deployment
 from app.db.models import AuthSession, RegistrationInvite, User, Workspace, WorkspaceMember, now
 
@@ -252,7 +252,7 @@ def logout(request: Request, db: DbSession, user: CurrentUser) -> dict:
     # which is worse than refusing.
     header = request.headers.get("authorization", "")
     token = header.removeprefix("Bearer ").strip() or (request.query_params.get("token") or "").strip()
-    session = db.get(AuthSession, token) if token else None
+    session = find_session(db, token)
     if session is not None and session.user_id == user.id:
         db.delete(session)
         db.commit()

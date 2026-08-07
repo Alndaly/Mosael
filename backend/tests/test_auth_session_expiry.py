@@ -23,6 +23,7 @@ from app.core.db import SessionLocal
 from app.core.security import (
     LOGIN_SESSION_TTL,
     SERVICE_SESSION_TTL,
+    find_session,
     mint_service_session,
     prune_expired_sessions,
 )
@@ -31,13 +32,14 @@ from tests.util import PASSWORD, fresh_client
 
 
 def _row(token: str) -> AuthSession | None:
+    """按**来客手上那串**取行 —— 库里存的是它的哈希(见 core/tokens),主键不再是令牌本身。"""
     with SessionLocal() as db:
-        return db.get(AuthSession, token)
+        return find_session(db, token)
 
 
 def _expire(token: str, *, by: timedelta = timedelta(seconds=1)) -> None:
     with SessionLocal() as db:
-        row = db.get(AuthSession, token)
+        row = find_session(db, token)
         row.expires_at = now() - by
         db.commit()
 
@@ -100,7 +102,7 @@ def test_an_active_login_is_renewed_rather_than_cut_off() -> None:
     token = client.headers["Authorization"].removeprefix("Bearer ")
     # 逼近过期(剩余不足半个周期)——这时下一次请求应当把它续上。
     with SessionLocal() as db:
-        row = db.get(AuthSession, token)
+        row = find_session(db, token)
         row.expires_at = now() + timedelta(minutes=1)
         db.commit()
 

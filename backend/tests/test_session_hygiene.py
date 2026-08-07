@@ -12,11 +12,14 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
+from app.core.security import revoke_session
+from app.core.tokens import token_digest
 from app.db.models import AuthSession
 from tests.util import PASSWORD, fresh_client
 
 
 def _tokens() -> set[str]:
+    """库里那一列 —— 存的是**哈希**,所以拿来客手上那串比对前要先过 token_digest。"""
     with SessionLocal() as db:
         return set(db.scalars(select(AuthSession.token)))
 
@@ -29,7 +32,7 @@ def test_logout_revokes_a_query_param_session() -> None:
     del client.headers["Authorization"]
     assert client.post("/api/auth/logout", params={"token": token}).status_code == 200
 
-    assert token not in _tokens(), "logout reported success and left the session live"
+    assert token_digest(token) not in _tokens(), "logout reported success and left the session live"
     assert client.get("/api/workspaces", params={"token": token}).status_code == 401
 
 
@@ -37,7 +40,7 @@ def test_logout_still_revokes_a_header_session() -> None:
     client = fresh_client()
     token = client.headers["Authorization"].removeprefix("Bearer ")
     assert client.post("/api/auth/logout").status_code == 200
-    assert token not in _tokens()
+    assert token_digest(token) not in _tokens()
 
 
 def test_logout_without_any_token_does_not_explode() -> None:
@@ -61,14 +64,12 @@ def test_a_chat_turn_does_not_leave_a_permanent_token_behind() -> None:
 
         user = db.scalars(select(User)).first()
         token = host._mint_service_token(db, user)
-    assert token in _tokens()
+    assert token_digest(token) in _tokens()
 
-    # The turn's finally block revokes it; call the same deletion directly.
+    # The turn's finally block revokes it; call the same revocation directly.
     with SessionLocal() as db:
-        row = db.get(AuthSession, token)
-        if row is not None:
-            db.delete(row)
-            db.commit()
+        revoke_session(db, token)
+        db.commit()
 
     assert _tokens() == before, "a turn left a credential behind"
     assert PASSWORD  # keeps the import meaningful if the helper changes

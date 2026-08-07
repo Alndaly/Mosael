@@ -19,7 +19,7 @@ from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context
 from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.security import mint_service_session
+from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
 from app.domain.usage import billable, estimate_text_tokens
 
@@ -658,9 +658,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             # server can call back into the API, and nothing ever removed it — AuthSession has
             # no expiry, so every chat turn left a permanent full-privilege credential in the
             # database. A long-running install accumulated one per message, forever.
-            service_session = db.get(AuthSession, token)
-            if service_session is not None:
-                db.delete(service_session)
+            revoke_session(db, token)
             try:
                 db.commit()
             except Exception:  # noqa: BLE001

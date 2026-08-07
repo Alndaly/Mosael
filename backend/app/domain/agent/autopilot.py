@@ -10,7 +10,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentSession, AuthSession, ToolConfirmation, User, Workspace, now
+from app.core.security import find_session
+from app.db.models import AgentSession, ToolConfirmation, User, Workspace, now
 from app.domain.agent import judge as judge_module
 from app.domain.agent import rules
 
@@ -267,7 +268,7 @@ def _fall_back_to_a_human(db: Session, confirmation_id: str, reason: str) -> Non
 
 def session_for_token(db: Session, token: str) -> str | None:
     """这份凭据属于哪次对话。归属由凭据决定,不由调用方声明(见 routes/confirmations)。"""
-    auth = db.get(AuthSession, token) if token else None
+    auth = find_session(db, token)
     return auth.agent_session_id if auth is not None else None
 
 

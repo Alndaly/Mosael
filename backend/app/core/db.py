@@ -11,6 +11,8 @@ from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import LOGIN_SESSION_TTL, settings
+# 纯函数,单独一个模块 —— 从 core.security 引会成环(core.security → db.models → core.db)。
+from app.core.tokens import TOKEN_SCHEME, token_digest
 
 logger = logging.getLogger(__name__)
 
@@ -331,6 +333,30 @@ def _migrate_provider_defaults_per_person() -> None:
         )
         conn.execute(text("DROP TABLE provider_defaults"))
         conn.execute(text("ALTER TABLE provider_defaults_new RENAME TO provider_defaults"))
+
+
+def _migrate_hash_session_tokens() -> None:
+    """把老库里明文存着的会话令牌就地换成哈希。
+
+    令牌就是这个人本人 —— 一次库泄露(或一份被拷走的数据目录)里,所有还没过期的令牌都能直接
+    拿去用,受害者这边不会有任何痕迹。密码早就只存哈希了,令牌此前不是。
+
+    **人不掉线**:他手上那串没变,校验时再哈希一次就对得上。
+
+    判据是前缀 `sha256:`,不是长度 —— 原始令牌本身就是 64 位十六进制(token_hex(32)),和裸哈希
+    长得一模一样。迁移每次启动都会跑,认错一次就是把所有人哈希两遍、全部掉线。
+    """
+    if "auth_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT token FROM auth_sessions")).fetchall()
+        for (stored,) in rows:
+            if str(stored).startswith(f"{TOKEN_SCHEME}:"):
+                continue
+            conn.execute(
+                text("UPDATE auth_sessions SET token = :hashed WHERE token = :raw"),
+                {"hashed": token_digest(str(stored)), "raw": stored},
+            )
 
 
 def _migrate_deployment_config() -> None:
@@ -793,6 +819,7 @@ def init_db() -> None:
     # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
     _migrate_encrypt_secrets()
     _migrate_deployment_config()
+    _migrate_hash_session_tokens()
     _migrate_client_version()
     _migrate_job_actor()
     _migrate_provider_credentials()
