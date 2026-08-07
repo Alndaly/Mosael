@@ -3813,28 +3813,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plugins/{package_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Uninstall Package
-         * @description 卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
-         *
-         *     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
-         */
-        delete: operations["uninstall_package_api_plugins__package_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/plugins/{package_id}/instances": {
         parameters: {
             query?: never;
@@ -3844,7 +3822,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Instance */
+        /**
+         * Create Instance
+         * @description 接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。
+         *
+         *     没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。
+         */
         post: operations["create_instance_api_plugins__package_id__instances_post"];
         delete?: never;
         options?: never;
@@ -3987,13 +3970,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Invocations */
+        /**
+         * List Invocations
+         * @description **我自己接的那些**的调用记录。
+         *
+         *     记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。
+         *     此前这里不做过滤,因为那时接入本来就是所有人共用的一份。
+         */
         get: operations["list_invocations_api_plugins_invocations_get"];
         put?: never;
         post?: never;
         /**
          * Clear Invocations
-         * @description 清空调用记录;带 instance_id 只清该连接的。
+         * @description 清空**我自己**的调用记录;带 instance_id 只清该接入的。
          */
         delete: operations["clear_invocations_api_plugins_invocations_delete"];
         options?: never;
@@ -4013,6 +4002,28 @@ export interface paths {
         post?: never;
         /** Delete Invocation */
         delete: operations["delete_invocation_api_plugins_invocations__invocation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{package_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Uninstall Package
+         * @description 卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
+         *
+         *     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
+         */
+        delete: operations["uninstall_package_api_plugins__package_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -16836,35 +16847,6 @@ export interface operations {
             };
         };
     };
-    uninstall_package_api_plugins__package_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                package_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_instance_api_plugins__package_id__instances_post: {
         parameters: {
             query?: never;
@@ -17293,6 +17275,35 @@ export interface operations {
             header?: never;
             path: {
                 invocation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    uninstall_package_api_plugins__package_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
             };
             cookie?: never;
         };

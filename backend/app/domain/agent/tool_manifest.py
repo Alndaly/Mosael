@@ -58,7 +58,7 @@ def agent_tool_name(instance_id: str, tool_name: str) -> str:
     return f"{PLUGIN_TOOL_PREFIX}{_SAFE_NAME.sub('_', instance_id)}__{_SAFE_NAME.sub('_', tool_name)}"
 
 
-def _plugin_tool_specs(db: Any) -> list[ToolSpec]:
+def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     from app.domain.plugins.tools import exposed
 
     return [
@@ -71,11 +71,11 @@ def _plugin_tool_specs(db: Any) -> list[ToolSpec]:
             parameters=tool["input_schema"] or {"type": "object", "properties": {}},
             read_only=tool["read_only"],
         )
-        for tool in exposed(db)
+        for tool in exposed(db, user_id)
     ]
 
 
-def agent_tool_specs(db: Any) -> list[ToolSpec]:
+def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     """同一份清单,不经 HTTP —— 上下文水位要按它算「工具定义占了多少」。
 
     分成两个函数而不是让水位那边再列一遍:第二份清单会漂移,而漂移后的水位仍然看起来像
@@ -97,4 +97,4 @@ def agent_tool_specs(db: Any) -> list[ToolSpec]:
         for tool in tools
         if tool.name not in _PLUGIN_META_TOOLS
     ]
-    return specs + _plugin_tool_specs(db)
+    return specs + _plugin_tool_specs(db, user_id)

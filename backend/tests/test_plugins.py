@@ -17,6 +17,14 @@ from app.domain.plugins import packages as pkg
 from tests.util import fresh_client
 
 
+def _first_user_id(db) -> str:
+    """扫描的是**某个人** —— 自动建的默认接入归他(接入归人,见 db.models.PluginInstance)。"""
+    from app.db.models import User
+
+    me = db.query(User).order_by(User.created_at).first()
+    return me.id if me is not None else ""
+
+
 def plugins_root() -> Path:
     """真实的插件目录(测试数据目录下,fresh_client 保证它是一次性的)。
 
@@ -106,7 +114,11 @@ def install(*manifests: dict, entry: str = ENV_ENTRY):
         (directory / "open-studio.plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
         (directory / "main.py").write_text(entry, encoding="utf-8")
     with SessionLocal() as db:
-        installer.sync(db, plugins_root())
+        # 扫描的是**某个人** —— 自动建的默认接入归他(接入归人,见 db.models.PluginInstance)。
+        from app.db.models import User
+
+        me = db.query(User).order_by(User.created_at).first()
+        installer.sync(db, plugins_root(), owner_user_id=me.id if me else "")
     return client
 
 
@@ -126,7 +138,7 @@ def test_通用文件名被改成规范名() -> None:
     (directory / "plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
     (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
     with SessionLocal() as db:
-        installer.sync(db, plugins_root())
+        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
 
     assert (directory / "open-studio.plugin.json").exists()
     assert not (directory / "plugin.json").exists()
@@ -431,7 +443,7 @@ def test_迁移是幂等的_跑第二次不再改动() -> None:
     path = plugins_root() / "legacy" / "open-studio.plugin.json"
     first = path.read_text(encoding="utf-8")
     with SessionLocal() as db:
-        installer.sync(db, plugins_root())
+        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
     assert path.read_text(encoding="utf-8") == first
     assert client is not None
 
@@ -442,7 +454,7 @@ def test_目录被手动删掉后_扫描顺手清掉那条记录() -> None:
 
     shutil.rmtree(plugins_root() / "keyed")
     with SessionLocal() as db:
-        installer.sync(db, plugins_root())
+        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
     assert set(packages(client)) == {"dev.simple"}
 
 
@@ -463,5 +475,5 @@ def test_卸载连目录一起删_否则下次扫描又装回来() -> None:
     assert client.delete("/api/plugins/dev.simple").status_code == 204
     assert not (plugins_root() / "simple").exists()
     with SessionLocal() as db:
-        installer.sync(db, plugins_root())
+        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
     assert packages(client) == {}

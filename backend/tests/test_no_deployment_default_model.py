@@ -135,7 +135,11 @@ def test_no_code_path_still_reads_the_empty_owner_row() -> None:
         # 这两个迁移都必须碰那一列:一个删掉无主的默认行,一个给无主的连接补上主人。
         # 禁掉它们等于禁掉清理本身。按函数名点名放行,而不是放行整个文件。
         # **两个都要收**:上一版 `return` 在第一个匹配就出去了,于是另一个照样被判违规。
-        allowed = {"_migrate_drop_deployment_defaults", "_migrate_connections_get_an_owner"}
+        allowed = {
+            "_migrate_drop_deployment_defaults",
+            "_migrate_connections_get_an_owner",
+            "_migrate_plugin_instances_get_an_owner",
+        }
         lines: set[int] = set()
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.FunctionDef) and node.name in allowed:

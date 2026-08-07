@@ -381,6 +381,31 @@ def _migrate_connections_get_an_owner() -> None:
             )
 
 
+def _migrate_plugin_instances_get_an_owner() -> None:
+    """给每个插件接入补上主人 —— 和连接那条同一个道理(见 _migrate_connections_get_an_owner)。
+
+    老库里接入是部署级的,建它一直需要部署管理员权限,所以现存的每一个都是某个管理员配的。
+    多个管理员时取最早那个。
+    """
+    inspector = inspect(engine)
+    if "plugin_instances" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("plugin_instances")}
+    with engine.begin() as conn:
+        if "owner_user_id" not in columns:
+            conn.execute(
+                text("ALTER TABLE plugin_instances ADD COLUMN owner_user_id VARCHAR(64) NOT NULL DEFAULT ''")
+            )
+        admin = conn.execute(
+            text("SELECT id FROM users WHERE is_deployment_admin = 1 ORDER BY created_at LIMIT 1")
+        ).scalar()
+        if admin:
+            conn.execute(
+                text("UPDATE plugin_instances SET owner_user_id = :uid WHERE owner_user_id = ''"),
+                {"uid": admin},
+            )
+
+
 def _migrate_drop_deployment_defaults() -> None:
     """删掉「部署默认模型」那些行 —— 这一档不存在了。
 
@@ -865,6 +890,7 @@ def init_db() -> None:
     _migrate_deployment_config()
     _migrate_drop_deployment_defaults()
     _migrate_connections_get_an_owner()
+    _migrate_plugin_instances_get_an_owner()
     _migrate_hash_session_tokens()
     _migrate_client_version()
     _migrate_job_actor()

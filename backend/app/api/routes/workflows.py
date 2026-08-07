@@ -41,7 +41,7 @@ router = APIRouter(tags=["workflows"])
 
 
 @router.get("/workflows/node-types", response_model=list[WorkflowNodeTypeOut])
-def node_types(db: DbSession) -> list[dict]:
+def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     """节点类型清单,**按面板分组顺序排好**。
 
     排序放在这里而不是前端:分组和顺序是这份注册表自己的性质(NODE_CATEGORIES 就在它旁边)。
@@ -51,7 +51,7 @@ def node_types(db: DbSession) -> list[dict]:
     order = {name: index for index, name in enumerate(NODE_CATEGORIES)}
     # 插件节点跟内置节点走同一条路出去:同样的字段、同样的分组、同样的排序。前端因此不需要
     # 知道"这一项是插件来的" —— 它在画布上就该跟别的节点没有区别。
-    registry = {**NODE_TYPES, **plugin_node_types(db)}
+    registry = {**NODE_TYPES, **plugin_node_types(db, user.id)}
     items = [
         {
             "type": key,

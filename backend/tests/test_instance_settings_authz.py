@@ -72,11 +72,16 @@ def test_an_outsider_cannot_repoint_a_provider_and_harvest_its_key(owner_and_out
     assert acquired.json().get("credential") is None, "outsider 拿到了别人的凭据"
 
 
-def test_an_outsider_cannot_grant_plugin_permissions_or_wipe_the_audit_log(owner_and_outsider) -> None:
+def test_an_outsider_cannot_grant_plugin_permissions_or_read_the_audit_log(owner_and_outsider) -> None:
+    """插件接入归人(见 tests/test_plugins_belong_to_a_person),所以判据从"够不够管理员"
+    变成"是不是他的" —— 别人的接入一律 404,调用记录里只出现他自己的。
+
+    记录这一档尤其要紧:它带着每次调用的 input/output,那是别人的请求参数和返回内容。
+    """
     _, outsider = owner_and_outsider
-    assert outsider.patch("/api/plugins/instances/any-instance/permissions", json={"grants": {}}).status_code == 403
-    assert outsider.get("/api/plugins/invocations").status_code == 403
-    assert outsider.delete("/api/plugins/invocations").status_code == 403
+    assert outsider.patch("/api/plugins/instances/any-instance/permissions", json={"grants": {}}).status_code == 404
+    assert outsider.get("/api/plugins/invocations").json() == []
+    assert outsider.delete("/api/plugins/invocations").status_code == 204
 
 
 def test_the_owner_is_not_locked_out_of_their_own_install(owner_and_outsider) -> None:

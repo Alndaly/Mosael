@@ -140,7 +140,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def plugin_node_types(db: Session) -> dict[str, dict[str, Any]]:
+def plugin_node_types(db: Session, user_id: str | None = None) -> dict[str, dict[str, Any]]:
     """当前可用的插件节点类型。可用实例(启用 + 配置齐 + 凭据齐 + 已授权)暴露的工具才在列。
 
     **这份注册表是动态的**,这正是它不能并进 NODE_TYPES 的原因:NODE_TYPES 是这份代码的
@@ -154,14 +154,14 @@ def plugin_node_types(db: Session) -> dict[str, dict[str, Any]]:
     from app.domain.plugins.tools import exposed
 
     out: dict[str, dict[str, Any]] = {}
-    for tool in exposed(db):
+    for tool in exposed(db, user_id):
         key = node_type_id(tool["package_id"], tool["name"])
         if key not in out:
             out[key] = node_meta(tool)
     return out
 
 
-def instances_for_node(db: Session, node_type: str) -> list[dict[str, str]]:
+def instances_for_node(db: Session, node_type: str, user_id: str | None = None) -> list[dict[str, str]]:
     """这个节点类型可以用哪些实例。节点配置里的「连接」下拉读它。"""
     from app.domain.plugins.tools import exposed
 
@@ -171,7 +171,7 @@ def instances_for_node(db: Session, node_type: str) -> list[dict[str, str]]:
     package_id, tool_name = parsed
     return [
         {"id": tool["instance_id"], "name": tool["instance_name"]}
-        for tool in exposed(db)
+        for tool in exposed(db, user_id)
         if tool["package_id"] == package_id and tool["name"] == tool_name
     ]
 

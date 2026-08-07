@@ -898,7 +898,7 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
     return prompt
 
 
-def tool_definition_tokens(db: Session) -> int:
+def tool_definition_tokens(db: Session, user_id: str | None = None) -> int:
     """工具定义每轮重发一遍占掉多少 —— 这个应用里通常是**最大的一块**。
 
     按 sidecar 实际发出去的形状估:名字 + 描述 + 参数 schema 的 JSON。它不随对话增长,所以
@@ -909,7 +909,7 @@ def tool_definition_tokens(db: Session) -> int:
     payload = json.dumps(
         [
             {"name": spec.name, "description": spec.description, "parameters": spec.parameters}
-            for spec in agent_tool_specs(db)
+            for spec in agent_tool_specs(db, user_id)
         ],
         ensure_ascii=False,
     )
@@ -945,7 +945,7 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
         **context_breakdown(
             session.adapter_state,
             system_prompt=build_system_prompt(db, session),
-            tool_tokens=tool_definition_tokens(db),
+            tool_tokens=tool_definition_tokens(db, session.owner_user_id),
             window=window,
         ),
     }

@@ -88,14 +88,21 @@ def _runtime_manifest(manifest: Manifest) -> dict[str, Any]:
     }
 
 
-def exposed(db: Session) -> list[dict[str, Any]]:
-    """所有**可用**实例暴露出来的工具。智能体工具表、工作流节点面板、插件页共用这一份。
+def exposed(db: Session, user_id: str | None) -> list[dict[str, Any]]:
+    """**他自己接的**那些可用实例暴露出来的工具。智能体工具表、工作流节点面板、插件页共用这一份。
 
     可用 = 启用 + 配置齐 + 凭据齐 + 权限已授。不可用的实例整条不出现 —— 让智能体去调一个
     必定 401 的工具,只会烧掉一轮对话来复述一句用户在设置页早就看得到的话。
+
+    `user_id` 是**必填位置参数**(可以显式传 None 表示"不按人过滤",只有后台无人路径这么用):
+    接入归人(见 db.models.PluginInstance),漏过滤的地方会让我的智能体拿着**别人的**第三方
+    密钥去调 —— 那笔账记在他头上,我这边什么痕迹都没有。给个默认值就等于让漏改的地方静默通过。
     """
     out: list[dict[str, Any]] = []
-    for instance in db.scalars(select(PluginInstance).where(PluginInstance.enabled.is_(True))):
+    stmt = select(PluginInstance).where(PluginInstance.enabled.is_(True))
+    if user_id is not None:
+        stmt = stmt.where(PluginInstance.owner_user_id == user_id)
+    for instance in db.scalars(stmt):
         if inst.blocked_reason(db, instance):
             continue
         package = db.get(PluginPackage, instance.package_id)

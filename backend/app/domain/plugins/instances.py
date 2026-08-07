@@ -37,17 +37,31 @@ def manifest_for(db: Session, instance: PluginInstance) -> Manifest:
     return manifest_of(package)
 
 
-def create(db: Session, package_id: str, config: dict[str, Any] | None = None, name: str = "") -> PluginInstance:
+def create(
+    db: Session,
+    package_id: str,
+    config: dict[str, Any] | None = None,
+    name: str = "",
+    *,
+    owner_user_id: str = "",
+) -> PluginInstance:
     package = db.get(PluginPackage, package_id)
     if package is None:
         raise PluginDomainError("Plugin not found")
     manifest = manifest_of(package)
-    existing = db.scalars(select(PluginInstance).where(PluginInstance.package_id == package_id)).all()
+    # 「只能有一个」是**对这个人**而言的:接入归人(见 db.models.PluginInstance),
+    # 别人接过不该挡住我接我自己的那一个。
+    existing = db.scalars(
+        select(PluginInstance).where(
+            PluginInstance.package_id == package_id, PluginInstance.owner_user_id == owner_user_id
+        )
+    ).all()
     if existing and not manifest.multiple:
         raise PluginDomainError(f"「{manifest.name}」只能有一个连接")
     merged = _fit_config(manifest, config or {})
     instance = PluginInstance(
         package_id=package_id,
+        owner_user_id=owner_user_id,
         name=name.strip() or render_name(manifest, merged),
         enabled=False,
         config=merged,

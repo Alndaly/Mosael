@@ -363,7 +363,7 @@ def delete_memory(memory_id: str, db: DbSession, user: CurrentUser) -> None:
 
 @router.get("/agent/skills", response_model=list[AgentSkillOut])
 def get_agent_skills(db: DbSession) -> list[dict]:
-    return list_agent_skills(db)
+    return list_agent_skills(db, user.id)
 
 
 @router.get("/agent/manifest", response_model=AgentManifestOut)
@@ -372,5 +372,5 @@ def get_agent_manifest(db: DbSession) -> AgentManifestOut:
         app="open-studio",
         version=app_version(),
         openapi_url="/openapi.json",
-        skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db)],
+        skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db, user.id)],
     )

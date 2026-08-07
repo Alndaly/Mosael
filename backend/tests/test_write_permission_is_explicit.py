@@ -43,6 +43,11 @@ EXPLICIT = {
 #: 只是和"取哪个对象"合成了一行(见 core/permissions.require_sequence_access)。
 GATED_HELPERS = {"require_sequence_access", "require_asset"}
 
+#: **归属即权限**的那几个:东西归某个人,判据就是"它是不是我的",没有角色可言。
+#: 它们各自是所在模块里唯一的取对象入口,取不到自己的就 404(见 settings._require_profile、
+#: plugins.my_instance)。写在这里而不是让棘轮猜:漏掉一个的后果是那条路径能改别人的东西。
+OWNERSHIP_GATES = {"_require_profile", "my_instance"}
+
 
 def _local_gated_helpers(tree: ast.Module) -> set[str]:
     """这个模块自己的「取对象顺带过闸」辅助 —— 同样接受 `perm=`(见 routes/kb._require_dataset)。"""
@@ -57,7 +62,8 @@ def _local_gated_helpers(tree: ast.Module) -> set[str]:
 NOT_WORKSPACE_SCOPED = {
     "auth.py",           # 注册/登录/改自己的资料
     "deployment.py",     # 部署级:邀请码、部署管理员
-    "settings.py",       # 部署级:供应商连接、网络、模型 —— 各自 ensure_deployment_admin
+    "settings.py",       # 部署级(网络/运行时/TTS)各自 ensure_deployment_admin;
+                         # 供应商连接归人,判据是 _require_profile(见 OWNERSHIP_GATES)
     "publish_worker.py", # 桌面发布器的回报通道(独立的 worker key)
     "browser_worker.py", # 浏览器执行器的回报通道
     "jobs_worker.py",    # 外部任务执行器的回报通道
@@ -81,6 +87,8 @@ GATED_IN_THE_DOMAIN = {
     "confirmations.py:reject",
     # 建工作区时还没有工作区可查 —— 建的人成为它的 owner
     "projects.py:create_workspace",
+    # 接一个插件时还没有这个接入可查 —— 建出来的就归建的人(见 db.models.PluginInstance)
+    "plugins.py:create_instance",
 }
 
 
@@ -88,7 +96,7 @@ def _names_a_permission(fn: ast.AST, gated: set[str]) -> bool:
     for node in ast.walk(fn):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
             continue
-        if node.func.id in EXPLICIT:
+        if node.func.id in EXPLICIT or node.func.id in OWNERSHIP_GATES:
             return True
         if node.func.id in gated and any(k.arg == "perm" for k in node.keywords):
             return True

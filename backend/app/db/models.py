@@ -1228,6 +1228,10 @@ class PluginInstance(Base):
     __tablename__ = "plugin_instances"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 谁接的。**包是这台机器装了什么(部署级),接入是某个人用他的账号连上了它。**
+    #: 此前整份都是部署级:管理员配一次,所有人的智能体共用那一把第三方密钥 —— 于是用量算不到
+    #: 人头上,而新账号一进插件页就看到别人接好的一排。和供应商连接同一条(见 ProviderProfile)。
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="", index=True)
     package_id: Mapped[str] = mapped_column(ForeignKey("plugin_packages.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

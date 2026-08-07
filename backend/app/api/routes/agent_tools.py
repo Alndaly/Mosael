@@ -62,7 +62,7 @@ class ToolInvocation(BaseModel):
 @router.get("/agent/tools", response_model=list[ToolSpec])
 def list_agent_tools(db: DbSession, user: CurrentUser) -> list[ToolSpec]:
     """The tools an agent runtime may offer. Derived from the MCP registry, never a second list."""
-    return agent_tool_specs(db)
+    return agent_tool_specs(db, user.id)
 
 
 def _accepted_names(fn: Any) -> list[str]:
@@ -105,7 +105,7 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
     return fitted, dropped
 
 
-def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any], user_id: str) -> dict[str, Any]:
     """把展开后的名字反查回 (plugin_id, tool_name) 并执行。
 
     走的是 invoke_plugin_tool 这条**唯一**的插件执行路径 —— 权限校验、凭据注入、调用留痕
@@ -114,7 +114,8 @@ def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any]) -> dict[s
     from app.domain.plugins import PluginDomainError
     from app.domain.plugins.tools import exposed, invoke
 
-    match = next((t for t in exposed(db) if agent_tool_name(t["instance_id"], t["name"]) == name), None)
+    # **只在他自己接的实例里找**:否则一个名字对得上的调用就会用别人的第三方密钥跑起来。
+    match = next((t for t in exposed(db, user_id) if agent_tool_name(t["instance_id"], t["name"]) == name), None)
     if match is None:
         # 连接被停用/撤权/凭据被清空、或者这个工具被取消暴露之后,模型手里还攥着上一轮的
         # 工具表。说清楚是哪一类问题,而不是一句"找不到"。
@@ -145,7 +146,7 @@ def invoke_agent_tool(
     if workspace_id:
         ensure_workspace_member(db, user, workspace_id)
     if name.startswith(PLUGIN_TOOL_PREFIX):
-        return _invoke_plugin_tool(db, name, body.arguments)
+        return _invoke_plugin_tool(db, name, body.arguments, user.id)
     registry = _registry()
     fn = getattr(registry, name, None)
     if fn is None or not callable(fn) or name.startswith("_"):

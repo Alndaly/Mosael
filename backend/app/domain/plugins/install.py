@@ -16,12 +16,12 @@ from app.domain.plugins import packages as pkg
 from app.domain.plugins.manifest import Manifest, manifest_of
 
 
-def sync(db: Session, plugins_dir: Path) -> list[PluginPackage]:
+def sync(db: Session, plugins_dir: Path, *, owner_user_id: str = "") -> list[PluginPackage]:
     """扫描插件目录并把实例对齐。插件页的「扫描插件」走这条。"""
     scanned = pkg.scan(db, plugins_dir)
     for package in scanned:
         manifest = manifest_of(package)
-        _ensure_default_instance(db, package, manifest)
+        _ensure_default_instance(db, package, manifest, owner_user_id)
         for instance in pkg.instances_of(db, package.id):
             # 作者把某个字段从凭据改成配置(或反过来)时,把用户早就填过的值搬到新位置 ——
             # 重填是我们的问题,不是他的。
@@ -30,17 +30,25 @@ def sync(db: Session, plugins_dir: Path) -> list[PluginPackage]:
     return scanned
 
 
-def _ensure_default_instance(db: Session, package: PluginPackage, manifest: Manifest) -> None:
+def _ensure_default_instance(
+    db: Session, package: PluginPackage, manifest: Manifest, owner_user_id: str
+) -> None:
     """无配置无凭据的包装上就建一个默认连接 —— 那种插件不该逼用户先"新建一个连接"。
 
     有配置的包不自动建:建之前我们不知道它连的是哪个端点,也就不知道它该叫什么名字,
     而一个叫「TikHub」却没配平台的空壳只会让人以为它坏了。
+
+    **建给扫描的那个人**(接入归人,见 db.models.PluginInstance)。"自动建一个大家共用的"
+    在归属拆开之后没有意义 —— 它会是一个没有主人、却记着某个人调用的接入。别人一键就能建
+    自己的那一个。
     """
     if manifest.config or manifest.credentials:
         return
-    if pkg.instances_of(db, package.id):
+    if not owner_user_id:
         return
-    inst.create(db, package.id, {}, manifest.name)
+    if [i for i in pkg.instances_of(db, package.id) if i.owner_user_id == owner_user_id]:
+        return
+    inst.create(db, package.id, {}, manifest.name, owner_user_id=owner_user_id)
 
 
 def _seed(db: Session, instance: PluginInstance, manifest: Manifest) -> None:

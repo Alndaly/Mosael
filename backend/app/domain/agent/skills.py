@@ -73,7 +73,7 @@ CORE_SKILLS = [
 ]
 
 
-def list_agent_skills(db: Session) -> list[dict[str, Any]]:
+def list_agent_skills(db: Session, user_id: str | None = None) -> list[dict[str, Any]]:
     """核心技能 + 每个**可用实例**贡献的技能。
 
     实例(而不是包)是技能的主人:同一个包的两次接入是两套凭据、两个端点,给别的智能体看的
@@ -84,7 +84,7 @@ def list_agent_skills(db: Session) -> list[dict[str, Any]]:
 
     skills = [dict(skill) for skill in CORE_SKILLS]
     by_instance: dict[str, list[dict[str, Any]]] = {}
-    for tool in exposed(db):
+    for tool in exposed(db, user_id):
         by_instance.setdefault(tool["instance_id"], []).append(
             {
                 "name": tool["name"],

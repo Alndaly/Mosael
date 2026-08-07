@@ -27,7 +27,7 @@ from app.api.schemas import (
 )
 from app.core.config import settings
 from app.core.permissions import ensure_deployment_admin
-from app.db.models import PluginInvocation, PluginPackage
+from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst
 from app.domain.plugins import install as installer
@@ -48,10 +48,10 @@ def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
 def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     ensure_deployment_admin(db, user)
     try:
-        installer.sync(db, settings.plugins_dir)
+        installer.sync(db, settings.plugins_dir, owner_user_id=user.id)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _packages(db)
+    return _packages(db, user)
 
 
 @router.get("/plugins/dir")
@@ -65,24 +65,33 @@ def plugins_directory(user: CurrentUser) -> dict[str, str]:
 
 
 @router.get("/plugins", response_model=list[PluginPackageOut])
-def list_packages(db: DbSession) -> list[dict]:
-    return _packages(db)
+def list_packages(db: DbSession, user: CurrentUser) -> list[dict]:
+    return _packages(db, user)
 
 
-@router.delete("/plugins/{package_id}", status_code=204)
-def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None:
-    """卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
+def my_instance(db: DbSession, instance_id: str, user: CurrentUser) -> PluginInstance:
+    """**我自己接的**那个,不是就 404。
 
-    **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
+    接入归人(见 db.models.PluginInstance)。"别人接的"和"不存在"对他是同一件事 —— 回 403 等于
+    告诉他这个 id 有效。归属判定只此一处:每个路由各写一遍的话,漏掉任何一处都不会报错,
+    只会让那条路径能读到别人的第三方凭据。
     """
-    ensure_deployment_admin(db, user)
-    try:
-        pkg.uninstall(db, package_id, settings.plugins_dir)
-    except PluginDomainError as exc:
-        raise _fail(exc, 404) from exc
+    instance = db.get(PluginInstance, instance_id)
+    if instance is None or instance.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="插件接入不存在")
+    return instance
 
 
-def _packages(db: DbSession) -> list[dict]:
+def _my_instance_ids(db: DbSession, user: CurrentUser) -> list[str]:
+    return list(db.scalars(select(PluginInstance.id).where(PluginInstance.owner_user_id == user.id)))
+
+
+def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
+    """装了哪些包 + **我自己**接的那些实例。
+
+    包是这台机器的事实,人人看得到(否则他不知道有什么可接);实例是他自己的接入,别人的一个
+    都不该出现 —— 此前这里不做过滤,新账号一进插件页就看到管理员接好的一排。
+    """
     out: list[dict] = []
     for package in db.scalars(select(PluginPackage).order_by(PluginPackage.name)):
         manifest = manifest_of(package)
@@ -96,7 +105,11 @@ def _packages(db: DbSession) -> list[dict]:
                 "permissions": manifest.permissions,
                 "config_fields": [_field(f) for f in manifest.config],
                 "credential_fields": [_field(f) for f in manifest.credentials],
-                "instances": [_instance(db, i) for i in pkg.instances_of(db, package.id)],
+                "instances": [
+                    _instance(db, i)
+                    for i in pkg.instances_of(db, package.id)
+                    if i.owner_user_id == user.id
+                ],
             }
         )
     return out
@@ -132,9 +145,12 @@ def _instance(db: DbSession, instance) -> dict:
 
 @router.post("/plugins/{package_id}/instances", response_model=PluginInstanceOut)
 def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_deployment_admin(db, user)
+    """接一个**我自己的**。不要求部署管理员:他自己的账号、他自己的额度。
+
+    没有归属判定可做(还没有这个接入)—— 建出来的就归他,这一行本身就是那道闸。
+    """
     try:
-        instance = inst.create(db, package_id, body.config, body.name)
+        instance = inst.create(db, package_id, body.config, body.name, owner_user_id=user.id)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _instance(db, instance)
@@ -142,9 +158,8 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
 
 @router.patch("/plugins/instances/{instance_id}", response_model=PluginInstanceOut)
 def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_deployment_admin(db, user)
     try:
-        instance = inst.get(db, instance_id)
+        instance = my_instance(db, instance_id, user)
         if body.name is not None:
             inst.rename(db, instance, body.name)
         if body.config is not None:
@@ -158,9 +173,8 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession,
 
 @router.delete("/plugins/instances/{instance_id}", status_code=204)
 def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_deployment_admin(db, user)
     try:
-        db.delete(inst.get(db, instance_id))
+        db.delete(my_instance(db, instance_id, user))
         db.commit()
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
@@ -169,9 +183,8 @@ def delete_instance(instance_id: str, db: DbSession, user: CurrentUser) -> None:
 @router.post("/plugins/instances/{instance_id}/refresh", response_model=PluginInstanceOut)
 def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
     """重新向 MCP 服务要工具清单。进程类实例直接原样返回。"""
-    ensure_deployment_admin(db, user)
     try:
-        instance = tools_domain.refresh_tools(db, inst.get(db, instance_id))
+        instance = tools_domain.refresh_tools(db, my_instance(db, instance_id, user))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _instance(db, instance)
@@ -181,9 +194,8 @@ def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -
 def update_capabilities(
     instance_id: str, body: PluginCapabilityUpdate, db: DbSession, user: CurrentUser
 ) -> dict:
-    ensure_deployment_admin(db, user)
     try:
-        instance = inst.get(db, instance_id)
+        instance = my_instance(db, instance_id, user)
         inst.set_exposed(db, instance, body.tools)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
@@ -192,9 +204,8 @@ def update_capabilities(
 
 @router.get("/plugins/instances/{instance_id}/permissions", response_model=list[PluginPermissionGrantOut])
 def list_instance_permissions(instance_id: str, db: DbSession, user: CurrentUser) -> list:
-    ensure_deployment_admin(db, user)
     try:
-        return inst.list_permissions(db, inst.get(db, instance_id))
+        return inst.list_permissions(db, my_instance(db, instance_id, user))
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
 
@@ -204,18 +215,16 @@ def update_instance_permissions(
     instance_id: str, body: PluginPermissionGrantUpdate, db: DbSession, user: CurrentUser
 ) -> list:
     # 授权是提权路径:未门禁的调用方可以先授权再调用,两个请求就绕过了确认。
-    ensure_deployment_admin(db, user)
     try:
-        return inst.set_permissions(db, inst.get(db, instance_id), body.grants)
+        return inst.set_permissions(db, my_instance(db, instance_id, user), body.grants)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
 
 
 @router.get("/plugins/instances/{instance_id}/credentials", response_model=list[PluginCredentialOut])
 def list_instance_credentials(instance_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_deployment_admin(db, user)
     try:
-        return inst.describe_credentials(db, inst.get(db, instance_id))
+        return inst.describe_credentials(db, my_instance(db, instance_id, user))
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
 
@@ -224,9 +233,8 @@ def list_instance_credentials(instance_id: str, db: DbSession, user: CurrentUser
 def update_instance_credentials(
     instance_id: str, body: PluginCredentialUpdate, db: DbSession, user: CurrentUser
 ) -> list[dict]:
-    ensure_deployment_admin(db, user)
     try:
-        instance = inst.get(db, instance_id)
+        instance = my_instance(db, instance_id, user)
         inst.set_credentials(db, instance, body.values)
         # 凭据是连上服务的前提,填完顺手重拉一次清单 —— 否则用户填完 key 还要再找一个
         # 「刷新」按钮点一下,而中间那段时间插件看起来像是坏的。
@@ -242,16 +250,16 @@ def update_instance_credentials(
 # --- 能力 ---------------------------------------------------------------
 
 @router.get("/plugins/tools", response_model=list[PluginToolOut])
-def list_exposed_tools(db: DbSession) -> list[dict]:
+def list_exposed_tools(db: DbSession, user: CurrentUser) -> list[dict]:
     """所有可用实例**暴露**的工具。智能体工具表与工作流节点面板读的就是这一份。"""
-    return tools_domain.exposed(db)
+    return tools_domain.exposed(db, user.id)
 
 
 @router.post("/plugins/instances/{instance_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
 def invoke_tool(
     instance_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
 ) -> PluginInvocation:
-    ensure_deployment_admin(db, user)
+    my_instance(db, instance_id, user)  # 归属判定,和这个接入上其余操作同一道门
     try:
         return tools_domain.invoke(db, instance_id, tool_name, body.input)
     except PluginDomainError as exc:
@@ -262,8 +270,12 @@ def invoke_tool(
 
 @router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
 def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> list[PluginInvocation]:
-    ensure_deployment_admin(db, user)
-    stmt = select(PluginInvocation)
+    """**我自己接的那些**的调用记录。
+
+    记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。
+    此前这里不做过滤,因为那时接入本来就是所有人共用的一份。
+    """
+    stmt = select(PluginInvocation).where(PluginInvocation.instance_id.in_(_my_instance_ids(db, user)))
     if instance_id:
         stmt = stmt.where(PluginInvocation.instance_id == instance_id)
     return list(db.scalars(stmt.order_by(PluginInvocation.created_at.desc())))
@@ -271,18 +283,19 @@ def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None =
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
 def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> None:
-    ensure_deployment_admin(db, user)
     obj = db.get(PluginInvocation, invocation_id)
     if obj is not None:
+        my_instance(db, obj.instance_id, user)  # 别人的记录删不得,也不该知道它存在
         db.delete(obj)
         db.commit()
 
 
 @router.delete("/plugins/invocations", status_code=204)
 def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> None:
-    """清空调用记录;带 instance_id 只清该连接的。"""
-    ensure_deployment_admin(db, user)
-    stmt = select(PluginInvocation)
+    """清空**我自己**的调用记录;带 instance_id 只清该接入的。"""
+    if instance_id:
+        my_instance(db, instance_id, user)
+    stmt = select(PluginInvocation).where(PluginInvocation.instance_id.in_(_my_instance_ids(db, user)))
     if instance_id:
         stmt = stmt.where(PluginInvocation.instance_id == instance_id)
     for obj in db.scalars(stmt):
@@ -292,3 +305,23 @@ def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None 
 
 # 旧的 PluginEnableRequest 仍被 schema 引用;实例的启用走 PATCH /plugins/instances/{id}。
 __all__ = ["router", "PluginEnableRequest"]
+
+
+# --- 卸载 ---------------------------------------------------------------
+#
+# **必须声明在最后。** `/plugins/{package_id}` 是个吃通配的路径,而 FastAPI 按声明顺序匹配 ——
+# 它在上面时会把 `DELETE /plugins/invocations` 一并吃掉,当成"卸载一个叫 invocations 的包",
+# 于是清空调用记录这件事从来就没成功过(管理员来也是一句 "Plugin not found")。
+# 两条路由都要求部署管理员的年代看不出来:两边都 403/404,像是权限不够。
+
+@router.delete("/plugins/{package_id}", status_code=204)
+def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None:
+    """卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
+
+    **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        pkg.uninstall(db, package_id, settings.plugins_dir)
+    except PluginDomainError as exc:
+        raise _fail(exc, 404) from exc
