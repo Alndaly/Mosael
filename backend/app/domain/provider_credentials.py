@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderCredential, ProviderProfile, User
+# 叶子模块:预设是纯数据。从 providers 引会成环(它在顶层 import 本模块)。
+from app.domain.provider_presets import VENDOR_PRESETS
 
 """钥匙是人的,连接是部署的。
 
@@ -68,12 +70,19 @@ def _has_secret(credential: ProviderCredential) -> bool:
 
 
 def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -> ResolvedProvider | None:
-    """这条连接 + 这个人该用的钥匙。没有可用的钥匙就回 None(调用方报「请先配置」)。"""
+    """这条连接 + 这个人该用的钥匙。没有可用的钥匙就回 None(调用方报「请先配置」)。
+
+    **免密钥的 vendor 例外**(今天只有本地 ComfyUI):它没有账号也没有 key,而"有没有一份带
+    秘密的凭据"这个判据对它永远为假 —— 于是那条连接一次都用不了,界面上还挂着一行"未配置你的
+    密钥",而它压根没有密钥可配。用户唯一的出路是随便敲几个字符骗过判据,那既不是配置也不是安全。
+    """
     if profile is None or not profile.enabled:
         return None
     credential = pick(db, profile.id, user_id)
-    if credential is None:
+    if credential is None and not is_keyless(profile.vendor):
         return None
+    if credential is None:
+        return _keyless(profile)
     extra = dict(profile.extra or {})
     extra.update(credential.secrets or {})
     return ResolvedProvider(
@@ -89,6 +98,29 @@ def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -
         credential_version=credential.credential_version or 0,
         extra=extra,
         owner_user_id=credential.owner_user_id,
+    )
+
+
+def is_keyless(vendor: str) -> bool:
+    """这家供应商**不需要任何凭据**吗 —— 今天只有本机 ComfyUI。
+
+    由预设声明,不从"有没有 secret 字段"反推:那个推论对 openrouter / anthropic 这些
+    `fields: []` 但确实收 key 的 vendor 是错的(它们的 key 走通用的「我的密钥」入口)。
+    """
+    return bool(VENDOR_PRESETS.get(vendor, {}).get("keyless"))
+
+
+def _keyless(profile: ProviderProfile) -> ResolvedProvider:
+    """免密钥连接的解析结果 —— 除了没有钥匙,和正常那份一模一样。"""
+    return ResolvedProvider(
+        id=profile.id,
+        name=profile.name,
+        vendor=profile.vendor,
+        base_url=profile.base_url or "",
+        auth_type=profile.auth_type,
+        enabled=profile.enabled,
+        extra=dict(profile.extra or {}),
+        owner_user_id=profile.owner_user_id,
     )
 
 

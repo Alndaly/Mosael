@@ -796,6 +796,10 @@ class ProviderProfileOut(OrmModel):
     key_hint: str = ""
     #: 我在这条连接上配过自己的钥匙吗。没配 → 这条连接对我不可用,界面直说。
     is_mine: bool = False
+    #: 这家供应商**要不要钥匙**。免密钥的(本机 ComfyUI)为 False —— 界面据此决定要不要显示
+    #: 那行「未配置你的密钥」。判据由后端给:前端按 vendor 名字硬编,下一个免密钥的 vendor
+    #: 加进来时没有任何东西会提醒你。
+    needs_key: bool = True
     #: Non-secret extras come back verbatim; secret ones only as "…abcd", never in full —
     #: same rule as api_key/key_hint.
     extra: dict[str, str] = Field(default_factory=dict)

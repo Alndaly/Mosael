@@ -72,6 +72,7 @@ from app.domain.ai_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain import provider_health
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
+from app.domain.provider_credentials import is_keyless
 from app.domain.providers import (
     VENDOR_PRESETS,
     pi_provider_id,
@@ -107,6 +108,7 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     credential = provider_credentials.get(db, profile.id, user.id)
     out.key_hint = provider_credentials.key_hint(credential)
     out.is_mine = credential is not None
+    out.needs_key = not is_keyless(profile.vendor)
     out.extra = _masked_extra(profile, credential)
     out.config = _masked_config(db, profile, credential)
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。

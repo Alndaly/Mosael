@@ -510,8 +510,13 @@ export function ProviderProfilesSection({
                     </>
                   ) : profile.key_hint ? (
                     ` · ${profile.key_hint}`
-                  ) : (
+                  ) : profile.needs_key ? (
                     <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
+                  ) : (
+                    /* 免密钥的(本机 ComfyUI):它压根没有密钥可配,一行红字只会让人去找一个
+                       不存在的输入框。判据由后端给(needs_key),不在这里按 vendor 名字硬编 ——
+                       下一个免密钥的 vendor 加进来时,硬编的那份没有任何东西会提醒你。 */
+                    <> · {t("providerKeyless")}</>
                   )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}

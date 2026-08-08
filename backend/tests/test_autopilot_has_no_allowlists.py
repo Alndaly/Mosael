@@ -8,8 +8,9 @@
 页面上原本那句"名单之外的情况会交给判断者"也只对 run_code 成立,对这两项是错的:它们不命中是
 DENY,不是 ASK。一句说明同时描述三项而只对一项为真,比没有说明更坏。
 
-现在三项统一:`ask`(默认,一律问你)| `judge`(交给那个与对话隔离的判断者)。判断者仍然翻不了
-任何东西 —— 它只能把"问你"变成"放行",不能把"拒绝"变成"放行"(见 domain/agent/rules.evaluate)。
+现在三项统一,各有三档:`ask`(默认,一律问你)| `judge`(交给那个与对话隔离的判断者)|
+`always`(不问也不判,直接放行)。判断者仍然翻不了任何东西 —— 它只能把"问你"变成"放行",
+不能把"拒绝"变成"放行"(见 domain/agent/rules.evaluate)。
 """
 
 from __future__ import annotations
@@ -71,7 +72,7 @@ def test_turning_it_on_hands_the_call_to_the_judge(tool: str, payload: dict, key
 
 def test_a_bad_value_falls_back_to_asking() -> None:
     """存进来一个不认识的档位,读出来必须是最保守的那个。"""
-    normalized = rules.normalize({"http_request": "always", "publish": True, "run_code": "judge"})
+    normalized = rules.normalize({"http_request": "sometimes", "publish": True, "run_code": "judge"})
 
     assert normalized["http_request"] == "ask"
     assert normalized["publish"] == "ask"
@@ -96,3 +97,48 @@ def test_old_rows_with_allowlists_read_as_ask() -> None:
     assert normalized["http_request"] == "ask"
     assert normalized["publish"] == "ask"
     assert normalized["notes"] == "旧的", "补充说明不该跟着一起丢"
+
+
+# ---------------- 第三档:完全放行 ----------------
+
+
+def test_a_category_can_be_opened_all_the_way() -> None:
+    """`always` = 不问、也不过判断者,直接放行。
+
+    它比 `judge` 更宽:judge 至少还有一次独立判断,而这一档等于把这一整类操作交出去。之所以
+    仍然提供,是因为有人的用法就是"这台机器上我一个人,我知道我在干什么" —— 而没有这一档的话,
+    他会去把整个会话切成 bypass,那连另外两类也一起放开了。**给一个精确的开关,好过逼人用一个
+    粗的。**
+    """
+    ruling = rules.evaluate(
+        "http_request", {"url": "https://x.example/y"}, {**rules.default_rules(), "http_request": "always"}
+    )
+
+    assert ruling.allowed, ruling.reason
+
+
+@pytest.mark.parametrize("key,tool,payload", [
+    ("http_request", "http_request", {"url": "https://x.example/y"}),
+    ("publish", "publish_asset", {"account_id": "acc-1"}),
+    ("run_code", "run_code", {"code": "print(1)"}),
+])
+def test_all_three_can_be_opened_all_the_way(key: str, tool: str, payload: dict) -> None:
+    """三档一致 —— 有一档少一个选项,用户就会以为那是 bug 而不是设计。"""
+    ruling = rules.evaluate(tool, payload, {**rules.default_rules(), key: "always"})
+
+    assert ruling.allowed, ruling.reason
+
+
+def test_opening_it_all_the_way_never_reaches_the_judge() -> None:
+    """确定性的答案不该花一次模型调用 —— 也不该让一次模型调用有机会否掉它。"""
+    ruling = rules.evaluate(
+        "run_code", {"code": "print(1)"}, {**rules.default_rules(), "run_code": "always"}
+    )
+
+    assert ruling.outcome == rules.ALLOW
+
+
+def test_an_unknown_level_still_falls_back_to_asking() -> None:
+    """三个档位之后,"不认识的值落到最保守那一档"这条更要紧了。"""
+    assert rules.normalize({"http_request": "ALWAYS "})["http_request"] == "ask"
+    assert rules.normalize({"http_request": "always"})["http_request"] == "always"

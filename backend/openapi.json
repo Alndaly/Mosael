@@ -19850,6 +19850,11 @@
             "title": "Is Mine",
             "default": false
           },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key",
+            "default": true
+          },
           "extra": {
             "additionalProperties": {
               "type": "string"

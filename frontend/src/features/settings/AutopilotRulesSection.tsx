@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
-type Level = "ask" | "judge";
+type Level = "ask" | "judge" | "always";
 type Rules = {
   http_request: Level;
   publish: Level;
@@ -103,6 +103,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
             <SelectContent>
               <SelectItem value="ask">{t("autopilotGateAsk")}</SelectItem>
               <SelectItem value="judge">{t("autopilotGateJudge")}</SelectItem>
+              <SelectItem value="always">{t("autopilotGateAlways")}</SelectItem>
             </SelectContent>
           </Select>
         </SettingsRow>

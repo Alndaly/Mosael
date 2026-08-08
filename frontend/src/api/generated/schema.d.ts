@@ -7118,6 +7118,11 @@ export interface components {
              * @default false
              */
             is_mine: boolean;
+            /**
+             * Needs Key
+             * @default true
+             */
+            needs_key: boolean;
             /** Extra */
             extra?: {
                 [key: string]: string;
