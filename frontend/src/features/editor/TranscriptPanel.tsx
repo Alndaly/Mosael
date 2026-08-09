@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Languages, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
-import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
+import { API_BASE, api, fetchJob, getAuthToken, transcribeAsset, type Job, type Sequence } from "@/api/client";
 import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
@@ -198,6 +198,27 @@ export function TranscriptPanel({
     setQueueTotal(pending.length);
     setQueue(pending);
   }, [assetIds, hasTranscript, t]);
+  // **换个页面再回来,进度还在。**
+  //
+  // 队列活在组件的 state 里,一卸载就没了 —— 而任务在后端还跑着。此前回来看到的是一个安静的
+  // 「AI 转写」按钮,像是什么都没发生过;再点一次会再排一遍队。
+  //
+  // 状态的真相在服务端(它有这些任务),所以挂载时去认领:这个工作区里还在跑的转写任务。
+  const runningTranscribes = useQuery({
+    queryKey: ["jobs", sequence.workspace_id, "transcribe"],
+    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${sequence.workspace_id}&kind=transcribe`),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((job) => job.status === "running" || job.status === "queued") ? 1500 : false,
+  });
+  React.useEffect(() => {
+    if (asrJobId || queue.length > 0) return;
+    const live = (runningTranscribes.data ?? []).find(
+      (job) => job.status === "running" || job.status === "queued",
+    );
+    if (live) setAsrJobId(live.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningTranscribes.data]);
+
   const asrJob = useQuery({
     queryKey: ["job", asrJobId],
     enabled: Boolean(asrJobId),
@@ -240,8 +261,13 @@ export function TranscriptPanel({
       disabled={asrRunning}
       onClick={startAll}
     >
-      {asrRunning ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Mic size={12} />}
-      {asrRunning ? `${asrJob.data?.message ?? t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
+      {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
+          可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
+          不属于控件本身。 */}
+      {asrRunning ? <Loader2 size={12} className="shrink-0 animate-openstudio-spin" /> : <Mic size={12} className="shrink-0" />}
+      <span className="whitespace-nowrap">
+        {asrRunning ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
+      </span>
     </button>
   );
 
@@ -433,7 +459,12 @@ export function TranscriptPanel({
         <p>{t("transcriptEmpty")}</p>
         <p className="max-w-[220px] text-[11.5px] leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
         {transcribeButton}
-        {asrError && <p className="max-w-[220px] text-xs text-destructive">{asrError}</p>}
+        {/* 后端那句状态单独一行:它会长(下模型、装环境、第几段),而且**会变** —— 放在按钮里
+            意味着控件的宽度跟着它跳。 */}
+        {asrRunning && asrJob.data?.message && (
+          <p className="m-0 max-w-[240px] text-[11.5px] leading-[1.5] text-muted-foreground">{asrJob.data.message}</p>
+        )}
+        {asrError && <p className="m-0 max-w-[240px] whitespace-pre-line text-xs text-destructive">{asrError}</p>}
       </div>
     );
   }
