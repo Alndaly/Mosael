@@ -4,6 +4,7 @@ import { AudioLines, Languages, Loader2, MessageSquareText, Mic, Scissors, Spark
 
 import { API_BASE, api, fetchJob, getAuthToken, transcribeAsset, type Job, type Sequence } from "@/api/client";
 import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
+import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -30,12 +31,12 @@ export interface CutRange {
 /** Selected word key → its cut payload. */
 type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: number }>;
 
-/** 老版 chunk-list 的说话人配色:名字哈希到色相,同一说话人永远同色。 */
-function speakerHue(speaker: string): number {
-  let hash = 0;
-  for (const ch of speaker) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return hash % 360;
-}
+/** 工具条上的胶囊按钮。**一份** —— 此前这串类名在这个文件里抄了九遍。 */
+const PILL =
+  "inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums";
+
+/** 时间码那一栏的宽度。句子和静音块共用它 —— 对齐是**结构**给的,不是手调出来的边距。 */
+const GUTTER = "grid-cols-[50px_minmax(0,1fr)]";
 
 export function TranscriptPanel({
   sequence,
@@ -143,6 +144,11 @@ export function TranscriptPanel({
   );
   const fillerCount = React.useMemo(
     () => projected.reduce((count, item) => count + item.tokens.filter((tok) => isFillerToken(tok.text)).length, 0),
+    [projected],
+  );
+  // 只有一个说话人时,那个标签每行都一样 —— 不是信息,是噪声。
+  const showSpeakers = React.useMemo(
+    () => speakersAreMeaningful(projected.map((item) => item.speaker)),
     [projected],
   );
 
@@ -257,7 +263,7 @@ export function TranscriptPanel({
   const transcribeButton = assetIds.length > 0 && (
     <button
       type="button"
-      className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums"
+      className={PILL}
       disabled={asrRunning}
       onClick={startAll}
     >
@@ -475,25 +481,25 @@ export function TranscriptPanel({
         {transcribeButton}
         <button
           type="button"
-          className={cn("inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums", showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
+          className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
           title={t("silencesHint")}
           onClick={() => setShowSilences((value) => !value)}
         >
           <AudioLines size={12} /> {t("silences")}
           {showSilences && silences.length > 0 && <em>{silences.length}</em>}
         </button>
-        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
+        <button type="button" className={PILL} title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
           <Sparkles size={12} /> {t("fillers")}
           {fillerCount > 0 && <em>{fillerCount}</em>}
         </button>
         {onSplitPoints && (
           <>
-            <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("splitBySentenceHint")} onClick={splitBySentence}>
+            <button type="button" className={PILL} title={t("splitBySentenceHint")} onClick={splitBySentence}>
               <Split size={12} /> {t("splitBySentence")}
             </button>
             <button
               type="button"
-              className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums"
+              className={PILL}
               title={t("splitAtWordHint")}
               onClick={splitAtPlayhead}
               disabled={!activeSrc}
@@ -505,7 +511,7 @@ export function TranscriptPanel({
         {onTranslateToSubtitles && (
           <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
             <PopoverTrigger asChild>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" disabled={translating} title={t("transcriptTranslateNote")}>
+              <button type="button" className={PILL} disabled={translating} title={t("transcriptTranslateNote")}>
                 {translating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Languages size={12} />}
                 {t("transcriptTranslateToSubtitles")}
               </button>
@@ -542,7 +548,7 @@ export function TranscriptPanel({
           </Popover>
         )}
         {showSilences && silences.length > 0 && (
-          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("removeAllSilences")} onClick={selectAllSilences}>
+          <button type="button" className={PILL} title={t("removeAllSilences")} onClick={selectAllSilences}>
             {t("selectAllSilences")}
           </button>
         )}
@@ -553,9 +559,9 @@ export function TranscriptPanel({
         </span>
       </div>
 
-      <p className="m-0 px-3 pt-1.5 text-[11px] text-muted-foreground">{t("transcriptUsage")}</p>
+      <p className="m-0 px-2.5 pt-1.5 text-[11px] leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
-        className="flex min-h-0 flex-1 select-none flex-col gap-2 overflow-y-auto px-2.5 pb-3 pt-2.5"
+        className="flex min-h-0 flex-1 select-none flex-col gap-1 overflow-y-auto px-2.5 pb-3 pt-2"
         onPointerOver={(event) => {
           if (!(event.buttons & 1) || !dragRef.current) return;
           const el = (event.target as HTMLElement).closest("[data-flat]");
@@ -567,18 +573,22 @@ export function TranscriptPanel({
             const gap = item.gap;
             const gapKey = `${gap.clipId}:sil:${gap.srcStart}`;
             return (
-              <button
-                key={gapKey}
-                type="button"
-                className={cn(
-                  "ml-[46px] inline-flex cursor-pointer items-center gap-1 self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive",
-                  selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
-                )}
-                title={t("silenceGapHint")}
-                onClick={() => toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
-              >
-                <AudioLines size={10} /> {gap.duration.toFixed(1)}s
-              </button>
+              // 静音块走**同一套栅格**:空掉时间码那一栏,正文那一栏自然对齐。
+              // 此前是 `ml-[46px]` —— 一个照着时间码宽度手调出来的数,时间码一改就错开。
+              <div key={gapKey} className={cn("grid items-center gap-1.5 pl-1.5", GUTTER)}>
+                <span aria-hidden />
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive",
+                    selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
+                  )}
+                  title={t("silenceGapHint")}
+                  onClick={() => toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
+                >
+                  <AudioLines size={10} /> {gap.duration.toFixed(1)}s
+                </button>
+              </div>
             );
           }
           const sentence = item.sentence;
@@ -589,24 +599,42 @@ export function TranscriptPanel({
               key={key}
               ref={active ? activeSentenceRef : undefined}
               className={cn(
-                "group/sentence relative grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-1.5 rounded-sm border-l-2 border-transparent pl-1.5 pr-[22px] transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_3%,transparent)]",
-                active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
+                "group/sentence relative grid items-baseline gap-1.5 rounded-md border-l-2 border-transparent py-[3px] pl-1.5 transition-[background,border-color] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
+                GUTTER,
+                // 右边给悬停按钮留位:一个是 22px,两个就得是 40px —— 少留的那 18px 会让
+                // 「切一刀」压在正文最后几个字上,而那几个字是可以点的。
+                onSplitPoints ? "pr-[40px]" : "pr-[22px]",
+                active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]",
               )}
             >
-              <div className="grid justify-items-start gap-0.5">
+              <div className="grid justify-items-start gap-[3px]">
                 <button
                   type="button"
-                  className="timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-[10.5px] leading-normal text-muted-foreground hover:text-primary"
+                  className={cn(
+                    "timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-[10.5px] leading-[1.9] tabular-nums text-muted-foreground hover:text-primary",
+                    active && "font-medium text-primary",
+                  )}
                   title={t("seekToSentence")}
                   onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
                 >
                   {formatTimecode(sentence.timelineStart)}
                 </button>
+                {/* 说话人挪到时间码底下:它是这一句的**属性**,不是这一句的第一个词。
+                    夹在正文里时它每行都把第一句话往右顶,还会跟着文字重排。 */}
+                {showSpeakers && sentence.speaker && (
+                  <span
+                    className="max-w-full truncate rounded-full px-[6px] text-[10px] font-semibold leading-[15px] tabular-nums"
+                    style={speakerChipStyle(sentence.speaker)}
+                    title={speakerLabel(sentence.speaker)}
+                  >
+                    {speakerShort(sentence.speaker)}
+                  </span>
+                )}
               </div>
               {onSplitPoints && (
                 <button
                   type="button"
-                  className="absolute top-[3px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
+                  className="absolute top-[6px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
                   title={t("splitSentenceOutHint")}
                   aria-label={t("splitSentenceOut")}
                   onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -616,7 +644,7 @@ export function TranscriptPanel({
               )}
               <button
                 type="button"
-                className="absolute top-[3px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
+                className="absolute top-[6px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
                 title={t("cutSentenceHint")}
                 aria-label={t("cutSentence")}
                 onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
@@ -624,17 +652,6 @@ export function TranscriptPanel({
                 <X size={11} />
               </button>
               <p className="m-0 text-[13px] leading-[1.9] [word-break:break-word]">
-                {sentence.speaker && (
-                  <em
-                    className="mr-1.5 whitespace-nowrap rounded-full px-[7px] py-px align-[1px] text-[10px] font-semibold not-italic"
-                    style={{
-                      background: `oklch(0.94 0.05 ${speakerHue(sentence.speaker)})`,
-                      color: `oklch(0.45 0.12 ${speakerHue(sentence.speaker)})`,
-                    }}
-                  >
-                    {sentence.speaker.replace("SPEAKER_", "说话人 ")}
-                  </em>
-                )}
                 {sentence.tokens.length > 0
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
@@ -691,10 +708,10 @@ export function TranscriptPanel({
           <span className="flex-1 text-xs tabular-nums text-muted-foreground">
             {t("selectedWordsInfo").replace("{n}", String(selected.size)).replace("{s}", selectedSeconds.toFixed(1))}
           </span>
-          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" onClick={() => setSelected(new Map())}>
+          <button type="button" className={PILL} onClick={() => setSelected(new Map())}>
             {t("clearSelection")}
           </button>
-          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums border-[color-mix(in_oklab,var(--destructive)_35%,var(--border))] text-destructive enabled:hover:border-destructive enabled:hover:bg-[color-mix(in_oklab,var(--destructive)_8%,var(--background))] enabled:hover:text-destructive" onClick={applySelected}>
+          <button type="button" className={cn(PILL, "border-[color-mix(in_oklab,var(--destructive)_35%,var(--border))] text-destructive enabled:hover:border-destructive enabled:hover:bg-[color-mix(in_oklab,var(--destructive)_8%,var(--background))] enabled:hover:text-destructive")} onClick={applySelected}>
             <Trash2 size={12} /> {t("removeSelectedWords")}
           </button>
         </div>
