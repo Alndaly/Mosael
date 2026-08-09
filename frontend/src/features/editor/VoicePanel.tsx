@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mic, Play, Square, Trash2, Upload, UsersRound, Wand2 } from "lucide-react";
+import { AudioLines, Loader2, Mic, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -27,6 +27,7 @@ import { Combobox } from "@/components/app/combobox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
 /** 带小标签的紧凑表单格:配音面板的下拉全长一个样,没有标签就分不清
@@ -109,7 +110,9 @@ export function VoicePanel({
   // stretching the waveform afterwards). The local clone worker has no speed input, so the
   // control only renders for remote engines and the value only rides on their requests.
   const [speed, setSpeed] = React.useState(1);
-  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: Infinity });
+  // staleTime 不能是 Infinity:这份数据里带着"本地引擎装了没有",而用户就是会在另一个页面
+  // 把它装上再回来。装完了界面还说"没装",比一开始就没说更让人不知道该干嘛。
+  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   const activeEngine = engines.data?.find((item) => item.id === engine);
   // Fetched per engine rather than bundled with the engine list: 火山's catalogue depends on
   // the account, so it is a live lookup that can change without the engine list changing.
@@ -132,6 +135,7 @@ export function VoicePanel({
   const fileRef = React.useRef<HTMLInputElement>(null);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
+  const [dragOver, setDragOver] = React.useState(false);
   const [recording, setRecording] = React.useState(false);
   const [recordSecs, setRecordSecs] = React.useState(0);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -170,6 +174,9 @@ export function VoicePanel({
     stopTimer();
   };
   React.useEffect(() => () => stopTimer(), []);
+
+  // 「确认」点不动时,差的是哪一样。两样都缺先说音频 —— 那是这件事的主料。
+  const cloneBlocker = !file ? "voiceNeedRefAudio" : !name.trim() ? "voiceNeedName" : null;
 
   const list = voices.data ?? [];
   const activeVoice = selected ?? list[0]?.id ?? null;
@@ -231,7 +238,8 @@ export function VoicePanel({
   const podcastSpeakers = [engineVoice || voiceChoices[0]?.value || "", speakerB || voiceChoices[1]?.value || ""];
   const engineReady =
     engine === "clone"
-      ? Boolean(activeVoice)
+      // 装没装引擎,和选没选音色,是两件都得成立的事。
+      ? Boolean(activeVoice) && activeEngine?.ready !== false
       : isPodcast
         ? podcastMode === "read"
           ? Boolean(podcastSpeakers[0])
@@ -335,6 +343,34 @@ export function VoicePanel({
                 </SelectContent>
               </Select>
             </VoiceField>
+            {/* 本地克隆:**音色也在这里选**。
+                此前这一格是空的 —— 唯一的选法是滚到下面的音色库点一张卡,而在没点之前
+                `activeVoice` 会悄悄取列表第一个。于是"我到底在用哪个音色"这件事,界面上
+                一个字都没写。远程引擎的音色就在这个位置,克隆没有理由长得不一样。 */}
+            {/* 这里**没有语速** —— 本地克隆的 worker 不吃这个参数(上面 speed 那段注释说的就是
+                它)。摆一个拨不动的旋钮,比不摆更糟。 */}
+            {engine === "clone" && (
+              <div className="grid gap-1.5">
+                <VoiceField label={t("voiceLibraryPick")}>
+                  {list.length > 0 ? (
+                    <Select value={activeVoice ?? ""} onValueChange={setSelected}>
+                      <SelectTrigger className="w-full min-w-0" aria-label={t("voiceLibraryPick")}>
+                        <SelectValue placeholder={t("voiceLibraryPickPlaceholder")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {list.map((voice) => (
+                          <SelectItem key={voice.id} value={voice.id}>
+                            {voice.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="m-0 text-[11px] leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
+                  )}
+                </VoiceField>
+              </div>
+            )}
             {/* 单人远程引擎:音色 + 语速 同行,标签说明谁是谁 */}
             {engine !== "clone" && !isPodcast && voiceChoices.length > 0 && (
               <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
@@ -417,7 +453,13 @@ export function VoicePanel({
             <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
           )}
           {isPodcast && !engineReady && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voicePodcastNeedTwo")}</p>}
-          {engine !== "clone" && activeEngine?.note && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{activeEngine.note}</p>}
+          {/* 克隆这一条的 note 会随"装没装"变 —— 以前不显示它,于是"没装"这件事只能等到
+              点了生成、收到一句拒绝才知道。 */}
+          {activeEngine?.note && (
+            <p className={cn("m-0 text-[11px] leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
+              {activeEngine.note}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
@@ -493,7 +535,25 @@ export function VoicePanel({
         )}
 
         {uploadOpen && (
-          <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
+          // 这个框一直长着虚线边 —— 那是"往这儿拖"的样子。以前它只是长得像,拖上去什么都不会
+          // 发生;既然长成这样,就让它真的收。
+          <div
+            className={cn(
+              "grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5 transition-colors duration-100",
+              dragOver && "border-primary bg-[color-mix(in_oklab,var(--primary)_6%,transparent)]",
+            )}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragOver(false);
+              const dropped = event.dataTransfer.files?.[0];
+              if (dropped) setFile(dropped);
+            }}
+          >
             <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} />
             <Textarea
               placeholder={t("voiceRefText")}
@@ -508,10 +568,28 @@ export function VoicePanel({
               className="hidden"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
+            {/* 选好的音频要**看得见、去得掉**。以前它只是把按钮文字换成截断的文件名 ——
+                既看不出到底选没选,也没有反悔的路。 */}
+            {file && !recording && (
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1">
+                <AudioLines size={12} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-[11.5px]" title={file.name}>{file.name}</span>
+                <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
+                <button
+                  type="button"
+                  className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
+                  aria-label={t("voiceClearFile")}
+                  title={t("voiceClearFile")}
+                  onClick={() => setFile(null)}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1">
-                <Button size="sm" variant="ghost" disabled={recording} onClick={() => fileRef.current?.click()}>
-                  {file && !recording ? file.name.slice(0, 18) : t("voicePickFile")}
+                <Button size="sm" variant="outline" disabled={recording} onClick={() => fileRef.current?.click()}>
+                  <Upload size={12} /> {file && !recording ? t("voiceReplaceFile") : t("voicePickFile")}
                 </Button>
                 {recording ? (
                   <Button size="sm" variant="destructive" onClick={stopRecording}>
@@ -531,7 +609,11 @@ export function VoicePanel({
                 {upload.isPending ? <Loader2 size={12} className="animate-openstudio-spin" /> : null} {t("confirm")}
               </Button>
             </div>
-            <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{recording ? t("voiceRecording") : t("voiceUploadHint")}</p>
+            {/* 「确认」灰着的时候要说**还差什么**。以前这里永远是同一句通用说明,
+                于是按钮为什么点不动只能靠猜。 */}
+            <p className={cn("m-0 text-[11px] leading-[1.45] text-muted-foreground", cloneBlocker && "text-destructive")}>
+              {recording ? t("voiceRecording") : cloneBlocker ? t(cloneBlocker) : t("voiceUploadHint")}
+            </p>
           </div>
         )}
 

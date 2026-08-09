@@ -16,15 +16,27 @@ def test_tts_catalog_status_shape() -> None:
         assert {"id", "label", "detail", "expected_bytes"} <= row.keys()
 
 
-def test_worker_placeholder_produces_valid_wav(tmp_path) -> None:
-    # No f5-tts installed in the test interpreter → placeholder tone of estimated length.
+def test_synthesis_fails_instead_of_inventing_audio(tmp_path) -> None:
+    """引擎导不进来时报错。
+
+    此前它会写一段正弦音、返回 "placeholder",而宿主把任务标成成功、把这段音注册成素材 ——
+    用户拖上时间线听到的是"嘟——"。合成的输出会进成片,那里不能有不是用户声音的东西。
+    """
+    import pytest
+
     out = tmp_path / "out.wav"
-    engine = tts_worker.synthesize({"engine": "f5-tts", "text": "你好,测试一段语音合成。"}, str(out))
-    assert engine == "placeholder"
+    with pytest.raises(Exception):
+        tts_worker.synthesize({"engine": "f5-tts", "text": "你好,测试一段语音合成。"}, str(out))
+    assert not out.exists()
+
+
+def test_warmup_still_writes_its_marker(tmp_path) -> None:
+    """预热的 wav 没人听 —— 它只是"这一趟跑完了"的痕迹,留着。"""
+    out = tmp_path / "marker.wav"
+    tts_worker.write_marker_wav(str(out), "预热")
     with wave.open(str(out)) as handle:
         assert handle.getnchannels() == 1
         assert handle.getframerate() == 24000
-        assert handle.getnframes() > 24000  # > 1 second
 
 
 def test_estimate_scales_with_text() -> None:

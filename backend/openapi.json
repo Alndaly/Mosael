@@ -20452,6 +20452,11 @@
             "type": "string",
             "title": "Note",
             "default": ""
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": true
           }
         },
         "type": "object",
@@ -20532,6 +20537,11 @@
             "type": "string",
             "title": "Source Dir",
             "default": ""
+          },
+          "runtime_ready": {
+            "type": "boolean",
+            "title": "Runtime Ready",
+            "default": false
           }
         },
         "type": "object",

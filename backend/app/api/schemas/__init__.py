@@ -982,6 +982,10 @@ class TtsEngineOut(BaseModel):
     needs_source: bool = False
     source_ready: bool = False
     source_dir: str = ""
+    #: **权重在不在盘上,和跑不跑得起来是两件事。** status 说前者,这个说后者:有没有一个
+    #: Python 解释器能 import 这个引擎。两者完全可以一真一假(权重是别的工具下的、或者
+    #: 托管 venv 被删了),而把它们合成一句「已安装,声音克隆可用」正是这一页说谎的方式。
+    runtime_ready: bool = False
 
 
 class SynthesizeRequest(BaseModel):
@@ -1041,6 +1045,9 @@ class TtsEngineChoiceOut(BaseModel):
     needs_voice_id: bool
     voices: list[str] = []
     note: str = ""
+    #: 这台机器上现在就能跑吗。远程引擎恒真(能不能跑取决于档案,那是另一件事);
+    #: 本地克隆按解释器探测结果给,好让界面在**挑引擎**时就说清楚。
+    ready: bool = True
 
 
 class VoiceFromSpeakerRequest(BaseModel):

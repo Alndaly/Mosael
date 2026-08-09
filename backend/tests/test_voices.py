@@ -39,17 +39,11 @@ def test_voice_upload_list_synthesize_delete() -> None:
     sample = client.get(f"/api/voices/{voice['id']}/sample")
     assert sample.status_code == 200 and sample.headers["content-type"] == "audio/wav"
 
-    # Synthesize → job → succeeds with an audio asset (placeholder engine here).
-    job = client.post(f"/api/voices/{voice['id']}/synthesize", json={"text": "这是一段测试配音。"}).json()
-    for _ in range(60):
-        state = client.get(f"/api/jobs/{job['id']}").json()
-        if state["status"] in ("succeeded", "failed"):
-            break
-        time.sleep(0.2)
-    assert state["status"] == "succeeded", state
-    asset_id = state["result"]["asset_id"]
-    asset = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["id"] == asset_id)
-    assert asset["kind"] == "audio"
+    # 合成:这台机器上没装本地引擎,于是它**当场拒绝**,而不是起一个任务、发一段占位音。
+    # (装上引擎后走的是同一个接口,区别只在这一句能不能过。)
+    refused = client.post(f"/api/voices/{voice['id']}/synthesize", json={"text": "这是一段测试配音。"})
+    assert refused.status_code == 422, refused.text
+    assert "引擎" in refused.json()["detail"]
 
     # Delete.
     assert client.delete(f"/api/voices/{voice['id']}").status_code == 204

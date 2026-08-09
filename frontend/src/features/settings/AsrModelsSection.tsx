@@ -9,18 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
+import { formatBytes, formatSpeed } from "@/lib/bytes";
 
-function fmtBytes(n: number): string {
-  if (n <= 0) return "0 MB";
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} GB`;
-  return `${Math.round(n / 1_000_000)} MB`;
-}
 
-function fmtSpeed(bps: number): string {
-  if (bps <= 0) return "";
-  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} MB/s`;
-  return `${Math.round(bps / 1000)} KB/s`;
-}
 
 /** Settings → 转写模型:预下载 funasr / whisperx 权重,展示进度、百分比、
     速度与剩余时间。转写首次会自动下载,这里给一个手动、可见的下载渠道。 */
@@ -79,7 +70,7 @@ function AsrModelCard({
           <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
             <strong>{model.label}</strong>
             <span className="rounded-md border border-border px-[5px] text-[10.5px] uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
           {model.status === "installed" && !model.runtime_ready && (
@@ -128,10 +119,10 @@ function AsrModelCard({
               <Progress value={pct} />
               <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
                 <span>
-                  {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
+                  {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
                 </span>
                 <span>
-                  {fmtSpeed(model.speed_bps)}
+                  {formatSpeed(model.speed_bps)}
                   {model.speed_bps > 0 && model.message ? " · " : ""}
                   {model.message}
                 </span>

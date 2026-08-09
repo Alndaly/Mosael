@@ -7524,6 +7524,11 @@ export interface components {
              * @default
              */
             note: string;
+            /**
+             * Ready
+             * @default true
+             */
+            ready: boolean;
         };
         /** TtsEngineOut */
         TtsEngineOut: {
@@ -7577,6 +7582,11 @@ export interface components {
              * @default
              */
             source_dir: string;
+            /**
+             * Runtime Ready
+             * @default false
+             */
+            runtime_ready: boolean;
         };
         /**
          * TtsVoiceOut

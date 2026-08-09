@@ -260,6 +260,8 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     row.fish_model_dir = body.fish_model_dir.strip()
     db.commit()
     tts_config.refresh()
+    # 解释器路径/fish 目录刚改过 —— 探测缓存里的答案是按旧配置算的。
+    tts_models.clear_runtime_probes()
     return _tts_config_out()
 
 

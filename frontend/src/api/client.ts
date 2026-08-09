@@ -182,6 +182,9 @@ export interface TtsEngineChoice {
   needs_voice_id: boolean;
   voices: string[];
   note: string;
+  /** 这台机器上现在跑得了吗。本地克隆按解释器探测给,远程引擎恒真 —— 界面据此在**挑引擎**
+      的时候就说清楚,而不是等填完文本、点了生成才拒绝。 */
+  ready: boolean;
 }
 
 export interface TtsVoice {

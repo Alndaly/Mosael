@@ -22,17 +22,8 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
+import { formatBytes, formatSpeed } from "@/lib/bytes";
 
-function fmtBytes(n: number): string {
-  if (n <= 0) return "0 MB";
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} GB`;
-  return `${Math.round(n / 1_000_000)} MB`;
-}
-function fmtSpeed(bps: number): string {
-  if (bps <= 0) return "";
-  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} MB/s`;
-  return `${Math.round(bps / 1000)} KB/s`;
-}
 
 type ConfigForm = { engine: string; python_path: string; source: string; pip_index: string; fish_repo_dir: string; fish_model_dir: string };
 
@@ -221,15 +212,26 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
         <div className="grid min-w-0 gap-[3px]">
           <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
             <strong>{model.label}</strong>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBytes(model.expected_bytes)}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
+          {model.status === "installed" && !model.runtime_ready && (
+            <small className="text-[11.5px] text-destructive">{t("voiceModelNoRuntime")}</small>
+          )}
         </div>
         <div className="shrink-0">
-          {model.status === "installed" && (
+          {/* **两件事分开说**:权重在不在盘上(status),和跑不跑得起来(runtime_ready)。
+              转写那边刚修过同一个坑:此前这里只看前者,页面写着「已安装」,一点合成却说
+              「没有可用的引擎」—— 而用户最容易做的事是去重下已经在盘上的那几个 GB。 */}
+          {model.status === "installed" && model.runtime_ready && (
             <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
               <CheckCircle2 size={14} /> {t("asrModelInstalled")}
             </span>
+          )}
+          {model.status === "installed" && !model.runtime_ready && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+              <Download size={13} /> {t("asrModelInstallRuntime")}
+            </Button>
           )}
           {model.status === "missing" && (
             <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
@@ -253,10 +255,10 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
           <Progress value={pct} />
           <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
             <span>
-              {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
+              {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
             </span>
             <span>
-              {fmtSpeed(model.speed_bps)}
+              {formatSpeed(model.speed_bps)}
               {model.speed_bps > 0 && model.message ? " · " : ""}
               {model.message}
             </span>

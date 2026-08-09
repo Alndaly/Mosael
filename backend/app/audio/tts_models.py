@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -168,38 +169,51 @@ def _probe_code(engine_id: str) -> str | None:
     return f"import sys; sys.path.insert(0, {repo!r}); import fish_speech"
 
 
-def probe_interpreter(engine_id: str) -> dict[str, Any]:
-    """Whether some candidate interpreter can import the engine (i.e. real
-    synthesis is available). Returns {worker_ready, worker_python}."""
+@lru_cache(maxsize=8)
+def _resolve_engine_python(engine_id: str) -> str | None:
+    """探测本身。**只有这一处**会去起子进程试 import。
+
+    带缓存是因为它不便宜:每个候选解释器一次子进程,最长各等两分钟。而配音面板、设置页、
+    引擎列表都要问这个问题 —— 不缓存的话,光是打开一次面板就能起好几个 python。
+    装完引擎之后由 `clear_runtime_probes()` 作废,答案不会停在"装之前"。
+    """
     code = _probe_code(engine_id)
-    if code is None:
-        return {"worker_ready": False, "worker_python": ""}
+    if code is None:  # 依赖的资源(fish 检出/权重)不齐,谈不上就绪
+        return None
     for python in candidate_pythons():
         if not python.is_file():
             continue
         try:
-            probe = subprocess.run([str(python), "-c", code], capture_output=True, timeout=60)
+            probe = subprocess.run([str(python), "-c", code], capture_output=True, timeout=120)
         except (subprocess.SubprocessError, OSError):
             continue
         if probe.returncode == 0:
-            return {"worker_ready": True, "worker_python": str(python)}
-    return {"worker_ready": False, "worker_python": ""}
-
-
-def resolve_tts_python(engine_module: str | None = None) -> str:
-    """First interpreter that can import the engine; else this interpreter (the
-    worker's placeholder fallback still produces a valid wav there)."""
-    import sys
-
-    for python in candidate_pythons():
-        if not python.is_file():
-            continue
-        if engine_module is None:
             return str(python)
-        probe = subprocess.run([str(python), "-c", f"import {engine_module}"], capture_output=True, timeout=120)
-        if probe.returncode == 0:
-            return str(python)
-    return sys.executable
+    return None
+
+
+def resolve_engine_python(engine_id: str) -> str | None:
+    """能真的跑这个引擎的解释器,**没有就是没有**。
+
+    这里曾经在找不到时回退到后端自己的解释器,注释写着"worker 的占位音在那儿也能生成一个
+    合法 wav"—— 而那正是用户说的「根本克隆不了」:合成照跑、任务报成功、素材库里多一段正弦音。
+    一个跑不了的引擎的正确答案是 None,不是"随便找个解释器凑合"。
+
+    这也是**唯一**一处回答"哪个解释器能跑这个引擎"。此前 `probe_interpreter` 自己又实现了
+    一遍:设置页问的是它,合成问的是另一个带兜底的 —— 同一个问题两处实现,于是两个答案。
+    """
+    return _resolve_engine_python(engine_id)
+
+
+def clear_runtime_probes() -> None:
+    """装完引擎、改完解释器路径之后叫一声,否则答案会停在"装之前"。"""
+    _resolve_engine_python.cache_clear()
+
+
+def probe_interpreter(engine_id: str) -> dict[str, Any]:
+    """设置页要的形状。答案来自上面那一处,不另算一遍。"""
+    python = resolve_engine_python(engine_id)
+    return {"worker_ready": bool(python), "worker_python": python or ""}
 
 
 # ---------------------------------------------------------------------------
@@ -264,9 +278,15 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),
                 "total_bytes": engine.expected_bytes, "message": live.message}
     if _is_installed(engine):
-        return {**base, "status": "installed", "downloaded_bytes": _measure(engine),
-                "total_bytes": engine.expected_bytes, "message": "已安装,声音克隆可用"}
-    return {**base, "status": "missing", "downloaded_bytes": _measure(engine),
+        # 权重齐了不等于跑得起来:pip 包可能压根没装(权重是别的工具下的,或者托管 venv 被删了)。
+        # 此前这里一律说「已安装,声音克隆可用」,而合成那边探测解释器失败 —— 页面说可用,
+        # 一点就说不可用。两句话得出自同一次判断。
+        ready = resolve_engine_python(engine.id) is not None
+        return {**base, "status": "installed", "runtime_ready": ready,
+                "downloaded_bytes": _measure(engine), "total_bytes": engine.expected_bytes,
+                "message": "已安装,声音克隆可用" if ready
+                else "权重已下好,但还没有解释器装了它 —— 再点一次「下载」会把运行环境补上"}
+    return {**base, "status": "missing", "runtime_ready": False, "downloaded_bytes": _measure(engine),
             "total_bytes": engine.expected_bytes, "message": "未下载"}
 
 
@@ -443,7 +463,9 @@ def _download_body(engine_id: str) -> None:
         env["OPEN_STUDIO_FISH_MODEL_DIR"] = str(progress_dir)
         python = _download_python()
     else:
-        python = resolve_tts_python(engine.module)
+        # 预热是**去下权重**:优先能跑引擎的那个解释器,没有就退到第一个存在的候选
+        # (装了 f5-tts 但还没下权重时,它就是那一个)。跑不起来由预热自己的状态去报。
+        python = resolve_engine_python(engine.id) or _download_python()
 
     def measure() -> int:
         return _dir_size(progress_dir) if progress_dir is not None else _measure(engine)
@@ -483,6 +505,7 @@ def _download_body(engine_id: str) -> None:
         from app.domain import tts_config
 
         tts_config.refresh()
+    clear_runtime_probes()  # 刚装完,探测结果必须重算
     if _is_installed(engine):
         _store.clear(engine.id)
     else:
@@ -494,4 +517,5 @@ def _download_body(engine_id: str) -> None:
             pass
 
 
-__all__ = ["CATALOG", "list_status", "get_status", "start_download", "is_installed", "resolve_tts_python"]
+__all__ = ["CATALOG", "list_status", "get_status", "start_download", "is_installed",
+           "resolve_engine_python", "clear_runtime_probes"]

@@ -13,9 +13,9 @@ stdin:  JSON {action: "warmup"|"synthesize", engine, text?, reference_wav?,
               reference_text?, whisper_model?}
 argv:   [output_path] — the synthesized WAV (results are files: engines print
         progress bars to stdout).
-When the requested engine isn't importable, falls back to a placeholder tone of
-the estimated duration so the whole pipeline (asset + timeline) works without
-the heavy models installed. The result JSON reports which engine actually ran.
+When the requested engine isn't importable, synthesis raises — it never invents
+audio. (Warmup still writes a tiny marker wav; nobody listens to that one.)
+The result JSON reports which engine actually ran.
 """
 from __future__ import annotations
 
@@ -34,9 +34,12 @@ def _estimate_seconds(text: str) -> float:
     return max(1.0, min(30.0, len(text.strip()) * 0.22 + 0.6))
 
 
-def write_placeholder_wav(path: str, text: str, sr: int = 24000) -> None:
-    """A gentle fading tone of the estimated length — audible marker so the
-    asset/waveform/timeline flow is testable before f5-tts is installed."""
+def write_marker_wav(path: str, text: str, sr: int = 24000) -> None:
+    """预热用的占位输出。**只给预热用** —— 预热要的是"权重下下来了没有",它的 wav 没人会听。
+
+    合成不再用它:合成的输出会被注册成素材、拖上时间线、导进成片,那里不能出现一段不是
+    用户声音的东西。
+    """
     seconds = _estimate_seconds(text)
     total = int(seconds * sr)
     with wave.open(path, "w") as handle:
@@ -158,14 +161,16 @@ def run_fish(request: dict[str, Any], output_path: str) -> str:
 
 
 def synthesize(request: dict[str, Any], output_path: str) -> str:
+    """引擎跑不起来就**报错**,不写一段正弦音冒充结果。
+
+    此前这里 catch 一切、写占位音、返回 "placeholder",宿主照样把任务标成成功并把它注册成音频
+    素材 —— 用户拖到时间线上听到的是"嘟——"。一段听起来像结果的东西比一条错误难查得多:
+    错误会停在任务上,而假结果会一路走到成片里。
+    """
     engine = (request.get("engine") or "f5-tts").strip().lower()
-    try:
-        if engine == "fish-speech":
-            return run_fish(request, output_path)
-        return run_f5(request, output_path)
-    except Exception:  # noqa: BLE001 — engine missing/failed → audible placeholder
-        write_placeholder_wav(output_path, request.get("text", ""))
-        return "placeholder"
+    if engine == "fish-speech":
+        return run_fish(request, output_path)
+    return run_f5(request, output_path)
 
 
 def warmup(request: dict[str, Any], output_path: str) -> str:
@@ -186,11 +191,11 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
             from f5_tts.api import F5TTS
 
             F5TTS(device="cpu")
-        write_placeholder_wav(output_path, "预热")
+        write_marker_wav(output_path, "预热")
         return engine
     except Exception:  # noqa: BLE001
-        write_placeholder_wav(output_path, "预热")
-        return "placeholder"
+        write_marker_wav(output_path, "预热")
+        return "placeholder"  # 预热失败;是否装上由宿主按字节数判定
 
 
 def main() -> None:

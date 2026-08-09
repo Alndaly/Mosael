@@ -330,7 +330,16 @@ REMOTE_ENGINES = {
 
 
 def describe_engines() -> list[dict[str, object]]:
-    """What the UI needs to render an engine picker, without importing the classes."""
+    """What the UI needs to render an engine picker, without importing the classes.
+
+    本地克隆这一条的 note 跟着**这台机器上装没装引擎**变:装了就说怎么用,没装就说去哪装。
+    在这里说,是因为这是用户**挑引擎**的那一刻 —— 比让他填完文本、点了生成、再收到一句
+    「还没有可用的引擎」要早得多。
+    """
+    from app.audio import tts_models
+    from app.domain import tts_config
+
+    clone_ready = tts_models.resolve_engine_python(tts_config.get().engine) is not None
     return [
         {
             "id": "clone",
@@ -338,7 +347,13 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_key": False,
             "needs_voice_id": False,
             "voices": [],
-            "note": "用音色库里的克隆音色;需要本地引擎(F5 / Fish Speech)。",
+            "ready": clone_ready,
+            "note": (
+                "用音色库里的克隆音色,完全本地。"
+                if clone_ready
+                else "本地引擎还没装:去设置的「声音克隆」点「下载」装一次;"
+                "只想马上出声的话,下面的「Edge 免费在线合成」不用装。"
+            ),
         },
         {
             "id": EdgeTTS.id,

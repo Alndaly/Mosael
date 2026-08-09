@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.domain import provider_models
 from app.domain.usage import billable
-from app.audio.tts_models import WORKER_PATH, resolve_tts_python
+from app.audio import tts_models
+from app.audio.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded
 from app.db.models import Asset, Job, Voice
@@ -30,6 +31,22 @@ TTS_TIMEOUT_SECONDS = 1200
 
 class VoiceError(RuntimeError):
     pass
+
+
+#: 纯文本,不要 markdown —— 这句话会原样显示在界面上。
+_NO_ENGINE = (
+    "本地音色克隆还没有可用的引擎:没有任何 Python 解释器装了 F5-TTS 或 Fish Speech。"
+    "去设置的「声音克隆」那一页点「下载」,装一次就好;"
+    "想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。"
+)
+
+
+def _require_local_engine() -> None:
+    """跑得了才让建任务。跑不了是**现在**就能知道的事,那就现在说。"""
+    from app.domain import tts_config
+
+    if tts_models.resolve_engine_python(tts_config.get().engine) is None:
+        raise VoiceError(_NO_ENGINE)
 
 
 def _transcode_reference(source: Path, target: Path) -> None:
@@ -179,6 +196,10 @@ def start_synthesis(
         voice = db.get(Voice, voice_id or "")
         if voice is None:
             raise VoiceError("音色不存在")
+        # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器而已。
+        # 不挡的话它会一路跑到 worker,worker 导不进引擎就写一段正弦音、宿主把任务标成成功,
+        # 于是素材库里多一段"嘟——",而用户以为那是自己的声音。这是用户说的「根本克隆不了」。
+        _require_local_engine()
         workspace_id = voice.workspace_id
         label = voice.name
     else:
@@ -303,11 +324,13 @@ def _run_synthesis_body(
                 raise VoiceError("音色参考音频缺失")
             from app.domain import tts_config
 
-            cfg = tts_config.get()
-            engine = cfg.engine
-            engine_module = "fish_speech" if engine == "fish-speech" else "f5_tts"
-            python = resolve_tts_python(engine_module)  # real engine if installed, else placeholder fallback
-            worker_env = {**os.environ, "HF_ENDPOINT": cfg.hf_endpoint}
+            engine = tts_config.get().engine
+            python = tts_models.resolve_engine_python(engine)
+            if python is None:  # 建任务时还在,跑起来时被卸了
+                raise VoiceError(_NO_ENGINE)
+            # env 也只有一份:此前这里手拼 `{**os.environ, "HF_ENDPOINT": …}`,漏了 fish-speech
+            # 要的检出目录和权重目录 —— 于是装好了 fish 的机器也照样导不进引擎、照样出占位音。
+            worker_env = tts_models._worker_env()
             with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {
@@ -323,10 +346,8 @@ def _run_synthesis_body(
                 )
                 if proc.returncode != 0 or not out_wav.exists():
                     raise VoiceError(f"语音合成失败: {proc.stderr[-400:]}")
-                used = "placeholder"
                 meta = Path(str(out_wav) + ".json")
-                if meta.exists():
-                    used = json.loads(meta.read_text()).get("engine", used)
+                used = json.loads(meta.read_text()).get("engine", engine) if meta.exists() else engine
                 job.progress = 0.85
                 db.commit()
                 asset = register_file_asset(
@@ -340,7 +361,7 @@ def _run_synthesis_body(
             job = db.get(Job, job_id)
             job.status = "succeeded"
             job.progress = 1.0
-            job.message = "配音已生成" if used != "placeholder" else "配音已生成(占位音,装 f5-tts 后为真实音色)"
+            job.message = "配音已生成"
             job.result = {"asset_id": asset.id, "engine": used}
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
