@@ -190,7 +190,6 @@ export function HomeView({
           action: () => latestProject && onOpenProject(latestProject.id),
         },
         { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} />, goto: "/workflows" },
-        { key: "homeStatKbDocs", value: stats.kb_document_count, icon: <BookOpen size={13} />, goto: "/kb" },
         { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} />, action: openTaskCenter },
         {
           key: "homeStatAiUsage",

@@ -2,9 +2,9 @@
 
 这个模块是 `AgentMemory` 的拥有方(见 domain/ownership.py)。
 
-**它和知识库是两件事**。知识库是用户的资料,要 `search_kb` 检索才读得到;记忆是**不检索也
+记忆是**不检索也
 生效**的行为约定 —— "视频统一 1080p 竖屏"、"片头永远用 brand-intro.mp4"、"客户不要红色"。
-把这类事塞进知识库,等于指望模型每轮都想起来去搜一遍;而它们的价值恰恰在于不用想起来。
+它们的价值恰恰在于不用想起来 —— 用户说过一次,以后每一轮都在。
 Claude Code 的 CLAUDE.md、Codex 的 AGENTS.md 解决的是同一个问题,只是那边落在文件里 ——
 这个应用里没有"工程目录",所以落在库里,并在设置页给出同一份可编辑的清单。
 
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import AgentMemory
 
-#: 单条记忆的字数上限。记忆是**约定**不是**资料** —— 写不下的东西本来就该进知识库。
+#: 单条记忆的字数上限。记忆是**约定**不是**资料** —— 每一轮都要为它付 token,所以它必须短。
 MAX_CONTENT_CHARS = 500
 
 #: 注入系统提示的总字数上限。超出后丢最旧的(用户手写的优先保留,见 list_memories 的排序)。
@@ -66,7 +66,7 @@ def remember(
     if not text:
         raise ValueError("记忆内容不能为空")
     if len(text) > MAX_CONTENT_CHARS:
-        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字;更长的内容请存进知识库")
+        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字 —— 它每一轮都要重发一遍,写不下的说明那不是一条约定")
     existing = [row for row in list_memories(db, workspace_id, project_id) if row.content == text]
     if existing:
         return existing[0]
@@ -88,7 +88,7 @@ def update(db: Session, memory: AgentMemory, content: str) -> AgentMemory:
     if not text:
         raise ValueError("记忆内容不能为空")
     if len(text) > MAX_CONTENT_CHARS:
-        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字;更长的内容请存进知识库")
+        raise ValueError(f"单条记忆最多 {MAX_CONTENT_CHARS} 字 —— 它每一轮都要重发一遍,写不下的说明那不是一条约定")
     memory.content = text
     db.flush()
     return memory
@@ -126,5 +126,5 @@ def memory_prompt(db: Session, workspace_id: str, project_id: str | None = None)
         "\n\n【长期记忆】以下是你在此前的会话中记下、或用户直接写下的约定,默认一直有效:\n"
         + "\n".join(lines)
         + "\n发现新的、值得跨会话保留的约定或事实时,用 remember 记下来(只记约定与偏好,"
-        + "不要把对话内容或资料塞进去 —— 那些属于知识库)。用户说「不用记了/忘掉」时用 forget 删掉。"
+        + "不要把对话内容或资料塞进去 —— 它每一轮都要重发一遍)。用户说「不用记了/忘掉」时用 forget 删掉。"
     )

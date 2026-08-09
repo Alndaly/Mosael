@@ -28,7 +28,6 @@ from app.core.roles import ROLES
 from app.db.models import (
     Asset,
     Job,
-    KbDocument,
     Project,
     PublishAccount,
     PublishTask,
@@ -388,7 +387,6 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
         asset_count=count(scoped(Asset)),
         sequence_count=count(scoped(Sequence)),
         workflow_count=count(scoped(Workflow)),
-        kb_document_count=count(scoped(KbDocument)),
         running_jobs=count(scoped(Job).where(Job.status.in_(("queued", "running")))),
         week_jobs_succeeded=count(scoped(Job).where(Job.status == "succeeded", Job.updated_at >= week_ago)),
         week_jobs_failed=count(scoped(Job).where(Job.status == "failed", Job.updated_at >= week_ago)),

@@ -33,12 +33,3 @@ os.environ["OPEN_STUDIO_TEXT_RASTERIZE"] = "0"
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def _reset_kb_embedding_cache():
-    """The KB embedding config is cached in-process; reset it around each test
-    so monkeypatched settings / DB rows don't leak between tests."""
-    from app.domain.kb import config as kb_config
-
-    kb_config.refresh()
-    yield
-    kb_config.refresh()

@@ -31,7 +31,6 @@ MUTATING = {
     "browser_scroll",
     "browser_close",
     # 后面这些写的是本应用的数据,不至于伤及外部,但同样不是"只读"。
-    "create_kb_note",
     "create_project",
     "remember",
     "forget",
@@ -67,7 +66,7 @@ def test_genuinely_read_only_tools_stay_available() -> None:
     """别把子智能体废掉:它存在的意义就是替主智能体去翻素材、读文档、查网页。"""
     client = fresh_client()
     specs = _specs(client)
-    for name in ("list_assets", "search_kb", "read_kb_document", "web_search", "fetch_url", "browser_read"):
+    for name in ("list_assets", "web_search", "fetch_url", "browser_read"):
         assert specs[name]["read_only"] is True, f"{name} 是只读的,不该被挡在子智能体外面"
 
 

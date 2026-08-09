@@ -165,7 +165,6 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.openai_image",
         "app.ai.providers.comfyui",
         "app.ai.providers.comfyui_client",
-        "app.domain.kb.vectors",
         "app.domain.generation.prompt_optimizer",
         "app.domain.workflows.ai_edit",
         "app.ai.analysis.service",

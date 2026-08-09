@@ -65,10 +65,3 @@ def test_an_editor_gets_the_whole_content_tier_at_once() -> None:
     assert editor.post("/api/scheduled-tasks", json=task).status_code != 403
     assert editor.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).status_code == 200
 
-
-def test_viewer_can_run_retrieval_test() -> None:
-    # A read-only POST (KB retrieval test) stays open to viewers.
-    owner, ws, viewer = _setup("viewer")
-    ds = owner.post("/api/kb/datasets", json={"workspace_id": ws["id"], "name": "D"}).json()
-    r = viewer.post(f"/api/kb/datasets/{ds['id']}/retrieval-test", json={"query": "hello"})
-    assert r.status_code == 200, r.text

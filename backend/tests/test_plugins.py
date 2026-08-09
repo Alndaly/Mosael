@@ -390,7 +390,7 @@ def test_插件工具默认不是只读_子智能体因此拿不到() -> None:
     assert plugin_specs["shout"]["read_only"] is True
     assert plugin_specs["noisy"]["read_only"] is False
     # 内置工具的只读仍然等价于"没有确认门",这条改动不该动到它们。
-    assert specs["search_kb"]["read_only"] is True
+    assert specs["web_search"]["read_only"] is True
     assert specs["render_sequence"]["read_only"] is False
 
 

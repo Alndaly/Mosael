@@ -84,25 +84,6 @@ class Settings(BaseSettings):
     tts_python: str = ""
     tts_engine: str = "f5-tts"  # "f5-tts" | "fish-speech"
 
-    # 知识库增强层(全部可选,未配置时基线 FTS5 始终可用)。
-    # 文件转换:auto = MinerU(配了 token)→ markitdown → 纯文本
-    kb_convert_engine: str = "auto"  # auto|mineru|markitdown|text
-    mineru_api_base: str = "https://mineru.net"
-    mineru_api_token: str = ""
-    # 向量层:配置 embedding 模型即启用;Milvus URI 留空用内嵌 milvus-lite
-    kb_embedding_vendor: str = ""  # provider profile vendor,如 openai-compatible / alibaba
-    kb_embedding_model: str = ""
-    kb_embedding_dim: int = 1024
-    kb_milvus_uri: str = ""  # 空 = data_dir/kb_vectors.db;或 http://host:19530
-    # 图谱层:配置 Neo4j 连接即启用(入库抽实体,检索做实体扩展)
-    neo4j_uri: str = ""
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = ""
-
-    @property
-    def kb_milvus_path(self) -> str:
-        return self.kb_milvus_uri or str(self.data_dir / "kb_vectors.db")
-
     @property
     def db_path(self) -> Path:
         return self.data_dir / "open-studio.db"

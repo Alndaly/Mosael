@@ -27,7 +27,6 @@ import { HomeView } from "@/features/home/HomeView";
 import { MediaLibraryView } from "@/features/media/MediaLibraryView";
 import { PublishView } from "@/features/publish/PublishView";
 import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
-import { KbView } from "@/features/kb/KbView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
@@ -288,7 +287,7 @@ function WorkspaceGate() {
   return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
 }
 
-const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "publish", "kb", "settings", "workflows", "scheduler", "plugins", "browser-pool", "admin"];
+const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "publish", "settings", "workflows", "scheduler", "plugins", "browser-pool", "admin"];
 
 function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
@@ -414,7 +413,6 @@ function Studio({
       {view === "ai" && <AiStudio workspace={workspace} />}
       {view === "publish" && <PublishView workspace={workspace} />}
       {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}
-      {view === "kb" && <KbView workspace={workspace} />}
       {view === "settings" && <SettingsView workspace={workspace} />}
       {view === "admin" && <AdminView />}
       {view === "workflows" && <WorkflowsView workspace={workspace} />}

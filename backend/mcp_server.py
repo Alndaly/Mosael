@@ -198,8 +198,6 @@ READ_ONLY_TOOLS = frozenset(
         "list_publish_accounts",
         "list_workflow_node_types",
         "list_workflows",
-        "read_kb_document",
-        "search_kb",
         "sleep",
         "translate_text",
         "web_search",
@@ -221,7 +219,6 @@ MUTATING_TOOLS = frozenset(
         "browser_scroll",
         "browser_type",
         "browser_upload",
-        "create_kb_note",
         "create_project",
         "forget",
         "invoke_plugin_tool",
@@ -273,7 +270,7 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
     Use when you need asset_id values for timeline clips, visual analysis, tagging,
     or choosing generated/imported media. Filter with kind ("video"/"image"/"audio")
     and/or name_contains to batch-select. Do NOT use for knowledge-base documents,
-    scripts, notes, or workflow nodes — use search_kb/list_workflows instead.
+    scripts, notes, or workflow nodes — use list_workflows instead.
     Leave workspace_id empty to use the first workspace.
     """
     if not workspace_id:
@@ -456,7 +453,7 @@ def generate_image(
     "用 ComfyUI 画"), call list_generation_models to see valid provider/model
     pairs; local ComfyUI is provider="comfyui", model="workflow" and needs no
     API key. Do NOT use to analyze an existing asset (analyze_asset), tag an
-    asset (update_asset_tags), search the KB (search_kb), or edit a
+    asset (update_asset_tags), or edit a
     workflow/timeline.
     """
     confirmation = _post(
@@ -590,9 +587,9 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
     """Runs directly: analyze an EXISTING image/video media asset with a multimodal model.
 
     Use after list_assets when you need to understand visual/audio content,
-    scenes, on-screen text, mood, or best moments for cutting. Do NOT use for KB
+    scenes, on-screen text, mood, or best moments for cutting. Do NOT use for
     documents, web pages, workflow graphs, or to generate new media — use
-    read_kb_document/fetch_url/get_workflow/generate_*.
+    fetch_url/get_workflow/generate_*.
 
     mode: how to feed video (images always go directly):
       - "auto" (default): native video understanding when a capable profile is
@@ -611,7 +608,7 @@ def list_plugin_tools() -> list[dict[str, Any]]:
     Use only when the built-in Open Studio tools do not cover the user's request and a
     plugin-specific capability may. Each entry has instance_id (which connection),
     instance_name, name, description and input_schema; call with invoke_plugin_tool.
-    Do NOT use for built-in timeline/workflow/KB/media operations when a first-party
+    Do NOT use for built-in timeline/workflow/media operations when a first-party
     tool exists.
     """
     return _get("/api/plugins/tools")
@@ -623,7 +620,7 @@ def invoke_plugin_tool(instance_id: str, tool_name: str, input: dict[str, Any]) 
 
     Use only with an instance_id/tool_name/input_schema you got from list_plugin_tools —
     instance_id picks WHICH connection (the same plugin can be connected more than once,
-    e.g. one per platform). Built-in Open Studio edits, renders, generations, KB
+    e.g. one per platform). Built-in Open Studio edits, renders, generations,
     operations, and workflow runs should use their dedicated first-party tools instead.
     Returns status, output, and error.
     """
@@ -635,88 +632,7 @@ def invoke_plugin_tool(instance_id: str, tool_name: str, input: dict[str, Any]) 
     }
 
 
-@mcp.tool()
-def search_kb(query: str, workspace_id: str = "", dataset_id: str = "", limit: int = 6) -> list[dict[str, Any]]:
-    """Read-only: search the KNOWLEDGE BASE — scripts, briefs, notes, imported articles.
 
-    Use this BEFORE writing copy, planning a cut, or answering questions about
-    the user's project background — the KB holds their scripts, style guides
-    and reference material. Returns per-chunk best-matching snippets with
-    document_id and score; call read_kb_document for the full text. Chinese and
-    English queries both work (trigram index). Do NOT use for media assets —
-    that is list_assets/analyze_asset.
-
-    The KB is organised into datasets. Pass dataset_id to search one dataset;
-    leave it empty to search every dataset in the workspace (results merged and
-    re-ranked by score). Leave workspace_id empty to use the first workspace.
-    """
-    if dataset_id:
-        return _get(f"/api/kb/datasets/{dataset_id}/search", {"q": query, "limit": limit})
-
-    ws = workspace_id or _default_workspace_id()
-    datasets = _get("/api/kb/datasets", {"workspace_id": ws})
-    hits: list[dict[str, Any]] = []
-    for dataset in datasets:
-        hits.extend(_get(f"/api/kb/datasets/{dataset['id']}/search", {"q": query, "limit": limit}))
-    # Each dataset ranks independently; merge and keep the globally best `limit`.
-    hits.sort(key=lambda hit: hit.get("score", 0.0), reverse=True)
-    return hits[:limit]
-
-
-@mcp.tool()
-def read_kb_document(document_id: str) -> dict[str, Any]:
-    """Read-only: read one KNOWLEDGE BASE document in full.
-
-    Returns title, markdown content, tags, source_type, and source_ref. Get
-    document_id from search_kb results or the user. Prefer search_kb snippets
-    when you only need a fact; read the full document when you must follow a
-    script or style guide precisely. Do NOT use for media asset analysis or
-    workflow graph inspection — use analyze_asset/get_workflow.
-    """
-    doc = _get(f"/api/kb/documents/{document_id}")
-    return {
-        "document_id": doc["id"],
-        "title": doc["title"],
-        "source_type": doc["source_type"],
-        "source_ref": doc["source_ref"],
-        "tags": doc.get("tags", []),
-        "content": doc.get("content") or "",
-    }
-
-
-@mcp.tool()
-def create_kb_note(
-    title: str,
-    content: str,
-    workspace_id: str = "",
-    dataset_id: str = "",
-    tags: list[str] | None = None,
-) -> dict[str, Any]:
-    """Runs directly: save a NEW polished note into the knowledge base.
-
-    Use to persist reusable creative output the user asks you to keep:
-    finalized scripts, shot lists, title/description drafts, research digests.
-    If dataset_id is omitted, the note is saved to the workspace's most recent
-    knowledge base; if none exists, Open Studio creates an "AI 笔记" knowledge base.
-    Do NOT dump raw chat replies; save polished reusable material with a clear
-    title. Do NOT use for media asset tags (update_asset_tags), timeline edits
-    (edit_timeline), or workflow graph edits (edit_workflow/update_workflow).
-    """
-    ws = workspace_id or _default_workspace_id()
-    if not dataset_id:
-        datasets = _get("/api/kb/datasets", {"workspace_id": ws})
-        if datasets:
-            dataset_id = datasets[0]["id"]
-        else:
-            dataset_id = _post(
-                "/api/kb/datasets",
-                {"workspace_id": ws, "name": "AI 笔记", "description": "AI 助手自动保存的笔记"},
-            )["id"]
-    doc = _post(
-        f"/api/kb/datasets/{dataset_id}/documents",
-        {"title": title, "content": content, "source_type": "note", "tags": tags or []},
-    )
-    return {"document_id": doc["id"], "dataset_id": doc["dataset_id"], "title": doc["title"]}
 
 
 @mcp.tool()
@@ -725,8 +641,8 @@ def update_asset_tags(asset_id: str, tags: list[str]) -> dict[str, Any]:
 
     Use for metadata organisation of assets returned by list_assets. This
     replaces the entire tag array; read current tags first if you want to merge
-    instead of overwrite. Do NOT use for KB document tags, workflow node labels,
-    or project names — use KB/workflow/project-specific tools instead.
+    instead of overwrite. Do NOT use for workflow node labels or project names —
+    use the workflow/project-specific tools instead.
     """
     asset = _patch(f"/api/assets/{asset_id}", {"tags": tags})
     return {"asset_id": asset["id"], "name": asset["name"], "tags": asset.get("tags", [])}
@@ -751,7 +667,7 @@ def remember(content: str, workspace_id: str = "", project_id: str = "") -> dict
 
     Do NOT use it as a notepad for the current conversation, and do NOT store
     reference material, scripts or research — those belong in the knowledge base
-    (create_kb_note), which is searched on demand instead of costing tokens every
+    which is searched on demand instead of costing tokens every
     single turn. Pass project_id to scope a memory to one project.
     """
     ws = workspace_id or _default_workspace_id()
@@ -963,8 +879,8 @@ def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
 
     Use when the user needs current facts beyond local Open Studio data. Returns up to
     count results as {title, url, snippet}; follow up with fetch_url to read a
-    promising page. Do NOT use for the user's local assets, KB, projects, or
-    workflows — use list_assets/search_kb/list_projects/list_workflows.
+    promising page. Do NOT use for the user's local assets, projects, or
+    workflows — use list_assets/list_projects/list_workflows.
     """
     return _get("/api/websearch", {"q": query, "count": count}).get("results", [])
 
@@ -975,7 +891,7 @@ def fetch_url(url: str) -> dict[str, Any]:
 
     Use after web_search when you need the page body. Returns {title, url, text}.
     Only http/https public pages are allowed; internal/localhost addresses are
-    blocked. Do NOT use for local Open Studio KB documents/assets/workflows.
+    blocked. Do NOT use for local Open Studio assets/workflows.
     """
     return _get("/api/webfetch", {"url": url})
 
@@ -1063,7 +979,7 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
       {"kind":"add_node","type":"llm","name":"改写","node_id":"llm_1","config":{"prompt":"..."}}
           (node_id/name/position/config optional; server auto-ids and lays out)
       {"kind":"connect","source":"start","target":"llm_1","source_handle":"true|false (condition only)"}
-      {"kind":"connect_data","source":"kb_1","source_output":"text","target":"llm_1","target_input":"prompt"}
+      {"kind":"connect_data","source":"http_1","source_output":"text","target":"llm_1","target_input":"prompt"}
       {"kind":"set_node_config","node_id":"llm_1","config":{"prompt":"新提示词"}}   (merges)
       {"kind":"set_node_name","node_id":"llm_1","name":"新名字"}
       {"kind":"remove_node","node_id":"llm_1"}                                     (drops its edges too)

@@ -381,6 +381,35 @@ def _migrate_connections_get_an_owner() -> None:
             )
 
 
+def _migrate_drop_the_knowledge_base() -> None:
+    """删掉知识库留下的表和向量库文件。
+
+    功能整块删了(见 tests/test_the_knowledge_base_is_gone)。**表不留**:一张没人读的表不是
+    "以后可能有用",是下一个人打开数据库时的一个问号 —— 而它还带着用户以为自己存好了的文档。
+
+    向量库是数据目录下的单文件(milvus-lite),一并删掉;删不掉只记日志,它不该挡住启动。
+    """
+    names = ("kb_chunks_fts", "kb_chunks", "kb_documents", "kb_datasets", "kb_embedding_config")
+    existing = set(inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        for name in names:
+            if name in existing or name.endswith("_fts"):
+                conn.execute(text(f"DROP TABLE IF EXISTS {name}"))
+    # **milvus-lite 建的是目录,不是文件** —— 名字叫 kb_vectors.db 很容易看成单文件,而
+    # `unlink()` 对目录抛 IsADirectoryError(OSError 的子类),正好被这里的 except 吃掉:
+    # 表删干净了、目录原封不动留着。拿真实数据目录验过才发现。
+    import shutil
+
+    stale = settings.data_dir / "kb_vectors.db"
+    try:
+        if stale.is_dir():
+            shutil.rmtree(stale, ignore_errors=True)
+        else:
+            stale.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("删不掉遗留的向量库:%s", stale)
+
+
 def _migrate_plugin_instances_get_an_owner() -> None:
     """给每个插件接入补上主人 —— 和连接那条同一个道理(见 _migrate_connections_get_an_owner)。
 
@@ -891,6 +920,7 @@ def init_db() -> None:
     _migrate_drop_deployment_defaults()
     _migrate_connections_get_an_owner()
     _migrate_plugin_instances_get_an_owner()
+    _migrate_drop_the_knowledge_base()
     _migrate_hash_session_tokens()
     _migrate_client_version()
     _migrate_job_actor()

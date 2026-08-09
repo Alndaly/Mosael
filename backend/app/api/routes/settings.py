@@ -27,8 +27,6 @@ from app.api.schemas import (
     AiRuntimeConfigUpdate,
     NetworkConfigOut,
     NetworkConfigUpdate,
-    KbEmbeddingConfigOut,
-    KbEmbeddingConfigUpdate,
     CapabilityModelOut,
     ProviderDefaultOut,
     ProviderDefaultUpdate,
@@ -51,7 +49,6 @@ from app.core.db import SessionLocal
 from app.db.models import (
     AiRuntimeConfig,
     NetworkConfig,
-    KbEmbeddingConfig,
     ProviderCredential,
     ProviderDefault,
     ProviderModel,
@@ -62,8 +59,6 @@ from app.db.models import (
 from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedProvider
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
-from app.domain import kb
-from app.domain.kb import config as kb_config
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
 from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
 from app.ai.agent.host import mint_tool_token
@@ -1118,64 +1113,10 @@ def delete_provider_profile(profile_id: str, db: DbSession, user: CurrentUser) -
     if profile is not None:
         db.delete(profile)
         db.commit()
-        kb_config.refresh()  # 嵌入配置可能引用了被删的供应商(FK 已 SET NULL)
     return Response(status_code=204)
 
 
-def _kb_embedding_out() -> KbEmbeddingConfigOut:
-    cfg = kb_config.get()
-    return KbEmbeddingConfigOut(
-        provider_profile_id=cfg.provider_profile_id, model=cfg.model, dim=cfg.dim, enabled=cfg.enabled
-    )
 
-
-@router.get("/settings/kb-embedding", response_model=KbEmbeddingConfigOut)
-def get_kb_embedding(db: DbSession, user: CurrentUser) -> KbEmbeddingConfigOut:
-    return _kb_embedding_out()
-
-
-@router.put("/settings/kb-embedding", response_model=KbEmbeddingConfigOut)
-def set_kb_embedding(
-    body: KbEmbeddingConfigUpdate, db: DbSession, user: CurrentUser
-) -> KbEmbeddingConfigOut:
-    ensure_deployment_admin(db, user)
-    if body.provider_profile_id:
-        profile = db.get(ProviderProfile, body.provider_profile_id)
-        if profile is None:
-            raise HTTPException(status_code=404, detail="供应商不存在")
-        if not supports_capability(profile.vendor, "embedding"):
-            raise HTTPException(status_code=422, detail="该供应商不支持知识库嵌入能力")
-    old = kb_config.get()
-    row = db.get(KbEmbeddingConfig, "default")
-    if row is None:
-        row = KbEmbeddingConfig(id="default")
-        db.add(row)
-    row.provider_profile_id = body.provider_profile_id
-    row.model = body.model.strip()
-    row.dim = body.dim
-    db.commit()
-    kb_config.refresh()
-
-    new = kb_config.get()
-    changed = (
-        old.provider_profile_id != new.provider_profile_id
-        or old.model != new.model
-        or old.dim != new.dim
-    )
-    if changed and new.enabled:
-        dim_changed = old.dim != new.dim
-        # 后台重嵌用**发起这次改动的人**的钥匙 —— 后台线程没有请求身份,但这活儿是他要的。
-        actor_id = user.id
-
-        def run() -> None:
-            try:
-                with SessionLocal() as session:
-                    kb.rebuild_all_vectors(session, dim_changed=dim_changed, user_id=actor_id)
-            except Exception:  # noqa: BLE001 - background rebuild must not poison request/test processes
-                logger.exception("KB embedding rebuild failed")
-
-        threading.Thread(target=run, daemon=True).start()
-    return _kb_embedding_out()
 
 
 def _network_out(row: NetworkConfig) -> NetworkConfigOut:

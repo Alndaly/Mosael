@@ -94,7 +94,7 @@ def test_vendor_presets_listed() -> None:
     assert not presets["minimax"].get("default_model")
     # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image —— 同一把
     # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案,而它明明就是这一家。
-    assert presets["alibaba"]["capability_ids"] == ["chat", "image", "embedding"]
+    assert presets["alibaba"]["capability_ids"] == ["chat", "image"]
     # 火山方舟合成一家:同一把 Key 既做图像(Seedream)也做视频(Seedance)。
     # 拆成两个 vendor 是"一档案一能力"年代的产物,重构后只剩"同一把 Key 填两遍"的代价。
     assert presets["bytedance"]["capability_ids"] == ["image", "video"]
@@ -134,41 +134,6 @@ def test_provider_defaults_require_matching_capability() -> None:
         "/api/settings/provider-defaults/tts",
         json={"provider_profile_id": openai_tts["id"], "model": "gpt-4o-mini-tts"},
     ).status_code == 200
-
-
-def test_kb_embedding_config_put_get() -> None:
-    client = fresh_client()
-    client.post("/api/workspaces", json={"name": "W"})
-    profile = client.post(
-        "/api/settings/providers",
-        json={
-            "name": "本地 Ollama",
-            "vendor": "openai-compatible",
-            "config": {
-                "api_key": "x",
-                "base_url": "http://localhost:11434/v1",
-                "default_model": "nomic-embed-text",
-            },
-        },
-    ).json()
-
-    saved = client.put(
-        "/api/settings/kb-embedding",
-        json={"provider_profile_id": profile["id"], "model": "nomic-embed-text", "dim": 768},
-    ).json()
-    assert saved["provider_profile_id"] == profile["id"]
-    assert saved["model"] == "nomic-embed-text"
-    assert saved["dim"] == 768
-    assert saved["enabled"] is True
-
-    fetched = client.get("/api/settings/kb-embedding").json()
-    assert fetched == saved  # persisted, overrides the env fallback
-
-    # Unknown provider is rejected.
-    assert client.put(
-        "/api/settings/kb-embedding",
-        json={"provider_profile_id": "does-not-exist", "model": "m", "dim": 8},
-    ).status_code == 404
 
 
 def test_create_profile_copies_credentials_server_side() -> None:

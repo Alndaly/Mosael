@@ -44,7 +44,6 @@ export type StudioView =
   | "editor"
   | "ai"
   | "publish"
-  | "kb"
   | "settings"
   | "workflows"
   | "scheduler"
@@ -58,7 +57,6 @@ const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: Me
   { view: "editor", icon: <Scissors size={17} />, labelKey: "navEditor" },
   { view: "ai", icon: <Bot size={17} />, labelKey: "navAi" },
   { view: "publish", icon: <Rocket size={17} />, labelKey: "navPublish" },
-  { view: "kb", icon: <BookOpen size={17} />, labelKey: "navKb" },
   { view: "settings", icon: <Settings size={17} />, labelKey: "navSettings" },
 ];
 

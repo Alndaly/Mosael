@@ -46,7 +46,6 @@ def test_summary_counts_scoped_to_the_workspace() -> None:
     assert summary["week_published"] == 1
     assert summary["publish_daily"][-1]["succeeded"] == 1
     assert summary["publish_platforms"] == {"folder": 1}
-    assert summary["kb_document_count"] == 0
 
 
 def test_summary_of_a_foreign_workspace_is_404() -> None:

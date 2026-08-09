@@ -18,7 +18,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image,于是同一把
         # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案 —— 而它明明就是这一家。
         "capabilities": "图像生成(qwen-image)、对话与向量嵌入(compatible-mode 端点)。",
-        "capability_ids": ["chat", "image", "embedding"],
+        "capability_ids": ["chat", "image"],
         "fields": [
             {"key": "api_key", "label": "DashScope API Key", "storage": "api_key", "secret": True, "required": True},
             {
@@ -120,7 +120,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         # 两个 vendor 的理由分别是"能力要分开"和"要填自定义 endpoint" —— 前者被供应商⇄模型重构
         # 消掉了(能力挂模型行),后者本来就有 base_url 字段可填。
         "capabilities": "对话、图像生成、语音合成、向量嵌入 —— 同一把 Key,自建兼容端点改 Endpoint 即可。",
-        "capability_ids": ["chat", "image", "tts", "embedding"],
+        "capability_ids": ["chat", "image", "tts"],
         "fields": [
             {"key": "api_key", "label": "OpenAI API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "OpenAI Endpoint", "storage": "base_url", "default": "https://api.openai.com/v1"},
@@ -204,7 +204,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "label": "OpenAI 兼容端点",
         "base_url": "",
         "capabilities": "任意 OpenAI 兼容端点:对话、图像生成与向量嵌入。",
-        "capability_ids": ["chat", "image", "embedding"],
+        "capability_ids": ["chat", "image"],
         "fields": [
             {"key": "api_key", "label": "Bearer Token / API Key", "storage": "api_key", "secret": True, "required": True},
             {"key": "base_url", "label": "兼容 Endpoint", "storage": "base_url", "required": True},

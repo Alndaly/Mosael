@@ -260,18 +260,6 @@ function SearchResults({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
-function KbResults({ rows }: { rows: Record<string, unknown>[] }) {
-  return (
-    <ul className="m-0 grid list-none gap-1 p-0">
-      {rows.map((row, index) => (
-        <li className="grid gap-0.5 text-xs" key={`${row.document_id}-${row.chunk_index ?? index}`}>
-          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.title ?? row.document_id)}</span>
-          <span className="line-clamp-2 text-[11px] leading-[1.45] text-muted-foreground">{String(row.snippet ?? "")}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
   return (
@@ -491,7 +479,6 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
  */
 export type ResultShape =
   | "assets"
-  | "kb"
   | "search"
   | "projects"
   | "named"
@@ -526,7 +513,6 @@ export function detectShape(value: unknown): ResultShape {
 
   if (Array.isArray(value) && value.length === 0) return "empty";
   if (everyRecordHas(value, "id", "name", "kind")) return "assets";
-  if (everyRecordHas(value, "document_id", "snippet")) return "kb";
   if (everyRecordHas(value, "url", "title")) return "search";
   if (everyRecordHas(value, "id", "name", "active_sequence_id")) return "projects";
   if (everyRecordHas(value, "id", "name") || everyRecordHas(value, "type", "label")) return "named";
@@ -549,7 +535,6 @@ export function detectShape(value: unknown): ResultShape {
     if (["workflow_id", "project_id", "sequence_id", "job_id", "generation_id"].some((key) => typeof value[key] === "string" && String(value[key]).trim())) {
       return "refs";
     }
-    // create_kb_note:单条文档引用(数组版是 kb 搜索,已在上面命中)。
     if ("document_id" in value && "title" in value && !("snippet" in value)) return "docref";
     // analyze_asset / fetch_url / read_kb_document / llm nodes: prose, not raw data.
     for (const key of ["answer", "text", "content", "body"]) {
@@ -574,8 +559,6 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
   switch (detectShape(value)) {
     case "assets":
       return <AssetList rows={value as Record<string, unknown>[]} />;
-    case "kb":
-      return <KbResults rows={value as Record<string, unknown>[]} />;
     case "search":
       return <SearchResults rows={value as Record<string, unknown>[]} />;
     case "projects":

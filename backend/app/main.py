@@ -28,7 +28,6 @@ from app.api.routes.generation import router as generation_router
 from app.api.routes.health import router as health_router
 from app.api.routes.hooks import router as hooks_router
 from app.api.routes.jobs import router as jobs_router
-from app.api.routes.kb import router as kb_router
 from app.api.routes.fonts import router as fonts_router
 from app.api.routes.luts import router as luts_router
 from app.api.routes.plugins import router as plugins_router
@@ -197,7 +196,6 @@ def create_app() -> FastAPI:
     app.include_router(sequences_router, prefix="/api", dependencies=protected)
     app.include_router(jobs_router, prefix="/api", dependencies=protected)
     app.include_router(notifications_router, prefix="/api", dependencies=protected)
-    app.include_router(kb_router, prefix="/api", dependencies=protected)
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)

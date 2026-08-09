@@ -10,7 +10,6 @@ import threading
 import time
 from pathlib import Path
 
-from app.domain.kb import graph as kb_graph
 from app.media import probe as media_probe
 
 
@@ -57,56 +56,3 @@ def test_ffprobe_batch_is_bounded(monkeypatch) -> None:
     monkeypatch.setattr(media_probe, "probe_has_audio", recorder)
     media_probe.probe_has_audio_many([Path(f"/tmp/v{i}.mp4") for i in range(40)])
     assert recorder.peak <= media_probe._MAX_PARALLEL_PROBES
-
-
-def test_kb_entity_extraction_overlaps_and_reads_the_db_once(monkeypatch) -> None:
-    """Extraction is one LLM call per chunk. They must overlap — and the provider must be
-    resolved a single time on the calling thread, not once per chunk inside a worker."""
-    main_thread = threading.current_thread().name
-    profile_reads: list[str] = []
-    recorder = _OverlapRecorder(delay=0.05)
-
-    def fake_profile(_db, _user_id=None):
-        profile_reads.append(threading.current_thread().name)
-        return object()
-
-    extracted: list[str] = []
-
-    def fake_extract(_profile, text, call=None):
-        recorder()
-        extracted.append(text)
-        return [{"name": text, "type": "X"}]
-
-    monkeypatch.setattr(kb_graph, "_entity_profile", fake_profile)
-    monkeypatch.setattr(kb_graph, "_extract_with", fake_extract)
-    monkeypatch.setattr(kb_graph, "graph_tier_enabled", lambda: True)
-
-    runs: list[tuple] = []
-
-    class FakeSession:
-        def run(self, *args, **kwargs):
-            runs.append((threading.current_thread().name, args))
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-    class FakeDriver:
-        def session(self):
-            return FakeSession()
-
-    monkeypatch.setattr(kb_graph, "_get_driver", lambda: FakeDriver())
-
-    chunks = [(f"c{i}", f"text {i}") for i in range(8)]
-    kb_graph.upsert_document_graph(
-        None, workspace_id="ws", document_id="doc", title="T", chunks=chunks, user_id=None
-    )
-
-    assert recorder.peak > 1, "chunks were extracted one after another"
-    assert sorted(extracted) == sorted(t for _, t in chunks)
-    assert len(profile_reads) == 1, f"provider resolved {len(profile_reads)} times, expected once"
-    assert profile_reads[0] == main_thread, "provider was resolved from a worker thread"
-    # Graph writes must stay on the calling thread — a neo4j Session is not thread-safe.
-    assert {name for name, _ in runs} == {main_thread}

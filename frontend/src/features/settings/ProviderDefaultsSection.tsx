@@ -167,7 +167,7 @@ export function ProviderDefaultsSection({
     >
       {enabled.length === 0 ? (
         <SettingsBlock>
-          <p className="m-0 text-xs text-muted-foreground">{t("kbEmbedNoProvider")}</p>
+          <p className="m-0 text-xs text-muted-foreground">{t("providerDefaultsNoProvider")}</p>
         </SettingsBlock>
       ) : (
         <>

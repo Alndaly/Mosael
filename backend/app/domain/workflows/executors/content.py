@@ -15,28 +15,6 @@ from app.domain.workflows.executors import register, register_prefix
 from app.domain.workflows.executors.common import id_list
 
 
-@register("kb_search")
-def kb_search(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    from app.db.models import KbDataset
-    from app.domain.kb import search
-
-    limit = int(config.get("limit") or 5)
-    dataset_id = str(config.get("dataset_id", "")).strip()
-    dataset = db.get(KbDataset, dataset_id) if dataset_id else None
-    if dataset is None:
-        # 未指定库时退回工作区内最早的知识库,保持节点可用。
-        dataset = db.scalars(
-            select(KbDataset)
-            .where(KbDataset.workspace_id == workflow.workspace_id)
-            .order_by(KbDataset.created_at)
-        ).first()
-    if dataset is None:
-        return {"text": "", "results": []}
-    results = search(db, dataset, str(config.get("query", "")), top_k=limit)
-    text = "\n\n".join(f"[{item['title']}] {item['snippet']}" for item in results)
-    return {"text": text, "results": results}
-
-
 def _run_plugin_tool(db: Session, instance_id: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     from app.domain.plugins import PluginDomainError
     from app.domain.plugins.tools import invoke

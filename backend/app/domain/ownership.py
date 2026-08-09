@@ -68,7 +68,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ProviderModel": ("app/domain/provider_models.py", "app/api/routes/settings.py"),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),
-    "KbEmbeddingConfig": ("app/domain/kb/",),
     "AiRuntimeConfig": ("app/api/routes/settings.py",),
     # 单例行由 network 域按需创建(get_config),路由只负责改值。
     "NetworkConfig": ("app/domain/network.py", "app/api/routes/settings.py"),
@@ -88,9 +87,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
     # 知识库
-    "KbDataset": ("app/domain/kb/",),
-    "KbDocument": ("app/domain/kb/",),
-    "KbChunk": ("app/domain/kb/",),
 }
 
 # 路由层与测试不受限:路由是薄转译(建实体前已被鉴权链把关),测试需要自由造数据。

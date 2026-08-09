@@ -61,7 +61,7 @@ def normalize_auth_type(vendor: str, value: str | None) -> str:
 
 
 # 已知能力全集(建/改档案时校验覆盖值,过滤掉无意义的能力名)。
-ALL_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast", "embedding")
+ALL_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast")
 
 
 def capability_ids_for_vendor(vendor: str) -> list[str]:

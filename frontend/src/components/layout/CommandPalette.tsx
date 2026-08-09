@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/command";
 import { emitOpenEvent } from "@/lib/deepLink";
 
-type KbSearchResult = components["schemas"]["KbSearchResultOut"];
 
 /** 页面导航项:label 走 i18n,keywords 供英文/拼音前缀匹配。 */
 const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[]; icon: React.ReactNode }> = [
@@ -46,7 +45,6 @@ const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[
   { view: "editor", labelKey: "navEditor", keywords: ["editor", "cut", "jianji"], icon: <Scissors size={14} /> },
   { view: "ai", labelKey: "navAi", keywords: ["ai", "chat", "agent"], icon: <Bot size={14} /> },
   { view: "publish", labelKey: "navPublish", keywords: ["publish", "fabu"], icon: <Rocket size={14} /> },
-  { view: "kb", labelKey: "navKb", keywords: ["kb", "knowledge", "zhishiku"], icon: <BookOpen size={14} /> },
   { view: "workflows", labelKey: "navWorkflows", keywords: ["workflow", "flow", "gongzuoliu"], icon: <Workflow size={14} /> },
   { view: "browser-pool", labelKey: "navBrowserPool", keywords: ["browser", "pool", "account", "liulanqi", "zhanghao"], icon: <Boxes size={14} /> },
   { view: "settings", labelKey: "navSettings", keywords: ["settings", "shezhi"], icon: <Settings size={14} /> },
@@ -115,13 +113,6 @@ export function CommandPalette({
     enabled: open && query.length > 0,
     staleTime: 30_000,
   });
-  const kbResults = useQuery({
-    queryKey: ["cmdk-kb", workspace.id, query],
-    queryFn: () =>
-      api<KbSearchResult[]>(`/api/kb/search?workspace_id=${workspace.id}&q=${encodeURIComponent(query)}&limit=6`),
-    enabled: open && query.length > 1,
-    staleTime: 30_000,
-  });
 
   const q = query.toLowerCase();
   const navMatches = q
@@ -141,19 +132,14 @@ export function CommandPalette({
         )
         .slice(0, 6)
     : [];
-  const kbMatches = kbResults.data ?? [];
-  // 同一文档命中多个 chunk 时只展示得分最高的一条
-  const kbUnique = kbMatches.filter(
-    (item, index) => kbMatches.findIndex((other) => other.document_id === item.document_id) === index,
-  );
 
   const run = (action: () => void) => {
     setOpen(false);
     action();
   };
 
-  const searching = assets.isFetching || kbResults.isFetching || input.trim() !== query;
-  const hasAnyResult = navMatches.length > 0 || projectMatches.length > 0 || assetMatches.length > 0 || kbUnique.length > 0;
+  const searching = assets.isFetching || input.trim() !== query;
+  const hasAnyResult = navMatches.length > 0 || projectMatches.length > 0 || assetMatches.length > 0;
 
   // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
   // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。
@@ -166,8 +152,6 @@ export function CommandPalette({
           ? `project-${projectMatches[0].id}`
           : assetMatches.length > 0
             ? `asset-${assetMatches[0].id}`
-            : kbUnique.length > 0
-              ? `kb-${kbUnique[0].document_id}`
               : "";
   const [highlighted, setHighlighted] = React.useState(firstValue);
   React.useEffect(() => {
@@ -209,10 +193,6 @@ export function CommandPalette({
               <CommandItem value="action-new-project" onSelect={() => run(() => onNavigate("home"))}>
                 <FolderPlus size={14} />
                 {t("createProject")}
-              </CommandItem>
-              <CommandItem value="action-new-note" onSelect={() => run(() => onNavigate("kb"))}>
-                <FileText size={14} />
-                {t("kbNewNote")}
               </CommandItem>
               <CommandItem
                 value="action-toggle-theme"
@@ -272,27 +252,6 @@ export function CommandPalette({
                 {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
                 <span className="min-w-0 flex-1 truncate">{asset.name}</span>
                 <span className="text-[11px] uppercase text-muted-foreground">{asset.kind}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {kbUnique.length > 0 && (
-          <CommandGroup heading={t("cmdkKb")}>
-            {kbUnique.map((result) => (
-              <CommandItem
-                key={result.document_id}
-                value={`kb-${result.document_id}`}
-                onSelect={() =>
-                  run(() => {
-                    onNavigate("kb");
-                    emitOpenEvent("openstudio:open-kb-doc", result.document_id);
-                  })
-                }
-              >
-                <BookOpen size={14} />
-                <span className="min-w-0 flex-1 truncate">{result.title}</span>
-                <span className="max-w-[180px] truncate text-[11px] text-muted-foreground">{result.snippet}</span>
               </CommandItem>
             ))}
           </CommandGroup>

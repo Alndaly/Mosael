@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **54** 个工具,其中 **15** 个走确认卡。
+共 **51** 个工具,其中 **15** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -24,7 +24,6 @@ summaries — never raw internal schemas.
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
-| `create_kb_note` | 直接执行 | Runs directly: save a NEW polished note into the knowledge base. |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE sequence. |
@@ -51,12 +50,10 @@ summaries — never raw internal schemas.
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
-| `read_kb_document` | 直接执行 | Read-only: read one KNOWLEDGE BASE document in full. |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet locally and return `output`. |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
-| `search_kb` | 直接执行 | Read-only: search the KNOWLEDGE BASE — scripts, briefs, notes, imported articles. |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |
 | `translate_text` | 直接执行 | Runs directly: translate text into a target language. |

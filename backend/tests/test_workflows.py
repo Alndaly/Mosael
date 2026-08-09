@@ -35,10 +35,10 @@ def linear_graph() -> dict:
             {"id": "start", "type": "start", "name": "开始", "position": {"x": 0, "y": 0}, "config": {"params": {"topic": "海边"}}},
             {
                 "id": "search",
-                "type": "kb_search",
+                "type": "template",
                 "name": "查资料",
                 "position": {"x": 240, "y": 0},
-                "config": {"query": "{{start.topic}}", "limit": 3},
+                "config": {"template": "关于 {{start.topic}}"},
             },
         ],
         "edges": [{"id": "e1", "source": "start", "target": "search"}],
@@ -148,7 +148,7 @@ def test_workflow_crud_and_run() -> None:
     assert bad.status_code == 422
 
     types = client.get("/api/workflows/node-types").json()
-    assert {t["type"] for t in types} >= {"start", "llm", "kb_search", "plugin_tool"}
+    assert {t["type"] for t in types} >= {"start", "llm", "template", "plugin_tool"}
 
     run = client.post(f"/api/workflows/{workflow_id}/run", json={"params": {"topic": "山顶"}})
     assert run.status_code == 200, run.text

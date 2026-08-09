@@ -198,53 +198,6 @@
     "updated_at",
     "workspace_id"
   ],
-  "kb_chunks": [
-    "char_count",
-    "chunk_index",
-    "dataset_id",
-    "document_id",
-    "id",
-    "text",
-    "workspace_id"
-  ],
-  "kb_datasets": [
-    "chunk_overlap",
-    "chunk_size",
-    "created_at",
-    "description",
-    "graph_enabled",
-    "id",
-    "name",
-    "retrieval_mode",
-    "score_threshold",
-    "top_k",
-    "updated_at",
-    "workspace_id"
-  ],
-  "kb_documents": [
-    "char_count",
-    "chunk_count",
-    "content",
-    "created_at",
-    "dataset_id",
-    "error",
-    "id",
-    "source_ref",
-    "source_type",
-    "status",
-    "summary",
-    "tags",
-    "title",
-    "updated_at",
-    "workspace_id"
-  ],
-  "kb_embedding_config": [
-    "dim",
-    "id",
-    "model",
-    "provider_profile_id",
-    "updated_at"
-  ],
   "luts": [
     "created_at",
     "file_key",

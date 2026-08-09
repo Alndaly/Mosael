@@ -17,7 +17,6 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
-import { KbEmbeddingSection } from "@/features/settings/KbEmbeddingSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
@@ -34,7 +33,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import { cn } from "@/lib/utils";
 
-type KbStatus = components["schemas"]["KbStatusOut"];
 
 type SectionId =
   | "account"
@@ -43,7 +41,6 @@ type SectionId =
   | "provider-chat"
   | "provider-image"
   | "provider-video"
-  | "provider-embedding"
   | "provider-audio"
   | "provider-pricing"
   | "ai-runtime"
@@ -61,7 +58,6 @@ const SECTION_IDS: SectionId[] = [
   "provider-chat",
   "provider-image",
   "provider-video",
-  "provider-embedding",
   "provider-audio",
   "provider-pricing",
   "ai-runtime",
@@ -101,11 +97,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               ? "provider-image"
               : focus === "video"
                 ? "provider-video"
-                : focus === "embedding"
-                  ? "provider-embedding"
-                  : focus === "tts" || focus === "podcast" || focus === "audio"
-                    ? "provider-audio"
-                : "provider-chat";
+                : focus === "tts" || focus === "podcast" || focus === "audio"
+                  ? "provider-audio"
+                  : "provider-chat";
         setSection(next);
         setFocusProviderCapability(focus || null);
         return;
@@ -127,7 +121,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "provider-image", label: t("providerImageTitle"), icon: <ImageIcon size={14} /> },
     { id: "provider-video", label: t("providerVideoTitle"), icon: <Video size={14} /> },
     { id: "provider-audio", label: t("providerAudioTitle"), icon: <AudioLines size={14} /> },
-    { id: "provider-embedding", label: t("providerEmbeddingTitle"), icon: <Database size={14} /> },
     { id: "provider-pricing", label: t("providerPricingTitle"), icon: <ReceiptText size={14} /> },
     // 重试对**所有** AI 供应商调用生效(对话/生图/生视频/语音/向量化),所以自成一节。
     // 原本挂在「AI 对话」下面,位置本身就在说"只管对话",而它从来不是。
@@ -203,18 +196,6 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                 capability="video"
                 title={t("providerVideoTitle")}
                 description={t("providerVideoDesc")}
-              />
-            </>
-          )}
-          {section === "provider-embedding" && (
-            <>
-              <KbEmbeddingSection />
-              {/* 标题和上面那块不能同名:这一屏原本上下两个分组都叫「知识库嵌入」,
-                  上面是配置、下面是连接列表,而读者只看到同一个标题出现两次。 */}
-              <ProviderProfilesSection
-                capability="embedding"
-                title={t("providerEmbeddingConnTitle")}
-                description={t("providerEmbeddingDesc")}
               />
             </>
           )}
@@ -837,13 +818,6 @@ function ProxySection() {
 
 function BackendSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
-  const kbStatus = useQuery({
-    queryKey: ["kb-status"],
-    queryFn: () => api<KbStatus>("/api/kb/status"),
-  });
-  const tierBadge = (enabled: boolean | undefined) => (
-    <Badge variant={enabled ? "default" : "secondary"}>{enabled ? t("kbStatusOn") : t("kbStatusOff")}</Badge>
-  );
   return (
     <>
       <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
@@ -861,18 +835,6 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
         </SettingsRow>
       </SettingsGroup>
       <ProxySection />
-      <SettingsGroup title={t("kbStatusTitle")} description={t("kbStatusDesc")}>
-        <SettingsRow label={t("kbStatusEngine")} description={t("kbStatusEngineDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{kbStatus.data?.convert_engine ?? "…"}</code>
-        </SettingsRow>
-        <SettingsRow label={t("kbStatusVector")} description={t("kbStatusVectorDesc")}>
-          {kbStatus.data?.embedding_model && <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{kbStatus.data.embedding_model}</code>}
-          {tierBadge(kbStatus.data?.vector_enabled)}
-        </SettingsRow>
-        <SettingsRow label={t("kbStatusGraph")} description={t("kbStatusGraphDesc")}>
-          {tierBadge(kbStatus.data?.graph_enabled)}
-        </SettingsRow>
-      </SettingsGroup>
     </>
   );
 }

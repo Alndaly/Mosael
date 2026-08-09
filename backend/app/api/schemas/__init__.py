@@ -928,17 +928,6 @@ class ProviderUsageEventOut(OrmModel):
     created_at: datetime
 
 
-class KbEmbeddingConfigOut(BaseModel):
-    provider_profile_id: str | None = None
-    model: str = ""
-    dim: int = 0
-    enabled: bool = False
-
-
-class KbEmbeddingConfigUpdate(BaseModel):
-    provider_profile_id: str | None = None
-    model: str = Field(min_length=1, max_length=120)
-    dim: int = Field(ge=1, le=8192)
 
 
 class NetworkConfigOut(BaseModel):
@@ -1753,124 +1742,12 @@ class AgentSkillOut(BaseModel):
 # ---------- 知识库(Dify 式 dataset) ----------
 
 
-class KbDatasetCreate(BaseModel):
-    workspace_id: str
-    name: str = Field(min_length=1, max_length=200)
-    description: str = Field(default="", max_length=2000)
 
 
-class KbDatasetUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = Field(default=None, max_length=2000)
-    retrieval_mode: str | None = Field(default=None, pattern="^(fts|hybrid)$")
-    top_k: int | None = Field(default=None, ge=1, le=50)
-    score_threshold: float | None = Field(default=None, ge=0, le=1)
-    chunk_size: int | None = Field(default=None, ge=100, le=4000)
-    chunk_overlap: int | None = Field(default=None, ge=0, le=1000)
-    graph_enabled: bool | None = None
 
 
-class KbDatasetOut(OrmModel):
-    id: str
-    workspace_id: str
-    name: str
-    description: str
-    retrieval_mode: str
-    top_k: int
-    score_threshold: float | None = None
-    chunk_size: int
-    chunk_overlap: int
-    graph_enabled: bool
-    created_at: datetime
-    updated_at: datetime
-    document_count: int = 0  # 列表附带,计算得出
 
 
-class KbDocumentCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=300)
-    content: str = Field(default="", max_length=400_000)
-    source_type: str = Field(default="note", pattern="^(note|file|url)$")
-    source_ref: str = Field(default="", max_length=600)
-    tags: list[str] = Field(default_factory=list, max_length=24)
-
-
-class KbDocumentUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=300)
-    content: str | None = Field(default=None, max_length=400_000)
-    tags: list[str] | None = Field(default=None, max_length=24)
-
-
-class KbUrlImportRequest(BaseModel):
-    url: str = Field(min_length=8, max_length=600)
-
-
-class KbDocumentOut(OrmModel):
-    id: str
-    workspace_id: str
-    dataset_id: str
-    title: str
-    source_type: str
-    source_ref: str
-    summary: str
-    tags: list[str] = Field(default_factory=list)
-    status: str
-    error: str = ""
-    chunk_count: int = 0
-    char_count: int = 0
-    created_at: datetime
-    updated_at: datetime
-    content: str | None = None  # 列表不带正文,详情才带
-
-
-class KbChunkOut(OrmModel):
-    id: str
-    chunk_index: int
-    text: str
-    char_count: int = 0
-
-
-class KbRetrievalTestRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=2000)
-    top_k: int | None = Field(default=None, ge=1, le=50)
-    score_threshold: float | None = Field(default=None, ge=0, le=1)
-
-
-class KbGraphNode(BaseModel):
-    id: str
-    label: str
-    kind: str  # document|entity
-    ref: str | None = None  # document 节点的真实文档 id
-    entity_type: str | None = None
-
-
-class KbGraphEdge(BaseModel):
-    source: str
-    target: str
-    weight: int = 1
-
-
-class KbGraphOut(BaseModel):
-    enabled: bool
-    nodes: list[KbGraphNode] = Field(default_factory=list)
-    edges: list[KbGraphEdge] = Field(default_factory=list)
-
-
-class KbStatusOut(BaseModel):
-    convert_engine: str
-    vector_enabled: bool
-    graph_enabled: bool
-    embedding_model: str = ""
-
-
-class KbSearchResultOut(BaseModel):
-    document_id: str
-    title: str
-    source_type: str
-    tags: list[str] = Field(default_factory=list)
-    chunk_index: int
-    snippet: str
-    score: float = 0.0
-    from_graph: bool = False
 
 
 class AgentManifestOut(BaseModel):
@@ -1927,7 +1804,6 @@ class WorkspaceSummaryOut(BaseModel):
     asset_count: int
     sequence_count: int
     workflow_count: int
-    kb_document_count: int
     running_jobs: int
     week_jobs_succeeded: int
     week_jobs_failed: int

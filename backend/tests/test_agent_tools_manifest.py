@@ -52,7 +52,7 @@ def test_the_tools_the_sidecar_was_missing_are_in_the_manifest() -> None:
     client = fresh_client()
     names = {tool["name"] for tool in _manifest(client)}
     # Each of these was implemented during this project and never reached the pi agent.
-    for missing in ("analyze_asset", "web_search", "fetch_url", "edit_workflow", "search_kb"):
+    for missing in ("analyze_asset", "web_search", "fetch_url", "edit_workflow"):
         assert missing in names, f"{missing} still not offered to the agent"
 
 
@@ -80,9 +80,7 @@ def test_high_risk_tool_descriptions_disambiguate_common_misuse() -> None:
     assert "use edit_workflow" in descriptions["update_workflow"]
 
     assert "Do NOT use for knowledge-base" in descriptions["list_assets"]
-    assert "Do NOT use for media assets" in descriptions["search_kb"]
-    assert "Do NOT use for media asset tags" in descriptions["create_kb_note"]
-    assert "Do NOT use for KB document tags" in descriptions["update_asset_tags"]
+    assert "Do NOT use for workflow node labels" in descriptions["update_asset_tags"]
 
     assert "Do NOT use for running visual workflows" in descriptions["render_sequence"]
     assert "Do NOT use to edit the workflow graph" in descriptions["run_workflow"]
@@ -132,7 +130,7 @@ def test_workflow_graph_ops_sent_to_edit_timeline_get_recoverable_feedback(monke
             "arguments": {
                 "sequence_id": None,
                 "workspace_id": workspace_id,
-                "operations": [{"kind": "remove_node", "node_id": "kb-search-1"}],
+                "operations": [{"kind": "remove_node", "node_id": "llm-1"}],
             }
         },
     )
@@ -185,7 +183,7 @@ def test_asset_tagging_is_reachable_by_the_agent() -> None:
     the manifest exists."""
     client = fresh_client()
     names = {tool["name"] for tool in _manifest(client)}
-    for expected in ("update_asset_tags", "list_workflows", "search_kb", "web_search"):
+    for expected in ("update_asset_tags", "list_workflows", "web_search"):
         assert expected in names, f"{expected} is not offered to the agent"
 
 
@@ -225,7 +223,7 @@ def test_workspace_scoped_tools_declare_workspace_id() -> None:
     declared = {
         tool["name"]: set(tool["parameters"].get("properties", {})) for tool in _builtin(client)
     }
-    for scoped in ("list_assets", "list_projects", "search_kb", "list_workflows"):
+    for scoped in ("list_assets", "list_projects", "list_workflows"):
         assert "workspace_id" in declared[scoped], f"{scoped} lost its workspace_id parameter"
     for unscoped in ("web_search", "fetch_url", "analyze_asset"):
         assert "workspace_id" not in declared[unscoped], (

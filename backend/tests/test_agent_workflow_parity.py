@@ -20,7 +20,6 @@ from app.domain.workflows import NODE_TYPES
 NODE_TO_TOOL: dict[str, str] = {
     "delay": "sleep",
     "llm": "",  # 见 NOT_A_TOOL
-    "kb_search": "search_kb",
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",
     "export_sequence": "render_sequence",

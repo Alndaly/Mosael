@@ -57,13 +57,6 @@ describe("detectShape", () => {
     expect(detectShape(fullRecord)).toBe("assets");
   });
 
-  it("does not mistake a KB search for an asset list", () => {
-    // The failure this guards: a loose "array of objects" test rendered search results as a
-    // broken asset list, which is worse than the JSON it replaced.
-    const kb = [{ document_id: "d", title: "t", snippet: "s", score: 0.8 }];
-    expect(detectShape(kb)).toBe("kb");
-  });
-
   it("recognises web results", () => {
     expect(detectShape([{ title: "t", url: "https://x", snippet: "s" }])).toBe("search");
   });
@@ -105,7 +98,7 @@ describe("asset rows", () => {
   });
 });
 
-describe("single-object shapes (get_workflow / update_asset_tags / create_kb_note)", () => {
+describe("single-object shapes (get_workflow / update_asset_tags)", () => {
   it("recognises a workflow by its graph, not its tool name", () => {
     expect(
       detectShape({ id: "w1", name: "发布流", graph: { nodes: [{ id: "start", type: "start" }], edges: [] } }),
@@ -122,10 +115,6 @@ describe("single-object shapes (get_workflow / update_asset_tags / create_kb_not
 
   it("recognises a single document reference (created note)", () => {
     expect(detectShape({ document_id: "d1", title: "口播稿" })).toBe("docref");
-  });
-
-  it("keeps kb SEARCH results (array with snippets) on the kb card", () => {
-    expect(detectShape([{ document_id: "d1", snippet: "…", title: "t" }])).toBe("kb");
   });
 });
 

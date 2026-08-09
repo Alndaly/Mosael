@@ -2494,13 +2494,6 @@ function NodeInspector({
     queryFn: () => listAssets(workspaceId),
     enabled: hasAssetField,
   });
-  // 知识库检索节点:dataset_id 走知识库下拉。
-  const kbDatasets = useQuery({
-    queryKey: ["kb-datasets", workspaceId],
-    queryFn: () => api<Array<{ id: string; name: string }>>(`/api/kb/datasets?workspace_id=${workspaceId}`),
-    enabled: node.type === "kb_search",
-  });
-
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
     if (node.type === "llm") {
@@ -2724,9 +2717,6 @@ function NodeInspector({
     }
     if (node.type === "publish" && key === "account_id") {
       return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
-    }
-    if (node.type === "kb_search" && key === "dataset_id") {
-      return (kbDatasets.data ?? []).map((ds) => ({ value: ds.id, label: ds.name }));
     }
     if (node.type === "synthesize_speech" && key === "voice_id") {
       return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));

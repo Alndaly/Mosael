@@ -87,17 +87,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["text", "json"],
     },
-    "kb_search": {
-        "category": "数据",
-        "label": "知识库检索",
-        "description": "检索指定知识库,输出片段文本。",
-        "config": {
-            "dataset_id": {"type": "string", "description": "选择要检索的知识库(留空则用工作区内首个)"},
-            "query": {"type": "template", "required": True},
-            "limit": {"type": "number", "description": "返回条数,默认 5"},
-        },
-        "outputs": ["text", "results"],
-    },
     "plugin_tool": {
         "category": "插件",
         "label": "插件工具",
@@ -727,7 +716,6 @@ INTERNAL_NODE_TYPES = frozenset(
     {
         "start",
         "llm",
-        "kb_search",
         "transcribe_asset",
         "export_sequence",
         "ai_generate",
