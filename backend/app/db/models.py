@@ -401,6 +401,13 @@ class Clip(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
     track: Mapped[Track] = relationship(back_populates="clips")
+    #: 只为读**素材类型**用(界面要判断"这一段转不转得了")。同一条序列里同一个素材反复出现,
+    #: 身份映射会把它们收敛成一次查询,所以这里不值得为它加急切加载。
+    asset: Mapped["Asset | None"] = relationship(lazy="selectin")
+
+    @property
+    def asset_kind(self) -> str:
+        return self.asset.kind if self.asset is not None else ""
 
 
 class SequenceOperation(Base):

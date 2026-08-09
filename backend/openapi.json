@@ -14368,6 +14368,11 @@
             ],
             "title": "Asset Id"
           },
+          "asset_kind": {
+            "type": "string",
+            "title": "Asset Kind",
+            "default": ""
+          },
           "timeline_start": {
             "type": "number",
             "title": "Timeline Start"

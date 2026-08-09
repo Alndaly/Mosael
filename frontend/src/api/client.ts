@@ -1,4 +1,5 @@
 import type { components } from "@/api/generated/schema";
+import { humanError } from "@/api/errorMessage";
 
 // 服务器可切换(团队模式铺垫):默认本机后端,localStorage 记住自定义地址。
 // 切换后整页 reload,让所有模块用新地址重新初始化;换服务器后原 token 失效
@@ -295,8 +296,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     // 开发者可在控制台追溯失败的后端调用;抛出的错误照常驱动界面 toast 给用户。
     const method = (init?.method ?? "GET").toUpperCase();
+    // 控制台留全貌给开发者;抛给界面的只留后端写的那句人话(见 api/errorMessage)。
     console.warn(`[api] ${method} ${path} → ${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
-    throw new Error(`${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
+    throw new Error(humanError(res.status, res.statusText, body));
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

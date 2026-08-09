@@ -4938,6 +4938,11 @@ export interface components {
             track_id: string;
             /** Asset Id */
             asset_id: string | null;
+            /**
+             * Asset Kind
+             * @default
+             */
+            asset_kind: string;
             /** Timeline Start */
             timeline_start: number;
             /** Src In */

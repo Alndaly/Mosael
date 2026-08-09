@@ -297,6 +297,9 @@ class ClipOut(OrmModel):
     sequence_id: str
     track_id: str
     asset_id: str | None
+    #: 这一段用的是哪一类素材(video/audio/image/…)。**轨道类型说明不了它** —— 视频轨上完全
+    #: 可以放图片(AI 生成的静图就是这么落上去的),而界面要据此判断"这一段能不能转写"。
+    asset_kind: str = ""
     timeline_start: float
     src_in: float
     src_out: float
