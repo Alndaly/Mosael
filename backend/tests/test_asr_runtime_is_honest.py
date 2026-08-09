@@ -62,8 +62,8 @@ def test_runtime_ready_asks_the_interpreter_not_the_disk(monkeypatch) -> None:
 
 def test_the_error_says_the_models_are_fine(monkeypatch) -> None:
     """报错要说清缺的是**运行环境**,不是模型 —— 否则用户会去重下已经在盘上的 6GB。"""
-    monkeypatch.setattr(service, "_candidate_pythons", lambda: [])
-    service.resolve_asr_runtime.cache_clear()
+    monkeypatch.setattr(asr_models, "candidate_pythons", lambda: [])
+    asr_models.clear_runtime_probes()
 
     try:
         service.resolve_asr_runtime()
@@ -197,3 +197,42 @@ def test_a_half_downloaded_model_is_not_reported_installed(tmp_path, monkeypatch
     monkeypatch.setattr(asr_models, "_measure", lambda e: int(e.expected_bytes * 0.5))
 
     assert asr_models._is_installed(entry) is False
+
+
+# ---------------- 候选解释器只有一份 ----------------
+
+
+def test_the_managed_venv_is_visible_to_transcription() -> None:
+    """转写和模型页问的是同一个问题 —— 得由同一份名单回答。
+
+    实际撞到的:托管 venv 里 funasr 装好了,模型页显示「已安装」,而一点转写就报"没有运行环境"。
+    因为托管 venv 只加进了 asr_models 那个探测点,service 这边还是老的两个候选(用户设的解释器 +
+    后端自己的)。**同一个问题问了两遍,两个函数给了不同答案** —— 和「文件在盘上 vs 跑不跑得起来」
+    是同一种缺陷,只是这次两边都在回答后者。
+    """
+    managed = str(asr_models.managed_venv_python())
+    candidates = [str(p) for p in asr_models.candidate_pythons()]
+
+    assert managed in candidates, f"转写看不到托管 venv:{candidates}"
+
+
+def test_the_two_probes_share_one_list() -> None:
+    """形状棘轮:候选名单只有一处。两处各拼一份,下一次加候选时又会只加一边。"""
+    import inspect
+
+    # 探测只有一份实现:service 不再自己探,它调 asr_models 那一个。
+    assert "subprocess" not in inspect.getsource(service.resolve_asr_runtime), "service 又自己探测了一遍"
+    assert "candidate_pythons()" in inspect.getsource(asr_models._resolve_python)
+
+
+def test_the_error_is_plain_text(monkeypatch) -> None:
+    """这句话会**原样**显示在界面上 —— markdown 在那儿只会以星号的样子出现。"""
+    monkeypatch.setattr(asr_models, "candidate_pythons", lambda: [])
+    asr_models.clear_runtime_probes()
+
+    try:
+        service.resolve_asr_runtime()
+    except service.AsrError as exc:
+        assert "**" not in str(exc), f"报错里有没被渲染的 markdown:{exc}"
+    else:
+        raise AssertionError("该报错的没报")

@@ -236,6 +236,20 @@ class _Store:
 _store = _Store()
 
 
+def resolve_engine_python(engine: str) -> str | None:
+    """装了这个引擎的解释器;没有就 None。调用方据此决定是报错还是换一个引擎试。"""
+    try:
+        return _resolve_python(engine)
+    except Exception:  # noqa: BLE001 — "没有"就是答案,原因由调用方另行呈现
+        return None
+
+
+def clear_runtime_probes() -> None:
+    """装好环境之后把探测缓存清掉 —— 只有一处要清,因为只有一份缓存。"""
+    _resolve_python.cache_clear()
+    runtime_ready.cache_clear()
+
+
 @lru_cache(maxsize=4)
 def runtime_ready(engine: str) -> bool:
     """有没有一个解释器能 `import <engine>` —— 也就是**跑不跑得起来**。
@@ -310,12 +324,36 @@ def any_downloading() -> bool:
 # ---------------------------------------------------------------------------
 # Download orchestration
 # ---------------------------------------------------------------------------
-def _resolve_python(engine: str) -> str:
-    """Path to an interpreter that has `engine` installed. Reuses the ASR
-    runtime probe but pins the provider to this entry's engine."""
-    from app.audio.service import _candidate_pythons  # local: avoid cycle
+def candidate_pythons() -> list[Path]:
+    """可能装了 funasr/whisperx 的解释器,按优先级。**这是唯一一份名单。**
 
-    for python in [managed_venv_python(), *_candidate_pythons()]:
+    托管 venv 排在最前:那是应用自己建、自己装的那个(见 audio/asr_models.ensure_engine_runtime),
+    最可能是对的。用户显式指定的次之,后端自己的解释器兜底。
+
+    收在一处是因为它被问过两遍:转写走这里,模型页那个「跑不跑得起来」也走这里。此前两边各拼
+    一份,而托管 venv 只加进了后者 —— 于是模型页显示「已安装」、一点转写就报"没有运行环境",
+    同一个问题两个答案。
+    """
+    candidates: list[Path] = [managed_venv_python()]
+    if settings.asr_python:
+        candidates.append(Path(settings.asr_python).expanduser())
+    import sys
+
+    candidates.append(Path(sys.executable))
+    return candidates
+
+
+@lru_cache(maxsize=8)
+def _resolve_python(engine: str) -> str:
+    """装了 `engine` 的那个解释器。**全项目唯一的探测实现**,也是唯一那份缓存。
+
+    此前有两份:这里一份、service.resolve_asr_runtime 一份,各带各的 lru_cache。两份实现意味着
+    两个答案 —— 托管 venv 加进了这一份、漏了那一份,于是模型页说「已安装」而转写说"没有环境"。
+    合成一份之后,加候选、改判据都只有一个地方。
+
+    探测要起子进程,所以缓存;装完环境后调 `clear_runtime_probes()`。
+    """
+    for python in candidate_pythons():
         if not python.is_file():
             continue
         probe = subprocess.run([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120)
@@ -366,10 +404,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     )
     if result.returncode != 0:
         raise RuntimeError(f"安装 {engine} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
-    runtime_ready.cache_clear()
-    from app.audio.service import resolve_asr_runtime
-
-    resolve_asr_runtime.cache_clear()
+    clear_runtime_probes()
 
 
 def start_download(model_id: str) -> dict[str, Any]:

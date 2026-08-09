@@ -32,40 +32,25 @@ class AsrError(RuntimeError):
     pass
 
 
-def _candidate_pythons() -> list[Path]:
-    candidates: list[Path] = []
-    if settings.asr_python:
-        candidates.append(Path(settings.asr_python).expanduser())
-    import sys
-
-    candidates.append(Path(sys.executable))
-    return candidates
-
-
-@lru_cache(maxsize=1)
 def resolve_asr_runtime() -> tuple[str, str]:
-    """(python_path, provider). Probes each candidate interpreter for funasr,
-    then whisperx. Cached — probing spawns interpreters."""
+    """(解释器路径, 引擎)。探测与缓存都在 asr_models —— **这件事只有一份实现**。
+
+    此前这里自己又探测了一遍,和 asr_models 那份各带一份缓存。两份实现意味着两个答案:托管 venv
+    加进了那一份、漏了这一份,于是模型页显示「已安装」而一点转写就报"没有运行环境"。
+    """
+    from app.audio.asr_models import resolve_engine_python
+
     preferred = settings.asr_provider.strip().lower()
-    providers = ["funasr", "whisperx"] if preferred in ("", "auto") else [preferred]
-    for python in _candidate_pythons():
-        if not python.is_file():
-            continue
-        for provider in providers:
-            probe = subprocess.run(
-                [str(python), "-c", f"import {provider}"],
-                capture_output=True,
-                timeout=120,
-            )
-            if probe.returncode == 0:
-                return str(python), provider
-    # **说清缺的是哪一半**。模型权重和运行环境是两件独立的事,而这条报错此前只提后者 ——
-    # 用户看到"未找到转写环境"、又看到设置页三行「已安装」,最容易做的事是去重下已经在盘上的
-    # 那 6GB 模型。缺的从来不是它们。
+    engines = ["funasr", "whisperx"] if preferred in ("", "auto") else [preferred]
+    for engine in engines:
+        python = resolve_engine_python(engine)
+        if python:
+            return python, engine
     raise AsrError(
-        "缺的是**运行环境**,不是模型:模型权重已经下载好的话它们不用再下一遍,"
+        # 纯文本,不要 markdown —— 这句话会原样显示在界面上,星号只会以星号的样子出现。
+        "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,"
         "但还没有任何 Python 解释器装了 funasr 或 whisperx。"
-        "去「转写模型」那一页装一下运行环境,或设置 OPEN_STUDIO_ASR_PYTHON 指向一个已装好的解释器。"
+        "去设置的「转写模型」那一页点「安装运行环境」,装一次就好。"
     )
 
 
