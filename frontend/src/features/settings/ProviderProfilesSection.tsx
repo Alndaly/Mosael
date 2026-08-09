@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, KeyRound, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Power, RotateCw, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -592,7 +592,25 @@ export function ProviderProfilesSection({
               )}
             </div>
           ))}
-          {profiles.data && visibleProfiles.length === 0 && (
+          {/* **「没有」和「没问出来」是两回事。** 空状态此前挂在 `profiles.data && …` 后面:
+              请求失败(401、后端没起、网络断)时 data 是 undefined,那一行被短路掉,而外层容器
+              照画 —— 于是失败长得和"空"一模一样,而"空"又长得像什么都没发生。用户看到的就是
+              一条什么都没有的灰条,而他知道自己明明配过连接。 */}
+          {profiles.isError && (
+            <div className="grid gap-1.5 justify-items-start">
+              <p className="m-0 text-xs text-destructive">
+                {t("providerLoadFailed")}
+                {profiles.error instanceof Error && profiles.error.message
+                  ? `:${profiles.error.message}`
+                  : ""}
+              </p>
+              <Button size="sm" variant="outline" onClick={() => void profiles.refetch()}>
+                <RotateCw size={12} /> {t("retry")}
+              </Button>
+            </div>
+          )}
+          {profiles.isPending && <p className="m-0 text-xs text-muted-foreground">{t("connecting")}</p>}
+          {profiles.isSuccess && visibleProfiles.length === 0 && (
             <p className="m-0 text-xs text-muted-foreground">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
           )}
         </div>
