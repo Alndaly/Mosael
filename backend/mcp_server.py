@@ -1069,6 +1069,20 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
       {"kind":"remove_node","node_id":"llm_1"}                                     (drops its edges too)
       {"kind":"remove_edge","edge_id":"e-start-llm_1"}
     Config string values may reference upstream outputs as {{node_id.output}}.
+
+    形状(默认画一条直线是最常见的浪费):
+      并排 —— 同一个 source 连出多条边就是并发执行,总时长按最慢的那支算:
+        {"kind":"connect","source":"start","target":"img_1"}
+        {"kind":"connect","source":"start","target":"img_2"}
+      subgraph —— 把一段复杂但只用一次的流程折成一个节点,config.body 里嵌一整张子画布,
+      内部用 {{input.名}} 取外层喂进来的值:
+        {"kind":"add_node","type":"subgraph","node_id":"sub_1","config":{
+           "inputs":{"稿子":"{{llm_1.text}}"},
+           "body":{"nodes":[{"id":"t_1","type":"template","config":{"template":"{{input.稿子}}"}}],"edges":[]},
+           "output":"{{t_1.text}}"}}
+      call_workflow —— 一段会被别处复用的流程,抽成独立工作流再调它(复制粘贴的两份迟早不一样):
+        {"kind":"add_node","type":"call_workflow","node_id":"call_1",
+         "config":{"workflow_id":"<另一张图的 id>","inputs":{"标题":"{{start.text}}"}}}
     """
     confirmation = _post(
         "/api/confirmations",
