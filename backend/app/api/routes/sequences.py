@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -126,6 +129,20 @@ def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response
     return _sequence_response(_get_sequence(db, sequence_id))
 
 
+def _payload_shape_digest() -> str:
+    """这个接口的响应**长什么样**的指纹 —— 由响应模型自己算出来,不是手写的常量。
+
+    手写常量意味着"改了模型要记得改它",而忘记的代价是老客户端上功能凭空消失 —— 没人会想到
+    去查缓存。让它跟着模型走,改模型就自动失效。
+    """
+    schema = json.dumps(SequenceOut.model_json_schema(), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(schema.encode()).hexdigest()[:12]
+
+
+#: 进程启动时算一次 —— 模型在运行期不会变。
+_PAYLOAD_SHAPE = _payload_shape_digest()
+
+
 @router.get("/projects/{project_id}/sequences", response_model=list[SequenceOut])
 def list_sequences(project_id: str, request: Request, db: DbSession, user: CurrentUser) -> Response:
     project = db.get(Project, project_id)
@@ -158,8 +175,18 @@ def list_sequences(project_id: str, request: Request, db: DbSession, user: Curre
     # editor polls this endpoint continuously, and a 200-clip sequence is ~72KB — pushing that
     # through on every tick was the single biggest thing the poll cost, and the thing that made
     # concurrent polls collapse while a small endpoint at the same concurrency did not.
-    # `revision` is already exactly the validator an ETag needs: it changes iff the body does.
-    etag = 'W/"' + ".".join(f"{sid}-{revision}" for sid, revision in ids_and_revisions) + '"'
+    # `revision` 说的是**数据**变没变;而 body 还取决于**序列化器**长什么样。只用 revision 的话,
+    # 给 ClipOut 加一个字段之后:序列一个字没改 → ETag 不变 → 服务端一路回 304 → 浏览器一路用
+    # 加字段之前的响应体。用户看到的不是"新字段没生效",而是**一个功能凭空消失**,而且刷新和
+    # 重启后端都没用(重启只清进程内那层,清不掉浏览器里的)。这类 bug 发版之后才发作。
+    # 把响应模型的形状摘要编进去:它变一次,所有 ETag 失效一次,正好是需要的粒度。
+    etag = (
+        'W/"'
+        + _PAYLOAD_SHAPE
+        + ':'
+        + ".".join(f"{sid}-{revision}" for sid, revision in ids_and_revisions)
+        + '"'
+    )
     # no-cache means "store it, but revalidate every time" — which is what a polled endpoint
     # wants, and it makes the browser's revalidation deterministic instead of heuristic. The
     # 304 path is what the browser does with this automatically; JS still sees a 200 and the
