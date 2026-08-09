@@ -323,40 +323,63 @@ _refresh_failed_at: dict[str, float] = {}
 
 
 def _auto_refresh_expired(db: DbSession, user: CurrentUser, profiles) -> None:
-    """过期就先刷一次,而不是把「令牌已过期」摆出来让用户自己去想办法。
+    """过期就去刷一次 —— **在后台**,不占着这次请求。
 
-    **过期本身不是一个需要用户知道的状态**:订阅计划的 access token 普遍只有几小时,
-    刷新是协议里就有的一步。此前只有对话路径(pi 解析鉴权时)和查额度会触发刷新,于是
-    "隔夜再打开设置页"必然看到一行已过期 —— 而它其实只要被用到就会自己好。
+    **过期本身不是一个需要用户知道的状态**:订阅计划的 access token 普遍只有几小时,刷新是协议
+    里就有的一步。此前只有对话路径和查额度会触发刷新,于是"隔夜再打开设置页"必然看到一行已过期
+    —— 而它其实只要被用到就会自己好。
 
-    刷新协议仍然在 pi 那边(见 refresh_oauth_credential),这里只负责决定什么时候刷。
-    刷不动才让 oauth_expired 保持 True —— 那时它是真的需要用户重新授权。
+    **但它不能挡在列表前面。** 刷新是:起一个 Node 子进程(pi sidecar)→ 向那家供应商发一次
+    网络请求 → 最长等 60 秒;而且每条过期连接串着来。断网或那家挂掉时,一件本地的纯读的事
+    (告诉我我配了哪些连接)被一件远程的可选的事拖到几十秒 —— 用户看到的是设置页一直
+    「正在连接后端…」,而日志里只有一行 fetch failed。
+
+    判据:**这个接口要回答的问题,不需要出网就能回答。** 所以先把列表给他,刷新在后台跑,
+    下一次拉列表时状态自己就对了。刷不动才让 oauth_expired 保持 True —— 那时是真的要重新授权。
     """
-    now = time.monotonic()
-    for profile, row in profiles:
-        if profile.auth_type != "oauth" or row is None or not row.oauth_credential:
-            continue
+    stale = [
+        (profile, row)
+        for profile, row in profiles
+        if profile.auth_type == "oauth" and row is not None and row.oauth_credential
+    ]
+    if not stale:
+        return
+    # 令牌在这里铸:后台线程拿不到这次请求的身份,而铸令牌要 db+user。
+    token = mint_tool_token(db, user)
+    pending = [
+        (profile.id, profile.name, profile.vendor, credential)
+        for profile, row in stale
+        if (credential := read_credential(row)) is not None and is_expired(credential)
+    ]
+    for profile, row in stale:
         credential = read_credential(row)
-        if credential is None or not is_expired(credential):
+        if credential is not None and not is_expired(credential):
             _refresh_failed_at.pop(profile.id, None)
-            continue
-        failed_at = _refresh_failed_at.get(profile.id)
+    if not pending:
+        return
+    threading.Thread(target=_refresh_in_background, args=(token, pending), daemon=True).start()
+
+
+def _refresh_in_background(token: str, pending: list[tuple[str, str, str, dict]]) -> None:
+    """后台把过期的订阅令牌刷一遍。失败只记日志 —— 它本来就是"顺手做的事"。"""
+    now = time.monotonic()
+    for profile_id, name, vendor, credential in pending:
+        failed_at = _refresh_failed_at.get(profile_id)
         if failed_at is not None and now - failed_at < _REFRESH_COOLDOWN_SECONDS:
             continue
         try:
             refresh_oauth_credential(
                 api_base=f"http://{settings_config.backend_host}:{settings_config.backend_port}",
-                token=mint_tool_token(db, user),
-                pi_provider=pi_provider_id(profile.vendor) or "",
-                profile_id=profile.id,
+                token=token,
+                pi_provider=pi_provider_id(vendor) or "",
+                profile_id=profile_id,
                 credential=credential,
             )
         except AdapterError as exc:
-            logger.warning("刷新 %s 的订阅令牌失败:%s", profile.name, exc)
-            _refresh_failed_at[profile.id] = now
+            logger.warning("刷新 %s 的订阅令牌失败:%s", name, exc)
+            _refresh_failed_at[profile_id] = now
             continue
-        _refresh_failed_at.pop(profile.id, None)
-        db.refresh(row)
+        _refresh_failed_at.pop(profile_id, None)
 
 
 @router.put("/settings/providers/{profile_id}/credential", response_model=ProviderCredentialOut)

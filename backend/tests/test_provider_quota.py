@@ -241,9 +241,22 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
         return True
 
     monkeypatch.setattr(settings_routes, "refresh_oauth_credential", fake_refresh)
-    row = next(r for r in client.get("/api/settings/providers").json() if r["id"] == profile_id)
-    assert row["oauth_linked"] is True
-    assert row["oauth_expired"] is False
+
+    # 刷新**在后台**跑,不占着这次请求(见 tests/test_listing_connections_does_not_block:
+    # 它此前会让整个设置页等一次跨网 token 交换,断网时几十秒)。所以第一次拉到的仍然是
+    # 「已过期」,下一次才对 —— 而"下一次"在界面上就是一次轮询。
+    import time as _time
+
+    client.get("/api/settings/providers")
+    deadline = _time.time() + 5
+    row = None
+    while _time.time() < deadline:
+        row = next(r for r in client.get("/api/settings/providers").json() if r["id"] == profile_id)
+        if row["oauth_expired"] is False:
+            break
+        _time.sleep(0.05)
+    assert row is not None and row["oauth_linked"] is True
+    assert row["oauth_expired"] is False, "后台刷新没生效"
 
 
 def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
