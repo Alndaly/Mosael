@@ -115,13 +115,32 @@ def reindex_document(db: Session, document: KbDocument, dataset: KbDataset, *, u
         title=document.title,
         chunks=chunk_rows,
         graph_enabled=dataset.graph_enabled,
+        user_id=user_id,
     )
     return len(pieces)
 
 
 def _schedule_enhanced_index(
-    *, workspace_id: str, document_id: str, title: str, chunks: list[tuple[str, str]], graph_enabled: bool
+    *,
+    workspace_id: str,
+    document_id: str,
+    title: str,
+    chunks: list[tuple[str, str]],
+    graph_enabled: bool,
+    user_id: str | None,
 ) -> None:
+    """把增强层索引丢进后台线程。
+
+    `user_id` 是**参数**,不是从外层借的自由变量 —— 它曾经是后者:签名里没有它,调用处也没传,
+    于是线程里每次都 NameError,而 NameError 和"embedding 端点 503"落进同一个 `except Exception`。
+    一个必然失败被当成偶然失败记进日志,向量层因此一次都没跑过,而从外面看毫无区别:文档状态
+    正常、chunk 数正常、检索也有结果 —— FTS 兜住了,只是永远只有关键词那一层。
+
+    **降级要留着,但它只该吃调用失败,不该吃"没调用成功"。** 这两者在日志里长得一模一样,
+    所以有一条用例直接盯"它被调用了没有"(见 tests/test_kb_enhanced_index_actually_runs)。
+
+    向量用的是**保存这篇文档的那个人**的钥匙 —— 嵌入是一次真实的付费调用,得算在他头上。
+    """
     want_graph = graph_enabled and kb_graph.graph_tier_enabled()
     if not (kb_vectors.vector_tier_enabled() or want_graph):
         return
