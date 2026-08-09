@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Recorder } from "@/features/editor/Recorder";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
+import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
@@ -53,10 +54,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [previewing, setPreviewing] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
-  const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
-  const [tagFilter, setTagFilter] = React.useState<string | null>(null);
+  // 筛选和排序是**这个人怎么用素材库**的一部分,不是这一刻的临时值 —— 切走再回来不该重置。
+  // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
+  const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<SortKey>("created");
+  const [sortKey, setSortKey] = usePersistentTab<SortKey>("media-sort", "created", SORT_KEYS);
   const [selectMode, setSelectMode] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [comparing, setComparing] = React.useState(false);
@@ -170,6 +172,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     for (const asset of assets.data ?? []) for (const tag of assetTags(asset)) set.add(tag);
     return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
   }, [assets.data]);
+
+  // 标签筛选同理。用 selection 而不是 tab:合法值是**动态的**(标签会被删),存着一个已经不存在
+  // 的标签时当作没筛 —— 否则素材库会空得莫名其妙。
+  const [tagFilter, setTagFilter] = usePersistentSelection("media-tag", allTags);
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -332,7 +338,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
                 tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
               )}
-              onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
+              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
             >
               {tag}
             </button>

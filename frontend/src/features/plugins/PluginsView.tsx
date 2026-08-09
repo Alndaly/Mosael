@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,7 +48,6 @@ import { cn } from "@/lib/utils";
 export function PluginsView() {
   const t = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const packages = useQuery({ queryKey: ["plugins"], queryFn: () => api<PluginPackage[]>("/api/plugins") });
   // 插件目录由后端算、后端报:Windows 上它不是 `~/.open-studio/`,文案里写死找不到地方。
@@ -62,6 +62,9 @@ export function PluginsView() {
   });
 
   const list = packages.data ?? [];
+  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
+  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
+  const [selectedId, setSelectedId] = usePersistentSelection("plugins", list.map((item) => item.id));
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
   if (packages.isSuccess && list.length === 0) {

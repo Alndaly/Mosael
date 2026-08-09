@@ -140,7 +140,9 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
-import { usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+
+const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import {
   analyzeWorkflow,
@@ -574,7 +576,6 @@ const DEFAULT_EDGE_OPTIONS = {
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
 
@@ -656,6 +657,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
 
+  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
+  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
+  const [selectedId, setSelectedId] = usePersistentSelection("workflows", (workflows.data ?? []).map((w) => w.id));
   const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? (workflows.data ?? [])[0] ?? null;
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
@@ -997,9 +1001,10 @@ function WorkflowEditor({
   React.useEffect(() => {
     localStorage.setItem(AGENT_PANEL_KEY, agentOpen ? "1" : "0");
   }, [agentOpen]);
-  const [agentMode, setAgentMode] = React.useState<WorkflowAgentMode>("docked");
+  // 停靠还是浮窗,是布局偏好 —— 每次回来都弹回"停靠"等于每次都要重摆一遍。
+  const [agentMode, setAgentMode] = usePersistentTab<WorkflowAgentMode>("wf-agent-mode", "docked", AGENT_MODES);
   /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
-  const [historyMode, setHistoryMode] = React.useState<WorkflowAgentMode>("docked");
+  const [historyMode, setHistoryMode] = usePersistentTab<WorkflowAgentMode>("wf-history-mode", "docked", AGENT_MODES);
   const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   /** 节点的手动层级。只在会话内有效,不写进图 —— 叠放是看图时的临时诉求(把被压住的那个
    *  拎出来看一眼),固化进数据会让每次调整都变成一次图变更、触发自动保存。 */

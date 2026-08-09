@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { gotoRecord } from "@/lib/deepLink";
+import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -37,7 +38,6 @@ const BLOCKED = new Set(["login_required", "waiting_manual", "permission_require
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   // 任务中心深链(openstudio:open-* 事件通道):直接选中那条发布记录。
   React.useEffect(() => {
@@ -75,6 +75,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     },
   });
 
+  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
+  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
+  const [selectedId, setSelectedId] = usePersistentSelection("publish", (tasks.data ?? []).map((task) => task.id));
   const selected = (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
 
   const dialogs = (

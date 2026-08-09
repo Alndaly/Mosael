@@ -39,6 +39,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 
 const HOME_LIVE_REFRESH_MS = 5_000;
 
@@ -61,7 +62,10 @@ export function HomeView({
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const [search, setSearch] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<"updated" | "created" | "name">("updated");
+  // 排序方式跟着人走 —— 切走再回来不该重置成默认(见 lib/usePersistentTab)。
+  const [sortKey, setSortKey] = usePersistentTab<"updated" | "created" | "name">(
+    "home-sort", "updated", ["updated", "created", "name"],
+  );
 
   // 诗从后端取(今日诗词,几十万句);取不到就用本地精选那份 —— 断网不该让首页空一格。
   // 首屏先给本地那句,网络回来了再换,避免开屏闪一下空白。

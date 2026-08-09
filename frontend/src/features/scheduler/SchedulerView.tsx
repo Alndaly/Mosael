@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,7 +38,6 @@ import { cn } from "@/lib/utils";
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [menuDeleting, setMenuDeleting] = React.useState<ScheduledTask | null>(null);
 
@@ -69,6 +69,9 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     },
   });
 
+  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
+  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
+  const [selectedId, setSelectedId] = usePersistentSelection("scheduler", (tasks.data ?? []).map((task) => task.id));
   const selected =
     (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
 
